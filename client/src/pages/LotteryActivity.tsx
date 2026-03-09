@@ -76,10 +76,73 @@ function useCountdown(targetTime: string | null) {
 }
 
 // ─── 股票行情看板 ─────────────────────────────────────────────────────────────
-function StockBoard({ seedType, seedValue, seedSource }: {
+function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
+  seedValue?: string | null;
+  seedSource?: string | null;
+  drawAt?: string | null;
+  seedDate?: string | null;
+  seedType?: string | null;
+}) {
+  const isStock = seedType === 'sh_index' || seedType === 'sz_index';
+  // 计算目标时间：股票用开奖日 15:00，彩票用开奖日 22:00
+  const getTargetTime = (): Date | null => {
+    const dateStr = seedDate ?? drawAt;
+    if (!dateStr) return null;
+    const base = new Date(dateStr);
+    if (isNaN(base.getTime())) return null;
+    if (isStock) {
+      base.setHours(15, 0, 0, 0);
+    } else {
+      base.setHours(22, 0, 0, 0);
+    }
+    return base;
+  };
+  const targetTime = getTargetTime();
+  const countdown = useCountdown(targetTime ? targetTime.toISOString() : null);
+  const now = Date.now();
+  const hasData = !!seedValue;
+  // 从 seedSource 解析获取时间
+  let fetchedAt: string | null = null;
+  if (seedSource) {
+    try {
+      const p = JSON.parse(seedSource);
+      if (p.time) fetchedAt = String(p.time);
+      else if (p.fetchedAt) fetchedAt = String(p.fetchedAt);
+    } catch {}
+  }
+  const isPast = targetTime ? now > targetTime.getTime() : false;
+  return (
+    <div className="px-4 pb-3 pt-1 flex items-center gap-1.5" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
+      <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.darkSub }} />
+      {hasData ? (
+        <span className="text-xs font-mono" style={{ color: C.darkSub }}>
+          数据已获取{fetchedAt ? `·${fetchedAt}` : (seedDate ? `·${seedDate}` : '')}
+        </span>
+      ) : isPast ? (
+        <span className="text-xs font-mono" style={{ color: '#F59E0B' }}>
+          {isStock ? '收盘后' : '开奖后'}数据获取中...
+        </span>
+      ) : targetTime ? (
+        <span className="text-xs font-mono" style={{ color: C.darkSub }}>
+          距数据获取还剩&nbsp;
+          {countdown.d > 0 && <span style={{ color: C.darkText }}>{countdown.d}天</span>}
+          {(countdown.d > 0 || countdown.h > 0) && <span style={{ color: C.darkText }}>{countdown.h}时</span>}
+          <span style={{ color: C.darkText }}>{countdown.m}分{countdown.s}秒</span>
+          &nbsp;·&nbsp;{isStock ? '收盘时间 15:00' : '开奖时间 22:00'}
+        </span>
+      ) : (
+        <span className="text-xs font-mono" style={{ color: C.darkSub }}>等待开奖日期确定...</span>
+      )}
+    </div>
+  );
+}
+
+function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
   seedType: string;
   seedValue?: string | null;
   seedSource?: string | null;
+  drawAt?: string | null;
+  seedDate?: string | null;
 }) {
   const indexName = seedType === 'sh_index' ? '上证指数' : '深证成指';
   const indexCode = seedType === 'sh_index' ? '000001.SH' : '399001.SZ';
@@ -189,15 +252,19 @@ function StockBoard({ seedType, seedValue, seedSource }: {
           <span>去新浪财经查看原始数据 →</span>
         </a>
       </div>
+      {/* 数据获取时间提示 */}
+      <SeedTimingInfo seedValue={seedValue} seedSource={seedSource} drawAt={drawAt} seedDate={seedDate} seedType={seedType} />
     </div>
   );
 }
 
 // ─── 彩票球形序列 ─────────────────────────────────────────────────────────────
-function LotteryBalls({ seedType, seedValue, seedSource }: {
+function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
   seedType: string;
   seedValue?: string | null;
   seedSource?: string | null;
+  drawAt?: string | null;
+  seedDate?: string | null;
 }) {
   const isSSQ = seedType === 'ssq';
   const lotteryName = isSSQ ? '双色球' : '超级大乐透';
@@ -312,6 +379,8 @@ function LotteryBalls({ seedType, seedValue, seedSource }: {
           <span>去官方彩票网站验证原始数据 →</span>
         </a>
       </div>
+      {/* 数据获取时间提示 */}
+      <SeedTimingInfo seedValue={seedValue} seedSource={seedSource} drawAt={drawAt} seedDate={seedDate} seedType={seedType} />
     </div>
   );
 }
@@ -499,7 +568,7 @@ function DrawResultsSection({ activityId }: { activityId: number }) {
             <span className="font-semibold text-sm" style={{ color: C.red }}>{group.prizeName}</span>
             <span className="ml-auto text-xs" style={{ color: C.sub }}>{group.winners.length} 人获奖</span>
           </div>
-          <div className="divide-y" style={{ divideColor: '#F5F5F5' }}>
+          <div className="divide-y divide-gray-100">
             {group.winners.map((w: any, wIdx: number) => (
               <div key={wIdx} className="px-4 py-3 flex items-center gap-3">
                 <div
@@ -856,6 +925,8 @@ export default function LotteryActivity() {
                 seedType={activity.external_seed_type}
                 seedValue={activity.external_seed_value}
                 seedSource={activity.external_seed_source}
+                drawAt={activity.draw_at}
+                seedDate={activity.external_seed_date}
               />
             )}
             {isLottery && (
@@ -863,6 +934,8 @@ export default function LotteryActivity() {
                 seedType={activity.external_seed_type}
                 seedValue={activity.external_seed_value}
                 seedSource={activity.external_seed_source}
+                drawAt={activity.draw_at}
+                seedDate={activity.external_seed_date}
               />
             )}
           </div>
