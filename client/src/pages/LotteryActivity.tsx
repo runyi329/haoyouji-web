@@ -129,40 +129,38 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
   const isPast = targetTime ? now > targetTime.getTime() : false;
   const isFetchPast = fetchDeadline ? now > fetchDeadline.getTime() : false;
   return (
-    <div className="px-4 pb-3 pt-1 flex items-center gap-1.5 flex-wrap" style={{ borderTop: `1px solid ${C.border}` }}>
-      <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.sub }} />
+    <div className="px-4 pb-3 pt-2 flex items-center gap-1.5 flex-wrap" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
+      <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.darkSub }} />
       {hasData ? (
-        <span className="text-xs font-mono" style={{ color: C.sub }}>
+        <span className="text-xs font-mono" style={{ color: C.darkSub }}>
           数据已获取{fetchedAt ? `·${fetchedAt}` : (seedDate ? `·${seedDate}` : '')}
         </span>
       ) : isPast ? (
         isFetchPast ? (
-          // 已过预计获取时间，数据仍未到，继续等待
-          <span className="text-xs font-mono" style={{ color: '#D97706' }}>
+          <span className="text-xs font-mono" style={{ color: '#FBBF24' }}>
             {isStock ? '收盘后' : '开奖后'}数据获取中，请稍候...
           </span>
         ) : (
-          // 已收盘/开奖，距预计数据获取时间还有倒计时
-          <span className="text-xs font-mono flex items-center gap-1.5" style={{ color: '#D97706' }}>
+          <span className="text-xs font-mono flex items-center gap-1.5" style={{ color: '#FBBF24' }}>
             <span>距数据获取还剩</span>
             <span
               className="font-mono px-1.5 py-0.5 rounded"
-              style={{ background: 'rgba(217,119,6,0.1)', color: '#D97706', letterSpacing: '0.05em' }}
+              style={{ background: 'rgba(251,191,36,0.15)', color: '#FBBF24', letterSpacing: '0.05em' }}
             >
               {fetchCountdown.h > 0 && `${String(fetchCountdown.h).padStart(2,'0')}:`}{String(fetchCountdown.m).padStart(2,'0')}:{String(fetchCountdown.s).padStart(2,'0')}
             </span>
           </span>
         )
       ) : targetTime ? (
-        <span className="text-xs font-mono" style={{ color: C.sub }}>
+        <span className="text-xs font-mono" style={{ color: C.darkSub }}>
           距{isStock ? '收盘' : '开奖'}还有&nbsp;
-          {countdown.d > 0 && <span style={{ color: C.text }}>{countdown.d}天</span>}
-          {(countdown.d > 0 || countdown.h > 0) && <span style={{ color: C.text }}>{countdown.h}时</span>}
-          <span style={{ color: C.text }}>{countdown.m}分{countdown.s}秒</span>
+          {countdown.d > 0 && <span style={{ color: C.darkText }}>{countdown.d}天</span>}
+          {(countdown.d > 0 || countdown.h > 0) && <span style={{ color: C.darkText }}>{countdown.h}时</span>}
+          <span style={{ color: C.darkText }}>{countdown.m}分{countdown.s}秒</span>
           &nbsp;·&nbsp;北京时间 {isStock ? '15:00 收盘' : '22:00 开奖'}
         </span>
       ) : (
-        <span className="text-xs font-mono" style={{ color: C.sub }}>等待开奖日期确定...</span>
+        <span className="text-xs font-mono" style={{ color: C.darkSub }}>等待开奖日期确定...</span>
       )}
     </div>
   );
@@ -1319,36 +1317,7 @@ export default function LotteryActivity() {
           </div>
         )}
 
-        {/* 渐变蒙层 + 倒计时 */}
-        {(isOpen || isDrawing) && activity.draw_at && countdown.remaining > 0 && (
-          <div
-            className="absolute bottom-0 left-0 right-0 px-4 py-4"
-            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 100%)' }}
-          >
-            <div className="text-white/70 text-xs mb-2 flex items-center gap-1">
-              <Clock className="w-3 h-3" />
-              <span>距离开奖</span>
-            </div>
-            <div className="flex gap-2">
-              {[
-                { v: countdown.d, u: '天' },
-                { v: countdown.h, u: '时' },
-                { v: countdown.m, u: '分' },
-                { v: countdown.s, u: '秒' },
-              ].map(({ v, u }) => (
-                <div key={u} className="flex flex-col items-center">
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold text-white"
-                    style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)' }}
-                  >
-                    {String(v).padStart(2, '0')}
-                  </div>
-                  <span className="text-white/60 text-[10px] mt-1">{u}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Hero 区倒计时已移至开奖数据卡片底部显示 */}
 
         {/* 开奖中动效标 */}
         {isDrawing && (
