@@ -1090,15 +1090,9 @@ export const lotteryRouter = router({
         if (!imgRes.ok) throw new Error(`图片服务返回 ${imgRes.status}`);
         const buffer = Buffer.from(await imgRes.arrayBuffer());
         const fileKey = `ai-generated/${Date.now()}-${seed}.jpg`;
-        // 优先使用腾讯云COS（生产环境）
-        let finalUrl: string;
-        if (process.env.COS_SECRET_ID && process.env.COS_BUCKET) {
-          const { uploadImageToCOS } = await import('./cos-upload');
-          finalUrl = await uploadImageToCOS(buffer, 'ledger-photos', fileKey);
-        } else {
-          const { url: s3Url } = await storagePut(fileKey, buffer, 'image/jpeg');
-          finalUrl = s3Url;
-        }
+        // 上传到腾讯云COS（国内节点，速度快）
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const finalUrl = await uploadImageToCOS(buffer, 'lottery-images', fileKey);
         return { url: finalUrl };
       } catch (e: any) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `图片生成失败：${e.message}` });

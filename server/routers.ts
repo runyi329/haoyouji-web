@@ -1265,22 +1265,11 @@ export const appRouter = router({
         const ext = input.contentType.split("/")[1] || "bin";
         const fileKey = `${input.prefix}/${Date.now()}-${nanoid()}.${ext}`;
         
-        // 优先使用腾讯云COS（生产环境），Forge不可用时也走COS
-        const cosSecretId = process.env.COS_SECRET_ID;
-        const cosSecretKey = process.env.COS_SECRET_KEY;
-        const cosBucket = process.env.COS_BUCKET;
-        const cosRegion = process.env.COS_REGION;
-        
-        if (cosSecretId && cosSecretKey && cosBucket && cosRegion) {
-          // 使用腾讯云COS上传
-          const { uploadImageToCOS } = await import('./cos-upload');
-          const url = await uploadImageToCOS(buffer, 'ledger-photos', fileKey);
-          return { url, fileKey };
-        } else {
-          // 回退到Forge存储（开发环境）
-          const { url } = await storagePut(fileKey, buffer, input.contentType);
-          return { url, fileKey };
-        }
+        // 上传到腾讯云COS（国内节点，速度快）
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const folder = input.prefix.startsWith('lottery') ? 'lottery-images' : 'ledger-photos';
+        const url = await uploadImageToCOS(buffer, folder as any, fileKey);
+        return { url, fileKey };
       }),
   }),
   
@@ -2025,10 +2014,11 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "相册不存在" });
         }
 
-        // 上传到S3
+        // 上传到腾讯云COS（国内节点，速度快）
         const buffer = Buffer.from(input.fileData, "base64");
         const fileKey = `photos/${ctx.user.id}/${nanoid()}-${input.fileName}`;
-        const { url } = await storagePut(fileKey, buffer, input.mimeType);
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const url = await uploadImageToCOS(buffer, 'ledger-photos', fileKey);
 
         // 保存到数据库
         const id = await db.createPhoto({
@@ -2516,7 +2506,8 @@ export const appRouter = router({
         const ext = input.contentType.split("/")[1] || "jpg";
         const fileKey = `kids/avatar-${input.id || Date.now()}-${nanoid()}.${ext}`;
         
-        const { url } = await storagePut(fileKey, buffer, input.contentType);
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const url = await uploadImageToCOS(buffer, 'avatars', fileKey);
         
         // 如果提供了宝宝ID，更新数据库
         if (input.id) {
