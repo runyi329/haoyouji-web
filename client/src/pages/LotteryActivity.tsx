@@ -425,12 +425,13 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
 }
 
 // ─── 算法公式展示 ─────────────────────────────────────────────────────────────
-function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantScale }: {
+function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantScale, activityId }: {
   seedType?: string | null;
   mode: string;
   seedDate?: string | null;
   participantCount?: number;
   participantScale?: string | null;
+  activityId?: number;
 }) {
   const isStock = seedType === 'sh_index' || seedType === 'sz_index';
   const isLottery = seedType === 'ssq' || seedType === 'dlt';
@@ -439,11 +440,22 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
     ssq: '双色球红球号码之和', dlt: '大乐透前区号码之和',
   }[seedType ?? ''] ?? '随机种子';
 
-  // 生成示例数据（用实际人数或默认3人）
-  const exampleN = participantCount && participantCount > 1 ? Math.min(participantCount, 9) : 3;
-  const exampleTail = 78; // 示例尾数
-  // 正确算法：余数+1 即为中奖编号（余数0→#1, 余数1→#2, ..., 余数N-1→#N）
-  const winnerNo = (exampleTail % exampleN) + 1;
+  // 查询真实参与者列表
+  const { data: participantsData } = trpc.lottery.getPublicParticipants.useQuery(
+    { activityId: activityId! },
+    { enabled: !!activityId }
+  );
+  const realParticipants: any[] = (participantsData as any[]) ?? [];
+
+  // 实际人数：优先用真实参与者数量，其次用 participantCount，默认3
+  const actualN = realParticipants.length > 0 ? realParticipants.length
+    : (participantCount && participantCount > 0 ? participantCount : 3);
+  // 对照表展示上限9人（超过9人只展示前9行示例，但概率按实际人数算）
+  const exampleN = actualN;
+  // 编号位数
+  const digits = actualN < 100 ? 2 : actualN < 1000 ? 3 : 4;
+  const fmtNo = (n: number) => String(n).padStart(digits, '0');
+
   const [showTip, setShowTip] = useState(false);
 
   return (
@@ -503,28 +515,39 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
 
           {/* 完整对照表 */}
           {(() => {
-            // 对照表：尾数 00~99 共100种，正确算法：余数+1 = 中奖编号
-            // 余数 0→#1, 余数 1→#2, ..., 余数 N-1→#N
-            // 每个人获得 floor(100/N) 或 ceil(100/N) 个尾数，概率几乎均等
             const intPart = '4162';
-            // 计算每个编号获得的尾数数量
-            const countPerPerson: number[] = Array(exampleN + 1).fill(0); // index 1..N
+            // 计算每个编号获得的尾数数量（按实际人数）
+            const countPerPerson: number[] = Array(exampleN + 1).fill(0);
             for (let t = 0; t <= 99; t++) {
-              const person = (t % exampleN) + 1; // 余数+1 即为编号
+              const person = (t % exampleN) + 1;
               countPerPerson[person]++;
             }
-            // 展示三行示例：尾数 88　25　00
-            const exampleTails = [88, 25, 0];
+            // 对照表行数：1人→1行(100%)，2人→2行，3~9人→3行，10+人→每人一行（最多展示9行）
+            let exampleTails: number[];
+            if (exampleN === 1) {
+              exampleTails = [88]; // 1人必中，只展示1行
+            } else if (exampleN === 2) {
+              exampleTails = [88, 25]; // 2人展示2行
+            } else {
+              // 3人以上：每人展示1个代表性尾数（余数=人员索引0..N-1）
+              const displayN = Math.min(exampleN, 9);
+              exampleTails = Array.from({ length: displayN }, (_, i) => {
+                // 找一个余数恰好等于 i 的尾数（即 i 本身，因为 i < N <= 100）
+                return i; // 尾数 0,1,2...对应余数 0,1,2...
+              });
+            }
             const rows = exampleTails.map(tail => {
               const tailStr = String(tail).padStart(2, '0');
               const remainder = tail % exampleN;
-              const winner = remainder + 1; // 余数+1 = 中奖编号
-              return { tail, tailStr, remainder, winner };
+              const winner = remainder + 1;
+              const participant = realParticipants[winner - 1]; // 对应的真实参与者（0-indexed）
+              return { tail, tailStr, remainder, winner, participant };
             });
             return (
               <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
                 <div className="px-3 py-2 font-semibold" style={{ background: C.bg, color: C.sub }}>
                   对照表：尾数对应中奖编号（共 {exampleN} 人）
+                  {exampleN > 9 && <span className="ml-1 font-normal" style={{ color: C.sub }}>· 仅展示前9行示例</span>}
                 </div>
                 <table className="w-full">
                   <thead>
@@ -535,16 +558,45 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map(({ tail, tailStr, remainder, winner }, i) => (
+                    {rows.map(({ tail, tailStr, remainder, winner, participant }, i) => (
                       <tr key={i} style={{ borderTop: `1px solid ${C.border}`, background: remainder === 0 ? '#FFF8F8' : undefined }}>
                         <td className="px-2 py-1.5 font-mono" style={{ color: C.text }}>
                           {intPart}.<span style={{ color: C.red, fontWeight: 700 }}>{tailStr}</span>
                         </td>
                         <td className="text-center px-2 py-1.5" style={{ color: C.sub }}>
                           {tail} ÷ {exampleN} 余 <span style={{ color: C.red, fontWeight: 600 }}>{remainder}</span>
-                          <span style={{ color: C.sub, fontSize: '0.9em' }}> (+1→中奖编号{String(winner).padStart(2,'0')})</span>
+                          <span style={{ color: C.sub, fontSize: '0.9em' }}> (+1→{fmtNo(winner)}号)</span>
                         </td>
-                        <td className="text-center px-2 py-1.5 font-mono font-bold" style={{ color: C.red }}>中奖编号 {String(winner).padStart(2,'0')}</td>
+                        <td className="px-2 py-1.5">
+                          {/* 中奖列：显示真实参与者头像+编号，无参与者时显示编号文字 */}
+                          <div className="flex items-center gap-1.5 justify-center">
+                            {participant ? (
+                              <>
+                                {/* 头像 */}
+                                <div
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                                  style={{
+                                    background: participant.avatar_url ? 'transparent' : `hsl(${((winner - 1) * 47) % 360}, 55%, 45%)`,
+                                    border: `1.5px solid ${C.red}`,
+                                    overflow: 'hidden',
+                                  }}
+                                >
+                                  {participant.avatar_url
+                                    ? <img src={participant.avatar_url} alt="" className="w-full h-full object-cover" />
+                                    : (participant.display_name ?? '?').charAt(0)
+                                  }
+                                </div>
+                                {/* 编号+名字 */}
+                                <div className="flex flex-col items-start">
+                                  <span className="font-mono font-bold leading-none" style={{ color: C.red, fontSize: '0.9em' }}>抽奖编号 {fmtNo(winner)}</span>
+                                  <span className="leading-none mt-0.5 truncate max-w-[60px]" style={{ color: C.sub, fontSize: '0.85em' }}>{participant.display_name}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <span className="font-mono font-bold" style={{ color: C.red }}>中奖编号 {fmtNo(winner)}</span>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -552,30 +604,77 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                 {/* 每个人的中奖概率 */}
                 <div className="px-3 py-2" style={{ background: '#FAFAFA', borderTop: `1px solid ${C.border}` }}>
                   <div className="font-semibold mb-1.5" style={{ color: C.sub }}>各人中奖概率</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Array.from({ length: exampleN }, (_, idx) => {
-                      const person = idx + 1;
-                      const cnt = countPerPerson[person];
-                      const pct = (cnt / 100 * 100).toFixed(0);
-                      // 新算法下，拥有最多尾数的人（即前 ceil(100%N) 个人）概率略高
-                      const maxCnt = Math.ceil(100 / exampleN);
-                      const isHigher = cnt === maxCnt && maxCnt > Math.floor(100 / exampleN);
-                      return (
-                        <div key={person}
-                          className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+                  {exampleN === 1 ? (
+                    <div className="flex items-center gap-2">
+                      {realParticipants[0] && (
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
                           style={{
-                            background: isHigher ? C.redLight : C.bg,
-                            border: `1px solid ${isHigher ? C.red : C.border}`,
+                            background: realParticipants[0].avatar_url ? 'transparent' : `hsl(0, 55%, 45%)`,
+                            border: `2px solid ${C.red}`,
+                            overflow: 'hidden',
                           }}
                         >
-                          <span className="font-mono" style={{ color: isHigher ? C.red : C.text }}>中奖编号 {String(person).padStart(2,'0')}</span>
-                          <span style={{ color: isHigher ? C.red : C.sub }}>{pct}%</span>
+                          {realParticipants[0].avatar_url
+                            ? <img src={realParticipants[0].avatar_url} alt="" className="w-full h-full object-cover" />
+                            : (realParticipants[0].display_name ?? '?').charAt(0)
+                          }
                         </div>
-                      );
-                    })}
-                  </div>
+                      )}
+                      <div>
+                        <span className="font-mono font-bold" style={{ color: C.red }}>
+                          {realParticipants[0]?.display_name ?? '抽奖编号 01'}
+                        </span>
+                        <span className="ml-2 font-bold" style={{ color: C.red }}>100%</span>
+                        <span className="ml-1 text-xs" style={{ color: C.sub }}>（唯一参与者，必定中奖）</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from({ length: Math.min(exampleN, 20) }, (_, idx) => {
+                        const person = idx + 1;
+                        const cnt = countPerPerson[person];
+                        const pct = (cnt / 100 * 100).toFixed(0);
+                        const maxCnt = Math.ceil(100 / exampleN);
+                        const isHigher = cnt === maxCnt && maxCnt > Math.floor(100 / exampleN);
+                        const participant = realParticipants[idx];
+                        return (
+                          <div key={person}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+                            style={{
+                              background: isHigher ? C.redLight : C.bg,
+                              border: `1px solid ${isHigher ? C.red : C.border}`,
+                            }}
+                          >
+                            {participant && (
+                              <div
+                                className="w-4 h-4 rounded-full flex items-center justify-center text-white flex-shrink-0"
+                                style={{
+                                  background: participant.avatar_url ? 'transparent' : `hsl(${(idx * 47) % 360}, 55%, 45%)`,
+                                  fontSize: '8px',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                {participant.avatar_url
+                                  ? <img src={participant.avatar_url} alt="" className="w-full h-full object-cover" />
+                                  : (participant.display_name ?? '?').charAt(0)
+                                }
+                              </div>
+                            )}
+                            <span className="font-mono text-[10px]" style={{ color: isHigher ? C.red : C.text }}>
+                              {participant?.display_name ?? `编号${fmtNo(person)}`}
+                            </span>
+                            <span className="text-[10px]" style={{ color: isHigher ? C.red : C.sub }}>{pct}%</span>
+                          </div>
+                        );
+                      })}
+                      {exampleN > 20 && (
+                        <span className="text-[10px] px-2 py-0.5" style={{ color: C.sub }}>...共 {exampleN} 人，每人约 {(100/exampleN).toFixed(1)}%</span>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-1.5" style={{ color: C.sub, fontSize: '0.85em' }}>
-                    公式：余数 + 1 = 中奖编号。{exampleN} 人参与时，100 个尾数均分配，每人概率几乎相同。
+                    公式：余数 + 1 = 中奖编号。{exampleN} 人参与，100 个尾数均分，每人概率几乎相同。
                   </div>
                 </div>
               </div>
@@ -1140,7 +1239,7 @@ export default function LotteryActivity() {
 
         {/* ── 4. 开奖算法公式 ── */}
         {(hasExternalSeed || activity.mode === 'scheduled') && (
-          <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} participantCount={activity.participantCount} participantScale={activity.participant_scale} />
+          <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} participantCount={activity.participantCount} participantScale={activity.participant_scale} activityId={activityId} />
         )}
 
         {/* ── 5. 开奖结果（已结束时展示）── */}
