@@ -84,21 +84,26 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
   seedType?: string | null;
 }) {
   const isStock = seedType === 'sh_index' || seedType === 'sz_index';
-  // 计算目标时间：股票用开奖日 15:00，彩票用开奖日 22:00
+  // 用北京时间（UTC+8）计算目标时间：股票收盘 15:00 BJT = UTC 07:00，彩票开奖 22:00 BJT = UTC 14:00
   const getTargetTime = (): Date | null => {
     const dateStr = seedDate ?? drawAt;
     if (!dateStr) return null;
-    const base = new Date(dateStr);
-    if (isNaN(base.getTime())) return null;
-    if (isStock) {
-      base.setHours(15, 0, 0, 0);
-    } else {
-      base.setHours(22, 0, 0, 0);
-    }
-    return base;
+    // 从日期字符串提取 YYYY-MM-DD 部分（兼容 ISO 字符串和纯日期字符串）
+    const datePart = String(dateStr).slice(0, 10); // "2026-03-10"
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return null;
+    // 直接用 UTC 时间构造北京时间的 15:00 / 22:00
+    // 北京时间 15:00 = UTC 07:00，北京时间 22:00 = UTC 14:00
+    const utcHour = isStock ? 7 : 14;
+    const t = new Date(`${datePart}T${String(utcHour).padStart(2,'0')}:00:00.000Z`);
+    if (isNaN(t.getTime())) return null;
+    return t;
   };
   const targetTime = getTargetTime();
+  // 收盘/开奖后 30 分钟为预计数据获取时间
+  const DATA_FETCH_DELAY_MS = 30 * 60 * 1000;
+  const fetchDeadline = targetTime ? new Date(targetTime.getTime() + DATA_FETCH_DELAY_MS) : null;
   const countdown = useCountdown(targetTime ? targetTime.toISOString() : null);
+  const fetchCountdown = useCountdown(fetchDeadline ? fetchDeadline.toISOString() : null);
   const now = Date.now();
   const hasData = !!seedValue;
   // 从 seedSource 解析获取时间
@@ -111,18 +116,7 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
     } catch {}
   }
   const isPast = targetTime ? now > targetTime.getTime() : false;
-  // 已过收盘/开奖时间后，计算已过去多少秒（显示 +HH:MM:SS）
-  const [elapsedSec, setElapsedSec] = useState(0);
-  useEffect(() => {
-    if (!isPast || !targetTime) return;
-    const update = () => setElapsedSec(Math.floor((Date.now() - targetTime.getTime()) / 1000));
-    update();
-    const t = setInterval(update, 1000);
-    return () => clearInterval(t);
-  }, [isPast, targetTime]);
-  const elapsedH = Math.floor(elapsedSec / 3600);
-  const elapsedM = Math.floor((elapsedSec % 3600) / 60);
-  const elapsedS = elapsedSec % 60;
+  const isFetchPast = fetchDeadline ? now > fetchDeadline.getTime() : false;
   return (
     <div className="px-4 pb-3 pt-1 flex items-center gap-1.5 flex-wrap" style={{ borderTop: `1px solid ${C.border}` }}>
       <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.sub }} />
@@ -131,22 +125,30 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
           数据已获取{fetchedAt ? `·${fetchedAt}` : (seedDate ? `·${seedDate}` : '')}
         </span>
       ) : isPast ? (
-        <span className="text-xs font-mono flex items-center gap-2" style={{ color: '#D97706' }}>
-          <span>{isStock ? '收盘后' : '开奖后'}数据获取中...</span>
-          <span
-            className="text-xs font-mono px-1.5 py-0.5 rounded"
-            style={{ background: 'rgba(217,119,6,0.1)', color: '#D97706', letterSpacing: '0.05em' }}
-          >
-            +{elapsedH > 0 ? `${String(elapsedH).padStart(2,'0')}:` : ''}{String(elapsedM).padStart(2,'0')}:{String(elapsedS).padStart(2,'0')}
+        isFetchPast ? (
+          // 已过预计获取时间，数据仍未到，继续等待
+          <span className="text-xs font-mono" style={{ color: '#D97706' }}>
+            {isStock ? '收盘后' : '开奖后'}数据获取中，请稍候...
           </span>
-        </span>
+        ) : (
+          // 已收盘/开奖，距预计数据获取时间还有倒计时
+          <span className="text-xs font-mono flex items-center gap-1.5" style={{ color: '#D97706' }}>
+            <span>距数据获取还剩</span>
+            <span
+              className="font-mono px-1.5 py-0.5 rounded"
+              style={{ background: 'rgba(217,119,6,0.1)', color: '#D97706', letterSpacing: '0.05em' }}
+            >
+              {fetchCountdown.h > 0 && `${String(fetchCountdown.h).padStart(2,'0')}:`}{String(fetchCountdown.m).padStart(2,'0')}:{String(fetchCountdown.s).padStart(2,'0')}
+            </span>
+          </span>
+        )
       ) : targetTime ? (
         <span className="text-xs font-mono" style={{ color: C.sub }}>
           距{isStock ? '收盘' : '开奖'}还有&nbsp;
           {countdown.d > 0 && <span style={{ color: C.text }}>{countdown.d}天</span>}
           {(countdown.d > 0 || countdown.h > 0) && <span style={{ color: C.text }}>{countdown.h}时</span>}
           <span style={{ color: C.text }}>{countdown.m}分{countdown.s}秒</span>
-          &nbsp;·&nbsp;{isStock ? '15:00 收盘' : '22:00 开奖'}
+          &nbsp;·&nbsp;北京时间 {isStock ? '15:00 收盘' : '22:00 开奖'}
         </span>
       ) : (
         <span className="text-xs font-mono" style={{ color: C.sub }}>等待开奖日期确定...</span>
