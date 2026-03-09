@@ -503,12 +503,83 @@ export default function LedgerDetail() {
                 const isActive = ['draft', 'open', 'drawing'].includes(activity.status);
                 const isCompleted = activity.status === 'completed';
                 const isCancelled = activity.status === 'cancelled';
-                const progressPct = getProgressPct(activity);
-                const countdown = formatCountdown(activity.draw_at);
                 const placeholderGrad = PRIZE_PLACEHOLDER_COLORS[idx % PRIZE_PLACEHOLDER_COLORS.length];
                 const firstWinnerName = activity.firstWinnerName || null;
                 const recentParticipants: any[] = activity.recentParticipants ?? [];
                 const participantCount = Number(activity.participantCount ?? 0);
+
+                // 计算报名倒计时（依赖 tick 每秒刷新）
+                void tick;
+                const now = Date.now();
+                const signupEndMs = activity.signup_end_at ? new Date(activity.signup_end_at).getTime() : null;
+                const drawAtMs = activity.draw_at ? new Date(activity.draw_at).getTime() : null;
+                const signupDiff = signupEndMs ? signupEndMs - now : null;
+                const drawDiff = drawAtMs ? drawAtMs - now : null;
+
+                // 格式化倒计时为 { d, h, m, s } 对象
+                const parseDiff = (diff: number | null) => {
+                  if (diff === null) return null;
+                  if (diff <= 0) return { ended: true, d: 0, h: 0, m: 0, s: 0 };
+                  const totalSec = Math.floor(diff / 1000);
+                  const d = Math.floor(totalSec / 86400);
+                  const h = Math.floor((totalSec % 86400) / 3600);
+                  const m = Math.floor((totalSec % 3600) / 60);
+                  const s = totalSec % 60;
+                  return { ended: false, d, h, m, s };
+                };
+                const signupCd = parseDiff(signupDiff);
+                const drawCd = parseDiff(drawDiff);
+
+                // 格式化已过去时间（显示结束时间）
+                const fmtDate = (ts: number) => {
+                  const d = new Date(ts);
+                  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                };
+
+                // 翻牌数字组件（内联）
+                const FlipDigit = ({ val, label }: { val: number; label: string }) => (
+                  <div className="flex flex-col items-center">
+                    <div
+                      className="flex items-center justify-center rounded-md text-white font-bold text-[18px] leading-none"
+                      style={{
+                        width: '36px', height: '40px',
+                        background: 'linear-gradient(180deg, #C62828 0%, #B71C1C 50%, #8B0000 50%, #7B0000 100%)',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.35)',
+                        fontVariantNumeric: 'tabular-nums',
+                        letterSpacing: '-0.02em',
+                      }}
+                    >
+                      {String(val).padStart(2, '0')}
+                    </div>
+                    <span className="text-[9px] text-gray-400 mt-0.5">{label}</span>
+                  </div>
+                );
+
+                // 倒计时显示组件
+                const CountdownBlock = ({ cd, label, endedText }: {
+                  cd: ReturnType<typeof parseDiff>;
+                  label: string;
+                  endedText: string;
+                }) => (
+                  <div className="flex flex-col items-center">
+                    <span className="text-[9px] text-gray-400 mb-1">{label}</span>
+                    {!cd || cd.ended ? (
+                      <span className="text-[11px] font-semibold" style={{ color: '#9E9E9E' }}>{endedText}</span>
+                    ) : cd.d > 0 ? (
+                      <div className="flex items-end gap-0.5">
+                        <FlipDigit val={cd.d} label="天" />
+                        <FlipDigit val={cd.h} label="时" />
+                        <FlipDigit val={cd.m} label="分" />
+                      </div>
+                    ) : (
+                      <div className="flex items-end gap-0.5">
+                        <FlipDigit val={cd.h} label="时" />
+                        <FlipDigit val={cd.m} label="分" />
+                        <FlipDigit val={cd.s} label="秒" />
+                      </div>
+                    )}
+                  </div>
+                );
 
                 return (
                   <div
@@ -528,13 +599,13 @@ export default function LedgerDetail() {
                   >
                     {/* 已结束蒙层 */}
                     {!isActive && (
-                      <div className="absolute inset-0 bg-white/50 z-10 pointer-events-none" />
+                      <div className="absolute inset-0 bg-white/40 z-10 pointer-events-none" />
                     )}
 
                     {/* Ribbon 标签 */}
                     {isCompleted && (
                       <div
-                        className="absolute top-4 right-[-20px] z-20 text-white text-[9px] font-bold px-7 py-0.5 rotate-45"
+                        className="absolute top-5 right-[-22px] z-20 text-white text-[9px] font-bold px-8 py-0.5 rotate-45"
                         style={{ background: '#757575', letterSpacing: '0.08em' }}
                       >
                         已开奖
@@ -542,7 +613,7 @@ export default function LedgerDetail() {
                     )}
                     {isCancelled && (
                       <div
-                        className="absolute top-4 right-[-20px] z-20 text-white text-[9px] font-bold px-7 py-0.5 rotate-45"
+                        className="absolute top-5 right-[-22px] z-20 text-white text-[9px] font-bold px-8 py-0.5 rotate-45"
                         style={{ background: '#EF5350', letterSpacing: '0.08em' }}
                       >
                         已取消
@@ -550,207 +621,173 @@ export default function LedgerDetail() {
                     )}
                     {activity.status === 'draft' && (
                       <div
-                        className="absolute top-4 right-[-20px] z-20 text-white text-[9px] font-bold px-7 py-0.5 rotate-45"
+                        className="absolute top-5 right-[-22px] z-20 text-white text-[9px] font-bold px-8 py-0.5 rotate-45"
                         style={{ background: '#BDBDBD', letterSpacing: '0.08em' }}
                       >
                         草稿
                       </div>
                     )}
 
-                    {/* 卡片主体：左图右文 */}
-                    <div className="flex" style={{ minHeight: '130px' }}>
-                      {/* 左侧奖品图区：1:1 正方形 */}
+                    {/* ── 顶部：横幅图片区 ── */}
+                    <div className="relative w-full" style={{ height: '160px' }}>
+                      {activity.banner_image_url || activity.cover_image_url ? (
+                        <img
+                          src={activity.banner_image_url || activity.cover_image_url}
+                          alt={activity.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className={`w-full h-full bg-gradient-to-br ${placeholderGrad} flex flex-col items-center justify-center gap-2`}
+                        >
+                          <Gift className="w-12 h-12 text-white/70" />
+                          <span className="text-white/50 text-[11px] tracking-wide">奖品图片</span>
+                        </div>
+                      )}
+                      {/* 图片底部渐变遮罩 + 标题叠加 */}
                       <div
-                        className="flex-shrink-0 relative"
-                        style={{ width: '130px', minHeight: '130px' }}
+                        className="absolute bottom-0 left-0 right-0 px-3 pt-6 pb-2"
+                        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%)' }}
                       >
-                        {activity.cover_image_url ? (
-                          <img
-                            src={activity.cover_image_url}
-                            alt={activity.title}
-                            className="absolute inset-0 w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div
-                            className={`absolute inset-0 bg-gradient-to-br ${placeholderGrad} flex flex-col items-center justify-center gap-1.5`}
+                        <div className="flex items-end justify-between gap-2">
+                          <span className="text-white text-[15px] font-bold line-clamp-1 flex-1" style={{ lineHeight: '1.4', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                            {activity.title}
+                          </span>
+                          {/* 状态勋章 */}
+                          <span
+                            className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold"
+                            style={{
+                              background:
+                                activity.status === 'open' ? '#E8F5E9' :
+                                activity.status === 'drawing' ? '#FFF3E0' :
+                                activity.status === 'draft' ? 'rgba(255,255,255,0.85)' :
+                                'rgba(255,255,255,0.85)',
+                              color:
+                                activity.status === 'open' ? '#2E7D32' :
+                                activity.status === 'drawing' ? '#E65100' :
+                                activity.status === 'draft' ? '#9E9E9E' : '#757575',
+                              border:
+                                activity.status === 'open' ? '1px solid #A5D6A7' :
+                                activity.status === 'drawing' ? '1px solid #FFCC80' :
+                                '1px solid rgba(0,0,0,0.1)',
+                            }}
                           >
-                            <Gift className="w-11 h-11 text-white/75" />
-                            <span className="text-white/50 text-[10px] tracking-wide">奖品图片</span>
-                          </div>
-                        )}
-                        {/* 开奖中火焰标 */}
-                        {activity.status === 'drawing' && (
-                          <div className="absolute top-2 left-2 bg-orange-500 rounded-full p-1 z-10"
-                            style={{ boxShadow: '0 2px 6px rgba(255,109,0,0.5)' }}>
-                            <Flame className="w-3.5 h-3.5 text-white" />
-                          </div>
-                        )}
-                        {/* 参与人数浮层（左下角） */}
-                        <div className="absolute bottom-0 left-0 right-0 px-2 py-1"
-                          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.45) 0%, transparent 100%)' }}>
-                          <span className="text-white text-[10px] font-medium">
-                            {participantCount > 0 ? `${participantCount} 人参与` : '期待参与'}
+                            {lotteryStatusMap[activity.status]?.label ?? '未知'}
                           </span>
                         </div>
                       </div>
-
-                      {/* 右侧文字区 */}
-                      <div className="flex-1 px-3 py-3 flex flex-col justify-between min-w-0">
-                        {/* 第一行：标题 + 状态徽章 */}
-                        <div>
-                          <div className="flex items-start justify-between gap-1.5 mb-1">
-                            <span
-                              className="text-[16px] font-bold text-[#1A1A1A] line-clamp-2 flex-1"
-                              style={{ lineHeight: '1.4' }}
-                            >
-                              {activity.title}
-                            </span>
-                            {/* 状态勋章 */}
-                            <span
-                              className="flex-shrink-0 ml-1 mt-0.5 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold"
-                              style={{
-                                background:
-                                  activity.status === 'open' ? '#E8F5E9' :
-                                  activity.status === 'drawing' ? '#FFF3E0' :
-                                  activity.status === 'draft' ? '#F5F5F5' : '#F5F5F5',
-                                color:
-                                  activity.status === 'open' ? '#2E7D32' :
-                                  activity.status === 'drawing' ? '#E65100' :
-                                  activity.status === 'draft' ? '#9E9E9E' : '#9E9E9E',
-                                border:
-                                  activity.status === 'open' ? '1px solid #A5D6A7' :
-                                  activity.status === 'drawing' ? '1px solid #FFCC80' :
-                                  '1px solid #E0E0E0',
-                              }}
-                            >
-                              {lotteryStatusMap[activity.status]?.label ?? '未知'}
-                            </span>
-                          </div>
-                          {/* 描述 */}
-                          {activity.description && (
-                            <div className="text-[11px] text-gray-400 line-clamp-1 mb-2" style={{ lineHeight: '1.4' }}>
-                              {activity.description}
-                            </div>
-                          )}
+                      {/* 开奖中火焰标 */}
+                      {activity.status === 'drawing' && (
+                        <div className="absolute top-2 left-2 bg-orange-500 rounded-full p-1 z-10"
+                          style={{ boxShadow: '0 2px 6px rgba(255,109,0,0.5)' }}>
+                          <Flame className="w-3.5 h-3.5 text-white" />
                         </div>
+                      )}
+                    </div>
 
-                        {/* 进度条（始终显示，无 max 时展示参与人数进度） */}
-                        {isActive && (
-                          <div className="mb-2">
-                            {activity.max_participants > 0 ? (
-                              <>
-                                <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-                                  <span>{participantCount} / {activity.max_participants} 人</span>
-                                  <span
-                                    className="font-semibold"
-                                    style={{ color: progressPct >= 80 ? '#D32F2F' : '#9E9E9E' }}
-                                  >{progressPct}%</span>
-                                </div>
-                                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                  <div
-                                    className="h-full rounded-full"
-                                    style={{
-                                      width: `${progressPct}%`,
-                                      background: progressPct >= 80
-                                        ? 'linear-gradient(90deg,#D32F2F,#FF5722)'
-                                        : 'linear-gradient(90deg,#CBA471,#D32F2F)',
-                                      transition: 'width 0.6s ease',
-                                    }}
-                                  />
-                                </div>
-                              </>
-                            ) : (
-                              /* 无人数上限：显示活跃度进度条（每人 +10%，最大 90%） */
-                              <>
-                                <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-                                  <span>{participantCount} 人已参与</span>
-                                  <span className="text-[#CBA471] font-medium">火热进行中</span>
-                                </div>
-                                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                                  <div
-                                    className="h-full rounded-full"
-                                    style={{
-                                      width: `${Math.min(90, participantCount * 10)}%`,
-                                      background: 'linear-gradient(90deg,#CBA471,#D32F2F)',
-                                      transition: 'width 0.6s ease',
-                                    }}
-                                  />
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-
-                        {/* 底部行：头像堆叠 */}
-                        <div className="flex items-center justify-between">
-                          {isActive ? (
-                            <>
-                              {/* 头像堆叠：有多少显多少，超出显示 +N */}
-                              <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-                                {recentParticipants.length > 0 && (() => {
-                                  // 每个头像实际占宽约 14px（w-5=20px, 负间距-6px），容器可用宽度约 160px
-                                  // 最多显示 10 个头像，超出的用 +N 气泡表示
-                                  const MAX_SHOW = 10;
-                                  const shown = recentParticipants.slice(0, MAX_SHOW);
-                                  const extra = participantCount - shown.length;
-                                  return (
-                                    <div className="flex -space-x-1.5 overflow-hidden">
-                                      {shown.map((p: any, pi: number) => (
-                                        <div
-                                          key={pi}
-                                          className="w-5 h-5 rounded-full border-2 border-white overflow-hidden flex-shrink-0"
-                                          style={{ zIndex: MAX_SHOW - pi }}
-                                        >
-                                          {p.avatar_url ? (
-                                            <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
-                                          ) : (
-                                            <div
-                                              className="w-full h-full flex items-center justify-center text-[8px] font-bold text-white"
-                                              style={{ background: '#D32F2F' }}
-                                            >
-                                              {(p.display_name || '?')[0]}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                      {extra > 0 && (
-                                        <div
-                                          className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0 text-[8px] font-bold text-white"
-                                          style={{ background: '#9E9E9E', zIndex: 0 }}
-                                        >+{extra}</div>
-                                      )}
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              {/* 已结束：中奖者或参与人数 */}
-                              <div className="flex items-center gap-1">
-                                {firstWinnerName ? (
-                                  <>
-                                    <Trophy className="w-3.5 h-3.5 text-[#CBA471]" />
-                                    <span className="text-[11px] text-gray-500 truncate max-w-[100px]">中奖：{firstWinnerName}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Users className="w-3.5 h-3.5 text-gray-400" />
-                                    <span className="text-[11px] text-gray-400">{participantCount} 人参与</span>
-                                  </>
-                                )}
-                              </div>
-                              {/* 查看名单按钒（置灰描边） */}
-                              <button
-                                className="text-[11px] font-medium text-gray-400 border border-gray-200 px-3.5 py-1.5 rounded-full bg-white flex-shrink-0"
-                                onClick={e => { e.stopPropagation(); setLocation(`/lottery/${activity.id}`); }}
-                              >
-                                查看名单
-                              </button>
-                            </>
+                    {/* ── 中部：倒计时区 ── */}
+                    {isActive && (
+                      <div
+                        className="px-3 py-3"
+                        style={{ borderBottom: '1px solid #F5F5F5' }}
+                      >
+                        <div className="flex items-start justify-around">
+                          {/* 报名截止倒计时 */}
+                          {signupEndMs && (
+                            <CountdownBlock
+                              cd={signupCd}
+                              label="报名截止"
+                              endedText={`已于 ${fmtDate(signupEndMs)} 截止`}
+                            />
+                          )}
+                          {/* 分隔线 */}
+                          {signupEndMs && drawAtMs && (
+                            <div className="self-stretch w-px bg-gray-100 mx-2" />
+                          )}
+                          {/* 开奖倒计时 */}
+                          {drawAtMs && (
+                            <CountdownBlock
+                              cd={drawCd}
+                              label="距离开奖"
+                              endedText={drawCd?.ended ? '已开奖' : `${fmtDate(drawAtMs)} 开奖`}
+                            />
+                          )}
+                          {/* 无时间信息时显示参与人数 */}
+                          {!signupEndMs && !drawAtMs && (
+                            <span className="text-[12px] text-gray-400">{participantCount} 人已参与</span>
                           )}
                         </div>
                       </div>
+                    )}
+
+                    {/* ── 底部：参与人数 + 头像 ── */}
+                    <div className="px-3 py-2.5 flex items-center justify-between">
+                      {isActive ? (
+                        <>
+                          <span className="text-[11px] text-gray-400">{participantCount} 人已参与</span>
+                          {/* 头像堆叠 */}
+                          {recentParticipants.length > 0 && (() => {
+                            const MAX_SHOW = 10;
+                            const shown = recentParticipants.slice(0, MAX_SHOW);
+                            const extra = participantCount - shown.length;
+                            return (
+                              <div className="flex -space-x-1.5 overflow-hidden">
+                                {shown.map((p: any, pi: number) => (
+                                  <div
+                                    key={pi}
+                                    className="w-6 h-6 rounded-full border-2 border-white overflow-hidden flex-shrink-0"
+                                    style={{ zIndex: MAX_SHOW - pi }}
+                                  >
+                                    {p.avatar_url ? (
+                                      <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div
+                                        className="w-full h-full flex items-center justify-center text-[9px] font-bold text-white"
+                                        style={{ background: '#D32F2F' }}
+                                      >
+                                        {(p.display_name || '?')[0]}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                                {extra > 0 && (
+                                  <div
+                                    className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0 text-[9px] font-bold text-white"
+                                    style={{ background: '#9E9E9E', zIndex: 0 }}
+                                  >+{extra}</div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </>
+                      ) : (
+                        <>
+                          {/* 已结束：中奖者或参与人数 */}
+                          <div className="flex items-center gap-1">
+                            {firstWinnerName ? (
+                              <>
+                                <Trophy className="w-3.5 h-3.5 text-[#CBA471]" />
+                                <span className="text-[11px] text-gray-500 truncate max-w-[140px]">中奖：{firstWinnerName}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Users className="w-3.5 h-3.5 text-gray-400" />
+                                <span className="text-[11px] text-gray-400">{participantCount} 人参与</span>
+                              </>
+                            )}
+                            {/* 已结束时间说明 */}
+                            {isCompleted && drawAtMs && (
+                              <span className="text-[10px] text-gray-300 ml-1">· {fmtDate(drawAtMs)} 开奖</span>
+                            )}
+                          </div>
+                          <button
+                            className="text-[11px] font-medium text-gray-400 border border-gray-200 px-3.5 py-1.5 rounded-full bg-white flex-shrink-0"
+                            onClick={e => { e.stopPropagation(); setLocation(`/lottery/${activity.id}`); }}
+                          >
+                            查看名单
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
