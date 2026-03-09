@@ -680,10 +680,20 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                                 </div>
                                 {/* 列间分隔线 */}
                                 <div className="flex-shrink-0" style={{ width: '1px', background: C.border, margin: '2px 0' }} />
-                                {/* 列 2：编号 + 概率 */}
-                                <div className="flex flex-col justify-center flex-shrink-0 px-3" style={{ width: '80px' }}>
-                                  <div className="text-xs font-bold font-mono" style={{ color: C.red }}>{fmtNo(idx)}号</div>
-                                  <div className="text-xs font-bold" style={{ color: C.red }}>{pct}%</div>
+                                {/* 列 2：开奖编号 + 中奖概率（中间用横线隔开） */}
+                                <div className="flex flex-col flex-shrink-0" style={{ width: '80px' }}>
+                                  {/* 上半：开奖编号 */}
+                                  <div className="flex-1 flex flex-col items-center justify-center px-2 py-1">
+                                    <div className="text-[9px] mb-0.5" style={{ color: C.sub }}>开奖编号</div>
+                                    <div className="text-xs font-bold font-mono" style={{ color: C.red }}>{fmtNo(idx)}号</div>
+                                  </div>
+                                  {/* 横向分隔线 */}
+                                  <div style={{ height: '1px', background: C.border, margin: '0 6px' }} />
+                                  {/* 下半：中奖概率 */}
+                                  <div className="flex-1 flex flex-col items-center justify-center px-2 py-1">
+                                    <div className="text-[9px] mb-0.5" style={{ color: C.sub }}>中奖概率</div>
+                                    <div className="text-xs font-bold" style={{ color: C.red }}>{pct}%</div>
+                                  </div>
                                 </div>
                                 {/* 列间分隔线 */}
                                 <div className="flex-shrink-0" style={{ width: '1px', background: C.border, margin: '2px 0' }} />
