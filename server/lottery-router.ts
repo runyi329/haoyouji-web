@@ -247,8 +247,13 @@ export const lotteryRouter = router({
         if (activity[f] instanceof Date) activity[f] = (activity[f] as Date).toISOString();
       }
       // external_seed_date 是 DATE 类型，也可能是 Date 对象
+      // 必须用本地时区提取日期，而非 UTC，否则在 UTC+8 服务器上会少一天
       if (activity.external_seed_date instanceof Date) {
-        activity.external_seed_date = (activity.external_seed_date as Date).toISOString().split('T')[0];
+        const d = activity.external_seed_date as Date;
+        const y = d.getFullYear();
+        const mo = String(d.getMonth() + 1).padStart(2, '0');
+        const dy = String(d.getDate()).padStart(2, '0');
+        activity.external_seed_date = `${y}-${mo}-${dy}`;
       }
       const prizes = await _execQuery(
         `SELECT * FROM lottery_prizes WHERE activity_id=? ORDER BY sort_order ASC`,
