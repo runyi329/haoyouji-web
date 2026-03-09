@@ -606,19 +606,19 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                 </div>
                 <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ background: C.bg }}>
-                      <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, borderRight: '0.5px solid rgba(0,0,0,0.08)' }}>收盘价示例</th>
-                      <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, borderRight: '0.5px solid rgba(0,0,0,0.08)' }}>计算</th>
+                    <tr style={{ background: C.bg, borderBottom: `1px solid ${C.formulaBorder}` }}>
+                      <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, borderRight: `1px solid ${C.formulaBorder}` }}>收盘价示例</th>
+                      <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, borderRight: `1px solid ${C.formulaBorder}` }}>计算</th>
                       <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>中奖示例</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map(({ tail, tailStr, remainder, winner, participant }, i) => (
                       <tr key={i} style={{ borderTop: `1px solid ${C.formulaBorder}`, background: i % 2 === 0 ? C.card : C.formulaBg }}>
-                        <td className="px-2 py-1.5 font-mono" style={{ color: C.text, borderRight: '0.5px solid rgba(0,0,0,0.08)' }}>
+                        <td className="px-2 py-1.5 font-mono" style={{ color: C.text, borderRight: `1px solid ${C.formulaBorder}` }}>
                           {intPart}.<span style={{ color: C.red, fontWeight: 700 }}>{tailStr}</span>
                         </td>
-                        <td className="text-center px-2 py-1.5 font-mono" style={{ color: C.sub, borderRight: '0.5px solid rgba(0,0,0,0.08)' }}>
+                        <td className="text-center px-2 py-1.5 font-mono" style={{ color: C.sub, borderRight: `1px solid ${C.formulaBorder}` }}>
                           {/* 尾数用红框，人数用红框，让用户清楚两个数字的来源 */}
                           <span style={{ border: `1.5px solid ${C.red}`, borderRadius: '3px', padding: '0 3px', color: C.red, fontWeight: 700 }}>{tailStr}</span>
                           <span className="mx-0.5">÷</span>
