@@ -754,35 +754,35 @@ export default function LedgerDetail() {
                     )}
 
                     {/* ── 底部：参与人数 + 头像 ── */}
-                    <div className="px-3 py-2.5 flex items-center justify-between">
+                    <div className="px-3 py-2.5 flex items-center gap-2">
                       {isActive ? (
                         <>
+                          {/* 左侧：参与人数，不压缩 */}
                           <span className="text-[11px] text-gray-400 flex-shrink-0">{participantCount} 人已参与</span>
-                          {/* 头像堆叠 */}
+                          {/* 中间弹性间距 */}
+                          <div className="flex-1" />
+                          {/* 头像堆叠：用普通 flex 排列，容器不超出卡片 */}
                           {recentParticipants.length > 0 && (() => {
-                            const MAX_SHOW = 8;
+                            const MAX_SHOW = 7;
                             const shown = recentParticipants.slice(0, MAX_SHOW);
                             const extra = participantCount - shown.length;
-                            // 头像大小自适应：人少时大，人多时小
-                            const avatarSize = participantCount <= 3 ? 28 : participantCount <= 6 ? 24 : 20;
-                            // 重叠量：每个头像向左移动的像素数
-                            const overlapPx = Math.round(avatarSize * 0.3);
-                            // 容器宽度 = 第一个头像全宽 + 后续每个只占可见宽度
-                            const visibleWidth = avatarSize + (shown.length - 1 + (extra > 0 ? 1 : 0)) * (avatarSize - overlapPx);
+                            const avatarSize = 24;
+                            const overlapPx = 7; // 固定重叠 7px
                             return (
                               <div
-                                className="relative flex-shrink-0"
-                                style={{ width: visibleWidth, height: avatarSize }}
+                                className="flex items-center flex-shrink-0"
+                                style={{ paddingRight: overlapPx }} // 补偿最后一个头像的重叠量，避免被截
                               >
                                 {shown.map((p: any, pi: number) => (
                                   <div
                                     key={pi}
-                                    className="absolute rounded-full border-2 border-white overflow-hidden"
+                                    className="rounded-full border-2 border-white overflow-hidden flex-shrink-0"
                                     style={{
                                       width: avatarSize,
                                       height: avatarSize,
-                                      left: pi * (avatarSize - overlapPx),
+                                      marginLeft: pi === 0 ? 0 : -overlapPx,
                                       zIndex: MAX_SHOW - pi,
+                                      position: 'relative',
                                     }}
                                   >
                                     {p.avatar_url ? (
@@ -790,7 +790,7 @@ export default function LedgerDetail() {
                                     ) : (
                                       <div
                                         className="w-full h-full flex items-center justify-center font-bold text-white"
-                                        style={{ background: '#D32F2F', fontSize: Math.max(8, avatarSize * 0.38) }}
+                                        style={{ background: '#D32F2F', fontSize: 9 }}
                                       >
                                         {(p.display_name || '?')[0]}
                                       </div>
@@ -799,14 +799,15 @@ export default function LedgerDetail() {
                                 ))}
                                 {extra > 0 && (
                                   <div
-                                    className="absolute rounded-full border-2 border-white flex items-center justify-center font-bold text-white"
+                                    className="rounded-full border-2 border-white flex items-center justify-center flex-shrink-0 font-bold text-white"
                                     style={{
                                       width: avatarSize,
                                       height: avatarSize,
-                                      left: shown.length * (avatarSize - overlapPx),
+                                      marginLeft: -overlapPx,
                                       background: '#BDBDBD',
                                       zIndex: 0,
-                                      fontSize: Math.max(7, avatarSize * 0.3),
+                                      position: 'relative',
+                                      fontSize: 8,
                                     }}
                                   >+{extra}</div>
                                 )}
