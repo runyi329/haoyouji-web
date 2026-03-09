@@ -111,24 +111,42 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
     } catch {}
   }
   const isPast = targetTime ? now > targetTime.getTime() : false;
+  // 已过收盘/开奖时间后，计算已过去多少秒（显示 +HH:MM:SS）
+  const [elapsedSec, setElapsedSec] = useState(0);
+  useEffect(() => {
+    if (!isPast || !targetTime) return;
+    const update = () => setElapsedSec(Math.floor((Date.now() - targetTime.getTime()) / 1000));
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [isPast, targetTime]);
+  const elapsedH = Math.floor(elapsedSec / 3600);
+  const elapsedM = Math.floor((elapsedSec % 3600) / 60);
+  const elapsedS = elapsedSec % 60;
   return (
-    <div className="px-4 pb-3 pt-1 flex items-center gap-1.5" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
+    <div className="px-4 pb-3 pt-1 flex items-center gap-1.5 flex-wrap" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
       <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.darkSub }} />
       {hasData ? (
         <span className="text-xs font-mono" style={{ color: C.darkSub }}>
           数据已获取{fetchedAt ? `·${fetchedAt}` : (seedDate ? `·${seedDate}` : '')}
         </span>
       ) : isPast ? (
-        <span className="text-xs font-mono" style={{ color: '#F59E0B' }}>
-          {isStock ? '收盘后' : '开奖后'}数据获取中...
+        <span className="text-xs font-mono flex items-center gap-2" style={{ color: '#F59E0B' }}>
+          <span>{isStock ? '收盘后' : '开奖后'}数据获取中...</span>
+          <span
+            className="text-xs font-mono px-1.5 py-0.5 rounded"
+            style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', letterSpacing: '0.05em' }}
+          >
+            +{elapsedH > 0 ? `${String(elapsedH).padStart(2,'0')}:` : ''}{String(elapsedM).padStart(2,'0')}:{String(elapsedS).padStart(2,'0')}
+          </span>
         </span>
       ) : targetTime ? (
         <span className="text-xs font-mono" style={{ color: C.darkSub }}>
-          距数据获取还剩&nbsp;
+          距{isStock ? '收盘' : '开奖'}还有&nbsp;
           {countdown.d > 0 && <span style={{ color: C.darkText }}>{countdown.d}天</span>}
           {(countdown.d > 0 || countdown.h > 0) && <span style={{ color: C.darkText }}>{countdown.h}时</span>}
           <span style={{ color: C.darkText }}>{countdown.m}分{countdown.s}秒</span>
-          &nbsp;·&nbsp;{isStock ? '收盘时间 15:00' : '开奖时间 22:00'}
+          &nbsp;·&nbsp;{isStock ? '15:00 收盘' : '22:00 开奖'}
         </span>
       ) : (
         <span className="text-xs font-mono" style={{ color: C.darkSub }}>等待开奖日期确定...</span>
