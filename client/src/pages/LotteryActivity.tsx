@@ -142,12 +142,9 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
             {isStock ? '收盘后' : '开奖后'}数据获取中，请稍候...
           </span>
         ) : (
-          <span className="text-xs font-mono flex items-center gap-1.5" style={{ color: '#FBBF24' }}>
-            <span>距数据获取还剩</span>
-            <span
-              className="font-mono px-1.5 py-0.5 rounded"
-              style={{ background: 'rgba(251,191,36,0.15)', color: '#FBBF24', letterSpacing: '0.05em' }}
-            >
+          <span className="text-xs font-mono" style={{ color: '#FBBF24' }}>
+            距数据获取还剩&nbsp;
+            <span style={{ letterSpacing: '0.05em' }}>
               {fetchCountdown.h > 0 && `${String(fetchCountdown.h).padStart(2,'0')}:`}{String(fetchCountdown.m).padStart(2,'0')}:{String(fetchCountdown.s).padStart(2,'0')}
             </span>
           </span>
