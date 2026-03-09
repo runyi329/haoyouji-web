@@ -526,17 +526,25 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
               countPerPerson[person]++;
             }
             // 对照表行数：1人→1行(100%)，2人→2行，3+人→每人一行（最多展示9行）
+            // 使用伪随机打乱：看起来随机但每个参与者恰好被算到一次
             let exampleTails: number[];
             if (exampleN === 1) {
               exampleTails = [88]; // 1人必中，只展示1行
             } else if (exampleN === 2) {
               exampleTails = [88, 25]; // 2人展示2行
             } else {
-              // 3人以上：每人展示1个代表性尾数
+              // 3人以上：每人展示1个代表性尾数，看起来随机但每人恰好出现一次
               const displayN = Math.min(exampleN, 9);
+              // 为每个编号 idx 选一个该编号对应的尾数（尾数 t 满足 t % exampleN === idx）
+              // 每个编号对应的尾数列表中，选一个看起来不是第一个的（用一个固定偏移量模拟随机感）
+              const offsets = [3, 7, 1, 5, 9, 2, 8, 4, 6]; // 预设偏移量，看起来随机
               exampleTails = Array.from({ length: displayN }, (_, i) => {
-                // 尾数 i 的余数就是 i（因为 i < N）
-                return i;
+                // 尾数 t 满足 t % exampleN === i 的列表：t = i, i+N, i+2N, ...
+                const tailsForIdx: number[] = [];
+                for (let t = i; t <= 99; t += exampleN) tailsForIdx.push(t);
+                // 用偏移量选一个看起来不是顺序的尾数
+                const offset = offsets[i % offsets.length];
+                return tailsForIdx[offset % tailsForIdx.length];
               });
             }
             const rows = exampleTails.map(tail => {
