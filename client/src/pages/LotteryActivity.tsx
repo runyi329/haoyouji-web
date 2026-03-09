@@ -538,7 +538,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
   const [showProbDetail, setShowProbDetail] = useState(false);
 
   return (
-    <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+    <div>
 
       {/* 实例说明 */}
       {(isStock || isLottery) ? (
