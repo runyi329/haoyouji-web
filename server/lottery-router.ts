@@ -548,7 +548,7 @@ export const lotteryRouter = router({
       };
     }),
 
-  // ── 定时统一开奖（组织者触发） ────────────
+  // ── 定时开奖（组织者触发） ────────────
   startDraw: protectedProcedure
     .input(z.object({ activityId: z.number() }))
     .mutation(async ({ input, ctx }) => {

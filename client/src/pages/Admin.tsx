@@ -102,7 +102,7 @@ const CUSTOM_LEDGER_TYPES = [
     key: "AE",
     label: "AE 型",
     name: "共享抽奖",
-    desc: "以共享账本为底座，支持即时刻刻乐、定时统一开奖、阶段解锁三种模式，内置公平验证机制",
+    desc: "以共享账本为底座，支持即时刻刻乐、定时开奖、阶段解锁三种模式，内置公平验证机制",
     component: CustomAEManager,
   },
 ];
