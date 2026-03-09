@@ -225,7 +225,18 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
             )}
           </div>
         ) : (
-          <div className="text-2xl font-mono" style={{ color: C.sub }}>待获取</div>
+          <div>
+            <div className="text-2xl font-mono" style={{ color: C.sub }}>待获取</div>
+            <div className="text-xs mt-1.5" style={{ color: C.sub }}>
+              将获取：
+              <span style={{ color: C.gold }}>
+                {seedDate
+                  ? `${seedDate} 北京时间 15:00 ${indexName}收盘价`
+                  : `开奖当天北京时间 15:00 ${indexName}收盘价`
+                }
+              </span>
+            </div>
+          </div>
         )}
       </div>
 
@@ -380,6 +391,15 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
               ))}
             </div>
             <div className="text-xs" style={{ color: C.sub }}>等待开奖数据...</div>
+            <div className="text-xs mt-1.5" style={{ color: C.sub }}>
+              将获取：
+              <span style={{ color: C.gold }}>
+                {seedDate
+                  ? `${seedDate} 北京时间 22:00 ${lotteryName}开奖号码`
+                  : `开奖当天北京时间 22:00 ${lotteryName}开奖号码`
+                }
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -441,7 +461,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
         <div className="space-y-3">
           {/* 取数方式 */}
           <div className="text-xs rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
-            <div className="flex items-center gap-1.5 mb-2">
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               <span className="font-semibold" style={{ color: C.text }}>取数方式</span>
               <button
                 type="button"
@@ -449,6 +469,13 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                 className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                 style={{ background: C.border, color: C.sub, lineHeight: 1 }}
               >?</button>
+              {/* 开奖依据日期内嵌标签 */}
+              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px]" style={{ background: C.goldLight, color: C.gold, border: `1px solid ${C.gold}44` }}>
+                {seedDate
+                  ? `取 ${seedDate} ${isStock ? '北京时间 15:00 收盘价' : seedType === 'ssq' ? '北京时间 22:00 双色球开奖号码' : '北京时间 22:00 大乐透开奖号码'}`
+                  : `开奖当天 ${isStock ? '北京时间 15:00 收盘价' : '北京时间 22:00 开奖号码'}`
+                }
+              </span>
             </div>
             {/* 整体数字，16 用红色细框框出（2025-02-27 上证指数收盘价近4162.88） */}
             <div className="flex items-center gap-2">
@@ -554,13 +581,6 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
               </div>
             );
           })()}
-
-          {/* 开奖依据日期 */}
-          <div className="px-3 py-2 rounded-xl text-xs" style={{ background: C.goldLight, border: `1px solid ${C.gold}33` }}>
-            <span style={{ color: C.sub }}>开奖依据日期：</span>
-            <strong style={{ color: C.text }}>{seedDate ? seedDate : '开奖当天'}</strong>
-            <span style={{ color: C.sub }}>{isStock ? ' 上交所收盘价' : seedType === 'ssq' ? ' 双色球开奖号码' : ' 大乐透开奖号码'}</span>
-          </div>
 
           {/* 可验证说明 */}
           <div className="flex items-start gap-1.5">
