@@ -12,6 +12,7 @@
  *   8. 底部固定按钮
  */
 import { useState, useEffect, useRef } from "react";
+import Tooltip from '@/components/Tooltip';
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -525,6 +526,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
   const fmtNo = (n: number) => String(n).padStart(digits, '0');
 
   const [showTip, setShowTip] = useState(false);
+  const algoHelpRef = useRef<HTMLButtonElement>(null);
   const [showProbDetail, setShowProbDetail] = useState(false);
 
   return (
@@ -582,30 +584,35 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             });
             return (
               <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.formulaBorder}`, background: C.formulaBg }}>
-                {/* 头部：取数方式示例行 */}
-                <div className="px-3 pt-3 pb-2">
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className="font-semibold" style={{ color: C.text }}>取数方式</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowTip(v => !v)}
-                      className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                      style={{ background: C.border, color: C.sub, lineHeight: 1 }}
-                    >?</button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span style={{ color: C.sub }}>例：</span>
-                    <span className="font-mono font-bold text-base" style={{ color: C.text }}>
-                      4162.<span style={{ color: C.red, border: `1.5px solid ${C.red}`, borderRadius: '3px', padding: '0 2px', display: 'inline-block', lineHeight: 1.3 }}>88</span>
-                    </span>
-                    <span style={{ color: C.sub }}>→ 取 <strong style={{ color: C.red }}>88</strong></span>
-                  </div>
-                  {showTip && (
-                    <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.formulaBorder}`, color: C.sub }}>
-                      取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
-                      <strong style={{ color: C.text }}>余数直接对应中奖编号：余数 0→00号，余数 1→01号，以此类推</strong>。没有特例，不需要加一。
-                    </div>
-                  )}
+                {/* 头部：取数方式 — 单行 */}
+                <div className="px-3 py-2.5 flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-xs" style={{ color: C.text }}>取数方式：</span>
+                  <span style={{ color: C.sub }} className="text-xs">例：</span>
+                  <span className="font-mono font-bold text-sm" style={{ color: C.text }}>
+                    4162.<span style={{ color: C.red, border: `1.5px solid ${C.red}`, borderRadius: '3px', padding: '0 2px', display: 'inline-block', lineHeight: 1.3 }}>88</span>
+                  </span>
+                  <span style={{ color: C.sub }} className="text-xs">→ 取 <strong style={{ color: C.red }}>88</strong></span>
+                  <button
+                    ref={algoHelpRef}
+                    type="button"
+                    onClick={() => setShowTip(v => !v)}
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ background: C.border, color: C.sub, fontSize: 9, fontWeight: 700, lineHeight: 1 }}
+                  >?</button>
+                  <Tooltip
+                    isOpen={showTip}
+                    onClose={() => setShowTip(false)}
+                    triggerRef={algoHelpRef as React.RefObject<HTMLElement>}
+                    content={
+                      <div className="space-y-1">
+                        <div className="font-bold text-sm pb-1 border-b border-gray-200" style={{ color: C.red }}>取数方式说明</div>
+                        <div className="text-xs leading-relaxed" style={{ color: '#444' }}>
+                          取 <span style={{ color: C.red }}>{seedLabel}</span> 小数点后两位作为开奖基数，
+                          除以参与人数取余数，<strong>余数直接对应中奖编号</strong>：余数 0 → 00号，余数 1 → 01号，以此类推。没有特例，不需要加一。
+                        </div>
+                      </div>
+                    }
+                  />
                 </div>
                 {/* 分隔线 */}
                 <div style={{ borderTop: `1px solid ${C.formulaBorder}` }} />
