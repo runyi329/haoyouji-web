@@ -683,6 +683,13 @@ export default function LotteryActivity() {
   const isStock = activity.external_seed_type === 'sh_index' || activity.external_seed_type === 'sz_index';
   const isLottery = activity.external_seed_type === 'ssq' || activity.external_seed_type === 'dlt';
 
+  // 报名时间窗口判断（必须在 getOpenStatusLabel 之前定义）
+  const signupStartAt = activity.signup_start_at ? new Date(activity.signup_start_at) : null;
+  const signupEndAt = activity.signup_end_at ? new Date(activity.signup_end_at) : null;
+  const isSignupNotStarted = signupStartAt ? Date.now() < signupStartAt.getTime() : false;
+  const isSignupClosed = signupEndAt ? Date.now() > signupEndAt.getTime() : false;
+  const canSignup = isOpen && !isSignupNotStarted && !isSignupClosed;
+
   // 生成右上角报名状态标签文字
   const getOpenStatusLabel = () => {
     if (isSignupNotStarted && signupStartAt) {
@@ -721,16 +728,10 @@ export default function LotteryActivity() {
     cancelled: { label: '已取消', bg: '#FFEBEE', color: '#D32F2F' },
   }[activity.status as string] ?? { label: activity.status, bg: '#F5F5F5', color: '#9E9E9E' };
 
-  // 底部按钮逻辑（顶层变量，避免 IIFE 导致崩溃）
+  // 底部按鈕逻辑（顶层变量，避免 IIFE 导致崩溃）
   const regMode = activity.registration_mode ?? 'open';
   const isOrganizer = activity.created_by === user?.id;
   const isInviteOnly = (regMode === 'invite' || regMode === 'organizer_add') && !isOrganizer;
-  // 报名时间窗口判断
-  const signupStartAt = activity.signup_start_at ? new Date(activity.signup_start_at) : null;
-  const signupEndAt = activity.signup_end_at ? new Date(activity.signup_end_at) : null;
-  const isSignupNotStarted = signupStartAt ? Date.now() < signupStartAt.getTime() : false;
-  const isSignupClosed = signupEndAt ? Date.now() > signupEndAt.getTime() : false;
-  const canSignup = isOpen && !isSignupNotStarted && !isSignupClosed;
 
   return (
     <div className="min-h-screen pb-32" style={{ backgroundColor: C.bg }}>
