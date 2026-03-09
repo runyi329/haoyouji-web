@@ -134,23 +134,28 @@ export async function executeDrawForActivity(activityId: number): Promise<{ succ
         const seedDate = activity.external_seed_date ? new Date(activity.external_seed_date) : new Date();
         const dateStr = seedDate.toISOString().split('T')[0];
         if (activity.external_seed_type === 'sh_index' || activity.external_seed_type === 'sz_index') {
-          const symbol = activity.external_seed_type === 'sh_index' ? '000001.SS' : '399001.SZ';
+          const sinaCode = activity.external_seed_type === 'sh_index' ? 'sh000001' : 'sz399001';
+          const displayCode = activity.external_seed_type === 'sh_index' ? '000001.SH' : '399001.SZ';
           const indexName = activity.external_seed_type === 'sh_index' ? '上证指数' : '深证成指';
-          const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
-          const resp = await fetch(yahooUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-          const data = await resp.json() as any;
-          const result = data?.chart?.result?.[0];
-          if (result) {
-            const timestamps: number[] = result.timestamp || [];
-            const closes: number[] = result.indicators?.quote?.[0]?.close || [];
-            let bestClose = closes[closes.length - 1];
-            for (let i = 0; i < timestamps.length; i++) {
-              const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
-              if (d <= dateStr && closes[i]) bestClose = closes[i];
+          // 新浪财经实时行情 API，收盘后数据延迟最低
+          const sinaUrl = `https://hq.sinajs.cn/list=${sinaCode}`;
+          const resp = await fetch(sinaUrl, {
+            headers: {
+              'Referer': 'https://finance.sina.com.cn',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
-            if (bestClose) {
-              externalSeedValue = bestClose.toFixed(2);
-              externalSeedSource = `${indexName}(${symbol}) ${dateStr} 收盘价: ${externalSeedValue} 点 | 数据来源: Yahoo Finance`;
+          });
+          const text = await resp.text();
+          // 新浪返回格式: var hq_str_sh000001="名称,昨收,今开,当前价,最高,最低,...,日期,时间,...";
+          const match = text.match(/"([^"]+)"/);
+          if (match) {
+            const fields = match[1].split(',');
+            // fields[3] = 当前价（收盘价）
+            const closePrice = parseFloat(fields[3]);
+            const dataDate = fields[30] || dateStr; // fields[30] = 日期
+            if (closePrice && closePrice > 0) {
+              externalSeedValue = closePrice.toFixed(2);
+              externalSeedSource = `${indexName}(${displayCode}) ${dataDate} 收盘价: ${externalSeedValue} 点 | 数据来源: 新浪财经`;
               await _execQuery(
                 `UPDATE lottery_activities SET external_seed_value=?, external_seed_source=? WHERE id=?`,
                 [externalSeedValue, externalSeedSource, activityId]
@@ -160,6 +165,9 @@ export async function executeDrawForActivity(activityId: number): Promise<{ succ
               await _execQuery(`UPDATE lottery_activities SET status='active' WHERE id=?`, [activityId]);
               return { success: false, error: `${indexName}收盘价数据暂未更新，稍后重试` };
             }
+          } else {
+            await _execQuery(`UPDATE lottery_activities SET status='active' WHERE id=?`, [activityId]);
+            return { success: false, error: `${indexName}数据解析失败，稍后重试` };
           }
         }
       } catch (err) {
@@ -815,24 +823,27 @@ export const lotteryRouter = router({
             : new Date();
           const dateStr = seedDate.toISOString().split('T')[0];
           if (activity.external_seed_type === 'sh_index' || activity.external_seed_type === 'sz_index') {
-            // 沪深股市收盘价（Yahoo Finance）
-            const symbol = activity.external_seed_type === 'sh_index' ? '000001.SS' : '399001.SZ';
+            // 沪深股市收盘价（新浪财经）
+            const sinaCode = activity.external_seed_type === 'sh_index' ? 'sh000001' : 'sz399001';
+            const displayCode = activity.external_seed_type === 'sh_index' ? '000001.SH' : '399001.SZ';
             const indexName = activity.external_seed_type === 'sh_index' ? '上证指数' : '深证成指';
-            const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
-            const resp = await fetch(yahooUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            const data = await resp.json() as any;
-            const result = data?.chart?.result?.[0];
-            if (result) {
-              const timestamps: number[] = result.timestamp || [];
-              const closes: number[] = result.indicators?.quote?.[0]?.close || [];
-              // 找到最接近指定日期的收盘价
-              let bestClose = closes[closes.length - 1];
-              for (let i = 0; i < timestamps.length; i++) {
-                const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
-                if (d <= dateStr && closes[i]) bestClose = closes[i];
+            const sinaUrl = `https://hq.sinajs.cn/list=${sinaCode}`;
+            const resp = await fetch(sinaUrl, {
+              headers: {
+                'Referer': 'https://finance.sina.com.cn',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
               }
-              externalSeedValue = bestClose.toFixed(2);
-              externalSeedSource = `${indexName}(${symbol}) ${dateStr} 收盘价: ${externalSeedValue} 点 | 数据来源: Yahoo Finance`;
+            });
+            const text = await resp.text();
+            const match = text.match(/"([^"]+)"/);
+            if (match) {
+              const fields = match[1].split(',');
+              const closePrice = parseFloat(fields[3]);
+              const dataDate = fields[30] || dateStr;
+              if (closePrice && closePrice > 0) {
+                externalSeedValue = closePrice.toFixed(2);
+                externalSeedSource = `${indexName}(${displayCode}) ${dataDate} 收盘价: ${externalSeedValue} 点 | 数据来源: 新浪财经`;
+              }
             }
           } else if (activity.external_seed_type === 'ssq' || activity.external_seed_type === 'dlt') {
             // 双色球/大乐透：尝试从聚合数据 API 获取（需要 API key，否则用占位符提示）
