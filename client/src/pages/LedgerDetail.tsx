@@ -821,40 +821,39 @@ export default function LedgerDetail() {
                         </div>
                       )}
                     </div>
-                    {/* ── 通栏状态条：图片下方，半透明深色 ── */}
+                    {/* ── 通栏状态条：图片下方，左边距开奖倒计时，右边报名截止时间 ── */}
                     {isActive && (
                       <div
-                        className="flex items-center gap-2 px-3 py-2"
+                        className="flex items-center justify-between px-3 py-2"
                         style={{ background: 'rgba(28,18,18,0.05)', borderBottom: '1px solid rgba(0,0,0,0.05)' }}
                       >
-                        {/* 左侧：状态标签 */}
-                        {(() => {
-                          const statusColors: Record<string, { bg: string; text: string; label: string }> = {
-                            open: { bg: '#E8F5E9', text: '#2E7D32', label: '报名中' },
-                            drawing: { bg: '#FFF3E0', text: '#E65100', label: '开奖中' },
-                            draft: { bg: '#F5F5F5', text: '#757575', label: '草稿' },
-                          };
-                          const sc = statusColors[activity.status] || { bg: '#F5F5F5', text: '#757575', label: activity.status };
-                          return (
-                            <span
-                              className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-                              style={{ background: sc.bg, color: sc.text, letterSpacing: '0.04em' }}
-                            >
-                              {sc.label}
-                            </span>
-                          );
-                        })()}
-                        {/* 中间：报名截止时间 */}
+                        {/* 左侧：距开奖倒计时（醒目） */}
+                        {drawAtMs ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] font-medium flex-shrink-0" style={{ color: '#B71C1C' }}>距开奖</span>
+                            {drawCd && !drawCd.ended ? (
+                              <span className="text-[13px] font-bold tabular-nums" style={{ color: '#B71C1C', letterSpacing: '-0.02em' }}>
+                                {drawCd.d > 0
+                                  ? `${String(drawCd.d).padStart(2,'0')}天${String(drawCd.h).padStart(2,'0')}时`
+                                  : `${String(drawCd.h).padStart(2,'0')}:${String(drawCd.m).padStart(2,'0')}:${String(drawCd.s).padStart(2,'0')}`
+                                }
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-semibold" style={{ color: '#9E9E9E' }}>即将开奖</span>
+                            )}
+                          </div>
+                        ) : (
+                          // 无开奖时间时显示状态标签（仅开奖中/草稿）
+                          activity.status === 'drawing' ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#FFF3E0', color: '#E65100' }}>开奖中</span>
+                          ) : activity.status === 'draft' ? (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#F5F5F5', color: '#757575' }}>草稿</span>
+                          ) : null
+                        )}
+                        {/* 右侧：报名截止时间 */}
                         {signupEndMs ? (
-                          <span className="text-[11px] flex-1 truncate" style={{ color: '#5a5a5a' }}>
-                            {signupCd?.ended
-                              ? `报名已截止 · ${fmtDate(signupEndMs)}`
-                              : `报名截止：${fmtDate(signupEndMs)}`
-                            }
-                          </span>
-                        ) : drawAtMs ? (
-                          <span className="text-[11px] flex-1 truncate" style={{ color: '#5a5a5a' }}>
-                            {drawCd?.ended ? `已于 ${fmtDate(drawAtMs)} 开奖` : `${fmtDate(drawAtMs)} 开奖`}
+                          <span className="text-[10px] flex-shrink-0" style={{ color: signupCd?.ended ? '#9E9E9E' : '#5a5a5a' }}>
+                            {signupCd?.ended ? `截止 ${fmtDate(signupEndMs)}` : `报名截止 ${fmtDate(signupEndMs)}`}
                           </span>
                         ) : null}
                       </div>
@@ -871,8 +870,8 @@ export default function LedgerDetail() {
                             const MAX_SHOW = 7;
                             const shown = recentParticipants.slice(0, MAX_SHOW);
                             const extra = participantCount - shown.length;
-                            const avatarSize = 24;
-                            const overlapPx = 7;
+                            const avatarSize = 30;
+                            const overlapPx = 9;
                             return (
                               <div className="flex items-center">
                                 {shown.map((p: any, pi: number) => (
@@ -892,7 +891,7 @@ export default function LedgerDetail() {
                                     ) : (
                                       <div
                                         className="w-full h-full flex items-center justify-center font-bold text-white"
-                                        style={{ background: '#D32F2F', fontSize: 9 }}
+                                        style={{ background: '#D32F2F', fontSize: 11 }}
                                       >
                                         {(p.display_name || '?')[0]}
                                       </div>
