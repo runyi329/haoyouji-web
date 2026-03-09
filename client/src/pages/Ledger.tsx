@@ -808,7 +808,7 @@ export default function Ledger() {
                       <span className="text-gray-300">|</span>
                       <span className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#4CAF50]"></span>
-                        开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天
+                        {(ledger as any).type === 'custom_ae' ? <>开箱 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</> : <>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</>}
                       </span>
                       <span className="text-gray-300">|</span>
                       <span className="flex items-center gap-1">
@@ -964,7 +964,7 @@ export default function Ledger() {
                                 <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                                   <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
                                   <span className="text-gray-300">|</span>
-                                  <span>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</span>
+                                  <span>{(ledger as any).type === 'custom_ae' ? <>开箱 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</> : <>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</>}</span>
                                   <span className="text-gray-300">|</span>
                                   <span>{(ledger as any).type === 'custom_ae' ? <>{(ledger as any).activeLotteryCount || 0}个抽奖进行中</> : <>{ledger.recordCount || 0}条账目</>}</span>
                                 </div>
@@ -1025,7 +1025,7 @@ export default function Ledger() {
                               <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
                                 <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
                                 <span className="text-gray-300">|</span>
-                                <span>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</span>
+                                <span>{(ledger as any).type === 'custom_ae' ? <>开箱 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</> : <>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</>}</span>
                                 <span className="text-gray-300">|</span>
                                 <span>{(ledger as any).type === 'custom_ae' ? <>{(ledger as any).activeLotteryCount || 0}个抽奖进行中</> : <>{ledger.recordCount || 0}条账目</>}</span>
                               </div>
