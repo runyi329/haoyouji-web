@@ -556,15 +556,26 @@ export default function LedgerDetail() {
                 );
 
                 // 倒计时显示组件
-                const CountdownBlock = ({ cd, label, endedText }: {
+                const CountdownBlock = ({ cd, label, endedText, endedDate }: {
                   cd: ReturnType<typeof parseDiff>;
                   label: string;
                   endedText: string;
+                  endedDate?: string; // 已结束时显示的日期文字（与翻牌块等高）
                 }) => (
                   <div className="flex flex-col items-center">
                     <span className="text-[9px] text-gray-400 mb-1">{label}</span>
                     {!cd || cd.ended ? (
-                      <span className="text-[11px] font-semibold" style={{ color: '#9E9E9E' }}>{endedText}</span>
+                      // 已结束：用类似翻牌块的容器显示，保持视觉高度一致
+                      <div className="flex items-center gap-1">
+                        <div
+                          className="px-3 py-2 rounded-lg flex items-center justify-center"
+                          style={{ background: '#EEEEEE', minWidth: '80px' }}
+                        >
+                          <span className="text-[11px] font-semibold text-center" style={{ color: '#9E9E9E' }}>
+                            {endedDate ?? endedText}
+                          </span>
+                        </div>
+                      </div>
                     ) : cd.d > 0 ? (
                       <div className="flex items-end gap-0.5">
                         <FlipDigit val={cd.d} label="天" />
@@ -653,27 +664,7 @@ export default function LedgerDetail() {
                           <span className="text-white text-[15px] font-bold line-clamp-1 flex-1" style={{ lineHeight: '1.4', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
                             {activity.title}
                           </span>
-                          {/* 状态勋章 */}
-                          <span
-                            className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold"
-                            style={{
-                              background:
-                                activity.status === 'open' ? '#E8F5E9' :
-                                activity.status === 'drawing' ? '#FFF3E0' :
-                                activity.status === 'draft' ? 'rgba(255,255,255,0.85)' :
-                                'rgba(255,255,255,0.85)',
-                              color:
-                                activity.status === 'open' ? '#2E7D32' :
-                                activity.status === 'drawing' ? '#E65100' :
-                                activity.status === 'draft' ? '#9E9E9E' : '#757575',
-                              border:
-                                activity.status === 'open' ? '1px solid #A5D6A7' :
-                                activity.status === 'drawing' ? '1px solid #FFCC80' :
-                                '1px solid rgba(0,0,0,0.1)',
-                            }}
-                          >
-                            {lotteryStatusMap[activity.status]?.label ?? '未知'}
-                          </span>
+                          {/* 状态勋章已移除，倒计时区域已能体现状态 */}
                         </div>
                       </div>
                       {/* 开奖中火焰标 */}
@@ -697,7 +688,8 @@ export default function LedgerDetail() {
                             <CountdownBlock
                               cd={signupCd}
                               label="报名截止"
-                              endedText={`已于 ${fmtDate(signupEndMs)} 截止`}
+                              endedText={`已截止`}
+                              endedDate={`${fmtDate(signupEndMs)} 截止`}
                             />
                           )}
                           {/* 分隔线 */}
@@ -708,8 +700,9 @@ export default function LedgerDetail() {
                           {drawAtMs && (
                             <CountdownBlock
                               cd={drawCd}
-                              label="距离开奖"
-                              endedText={drawCd?.ended ? '已开奖' : `${fmtDate(drawAtMs)} 开奖`}
+                              label="距离开奖还剩"
+                              endedText={`已开奖`}
+                              endedDate={drawCd?.ended ? '已开奖' : `${fmtDate(drawAtMs)} 开奖`}
                             />
                           )}
                           {/* 无时间信息时显示参与人数 */}
@@ -730,20 +723,23 @@ export default function LedgerDetail() {
                             const MAX_SHOW = 10;
                             const shown = recentParticipants.slice(0, MAX_SHOW);
                             const extra = participantCount - shown.length;
+                            // 头像大小自适应：人少时大，人多时小
+                            const avatarSize = participantCount <= 3 ? 32 : participantCount <= 6 ? 26 : participantCount <= 10 ? 22 : 18;
+                            const overlapPx = Math.round(avatarSize * 0.35);
                             return (
-                              <div className="flex -space-x-1.5 overflow-hidden">
+                              <div className="flex overflow-hidden" style={{ marginRight: `-${overlapPx}px` }}>
                                 {shown.map((p: any, pi: number) => (
                                   <div
                                     key={pi}
-                                    className="w-6 h-6 rounded-full border-2 border-white overflow-hidden flex-shrink-0"
-                                    style={{ zIndex: MAX_SHOW - pi }}
+                                    className="rounded-full border-2 border-white overflow-hidden flex-shrink-0"
+                                    style={{ width: avatarSize, height: avatarSize, zIndex: MAX_SHOW - pi, marginRight: `-${overlapPx}px` }}
                                   >
                                     {p.avatar_url ? (
                                       <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
                                     ) : (
                                       <div
-                                        className="w-full h-full flex items-center justify-center text-[9px] font-bold text-white"
-                                        style={{ background: '#D32F2F' }}
+                                        className="w-full h-full flex items-center justify-center font-bold text-white"
+                                        style={{ background: '#D32F2F', fontSize: Math.max(8, avatarSize * 0.35) }}
                                       >
                                         {(p.display_name || '?')[0]}
                                       </div>
@@ -752,8 +748,8 @@ export default function LedgerDetail() {
                                 ))}
                                 {extra > 0 && (
                                   <div
-                                    className="w-6 h-6 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0 text-[9px] font-bold text-white"
-                                    style={{ background: '#9E9E9E', zIndex: 0 }}
+                                    className="rounded-full border-2 border-white flex items-center justify-center flex-shrink-0 font-bold text-white"
+                                    style={{ width: avatarSize, height: avatarSize, background: '#9E9E9E', zIndex: 0, marginRight: `-${overlapPx}px`, fontSize: Math.max(8, avatarSize * 0.3) }}
                                   >+{extra}</div>
                                 )}
                               </div>
