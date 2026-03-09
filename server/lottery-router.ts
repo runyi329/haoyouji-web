@@ -241,13 +241,29 @@ export const lotteryRouter = router({
       if (!activity) throw new TRPCError({ code: "NOT_FOUND" });
       // 将 BigInt 转为 Number（mysql2 的 COUNT(*) 子查询返回 BigInt）
       activity.participantCount = Number(activity.participantCount ?? 0);
-
+      // 将 Date 对象转为 ISO 字符串，防止 superjson 将 Date 传给前端导致渲染崩溃
+      const dateFields = ['draw_at', 'signup_start_at', 'signup_end_at', 'created_at', 'updated_at'];
+      for (const f of dateFields) {
+        if (activity[f] instanceof Date) activity[f] = (activity[f] as Date).toISOString();
+      }
+      // external_seed_date 是 DATE 类型，也可能是 Date 对象
+      if (activity.external_seed_date instanceof Date) {
+        activity.external_seed_date = (activity.external_seed_date as Date).toISOString().split('T')[0];
+      }
       const prizes = await _execQuery(
         `SELECT * FROM lottery_prizes WHERE activity_id=? ORDER BY sort_order ASC`,
         [input.activityId]
       ) as any[];
-
-      return { ...activity, prizes };
+      // 奖项字段标准化：INT 确保是 Number，DECIMAL 转为字符串
+      const normalizedPrizes = prizes.map((p: any) => ({
+        ...p,
+        quantity: Number(p.quantity ?? 1),
+        sort_order: Number(p.sort_order ?? 0),
+        weight: Number(p.weight ?? 1),
+        is_consolation: Number(p.is_consolation ?? 0),
+        prize_value: p.prize_value != null ? String(p.prize_value) : null,
+      }));
+      return { ...activity, prizes: normalizedPrizes };
     }),
 
   // ── 账本下的抽奖历史列表 ──────────────────
@@ -704,13 +720,22 @@ export const lotteryRouter = router({
          ORDER BY p.sort_order ASC, r.draw_index ASC`,
         [input.activityId]
       ) as any[];
+      // 将 INT/BigInt 字段转为 Number，防止 React 渲染崩溃
+      const normalizedResults = results.map((r: any) => ({
+        ...r,
+        prize_sort_order: Number(r.prize_sort_order ?? 0),
+        draw_index: Number(r.draw_index ?? 0),
+        prize_id: Number(r.prize_id ?? 0),
+        participant_id: Number(r.participant_id ?? 0),
+        winner_id: r.winner_id != null ? Number(r.winner_id) : null,
+      }));
 
       const [activity] = await _execQuery(
         `SELECT random_seed, random_seed_hash, use_participant_seed FROM lottery_activities WHERE id=?`,
         [input.activityId]
       ) as any[];
 
-      return { results, fairnessInfo: activity };
+      return { results: normalizedResults, fairnessInfo: activity };
     }),
 
   // ── 删除活动（物理删除） ──────────────────────
