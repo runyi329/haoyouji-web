@@ -109,7 +109,12 @@ export async function executeDrawForActivity(activityId: number): Promise<{ succ
   try {
     const [activity] = await _execQuery(`SELECT * FROM lottery_activities WHERE id=?`, [activityId]) as any[];
     if (!activity) return { success: false, error: '活动不存在' };
-    if (activity.status !== 'active' && activity.status !== 'open') return { success: false, error: `活动状态为 ${activity.status}，不可开奖` };
+    if (activity.status !== 'active' && activity.status !== 'open' && activity.status !== 'drawing') return { success: false, error: `活动状态为 ${activity.status}，不可开奖` };
+    // 如果已经是 drawing 状态（之前尝试失败卡住），先检查是否已有开奖结果
+    if (activity.status === 'drawing') {
+      const [existingResult] = await _execQuery(`SELECT id FROM lottery_results WHERE activity_id=? LIMIT 1`, [activityId]) as any[];
+      if (existingResult) return { success: false, error: '已有开奖结果，请刷新页面' };
+    }
 
     // 标记为开奖中
     await _execQuery(`UPDATE lottery_activities SET status='drawing' WHERE id=?`, [activityId]);
