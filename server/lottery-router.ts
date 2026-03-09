@@ -177,40 +177,65 @@ export async function executeDrawForActivity(activityId: number): Promise<{ succ
       }
     }
 
-    // 计算最终种子
-    let finalSeed = activity.random_seed;
-    if (externalSeedValue) {
-      finalSeed = crypto.createHash('sha256').update(`${activity.random_seed}:external:${externalSeedValue}`).digest('hex');
-    }
-    if (activity.use_participant_seed) {
-      const allSeeds = participants.map((p: any) => p.participant_seed).filter(Boolean).join(':');
-      finalSeed = crypto.createHash('sha256').update(`${finalSeed}:${allSeeds}`).digest('hex');
-    }
+    // ===== 尾数取余确定性算法 =====
+    // 规则：取收盘价小数点后两位数字（尾数），除以参与人数，余数对应中奖编号（从00开始）
+    // 例：收盘价 4096.60，尾数=60，9人参与，60÷9=6余6，编号06中奖
+    const finalSeed = externalSeedValue || activity.random_seed;
 
-    // 洗牌
-    const shuffled = seededShuffle(
-      participants.map((p: any) => ({ id: p.id, userId: p.user_id, name: p.display_name, weight: 1 })),
-      finalSeed
-    );
+    // 参与者按报名时间升序排列（编号00, 01, 02...与前端显示一致）
+    const sortedParticipants = [...participants].sort((a: any, b: any) => {
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    }).map((p: any, idx: number) => ({
+      id: p.id,
+      userId: p.user_id,
+      name: p.display_name,
+      drawNo: idx, // 抽奖编号（0-based，对应前端的00, 01, 02...）
+    }));
+
+    const totalCount = sortedParticipants.length;
+
+    // 计算中奖编号：取收盘价尾数（小数点后两位整数）÷ 人数 取余
+    let winnerDrawNo = 0;
+    if (externalSeedValue) {
+      // 取小数点后两位：如 4096.60 → 60，4096.07 → 7
+      const priceStr = externalSeedValue.toString();
+      const dotIdx = priceStr.indexOf('.');
+      let tailDigits = 0;
+      if (dotIdx !== -1) {
+        const decimalPart = priceStr.slice(dotIdx + 1).padEnd(2, '0').slice(0, 2);
+        tailDigits = parseInt(decimalPart, 10);
+      } else {
+        // 无小数点，取最后两位整数
+        tailDigits = parseInt(priceStr.slice(-2), 10) || 0;
+      }
+      winnerDrawNo = tailDigits % totalCount;
+      console.log(`[开奖算法] 收盘价=${externalSeedValue}, 尾数=${tailDigits}, 人数=${totalCount}, 余数=${winnerDrawNo} → 编号${String(winnerDrawNo).padStart(2,'0')}中奖`);
+    }
 
     // 分配中奖者
     const winners: Array<{ prizeId: number; prizeName: string; participantId: number; winnerName: string; drawIndex: number }> = [];
-    const usedParticipantIds = new Set<number>();
+    const usedDrawNos = new Set<number>();
+
     for (const prize of prizes) {
       if (prize.is_consolation) continue;
-      const available = shuffled.filter((p: any) => !usedParticipantIds.has(p.id));
-      const count = Math.min(prize.quantity, available.length);
+      const count = Math.min(prize.quantity, totalCount - usedDrawNos.size);
       for (let i = 0; i < count; i++) {
-        const winner = available[i];
-        winners.push({ prizeId: prize.id, prizeName: prize.name, participantId: winner.id, winnerName: winner.name, drawIndex: winners.length });
-        usedParticipantIds.add(winner.id);
+        // 第i个奖项的中奖编号 = (winnerDrawNo + i) % totalCount，循环取
+        const targetNo = (winnerDrawNo + i) % totalCount;
+        const winner = sortedParticipants[targetNo];
+        if (winner && !usedDrawNos.has(targetNo)) {
+          winners.push({ prizeId: prize.id, prizeName: prize.name, participantId: winner.id, winnerName: winner.name, drawIndex: targetNo });
+          usedDrawNos.add(targetNo);
+        }
       }
     }
     const consolationPrize = prizes.find((p: any) => p.is_consolation);
     if (consolationPrize) {
-      const remaining = shuffled.filter((p: any) => !usedParticipantIds.has(p.id));
-      for (const p of remaining) {
-        winners.push({ prizeId: consolationPrize.id, prizeName: consolationPrize.name, participantId: p.id, winnerName: p.name, drawIndex: winners.length });
+      for (let i = 0; i < totalCount; i++) {
+        if (!usedDrawNos.has(i)) {
+          const p = sortedParticipants[i];
+          winners.push({ prizeId: consolationPrize.id, prizeName: consolationPrize.name, participantId: p.id, winnerName: p.name, drawIndex: i });
+        }
       }
     }
 
