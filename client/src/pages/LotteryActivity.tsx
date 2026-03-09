@@ -234,7 +234,29 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
               </div>
             )}
           </div>
-        ) : null}
+        ) : (
+          // 待获取： shimmer 占位框
+          <div className="flex items-end gap-3 pb-1">
+            <div
+              className="h-10 rounded-lg"
+              style={{
+                width: '160px',
+                background: 'linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.11) 50%, rgba(0,0,0,0.06) 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.8s infinite',
+              }}
+            />
+            <div
+              className="h-5 rounded mb-1"
+              style={{
+                width: '56px',
+                background: 'linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)',
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.8s infinite 0.3s',
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* 尾数提取区（有数据时显示） */}
