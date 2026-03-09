@@ -253,7 +253,7 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
       )}
 
       {/* 单一深色框：待获取提示 + 倒计时 + 新浪财经链接 */}
-      <div className="mx-4 mb-4 rounded-xl overflow-hidden" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
+      <div className="mb-0 overflow-hidden" style={{ background: C.darkBg, borderTop: `1px solid ${C.darkBorder}` }}>
         {/* 深色框内主区：无数据时显示shimmer+AI提示，有数据时显示真实价格 */}
         {price ? (
           <div className="px-4 pt-3 pb-2">
@@ -886,9 +886,16 @@ function ParticipantGrid({ activityId }: { activityId: number }) {
               {/* 抽奖编号 */}
               <span
                 className="font-mono px-1.5 py-0.5 rounded-full whitespace-nowrap"
-                style={{ fontSize: '9px', background: 'rgba(203,164,113,0.18)', border: '1px solid rgba(203,164,113,0.5)', color: C.sub }}
+                style={{
+                  fontSize: '9px',
+                  background: 'linear-gradient(135deg, #F5D060 0%, #E8A820 40%, #F5D060 60%, #C8860A 100%)',
+                  border: '1px solid #D4A017',
+                  color: '#5C3A00',
+                  fontWeight: 600,
+                  boxShadow: '0 1px 3px rgba(200,134,10,0.35), inset 0 1px 0 rgba(255,240,120,0.6)',
+                }}
               >
-                抽奖编号 <span style={{ color: C.red, fontWeight: 700 }}>{no}</span>
+                抽奖编号 <span style={{ color: '#7A2800', fontWeight: 800 }}>{no}</span>
               </span>
             </div>
           );
