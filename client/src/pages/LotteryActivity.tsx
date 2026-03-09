@@ -422,8 +422,8 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
   // 生成示例数据（用实际人数或默认3人）
   const exampleN = participantCount && participantCount > 1 ? Math.min(participantCount, 9) : 3;
   const exampleTail = 78; // 示例尾数
-  const exampleWinner = exampleTail % exampleN; // 余数对应编号（0-based）
-  const winnerNo = exampleWinner === 0 ? 1 : exampleWinner; // 余数0则第1人中奖
+  // 正确算法：余数+1 即为中奖编号（余数0→#1, 余数1→#2, ..., 余数N-1→#N）
+  const winnerNo = (exampleTail % exampleN) + 1;
   const [showTip, setShowTip] = useState(false);
 
   return (
@@ -469,23 +469,21 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             {showTip && (
               <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}`, color: C.sub }}>
                 取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
-                <strong style={{ color: C.text }}>余数对应的编号即为中奖者</strong>（余数为 0 则第 1 位中奖）。
+                余数加 1 即为中奖编号：<strong style={{ color: C.text }}>余数 0→#1，余数 1→#2，余数 2→#3，以此类推</strong>。每个人都有对应的余数，概率均等。
               </div>
             )}
           </div>
 
           {/* 完整对照表 */}
           {(() => {
-            // 对照表：展示每个参与者的中奖概率
-            // 尾数 00~99 共100种，每个人分得的尾数数量：
-            //   余数 1~(N-1) 各分得 floor(100/N) 或 ceil(100/N) 个
-            //   余数 0 归属 #1，所以 #1 多拿一个
+            // 对照表：尾数 00~99 共100种，正确算法：余数+1 = 中奖编号
+            // 余数 0→#1, 余数 1→#2, ..., 余数 N-1→#N
+            // 每个人获得 floor(100/N) 或 ceil(100/N) 个尾数，概率几乎均等
             const intPart = '4162';
             // 计算每个编号获得的尾数数量
             const countPerPerson: number[] = Array(exampleN + 1).fill(0); // index 1..N
             for (let t = 0; t <= 99; t++) {
-              const r = t % exampleN;
-              const person = r === 0 ? 1 : r; // 余数 0 归 #1
+              const person = (t % exampleN) + 1; // 余数+1 即为编号
               countPerPerson[person]++;
             }
             // 展示三行示例：尾数 88　25　00
@@ -493,7 +491,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             const rows = exampleTails.map(tail => {
               const tailStr = String(tail).padStart(2, '0');
               const remainder = tail % exampleN;
-              const winner = remainder === 0 ? 1 : remainder; // 余数 0 归 #1
+              const winner = remainder + 1; // 余数+1 = 中奖编号
               return { tail, tailStr, remainder, winner };
             });
             return (
@@ -517,7 +515,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                         </td>
                         <td className="text-center px-2 py-1.5" style={{ color: C.sub }}>
                           {tail} ÷ {exampleN} 余 <span style={{ color: C.red, fontWeight: 600 }}>{remainder}</span>
-                          {remainder === 0 && <span style={{ color: C.sub, fontSize: '0.9em' }}> (0→#1)</span>}
+                          <span style={{ color: C.sub, fontSize: '0.9em' }}> (+1→#{winner})</span>
                         </td>
                         <td className="text-center px-2 py-1.5 font-mono font-bold" style={{ color: C.red }}>#{winner}</td>
                       </tr>
@@ -532,7 +530,9 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                       const person = idx + 1;
                       const cnt = countPerPerson[person];
                       const pct = (cnt / 100 * 100).toFixed(0);
-                      const isHigher = cnt > Math.floor(100 / exampleN);
+                      // 新算法下，拥有最多尾数的人（即前 ceil(100%N) 个人）概率略高
+                      const maxCnt = Math.ceil(100 / exampleN);
+                      const isHigher = cnt === maxCnt && maxCnt > Math.floor(100 / exampleN);
                       return (
                         <div key={person}
                           className="flex items-center gap-1 px-2 py-0.5 rounded-full"
@@ -548,7 +548,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                     })}
                   </div>
                   <div className="mt-1.5" style={{ color: C.sub, fontSize: '0.85em' }}>
-                    余数为 0 归属 #1，所以 #1 概率略高于其他人
+                    公式：余数 + 1 = 中奖编号。{exampleN} 人参与时，100 个尾数均均分配，每人概率几乎相同。
                   </div>
                 </div>
               </div>
