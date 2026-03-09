@@ -357,25 +357,37 @@ export default function LedgerDetail() {
           </div>
         </div>
 
-        {/* 成员头像和功能按钮 */}
+        {/* 成员头像和功能按鈕 */}
         <div className="px-4 py-2 flex items-center justify-between">
-          {/* 当前登录用户头像（靠左，单个头像） */}
-          <div className="flex items-center">
-            {user && (
-              <UserAvatar
-                username={user.username}
-                avatar={user.avatar}
-                nickname={user.nickname}
-                size="md"
-              />
+          {/* 左侧：普通账本显示所有共享成员头像；定制账本只显示当前用户 */}
+          <div className="flex items-center gap-1">
+            {!isCustomAE ? (
+              // 普通账本 / 减肥账本：显示所有成员头像
+              (membersData && membersData.length > 0 ? membersData : (user ? [{ username: user.username, avatar: user.avatar, nickname: user.nickname }] : [])).slice(0, 6).map((m: any, i: number) => (
+                <UserAvatar
+                  key={i}
+                  username={m.username || m.user?.username}
+                  avatar={m.avatar || m.user?.avatar}
+                  nickname={m.nickname || m.user?.nickname}
+                  size="md"
+                />
+              ))
+            ) : (
+              // AE 抽奖箱：只显示当前用户
+              user && (
+                <UserAvatar
+                  username={user.username}
+                  avatar={user.avatar}
+                  nickname={user.nickname}
+                  size="md"
+                />
+              )
             )}
           </div>
-          
 
-          
-          {/* 功能按钮（靠右）：管理员/创建者显示设置按钮，其他人全部隐藏 */}
+          {/* 功能按鈕（靠右） */}
           <div className="flex items-center gap-2">
-            {/* 减肥账本教练：学员管理按钮 */}
+            {/* 减肥账本教练：学员管理按鈕 */}
             {isDietCoach && (
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
@@ -385,7 +397,27 @@ export default function LedgerDetail() {
                 <Users className="w-5 h-5" style={{ color: '#D32F2F' }} />
               </div>
             )}
-            {/* 只有管理员或创建者才显示设置按钮 */}
+            {/* 普通账本：查找按鈕 */}
+            {!isCustomAE && !isDiet && (
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                style={{ backgroundColor: '#FFFFFF' }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
+              >
+                <Search className="w-5 h-5" style={{ color: '#D32F2F' }} />
+              </div>
+            )}
+            {/* 普通账本：数据统计按鈕 */}
+            {!isCustomAE && !isDiet && (
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                style={{ backgroundColor: '#FFFFFF' }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
+              >
+                <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
+              </div>
+            )}
+            {/* 管理员或创建者：设置按鈕 */}
             {(isOwner || isAdmin) && (
               <div 
                 className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
