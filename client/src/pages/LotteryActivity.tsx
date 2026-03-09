@@ -565,9 +565,13 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                         <td className="px-2 py-1.5 font-mono" style={{ color: C.text }}>
                           {intPart}.<span style={{ color: C.red, fontWeight: 700 }}>{tailStr}</span>
                         </td>
-                        <td className="text-center px-2 py-1.5" style={{ color: C.sub }}>
-                          {tail} ÷ {exampleN} 余 <span style={{ color: C.red, fontWeight: 600 }}>{remainder}</span>
-                          <span style={{ color: C.sub, fontSize: '0.9em' }}> (余数={fmtNo(winner)}号)</span>
+                        <td className="text-center px-2 py-1.5 font-mono" style={{ color: C.sub }}>
+                          {/* 尾数用红框，人数用红框，让用户清楚两个数字的来源 */}
+                          <span style={{ border: `1.5px solid ${C.red}`, borderRadius: '3px', padding: '0 3px', color: C.red, fontWeight: 700 }}>{tailStr}</span>
+                          <span className="mx-0.5">÷</span>
+                          <span style={{ border: `1.5px solid ${C.red}`, borderRadius: '3px', padding: '0 3px', color: C.red, fontWeight: 700 }}>{exampleN}人</span>
+                          <span className="mx-0.5">余</span>
+                          <span style={{ color: C.text, fontWeight: 600 }}>{remainder}</span>
                         </td>
                         <td className="px-2 py-1.5">
                           {/* 中奖列：显示真实参与者头像+编号，无参与者时显示编号文字 */}
@@ -578,8 +582,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                                 <div
                                   className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
                                   style={{
-                                    background: participant.avatar_url ? 'transparent' : `hsl(${((winner - 1) * 47) % 360}, 55%, 45%)`,
-                                    border: `1.5px solid ${C.red}`,
+                                    background: participant.avatar_url ? 'transparent' : `hsl(${(winner * 47) % 360}, 55%, 45%)`,
                                     overflow: 'hidden',
                                   }}
                                 >
@@ -590,12 +593,12 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                                 </div>
                                 {/* 编号+名字 */}
                                 <div className="flex flex-col items-start">
-                                  <span className="font-mono font-bold leading-none" style={{ color: C.red, fontSize: '0.9em' }}>中奖编号 {fmtNo(winner)}</span>
+                                  <span className="font-mono font-bold leading-none" style={{ color: C.text, fontSize: '0.9em' }}>中奖编号 {fmtNo(winner)}</span>
                                   <span className="leading-none mt-0.5 truncate max-w-[60px]" style={{ color: C.sub, fontSize: '0.85em' }}>{participant.display_name}</span>
                                 </div>
                               </>
                             ) : (
-                              <span className="font-mono font-bold" style={{ color: C.red }}>中奖编号 {fmtNo(winner)}</span>
+                              <span className="font-mono font-bold" style={{ color: C.text }}>中奖编号 {fmtNo(winner)}</span>
                             )}
                           </div>
                         </td>
