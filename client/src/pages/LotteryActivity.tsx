@@ -447,9 +447,11 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
   );
   const realParticipants: any[] = (participantsData as any[]) ?? [];
 
-  // 实际人数：优先用真实参与者数量，其次用 participantCount，默认3
-  const actualN = realParticipants.length > 0 ? realParticipants.length
-    : (participantCount && participantCount > 0 ? participantCount : 3);
+  // 实际人数：优先用真实参与者数量，其次用 participantCount，默认3；至少为 1，防止除以零崩溃
+  const actualN = Math.max(1,
+    realParticipants.length > 0 ? realParticipants.length
+    : (participantCount && participantCount > 0 ? participantCount : 3)
+  );
   // 对照表展示上限
   const exampleN = actualN;
   // 编号位数（编号从 00 开始）
