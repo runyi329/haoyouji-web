@@ -12,7 +12,7 @@
  *   8. 底部固定按钮
  */
 import { useState, useEffect, useRef } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import {
@@ -701,6 +701,7 @@ function ScratchCard({ prizeName, onReveal }: { prizeName: string; onReveal: () 
 // ─── 主页面 ──────────────────────────────────────────────────────────────────
 export default function LotteryActivity() {
   const [, params] = useRoute("/lottery/:activityId");
+  const [, navigate] = useLocation();
   const activityId = parseInt(params?.activityId ?? "0");
   const { user } = useAuth();
 
@@ -757,7 +758,7 @@ export default function LotteryActivity() {
     <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ backgroundColor: C.bg }}>
       <div className="text-sm" style={{ color: C.sub }}>活动不存在或已被删除</div>
       <button
-        onClick={() => window.history.back()}
+        onClick={() => navigate('/lottery' as any)}
         className="text-xs px-4 py-2 rounded-full text-white"
         style={{ backgroundColor: C.red }}
       >返回上一页</button>
@@ -827,7 +828,7 @@ export default function LotteryActivity() {
       {/* ── 顶部导航栏 ── */}
       <div className="sticky top-0 z-20" style={{ backgroundColor: C.red }}>
         <div className="flex items-center h-14 px-4 gap-3">
-          <button onClick={() => window.history.back()} className="p-2 -ml-2">
+          <button onClick={() => navigate('/lottery' as any)} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
           <h1 className="flex-1 text-base font-semibold truncate text-white">{activity.title}</h1>
