@@ -132,6 +132,7 @@ export const lotteryRouter = router({
       // 外部开奖数据源
       externalSeedType: z.enum(['sh_index', 'sz_index', 'ssq', 'dlt']).optional(),
       externalSeedDate: z.string().optional(), // YYYY-MM-DD
+      participantScale: z.enum(['small', 'large']).default('small'),
     }))
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user.id;
@@ -155,8 +156,8 @@ export const lotteryRouter = router({
            signup_start_at, signup_end_at, max_participants, requires_info,
            required_fields, signup_fee, registration_mode, random_seed_hash, random_seed,
            use_participant_seed, status, is_public,
-           external_seed_type, external_seed_date)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           external_seed_type, external_seed_date, participant_scale)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           input.ledgerId, userId, input.title, input.description ?? null,
           input.mode, input.instantStyle ?? "scratch",
@@ -169,6 +170,7 @@ export const lotteryRouter = router({
           input.useParticipantSeed ? 1 : 0,
           "draft", input.isPublic ? 1 : 0,
           input.externalSeedType ?? null, input.externalSeedDate ?? null,
+          input.participantScale ?? 'small',
         ]
       ) as any;
 
@@ -196,6 +198,7 @@ export const lotteryRouter = router({
       isPublic: z.boolean().optional(),
       externalSeedType: z.enum(['sh_index', 'sz_index', 'ssq', 'dlt']).optional(),
       externalSeedDate: z.string().optional(),
+      participantScale: z.enum(['small', 'large']).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { activityId, ...fields } = input;
@@ -221,6 +224,7 @@ export const lotteryRouter = router({
       if (fields.isPublic !== undefined) { updates.push("is_public=?"); values.push(fields.isPublic ? 1 : 0); }
       if (fields.externalSeedType !== undefined) { updates.push("external_seed_type=?"); values.push(fields.externalSeedType); }
       if (fields.externalSeedDate !== undefined) { updates.push("external_seed_date=?"); values.push(fields.externalSeedDate); }
+      if (fields.participantScale !== undefined) { updates.push("participant_scale=?"); values.push(fields.participantScale); }
 
       if (updates.length === 0) return { success: true };
       values.push(activityId);

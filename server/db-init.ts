@@ -138,6 +138,7 @@ export async function initDatabase() {
         external_seed_date DATE DEFAULT NULL,
         external_seed_value VARCHAR(255) DEFAULT NULL,
         external_seed_source TEXT DEFAULT NULL,
+        participant_scale ENUM('small','large') NOT NULL DEFAULT 'small',
         status ENUM('draft','open','drawing','completed','cancelled') NOT NULL DEFAULT 'draft',
         is_public TINYINT NOT NULL DEFAULT 1,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -218,6 +219,7 @@ export async function initDatabase() {
         { name: 'external_seed_date', def: 'DATE DEFAULT NULL' },
         { name: 'external_seed_value', def: 'VARCHAR(255) DEFAULT NULL' },
         { name: 'external_seed_source', def: 'TEXT DEFAULT NULL' },
+        { name: 'participant_scale', def: "ENUM('small','large') NOT NULL DEFAULT 'small'" },
       ];
       for (const col of lotteryNewCols) {
         await safeAddColumn(dbConn2, 'lottery_activities', col.name, col.def);

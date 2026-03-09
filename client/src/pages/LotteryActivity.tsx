@@ -405,13 +405,25 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
 }
 
 // ─── 算法公式展示 ─────────────────────────────────────────────────────────────
-function AlgorithmBox({ seedType, mode, seedDate }: { seedType?: string | null; mode: string; seedDate?: string | null }) {
+function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantScale }: {
+  seedType?: string | null;
+  mode: string;
+  seedDate?: string | null;
+  participantCount?: number;
+  participantScale?: string | null;
+}) {
   const isStock = seedType === 'sh_index' || seedType === 'sz_index';
   const isLottery = seedType === 'ssq' || seedType === 'dlt';
-  const seedName = {
-    sh_index: '上证收盘尾数', sz_index: '深证收盘尾数',
-    ssq: '双色球红球之和', dlt: '大乐透前区之和',
+  const seedLabel = {
+    sh_index: '上证指数收盘价尾数', sz_index: '深证指数收盘价尾数',
+    ssq: '双色球红球号码之和', dlt: '大乐透前区号码之和',
   }[seedType ?? ''] ?? '随机种子';
+
+  // 生成示例数据（用实际人数或默认3人）
+  const exampleN = participantCount && participantCount > 1 ? Math.min(participantCount, 9) : 3;
+  const exampleTail = 78; // 示例尾数
+  const exampleWinner = exampleTail % exampleN; // 余数对应编号（0-based）
+  const winnerNo = exampleWinner === 0 ? exampleN : exampleWinner; // 余数0则最后一人
 
   return (
     <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.border}` }}>
@@ -423,56 +435,79 @@ function AlgorithmBox({ seedType, mode, seedDate }: { seedType?: string | null; 
         </span>
       </div>
 
-      {/* 公式框 */}
-      <div className="rounded-xl p-3 mb-3 font-mono text-xs" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
-        {isStock || isLottery ? (
-          <div className="space-y-1.5">
-            <div style={{ color: C.sub }}>// 开奖计算公式</div>
-            <div style={{ color: C.text }}>
-              幸运码 = <span style={{ color: C.red }}>{seedName}</span>
-            </div>
-            <div style={{ color: C.text }}>
-              中奖者 = 参与者列表[幸运码 % 参与人数]
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <div style={{ color: C.sub }}>// 随机种子算法</div>
-            <div style={{ color: C.text }}>
-              种子 = SHA256(时间戳 + 活动ID + 随机熵)
-            </div>
-            <div style={{ color: C.text }}>
-              中奖者 = 参与者列表[种子哈希 % 参与人数]
+      {/* 实例说明 */}
+      {(isStock || isLottery) ? (
+        <div className="space-y-3">
+          {/* 规则一句话 */}
+          <div className="text-xs rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+            <div className="font-semibold mb-1" style={{ color: C.text }}>计算方式</div>
+            <div style={{ color: C.sub }}>
+              取 <span style={{ color: C.red }}>{seedLabel}</span> 的后两位数字，
+              除以参与人数，<strong style={{ color: C.text }}>余数对应的编号即为中奖者</strong>（余数为0则最后一位中奖）。
             </div>
           </div>
-        )}
-      </div>
 
-      <div className="text-xs space-y-1" style={{ color: C.sub }}>
-        <div className="flex items-start gap-1.5">
-          <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#4CAF50' }} />
-          <span>开奖前公示随机种子哈希，开奖后公开完整种子，任何人可独立验证</span>
-        </div>
-        {(isStock || isLottery) && (
+          {/* 示例表格 */}
+          <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+            <div className="px-3 py-2 font-semibold" style={{ background: C.bg, color: C.sub }}>
+              举例：{exampleN} 人参与，当日{isStock ? '指数' : '号码'}收盘尾数为 <span style={{ color: C.red }}>78</span>
+            </div>
+            <table className="w-full">
+              <thead>
+                <tr style={{ background: '#F5F5F5' }}>
+                  <th className="text-left px-3 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>步骤</th>
+                  <th className="text-left px-3 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>计算</th>
+                  <th className="text-left px-3 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>结果</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderTop: `1px solid ${C.border}` }}>
+                  <td className="px-3 py-1.5" style={{ color: C.sub }}>取尾数</td>
+                  <td className="px-3 py-1.5" style={{ color: C.text }}>收盘价后两位</td>
+                  <td className="px-3 py-1.5 font-mono font-bold" style={{ color: C.red }}>78</td>
+                </tr>
+                <tr style={{ borderTop: `1px solid ${C.border}` }}>
+                  <td className="px-3 py-1.5" style={{ color: C.sub }}>求余数</td>
+                  <td className="px-3 py-1.5" style={{ color: C.text }}>78 ÷ {exampleN} = {Math.floor(78 / exampleN)} 余 <span style={{ color: C.red }}>{78 % exampleN}</span></td>
+                  <td className="px-3 py-1.5 font-mono font-bold" style={{ color: C.red }}>余 {78 % exampleN}</td>
+                </tr>
+                <tr style={{ borderTop: `1px solid ${C.border}`, background: '#FFF8F8' }}>
+                  <td className="px-3 py-1.5" style={{ color: C.sub }}>中奖者</td>
+                  <td className="px-3 py-1.5" style={{ color: C.text }}>
+                    {78 % exampleN === 0 ? `余数为0，最后一位（编号${exampleN}）中奖` : `编号 ${78 % exampleN} 的参与者`}
+                  </td>
+                  <td className="px-3 py-1.5 font-mono font-bold" style={{ color: C.red }}>#{winnerNo} 号</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* 开奖依据日期 */}
+          <div className="px-3 py-2 rounded-xl text-xs" style={{ background: C.goldLight, border: `1px solid ${C.gold}33` }}>
+            <span style={{ color: C.sub }}>开奖依据日期：</span>
+            <strong style={{ color: C.text }}>{seedDate ? seedDate : '开奖当天'}</strong>
+            <span style={{ color: C.sub }}>{isStock ? ' 上交所收盘价' : seedType === 'ssq' ? ' 双色球开奖号码' : ' 大乐透开奖号码'}</span>
+          </div>
+
+          {/* 可验证说明 */}
           <div className="flex items-start gap-1.5">
             <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#4CAF50' }} />
-            <span>开奖依据来自第三方公开数据，主办方无法干预结果</span>
+            <span className="text-xs" style={{ color: C.sub }}>第三方公开数据，主办方无法干预；任何人可用手机计算器独立验证</span>
           </div>
-        )}
-        {(isStock || isLottery) && (
-          <div className="flex items-start gap-1.5 mt-1 px-2 py-1.5 rounded-lg" style={{ background: C.goldLight, border: `1px solid ${C.gold}33` }}>
-            <span className="text-xs" style={{ color: C.sub }}>
-              开奖依据日期：
-              <strong style={{ color: C.text }}>
-                {seedDate ? seedDate : '开奖当天最新数据'}
-              </strong>
-              {seedDate && isStock && <span style={{ color: C.sub }}>（上交所收盘价）</span>}
-              {seedDate && seedType === 'ssq' && <span style={{ color: C.sub }}>（双色球开奖号码）</span>}
-              {seedDate && seedType === 'dlt' && <span style={{ color: C.sub }}>（大乐透开奖号码）</span>}
-            </span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="rounded-xl p-3 font-mono text-xs" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+            <div style={{ color: C.sub }}>// 随机种子算法</div>
+            <div style={{ color: C.text }}>种子 = SHA256(时间戳 + 活动ID + 随机熵)</div>
+            <div style={{ color: C.text }}>中奖者 = 参与者列表[种子哈希 % 参与人数]</div>
           </div>
-        )}
-      </div>
+          <div className="flex items-start gap-1.5">
+            <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#4CAF50' }} />
+            <span className="text-xs" style={{ color: C.sub }}>开奖前公示随机种子哈希，开奖后公开完整种子，任何人可独立验证</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -963,7 +998,7 @@ export default function LotteryActivity() {
 
         {/* ── 4. 开奖算法公式 ── */}
         {(hasExternalSeed || activity.mode === 'scheduled') && (
-          <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} />
+          <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} participantCount={activity.participantCount} participantScale={activity.participant_scale} />
         )}
 
         {/* ── 5. 开奖结果（已结束时展示）── */}
