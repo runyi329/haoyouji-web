@@ -626,6 +626,8 @@ export default function LotteryActivity() {
 
   const { data: activity, isLoading, isError } = trpc.lottery.getActivity.useQuery({ activityId }, { retry: false });
   const countdown = useCountdown(activity?.draw_at ?? null);
+  // 报名截止倒计时（必须在条件 return 之前调用，遵守 Hook 规则）
+  const signupEndCountdown = useCountdown(activity?.signup_end_at ?? null);
   const signupMutation = trpc.lottery.signup.useMutation();
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
 
@@ -681,9 +683,39 @@ export default function LotteryActivity() {
   const isStock = activity.external_seed_type === 'sh_index' || activity.external_seed_type === 'sz_index';
   const isLottery = activity.external_seed_type === 'ssq' || activity.external_seed_type === 'dlt';
 
+  // 生成右上角报名状态标签文字
+  const getOpenStatusLabel = () => {
+    if (isSignupNotStarted && signupStartAt) {
+      const fmt = signupStartAt.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return `报名开放于 ${fmt}`;
+    }
+    if (isSignupClosed && signupEndAt) {
+      const fmt = signupEndAt.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return `报名已截止 · ${fmt}`;
+    }
+    if (signupEndAt && !isSignupClosed) {
+      const { d, h, m, s } = signupEndCountdown;
+      if (d > 0) return `报名中 · 还剩 ${d}天${h}时${m}分`;
+      if (h > 0) return `报名中 · 还剩 ${h}时${m}分${s}秒`;
+      if (m > 0) return `报名中 · 还剩 ${m}分${s}秒`;
+      return `报名中 · 即将截止`;
+    }
+    return '报名中';
+  };
+
+  const getOpenStatusStyle = () => {
+    if (isSignupNotStarted) return { bg: '#E3F2FD', color: '#1565C0' };
+    if (isSignupClosed) return { bg: '#FFEBEE', color: '#C62828' };
+    if (signupEndAt && !isSignupClosed) {
+      const { d, h } = signupEndCountdown;
+      if (d === 0 && h < 2) return { bg: '#FFF3E0', color: '#E65100' }; // 不到2小时，橙色警示
+    }
+    return { bg: '#E8F5E9', color: '#2E7D32' };
+  };
+
   const statusConfig = {
     draft: { label: '草稿', bg: '#E0E0E0', color: '#757575' },
-    open: { label: '报名中', bg: '#E8F5E9', color: '#2E7D32' },
+    open: { label: getOpenStatusLabel(), ...getOpenStatusStyle() },
     drawing: { label: '开奖中', bg: '#FFF3E0', color: '#E65100' },
     completed: { label: '已结束', bg: '#F5F5F5', color: '#9E9E9E' },
     cancelled: { label: '已取消', bg: '#FFEBEE', color: '#D32F2F' },
@@ -785,56 +817,6 @@ export default function LotteryActivity() {
       </div>
 
       <div className="px-4 pt-4 max-w-lg mx-auto space-y-4">
-
-        {/* ── 1.5 报名开始时间提示 ── */}
-        {isOpen && signupStartAt && isSignupNotStarted && (
-          <div
-            className="rounded-2xl px-4 py-3 flex items-center gap-3"
-            style={{
-              background: '#E3F2FD',
-              border: '1px solid #90CAF9',
-            }}
-          >
-            <Clock className="w-4 h-4 flex-shrink-0" style={{ color: '#1565C0' }} />
-            <div>
-              <div className="text-xs font-semibold" style={{ color: '#1565C0' }}>报名尚未开始</div>
-              <div className="text-xs mt-0.5" style={{ color: '#1976D2' }}>
-                开始时间：{signupStartAt.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-            <span
-              className="ml-auto text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-              style={{ background: '#1565C0', color: '#fff' }}
-            >待开放</span>
-          </div>
-        )}
-
-        {/* ── 1.6 报名截止时间提示 ── */}
-        {isOpen && signupEndAt && (
-          <div
-            className="rounded-2xl px-4 py-3 flex items-center gap-3"
-            style={{
-              background: isSignupClosed ? '#FFEBEE' : '#FFF8E1',
-              border: `1px solid ${isSignupClosed ? '#FFCDD2' : '#FFE082'}`,
-            }}
-          >
-            <Clock className="w-4 h-4 flex-shrink-0" style={{ color: isSignupClosed ? C.red : '#F9A825' }} />
-            <div>
-              <div className="text-xs font-semibold" style={{ color: isSignupClosed ? C.red : '#F57F17' }}>
-                {isSignupClosed ? '报名已截止' : '报名截止时间'}
-              </div>
-              <div className="text-xs mt-0.5" style={{ color: isSignupClosed ? '#C62828' : '#795548' }}>
-                {signupEndAt.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-            {isSignupClosed && (
-              <span
-                className="ml-auto text-xs px-2 py-0.5 rounded-full font-bold flex-shrink-0"
-                style={{ background: C.red, color: '#fff' }}
-              >已截止</span>
-            )}
-          </div>
-        )}
 
         {/* ── 2. 我的抽奖码（已报名时显示）── */}
         {participantId && (
@@ -1049,46 +1031,6 @@ export default function LotteryActivity() {
             {parseFloat(activity.signup_fee) > 0 && (
               <p className="text-center text-xs mt-2" style={{ color: C.sub }}>报名费：¥{activity.signup_fee}</p>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* 报名尚未开始提示 */}
-      {isOpen && isSignupNotStarted && !participantId && (
-        <div
-          className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 z-30"
-          style={{ background: 'linear-gradient(to top, rgba(250,243,237,1) 70%, rgba(250,243,237,0) 100%)' }}
-        >
-          <div
-            className="max-w-lg mx-auto rounded-2xl py-3 px-4 flex items-center gap-3"
-            style={{ background: '#E3F2FD', border: '1px solid #90CAF9' }}
-          >
-            <Clock className="w-5 h-5 flex-shrink-0" style={{ color: '#1565C0' }} />
-            <div>
-              <div className="font-bold text-sm" style={{ color: '#1565C0' }}>报名尚未开始</div>
-              <div className="text-xs" style={{ color: '#1976D2' }}>
-                开始时间：{signupStartAt!.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 报名已截止提示 */}
-      {isOpen && isSignupClosed && !participantId && (
-        <div
-          className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 z-30"
-          style={{ background: 'linear-gradient(to top, rgba(250,243,237,1) 70%, rgba(250,243,237,0) 100%)' }}
-        >
-          <div
-            className="max-w-lg mx-auto rounded-2xl py-3 px-4 flex items-center gap-3"
-            style={{ background: '#FFEBEE', border: '1px solid #FFCDD2' }}
-          >
-            <span className="text-xl flex-shrink-0">⏰</span>
-            <div>
-              <div className="font-bold text-sm" style={{ color: '#C62828' }}>报名已截止</div>
-              <div className="text-xs" style={{ color: '#757575' }}>报名时间已过，无法继续报名</div>
-            </div>
           </div>
         </div>
       )}
