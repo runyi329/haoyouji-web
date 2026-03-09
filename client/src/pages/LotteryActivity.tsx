@@ -256,7 +256,7 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
       <div className="mb-0 overflow-hidden" style={{ background: C.darkBg, borderTop: `1px solid ${C.darkBorder}` }}>
         {/* 深色框内主区：无数据时显示shimmer+AI提示，有数据时显示真实价格 */}
         {price ? (
-          <div className="px-4 pt-3 pb-2">
+          <div className="px-4 pt-3 pb-2 flex items-center justify-between">
             <div className="flex items-end gap-3">
               <span
                 className="font-bold"
@@ -270,6 +270,20 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
                   <span className="text-sm font-mono" style={{ color: isUp ? C.stockUp : C.stockDown }}>{change}</span>
                 </div>
               )}
+            </div>
+            {/* 封存印章 */}
+            <div
+              className="flex-shrink-0 flex flex-col items-center justify-center gap-0.5"
+              style={{
+                width: 58, height: 58,
+                border: '2.5px solid rgba(203,164,113,0.85)',
+                borderRadius: '50%',
+                transform: 'rotate(-15deg)',
+                boxShadow: '0 0 0 1px rgba(203,164,113,0.2), inset 0 0 0 3px rgba(203,164,113,0.08)',
+              }}
+            >
+              <span className="font-bold" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(203,164,113,0.9)', lineHeight: 1.3 }}>封</span>
+              <span className="font-bold" style={{ fontSize: '9px', letterSpacing: '0.1em', color: 'rgba(203,164,113,0.9)', lineHeight: 1.3 }}>存</span>
             </div>
           </div>
         ) : (
@@ -935,62 +949,125 @@ function DrawResultsSection({ activityId }: { activityId: number }) {
     </div>
   );
 
-  const grouped: Record<string, { prizeName: string; sortOrder: number; winners: any[] }> = {};
+  const grouped: Record<string, { prizeName: string; prizeImage: string | null; sortOrder: number; winners: any[] }> = {};
   for (const r of results) {
-    if (!grouped[r.prize_id]) grouped[r.prize_id] = { prizeName: r.prize_name, sortOrder: r.prize_sort_order, winners: [] };
+    if (!grouped[r.prize_id]) grouped[r.prize_id] = { prizeName: r.prize_name, prizeImage: r.prize_image ?? null, sortOrder: r.prize_sort_order, winners: [] };
     grouped[r.prize_id].winners.push(r);
   }
   const sortedGroups = Object.values(grouped).sort((a, b) => a.sortOrder - b.sortOrder);
-  const prizeIcons = ["🥇", "🥈", "🥉", "🏅", "🎖️"];
+
+  // 开奖时间（取第一条结果的 drawn_at）
+  const drawnAt = results[0]?.drawn_at ? new Date(results[0].drawn_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : null;
 
   return (
     <div className="space-y-3">
       {sortedGroups.map((group, gIdx) => (
-        <div key={gIdx} className="rounded-2xl overflow-hidden border" style={{ borderColor: C.border }}>
-          <div className="px-4 py-3 flex items-center gap-2" style={{ background: C.redLight }}>
-            <span className="text-base">{prizeIcons[gIdx] ?? "🎁"}</span>
-            <span className="font-semibold text-sm" style={{ color: C.red }}>{group.prizeName}</span>
+        <div
+          key={gIdx}
+          className="rounded-2xl overflow-hidden"
+          style={{ border: `1px solid ${C.formulaBorder}`, background: C.card }}
+        >
+          {/* 奖项标题行 */}
+          <div
+            className="px-4 py-2.5 flex items-center gap-2"
+            style={{ background: C.bg, borderBottom: `1px solid ${C.formulaBorder}` }}
+          >
+            {group.prizeImage ? (
+              <img src={group.prizeImage} alt="" className="w-5 h-5 rounded object-cover flex-shrink-0" />
+            ) : (
+              <Trophy className="w-4 h-4 flex-shrink-0" style={{ color: C.gold }} />
+            )}
+            <span className="font-bold text-sm" style={{ color: C.text }}>{group.prizeName}</span>
             <span className="ml-auto text-xs" style={{ color: C.sub }}>{group.winners.length} 人获奖</span>
           </div>
-          <div className="divide-y divide-gray-100">
-            {group.winners.map((w: any, wIdx: number) => (
-              <div key={wIdx} className="px-4 py-3 flex items-center gap-3">
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                  style={{ background: C.red }}
-                >
-                  {wIdx + 1}
+
+          {/* 中奖者卡片列表 */}
+          <div className="divide-y" style={{ borderColor: C.formulaBorder }}>
+            {group.winners.map((w: any, wIdx: number) => {
+              const initials = (w.winner_name || '?').charAt(0);
+              const avatarBg = `hsl(${(w.participant_id * 47) % 360}, 45%, 48%)`;
+              return (
+                <div key={wIdx} className="px-4 py-3 flex items-center gap-3" style={{ borderColor: C.formulaBorder }}>
+                  {/* 头像 */}
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                    style={{ background: w.avatar_url ? 'transparent' : avatarBg, overflow: 'hidden' }}
+                  >
+                    {w.avatar_url
+                      ? <img src={w.avatar_url} alt="" className="w-full h-full object-cover" />
+                      : initials
+                    }
+                  </div>
+
+                  {/* 姓名 + 编号 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm truncate" style={{ color: C.text }}>{w.winner_name}</div>
+                    <div className="text-xs font-mono mt-0.5" style={{ color: C.sub }}>抽奖编号 {String(w.draw_index).padStart(2, '0')}</div>
+                  </div>
+
+                  {/* 封存印章 */}
+                  <div
+                    className="flex-shrink-0 flex flex-col items-center justify-center"
+                    style={{
+                      width: 54, height: 54,
+                      border: `2px solid ${C.red}`,
+                      borderRadius: '50%',
+                      transform: 'rotate(-12deg)',
+                      opacity: 0.88,
+                      boxShadow: `0 0 0 1px rgba(211,47,47,0.15)`,
+                    }}
+                  >
+                    <span className="text-[9px] font-bold tracking-widest" style={{ color: C.red, letterSpacing: '0.12em' }}>中</span>
+                    <span className="text-[9px] font-bold tracking-widest" style={{ color: C.red, letterSpacing: '0.12em' }}>奖</span>
+                  </div>
                 </div>
-                <span className="text-sm font-medium" style={{ color: C.text }}>{w.winner_name}</span>
-                <CheckCircle className="w-4 h-4 ml-auto" style={{ color: '#66BB6A' }} />
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {/* 底部封存时间戳 */}
+          {drawnAt && gIdx === sortedGroups.length - 1 && (
+            <div
+              className="px-4 py-2 flex items-center gap-1.5"
+              style={{ borderTop: `1px solid ${C.formulaBorder}`, background: C.bg }}
+            >
+              <ShieldCheck className="w-3 h-3 flex-shrink-0" style={{ color: C.gold }} />
+              <span className="text-[10px] font-mono" style={{ color: C.sub }}>结果已封存 · {drawnAt} · 不可篡改</span>
+            </div>
+          )}
         </div>
       ))}
 
-      {/* 公平性验证 */}
+      {/* 公平性验证（可折叠） */}
       {fairness?.random_seed && (
-        <div className="rounded-2xl p-4" style={{ background: C.darkBg }}>
-          <div className="flex items-center gap-2 mb-3">
-            <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
-            <span className="text-sm font-bold" style={{ color: C.darkText }}>公平性验证</span>
-          </div>
-          <div className="space-y-2 text-xs font-mono" style={{ color: C.darkSub }}>
+        <details className="group">
+          <summary
+            className="flex items-center gap-2 px-3 py-2 rounded-xl cursor-pointer list-none"
+            style={{ background: C.bg, border: `1px solid ${C.formulaBorder}` }}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" style={{ color: C.gold }} />
+            <span className="text-xs font-semibold" style={{ color: C.sub }}>公平性验证数据</span>
+            <svg className="ml-auto w-3.5 h-3.5 group-open:rotate-180 transition-transform" viewBox="0 0 14 14" fill="none" style={{ color: C.sub }}>
+              <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </summary>
+          <div className="mt-1 rounded-xl p-3 font-mono text-xs space-y-1.5" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
             <div>
-              <span style={{ color: C.darkText }}>随机种子：</span>
-              <span className="break-all">{fairness.random_seed.slice(0, 40)}...</span>
+              <span style={{ color: C.darkSub }}>随机种子：</span>
+              <span className="break-all" style={{ color: C.darkText }}>{fairness.random_seed.slice(0, 40)}...</span>
             </div>
-            <div>
-              <span style={{ color: C.darkText }}>种子哈希：</span>
-              <span className="break-all">{fairness.random_seed_hash?.slice(0, 40)}...</span>
+            {fairness.random_seed_hash && (
+              <div>
+                <span style={{ color: C.darkSub }}>种子哈希：</span>
+                <span className="break-all" style={{ color: C.darkText }}>{fairness.random_seed_hash.slice(0, 40)}...</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 pt-1" style={{ color: '#66BB6A' }}>
+              <CheckCircle className="w-3 h-3" />
+              <span>可独立验证，结果不可篡改</span>
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-1.5 text-xs" style={{ color: '#66BB6A' }}>
-            <CheckCircle className="w-3.5 h-3.5" />
-            <span>开奖结果可通过种子独立验证，不可篡改</span>
-          </div>
-        </div>
+        </details>
       )}
     </div>
   );
@@ -1311,19 +1388,7 @@ export default function LotteryActivity() {
           </div>
         )}
 
-        {/* ── 3. 开奖结果（已结束时展示）── */}
-        {isCompleted && (
-          <div>
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
-              <Trophy className="w-4 h-4" style={{ color: C.gold }} />
-              <span className="text-sm font-bold" style={{ color: C.text }}>开奖结果</span>
-            </div>
-            <DrawResultsSection activityId={activityId} />
-          </div>
-        )}
-
-        {/* ── 4. 参与者名单 ── */}
+        {/* ── 3. 参与者名单 ── */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2.5">
@@ -1352,6 +1417,18 @@ export default function LotteryActivity() {
             <ParticipantGrid activityId={activityId} />
           </div>
         </div>
+
+        {/* ── 4. 开奖结果（已结束时展示）── */}
+        {isCompleted && (
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
+              <Trophy className="w-4 h-4" style={{ color: C.gold }} />
+              <span className="text-sm font-bold" style={{ color: C.text }}>开奖结果</span>
+            </div>
+            <DrawResultsSection activityId={activityId} />
+          </div>
+        )}
 
         {/* ── 5. 奖项详情 ── */}
         <div>
