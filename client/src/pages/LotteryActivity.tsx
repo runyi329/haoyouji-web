@@ -152,9 +152,9 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
       ) : targetTime ? (
         <span className="text-xs font-mono" style={{ color: C.darkSub }}>
           距{isStock ? '收盘' : '开奖'}还有&nbsp;
-          {countdown.d > 0 && <span style={{ color: C.darkText }}>{countdown.d}天</span>}
-          {(countdown.d > 0 || countdown.h > 0) && <span style={{ color: C.darkText }}>{countdown.h}时</span>}
-          <span style={{ color: C.darkText }}>{countdown.m}分{countdown.s}秒</span>
+          {countdown.d > 0 && <span style={{ color: C.darkText }}>{String(countdown.d).padStart(2,'0')}天</span>}
+          <span style={{ color: C.darkText }}>{String(countdown.h).padStart(2,'0')}时</span>
+          <span style={{ color: C.darkText }}>{String(countdown.m).padStart(2,'0')}分{String(countdown.s).padStart(2,'0')}秒</span>
           &nbsp;·&nbsp;北京时间 {isStock ? '15:00 收盘' : '22:00 开奖'}
         </span>
       ) : (
@@ -304,13 +304,13 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
               <span className="text-xs font-semibold" style={{ color: '#FBBF24' }}>AI 实时跟进·官方结算中</span>
             </div>
             <div className="text-xs leading-relaxed" style={{ color: C.darkSub }}>
-              将于封盘后自动获取：
-              <span className="ml-1" style={{ color: C.gold }}>
+              <div>将于封盘后自动获取：</div>
+              <div className="mt-0.5" style={{ color: C.gold }}>
                 {seedDate
                   ? `${seedDate} 北京时间 15:00 ${indexName}收盘价`
                   : `开奖当天 15:00 ${indexName}收盘价`
                 }
-              </span>
+              </div>
             </div>
           </div>
         )}
