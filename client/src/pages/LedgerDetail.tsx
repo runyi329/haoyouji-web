@@ -746,17 +746,17 @@ export default function LedgerDetail() {
                       </div>
                     )}
 
-                    {/* ── 顶部：横幅图片区 ── */}
-                    <div className="relative w-full" style={{ height: '168px' }}>
+                    {/* ── 顶部：横幅图片区（16:9） ── */}
+                    <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
                       {activity.banner_image_url || activity.cover_image_url ? (
                         <img
                           src={activity.banner_image_url || activity.cover_image_url}
                           alt={activity.title}
-                          className="w-full h-full object-cover"
+                          className="absolute inset-0 w-full h-full object-cover"
                         />
                       ) : (
                         <div
-                          className={`w-full h-full bg-gradient-to-br ${placeholderGrad} flex flex-col items-center justify-center gap-2`}
+                          className={`absolute inset-0 w-full h-full bg-gradient-to-br ${placeholderGrad} flex flex-col items-center justify-center gap-2`}
                         >
                           <Gift className="w-12 h-12 text-white/70" />
                           <span className="text-white/50 text-[11px] tracking-wide">奖品图片</span>
