@@ -542,49 +542,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
       {/* 实例说明 */}
       {(isStock || isLottery) ? (
         <div className="space-y-3">
-          {/* 取数方式 */}
-          <div className="text-xs rounded-xl p-3" style={{ background: C.formulaBg, border: `1px solid ${C.formulaBorder}` }}>
-            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-              <span className="font-semibold" style={{ color: C.text }}>取数方式</span>
-              <button
-                type="button"
-                onClick={() => setShowTip(v => !v)}
-                className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                style={{ background: C.border, color: C.sub, lineHeight: 1 }}
-              >?</button>
-              {/* 开奖依据日期内嵌标签 */}
-              <span className="ml-auto px-2 py-0.5 rounded-full text-[10px]" style={{ background: C.goldLight, color: C.gold, border: `1px solid ${C.gold}44` }}>
-                {seedDate
-                  ? `取 ${seedDate} ${isStock ? '北京时间 15:00 收盘价' : seedType === 'ssq' ? '北京时间 22:00 双色球开奖号码' : '北京时间 22:00 大乐透开奖号码'}`
-                  : `开奖当天 ${isStock ? '北京时间 15:00 收盘价' : '北京时间 22:00 开奖号码'}`
-                }
-              </span>
-            </div>
-            {/* 整体数字，16 用红色细框框出（2025-02-27 上证指数收盘价近4162.88） */}
-            <div className="flex items-center gap-2">
-              <span style={{ color: C.sub }}>例：</span>
-              <span className="font-mono font-bold text-base" style={{ color: C.text }}>
-                4162.<span style={{
-                  color: C.red,
-                  border: `1.5px solid ${C.red}`,
-                  borderRadius: '3px',
-                  padding: '0 2px',
-                  display: 'inline-block',
-                  lineHeight: 1.3,
-                }}>88</span>
-              </span>
-              <span style={{ color: C.sub }}>→ 取 <strong style={{ color: C.red }}>88</strong></span>
-            </div>
-            {/* 展开的详细说明 */}
-            {showTip && (
-              <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.formulaBorder}`, color: C.sub }}>
-                取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
-                <strong style={{ color: C.text }}>余数直接对应中奖编号：余数 0→00号，余数 1→01号，余数 2→02号，以此类推</strong>。没有特例，不需要加一，每个人都有对应的余数。
-              </div>
-            )}
-          </div>
-
-          {/* 完整对照表 */}
+          {/* 取数方式 + 对照表 — 合并为一个卡片 */}
           {(() => {
             const intPart = '4162';
             // 计算每个编号获得的尾数数量（编号从 00 开始，即索引 0~N-1）
@@ -623,14 +581,42 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
               return { tail, tailStr, remainder, winner, participant };
             });
             return (
-              <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
-                <div className="px-3 py-2 font-semibold" style={{ background: C.bg, color: C.sub }}>
+              <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.formulaBorder}`, background: C.formulaBg }}>
+                {/* 头部：取数方式示例行 */}
+                <div className="px-3 pt-3 pb-2">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="font-semibold" style={{ color: C.text }}>取数方式</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowTip(v => !v)}
+                      className="w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{ background: C.border, color: C.sub, lineHeight: 1 }}
+                    >?</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span style={{ color: C.sub }}>例：</span>
+                    <span className="font-mono font-bold text-base" style={{ color: C.text }}>
+                      4162.<span style={{ color: C.red, border: `1.5px solid ${C.red}`, borderRadius: '3px', padding: '0 2px', display: 'inline-block', lineHeight: 1.3 }}>88</span>
+                    </span>
+                    <span style={{ color: C.sub }}>→ 取 <strong style={{ color: C.red }}>88</strong></span>
+                  </div>
+                  {showTip && (
+                    <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.formulaBorder}`, color: C.sub }}>
+                      取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
+                      <strong style={{ color: C.text }}>余数直接对应中奖编号：余数 0→00号，余数 1→01号，以此类推</strong>。没有特例，不需要加一。
+                    </div>
+                  )}
+                </div>
+                {/* 分隔线 */}
+                <div style={{ borderTop: `1px solid ${C.formulaBorder}` }} />
+                {/* 对照表头部 */}
+                <div className="px-3 py-1.5 font-semibold" style={{ background: 'rgba(0,0,0,0.03)', color: C.sub }}>
                   对照表：尾数对应中奖编号（共 {exampleN} 人）
                   {exampleN > 9 && <span className="ml-1 font-normal" style={{ color: C.sub }}>· 仅展示前9行示例</span>}
                 </div>
                 <table className="w-full">
                   <thead>
-                    <tr style={{ background: '#F5F5F5' }}>
+                    <tr style={{ background: 'rgba(0,0,0,0.04)' }}>
                       <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>收盘价示例</th>
                       <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>计算</th>
                       <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>中奖</th>
