@@ -23,7 +23,7 @@ const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CG
 const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
 
 const CAROUSEL_IMAGES = [
-  { src: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/fidencio-main-hero_5a4de357.png", alt: "飞腾干红葡萄酒 FIDENCIO RESERVA · 主图" },
+  { src: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/fidencio-compressed_26249364.webp", alt: "飞腾干红葡萄酒 FIDENCIO RESERVA · 主图" },
   { src: `${COS}/wine-products/fidencio-hero.webp`, alt: "FIDENCIO 酒瓶特写" },
   { src: `${COS}/wine-products/fidencio-pairing.webp`, alt: "配餐场景" },
 ];
@@ -339,7 +339,7 @@ export default function WineProductFidencio() {
           <h3 className="text-sm font-semibold text-[#C9A84C]">图文详情</h3>
         </div>
         <img
-          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/fidencio-main-hero_5a4de357.png"
+          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/fidencio-compressed_26249364.webp"
           alt="飞腾干红葡萄酒 FIDENCIO RESERVA 详情"
           className="w-full block"
         />
