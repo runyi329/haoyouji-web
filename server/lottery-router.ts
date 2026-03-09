@@ -1065,6 +1065,18 @@ export const lotteryRouter = router({
     }),
 
   // ── 公平性验证 ────────────────────────
+  // ── 手动触发开奖（组织者专用）────────────────────────────
+  manualDraw: protectedProcedure
+    .input(z.object({ activityId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      await ensureOrganizer(input.activityId, ctx.user.id);
+      const result = await executeDrawForActivity(input.activityId);
+      if (!result.success) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: result.error || '开奖失败' });
+      }
+      return { success: true, winners: result.winners };
+    }),
+
   verifyFairness: publicProcedure
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input }) => {

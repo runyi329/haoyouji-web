@@ -1175,6 +1175,16 @@ export default function LotteryActivity() {
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
   const adminAddMutation = trpc.lottery.adminAddParticipant.useMutation();
   const adminRemoveMutation = trpc.lottery.adminRemoveParticipant.useMutation();
+  const manualDrawMutation = trpc.lottery.manualDraw.useMutation({
+    onSuccess: () => {
+      utils.lottery.getActivity.invalidate({ activityId });
+      utils.lottery.getResults.invalidate({ activityId });
+      alert('开奖成功！页面将自动刷新。');
+    },
+    onError: (err) => {
+      alert(`开奖失败：${err.message}`);
+    },
+  });
   // 用户搜索（与账本邀请相同的即时搜索逻辑）
   const { data: searchResults, isFetching: isSearching } = trpc.sharing.searchUsers.useQuery(
     { query: inviteSearchQuery.trim() },
@@ -1479,10 +1489,30 @@ export default function LotteryActivity() {
         {/* ── 6. 第三方开奖校验区 ── */}
         {hasExternalSeed && (
           <div>
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
-              <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
-              <span className="text-sm font-bold" style={{ color: C.text }}>第三方开奖数据</span>
+            <div className="flex items-center justify-between gap-2.5 mb-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
+                <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
+                <span className="text-sm font-bold" style={{ color: C.text }}>第三方开奖数据</span>
+              </div>
+              {isOrganizer && !isCompleted && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('确认现在手动触发开奖？系统将立即拉取收盘价并公布中奖结果。')) {
+                      manualDrawMutation.mutate({ activityId });
+                    }
+                  }}
+                  disabled={manualDrawMutation.isPending}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold"
+                  style={{
+                    background: manualDrawMutation.isPending ? C.border : C.gold,
+                    color: manualDrawMutation.isPending ? C.sub : '#fff',
+                    opacity: manualDrawMutation.isPending ? 0.7 : 1,
+                  }}
+                >
+                  {manualDrawMutation.isPending ? '开奖中...' : '立即开奖'}
+                </button>
+              )}
             </div>
             {isStock && (
               <StockBoard
