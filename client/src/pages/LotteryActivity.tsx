@@ -469,7 +469,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             {showTip && (
               <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}`, color: C.sub }}>
                 取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
-                余数加 1 即为中奖编号：<strong style={{ color: C.text }}>余数 0→#1，余数 1→#2，余数 2→#3，以此类推</strong>。每个人都有对应的余数，概率均等。
+                    余数加 1 即为中奖编号：<strong style={{ color: C.text }}>余数 0→中奖编号 01，余数 1→中奖编号 02，余数 2→中奖编号 03，以此类推</strong>。每个人都有对应的余数，概率均等。
               </div>
             )}
           </div>
@@ -515,9 +515,9 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                         </td>
                         <td className="text-center px-2 py-1.5" style={{ color: C.sub }}>
                           {tail} ÷ {exampleN} 余 <span style={{ color: C.red, fontWeight: 600 }}>{remainder}</span>
-                          <span style={{ color: C.sub, fontSize: '0.9em' }}> (+1→#{winner})</span>
+                          <span style={{ color: C.sub, fontSize: '0.9em' }}> (+1→中奖编号{String(winner).padStart(2,'0')})</span>
                         </td>
-                        <td className="text-center px-2 py-1.5 font-mono font-bold" style={{ color: C.red }}>#{winner}</td>
+                        <td className="text-center px-2 py-1.5 font-mono font-bold" style={{ color: C.red }}>中奖编号 {String(winner).padStart(2,'0')}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -541,14 +541,14 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                             border: `1px solid ${isHigher ? C.red : C.border}`,
                           }}
                         >
-                          <span className="font-mono" style={{ color: isHigher ? C.red : C.text }}>#{person}</span>
+                          <span className="font-mono" style={{ color: isHigher ? C.red : C.text }}>中奖编号 {String(person).padStart(2,'0')}</span>
                           <span style={{ color: isHigher ? C.red : C.sub }}>{pct}%</span>
                         </div>
                       );
                     })}
                   </div>
                   <div className="mt-1.5" style={{ color: C.sub, fontSize: '0.85em' }}>
-                    公式：余数 + 1 = 中奖编号。{exampleN} 人参与时，100 个尾数均均分配，每人概率几乎相同。
+                    公式：余数 + 1 = 中奖编号。{exampleN} 人参与时，100 个尾数均分配，每人概率几乎相同。
                   </div>
                 </div>
               </div>
@@ -656,7 +656,7 @@ function ParticipantGrid({ activityId }: { activityId: number }) {
                 className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full"
                 style={{ background: C.redLight, color: C.red }}
               >
-                #{no}
+                抽奖编号 {no}
               </span>
             </div>
           );
