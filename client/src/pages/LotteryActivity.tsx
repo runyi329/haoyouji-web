@@ -906,10 +906,10 @@ function ParticipantGrid({ activityId }: { activityId: number }) {
               </span>
               {/* 抽奖编号 */}
               <span
-                className="text-[11px] font-mono px-1.5 py-0.5 rounded-full"
-                style={{ border: '1px solid rgba(203,164,113,0.6)', background: 'transparent' }}
+                className="font-mono px-1.5 py-0.5 rounded-full whitespace-nowrap"
+                style={{ fontSize: '9px', background: 'rgba(203,164,113,0.18)', border: '1px solid rgba(203,164,113,0.5)', color: C.sub }}
               >
-                <span style={{ color: C.sub }}>抽奖编号 </span><span style={{ color: C.red, fontWeight: 700 }}>{no}</span>
+                抽奖编号 <span style={{ color: C.red, fontWeight: 700 }}>{no}</span>
               </span>
             </div>
           );
