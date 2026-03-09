@@ -56,6 +56,7 @@ export default function LotteryEdit() {
   const [isPublic, setIsPublic] = useState(true);
   const [externalSeedType, setExternalSeedType] = useState<"none" | "sh_index" | "sz_index" | "ssq" | "dlt">("none");
   const [externalSeedDate, setExternalSeedDate] = useState("");
+  const [participantScale, setParticipantScale] = useState<"small" | "large">("small");
   const [prizes, setPrizes] = useState<PrizeRow[]>([]);
   const [editingPrizeIdx, setEditingPrizeIdx] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -72,6 +73,7 @@ export default function LotteryEdit() {
     setIsPublic(activity.is_public !== false);
     setExternalSeedType((activity.external_seed_type as any) ?? "none");
     setExternalSeedDate(activity.external_seed_date ?? "");
+    setParticipantScale((activity.participant_scale as any) ?? "small");
     setMaxParticipants(activity.max_participants ? String(activity.max_participants) : "");
     if (activity.draw_at) {
       const d = new Date(activity.draw_at);
@@ -114,6 +116,7 @@ export default function LotteryEdit() {
         isPublic, requiresInfo, registrationMode,
         externalSeedType: externalSeedType === 'none' ? undefined : externalSeedType,
         externalSeedDate: externalSeedDate || undefined,
+        participantScale,
       });
       for (const prize of prizes) {
         if (prize.deleted && prize.id) {
@@ -278,6 +281,23 @@ export default function LotteryEdit() {
               <div className="text-xs flex-shrink-0 w-16" style={{ color: C.sub }}>人数上限</div>
               <input type="number" min={1} className={inputCls} style={{ ...inputSty, flex: 1 }}
                 placeholder="不限" value={maxParticipants} onChange={e => setMaxParticipants(e.target.value)} />
+            </div>
+            {/* 人数规模选择 */}
+            <div className="flex items-center gap-2">
+              <div className="text-xs flex-shrink-0 w-16" style={{ color: C.sub }}>人数规模</div>
+              <div className="flex gap-1.5 flex-1">
+                {([{ value: 'small', label: '100人以内' }, { value: 'large', label: '100人以上' }] as const).map(opt => (
+                  <button key={opt.value} onClick={() => setParticipantScale(opt.value)}
+                    className="flex-1 py-1.5 rounded-lg text-xs font-medium border-2 transition-colors"
+                    style={{
+                      borderColor: participantScale === opt.value ? C.red : C.border,
+                      backgroundColor: participantScale === opt.value ? C.redLight : '#FAFAFA',
+                      color: participantScale === opt.value ? C.red : C.sub,
+                    }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
