@@ -681,51 +681,47 @@ export default function LedgerDetail() {
                           </div>
                         )}
 
-                        {/* 底部行：头像堆叠 + 开奖方式 */}
+                        {/* 底部行：头像堆叠 */}
                         <div className="flex items-center justify-between">
                           {isActive ? (
                             <>
-                              {/* 头像堆叠 + 开奖方式 */}
-                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                {/* 头像堆叠（最多显示5个） */}
-                                {recentParticipants.length > 0 && (
-                                  <div className="flex -space-x-1.5">
-                                    {recentParticipants.slice(0, 5).map((p: any, pi: number) => (
-                                      <div
-                                        key={pi}
-                                        className="w-5 h-5 rounded-full border-2 border-white overflow-hidden flex-shrink-0"
-                                        style={{ zIndex: 5 - pi }}
-                                      >
-                                        {p.avatar_url ? (
-                                          <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
-                                        ) : (
-                                          <div
-                                            className="w-full h-full flex items-center justify-center text-[8px] font-bold text-white"
-                                            style={{ background: '#D32F2F' }}
-                                          >
-                                            {(p.display_name || '?')[0]}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                {/* 倒计时或开奖方式 */}
-                                {countdown ? (
-                                  <div className="flex items-center gap-0.5">
-                                    <Timer className="w-3 h-3 text-[#D32F2F]" />
-                                    <span className="text-[11px] font-mono font-bold text-[#D32F2F]">{countdown}</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-[11px] text-gray-400">
-                                    {activity.external_seed_type === 'sh_index' ? '上证指数开奖' :
-                                     activity.external_seed_type === 'sz_index' ? '深证成指开奖' :
-                                     activity.external_seed_type === 'ssq' ? '双色球开奖' :
-                                     activity.external_seed_type === 'dlt' ? '大乐透开奖' :
-                                     activity.mode === 'scheduled' ? '统一时间开奖' :
-                                     activity.mode === 'instant' ? '即时开奖' : '统一时间开奖'}
-                                  </span>
-                                )}
+                              {/* 头像堆叠：有多少显多少，超出显示 +N */}
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+                                {recentParticipants.length > 0 && (() => {
+                                  // 每个头像实际占宽约 14px（w-5=20px, 负间距-6px），容器可用宽度约 160px
+                                  // 最多显示 10 个头像，超出的用 +N 气泡表示
+                                  const MAX_SHOW = 10;
+                                  const shown = recentParticipants.slice(0, MAX_SHOW);
+                                  const extra = participantCount - shown.length;
+                                  return (
+                                    <div className="flex -space-x-1.5 overflow-hidden">
+                                      {shown.map((p: any, pi: number) => (
+                                        <div
+                                          key={pi}
+                                          className="w-5 h-5 rounded-full border-2 border-white overflow-hidden flex-shrink-0"
+                                          style={{ zIndex: MAX_SHOW - pi }}
+                                        >
+                                          {p.avatar_url ? (
+                                            <img src={p.avatar_url} alt={p.display_name} className="w-full h-full object-cover" />
+                                          ) : (
+                                            <div
+                                              className="w-full h-full flex items-center justify-center text-[8px] font-bold text-white"
+                                              style={{ background: '#D32F2F' }}
+                                            >
+                                              {(p.display_name || '?')[0]}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                      {extra > 0 && (
+                                        <div
+                                          className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center flex-shrink-0 text-[8px] font-bold text-white"
+                                          style={{ background: '#9E9E9E', zIndex: 0 }}
+                                        >+{extra}</div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </>
                           ) : (
