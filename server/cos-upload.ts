@@ -1,13 +1,15 @@
 import COS from 'cos-nodejs-sdk-v5';
 import crypto from 'crypto';
 
-const cos = new COS({
-  SecretId: process.env.COS_SECRET_ID!,
-  SecretKey: process.env.COS_SECRET_KEY!,
-});
+const COS_SECRET_ID = process.env.COS_SECRET_ID!;
+const COS_SECRET_KEY = process.env.COS_SECRET_KEY!;
+const BUCKET = process.env.COS_BUCKET || 'haoyouji-images-1396946788';
+const REGION = process.env.COS_REGION || 'ap-shanghai';
 
-const BUCKET = process.env.COS_BUCKET!;
-const REGION = process.env.COS_REGION!;
+const cos = new COS({
+  SecretId: COS_SECRET_ID,
+  SecretKey: COS_SECRET_KEY,
+});
 
 /**
  * 上传图片到腾讯云COS
@@ -18,7 +20,7 @@ const REGION = process.env.COS_REGION!;
  */
 export async function uploadImageToCOS(
   imageData: string | Buffer,
-  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' = 'avatars',
+  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' | 'lottery-images' = 'avatars',
   filename?: string
 ): Promise<string> {
   try {

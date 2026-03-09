@@ -11,8 +11,24 @@ import {
 import { LotteryDatePicker } from "@/components/LotteryDatePicker";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
+// ─── 裁剪工具函数 ──────────────────────────────────────────────────────────────────────────
+// 图片压缩工具：限制最大宽度和输出质量
+async function compressImageDataUrl(dataUrl: string, maxWidth = 800, quality = 0.75): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
 
-// ─── 裁剪工具函数 ────────────────────────────────────────────────────────────
 async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<string> {
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
@@ -20,12 +36,15 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<string>
     img.onerror = reject;
     img.src = imageSrc;
   });
+  // 裁剪后限制宽度不超过800px，压缩质量0.75
+  const MAX_W = 800;
+  const scale = pixelCrop.width > MAX_W ? MAX_W / pixelCrop.width : 1;
   const canvas = document.createElement('canvas');
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
+  canvas.width = Math.round(pixelCrop.width * scale);
+  canvas.height = Math.round(pixelCrop.height * scale);
   const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height);
-  return canvas.toDataURL('image/jpeg', 0.9);
+  ctx.drawImage(image, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.75);
 }
 
 // ─── 裁剪弹窗组件 ────────────────────────────────────────────────────────────
@@ -392,9 +411,11 @@ export default function LotteryEdit() {
                     setBannerUploading(true);
                     const reader = new FileReader();
                     reader.onload = async (ev) => {
-                      const base64 = (ev.target?.result as string).split(',')[1];
                       try {
-                        const { url } = await uploadFileMutation.mutateAsync({ base64Data: base64, contentType: file.type, prefix: 'lottery-banner' });
+                        // 先压缩到800px宽，再上传
+                        const compressed = await compressImageDataUrl(ev.target?.result as string, 800, 0.75);
+                        const base64 = compressed.split(',')[1];
+                        const { url } = await uploadFileMutation.mutateAsync({ base64Data: base64, contentType: 'image/jpeg', prefix: 'lottery-banner' });
                         setBannerImageUrl(url);
                         setCoverImageUrl(null);
                       } catch { alert('上传失败'); }
