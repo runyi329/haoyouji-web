@@ -208,14 +208,9 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
-      {/* 标题栏：深色底 + 外部数据源标识 */}
+      {/* 标题栏：深色底 */}
       <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.darkBorder}` }}>
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-3.5 h-3.5" style={{ color: C.gold }} />
-          <span className="text-xs font-semibold" style={{ color: C.darkText }}>{indexName}</span>
-          {/* 官方数据源标识 */}
-          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方数据源</span>
-        </div>
+        <span className="text-xs font-semibold" style={{ color: C.darkText }}>{indexName}</span>
         <span className="text-[11px] font-mono" style={{ color: C.darkSub }}>{indexCode}</span>
       </div>
 
@@ -319,20 +314,30 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
         </div>
       )}
 
-      {/* 底部：验证链接（辅助蓝色） */}
+      {/* 底部：验证链接 */}
       <div className="px-4 pb-4" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
-        <a
-          href={sinaUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-xs pt-3"
-          style={{ color: '#64B5F6' }}
-          onClick={e => e.stopPropagation()}
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          <span style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}>去新浪财经查看原始数据</span>
-          <span style={{ color: C.darkSub }}>（官方来源）</span>
-        </a>
+        <div className="flex items-center justify-between pt-3">
+          <a
+            href={sinaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs"
+            style={{ color: '#64B5F6' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <span>新浪财经原始数据</span>
+          </a>
+          <a
+            href={sinaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center"
+            style={{ color: '#64B5F6' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
       </div>
       {/* 数据获取时间提示 */}
       <SeedTimingInfo seedValue={seedValue} seedSource={seedSource} drawAt={drawAt} seedDate={seedDate} seedType={seedType} />
@@ -1339,7 +1344,6 @@ export default function LotteryActivity() {
               <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
               <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
               <span className="text-sm font-bold" style={{ color: C.text }}>第三方开奖数据</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded ml-auto" style={{ background: C.goldLight, color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方来源</span>
             </div>
             {isStock && (
               <StockBoard
