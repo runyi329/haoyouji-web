@@ -418,6 +418,66 @@ export default function LedgerDetail() {
             )}
           </div>
         )}
+        {/* 普通账本：统计面板（总收入/总结余/总支出）*/}
+        {!isCustomAE && !isDiet && (
+          <div className="px-4 pt-2 pb-1 relative">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="relative">
+                <div className="text-xs opacity-90 flex items-center justify-center gap-1">
+                  <span>
+                    {!hasDateFilter && statsPeriod === 'day' && '今日'}
+                    {!hasDateFilter && statsPeriod === 'week' && '本周'}
+                    {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
+                    {!hasDateFilter && statsPeriod === 'year' && '今年'}
+                    总收入
+                  </span>
+                  <button
+                    onClick={() => setShowPeriodMenu(!showPeriodMenu)}
+                    className="inline-flex items-center justify-center w-4 h-4"
+                  >
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 12 12">
+                      <path d="M6 8L2 4h8z" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="text-lg font-medium">{monthlyStats.income.toFixed(2)}</div>
+                {showPeriodMenu && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 w-[5.5rem]">
+                    {(['day', 'week', 'month', 'year'] as const).map((p, i) => (
+                      <button
+                        key={p}
+                        onClick={() => { setStatsPeriod(p); setShowPeriodMenu(false); }}
+                        className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
+                      >
+                        {['按天', '按自然周', '按自然月', '按自然年'][i]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="text-xs opacity-90">
+                  {!hasDateFilter && statsPeriod === 'day' && '今日'}
+                  {!hasDateFilter && statsPeriod === 'week' && '本周'}
+                  {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
+                  {!hasDateFilter && statsPeriod === 'year' && '今年'}
+                  总结余
+                </div>
+                <div className="text-lg font-medium">{monthlyStats.balance.toFixed(2)}</div>
+              </div>
+              <div>
+                <div className="text-xs opacity-90">
+                  {!hasDateFilter && statsPeriod === 'day' && '今日'}
+                  {!hasDateFilter && statsPeriod === 'week' && '本周'}
+                  {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
+                  {!hasDateFilter && statsPeriod === 'year' && '今年'}
+                  总支出
+                </div>
+                <div className="text-lg font-medium">{monthlyStats.expense.toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
 
