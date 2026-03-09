@@ -809,6 +809,43 @@ export default function LedgerDetail() {
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#F5F5F5', color: '#757575' }}>草稿</span>
                           ) : null
                         )}
+                        {/* 中间：两条细竖线 + 获奖者区域 */}
+                        <div className="flex items-center flex-1 mx-2 overflow-hidden">
+                          {/* 左细线 */}
+                          <div className="flex-shrink-0" style={{ width: '0.5px', height: 16, background: 'rgba(0,0,0,0.12)' }} />
+                          {/* 获奖者内容区 */}
+                          <div className="flex items-center gap-1.5 px-2 overflow-hidden">
+                            {activity.firstWinnerName ? (
+                              // 已有获奖者：显示头像 + 名字
+                              <>
+                                <div
+                                  className="rounded-full overflow-hidden flex-shrink-0 border border-white"
+                                  style={{ width: 18, height: 18 }}
+                                >
+                                  {activity.firstWinnerAvatar ? (
+                                    <img src={activity.firstWinnerAvatar} alt={activity.firstWinnerName} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-white font-bold" style={{ background: '#B71C1C', fontSize: 8 }}>
+                                      {(activity.firstWinnerName || '?')[0]}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-[10px] truncate" style={{ color: '#5a5a5a' }}>{activity.firstWinnerName}</span>
+                              </>
+                            ) : (
+                              // 未开奖：占位符
+                              <>
+                                <div
+                                  className="rounded-full flex-shrink-0"
+                                  style={{ width: 18, height: 18, background: 'rgba(0,0,0,0.06)', border: '1px dashed rgba(0,0,0,0.15)' }}
+                                />
+                                <span className="text-[10px] truncate" style={{ color: '#BDBDBD' }}>待开奖</span>
+                              </>
+                            )}
+                          </div>
+                          {/* 右细线 */}
+                          <div className="flex-shrink-0" style={{ width: '0.5px', height: 16, background: 'rgba(0,0,0,0.12)' }} />
+                        </div>
                         {/* 右侧：报名截止时间 */}
                         {signupEndMs ? (
                           <span className="text-[10px] flex-shrink-0" style={{ color: signupCd?.ended ? '#9E9E9E' : '#5a5a5a' }}>
