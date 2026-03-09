@@ -332,7 +332,15 @@ export default function LotteryCreate() {
         description: description.trim() || undefined,
         mode,
         instantStyle: mode === "instant" ? instantStyle : undefined,
-        drawAt: mode === "scheduled" && drawAt ? drawAt : undefined,
+        drawAt: mode === "scheduled" && externalSeedType !== "none" && externalSeedDate
+          ? (() => {
+              // 有外部依据时，自动计算开奖时间：股票当天15:30，彩票当天22:30（北京时间）
+              const isLotteryType = externalSeedType === 'ssq' || externalSeedType === 'dlt';
+              const hour = isLotteryType ? 22 : 15;
+              const min = 30;
+              return `${externalSeedDate}T${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+            })()
+          : mode === "scheduled" && drawAt ? drawAt : undefined,
         autoDrawEnabled,
         milestoneType: mode === "milestone" ? milestoneType : undefined,
         milestoneTarget: mode === "milestone" && milestoneTarget ? parseFloat(milestoneTarget) : undefined,
@@ -456,21 +464,14 @@ export default function LotteryCreate() {
               />
             </div>
 
-            {/* 定时模式：开奖时间 */}
+            {/* 定时模式：开奖时间（有外部依据时自动计算，无依据时手动填写）*/}
             {mode === "scheduled" && (
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-2" style={{ color: '#222222' }}>开奖时间 *</label>
-                <input
-                  type="datetime-local"
-                  className={inputClass}
-                  style={inputStyle}
-                  value={drawAt}
-                  onChange={e => setDrawAt(e.target.value)}
-                />
-                <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                  <input type="checkbox" checked={autoDrawEnabled} onChange={e => setAutoDrawEnabled(e.target.checked)} className="accent-red-600" />
-                  <span className="text-xs" style={{ color: '#757575' }}>到时间自动开奖（无需手动触发）</span>
-                </label>
+                <label className="block text-sm font-medium mb-2" style={{ color: '#222222' }}>开奖时间</label>
+                <div className="rounded-xl px-3 py-2.5 text-sm" style={{ background: '#FAF3ED', border: '1px solid #E0E0E0', color: '#757575' }}>
+                  将在第三步选择开奖依据日期后自动设定
+                </div>
+                <p className="text-xs mt-1.5" style={{ color: '#BDBDBD' }}>股票数据：依据日期当天 15:30 后自动开奖；彩票数据：当天 22:30 后自动开奖</p>
               </div>
             )}
 

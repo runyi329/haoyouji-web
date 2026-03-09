@@ -109,7 +109,13 @@ export default function LotteryEdit() {
       await updateMutation.mutateAsync({
         activityId, title: title.trim(),
         description: description.trim() || undefined,
-        mode, drawAt: drawAt || undefined,
+        mode, drawAt: mode === 'scheduled' && externalSeedType !== 'none' && externalSeedDate
+          ? (() => {
+              const isLotteryType = externalSeedType === 'ssq' || externalSeedType === 'dlt';
+              const hour = isLotteryType ? 22 : 15;
+              return `${externalSeedDate}T${String(hour).padStart(2,'0')}:30`;
+            })()
+          : drawAt || undefined,
         signupStartAt: signupStartMode === 'scheduled' && signupStartAt ? signupStartAt : undefined,
         signupEndAt: signupEndAt || undefined,
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : null,
@@ -227,11 +233,20 @@ export default function LotteryEdit() {
           </div>
           {/* 开奖时间（定时模式内联显示） */}
           {mode === 'scheduled' && (
-            <div className="mt-2 flex items-center gap-2">
-              <div className="text-xs flex-shrink-0" style={{ color: C.sub }}>开奖时间</div>
-              <input type="datetime-local" className={inputCls} style={{ ...inputSty, flex: 1 }}
-                value={drawAt} onChange={e => setDrawAt(e.target.value)} />
-            </div>
+            externalSeedType && externalSeedType !== 'none' && externalSeedDate ? (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="text-xs flex-shrink-0" style={{ color: C.sub }}>开奖时间</div>
+                <div className="text-xs px-2 py-1 rounded-lg flex-1" style={{ background: '#FAF3ED', color: C.sub, border: `1px solid ${C.border}` }}>
+                  {externalSeedDate} {(externalSeedType === 'ssq' || externalSeedType === 'dlt') ? '22:30' : '15:30'} 自动开奖
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="text-xs flex-shrink-0" style={{ color: C.sub }}>开奖时间</div>
+                <input type="datetime-local" className={inputCls} style={{ ...inputSty, flex: 1 }}
+                  value={drawAt} onChange={e => setDrawAt(e.target.value)} />
+              </div>
+            )
           )}
         </div>
 
