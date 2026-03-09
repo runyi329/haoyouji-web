@@ -450,20 +450,20 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                 style={{ background: C.border, color: C.sub, lineHeight: 1 }}
               >?</button>
             </div>
-            {/* 整体数字，78 用红色细框框出 */}
+            {/* 整体数字，16 用红色细框框出（2025-02-27 上证指数收盘价近4162.88） */}
             <div className="flex items-center gap-2">
               <span style={{ color: C.sub }}>例：</span>
               <span className="font-mono font-bold text-base" style={{ color: C.text }}>
-                3456.<span style={{
+                4162.<span style={{
                   color: C.red,
                   border: `1.5px solid ${C.red}`,
                   borderRadius: '3px',
                   padding: '0 2px',
                   display: 'inline-block',
                   lineHeight: 1.3,
-                }}>78</span>
+                }}>88</span>
               </span>
-              <span style={{ color: C.sub }}>→ 取 <strong style={{ color: C.red }}>78</strong></span>
+              <span style={{ color: C.sub }}>→ 取 <strong style={{ color: C.red }}>88</strong></span>
             </div>
             {/* 展开的详细说明 */}
             {showTip && (
@@ -476,16 +476,16 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
 
           {/* 完整对照表 */}
           {(() => {
-            // 固定三行示例：尾数 04、05、12
-            const exampleTails = [4, 5, 12];
+            // 固定三行示例：尾数 88　25　00（2025-02-27 上证指数收盘价近4162.88为基准）
+            const exampleTails = [88, 25, 0];
             const rows = exampleTails.map(tail => {
-              const tailStr = String(tail).padStart(2, '0'); // '04', '05', '12'
+              const tailStr = String(tail).padStart(2, '0'); // '88', '25', '00'
               const remainder = tail % exampleN;
               const winner = remainder === 0 ? exampleN : remainder;
               return { tail, tailStr, remainder, winner };
             });
-            // 整数部分随机但固定，用 3456
-            const intPart = '3456';
+            // 整数部分取近期上证指数真实收盘价近似値
+            const intPart = '4162';
             return (
               <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
                 <div className="px-3 py-2 font-semibold" style={{ background: C.bg, color: C.sub }}>
