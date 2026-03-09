@@ -541,6 +541,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
   const [showTip, setShowTip] = useState(false);
   const algoHelpRef = useRef<HTMLButtonElement>(null);
   const [showProbDetail, setShowProbDetail] = useState(false);
+  const [showDrawMethod, setShowDrawMethod] = useState(false);
 
   return (
     <div>
@@ -588,9 +589,33 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             });
             return (
               <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.formulaBorder}`, background: C.formulaBg }}>
-                {/* 头部：取数方式 — 单行 */}
-                <div className="px-3 py-2.5 flex items-center gap-2 flex-wrap" style={{ background: C.bg }}>
-                  <span className="font-semibold text-xs" style={{ color: C.text }}>取数方式：</span>
+                {/* 头部：取数方式 — 可折叠标题行 */}
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2.5"
+                  style={{ background: C.bg }}
+                  onClick={() => setShowDrawMethod(v => !v)}
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-xs" style={{ color: C.text }}>取数方式</span>
+                    {!showDrawMethod && (
+                      <span className="text-xs" style={{ color: C.sub }}>例：4162.<span style={{ color: C.red, fontWeight: 700 }}>88</span> → 取 <strong style={{ color: C.red }}>88</strong></span>
+                    )}
+                  </div>
+                  <svg
+                    width="14" height="14" viewBox="0 0 14 14" fill="none"
+                    style={{ color: C.sub, transform: showDrawMethod ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}
+                  >
+                    <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {/* 展开内容：取数方式说明 + 对照表 */}
+                {showDrawMethod && (
+                  <>
+                {/* 分隔线 */}
+                <div style={{ borderTop: `1px solid ${C.formulaBorder}` }} />
+                {/* 取数方式说明行 */}
+                <div className="px-3 py-2 flex items-center gap-2 flex-wrap" style={{ background: C.bg }}>
                   <span style={{ color: C.sub }} className="text-xs">例：</span>
                   <span className="font-mono font-bold text-xs" style={{ color: C.text }}>
                     4162.<span style={{ color: C.red, border: `1.5px solid ${C.red}`, borderRadius: '3px', padding: '0 2px', display: 'inline-block', lineHeight: 1.3 }}>88</span>
@@ -661,6 +686,8 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                     ))}
                   </tbody>
                 </table>
+                  </>
+                )}
                 {/* 每个人的中奖概率 - 可折叠 */}
                 <div style={{ borderTop: `1px solid ${C.formulaBorder}` }}>
                   {/* 标题行（点击展开/收起） */}
