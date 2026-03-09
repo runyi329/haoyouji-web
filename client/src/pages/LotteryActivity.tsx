@@ -207,12 +207,12 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
-      {/* 标题栏：深色底 */}
-      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.darkBorder}` }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+      {/* 标题栏 */}
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold" style={{ color: C.darkText }}>{indexName}</span>
-          <span className="text-[10px] font-mono" style={{ color: C.darkSub }}>{indexCode}</span>
+          <span className="text-xs font-semibold" style={{ color: C.text }}>{indexName}</span>
+          <span className="text-[10px] font-mono" style={{ color: C.sub }}>{indexCode}</span>
         </div>
         <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方数据源</span>
       </div>
@@ -221,7 +221,6 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
       <div className="px-4 pt-4 pb-3">
         {price ? (
           <div className="flex items-end gap-3">
-            {/* 数字标牌字体，视觉上与 App 文本隔离 */}
             <span
               className="text-4xl font-bold"
               style={{ color: isUp ? C.stockUp : C.stockDown, fontFamily: "'Courier New', 'Roboto Mono', monospace", letterSpacing: '0.02em' }}
@@ -236,17 +235,16 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
             )}
           </div>
         ) : (
-          // 待获取状态：展示框（不是输入框）+ 脱冲动效
+          // 待获取状态：展示框（保留深色）
           <div>
             <div
               className="rounded-xl px-4 py-3 mb-2"
               style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: `1px solid rgba(255,255,255,0.12)`,
+                background: C.darkBg,
+                border: `1px solid ${C.darkBorder}`,
               }}
             >
               <div className="flex items-center gap-2">
-                {/* 脱骨屏脆山脸动效块 */}
                 <div
                   className="h-7 rounded"
                   style={{
@@ -279,8 +277,8 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
 
       {/* 尾数提取区 */}
       {tailDigits && (
-        <div className="mx-4 mb-4 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.darkBorder}` }}>
-          <div className="text-xs mb-2 flex items-center gap-1" style={{ color: C.darkSub }}>
+        <div className="mx-4 mb-4 rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+          <div className="text-xs mb-2 flex items-center gap-1" style={{ color: C.sub }}>
             <Hash className="w-3 h-3" />
             <span>收盘价尾数提取</span>
           </div>
@@ -288,19 +286,19 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
           <div className="flex items-center gap-2">
             {/* 左：原始收盘价 */}
             <div className="flex flex-col items-center">
-              <span className="text-[10px] mb-1" style={{ color: C.darkSub }}>原始收盘价</span>
-              <span className="font-mono text-sm" style={{ color: C.darkText }}>
+              <span className="text-[10px] mb-1" style={{ color: C.sub }}>原始收盘价</span>
+              <span className="font-mono text-sm" style={{ color: C.text }}>
                 {price?.split('.')[0]}.<span style={{ color: C.red, fontWeight: 700 }}>{price?.split('.')[1] ?? tailDigits}</span>
               </span>
             </div>
             {/* 中：取数逻辑 */}
             <div className="flex flex-col items-center px-1">
-              <span className="text-[10px] mb-1" style={{ color: C.darkSub }}>取数逻辑</span>
-              <span className="text-xs" style={{ color: C.muted }}>→ 取末两位 →</span>
+              <span className="text-[10px] mb-1" style={{ color: C.sub }}>取数逻辑</span>
+              <span className="text-xs" style={{ color: C.sub }}>→ 取末两位 →</span>
             </div>
             {/* 右：开奖基数 */}
             <div className="flex flex-col items-center">
-              <span className="text-[10px] mb-1" style={{ color: C.darkSub }}>开奖基数</span>
+              <span className="text-[10px] mb-1" style={{ color: C.sub }}>开奖基数</span>
               <div className="flex gap-1">
                 {tailDigits.split('').map((d, i) => (
                   <span
@@ -318,7 +316,7 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
       )}
 
       {/* 底部：验证链接 */}
-      <div className="px-4 pb-4" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
+      <div className="px-4 pb-4" style={{ borderTop: `1px solid ${C.border}` }}>
         <div className="flex items-center justify-between pt-3">
           <a
             href={sinaUrl}
