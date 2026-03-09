@@ -438,12 +438,19 @@ export const lotteryRouter = router({
           return { ...a, recentParticipants, prizes };
         })
       );
-      // 将 BigInt 转为 Number（mysql2 的 COUNT(*) 子查询返回 BigInt）
-      return activitiesWithParticipants.map((a: any) => ({
-        ...a,
-        participantCount: Number(a.participantCount ?? 0),
-        winnerCount: Number(a.winnerCount ?? 0),
-      }));
+      // 将 BigInt 转为 Number，将 Date 转为 ISO 字符串（防止前端时区偏差）
+      const dateFields = ['draw_at', 'signup_start_at', 'signup_end_at', 'created_at', 'updated_at'];
+      return activitiesWithParticipants.map((a: any) => {
+        const normalized: any = {
+          ...a,
+          participantCount: Number(a.participantCount ?? 0),
+          winnerCount: Number(a.winnerCount ?? 0),
+        };
+        for (const f of dateFields) {
+          if (normalized[f] instanceof Date) normalized[f] = (normalized[f] as Date).toISOString();
+        }
+        return normalized;
+      });
     }),
 
   // ── 添加奖项 ──────────────────────────────
