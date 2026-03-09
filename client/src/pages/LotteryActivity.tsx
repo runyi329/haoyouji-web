@@ -664,11 +664,11 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                             return (
                               <div
                                 key={idx}
-                                className="flex items-stretch gap-2 py-2"
+                                className="flex items-stretch py-2"
                                 style={{ borderBottom: idx < Math.min(exampleN, 50) - 1 ? `1px solid ${C.border}` : 'none' }}
                               >
-                                {/* 列 1：头像（占两行高度，居中） */}
-                                <div className="flex items-center justify-center flex-shrink-0" style={{ width: '36px' }}>
+                                {/* 列 1：头像 */}
+                                <div className="flex items-center justify-center flex-shrink-0" style={{ width: '44px' }}>
                                   <div
                                     className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
                                     style={{ background: participant?.avatar_url ? 'transparent' : bgColor, overflow: 'hidden' }}
@@ -678,13 +678,17 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                                       : (participant?.display_name ?? '?').charAt(0)}
                                   </div>
                                 </div>
-                                {/* 列 2：编号 + 概率（固定宽度） */}
-                                <div className="flex flex-col justify-center flex-shrink-0" style={{ width: '72px' }}>
+                                {/* 列间分隔线 */}
+                                <div className="flex-shrink-0" style={{ width: '1px', background: C.border, margin: '2px 0' }} />
+                                {/* 列 2：编号 + 概率 */}
+                                <div className="flex flex-col justify-center flex-shrink-0 px-3" style={{ width: '80px' }}>
                                   <div className="text-xs font-bold font-mono" style={{ color: C.red }}>{fmtNo(idx)}号</div>
                                   <div className="text-xs font-bold" style={{ color: C.red }}>{pct}%</div>
                                 </div>
-                                {/* 列 3：尾数（占满剩余空间，分两行均匀排列） */}
-                                <div className="flex-1 flex flex-col justify-center gap-0.5 min-w-0">
+                                {/* 列间分隔线 */}
+                                <div className="flex-shrink-0" style={{ width: '1px', background: C.border, margin: '2px 0' }} />
+                                {/* 列 3：尾数 */}
+                                <div className="flex-1 flex flex-col justify-center gap-0.5 min-w-0 px-2">
                                   <div className="flex justify-around">
                                     {row1.map(t => (
                                       <span key={t} className="font-mono text-[11px] font-medium" style={{ color: C.text }}>{t}</span>
