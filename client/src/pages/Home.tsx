@@ -233,6 +233,11 @@ export default function Home() {
       id: 3,
       image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/ai.webp",
       title: "AI社交"
+    },
+    {
+      id: 4,
+      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maidong_poster_1280x720_876d1051.jpg",
+      title: "脉动周周赢"
     }
   ];
 
