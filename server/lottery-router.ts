@@ -530,6 +530,28 @@ export const lotteryRouter = router({
         [input.activityId, input.userId, displayName]
       ) as any;
 
+      // 自动将被邀请用户加入该账本成员（这样用户的钱脉账本列表中会自动显示该账本）
+      const [activity] = await _execQuery(
+        `SELECT ledger_id FROM lottery_activities WHERE id=?`,
+        [input.activityId]
+      ) as any[];
+      if (activity?.ledger_id) {
+        const ledgerId = activity.ledger_id;
+        // 检查是否已是账本成员
+        const [existingMember] = await _execQuery(
+          `SELECT id FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [ledgerId, input.userId]
+        ) as any[];
+        if (!existingMember) {
+          // 以 member 身份加入账本
+          await _execQuery(
+            `INSERT INTO ledger_members (ledgerId, userId, role, memberType, permissionView, permissionAdd, permissionEdit, permissionDelete, canEdit, canDelete, canInvite, invitedBy)
+             VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, ?)`,
+            [ledgerId, input.userId, ctx.user.id]
+          );
+        }
+      }
+
       return { id: (result as any).insertId, displayName, avatar: targetUser.avatar ?? null };
     }),
 
