@@ -604,6 +604,8 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                   <span className="font-semibold text-xs" style={{ color: C.text }}>对照表：</span>
                   <span className="text-xs" style={{ color: C.sub }}>尾数对应中奖编号（共 {exampleN} 人）{exampleN > 9 ? ' · 仅展示前9行示例' : ''}</span>
                 </div>
+                {/* 对照表标题与表格之间的分隔线 */}
+                <div style={{ borderTop: `1px solid ${C.formulaBorder}` }} />
                 <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: C.bg, borderBottom: `1px solid ${C.formulaBorder}` }}>
