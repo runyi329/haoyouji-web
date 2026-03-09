@@ -300,7 +300,7 @@ export const lotteryRouter = router({
              FROM lottery_participants lp
              JOIN users u ON u.id=lp.user_id
              WHERE lp.activity_id=? AND lp.status='confirmed'
-             ORDER BY lp.created_at DESC LIMIT 3`,
+             ORDER BY lp.created_at DESC LIMIT 5`,
             [a.id]
           ) as any[];
           const prizes = await _execQuery(
