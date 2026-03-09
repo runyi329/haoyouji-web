@@ -438,12 +438,23 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
       {/* 实例说明 */}
       {(isStock || isLottery) ? (
         <div className="space-y-3">
-          {/* 规则一句话 */}
+          {/* 规则说明 + 取数示例 */}
           <div className="text-xs rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
-            <div className="font-semibold mb-1" style={{ color: C.text }}>计算方式</div>
+            <div className="font-semibold mb-2" style={{ color: C.text }}>取数方式</div>
+            {/* 指数示例可视化 */}
+            <div className="flex items-center gap-1.5 mb-2">
+              <span style={{ color: C.sub }}>例：上证指数收盘</span>
+              <span className="font-mono font-bold text-sm" style={{ color: C.text }}>3456.</span>
+              <span className="font-mono font-bold text-sm px-1.5 py-0.5 rounded" style={{
+                color: '#fff',
+                background: C.red,
+                letterSpacing: '0.05em',
+              }}>78</span>
+              <span style={{ color: C.sub }}>→ 取 <strong style={{ color: C.red }}>78</strong></span>
+            </div>
             <div style={{ color: C.sub }}>
-              取 <span style={{ color: C.red }}>{seedLabel}</span> 的后两位数字，
-              除以参与人数，<strong style={{ color: C.text }}>余数对应的编号即为中奖者</strong>（余数为0则最后一位中奖）。
+              取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
+              <strong style={{ color: C.text }}>余数对应的编号即为中奖者</strong>（余数为0则最后一位中奖）。
             </div>
           </div>
 
