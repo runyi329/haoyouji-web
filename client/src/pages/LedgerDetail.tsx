@@ -771,48 +771,7 @@ export default function LedgerDetail() {
                           {activity.title}
                         </span>
                       </div>
-                      {/* ── 右上角：悬浮倒计时浮窗（仅活跃状态且有开奖时间时显示） ── */}
-                      {isActive && drawAtMs && (() => {
-                        const cd = drawCd;
-                        if (!cd) return null;
-                        return (
-                          <div
-                            className="absolute top-2.5 right-2.5 z-10 flex flex-col items-center px-2.5 py-1.5 rounded-xl"
-                            style={{
-                              background: 'rgba(183,28,28,0.90)',
-                              backdropFilter: 'blur(6px)',
-                              boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
-                              minWidth: '52px',
-                            }}
-                          >
-                            {cd.ended ? (
-                              <span className="text-white text-[10px] font-bold">已开奖</span>
-                            ) : (
-                              <>
-                                <span className="text-white/70 text-[8px] mb-0.5 tracking-widest">距开奖</span>
-                                <div className="flex items-baseline gap-px">
-                                  {cd.d > 0 ? (
-                                    <>
-                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.d).padStart(2,'0')}</span>
-                                      <span className="text-white/60 text-[9px] mx-0.5">天</span>
-                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.h).padStart(2,'0')}</span>
-                                      <span className="text-white/60 text-[9px]">时</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.h).padStart(2,'0')}</span>
-                                      <span className="text-white/50 text-[11px] mx-px">:</span>
-                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.m).padStart(2,'0')}</span>
-                                      <span className="text-white/50 text-[11px] mx-px">:</span>
-                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.s).padStart(2,'0')}</span>
-                                    </>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })()}
+                      {/* 右上角浮层已移除，倒计时改为状态条显示 */}
                       {/* 开奖中火焰标（左上角） */}
                       {activity.status === 'drawing' && (
                         <div className="absolute top-2 left-2 bg-orange-500 rounded-full p-1 z-10"
