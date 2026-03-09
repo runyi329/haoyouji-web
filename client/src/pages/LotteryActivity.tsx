@@ -1453,7 +1453,6 @@ export default function LotteryActivity() {
               <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
               <ShieldCheck className="w-4 h-4" style={{ color: C.red }} />
               <span className="text-sm font-bold" style={{ color: C.text }}>开奖算法说明</span>
-              <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: C.redLight, color: C.red }}>可验视</span>
             </div>
             <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} participantCount={activity.participantCount} participantScale={activity.participant_scale} activityId={activityId} />
           </div>
