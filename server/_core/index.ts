@@ -189,6 +189,19 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
+  // 前端错误上报接口
+  app.post('/api/log-client-error', (req, res) => {
+    const { message, stack, componentStack, url, userAgent, timestamp } = req.body || {};
+    console.error('[前端错误]', JSON.stringify({
+      message: message?.substring(0, 300),
+      stack: stack?.substring(0, 500),
+      componentStack: componentStack?.substring(0, 500),
+      url,
+      timestamp,
+    }, null, 2));
+    res.json({ ok: true });
+  });
+
   // AI search router
   const aiSearchModule = await import('../ai-search.js');
   app.use(aiSearchModule.default);
