@@ -531,15 +531,6 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
 
   return (
     <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-      {/* Section 标题：左侧品牌色装饰条 */}
-      <div className="flex items-center gap-2.5 mb-3">
-        <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
-        <ShieldCheck className="w-4 h-4" style={{ color: C.red }} />
-        <span className="text-sm font-bold" style={{ color: C.text }}>开奖算法说明</span>
-        <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: C.redLight, color: C.red }}>
-          可验证
-        </span>
-      </div>
 
       {/* 实例说明 */}
       {(isStock || isLottery) ? (
@@ -776,14 +767,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             );
           })()}
 
-          {/* 可验证说明 + 验证入口 */}
-          <div className="rounded-xl p-3 flex items-start gap-2" style={{ background: C.linkBlueBg, border: `1px solid rgba(21,101,192,0.15)` }}>
-            <CheckCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: C.linkBlue }} />
-            <div className="flex-1">
-              <div className="text-xs font-semibold mb-0.5" style={{ color: C.linkBlue }}>第三方公开数据，任何人可独立验证</div>
-              <div className="text-xs" style={{ color: C.sub }}>主办方无法干预开奖结果，用手机计算器即可复现全部计算过程</div>
-            </div>
-          </div>
+
         </div>
       ) : (
         <div className="space-y-3">
@@ -792,10 +776,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             <div style={{ color: C.text }}>种子 = SHA256(时间戳 + 活动ID + 随机熵)</div>
             <div style={{ color: C.text }}>中奖者 = 参与者列表[种子哈希 % 参与人数]</div>
           </div>
-          <div className="flex items-start gap-1.5">
-            <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#4CAF50' }} />
-            <span className="text-xs" style={{ color: C.sub }}>开奖前公示随机种子哈希，开奖后公开完整种子，任何人可独立验证</span>
-          </div>
+
         </div>
       )}
     </div>
@@ -1383,7 +1364,15 @@ export default function LotteryActivity() {
 
         {/* ── 4. 开奖算法公式 ── */}
         {(hasExternalSeed || activity.mode === 'scheduled') && (
-          <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} participantCount={activity.participantCount} participantScale={activity.participant_scale} activityId={activityId} />
+          <div>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
+              <ShieldCheck className="w-4 h-4" style={{ color: C.red }} />
+              <span className="text-sm font-bold" style={{ color: C.text }}>开奖算法说明</span>
+              <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: C.redLight, color: C.red }}>可验视</span>
+            </div>
+            <AlgorithmBox seedType={activity.external_seed_type} mode={activity.mode} seedDate={activity.external_seed_date} participantCount={activity.participantCount} participantScale={activity.participant_scale} activityId={activityId} />
+          </div>
         )}
 
         {/* ── 5. 开奖结果（已结束时展示）── */}
