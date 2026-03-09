@@ -130,7 +130,7 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
   const isPast = targetTime ? now > targetTime.getTime() : false;
   const isFetchPast = fetchDeadline ? now > fetchDeadline.getTime() : false;
   return (
-    <div className="px-4 pb-3 pt-2 flex items-center gap-1.5 flex-wrap" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
+    <div className="flex items-center gap-1.5 flex-wrap pb-2">
       <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.darkSub }} />
       {hasData ? (
         <span className="text-xs font-mono" style={{ color: C.darkSub }}>
@@ -315,9 +315,12 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
         </div>
       )}
 
-      {/* 底部：验证链接 */}
-      <div className="px-4 pb-4" style={{ borderTop: `1px solid ${C.border}` }}>
-        <div className="flex items-center justify-between pt-3">
+      {/* 底部：深色框—倒计时 + 新浪财经链接 */}
+      <div className="mx-4 mb-4 rounded-xl px-3 py-2.5" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
+        {/* 倒计时行 */}
+        <SeedTimingInfo seedValue={seedValue} seedSource={seedSource} drawAt={drawAt} seedDate={seedDate} seedType={seedType} />
+        {/* 新浪财经链接行 */}
+        <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
           <a
             href={sinaUrl}
             target="_blank"
@@ -340,8 +343,6 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
           </a>
         </div>
       </div>
-      {/* 数据获取时间提示 */}
-      <SeedTimingInfo seedValue={seedValue} seedSource={seedSource} drawAt={drawAt} seedDate={seedDate} seedType={seedType} />
     </div>
   );
 }
