@@ -57,6 +57,10 @@ export const lotteryActivities = mysqlTable("lottery_activities", {
   requiredFields: json("required_fields"),         // 自定义必填字段 [{name, label, type}]
   signupFee: decimal("signup_fee", { precision: 10, scale: 2 }).default('0.00').notNull(), // 报名费
 
+  // 报名条件（自主报名模式下生效）
+  // 格式：[{ type: 'min_contacts', value: 1, label: '至少有1个人脉' }, ...]
+  signupConditions: json("signup_conditions"),
+
   // 公平性
   randomSeedHash: varchar("random_seed_hash", { length: 64 }), // 开奖前公示的种子哈希
   randomSeed: varchar("random_seed", { length: 255 }),         // 开奖后公布的完整种子

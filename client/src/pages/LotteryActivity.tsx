@@ -1624,46 +1624,66 @@ export default function LotteryActivity() {
           </div>
         </div>
       )}
-      {canSignup && !participantId && !showDraw && !isInviteOnly && (
-        <div
-          className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 z-30"
-          style={{ background: 'linear-gradient(to top, rgba(250,243,237,1) 70%, rgba(250,243,237,0) 100%)' }}
-        >
-          <div className="max-w-lg mx-auto">
-            {!user && (
-              <div className="mb-2 text-xs text-center" style={{ color: C.sub }}>请先登录后再报名</div>
-            )}
-            {signupError && (
-              <div className="mb-2 text-xs text-center" style={{ color: C.red }}>{signupError}</div>
-            )}
-            {user && (
-              <div className="mb-2 flex items-center gap-2 px-1">
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                  style={{ background: C.red }}
-                >
-                  {(user.name ?? user.username ?? '?')[0]?.toUpperCase()}
+      {canSignup && !participantId && !showDraw && !isInviteOnly && (() => {
+        // 解析报名条件
+        let conditions: Array<{ type: string; value: number; label: string }> = [];
+        try {
+          const raw = (activity as any).signup_conditions;
+          if (raw) conditions = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        } catch {}
+        return (
+          <div
+            className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 z-30"
+            style={{ background: 'linear-gradient(to top, rgba(250,243,237,1) 70%, rgba(250,243,237,0) 100%)' }}
+          >
+            <div className="max-w-lg mx-auto">
+              {/* 报名条件提示 */}
+              {conditions.length > 0 && (
+                <div className="mb-2 rounded-xl px-3 py-2" style={{ background: '#FFF8E1', border: '1px solid #FFD54F' }}>
+                  <div className="text-xs font-semibold mb-1" style={{ color: '#E65100' }}>报名条件</div>
+                  {conditions.map((c, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs" style={{ color: '#757575' }}>
+                      <span style={{ color: '#E65100' }}>&#10003;</span>
+                      <span>{c.label}</span>
+                    </div>
+                  ))}
                 </div>
-                <span className="text-xs" style={{ color: C.sub }}>以 <strong style={{ color: C.text }}>{user.name ?? user.username}</strong> 的身份参与</span>
-              </div>
-            )}
-            <button
-              onClick={handleSignup}
-              disabled={signingUp || !user}
-              className="w-full py-4 rounded-full text-white font-bold text-base transition-opacity disabled:opacity-50"
-              style={{
-                background: user ? `linear-gradient(135deg, ${C.red}, ${C.redDark})` : '#BDBDBD',
-                boxShadow: user ? `0 4px 16px ${C.red}55` : 'none',
-              }}
-            >
-              {signingUp ? "报名中..." : "立即参与报名"}
-            </button>
-            {parseFloat(activity.signup_fee) > 0 && (
-              <p className="text-center text-xs mt-2" style={{ color: C.sub }}>报名费：¥{activity.signup_fee}</p>
-            )}
+              )}
+              {!user && (
+                <div className="mb-2 text-xs text-center" style={{ color: C.sub }}>请先登录后再报名</div>
+              )}
+              {signupError && (
+                <div className="mb-2 text-xs text-center" style={{ color: C.red }}>{signupError}</div>
+              )}
+              {user && (
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                    style={{ background: C.red }}
+                  >
+                    {(user.name ?? user.username ?? '?')[0]?.toUpperCase()}
+                  </div>
+                  <span className="text-xs" style={{ color: C.sub }}>以 <strong style={{ color: C.text }}>{user.name ?? user.username}</strong> 的身份参与</span>
+                </div>
+              )}
+              <button
+                onClick={handleSignup}
+                disabled={signingUp || !user}
+                className="w-full py-4 rounded-full text-white font-bold text-base transition-opacity disabled:opacity-50"
+                style={{
+                  background: user ? `linear-gradient(135deg, ${C.red}, ${C.redDark})` : '#BDBDBD',
+                  boxShadow: user ? `0 4px 16px ${C.red}55` : 'none',
+                }}
+              >
+                {signingUp ? "报名中..." : "立即报名"}
+              </button>
+              {parseFloat(activity.signup_fee) > 0 && (
+                <p className="text-center text-xs mt-2" style={{ color: C.sub }}>报名费：¥{activity.signup_fee}</p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 已报名（定时模式）提示 */}
       {participantId && activity.mode === "scheduled" && !drawResult && (

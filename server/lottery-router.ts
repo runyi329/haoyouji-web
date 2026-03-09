@@ -286,6 +286,12 @@ export const lotteryRouter = router({
       })).optional(),
       signupFee: z.number().default(0),
       registrationMode: z.enum(['invite', 'organizer_add', 'open']).default('open'),
+      // 报名条件（自主报名模式下生效）
+      signupConditions: z.array(z.object({
+        type: z.string(),   // 'min_contacts' | 'min_balance' | ...
+        value: z.number(),  // 条件参数
+        label: z.string(),  // 展示文字
+      })).optional(),
       useParticipantSeed: z.boolean().default(false),
       isPublic: z.boolean().default(true),
       // 外部开奖数据源
@@ -313,7 +319,7 @@ export const lotteryRouter = router({
           (ledger_id, created_by, title, description, mode, instant_style,
            draw_at, auto_draw_enabled, milestone_type, milestone_target,
            signup_start_at, signup_end_at, max_participants, requires_info,
-           required_fields, signup_fee, registration_mode, random_seed_hash, random_seed,
+           required_fields, signup_fee, registration_mode, signup_conditions, random_seed_hash, random_seed,
            use_participant_seed, status, is_public,
            external_seed_type, external_seed_date, participant_scale)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -325,7 +331,9 @@ export const lotteryRouter = router({
           input.signupStartAt ?? null, input.signupEndAt ?? null,
           input.maxParticipants ?? null, input.requiresInfo ? 1 : 0,
           input.requiredFields ? JSON.stringify(input.requiredFields) : null,
-          input.signupFee, input.registrationMode ?? 'open', hash, seed,
+          input.signupFee, input.registrationMode ?? 'open',
+          input.signupConditions ? JSON.stringify(input.signupConditions) : null,
+          hash, seed,
           input.useParticipantSeed ? 1 : 0,
           "draft", input.isPublic ? 1 : 0,
           input.externalSeedType ?? null, input.externalSeedDate ?? null,
@@ -598,6 +606,33 @@ export const lotteryRouter = router({
           [input.activityId, input.userId]
         ) as any[];
         if (existing) throw new TRPCError({ code: "BAD_REQUEST", message: "您已报名" });
+      }
+
+      // 校验报名条件（自主报名模式下）
+      if (activity.registration_mode === 'open' && activity.signup_conditions && input.userId) {
+        let conditions: any[];
+        try {
+          conditions = typeof activity.signup_conditions === 'string'
+            ? JSON.parse(activity.signup_conditions)
+            : (activity.signup_conditions ?? []);
+        } catch { conditions = []; }
+
+        for (const cond of conditions) {
+          if (cond.type === 'min_contacts') {
+            // 校验用户人脉数（contacts表中该用户创建的联系人数）
+            const [{ cnt }] = await _execQuery(
+              `SELECT COUNT(*) AS cnt FROM contacts WHERE user_id=? AND is_deleted=0`,
+              [input.userId]
+            ) as any[];
+            if (Number(cnt) < cond.value) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: `报名失败：${cond.label || `需要至少有${cond.value}个人脉`}（当前人脉数：${cnt}）`
+              });
+            }
+          }
+          // 未来可扩展其他条件类型...
+        }
       }
 
       // 生成参与者随机贡献（用于共同决定种子）
