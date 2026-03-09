@@ -398,11 +398,28 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
         : new Date(ledger.updatedAt);
 
       // 统一架构后：opinion_book 类型直接用 ledger.id 跳转，不再需要 opinionBookId
+
+      // 对 custom_ae 类型账本，额外查询进行中的抽奖数量
+      let activeLotteryCount = 0;
+      if (ledger.type === 'custom_ae') {
+        try {
+          const lotteryRows = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(sql`lottery_activities`)
+            .where(sql`ledger_id = ${ledger.id} AND status IN ('active', 'open')`)
+            .then((rows: any[]) => rows[0]?.count || 0);
+          activeLotteryCount = lotteryRows;
+        } catch {
+          activeLotteryCount = 0;
+        }
+      }
+
       return {
         ...ledger,
         members,
         memberCount,
         recordCount,
+        activeLotteryCount,
         userRole,
         lastActivityAt: lastActivityAt.toISOString(),
       };
