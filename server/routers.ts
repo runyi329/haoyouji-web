@@ -1265,9 +1265,22 @@ export const appRouter = router({
         const ext = input.contentType.split("/")[1] || "bin";
         const fileKey = `${input.prefix}/${Date.now()}-${nanoid()}.${ext}`;
         
-        const { url } = await storagePut(fileKey, buffer, input.contentType);
+        // 优先使用腾讯云COS（生产环境），Forge不可用时也走COS
+        const cosSecretId = process.env.COS_SECRET_ID;
+        const cosSecretKey = process.env.COS_SECRET_KEY;
+        const cosBucket = process.env.COS_BUCKET;
+        const cosRegion = process.env.COS_REGION;
         
-        return { url, fileKey };
+        if (cosSecretId && cosSecretKey && cosBucket && cosRegion) {
+          // 使用腾讯云COS上传
+          const { uploadImageToCOS } = await import('./cos-upload');
+          const url = await uploadImageToCOS(buffer, 'ledger-photos', fileKey);
+          return { url, fileKey };
+        } else {
+          // 回退到Forge存储（开发环境）
+          const { url } = await storagePut(fileKey, buffer, input.contentType);
+          return { url, fileKey };
+        }
       }),
   }),
   

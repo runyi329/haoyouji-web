@@ -905,12 +905,17 @@ export const lotteryRouter = router({
         const imgRes = await fetch(url, { signal: AbortSignal.timeout(30000) });
         if (!imgRes.ok) throw new Error(`图片服务返回 ${imgRes.status}`);
         const buffer = Buffer.from(await imgRes.arrayBuffer());
-        const { url: s3Url } = await storagePut(
-          `ai-generated/${Date.now()}-${seed}.jpg`,
-          buffer,
-          'image/jpeg'
-        );
-        return { url: s3Url };
+        const fileKey = `ai-generated/${Date.now()}-${seed}.jpg`;
+        // 优先使用腾讯云COS（生产环境）
+        let finalUrl: string;
+        if (process.env.COS_SECRET_ID && process.env.COS_BUCKET) {
+          const { uploadImageToCOS } = await import('./cos-upload');
+          finalUrl = await uploadImageToCOS(buffer, 'ledger-photos', fileKey);
+        } else {
+          const { url: s3Url } = await storagePut(fileKey, buffer, 'image/jpeg');
+          finalUrl = s3Url;
+        }
+        return { url: finalUrl };
       } catch (e: any) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `图片生成失败：${e.message}` });
       }
