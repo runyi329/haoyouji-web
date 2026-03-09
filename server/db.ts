@@ -4390,6 +4390,7 @@ export async function searchUsersByUsername(query: string): Promise<any[]> {
     id: users.id,
     username: users.username,
     name: users.name,
+    avatar: users.avatar,
   }).from(users)
     .where(
       or(

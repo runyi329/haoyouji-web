@@ -500,29 +500,37 @@ export const lotteryRouter = router({
   adminAddParticipant: protectedProcedure
     .input(z.object({
       activityId: z.number(),
-      displayName: z.string().min(1).max(50),
-      avatarUrl: z.string().url().optional().or(z.literal('')),
+      // 传入站内用户 ID，自动读取头像和昵称
+      userId: z.number(),
     }))
     .mutation(async ({ input, ctx }) => {
       // 验证是组织者
       await ensureOrganizer(input.activityId, ctx.user.id);
 
-      // 检查是否已存在同名参与者
-      const [existing] = await _execQuery(
-        `SELECT id FROM lottery_participants WHERE activity_id=? AND display_name=? AND status='confirmed'`,
-        [input.activityId, input.displayName]
+      // 读取被邀请用户的信息
+      const [targetUser] = await _execQuery(
+        `SELECT id, name, username, avatar FROM users WHERE id=?`,
+        [input.userId]
       ) as any[];
-      if (existing) throw new TRPCError({ code: 'BAD_REQUEST', message: `"${input.displayName}" 已在参与者名单中` });
+      if (!targetUser) throw new TRPCError({ code: 'NOT_FOUND', message: '用户不存在' });
 
-      // 插入参与者（avatar_url 存到 extra_info 字段）
-      const extraInfo = input.avatarUrl ? JSON.stringify({ avatar_url: input.avatarUrl }) : null;
+      const displayName = targetUser.name || targetUser.username || `用户${input.userId}`;
+
+      // 检查是否已报名（同一 userId）
+      const [existingById] = await _execQuery(
+        `SELECT id FROM lottery_participants WHERE activity_id=? AND user_id=? AND status='confirmed'`,
+        [input.activityId, input.userId]
+      ) as any[];
+      if (existingById) throw new TRPCError({ code: 'BAD_REQUEST', message: `"${displayName}" 已在参与者名单中` });
+
+      // 插入参与者（user_id 关联到用户，头像通过 JOIN 自动读取）
       const [result] = await _execQuery(
         `INSERT INTO lottery_participants (activity_id, user_id, display_name, extra_info, status)
-         VALUES (?, NULL, ?, ?, 'confirmed')`,
-        [input.activityId, input.displayName, extraInfo]
+         VALUES (?, ?, ?, NULL, 'confirmed')`,
+        [input.activityId, input.userId, displayName]
       ) as any;
 
-      return { id: (result as any).insertId, displayName: input.displayName };
+      return { id: (result as any).insertId, displayName, avatar: targetUser.avatar ?? null };
     }),
 
   // ── 管理员删除参与者 ────────
