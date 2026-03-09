@@ -459,43 +459,51 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
           </div>
 
           {/* 完整对照表 */}
-          <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
-            <div className="px-3 py-2 font-semibold" style={{ background: C.bg, color: C.sub }}>
-              对照表：共 {exampleN} 人参与，尾数对应中奖编号
-            </div>
-            <table className="w-full">
-              <thead>
-                <tr style={{ background: '#F5F5F5' }}>
-                  <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>收盘尾数</th>
-                  <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>计算（尾数 ÷ {exampleN}）</th>
-                  <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>中奖编号</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: exampleN }, (_, i) => {
-                  // 找出能让余数 = i+1 的最小尾数示例（余数0对应编号N）
-                  const remainder = i + 1 === exampleN ? 0 : i + 1;
-                  // 找一个两位数示例：remainder 本身（如果>=10）或 exampleN + remainder
-                  const tail = remainder === 0 ? exampleN * Math.ceil(10 / exampleN) : (remainder < 10 ? exampleN + remainder : remainder);
-                  const winnerLabel = i + 1;
-                  const isLast = i + 1 === exampleN;
-                  return (
-                    <tr key={i} style={{ borderTop: `1px solid ${C.border}`, background: isLast ? '#FFF8F8' : undefined }}>
-                      <td className="text-center px-2 py-1.5 font-mono" style={{ color: C.text }}>…{String(tail).slice(-2)}</td>
-                      <td className="text-center px-2 py-1.5" style={{ color: C.sub }}>
-                        {tail} ÷ {exampleN} 余 <span style={{ color: C.red, fontWeight: 600 }}>{remainder}</span>
-                        {remainder === 0 && <span style={{ color: C.sub }}> (0→末位)</span>}
-                      </td>
-                      <td className="text-center px-2 py-1.5 font-mono font-bold" style={{ color: C.red }}>#{winnerLabel} 号</td>
+          {(() => {
+            // 固定三行示例：尾数 04、05、12
+            const exampleTails = [4, 5, 12];
+            const rows = exampleTails.map(tail => {
+              const tailStr = String(tail).padStart(2, '0'); // '04', '05', '12'
+              const remainder = tail % exampleN;
+              const winner = remainder === 0 ? exampleN : remainder;
+              return { tail, tailStr, remainder, winner };
+            });
+            // 整数部分随机但固定，用 3456
+            const intPart = '3456';
+            return (
+              <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+                <div className="px-3 py-2 font-semibold" style={{ background: C.bg, color: C.sub }}>
+                  对照表：共 {exampleN} 人参与，尾数对应中奖编号
+                </div>
+                <table className="w-full">
+                  <thead>
+                    <tr style={{ background: '#F5F5F5' }}>
+                      <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>收盘价示例</th>
+                      <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>计算</th>
+                      <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>中奖</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div className="px-3 py-2 text-xs" style={{ background: '#FAFAFA', color: C.sub, borderTop: `1px solid ${C.border}` }}>
-              余数为 0 时，最后一位（#{exampleN} 号）中奖
-            </div>
-          </div>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ tail, tailStr, remainder, winner }, i) => (
+                      <tr key={i} style={{ borderTop: `1px solid ${C.border}`, background: remainder === 0 ? '#FFF8F8' : undefined }}>
+                        <td className="px-2 py-1.5 font-mono" style={{ color: C.text }}>
+                          {intPart}.<span style={{ color: C.red, fontWeight: 700 }}>{tailStr}</span>
+                        </td>
+                        <td className="text-center px-2 py-1.5" style={{ color: C.sub }}>
+                          {tail} ÷ {exampleN} 余 <span style={{ color: C.red, fontWeight: 600 }}>{remainder}</span>
+                          {remainder === 0 && <span style={{ color: C.sub }}> (0→末位)</span>}
+                        </td>
+                        <td className="text-center px-2 py-1.5 font-mono font-bold" style={{ color: C.red }}>#{winner}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="px-3 py-2 text-xs" style={{ background: '#FAFAFA', color: C.sub, borderTop: `1px solid ${C.border}` }}>
+                  余数为 0 时，最后一位（#{exampleN} 号）中奖
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 开奖依据日期 */}
           <div className="px-3 py-2 rounded-xl text-xs" style={{ background: C.goldLight, border: `1px solid ${C.gold}33` }}>
