@@ -783,75 +783,71 @@ export default function LedgerDetail() {
                     {/* ── 通栏状态条：图片下方，左边距开奖倒计时，右边报名截止时间 ── */}
                     {isActive && (
                       <div
-                        className="flex items-center justify-between px-3 py-2"
+                        className="flex items-center px-3 py-2"
                         style={{ background: 'rgba(28,18,18,0.05)', borderBottom: '1px solid rgba(0,0,0,0.05)' }}
                       >
-                        {/* 左侧：距开奖倒计时（醒目） */}
-                        {drawAtMs ? (
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] font-medium flex-shrink-0" style={{ color: '#B71C1C' }}>距开奖</span>
-                            {drawCd && !drawCd.ended ? (
-                              <span className="text-[13px] font-bold tabular-nums" style={{ color: '#B71C1C', letterSpacing: '-0.02em' }}>
-                                {drawCd.d > 0
-                                  ? `${String(drawCd.d).padStart(2,'0')}天${String(drawCd.h).padStart(2,'0')}时`
-                                  : `${String(drawCd.h).padStart(2,'0')}:${String(drawCd.m).padStart(2,'0')}:${String(drawCd.s).padStart(2,'0')}`
-                                }
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-semibold" style={{ color: '#9E9E9E' }}>即将开奖</span>
-                            )}
-                          </div>
-                        ) : (
-                          // 无开奖时间时显示状态标签（仅开奖中/草稿）
-                          activity.status === 'drawing' ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#FFF3E0', color: '#E65100' }}>开奖中</span>
+                        {/* ─── 左1/3：距开奖 ─── */}
+                        <div className="flex items-center justify-center gap-1 overflow-hidden" style={{ flex: 1 }}>
+                          {drawAtMs ? (
+                            <>
+                              <span className="text-[10px] font-medium flex-shrink-0" style={{ color: '#B71C1C' }}>距开奖</span>
+                              {drawCd && !drawCd.ended ? (
+                                <span className="text-[12px] font-bold tabular-nums flex-shrink-0" style={{ color: '#B71C1C', letterSpacing: '-0.02em' }}>
+                                  {drawCd.d > 0
+                                    ? `${String(drawCd.d).padStart(2,'0')}天${String(drawCd.h).padStart(2,'0')}时`
+                                    : `${String(drawCd.h).padStart(2,'0')}:${String(drawCd.m).padStart(2,'0')}:${String(drawCd.s).padStart(2,'0')}`
+                                  }
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: '#9E9E9E' }}>即将开奖</span>
+                              )}
+                            </>
+                          ) : activity.status === 'drawing' ? (
+                            <span className="text-[10px] font-bold" style={{ color: '#E65100' }}>开奖中</span>
                           ) : activity.status === 'draft' ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: '#F5F5F5', color: '#757575' }}>草稿</span>
-                          ) : null
-                        )}
-                        {/* 中间：两条细竖线 + 获奖者区域 */}
-                        <div className="flex items-center flex-1 mx-2 overflow-hidden">
-                          {/* 左细线 */}
-                          <div className="flex-shrink-0" style={{ width: '0.5px', height: 16, background: 'rgba(0,0,0,0.12)' }} />
-                          {/* 获奖者内容区 */}
-                          <div className="flex items-center gap-1.5 px-2 overflow-hidden">
-                            {activity.firstWinnerName ? (
-                              // 已有获奖者：显示头像 + 名字
-                              <>
-                                <div
-                                  className="rounded-full overflow-hidden flex-shrink-0 border border-white"
-                                  style={{ width: 18, height: 18 }}
-                                >
-                                  {activity.firstWinnerAvatar ? (
-                                    <img src={activity.firstWinnerAvatar} alt={activity.firstWinnerName} className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-white font-bold" style={{ background: '#B71C1C', fontSize: 8 }}>
-                                      {(activity.firstWinnerName || '?')[0]}
-                                    </div>
-                                  )}
-                                </div>
-                                <span className="text-[10px] truncate" style={{ color: '#5a5a5a' }}>{activity.firstWinnerName}</span>
-                              </>
-                            ) : (
-                              // 未开奖：占位符
-                              <>
-                                <div
-                                  className="rounded-full flex-shrink-0"
-                                  style={{ width: 18, height: 18, background: 'rgba(0,0,0,0.06)', border: '1px dashed rgba(0,0,0,0.15)' }}
-                                />
-                                <span className="text-[10px] truncate" style={{ color: '#BDBDBD' }}>待开奖</span>
-                              </>
-                            )}
-                          </div>
-                          {/* 右细线 */}
-                          <div className="flex-shrink-0" style={{ width: '0.5px', height: 16, background: 'rgba(0,0,0,0.12)' }} />
+                            <span className="text-[10px] font-bold" style={{ color: '#9E9E9E' }}>草稿</span>
+                          ) : <span className="text-[10px]" style={{ color: '#BDBDBD' }}>—</span>}
                         </div>
-                        {/* 右侧：报名截止时间 */}
-                        {signupEndMs ? (
-                          <span className="text-[10px] flex-shrink-0" style={{ color: signupCd?.ended ? '#9E9E9E' : '#5a5a5a' }}>
-                            {signupCd?.ended ? `截止 ${fmtDate(signupEndMs)}` : `报名截止 ${fmtDate(signupEndMs)}`}
-                          </span>
-                        ) : null}
+
+                        {/* 细竖线1 */}
+                        <div className="flex-shrink-0" style={{ width: '0.5px', height: 14, background: 'rgba(0,0,0,0.13)' }} />
+
+                        {/* ─── 中1/3：报名截止 ─── */}
+                        <div className="flex items-center justify-center overflow-hidden" style={{ flex: 1 }}>
+                          {signupEndMs ? (
+                            <span className="text-[10px] truncate" style={{ color: signupCd?.ended ? '#9E9E9E' : '#5a5a5a' }}>
+                              {signupCd?.ended ? `截止 ${fmtDate(signupEndMs)}` : `截止 ${fmtDate(signupEndMs)}`}
+                            </span>
+                          ) : (
+                            <span className="text-[10px]" style={{ color: '#BDBDBD' }}>—</span>
+                          )}
+                        </div>
+
+                        {/* 细竖线2 */}
+                        <div className="flex-shrink-0" style={{ width: '0.5px', height: 14, background: 'rgba(0,0,0,0.13)' }} />
+
+                        {/* ─── 右1/3：中奖者 ─── */}
+                        <div className="flex items-center justify-center gap-1.5 overflow-hidden" style={{ flex: 1 }}>
+                          {activity.firstWinnerName ? (
+                            <>
+                              <div className="rounded-full overflow-hidden flex-shrink-0" style={{ width: 16, height: 16 }}>
+                                {activity.firstWinnerAvatar ? (
+                                  <img src={activity.firstWinnerAvatar} alt={activity.firstWinnerName} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-white font-bold" style={{ background: '#B71C1C', fontSize: 7 }}>
+                                    {(activity.firstWinnerName || '?')[0]}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[10px] truncate" style={{ color: '#5a5a5a' }}>{activity.firstWinnerName}</span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="rounded-full flex-shrink-0" style={{ width: 16, height: 16, background: 'rgba(0,0,0,0.06)', border: '1px dashed rgba(0,0,0,0.15)' }} />
+                              <span className="text-[10px]" style={{ color: '#BDBDBD' }}>待开奖</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
 
