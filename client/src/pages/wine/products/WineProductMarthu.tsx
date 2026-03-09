@@ -23,7 +23,7 @@ const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CG
 const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
 
 const CAROUSEL_IMAGES = [
-  { src: `${CDN}/marthu-product_dff2b79b.jpg`, alt: "玛莎干红葡萄酒 MARTHU · 主图" },
+  { src: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/marthu-main-hero_ebd18b18.png", alt: "玛莎干红葡萄酒 MARTHU · 主图" },
   { src: `${COS}/wine-products/marthu-hero.webp`, alt: "MARTHU 酒瓶特写" },
   { src: `${COS}/wine-products/marthu-pairing.webp`, alt: "配餐场景" },
 ];
@@ -339,7 +339,7 @@ export default function WineProductMarthu() {
           <h3 className="text-sm font-semibold text-[#C9A84C]">图文详情</h3>
         </div>
         <img
-          src={`${CDN}/marthu-product_dff2b79b.jpg`}
+          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/marthu-main-hero_ebd18b18.png"
           alt="玛莎干红葡萄酒 MARTHU 详情"
           className="w-full block"
         />
