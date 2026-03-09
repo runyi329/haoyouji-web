@@ -209,14 +209,38 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const resolveApiKey = (): string => {
+  if (ENV.forgeApiKey && ENV.forgeApiKey.trim().length > 0) return ENV.forgeApiKey;
+  if (ENV.deepseekApiKey && ENV.deepseekApiKey.trim().length > 0) return ENV.deepseekApiKey;
+  return "";
+};
+
+const resolveApiUrl = (): string => {
+  // 优先使用 Forge API
+  if (ENV.forgeApiKey && ENV.forgeApiKey.trim().length > 0) {
+    return ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+      ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
+      : "https://forge.manus.im/v1/chat/completions";
+  }
+  // fallback: 使用 DeepSeek API
+  if (ENV.deepseekApiKey && ENV.deepseekApiKey.trim().length > 0) {
+    return "https://api.deepseek.com/v1/chat/completions";
+  }
+  return "https://forge.manus.im/v1/chat/completions";
+};
+
+const resolveModel = (): string => {
+  // 没有 forgeApiKey 但有 deepseekApiKey，使用 DeepSeek 模型
+  if ((!ENV.forgeApiKey || ENV.forgeApiKey.trim().length === 0) &&
+      ENV.deepseekApiKey && ENV.deepseekApiKey.trim().length > 0) {
+    return "deepseek-chat";
+  }
+  return "gemini-2.5-flash";
+};
 
 const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+  if (!resolveApiKey()) {
+    throw new Error("AI API Key 未配置，请在服务器设置 BUILT_IN_FORGE_API_KEY 或 DEEPSEEK_API_KEY");
   }
 };
 
@@ -280,7 +304,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: resolveModel(),
     messages: messages.map(normalizeMessage),
   };
 
@@ -297,8 +321,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   }
 
   payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
+  // thinking 参数仅 Gemini 支持，DeepSeek 不支持
+  if (resolveModel() !== 'deepseek-chat') {
+    payload.thinking = {
+      "budget_tokens": 128
+    }
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
@@ -316,7 +343,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${resolveApiKey()}`,
     },
     body: JSON.stringify(payload),
   });
