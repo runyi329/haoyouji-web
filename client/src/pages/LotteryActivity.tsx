@@ -705,6 +705,75 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
 }
 
 // ─── 参与者名单 ───────────────────────────────────────────────────────────────
+// 删除参与者列表组件（管理员专用）
+function ParticipantRemoveList({
+  activityId,
+  removingId,
+  onRemove,
+}: {
+  activityId: number;
+  removingId: number | null;
+  onRemove: (participantId: number) => void;
+}) {
+  const { data: participants, isLoading } = trpc.lottery.getPublicParticipants.useQuery({ activityId });
+  const C = COLORS;
+
+  if (isLoading) {
+    return <div className="text-center py-6 text-sm" style={{ color: C.sub }}>加载中...</div>;
+  }
+  if (!participants || participants.length === 0) {
+    return <div className="text-center py-6 text-sm" style={{ color: C.sub }}>暫无参与者</div>;
+  }
+
+  // 编号位数自适应
+  const total = participants.length;
+  const digits = total >= 1000 ? 4 : total >= 100 ? 3 : 2;
+  const fmtNo = (n: number) => String(n).padStart(digits, '0');
+
+  return (
+    <div className="space-y-2">
+      {participants.map((p: any, idx: number) => {
+        const no = fmtNo(idx + 1);
+        const initials = (p.display_name || '?').charAt(0);
+        const bgColor = `hsl(${(idx * 47) % 360}, 55%, 45%)`;
+        const isRemoving = removingId === p.id;
+        return (
+          <div
+            key={p.id}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+            style={{ background: C.bg, border: `1px solid ${C.border}`, opacity: isRemoving ? 0.5 : 1 }}
+          >
+            {/* 头像 */}
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+              style={{ background: p.avatar_url ? 'transparent' : bgColor, overflow: 'hidden' }}
+            >
+              {p.avatar_url
+                ? <img src={p.avatar_url} alt="" className="w-full h-full object-cover" />
+                : initials
+              }
+            </div>
+            {/* 名字和编号 */}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold truncate" style={{ color: C.text }}>{p.display_name}</div>
+              <div className="text-xs" style={{ color: C.sub }}>抽奖编号 {no}</div>
+            </div>
+            {/* 删除按鈕 */}
+            <button
+              onClick={() => onRemove(p.id)}
+              disabled={isRemoving}
+              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold disabled:opacity-50"
+              style={{ background: '#FFF0F0', color: C.red, border: `1px solid ${C.red}` }}
+            >
+              {isRemoving ? '删除中...' : '删除'}
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ParticipantGrid({ activityId }: { activityId: number }) {
   const { data: participants, isLoading } = trpc.lottery.getPublicParticipants.useQuery({ activityId });
   const [showAll, setShowAll] = useState(false);
@@ -960,10 +1029,12 @@ export default function LotteryActivity() {
 
   // 管理员邀请参与者弹窗
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteTab, setInviteTab] = useState<'add' | 'remove'>('add'); // 添加/删除 Tab
   const [inviteSearchQuery, setInviteSearchQuery] = useState("");
   const [inviteError, setInviteError] = useState("");
   const [inviting, setInviting] = useState(false);
   const [addedUserIds, setAddedUserIds] = useState<Set<number>>(new Set());
+  const [removingId, setRemovingId] = useState<number | null>(null); // 正在删除的参与者 id
 
   const { data: activity, isLoading, isError } = trpc.lottery.getActivity.useQuery({ activityId }, { retry: false });
   const utils = trpc.useUtils();
@@ -973,6 +1044,7 @@ export default function LotteryActivity() {
   const signupMutation = trpc.lottery.signup.useMutation();
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
   const adminAddMutation = trpc.lottery.adminAddParticipant.useMutation();
+  const adminRemoveMutation = trpc.lottery.adminRemoveParticipant.useMutation();
   // 用户搜索（与账本邀请相同的即时搜索逻辑）
   const { data: searchResults, isFetching: isSearching } = trpc.sharing.searchUsers.useQuery(
     { query: inviteSearchQuery.trim() },
@@ -1021,6 +1093,20 @@ export default function LotteryActivity() {
       setInviteError(e.message || "添加失败");
     } finally {
       setInviting(false);
+    }
+  };
+
+  const handleAdminRemove = async (participantId: number) => {
+    setRemovingId(participantId);
+    setInviteError("");
+    try {
+      await adminRemoveMutation.mutateAsync({ activityId, participantId });
+      await utils.lottery.getPublicParticipants.invalidate({ activityId });
+      await utils.lottery.getActivity.invalidate({ activityId });
+    } catch (e: any) {
+      setInviteError(e.message || "删除失败");
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -1296,12 +1382,12 @@ export default function LotteryActivity() {
               {/* 管理员专属：邀请参与者按鈕 */}
               {isOrganizer && (
                 <button
-                  onClick={() => { setShowInviteModal(true); setInviteError(""); }}
+                  onClick={() => { setShowInviteModal(true); setInviteTab('add'); setInviteError(""); setInviteSearchQuery(''); }}
                   className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
                   style={{ background: C.red, color: '#fff' }}
                 >
                   <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
-                  <span>邀请参与者</span>
+                  <span>邀请</span>
                 </button>
               )}
             </div>
@@ -1446,11 +1532,11 @@ export default function LotteryActivity() {
         >
           <div
             className="w-full max-w-lg rounded-t-3xl px-5 pt-5 pb-8"
-            style={{ background: C.card, maxHeight: '80vh', overflowY: 'auto' }}
+            style={{ background: C.card, maxHeight: '82vh', overflowY: 'auto' }}
           >
             {/* 弹窗标题 */}
             <div className="flex items-center justify-between mb-4">
-              <span className="text-base font-bold" style={{ color: C.text }}>邀请参与者</span>
+              <span className="text-base font-bold" style={{ color: C.text }}>参与者管理</span>
               <button
                 onClick={() => { setShowInviteModal(false); setInviteSearchQuery(''); setInviteError(''); }}
                 className="w-7 h-7 rounded-full flex items-center justify-center text-base"
@@ -1458,80 +1544,105 @@ export default function LotteryActivity() {
               >×</button>
             </div>
 
-            {/* 搜索框 */}
-            <div className="mb-3 relative">
-              <input
-                type="text"
-                value={inviteSearchQuery}
-                onChange={e => { setInviteSearchQuery(e.target.value); setInviteError(''); }}
-                placeholder="搜索用户昵称或账号"
-                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none pr-8"
-                style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text }}
-                autoFocus
-              />
-              {isSearching && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: C.sub }}>搜索中...</span>
-              )}
+            {/* Tab 切换 */}
+            <div className="flex mb-4 rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+              {(['add', 'remove'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => { setInviteTab(tab); setInviteError(''); setInviteSearchQuery(''); }}
+                  className="flex-1 py-2 text-sm font-semibold"
+                  style={inviteTab === tab
+                    ? { background: C.red, color: '#fff' }
+                    : { background: C.bg, color: C.sub }
+                  }
+                >
+                  {tab === 'add' ? '添加参与者' : '删除参与者'}
+                </button>
+              ))}
             </div>
 
-            {/* 搜索结果列表 */}
-            {inviteSearchQuery.trim().length > 0 && (
-              <div className="mb-3">
-                {!isSearching && (!searchResults || searchResults.length === 0) ? (
-                  <div className="text-center py-6 text-sm" style={{ color: C.sub }}>未找到匹配用户</div>
-                ) : (
-                  <div className="space-y-2">
-                    {(searchResults || []).map((u: any) => {
-                      const isAdded = addedUserIds.has(u.id);
-                      const initials = (u.name || u.username || '?').charAt(0).toUpperCase();
-                      const bgColors = ['#C62828','#AD1457','#6A1B9A','#1565C0','#00695C','#E65100'];
-                      const bg = bgColors[u.id % bgColors.length];
-                      return (
-                        <div
-                          key={u.id}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
-                          style={{ background: C.bg, border: `1px solid ${C.border}` }}
-                        >
-                          {/* 头像 */}
-                          {u.avatar ? (
-                            <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-                          ) : (
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold" style={{ background: bg }}>{initials}</div>
-                          )}
-                          {/* 姓名和账号 */}
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold truncate" style={{ color: C.text }}>{u.name || u.username}</div>
-                            {u.name && u.username && (
-                              <div className="text-xs truncate" style={{ color: C.sub }}>@{u.username}</div>
-                            )}
-                          </div>
-                          {/* 添加按钮 */}
-                          <button
-                            onClick={() => handleAdminInvite(u.id)}
-                            disabled={inviting || isAdded}
-                            className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold disabled:opacity-50"
-                            style={isAdded
-                              ? { background: C.bg, color: C.sub, border: `1px solid ${C.border}` }
-                              : { background: C.red, color: '#fff' }
-                            }
-                          >
-                            {isAdded ? '已添加' : inviting ? '添加中...' : '添加'}
-                          </button>
-                        </div>
-                      );
-                    })}
+            {/* 添加 Tab */}
+            {inviteTab === 'add' && (
+              <>
+                {/* 搜索框 */}
+                <div className="mb-3 relative">
+                  <input
+                    type="text"
+                    value={inviteSearchQuery}
+                    onChange={e => { setInviteSearchQuery(e.target.value); setInviteError(''); }}
+                    placeholder="搜索用户昵称或账号"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm outline-none pr-8"
+                    style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text }}
+                    autoFocus
+                  />
+                  {isSearching && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: C.sub }}>搜索中...</span>
+                  )}
+                </div>
+
+                {/* 搜索结果列表 */}
+                {inviteSearchQuery.trim().length > 0 ? (
+                  <div className="mb-3">
+                    {!isSearching && (!searchResults || searchResults.length === 0) ? (
+                      <div className="text-center py-6 text-sm" style={{ color: C.sub }}>未找到匹配用户</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {(searchResults || []).map((u: any) => {
+                          const isAdded = addedUserIds.has(u.id);
+                          const initials = (u.name || u.username || '?').charAt(0).toUpperCase();
+                          const bgColors = ['#C62828','#AD1457','#6A1B9A','#1565C0','#00695C','#E65100'];
+                          const bg = bgColors[u.id % bgColors.length];
+                          return (
+                            <div
+                              key={u.id}
+                              className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                              style={{ background: C.bg, border: `1px solid ${C.border}` }}
+                            >
+                              {u.avatar ? (
+                                <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold" style={{ background: bg }}>{initials}</div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-semibold truncate" style={{ color: C.text }}>{u.name || u.username}</div>
+                                {u.name && u.username && (
+                                  <div className="text-xs truncate" style={{ color: C.sub }}>@{u.username}</div>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => handleAdminInvite(u.id)}
+                                disabled={inviting || isAdded}
+                                className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-bold disabled:opacity-50"
+                                style={isAdded
+                                  ? { background: C.bg, color: C.sub, border: `1px solid ${C.border}` }
+                                  : { background: C.red, color: '#fff' }
+                                }
+                              >
+                                {isAdded ? '已添加' : inviting ? '添加中...' : '添加'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <div className="text-center py-4 text-xs" style={{ color: C.sub }}>输入一两个字即可搜索平台用户，搜到后点击“添加”即可加入名单</div>
                 )}
-              </div>
+              </>
+            )}
+
+            {/* 删除 Tab */}
+            {inviteTab === 'remove' && (
+              <ParticipantRemoveList
+                activityId={activityId}
+                removingId={removingId}
+                onRemove={handleAdminRemove}
+              />
             )}
 
             {inviteError && (
-              <div className="mb-3 text-xs text-center" style={{ color: C.red }}>{inviteError}</div>
-            )}
-
-            {/* 提示文字 */}
-            {inviteSearchQuery.trim().length === 0 && (
-              <div className="text-center py-4 text-xs" style={{ color: C.sub }}>输入一两个字即可搜索平台用户，搜到后点击“添加”即可加入名单</div>
+              <div className="mt-2 text-xs text-center" style={{ color: C.red }}>{inviteError}</div>
             )}
           </div>
         </div>
