@@ -722,8 +722,6 @@ function ParticipantRemoveList({
   onRemove: (participantId: number) => void;
 }) {
   const { data: participants, isLoading } = trpc.lottery.getPublicParticipants.useQuery({ activityId });
-  const C = COLORS;
-
   if (isLoading) {
     return <div className="text-center py-6 text-sm" style={{ color: C.sub }}>加载中...</div>;
   }
@@ -739,7 +737,7 @@ function ParticipantRemoveList({
   return (
     <div className="space-y-2">
       {participants.map((p: any, idx: number) => {
-        const no = fmtNo(idx + 1);
+        const no = fmtNo(idx); // 编号从 00 开始
         const initials = (p.display_name || '?').charAt(0);
         const bgColor = `hsl(${(idx * 47) % 360}, 55%, 45%)`;
         const isRemoving = removingId === p.id;
