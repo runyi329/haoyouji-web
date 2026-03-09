@@ -640,7 +640,7 @@ export default function LedgerDetail() {
                     )}
 
                     {/* ── 顶部：横幅图片区 ── */}
-                    <div className="relative w-full" style={{ height: '160px' }}>
+                    <div className="relative w-full" style={{ height: '168px' }}>
                       {activity.banner_image_url || activity.cover_image_url ? (
                         <img
                           src={activity.banner_image_url || activity.cover_image_url}
@@ -657,17 +657,56 @@ export default function LedgerDetail() {
                       )}
                       {/* 图片底部渐变遮罩 + 标题叠加 */}
                       <div
-                        className="absolute bottom-0 left-0 right-0 px-3 pt-6 pb-2"
-                        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%)' }}
+                        className="absolute bottom-0 left-0 right-0 px-3 pt-8 pb-2.5"
+                        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%)' }}
                       >
-                        <div className="flex items-end justify-between gap-2">
-                          <span className="text-white text-[15px] font-bold line-clamp-1 flex-1" style={{ lineHeight: '1.4', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                            {activity.title}
-                          </span>
-                          {/* 状态勋章已移除，倒计时区域已能体现状态 */}
-                        </div>
+                        <span className="text-white text-[15px] font-bold line-clamp-1 block" style={{ lineHeight: '1.4', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                          {activity.title}
+                        </span>
                       </div>
-                      {/* 开奖中火焰标 */}
+                      {/* ── 右上角：悬浮倒计时浮窗（仅活跃状态且有开奖时间时显示） ── */}
+                      {isActive && drawAtMs && (() => {
+                        const cd = drawCd;
+                        if (!cd) return null;
+                        return (
+                          <div
+                            className="absolute top-2.5 right-2.5 z-10 flex flex-col items-center px-2.5 py-1.5 rounded-xl"
+                            style={{
+                              background: 'rgba(183,28,28,0.90)',
+                              backdropFilter: 'blur(6px)',
+                              boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+                              minWidth: '52px',
+                            }}
+                          >
+                            {cd.ended ? (
+                              <span className="text-white text-[10px] font-bold">已开奖</span>
+                            ) : (
+                              <>
+                                <span className="text-white/70 text-[8px] mb-0.5 tracking-widest">距开奖</span>
+                                <div className="flex items-baseline gap-px">
+                                  {cd.d > 0 ? (
+                                    <>
+                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.d).padStart(2,'0')}</span>
+                                      <span className="text-white/60 text-[9px] mx-0.5">天</span>
+                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.h).padStart(2,'0')}</span>
+                                      <span className="text-white/60 text-[9px]">时</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.h).padStart(2,'0')}</span>
+                                      <span className="text-white/50 text-[11px] mx-px">:</span>
+                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.m).padStart(2,'0')}</span>
+                                      <span className="text-white/50 text-[11px] mx-px">:</span>
+                                      <span className="text-white font-bold text-[14px] tabular-nums leading-none">{String(cd.s).padStart(2,'0')}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      {/* 开奖中火焰标（左上角） */}
                       {activity.status === 'drawing' && (
                         <div className="absolute top-2 left-2 bg-orange-500 rounded-full p-1 z-10"
                           style={{ boxShadow: '0 2px 6px rgba(255,109,0,0.5)' }}>
@@ -675,41 +714,42 @@ export default function LedgerDetail() {
                         </div>
                       )}
                     </div>
-
-                    {/* ── 中部：倒计时区 ── */}
+                    {/* ── 通栏状态条：图片下方，半透明深色 ── */}
                     {isActive && (
                       <div
-                        className="px-3 py-3"
-                        style={{ borderBottom: '1px solid #F5F5F5' }}
+                        className="flex items-center gap-2 px-3 py-2"
+                        style={{ background: 'rgba(28,18,18,0.05)', borderBottom: '1px solid rgba(0,0,0,0.05)' }}
                       >
-                        <div className="flex items-start justify-around">
-                          {/* 报名截止倒计时 */}
-                          {signupEndMs && (
-                            <CountdownBlock
-                              cd={signupCd}
-                              label="报名截止"
-                              endedText={`已截止`}
-                              endedDate={`${fmtDate(signupEndMs)} 截止`}
-                            />
-                          )}
-                          {/* 分隔线 */}
-                          {signupEndMs && drawAtMs && (
-                            <div className="self-stretch w-px bg-gray-100 mx-2" />
-                          )}
-                          {/* 开奖倒计时 */}
-                          {drawAtMs && (
-                            <CountdownBlock
-                              cd={drawCd}
-                              label="距离开奖还剩"
-                              endedText={`已开奖`}
-                              endedDate={drawCd?.ended ? '已开奖' : `${fmtDate(drawAtMs)} 开奖`}
-                            />
-                          )}
-                          {/* 无时间信息时显示参与人数 */}
-                          {!signupEndMs && !drawAtMs && (
-                            <span className="text-[12px] text-gray-400">{participantCount} 人已参与</span>
-                          )}
-                        </div>
+                        {/* 左侧：状态标签 */}
+                        {(() => {
+                          const statusColors: Record<string, { bg: string; text: string; label: string }> = {
+                            open: { bg: '#E8F5E9', text: '#2E7D32', label: '报名中' },
+                            drawing: { bg: '#FFF3E0', text: '#E65100', label: '开奖中' },
+                            draft: { bg: '#F5F5F5', text: '#757575', label: '草稿' },
+                          };
+                          const sc = statusColors[activity.status] || { bg: '#F5F5F5', text: '#757575', label: activity.status };
+                          return (
+                            <span
+                              className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                              style={{ background: sc.bg, color: sc.text, letterSpacing: '0.04em' }}
+                            >
+                              {sc.label}
+                            </span>
+                          );
+                        })()}
+                        {/* 中间：报名截止时间 */}
+                        {signupEndMs ? (
+                          <span className="text-[11px] flex-1 truncate" style={{ color: '#5a5a5a' }}>
+                            {signupCd?.ended
+                              ? `报名已截止 · ${fmtDate(signupEndMs)}`
+                              : `报名截止：${fmtDate(signupEndMs)}`
+                            }
+                          </span>
+                        ) : drawAtMs ? (
+                          <span className="text-[11px] flex-1 truncate" style={{ color: '#5a5a5a' }}>
+                            {drawCd?.ended ? `已于 ${fmtDate(drawAtMs)} 开奖` : `${fmtDate(drawAtMs)} 开奖`}
+                          </span>
+                        ) : null}
                       </div>
                     )}
 
