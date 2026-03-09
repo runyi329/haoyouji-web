@@ -940,22 +940,34 @@ export const lotteryRouter = router({
     .query(async ({ input }) => {
       const results = await _execQuery(
         `SELECT r.*, p.name AS prize_name, p.description AS prize_description, p.image_url AS prize_image,
-                p.sort_order AS prize_sort_order
+                p.sort_order AS prize_sort_order,
+                lp.extra_info AS participant_extra_info,
+                u.avatar AS winner_avatar_url
          FROM lottery_results r
          JOIN lottery_prizes p ON r.prize_id = p.id
+         LEFT JOIN lottery_participants lp ON r.participant_id = lp.id
+         LEFT JOIN users u ON r.winner_id = u.id
          WHERE r.activity_id=?
          ORDER BY p.sort_order ASC, r.draw_index ASC`,
         [input.activityId]
       ) as any[];
       // 将 INT/BigInt 字段转为 Number，防止 React 渲染崩溃
-      const normalizedResults = results.map((r: any) => ({
-        ...r,
-        prize_sort_order: Number(r.prize_sort_order ?? 0),
-        draw_index: Number(r.draw_index ?? 0),
-        prize_id: Number(r.prize_id ?? 0),
-        participant_id: Number(r.participant_id ?? 0),
-        winner_id: r.winner_id != null ? Number(r.winner_id) : null,
-      }));
+      const normalizedResults = results.map((r: any) => {
+        // 解析 extra_info 中的 avatar_url
+        let extraAvatar: string | null = null;
+        if (r.participant_extra_info) {
+          try { extraAvatar = JSON.parse(r.participant_extra_info)?.avatar_url ?? null; } catch {}
+        }
+        return {
+          ...r,
+          prize_sort_order: Number(r.prize_sort_order ?? 0),
+          draw_index: Number(r.draw_index ?? 0),
+          prize_id: Number(r.prize_id ?? 0),
+          participant_id: Number(r.participant_id ?? 0),
+          winner_id: r.winner_id != null ? Number(r.winner_id) : null,
+          avatar_url: r.winner_avatar_url || extraAvatar || null,
+        };
+      });
 
       const [activity] = await _execQuery(
         `SELECT random_seed, random_seed_hash, use_participant_seed FROM lottery_activities WHERE id=?`,
