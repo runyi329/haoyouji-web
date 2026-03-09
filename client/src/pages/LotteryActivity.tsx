@@ -804,18 +804,7 @@ function ParticipantGrid({ activityId }: { activityId: number }) {
 
   return (
     <div>
-      {/* 实时滚动条（最新参与者） */}
-      {list.length > 0 && (
-        <div
-          className="flex items-center gap-2 px-3 py-2 rounded-xl mb-3 text-xs"
-          style={{ background: C.redLight, color: C.red }}
-        >
-          <Flame className="w-3.5 h-3.5 flex-shrink-0" />
-          <span className="truncate">
-            刚刚，<strong>{list[0]?.display_name}</strong> 参与了活动
-          </span>
-        </div>
-      )}
+
 
       {/* 头像阵列 */}
       <div className="grid grid-cols-4 gap-3">
