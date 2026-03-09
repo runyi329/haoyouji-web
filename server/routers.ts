@@ -903,7 +903,7 @@ export const appRouter = router({
         
         // 处理邀请码
         if (input.inviteCode) {
-          const dbConn = getDb();
+          const dbConn = await getDb();
           // 查找邀请者
           const [inviter] = await dbConn
             .select({ id: users.id })
