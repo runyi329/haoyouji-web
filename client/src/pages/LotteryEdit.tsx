@@ -220,8 +220,9 @@ export default function LotteryEdit() {
         mode, drawAt: mode === 'scheduled' && externalSeedType !== 'none' && externalSeedDate
           ? (() => {
               const isLotteryType = externalSeedType === 'ssq' || externalSeedType === 'dlt';
+              const minute = isLotteryType ? 30 : 0;
               const hour = isLotteryType ? 22 : 15;
-              return `${externalSeedDate}T${String(hour).padStart(2,'0')}:30`;
+              return `${externalSeedDate}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}`;
             })()
           : drawAt || undefined,
         signupStartAt: signupStartMode === 'scheduled' && signupStartAt ? signupStartAt : undefined,
@@ -482,7 +483,7 @@ export default function LotteryEdit() {
               <div className="mt-2 flex items-center gap-2">
                 <div className="text-xs flex-shrink-0" style={{ color: C.sub }}>开奖时间</div>
                 <div className="text-xs px-2 py-1 rounded-lg flex-1" style={{ background: '#FAF3ED', color: C.sub, border: `1px solid ${C.border}` }}>
-                  {externalSeedDate} {(externalSeedType === 'ssq' || externalSeedType === 'dlt') ? '22:30' : '15:30'} 自动开奖
+                  {externalSeedDate} {(externalSeedType === 'ssq' || externalSeedType === 'dlt') ? '22:30' : '15:00'} 自动开奖
                 </div>
               </div>
             ) : (
