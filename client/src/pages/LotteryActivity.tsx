@@ -821,12 +821,21 @@ export default function LotteryActivity() {
   const [signupError, setSignupError] = useState("");
   const [showFullParticipants, setShowFullParticipants] = useState(false);
 
+  // 管理员邀请参与者弹窗
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteAvatar, setInviteAvatar] = useState("");
+  const [inviteError, setInviteError] = useState("");
+  const [inviting, setInviting] = useState(false);
+
   const { data: activity, isLoading, isError } = trpc.lottery.getActivity.useQuery({ activityId }, { retry: false });
+  const utils = trpc.useUtils();
   const countdown = useCountdown(activity?.draw_at ?? null);
   // 报名截止倒计时（必须在条件 return 之前调用，遵守 Hook 规则）
   const signupEndCountdown = useCountdown(activity?.signup_end_at ?? null);
   const signupMutation = trpc.lottery.signup.useMutation();
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
+  const adminAddMutation = trpc.lottery.adminAddParticipant.useMutation();
 
   const handleSignup = async () => {
     if (!user) { setSignupError("请先登录后再报名"); return; }
@@ -853,6 +862,29 @@ export default function LotteryActivity() {
       setSignupError(e.message || "抽奖失败");
     } finally {
       setDrawing(false);
+    }
+  };
+
+  const handleAdminInvite = async () => {
+    if (!inviteName.trim()) { setInviteError("请输入参与者昵称"); return; }
+    setInviting(true);
+    setInviteError("");
+    try {
+      await adminAddMutation.mutateAsync({
+        activityId,
+        displayName: inviteName.trim(),
+        avatarUrl: inviteAvatar.trim() || undefined,
+      });
+      // 刷新参与者列表和活动详情（人数）
+      await utils.lottery.getPublicParticipants.invalidate({ activityId });
+      await utils.lottery.getActivity.invalidate({ activityId });
+      setInviteName("");
+      setInviteAvatar("");
+      setShowInviteModal(false);
+    } catch (e: any) {
+      setInviteError(e.message || "添加失败");
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -1123,7 +1155,20 @@ export default function LotteryActivity() {
               <Users className="w-4 h-4" style={{ color: C.red }} />
               <span className="text-sm font-bold" style={{ color: C.text }}>参与者名单</span>
             </div>
-            <span className="text-xs" style={{ color: C.sub }}>{activity.participantCount} 人已参与</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: C.sub }}>{activity.participantCount} 人已参与</span>
+              {/* 管理员专属：邀请参与者按鈕 */}
+              {isOrganizer && (
+                <button
+                  onClick={() => { setShowInviteModal(true); setInviteError(""); }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+                  style={{ background: C.red, color: '#fff' }}
+                >
+                  <span style={{ fontSize: '14px', lineHeight: 1 }}>+</span>
+                  <span>邀请参与者</span>
+                </button>
+              )}
+            </div>
           </div>
           <div
             className="rounded-2xl p-4 border"
@@ -1252,6 +1297,82 @@ export default function LotteryActivity() {
               <div className="font-bold text-sm" style={{ color: '#2E7D32' }}>报名成功！</div>
               <div className="text-xs" style={{ color: '#757575' }}>请等待开奖，结果将在上方公示</div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 管理员邀请参与者弹窗 ── */}
+      {showInviteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowInviteModal(false); }}
+        >
+          <div
+            className="w-full max-w-lg rounded-t-3xl px-5 pt-5 pb-8"
+            style={{ background: C.card }}
+          >
+            {/* 弹窗标题 */}
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-base font-bold" style={{ color: C.text }}>邀请参与者</span>
+              <button
+                onClick={() => setShowInviteModal(false)}
+                className="w-7 h-7 rounded-full flex items-center justify-center text-base"
+                style={{ background: C.bg, color: C.sub }}
+              >×</button>
+            </div>
+
+            {/* 昵称输入 */}
+            <div className="mb-3">
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.sub }}>参与者昵称（必填）</label>
+              <input
+                type="text"
+                value={inviteName}
+                onChange={e => setInviteName(e.target.value)}
+                placeholder="请输入昵称"
+                maxLength={50}
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text }}
+              />
+            </div>
+
+            {/* 头像 URL（可选） */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: C.sub }}>头像图片链接（可选）</label>
+              <input
+                type="url"
+                value={inviteAvatar}
+                onChange={e => setInviteAvatar(e.target.value)}
+                placeholder="https://...（不填则显示昵称首字）"
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text }}
+              />
+              {inviteAvatar.trim() && (
+                <div className="mt-2 flex items-center gap-2">
+                  <img
+                    src={inviteAvatar.trim()}
+                    alt="预览"
+                    className="w-10 h-10 rounded-full object-cover border"
+                    style={{ borderColor: C.border }}
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <span className="text-xs" style={{ color: C.sub }}>头像预览</span>
+                </div>
+              )}
+            </div>
+
+            {inviteError && (
+              <div className="mb-3 text-xs text-center" style={{ color: C.red }}>{inviteError}</div>
+            )}
+
+            <button
+              onClick={handleAdminInvite}
+              disabled={inviting || !inviteName.trim()}
+              className="w-full py-3.5 rounded-full text-white font-bold text-sm disabled:opacity-50"
+              style={{ background: `linear-gradient(135deg, ${C.red}, ${C.redDark})` }}
+            >
+              {inviting ? "添加中..." : "确认添加到名单"}
+            </button>
           </div>
         </div>
       )}

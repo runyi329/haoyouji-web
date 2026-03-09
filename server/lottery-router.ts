@@ -470,17 +470,77 @@ export const lotteryRouter = router({
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input }) => {
       const participants = await _execQuery(
-        `SELECT lp.id, lp.display_name, lp.created_at, u.avatar AS avatar_url
+        `SELECT lp.id, lp.display_name, lp.created_at, lp.extra_info,
+                u.avatar AS user_avatar_url
          FROM lottery_participants lp
          LEFT JOIN users u ON u.id = lp.user_id
          WHERE lp.activity_id=? AND lp.status='confirmed'
          ORDER BY lp.created_at ASC`,
         [input.activityId]
       ) as any[];
-      return participants;
+      // 将 extra_info 中的 avatar_url 合并到顶层，方便前端直接使用
+      return participants.map((p: any) => {
+        let extraAvatar: string | null = null;
+        try {
+          if (p.extra_info) {
+            const ei = typeof p.extra_info === 'string' ? JSON.parse(p.extra_info) : p.extra_info;
+            extraAvatar = ei?.avatar_url ?? null;
+          }
+        } catch {}
+        return {
+          id: p.id,
+          display_name: p.display_name,
+          created_at: p.created_at,
+          avatar_url: p.user_avatar_url || extraAvatar || null,
+        };
+      });
     }),
 
-  // ── 即时自助抽奖（参与者触发） ────────────
+  // ── 管理员直接添加参与者（组织者专用） ────────
+  adminAddParticipant: protectedProcedure
+    .input(z.object({
+      activityId: z.number(),
+      displayName: z.string().min(1).max(50),
+      avatarUrl: z.string().url().optional().or(z.literal('')),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      // 验证是组织者
+      await ensureOrganizer(input.activityId, ctx.user.id);
+
+      // 检查是否已存在同名参与者
+      const [existing] = await _execQuery(
+        `SELECT id FROM lottery_participants WHERE activity_id=? AND display_name=? AND status='confirmed'`,
+        [input.activityId, input.displayName]
+      ) as any[];
+      if (existing) throw new TRPCError({ code: 'BAD_REQUEST', message: `"${input.displayName}" 已在参与者名单中` });
+
+      // 插入参与者（avatar_url 存到 extra_info 字段）
+      const extraInfo = input.avatarUrl ? JSON.stringify({ avatar_url: input.avatarUrl }) : null;
+      const [result] = await _execQuery(
+        `INSERT INTO lottery_participants (activity_id, user_id, display_name, extra_info, status)
+         VALUES (?, NULL, ?, ?, 'confirmed')`,
+        [input.activityId, input.displayName, extraInfo]
+      ) as any;
+
+      return { id: (result as any).insertId, displayName: input.displayName };
+    }),
+
+  // ── 管理员删除参与者 ────────
+  adminRemoveParticipant: protectedProcedure
+    .input(z.object({
+      activityId: z.number(),
+      participantId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await ensureOrganizer(input.activityId, ctx.user.id);
+      await _execQuery(
+        `UPDATE lottery_participants SET status='cancelled' WHERE id=? AND activity_id=?`,
+        [input.participantId, input.activityId]
+      );
+      return { success: true };
+    }),
+
+  // ── 即时自助抽奖（参与者触发） ────────
   instantDraw: publicProcedure
     .input(z.object({
       activityId: z.number(),
