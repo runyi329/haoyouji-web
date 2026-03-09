@@ -210,20 +210,20 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
     <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.border}` }}>
       {/* 标题栏 */}
       <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold" style={{ color: C.text }}>{indexName}</span>
-          <span className="text-[10px] font-mono" style={{ color: C.sub }}>{indexCode}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold" style={{ color: C.text }}>{indexName}</span>
+          <span className="text-[11px] font-mono" style={{ color: C.sub }}>{indexCode}</span>
         </div>
         <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方数据源</span>
       </div>
 
-      {/* 指数名称 + 价格 */}
-      <div className="px-4 pt-4 pb-3">
+      {/* 价格区 */}
+      <div className="px-4 pt-3 pb-2">
         {price ? (
           <div className="flex items-end gap-3">
             <span
-              className="text-4xl font-bold"
-              style={{ color: isUp ? C.stockUp : C.stockDown, fontFamily: "'Courier New', 'Roboto Mono', monospace", letterSpacing: '0.02em' }}
+              className="font-bold"
+              style={{ fontSize: '2.4rem', color: isUp ? C.stockUp : C.stockDown, fontFamily: "'Courier New', 'Roboto Mono', monospace", letterSpacing: '0.02em', lineHeight: 1.1 }}
             >
               {price}
             </span>
@@ -234,69 +234,27 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
               </div>
             )}
           </div>
-        ) : (
-          // 待获取状态：展示框（保留深色）
-          <div>
-            <div
-              className="rounded-xl px-4 py-3 mb-2"
-              style={{
-                background: C.darkBg,
-                border: `1px solid ${C.darkBorder}`,
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <div
-                  className="h-7 rounded"
-                  style={{
-                    width: '120px',
-                    background: 'linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'shimmer 1.8s infinite',
-                  }}
-                />
-                <span
-                  className="text-xs px-2 py-0.5 rounded font-semibold"
-                  style={{ background: 'rgba(217,119,6,0.2)', color: '#FBBF24', border: '1px solid rgba(217,119,6,0.3)' }}
-                >
-                  官方结算中...
-                </span>
-              </div>
-              <div className="text-xs mt-2" style={{ color: C.darkSub }}>
-                将于开奖当天封盘后自动获取：
-                <span style={{ color: C.gold }}>
-                  {seedDate
-                    ? `${seedDate} 北京时间 15:00 ${indexName}收盘价`
-                    : `开奖当天北京时间 15:00 ${indexName}收盘价`
-                  }
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
+        ) : null}
       </div>
 
-      {/* 尾数提取区 */}
+      {/* 尾数提取区（有数据时显示） */}
       {tailDigits && (
-        <div className="mx-4 mb-4 rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+        <div className="mx-4 mb-3 rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
           <div className="text-xs mb-2 flex items-center gap-1" style={{ color: C.sub }}>
             <Hash className="w-3 h-3" />
             <span>收盘价尾数提取</span>
           </div>
-          {/* 三列线性排版：原始收盘价 → 取数逻辑 → 开奖基数 */}
           <div className="flex items-center gap-2">
-            {/* 左：原始收盘价 */}
             <div className="flex flex-col items-center">
               <span className="text-[10px] mb-1" style={{ color: C.sub }}>原始收盘价</span>
               <span className="font-mono text-sm" style={{ color: C.text }}>
                 {price?.split('.')[0]}.<span style={{ color: C.red, fontWeight: 700 }}>{price?.split('.')[1] ?? tailDigits}</span>
               </span>
             </div>
-            {/* 中：取数逻辑 */}
             <div className="flex flex-col items-center px-1">
               <span className="text-[10px] mb-1" style={{ color: C.sub }}>取数逻辑</span>
-              <span className="text-xs" style={{ color: C.sub }}>→ 取末两位 →</span>
+              <span className="text-xs" style={{ color: C.sub }}>→ 末两位 →</span>
             </div>
-            {/* 右：开奖基数 */}
             <div className="flex flex-col items-center">
               <span className="text-[10px] mb-1" style={{ color: C.sub }}>开奖基数</span>
               <div className="flex gap-1">
@@ -315,17 +273,43 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
         </div>
       )}
 
-      {/* 底部：深色框—倒计时 + 新浪财经链接 */}
-      <div className="mx-4 mb-4 rounded-xl px-3 py-2.5" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
+      {/* 单一深色框：待获取提示 + 倒计时 + 新浪财经链接 */}
+      <div className="mx-4 mb-4 rounded-xl overflow-hidden" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
+        {/* 待获取状态： AI 实时跟进闪烁行 */}
+        {!price && (
+          <div className="px-4 pt-3 pb-2">
+            <div className="flex items-center gap-2 mb-2">
+              {/* 闪烁圆点 */}
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ background: '#FBBF24', animation: 'pulse 1.2s ease-in-out infinite' }}
+              />
+              <span className="text-xs font-semibold" style={{ color: '#FBBF24' }}>AI 实时跟进·官方结算中</span>
+            </div>
+            <div className="text-xs leading-relaxed" style={{ color: C.darkSub }}>
+              将于封盘后自动获取：
+              <span className="ml-1" style={{ color: C.gold }}>
+                {seedDate
+                  ? `${seedDate} 北京时间 15:00 ${indexName}收盘价`
+                  : `开奖当天 15:00 ${indexName}收盘价`
+                }
+              </span>
+            </div>
+          </div>
+        )}
+        {/* 分隔线（待获取时才显示） */}
+        {!price && <div style={{ height: '1px', background: C.darkBorder, margin: '0 16px' }} />}
         {/* 倒计时行 */}
-        <SeedTimingInfo seedValue={seedValue} seedSource={seedSource} drawAt={drawAt} seedDate={seedDate} seedType={seedType} />
+        <div className="px-4 py-2">
+          <SeedTimingInfo seedValue={seedValue} seedSource={seedSource} drawAt={drawAt} seedDate={seedDate} seedType={seedType} />
+        </div>
         {/* 新浪财经链接行 */}
-        <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
+        <div className="flex items-center justify-between px-4 pb-3" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
           <a
             href={sinaUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-xs"
+            className="flex items-center gap-1 text-xs pt-2"
             style={{ color: '#64B5F6' }}
             onClick={e => e.stopPropagation()}
           >
@@ -335,7 +319,7 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
             href={sinaUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center"
+            className="flex items-center justify-center pt-2"
             style={{ color: '#64B5F6' }}
             onClick={e => e.stopPropagation()}
           >
