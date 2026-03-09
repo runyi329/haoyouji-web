@@ -1,5 +1,5 @@
 /**
- * A1 定制账本 - 共享抽奖：定时集体开奖大屏 + 结果公示
+ * A1 定制账本 - 共享抽奖：定时统一开奖大屏 + 结果公示
  * 路由：/lottery/:activityId/draw （组织者开奖大屏）
  * /lottery/:activityId/results（结果公示，所有人可见）
  */

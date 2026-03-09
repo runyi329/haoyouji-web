@@ -21,7 +21,7 @@ const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode; bgColo
     borderColor: "#E1BEE7",
   },
   scheduled: {
-    label: "定时集体开奖",
+    label: "定时统一开奖",
     icon: <Clock className="w-3 h-3" />,
     bgColor: "#E3F2FD",
     textColor: "#1565C0",
