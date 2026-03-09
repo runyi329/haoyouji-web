@@ -1267,13 +1267,7 @@ export default function LotteryActivity() {
           <button onClick={() => navigate(`/ledger/${activity.ledger_id}` as any)} className="p-2 -ml-2">
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
-          <h1 className="flex-1 text-base font-semibold truncate text-white">{activity.title}</h1>
-          <span
-            className="text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0"
-            style={{ background: statusConfig.bg, color: statusConfig.color }}
-          >
-            {statusConfig.label}
-          </span>
+          <h1 className="flex-1 text-base font-semibold text-white">{activity.title}</h1>
         </div>
       </div>
 
