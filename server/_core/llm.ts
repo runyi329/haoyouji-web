@@ -320,12 +320,14 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.tool_choice = normalizedToolChoice;
   }
 
-  payload.max_tokens = 32768
+  const isDeepSeek = resolveModel() === 'deepseek-chat';
+  // DeepSeek max_tokens 上限为 8192，Gemini 支持更大值
+  payload.max_tokens = isDeepSeek ? 4096 : 32768;
   // thinking 参数仅 Gemini 支持，DeepSeek 不支持
-  if (resolveModel() !== 'deepseek-chat') {
+  if (!isDeepSeek) {
     payload.thinking = {
       "budget_tokens": 128
-    }
+    };
   }
 
   const normalizedResponseFormat = normalizeResponseFormat({
