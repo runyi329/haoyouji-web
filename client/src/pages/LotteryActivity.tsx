@@ -295,7 +295,7 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
               </div>
             </div>
             <div className="text-xs leading-relaxed" style={{ color: C.darkSub }}>
-              <div>将于封盘后自动获取：</div>
+              <div>将于收盘后自动获取：</div>
               <div className="mt-0.5" style={{ color: C.gold }}>
                 {seedDate
                   ? `${seedDate} 北京时间 15:00 ${indexName}收盘价`
@@ -575,7 +575,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             return (
               <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.formulaBorder}`, background: C.formulaBg }}>
                 {/* 头部：取数方式 — 单行 */}
-                <div className="px-3 py-2.5 flex items-center gap-2 flex-wrap">
+                <div className="px-3 py-2.5 flex items-center gap-2 flex-wrap" style={{ background: C.bg }}>
                   <span className="font-semibold text-xs" style={{ color: C.text }}>取数方式：</span>
                   <span style={{ color: C.sub }} className="text-xs">例：</span>
                   <span className="font-mono font-bold text-xs" style={{ color: C.text }}>
@@ -600,7 +600,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                   </thead>
                   <tbody>
                     {rows.map(({ tail, tailStr, remainder, winner, participant }, i) => (
-                      <tr key={i} style={{ borderTop: `1px solid ${C.formulaBorder}`, background: remainder === 0 ? C.redTint : C.card }}>
+                      <tr key={i} style={{ borderTop: `1px solid ${C.formulaBorder}`, background: i % 2 === 0 ? C.card : C.formulaBg }}>
                         <td className="px-2 py-1.5 font-mono" style={{ color: C.text, borderRight: '0.5px solid rgba(0,0,0,0.08)' }}>
                           {intPart}.<span style={{ color: C.red, fontWeight: 700 }}>{tailStr}</span>
                         </td>
@@ -646,7 +646,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                   </tbody>
                 </table>
                 {/* 每个人的中奖概率 - 可折叠 */}
-                <div style={{ borderTop: `1px solid ${C.border}` }}>
+                <div style={{ borderTop: `1px solid ${C.formulaBorder}` }}>
                   {/* 标题行（点击展开/收起） */}
                   <button
                     type="button"
@@ -665,7 +665,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
 
                   {/* 展开内容 */}
                   {showProbDetail && (
-                    <div className="px-3 pb-3 pt-2" style={{ background: '#F5F5F5' }}>
+                    <div className="px-3 pb-3 pt-2" style={{ background: C.bg }}>
                       {exampleN === 1 ? (
                         /* 唯一参与者特殊展示 */
                         <div className="rounded-xl p-3 flex items-center gap-3" style={{ background: C.card, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
@@ -719,12 +719,12 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                                 </div>
                                 {/* 尾数矩阵：每个数字一个圆角矩形底色 */}
                                 <div className="flex-1 flex flex-wrap gap-1 min-w-0">
-                                  {myTails.map(t => (
-                                    <span
-                                      key={t}
-                                      className="font-mono text-[11px] font-medium px-1.5 py-0.5 rounded"
-                                      style={{ background: C.redLight, color: C.red }}
-                                    >{t}</span>
+                  {myTails.map(t => (
+                    <span
+                      key={t}
+                      className="font-mono text-[11px] font-medium px-1.5 py-0.5 rounded"
+                      style={{ background: C.goldLight, color: C.gold }}
+                    >{t}</span>
                                   ))}
                                 </div>
                               </div>
