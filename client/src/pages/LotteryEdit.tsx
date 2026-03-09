@@ -176,7 +176,7 @@ export default function LotteryEdit() {
     <div className="min-h-screen pb-28" style={{ backgroundColor: C.bg }}>
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 px-4 h-12 flex items-center gap-3" style={{ backgroundColor: C.red }}>
-        <button onClick={() => window.history.back()} className="p-1 -ml-1">
+        <button onClick={() => navigate(`/lottery/list/${activity.ledger_id}` as any)} className="p-1 -ml-1">
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
         <h1 className="text-sm font-semibold text-white flex-1">编辑活动</h1>
