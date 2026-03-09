@@ -31,7 +31,8 @@ export const lotteryActivities = mysqlTable("lottery_activities", {
   // 基础信息
   title: varchar({ length: 100 }).notNull(),       // 活动名称
   description: text(),                             // 活动描述
-  coverImageUrl: text("cover_image_url"),          // 封面图
+  coverImageUrl: text("cover_image_url"),          // 封面图（列表页卡片正方形，建议 400×400px）
+  bannerImageUrl: text("banner_image_url"),         // 横幅图（详情页顶部，建议 750×220px）
 
   // 抽奖模式
   mode: mysqlEnum(['instant', 'scheduled', 'milestone']).default('scheduled').notNull(),

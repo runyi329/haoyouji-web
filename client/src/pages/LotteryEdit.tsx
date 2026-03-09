@@ -7,7 +7,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useRef } from "react";
 import {
-  ChevronLeft, Save, Clock, Users, Gift, Plus, Trash2, Edit3, Check, Trophy, Zap, Timer, AlignLeft, Type, ImagePlus, X, TrendingUp, Shield
+  ChevronLeft, Save, Clock, Users, Gift, Plus, Trash2, Edit3, Check, Trophy, Zap, Timer, AlignLeft, Type, ImagePlus, X, TrendingUp, Shield, Sparkles, Wand2
 } from "lucide-react";
 import { LotteryDatePicker } from "@/components/LotteryDatePicker";
 
@@ -62,6 +62,16 @@ export default function LotteryEdit() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  // 图片状态
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [bannerImageUrl, setBannerImageUrl] = useState<string | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  // AI 生成
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiGenTypes, setAiGenTypes] = useState<Array<'description'|'cover'|'banner'>>(['description','cover','banner']);
+  const aiGenerateMutation = trpc.lottery.aiGenerate.useMutation();
 
   useEffect(() => {
     if (!activity) return;
@@ -91,6 +101,8 @@ export default function LotteryEdit() {
       const d = new Date(activity.signup_end_at);
       setSignupEndAt(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
     }
+    setCoverImageUrl(activity.cover_image_url ?? null);
+    setBannerImageUrl(activity.banner_image_url ?? null);
     if (activity.prizes) {
       setPrizes(activity.prizes.map((p: any) => ({
         id: p.id, name: p.name ?? "", description: p.description ?? "",
@@ -123,6 +135,8 @@ export default function LotteryEdit() {
         externalSeedType: externalSeedType === 'none' ? undefined : externalSeedType,
         externalSeedDate: externalSeedDate || undefined,
         participantScale,
+        coverImageUrl: coverImageUrl,
+        bannerImageUrl: bannerImageUrl,
       });
       for (const prize of prizes) {
         if (prize.deleted && prize.id) {
@@ -207,6 +221,155 @@ export default function LotteryEdit() {
           <textarea className={`${inputCls} mt-2`} style={{ ...inputSty, resize: 'none' }}
             placeholder="活动描述（选填）" rows={2}
             value={description} onChange={e => setDescription(e.target.value)} maxLength={500} />
+        </div>
+
+        {/* 卡片1.5：AI 辅助 + 图片上传 */}
+        <div className="bg-white rounded-xl p-3.5" style={{ border: `1px solid ${C.border}` }}>
+          <div className="flex items-center gap-1.5 text-xs font-semibold mb-2.5" style={{ color: C.sub }}>
+            <Sparkles className="w-3.5 h-3.5" style={{ color: C.red }} />活动图片
+          </div>
+
+          {/* 图片上传区域 */}
+          <div className="grid grid-cols-2 gap-2.5 mb-3">
+            {/* 封面图 */}
+            <div>
+              <div className="text-xs mb-1" style={{ color: C.sub }}>封面图（列表卡片）</div>
+              <div className="text-xs mb-1.5" style={{ color: '#BDBDBD' }}>建议 400×400px 正方形</div>
+              <label className="relative cursor-pointer block">
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) { alert('图片不能超过 5MB'); return; }
+                    setCoverUploading(true);
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                      const base64 = (ev.target?.result as string).split(',')[1];
+                      try {
+                        const { url } = await uploadFileMutation.mutateAsync({ base64Data: base64, contentType: file.type, prefix: 'lottery-cover' });
+                        setCoverImageUrl(url);
+                      } catch { alert('上传失败'); }
+                      setCoverUploading(false);
+                    };
+                    reader.readAsDataURL(file);
+                  }} />
+                {coverImageUrl ? (
+                  <div className="relative">
+                    <img src={coverImageUrl} alt="封面" className="w-full aspect-square rounded-lg object-cover" style={{ border: `1px solid ${C.border}` }} />
+                    <button type="button" className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/50 text-white flex items-center justify-center"
+                      onClick={e => { e.preventDefault(); setCoverImageUrl(null); }}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1"
+                    style={{ borderColor: C.border, backgroundColor: '#FAFAFA' }}>
+                    {coverUploading ? <div className="w-5 h-5 border-2 border-red-300 border-t-red-600 rounded-full animate-spin" /> : (
+                      <><ImagePlus className="w-5 h-5" style={{ color: C.sub }} /><span className="text-xs" style={{ color: C.sub }}>上传封面</span></>
+                    )}
+                  </div>
+                )}
+              </label>
+            </div>
+
+            {/* 横幅图 */}
+            <div>
+              <div className="text-xs mb-1" style={{ color: C.sub }}>横幅图（详情页顶部）</div>
+              <div className="text-xs mb-1.5" style={{ color: '#BDBDBD' }}>建议 750×220px 横幅</div>
+              <label className="relative cursor-pointer block">
+                <input type="file" accept="image/*" className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 5 * 1024 * 1024) { alert('图片不能超过 5MB'); return; }
+                    setBannerUploading(true);
+                    const reader = new FileReader();
+                    reader.onload = async (ev) => {
+                      const base64 = (ev.target?.result as string).split(',')[1];
+                      try {
+                        const { url } = await uploadFileMutation.mutateAsync({ base64Data: base64, contentType: file.type, prefix: 'lottery-banner' });
+                        setBannerImageUrl(url);
+                      } catch { alert('上传失败'); }
+                      setBannerUploading(false);
+                    };
+                    reader.readAsDataURL(file);
+                  }} />
+                {bannerImageUrl ? (
+                  <div className="relative">
+                    <img src={bannerImageUrl} alt="横幅" className="w-full aspect-square rounded-lg object-cover" style={{ border: `1px solid ${C.border}` }} />
+                    <button type="button" className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/50 text-white flex items-center justify-center"
+                      onClick={e => { e.preventDefault(); setBannerImageUrl(null); }}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-full aspect-square rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-1"
+                    style={{ borderColor: C.border, backgroundColor: '#FAFAFA' }}>
+                    {bannerUploading ? <div className="w-5 h-5 border-2 border-red-300 border-t-red-600 rounded-full animate-spin" /> : (
+                      <><ImagePlus className="w-5 h-5" style={{ color: C.sub }} /><span className="text-xs" style={{ color: C.sub }}>上传横幅</span></>
+                    )}
+                  </div>
+                )}
+              </label>
+            </div>
+          </div>
+
+          {/* 分隔线 */}
+          <div className="border-t my-2.5" style={{ borderColor: C.border }} />
+
+          {/* AI 生成区域 */}
+          <div className="flex items-center gap-1.5 text-xs font-semibold mb-2" style={{ color: C.sub }}>
+            <Wand2 className="w-3.5 h-3.5" style={{ color: C.red }} />AI 一键生成
+          </div>
+          <textarea className={`${inputCls} mb-2`} style={{ ...inputSty, resize: 'none' }}
+            placeholder="描述你的活动，例如：年会抽奖，奖品有 iPhone 和购物卡，轻松欢乐氛围"
+            rows={2} value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} maxLength={300} />
+          {/* 生成类型选择 */}
+          <div className="flex gap-1.5 mb-2.5 flex-wrap">
+            {(['description', 'cover', 'banner'] as const).map(t => {
+              const labels = { description: '活动说明', cover: '封面图', banner: '横幅图' };
+              const active = aiGenTypes.includes(t);
+              return (
+                <button key={t} type="button"
+                  onClick={() => setAiGenTypes(prev => active ? prev.filter(x => x !== t) : [...prev, t])}
+                  className="py-1 px-2.5 rounded-lg text-xs font-medium border-2 transition-colors"
+                  style={{ borderColor: active ? C.red : C.border, backgroundColor: active ? C.redLight : '#FAFAFA', color: active ? C.red : C.sub }}>
+                  {labels[t]}
+                </button>
+              );
+            })}
+          </div>
+          <button type="button"
+            disabled={!aiPrompt.trim() || aiGenTypes.length === 0 || aiGenerating}
+            onClick={async () => {
+              if (!aiPrompt.trim() || aiGenTypes.length === 0) return;
+              setAiGenerating(true);
+              try {
+                const res = await aiGenerateMutation.mutateAsync({
+                  activityId,
+                  prompt: aiPrompt.trim(),
+                  generateTypes: aiGenTypes,
+                });
+                if (res.description) setDescription(res.description);
+                if (res.coverImageUrl) setCoverImageUrl(res.coverImageUrl);
+                if (res.bannerImageUrl) setBannerImageUrl(res.bannerImageUrl);
+              } catch (e: any) {
+                alert('AI 生成失败：' + (e.message || '请重试'));
+              } finally {
+                setAiGenerating(false);
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
+            style={{ backgroundColor: C.red }}>
+            {aiGenerating ? (
+              <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />AI 生成中...</>
+            ) : (
+              <><Sparkles className="w-4 h-4" />AI 一键生成</>
+            )}
+          </button>
+          {aiGenerating && (
+            <div className="mt-2 text-xs text-center" style={{ color: C.sub }}>图片生成约需 10-20 秒，请耐心等待...</div>
+          )}
         </div>
 
         {/* 卡片2：开奖模式 */}
