@@ -813,7 +813,9 @@ export default function Ledger() {
                       <span className="text-gray-300">|</span>
                       <span className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-[#D32F2F]"></span>
-                        {ledger.recordCount || 0}条账目
+                        {(ledger as any).type === 'custom_ae'
+                          ? <>{(ledger as any).activeLotteryCount || 0}个抽奖进行中</>
+                          : <>{ledger.recordCount || 0}条账目</>}
                       </span>
                     </div>
                     )}
@@ -964,7 +966,7 @@ export default function Ledger() {
                                   <span className="text-gray-300">|</span>
                                   <span>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</span>
                                   <span className="text-gray-300">|</span>
-                                  <span>{ledger.recordCount || 0}条账目</span>
+                                  <span>{(ledger as any).type === 'custom_ae' ? <>{(ledger as any).activeLotteryCount || 0}个抽奖进行中</> : <>{ledger.recordCount || 0}条账目</>}</span>
                                 </div>
                                 )}
                               </div>
@@ -1025,7 +1027,7 @@ export default function Ledger() {
                                 <span className="text-gray-300">|</span>
                                 <span>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</span>
                                 <span className="text-gray-300">|</span>
-                                <span>{ledger.recordCount || 0}条账目</span>
+                                <span>{(ledger as any).type === 'custom_ae' ? <>{(ledger as any).activeLotteryCount || 0}个抽奖进行中</> : <>{ledger.recordCount || 0}条账目</>}</span>
                               </div>
                               )}
                             </div>
