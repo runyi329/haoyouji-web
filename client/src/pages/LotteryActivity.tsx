@@ -610,8 +610,8 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                   <thead>
                     <tr style={{ background: C.bg, borderBottom: `1px solid ${C.formulaBorder}` }}>
                       <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, borderRight: `1px solid ${C.formulaBorder}` }}>收盘价示例</th>
-                      <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, borderRight: `1px solid ${C.formulaBorder}` }}>计算过程</th>
-                      <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>中奖结果</th>
+                      <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, letterSpacing: '0.25em', borderRight: `1px solid ${C.formulaBorder}` }}>计算过程</th>
+                      <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, letterSpacing: '0.25em' }}>中奖结果</th>
                     </tr>
                   </thead>
                   <tbody>
