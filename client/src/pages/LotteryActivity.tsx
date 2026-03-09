@@ -616,7 +616,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                     style={{ background: '#FAFAFA' }}
                     onClick={() => setShowProbDetail(v => !v)}
                   >
-                    <span className="font-semibold text-xs" style={{ color: C.sub }}>各人中奖概率</span>
+                    <span className="font-semibold text-xs" style={{ color: C.sub }}>每人中奖概率</span>
                     <svg
                       width="14" height="14" viewBox="0 0 14 14" fill="none"
                       style={{ color: C.sub, transform: showProbDetail ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
@@ -627,73 +627,86 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
 
                   {/* 展开内容 */}
                   {showProbDetail && (
-                    <div className="px-3 pb-2 pt-1" style={{ background: '#FAFAFA' }}>
+                    <div className="px-3 pb-3 pt-2" style={{ background: '#FAFAFA' }}>
                       {exampleN === 1 ? (
-                        <div className="flex items-center gap-2 py-1">
-                          {realParticipants[0] && (
-                            <div
-                              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                              style={{ background: realParticipants[0].avatar_url ? 'transparent' : `hsl(0, 55%, 45%)`, overflow: 'hidden' }}
-                            >
-                              {realParticipants[0].avatar_url
-                                ? <img src={realParticipants[0].avatar_url} alt="" className="w-full h-full object-cover" />
-                                : (realParticipants[0].display_name ?? '?').charAt(0)}
-                            </div>
-                          )}
-                          <span className="font-mono font-bold text-xs" style={{ color: C.text }}>{realParticipants[0]?.display_name ?? '抽奖编号 00'}</span>
-                          <span className="font-bold text-xs" style={{ color: C.red }}>100%</span>
-                          <span className="text-[10px]" style={{ color: C.sub }}>（唯一参与者）</span>
+                        /* 唯一参与者特殊展示 */
+                        <div className="flex items-center gap-3 py-1.5">
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                            style={{ background: realParticipants[0]?.avatar_url ? 'transparent' : `hsl(0,55%,45%)`, overflow: 'hidden' }}
+                          >
+                            {realParticipants[0]?.avatar_url
+                              ? <img src={realParticipants[0].avatar_url} alt="" className="w-full h-full object-cover" />
+                              : (realParticipants[0]?.display_name ?? '?').charAt(0)}
+                          </div>
+                          <div style={{ width: '80px', flexShrink: 0 }}>
+                            <div className="text-xs font-bold font-mono" style={{ color: C.red }}>{fmtNo(0)}号</div>
+                            <div className="text-xs font-bold" style={{ color: C.red }}>100.00%</div>
+                          </div>
+                          <div className="flex-1 text-[11px]" style={{ color: C.sub }}>唯一参与者，必定中奖</div>
                         </div>
                       ) : (
-                        <div className="space-y-0">
+                        <div>
                           {Array.from({ length: Math.min(exampleN, 50) }, (_, idx) => {
                             const cnt = countPerPerson[idx];
-                            const pct = (cnt / 100 * 100).toFixed(0);
+                            const pct = (cnt / 100 * 100).toFixed(2); // 保留两位小数
                             const participant = realParticipants[idx];
-                            // 计算该人对应的所有尾数（尾数 t 满足 t % exampleN === idx）
-                            const myTails: number[] = [];
+                            const bgColor = `hsl(${(idx * 47) % 360}, 55%, 45%)`;
+                            // 计算该人对应的所有尾数
+                            const myTails: string[] = [];
                             for (let t = 0; t <= 99; t++) {
-                              if (t % exampleN === idx) myTails.push(t);
+                              if (t % exampleN === idx) myTails.push(String(t).padStart(2, '0'));
                             }
+                            // 尾数分两行均分
+                            const half = Math.ceil(myTails.length / 2);
+                            const row1 = myTails.slice(0, half);
+                            const row2 = myTails.slice(half);
                             return (
                               <div
                                 key={idx}
-                                className="py-1.5"
+                                className="flex items-stretch gap-2 py-2"
                                 style={{ borderBottom: idx < Math.min(exampleN, 50) - 1 ? `1px solid ${C.border}` : 'none' }}
                               >
-                                {/* 第一行：头像 + 姓名 + 编号 + 概率 */}
-                                <div className="flex items-center gap-1.5">
-                                  {participant ? (
-                                    <div
-                                      className="w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0"
-                                      style={{ background: participant.avatar_url ? 'transparent' : `hsl(${(idx * 47) % 360}, 55%, 45%)`, fontSize: '8px', overflow: 'hidden' }}
-                                    >
-                                      {participant.avatar_url
-                                        ? <img src={participant.avatar_url} alt="" className="w-full h-full object-cover" />
-                                        : (participant.display_name ?? '?').charAt(0)}
-                                    </div>
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-full flex-shrink-0" style={{ background: C.border }} />
-                                  )}
-                                  <span className="text-xs font-semibold truncate" style={{ color: C.text }}>
-                                    {participant?.display_name ?? `编号${fmtNo(idx)}`}
-                                  </span>
-                                  <span className="text-[10px] font-mono" style={{ color: C.sub }}>{fmtNo(idx)}号</span>
-                                  <span className="ml-auto text-xs font-bold" style={{ color: C.red }}>{pct}%</span>
+                                {/* 列 1：头像（占两行高度，居中） */}
+                                <div className="flex items-center justify-center flex-shrink-0" style={{ width: '36px' }}>
+                                  <div
+                                    className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold"
+                                    style={{ background: participant?.avatar_url ? 'transparent' : bgColor, overflow: 'hidden' }}
+                                  >
+                                    {participant?.avatar_url
+                                      ? <img src={participant.avatar_url} alt="" className="w-full h-full object-cover" />
+                                      : (participant?.display_name ?? '?').charAt(0)}
+                                  </div>
                                 </div>
-                                {/* 第二行：对应尾数列表 */}
-                                <div className="mt-0.5 pl-7 text-[10px] leading-relaxed" style={{ color: C.sub }}>
-                                  尾数：{myTails.map(t => String(t).padStart(2, '0')).join('、')}
+                                {/* 列 2：编号 + 概率（固定宽度） */}
+                                <div className="flex flex-col justify-center flex-shrink-0" style={{ width: '72px' }}>
+                                  <div className="text-xs font-bold font-mono" style={{ color: C.red }}>{fmtNo(idx)}号</div>
+                                  <div className="text-xs font-bold" style={{ color: C.red }}>{pct}%</div>
+                                </div>
+                                {/* 列 3：尾数（占满剩余空间，分两行均匀排列） */}
+                                <div className="flex-1 flex flex-col justify-center gap-0.5 min-w-0">
+                                  <div className="flex justify-around">
+                                    {row1.map(t => (
+                                      <span key={t} className="font-mono text-[11px] font-medium" style={{ color: C.text }}>{t}</span>
+                                    ))}
+                                  </div>
+                                  {row2.length > 0 && (
+                                    <div className="flex justify-around">
+                                      {row2.map(t => (
+                                        <span key={t} className="font-mono text-[11px] font-medium" style={{ color: C.text }}>{t}</span>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             );
                           })}
                           {exampleN > 50 && (
-                            <div className="text-[10px] py-1" style={{ color: C.sub }}>共 {exampleN} 人，每人约 {(100/exampleN).toFixed(1)}%</div>
+                            <div className="text-[10px] py-1" style={{ color: C.sub }}>共 {exampleN} 人，每人约 {(100/exampleN).toFixed(2)}%</div>
                           )}
                         </div>
                       )}
-                      <div className="mt-1.5 text-[10px]" style={{ color: C.sub }}>
+                      <div className="mt-2 text-[10px]" style={{ color: C.sub }}>
                         公式：余数 = 中奖编号（编号从 00 开始）。{exampleN} 人参与，100 个尾数均分，每人概率几乎相同。
                       </div>
                     </div>
