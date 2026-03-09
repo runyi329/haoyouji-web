@@ -754,25 +754,20 @@ export default function LedgerDetail() {
                     )}
 
                     {/* ── 底部：参与人数 + 头像 ── */}
-                    <div className="px-3 py-2.5 flex items-center gap-2">
+                    <div className="px-3 py-2.5 flex items-center gap-2 overflow-hidden">
                       {isActive ? (
                         <>
                           {/* 左侧：参与人数，不压缩 */}
                           <span className="text-[11px] text-gray-400 flex-shrink-0">{participantCount} 人已参与</span>
-                          {/* 中间弹性间距 */}
-                          <div className="flex-1" />
-                          {/* 头像堆叠：用普通 flex 排列，容器不超出卡片 */}
+                          {/* 头像堆叠：紧跟在文字后，从左开始排列，不靠右 */}
                           {recentParticipants.length > 0 && (() => {
                             const MAX_SHOW = 7;
                             const shown = recentParticipants.slice(0, MAX_SHOW);
                             const extra = participantCount - shown.length;
                             const avatarSize = 24;
-                            const overlapPx = 7; // 固定重叠 7px
+                            const overlapPx = 7;
                             return (
-                              <div
-                                className="flex items-center flex-shrink-0"
-                                style={{ paddingRight: overlapPx }} // 补偿最后一个头像的重叠量，避免被截
-                              >
+                              <div className="flex items-center">
                                 {shown.map((p: any, pi: number) => (
                                   <div
                                     key={pi}
