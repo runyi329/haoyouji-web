@@ -842,7 +842,6 @@ export default function LotteryActivity() {
   // 管理员邀请参与者弹窗
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteSearchQuery, setInviteSearchQuery] = useState("");
-  const [inviteSearchEnabled, setInviteSearchEnabled] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [inviting, setInviting] = useState(false);
   const [addedUserIds, setAddedUserIds] = useState<Set<number>>(new Set());
@@ -855,10 +854,10 @@ export default function LotteryActivity() {
   const signupMutation = trpc.lottery.signup.useMutation();
   const instantDrawMutation = trpc.lottery.instantDraw.useMutation();
   const adminAddMutation = trpc.lottery.adminAddParticipant.useMutation();
-  // 用户搜索（仅在弹窗开启且搜索词足够长时才触发）
-  const { data: searchResults, isFetching: isSearching } = trpc.contacts.searchUsers.useQuery(
+  // 用户搜索（与账本邀请相同的即时搜索逻辑）
+  const { data: searchResults, isFetching: isSearching } = trpc.sharing.searchUsers.useQuery(
     { query: inviteSearchQuery.trim() },
-    { enabled: inviteSearchEnabled && inviteSearchQuery.trim().length >= 1 }
+    { enabled: inviteSearchQuery.trim().length > 0 }
   );
 
   const handleSignup = async () => {
@@ -1324,7 +1323,7 @@ export default function LotteryActivity() {
         <div
           className="fixed inset-0 z-50 flex items-end justify-center"
           style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={e => { if (e.target === e.currentTarget) { setShowInviteModal(false); setInviteSearchQuery(''); setInviteSearchEnabled(false); setInviteError(''); } }}
+          onClick={e => { if (e.target === e.currentTarget) { setShowInviteModal(false); setInviteSearchQuery(''); setInviteError(''); } }}
         >
           <div
             className="w-full max-w-lg rounded-t-3xl px-5 pt-5 pb-8"
@@ -1334,7 +1333,7 @@ export default function LotteryActivity() {
             <div className="flex items-center justify-between mb-4">
               <span className="text-base font-bold" style={{ color: C.text }}>邀请参与者</span>
               <button
-                onClick={() => { setShowInviteModal(false); setInviteSearchQuery(''); setInviteSearchEnabled(false); setInviteError(''); }}
+                onClick={() => { setShowInviteModal(false); setInviteSearchQuery(''); setInviteError(''); }}
                 className="w-7 h-7 rounded-full flex items-center justify-center text-base"
                 style={{ background: C.bg, color: C.sub }}
               >×</button>
@@ -1345,7 +1344,7 @@ export default function LotteryActivity() {
               <input
                 type="text"
                 value={inviteSearchQuery}
-                onChange={e => { setInviteSearchQuery(e.target.value); setInviteSearchEnabled(true); setInviteError(''); }}
+                onChange={e => { setInviteSearchQuery(e.target.value); setInviteError(''); }}
                 placeholder="搜索用户昵称或账号"
                 className="w-full px-3 py-2.5 rounded-xl text-sm outline-none pr-8"
                 style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text }}
@@ -1357,7 +1356,7 @@ export default function LotteryActivity() {
             </div>
 
             {/* 搜索结果列表 */}
-            {inviteSearchEnabled && inviteSearchQuery.trim().length >= 1 && (
+            {inviteSearchQuery.trim().length > 0 && (
               <div className="mb-3">
                 {!isSearching && (!searchResults || searchResults.length === 0) ? (
                   <div className="text-center py-6 text-sm" style={{ color: C.sub }}>未找到匹配用户</div>
@@ -1412,8 +1411,8 @@ export default function LotteryActivity() {
             )}
 
             {/* 提示文字 */}
-            {!inviteSearchEnabled && (
-              <div className="text-center py-4 text-xs" style={{ color: C.sub }}>输入关键词搜索平台用户，搜到后点击“添加”即可加入名单</div>
+            {inviteSearchQuery.trim().length === 0 && (
+              <div className="text-center py-4 text-xs" style={{ color: C.sub }}>输入一两个字即可搜索平台用户，搜到后点击“添加”即可加入名单</div>
             )}
           </div>
         </div>
