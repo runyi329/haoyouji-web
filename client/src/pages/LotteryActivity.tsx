@@ -66,8 +66,8 @@ const C = {
   waitBg: '#F5F5F5',
   waitText: '#9E9E9E',
   // 算法公式框
-  formulaBg: '#F8F6FF',     // 极浅次要色（紫调）
-  formulaBorder: '#E8E4F0', // 同色系稍深描边
+  formulaBg: '#FFFBF7',     // 极浅暖色背景（和整体暗色系一致）
+  formulaBorder: '#EDE0D4', // 暖色描边
 };
 
 // ─── 倒计时 Hook ─────────────────────────────────────────────────────────────
@@ -586,13 +586,13 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                 {/* 分隔线 */}
                 <div style={{ borderTop: `1px solid ${C.formulaBorder}` }} />
                 {/* 对照表头部 */}
-                <div className="px-3 py-1.5 font-semibold text-center" style={{ background: 'rgba(0,0,0,0.03)', color: C.sub }}>
+                <div className="px-3 py-1.5 font-semibold text-center" style={{ background: C.bg, color: C.sub }}>
                   对照表：尾数对应中奖编号（共 {exampleN} 人）
                   {exampleN > 9 && <span className="ml-1 font-normal" style={{ color: C.sub }}>· 仅展示前9行示例</span>}
                 </div>
                 <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr style={{ background: 'rgba(0,0,0,0.04)' }}>
+                    <tr style={{ background: C.bg }}>
                       <th className="text-left px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, borderRight: '0.5px solid rgba(0,0,0,0.08)' }}>收盘价示例</th>
                       <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500, borderRight: '0.5px solid rgba(0,0,0,0.08)' }}>计算</th>
                       <th className="text-center px-2 py-1.5" style={{ color: C.sub, fontWeight: 500 }}>中奖示例</th>
@@ -600,7 +600,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                   </thead>
                   <tbody>
                     {rows.map(({ tail, tailStr, remainder, winner, participant }, i) => (
-                      <tr key={i} style={{ borderTop: `1px solid ${C.border}`, background: remainder === 0 ? '#FFF8F8' : undefined }}>
+                      <tr key={i} style={{ borderTop: `1px solid ${C.formulaBorder}`, background: remainder === 0 ? C.redTint : C.card }}>
                         <td className="px-2 py-1.5 font-mono" style={{ color: C.text, borderRight: '0.5px solid rgba(0,0,0,0.08)' }}>
                           {intPart}.<span style={{ color: C.red, fontWeight: 700 }}>{tailStr}</span>
                         </td>
@@ -651,7 +651,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                   <button
                     type="button"
                     className="w-full flex items-center justify-between px-3 py-2"
-                    style={{ background: '#FAFAFA' }}
+                    style={{ background: C.bg }}
                     onClick={() => setShowProbDetail(v => !v)}
                   >
                     <span className="font-semibold text-xs" style={{ color: C.sub }}>每人中奖概率</span>
