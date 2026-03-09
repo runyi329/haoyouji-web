@@ -217,47 +217,7 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
         <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方数据源</span>
       </div>
 
-      {/* 价格区 */}
-      <div className="px-4 pt-3 pb-2">
-        {price ? (
-          <div className="flex items-end gap-3">
-            <span
-              className="font-bold"
-              style={{ fontSize: '2.4rem', color: isUp ? C.stockUp : C.stockDown, fontFamily: "'Courier New', 'Roboto Mono', monospace", letterSpacing: '0.02em', lineHeight: 1.1 }}
-            >
-              {price}
-            </span>
-            {change && (
-              <div className="flex items-center gap-1 mb-1">
-                {isUp ? <TrendingUp className="w-4 h-4" style={{ color: C.stockUp }} /> : <TrendingDown className="w-4 h-4" style={{ color: C.stockDown }} />}
-                <span className="text-sm font-mono" style={{ color: isUp ? C.stockUp : C.stockDown }}>{change}</span>
-              </div>
-            )}
-          </div>
-        ) : (
-          // 待获取： shimmer 占位框
-          <div className="flex items-end gap-3 pb-1">
-            <div
-              className="h-10 rounded-lg"
-              style={{
-                width: '160px',
-                background: 'linear-gradient(90deg, rgba(0,0,0,0.06) 25%, rgba(0,0,0,0.11) 50%, rgba(0,0,0,0.06) 75%)',
-                backgroundSize: '200% 100%',
-                animation: 'shimmer 1.8s infinite',
-              }}
-            />
-            <div
-              className="h-5 rounded mb-1"
-              style={{
-                width: '56px',
-                background: 'linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%)',
-                backgroundSize: '200% 100%',
-                animation: 'shimmer 1.8s infinite 0.3s',
-              }}
-            />
-          </div>
-        )}
-      </div>
+
 
       {/* 尾数提取区（有数据时显示） */}
       {tailDigits && (
@@ -297,11 +257,49 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
 
       {/* 单一深色框：待获取提示 + 倒计时 + 新浪财经链接 */}
       <div className="mx-4 mb-4 rounded-xl overflow-hidden" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
-        {/* 待获取状态： AI 实时跟进闪烁行 */}
-        {!price && (
+        {/* 深色框内主区：无数据时显示shimmer+AI提示，有数据时显示真实价格 */}
+        {price ? (
           <div className="px-4 pt-3 pb-2">
-            <div className="flex items-center gap-2 mb-2">
-              {/* 闪烁圆点 */}
+            <div className="flex items-end gap-3">
+              <span
+                className="font-bold"
+                style={{ fontSize: '2.4rem', color: isUp ? C.stockUp : C.stockDown, fontFamily: "'Courier New', 'Roboto Mono', monospace", letterSpacing: '0.02em', lineHeight: 1.1 }}
+              >
+                {price}
+              </span>
+              {change && (
+                <div className="flex items-center gap-1 mb-1">
+                  {isUp ? <TrendingUp className="w-4 h-4" style={{ color: C.stockUp }} /> : <TrendingDown className="w-4 h-4" style={{ color: C.stockDown }} />}
+                  <span className="text-sm font-mono" style={{ color: isUp ? C.stockUp : C.stockDown }}>{change}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="px-4 pt-3 pb-2">
+            {/* shimmer 占位框 */}
+            <div className="flex items-end gap-3 mb-2">
+              <div
+                className="h-10 rounded-lg"
+                style={{
+                  width: '160px',
+                  background: 'linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.8s infinite',
+                }}
+              />
+              <div
+                className="h-5 rounded mb-1"
+                style={{
+                  width: '56px',
+                  background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%)',
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.8s infinite 0.3s',
+                }}
+              />
+            </div>
+            {/* AI 实时跟进提示 */}
+            <div className="flex items-center gap-2 mb-1.5">
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ background: '#FBBF24', animation: 'pulse 1.2s ease-in-out infinite' }}
@@ -319,8 +317,8 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
             </div>
           </div>
         )}
-        {/* 分隔线（待获取时才显示） */}
-        {!price && <div style={{ height: '1px', background: C.darkBorder, margin: '0 16px' }} />}
+        {/* 分隔线 */}
+        <div style={{ height: '1px', background: C.darkBorder, margin: '0 16px' }} />
         {/* 倒计时行 */}
         <div className="px-4 py-2">
           <SeedTimingInfo seedValue={seedValue} seedSource={seedSource} drawAt={drawAt} seedDate={seedDate} seedType={seedType} />
