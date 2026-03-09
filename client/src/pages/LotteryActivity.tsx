@@ -459,6 +459,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
   const fmtNo = (n: number) => String(n).padStart(digits, '0');
 
   const [showTip, setShowTip] = useState(false);
+  const [showProbDetail, setShowProbDetail] = useState(false);
 
   return (
     <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.border}` }}>
@@ -606,82 +607,97 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                     ))}
                   </tbody>
                 </table>
-                {/* 每个人的中奖概率 */}
-                <div className="px-3 py-2" style={{ background: '#FAFAFA', borderTop: `1px solid ${C.border}` }}>
-                  <div className="font-semibold mb-1.5" style={{ color: C.sub }}>各人中奖概率</div>
-                  {exampleN === 1 ? (
-                    <div className="flex items-center gap-2">
-                      {realParticipants[0] && (
-                        <div
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                          style={{
-                            background: realParticipants[0].avatar_url ? 'transparent' : `hsl(0, 55%, 45%)`,
-                            border: `2px solid ${C.red}`,
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {realParticipants[0].avatar_url
-                            ? <img src={realParticipants[0].avatar_url} alt="" className="w-full h-full object-cover" />
-                            : (realParticipants[0].display_name ?? '?').charAt(0)
-                          }
+                {/* 每个人的中奖概率 - 可折叠 */}
+                <div style={{ borderTop: `1px solid ${C.border}` }}>
+                  {/* 标题行（点击展开/收起） */}
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-between px-3 py-2"
+                    style={{ background: '#FAFAFA' }}
+                    onClick={() => setShowProbDetail(v => !v)}
+                  >
+                    <span className="font-semibold text-xs" style={{ color: C.sub }}>各人中奖概率</span>
+                    <svg
+                      width="14" height="14" viewBox="0 0 14 14" fill="none"
+                      style={{ color: C.sub, transform: showProbDetail ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                    >
+                      <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+
+                  {/* 展开内容 */}
+                  {showProbDetail && (
+                    <div className="px-3 pb-2 pt-1" style={{ background: '#FAFAFA' }}>
+                      {exampleN === 1 ? (
+                        <div className="flex items-center gap-2 py-1">
+                          {realParticipants[0] && (
+                            <div
+                              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                              style={{ background: realParticipants[0].avatar_url ? 'transparent' : `hsl(0, 55%, 45%)`, overflow: 'hidden' }}
+                            >
+                              {realParticipants[0].avatar_url
+                                ? <img src={realParticipants[0].avatar_url} alt="" className="w-full h-full object-cover" />
+                                : (realParticipants[0].display_name ?? '?').charAt(0)}
+                            </div>
+                          )}
+                          <span className="font-mono font-bold text-xs" style={{ color: C.text }}>{realParticipants[0]?.display_name ?? '抽奖编号 00'}</span>
+                          <span className="font-bold text-xs" style={{ color: C.red }}>100%</span>
+                          <span className="text-[10px]" style={{ color: C.sub }}>（唯一参与者）</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-0">
+                          {Array.from({ length: Math.min(exampleN, 50) }, (_, idx) => {
+                            const cnt = countPerPerson[idx];
+                            const pct = (cnt / 100 * 100).toFixed(0);
+                            const participant = realParticipants[idx];
+                            // 计算该人对应的所有尾数（尾数 t 满足 t % exampleN === idx）
+                            const myTails: number[] = [];
+                            for (let t = 0; t <= 99; t++) {
+                              if (t % exampleN === idx) myTails.push(t);
+                            }
+                            return (
+                              <div
+                                key={idx}
+                                className="py-1.5"
+                                style={{ borderBottom: idx < Math.min(exampleN, 50) - 1 ? `1px solid ${C.border}` : 'none' }}
+                              >
+                                {/* 第一行：头像 + 姓名 + 编号 + 概率 */}
+                                <div className="flex items-center gap-1.5">
+                                  {participant ? (
+                                    <div
+                                      className="w-5 h-5 rounded-full flex items-center justify-center text-white flex-shrink-0"
+                                      style={{ background: participant.avatar_url ? 'transparent' : `hsl(${(idx * 47) % 360}, 55%, 45%)`, fontSize: '8px', overflow: 'hidden' }}
+                                    >
+                                      {participant.avatar_url
+                                        ? <img src={participant.avatar_url} alt="" className="w-full h-full object-cover" />
+                                        : (participant.display_name ?? '?').charAt(0)}
+                                    </div>
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full flex-shrink-0" style={{ background: C.border }} />
+                                  )}
+                                  <span className="text-xs font-semibold truncate" style={{ color: C.text }}>
+                                    {participant?.display_name ?? `编号${fmtNo(idx)}`}
+                                  </span>
+                                  <span className="text-[10px] font-mono" style={{ color: C.sub }}>{fmtNo(idx)}号</span>
+                                  <span className="ml-auto text-xs font-bold" style={{ color: C.red }}>{pct}%</span>
+                                </div>
+                                {/* 第二行：对应尾数列表 */}
+                                <div className="mt-0.5 pl-7 text-[10px] leading-relaxed" style={{ color: C.sub }}>
+                                  尾数：{myTails.map(t => String(t).padStart(2, '0')).join('、')}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {exampleN > 50 && (
+                            <div className="text-[10px] py-1" style={{ color: C.sub }}>共 {exampleN} 人，每人约 {(100/exampleN).toFixed(1)}%</div>
+                          )}
                         </div>
                       )}
-                      <div>
-                        <span className="font-mono font-bold" style={{ color: C.red }}>
-                          {realParticipants[0]?.display_name ?? '抽奖编号 00'}
-                        </span>
-                        <span className="ml-2 font-bold" style={{ color: C.red }}>100%</span>
-                        <span className="ml-1 text-xs" style={{ color: C.sub }}>（唯一参与者，必定中奖）</span>
+                      <div className="mt-1.5 text-[10px]" style={{ color: C.sub }}>
+                        公式：余数 = 中奖编号（编号从 00 开始）。{exampleN} 人参与，100 个尾数均分，每人概率几乎相同。
                       </div>
                     </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {Array.from({ length: Math.min(exampleN, 20) }, (_, idx) => {
-                        const person = idx; // 编号从 00 开始
-                        const cnt = countPerPerson[person];
-                        const pct = (cnt / 100 * 100).toFixed(0);
-                        const maxCnt = Math.ceil(100 / exampleN);
-                        const isHigher = cnt === maxCnt && maxCnt > Math.floor(100 / exampleN);
-                        const participant = realParticipants[idx];
-                        return (
-                          <div key={person}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-full"
-                            style={{
-                              background: isHigher ? C.redLight : C.bg,
-                              border: `1px solid ${isHigher ? C.red : C.border}`,
-                            }}
-                          >
-                            {participant && (
-                              <div
-                                className="w-4 h-4 rounded-full flex items-center justify-center text-white flex-shrink-0"
-                                style={{
-                                  background: participant.avatar_url ? 'transparent' : `hsl(${(idx * 47) % 360}, 55%, 45%)`,
-                                  fontSize: '8px',
-                                  overflow: 'hidden',
-                                }}
-                              >
-                                {participant.avatar_url
-                                  ? <img src={participant.avatar_url} alt="" className="w-full h-full object-cover" />
-                                  : (participant.display_name ?? '?').charAt(0)
-                                }
-                              </div>
-                            )}
-                            <span className="font-mono text-[10px]" style={{ color: isHigher ? C.red : C.text }}>
-                              {participant?.display_name ?? `编号${fmtNo(person)}`}
-                            </span>
-                            <span className="text-[10px] font-mono" style={{ color: isHigher ? C.red : C.sub, opacity: 0.7 }}>{fmtNo(person)}号</span>
-                            <span className="text-[10px]" style={{ color: isHigher ? C.red : C.sub }}>{pct}%</span>
-                          </div>
-                        );
-                      })}
-                      {exampleN > 20 && (
-                        <span className="text-[10px] px-2 py-0.5" style={{ color: C.sub }}>...共 {exampleN} 人，每人约 {(100/exampleN).toFixed(1)}%</span>
-                      )}
-                    </div>
                   )}
-                  <div className="mt-1.5" style={{ color: C.sub, fontSize: '0.85em' }}>
-                    公式：余数 = 中奖编号（编号从 00 开始）。{exampleN} 人参与，100 个尾数均分，每人概率几乎相同。
-                  </div>
                 </div>
               </div>
             );
