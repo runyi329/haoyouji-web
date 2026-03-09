@@ -423,7 +423,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
   const exampleN = participantCount && participantCount > 1 ? Math.min(participantCount, 9) : 3;
   const exampleTail = 78; // 示例尾数
   const exampleWinner = exampleTail % exampleN; // 余数对应编号（0-based）
-  const winnerNo = exampleWinner === 0 ? exampleN : exampleWinner; // 余数0则最后一人
+  const winnerNo = exampleWinner === 0 ? 1 : exampleWinner; // 余数0则第1人中奖
   const [showTip, setShowTip] = useState(false);
 
   return (
@@ -469,27 +469,37 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             {showTip && (
               <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}`, color: C.sub }}>
                 取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
-                <strong style={{ color: C.text }}>余数对应的编号即为中奖者</strong>（余数为 0 则最后一位中奖）。
+                <strong style={{ color: C.text }}>余数对应的编号即为中奖者</strong>（余数为 0 则第 1 位中奖）。
               </div>
             )}
           </div>
 
           {/* 完整对照表 */}
           {(() => {
-            // 固定三行示例：尾数 88　25　00（2025-02-27 上证指数收盘价近4162.88为基准）
+            // 对照表：展示每个参与者的中奖概率
+            // 尾数 00~99 共100种，每个人分得的尾数数量：
+            //   余数 1~(N-1) 各分得 floor(100/N) 或 ceil(100/N) 个
+            //   余数 0 归属 #1，所以 #1 多拿一个
+            const intPart = '4162';
+            // 计算每个编号获得的尾数数量
+            const countPerPerson: number[] = Array(exampleN + 1).fill(0); // index 1..N
+            for (let t = 0; t <= 99; t++) {
+              const r = t % exampleN;
+              const person = r === 0 ? 1 : r; // 余数 0 归 #1
+              countPerPerson[person]++;
+            }
+            // 展示三行示例：尾数 88　25　00
             const exampleTails = [88, 25, 0];
             const rows = exampleTails.map(tail => {
-              const tailStr = String(tail).padStart(2, '0'); // '88', '25', '00'
+              const tailStr = String(tail).padStart(2, '0');
               const remainder = tail % exampleN;
-              const winner = remainder === 0 ? exampleN : remainder;
+              const winner = remainder === 0 ? 1 : remainder; // 余数 0 归 #1
               return { tail, tailStr, remainder, winner };
             });
-            // 整数部分取近期上证指数真实收盘价近似値
-            const intPart = '4162';
             return (
               <div className="text-xs rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
                 <div className="px-3 py-2 font-semibold" style={{ background: C.bg, color: C.sub }}>
-                  对照表：共 {exampleN} 人参与，尾数对应中奖编号
+                  对照表：尾数对应中奖编号（共 {exampleN} 人）
                 </div>
                 <table className="w-full">
                   <thead>
@@ -507,15 +517,39 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                         </td>
                         <td className="text-center px-2 py-1.5" style={{ color: C.sub }}>
                           {tail} ÷ {exampleN} 余 <span style={{ color: C.red, fontWeight: 600 }}>{remainder}</span>
-                          {remainder === 0 && <span style={{ color: C.sub }}> (0→末位)</span>}
+                          {remainder === 0 && <span style={{ color: C.sub, fontSize: '0.9em' }}> (0→#1)</span>}
                         </td>
                         <td className="text-center px-2 py-1.5 font-mono font-bold" style={{ color: C.red }}>#{winner}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <div className="px-3 py-2 text-xs" style={{ background: '#FAFAFA', color: C.sub, borderTop: `1px solid ${C.border}` }}>
-                  余数为 0 时，最后一位（#{exampleN} 号）中奖
+                {/* 每个人的中奖概率 */}
+                <div className="px-3 py-2" style={{ background: '#FAFAFA', borderTop: `1px solid ${C.border}` }}>
+                  <div className="font-semibold mb-1.5" style={{ color: C.sub }}>各人中奖概率</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Array.from({ length: exampleN }, (_, idx) => {
+                      const person = idx + 1;
+                      const cnt = countPerPerson[person];
+                      const pct = (cnt / 100 * 100).toFixed(0);
+                      const isHigher = cnt > Math.floor(100 / exampleN);
+                      return (
+                        <div key={person}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+                          style={{
+                            background: isHigher ? C.redLight : C.bg,
+                            border: `1px solid ${isHigher ? C.red : C.border}`,
+                          }}
+                        >
+                          <span className="font-mono" style={{ color: isHigher ? C.red : C.text }}>#{person}</span>
+                          <span style={{ color: isHigher ? C.red : C.sub }}>{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1.5" style={{ color: C.sub, fontSize: '0.85em' }}>
+                    余数为 0 归属 #1，所以 #1 概率略高于其他人
+                  </div>
                 </div>
               </div>
             );
