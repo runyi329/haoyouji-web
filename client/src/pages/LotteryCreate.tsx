@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { ChevronLeft, Plus, X, Trophy, Shield, TrendingUp, BarChart2, Users, UserPlus, Link2, HelpCircle } from "lucide-react";
+import { ChevronLeft, Plus, X, Trophy, Shield, TrendingUp, BarChart2, Users, UserPlus, Link2, HelpCircle, CheckCircle2, Circle } from "lucide-react";
 import { LotteryDatePicker } from "@/components/LotteryDatePicker";
 
 // ─── 抽奖模式配置 ──────────────────────────────────────────────────────────
@@ -318,6 +318,12 @@ export default function LotteryCreate() {
   const [maxParticipants, setMaxParticipants] = useState("");
   const [signupFee, setSignupFee] = useState("0");
   const [registrationMode, setRegistrationMode] = useState<"open" | "invite" | "organizer_add">("open");
+  // 报名条件（自主报名模式下可配置）
+  const [signupConditions, setSignupConditions] = useState<Array<{ type: string; value: number; label: string; enabled: boolean }>>(
+    [
+      { type: 'min_contacts', value: 1, label: '至少有1个人脉', enabled: false },
+    ]
+  );
   const [useParticipantSeed, setUseParticipantSeed] = useState(false);
   const [isPublic, setIsPublic] = useState(true);
   const [prizes, setPrizes] = useState<PrizeRow[]>([
@@ -367,6 +373,9 @@ export default function LotteryCreate() {
         maxParticipants: maxParticipants ? parseInt(maxParticipants) : undefined,
         signupFee: parseFloat(signupFee) || 0,
         registrationMode,
+        signupConditions: registrationMode === 'open'
+          ? signupConditions.filter(c => c.enabled).map(({ type, value, label }) => ({ type, value, label }))
+          : undefined,
         useParticipantSeed,
         isPublic,
         externalSeedType: externalSeedType !== "none" ? externalSeedType : undefined,
@@ -616,6 +625,69 @@ export default function LotteryCreate() {
                 ))}
               </div>
             </div>
+
+            {/* ── 报名条件（自主报名模式下显示） ── */}
+            {registrationMode === 'open' && (
+              <div className="bg-white rounded-2xl p-4 shadow-sm border mb-4" style={{ borderColor: '#E0E0E0' }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="w-4 h-4" style={{ color: '#D32F2F' }} />
+                  <span className="text-sm font-semibold" style={{ color: '#222222' }}>报名条件</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#FFF3E0', color: '#E65100', border: '1px solid #FFCC80' }}>可选</span>
+                </div>
+                <p className="text-xs mb-3" style={{ color: '#757575' }}>
+                  设置后，只有符合条件的用户才能报名。不设则任何人均可报名。
+                </p>
+                <div className="space-y-2">
+                  {signupConditions.map((cond, idx) => (
+                    <div key={cond.type} className="rounded-xl border p-3" style={{ borderColor: cond.enabled ? '#D32F2F' : '#E0E0E0', backgroundColor: cond.enabled ? '#FFEBEE' : '#FAF3ED' }}>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = [...signupConditions];
+                            updated[idx] = { ...updated[idx], enabled: !updated[idx].enabled };
+                            setSignupConditions(updated);
+                          }}
+                          className="flex-shrink-0"
+                        >
+                          {cond.enabled
+                            ? <CheckCircle2 className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                            : <Circle className="w-5 h-5" style={{ color: '#BDBDBD' }} />
+                          }
+                        </button>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium" style={{ color: cond.enabled ? '#D32F2F' : '#222222' }}>
+                            {cond.type === 'min_contacts' ? '人脉数量要求' : cond.label}
+                          </div>
+                          {cond.type === 'min_contacts' && (
+                            <div className="text-xs mt-0.5" style={{ color: '#757575' }}>报名者必须已添加至少 N 个人脉</div>
+                          )}
+                        </div>
+                        {cond.enabled && (
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="text-xs" style={{ color: '#757575' }}>至少</span>
+                            <input
+                              type="number" min={1}
+                              className="w-12 rounded-lg px-2 py-1 text-center text-sm border focus:outline-none"
+                              style={{ borderColor: '#D32F2F', backgroundColor: '#FFFFFF', color: '#222222' }}
+                              value={cond.value}
+                              onChange={e => {
+                                const raw = e.target.value;
+                                const updated = [...signupConditions];
+                                updated[idx] = { ...updated[idx], value: raw === '' ? 1 : (parseInt(raw) || 1), label: `至少有${raw || 1}个人脉` };
+                                setSignupConditions(updated);
+                              }}
+                            />
+                            <span className="text-xs" style={{ color: '#757575' }}>个人脉</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs mt-2" style={{ color: '#BDBDBD' }}>更多条件类型持续增加中...</p>
+              </div>
+            )}
 
             {/* ── 其他报名设置 ── */}
             <div className="bg-white rounded-2xl p-4 shadow-sm border mb-4 space-y-4" style={{ borderColor: '#E0E0E0' }}>
