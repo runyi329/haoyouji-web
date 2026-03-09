@@ -37,25 +37,36 @@ const C = {
   red: '#D32F2F',
   redDark: '#B71C1C',
   redLight: '#FFEBEE',
+  redTint: '#FFF5F5',       // 品牌主色极浅淡化版（10-15%饱和度）
   gold: '#CBA471',
   goldLight: '#FFF8E1',
-  bg: '#FAF3ED',
-  card: '#FFFFFF',
-  text: '#1A1A1A',
-  sub: '#757575',
-  border: '#E0E0E0',
-  // 深色系（用于开奖校验区）
-  darkBg: '#1A1A2E',
+  bg: '#FAF3ED',            // 页面大背景（最浅中性暖色）
+  card: '#FFFFFF',          // 卡片容器（比背景更亮一梯度）
+  text: '#1A1A1A',          // 一级标题（最深中性色）
+  sub: '#757575',           // 次要说明（中性灰）
+  muted: '#BDBDBD',         // 更淡的次要色（链接、箭头等）
+  border: '#EEEEEE',        // 容器描边（最浅中性色）
+  borderMid: '#E0E0E0',     // 中等描边
+  // 外部数据区（深色底，视觉区隔）
+  darkBg: '#1C1C2E',
   darkCard: '#16213E',
-  darkBorder: '#0F3460',
-  darkText: '#E0E0E0',
+  darkBorder: '#2A2A4A',
+  darkText: '#F0F0F0',
   darkSub: '#9E9E9E',
-  // 股票颜色
+  // 状态色
   stockUp: '#EF5350',
   stockDown: '#26A69A',
-  // 彩票颜色
   lotteryRed: '#D32F2F',
   lotteryBlue: '#1565C0',
+  // 链接/验证色（辅助蓝）
+  linkBlue: '#1565C0',
+  linkBlueBg: '#E3F2FD',
+  // 等待状态
+  waitBg: '#F5F5F5',
+  waitText: '#9E9E9E',
+  // 算法公式框
+  formulaBg: '#F8F6FF',     // 极浅次要色（紫调）
+  formulaBorder: '#E8E4F0', // 同色系稍深描边
 };
 
 // ─── 倒计时 Hook ─────────────────────────────────────────────────────────────
@@ -197,23 +208,26 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.border, background: C.bg }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
+      {/* 标题栏：深色底 + 外部数据源标识 */}
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.darkBorder}` }}>
         <div className="flex items-center gap-2">
-          <TrendingUp className="w-3.5 h-3.5" style={{ color: C.red }} />
-          <span className="text-xs font-semibold" style={{ color: C.text }}>{indexName}</span>
+          <TrendingUp className="w-3.5 h-3.5" style={{ color: C.gold }} />
+          <span className="text-xs font-semibold" style={{ color: C.darkText }}>{indexName}</span>
+          {/* 官方数据源标识 */}
+          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方数据源</span>
         </div>
-        <span className="text-xs font-mono" style={{ color: C.sub }}>{indexCode}</span>
+        <span className="text-[11px] font-mono" style={{ color: C.darkSub }}>{indexCode}</span>
       </div>
 
       {/* 指数名称 + 价格 */}
       <div className="px-4 pt-4 pb-3">
         {price ? (
           <div className="flex items-end gap-3">
+            {/* 数字标牌字体，视觉上与 App 文本隔离 */}
             <span
-              className="text-4xl font-bold font-mono"
-              style={{ color: isUp ? C.stockUp : C.stockDown }}
+              className="text-4xl font-bold"
+              style={{ color: isUp ? C.stockUp : C.stockDown, fontFamily: "'Courier New', 'Roboto Mono', monospace", letterSpacing: '0.02em' }}
             >
               {price}
             </span>
@@ -225,16 +239,42 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
             )}
           </div>
         ) : (
+          // 待获取状态：展示框（不是输入框）+ 脱冲动效
           <div>
-            <div className="text-2xl font-mono" style={{ color: C.sub }}>待获取</div>
-            <div className="text-xs mt-1.5" style={{ color: C.sub }}>
-              将获取：
-              <span style={{ color: C.gold }}>
-                {seedDate
-                  ? `${seedDate} 北京时间 15:00 ${indexName}收盘价`
-                  : `开奖当天北京时间 15:00 ${indexName}收盘价`
-                }
-              </span>
+            <div
+              className="rounded-xl px-4 py-3 mb-2"
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: `1px solid rgba(255,255,255,0.12)`,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                {/* 脱骨屏脆山脸动效块 */}
+                <div
+                  className="h-7 rounded"
+                  style={{
+                    width: '120px',
+                    background: 'linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.8s infinite',
+                  }}
+                />
+                <span
+                  className="text-xs px-2 py-0.5 rounded font-semibold"
+                  style={{ background: 'rgba(217,119,6,0.2)', color: '#FBBF24', border: '1px solid rgba(217,119,6,0.3)' }}
+                >
+                  官方结算中...
+                </span>
+              </div>
+              <div className="text-xs mt-2" style={{ color: C.darkSub }}>
+                将于开奖当天封盘后自动获取：
+                <span style={{ color: C.gold }}>
+                  {seedDate
+                    ? `${seedDate} 北京时间 15:00 ${indexName}收盘价`
+                    : `开奖当天北京时间 15:00 ${indexName}收盘价`
+                  }
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -242,44 +282,57 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
 
       {/* 尾数提取区 */}
       {tailDigits && (
-        <div className="mx-4 mb-4 rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
-          <div className="text-xs mb-2 flex items-center gap-1" style={{ color: C.sub }}>
+        <div className="mx-4 mb-4 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.darkBorder}` }}>
+          <div className="text-xs mb-2 flex items-center gap-1" style={{ color: C.darkSub }}>
             <Hash className="w-3 h-3" />
             <span>收盘价尾数提取</span>
           </div>
+          {/* 三列线性排版：原始收盘价 → 取数逻辑 → 开奖基数 */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono" style={{ color: C.sub }}>
-              {price?.replace('.', '')}
-            </span>
-            <span className="text-xs" style={{ color: C.sub }}>→ 取末两位 →</span>
-            <div className="flex gap-1">
-              {tailDigits.split('').map((d, i) => (
-                <span
-                  key={i}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold font-mono"
-                  style={{ background: C.red, color: '#fff' }}
-                >
-                  {d}
-                </span>
-              ))}
+            {/* 左：原始收盘价 */}
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] mb-1" style={{ color: C.darkSub }}>原始收盘价</span>
+              <span className="font-mono text-sm" style={{ color: C.darkText }}>
+                {price?.split('.')[0]}.<span style={{ color: C.red, fontWeight: 700 }}>{price?.split('.')[1] ?? tailDigits}</span>
+              </span>
             </div>
-            <span className="text-xs ml-1" style={{ color: C.gold }}>← 开奖基数</span>
+            {/* 中：取数逻辑 */}
+            <div className="flex flex-col items-center px-1">
+              <span className="text-[10px] mb-1" style={{ color: C.darkSub }}>取数逻辑</span>
+              <span className="text-xs" style={{ color: C.muted }}>→ 取末两位 →</span>
+            </div>
+            {/* 右：开奖基数 */}
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] mb-1" style={{ color: C.darkSub }}>开奖基数</span>
+              <div className="flex gap-1">
+                {tailDigits.split('').map((d, i) => (
+                  <span
+                    key={i}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold"
+                    style={{ background: C.red, color: '#fff', fontFamily: "'Courier New', monospace" }}
+                  >
+                    {d}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 底部：去验证链接 */}
-      <div className="px-4 pb-4">
+      {/* 底部：验证链接（辅助蓝色） */}
+      <div className="px-4 pb-4" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
         <a
           href={sinaUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 text-xs"
-          style={{ color: C.gold }}
+          className="flex items-center gap-1.5 text-xs pt-3"
+          style={{ color: '#64B5F6' }}
           onClick={e => e.stopPropagation()}
         >
-          <ExternalLink className="w-3 h-3" />
-          <span>去新浪财经查看原始数据 →</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+          <span style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}>去新浪财经查看原始数据</span>
+          <span style={{ color: C.darkSub }}>（官方来源）</span>
         </a>
       </div>
       {/* 数据获取时间提示 */}
@@ -325,15 +378,16 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-      {/* 标题栏 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.border, background: C.bg }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
+      {/* 标题栏：深色底 + 外部数据源标识 */}
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.darkBorder}` }}>
         <div className="flex items-center gap-2">
-          <Gift className="w-3.5 h-3.5" style={{ color: C.red }} />
-          <span className="text-xs font-semibold" style={{ color: C.text }}>{lotteryName}</span>
+          <Gift className="w-3.5 h-3.5" style={{ color: C.gold }} />
+          <span className="text-xs font-semibold" style={{ color: C.darkText }}>{lotteryName}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方数据源</span>
         </div>
         {issueNo && (
-          <span className="text-xs font-mono" style={{ color: C.sub }}>第 {issueNo} 期</span>
+          <span className="text-[11px] font-mono" style={{ color: C.darkSub }}>第 {issueNo} 期</span>
         )}
       </div>
 
@@ -348,7 +402,8 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
                   className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
                   style={{
                     background: 'radial-gradient(circle at 35% 35%, #EF5350, #B71C1C)',
-                    boxShadow: '0 3px 8px rgba(183,28,28,0.3), inset 0 1px 2px rgba(255,255,255,0.3)',
+                    boxShadow: '0 3px 8px rgba(183,28,28,0.4), inset 0 1px 2px rgba(255,255,255,0.3)',
+                    fontFamily: "'Courier New', monospace",
                   }}
                 >
                   {n}
@@ -360,7 +415,8 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
                   className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
                   style={{
                     background: 'radial-gradient(circle at 35% 35%, #42A5F5, #1565C0)',
-                    boxShadow: '0 3px 8px rgba(21,101,192,0.3), inset 0 1px 2px rgba(255,255,255,0.3)',
+                    boxShadow: '0 3px 8px rgba(21,101,192,0.4), inset 0 1px 2px rgba(255,255,255,0.3)',
+                    fontFamily: "'Courier New', monospace",
                   }}
                 >
                   {n}
@@ -368,54 +424,66 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
               ))}
             </div>
             {drawTime && (
-              <div className="text-center text-xs" style={{ color: C.sub }}>
+              <div className="text-center text-xs" style={{ color: C.darkSub }}>
                 开奖时间：{drawTime}
               </div>
             )}
           </>
         ) : (
-          <div className="text-center py-4">
-            <div className="flex justify-center gap-2 mb-2">
-              {Array.from({ length: isSSQ ? 7 : 7 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
-                  style={{
-                    background: i < (isSSQ ? 6 : 5) ? 'rgba(211,47,47,0.1)' : 'rgba(21,101,192,0.1)',
-                    color: C.sub,
-                    border: `1px dashed ${C.border}`,
-                  }}
-                >
-                  ?
+          // 待获取状态：展示框 + 脱骨屏动效
+          <div>
+            <div
+              className="rounded-xl px-4 py-3 mb-3"
+              style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid rgba(255,255,255,0.12)` }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex gap-1.5">
+                  {Array.from({ length: isSSQ ? 7 : 7 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                      style={{
+                        background: i < (isSSQ ? 6 : 5) ? 'rgba(239,83,80,0.15)' : 'rgba(66,165,245,0.15)',
+                        color: 'rgba(255,255,255,0.25)',
+                        border: `1px dashed rgba(255,255,255,0.15)`,
+                      }}
+                    >?</div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="text-xs" style={{ color: C.sub }}>等待开奖数据...</div>
-            <div className="text-xs mt-1.5" style={{ color: C.sub }}>
-              将获取：
-              <span style={{ color: C.gold }}>
-                {seedDate
-                  ? `${seedDate} 北京时间 22:00 ${lotteryName}开奖号码`
-                  : `开奖当天北京时间 22:00 ${lotteryName}开奖号码`
-                }
-              </span>
+                <span
+                  className="text-xs px-2 py-0.5 rounded font-semibold flex-shrink-0"
+                  style={{ background: 'rgba(217,119,6,0.2)', color: '#FBBF24', border: '1px solid rgba(217,119,6,0.3)' }}
+                >
+                  官方结算中...
+                </span>
+              </div>
+              <div className="text-xs" style={{ color: C.darkSub }}>
+                将于开奖当天自动获取：
+                <span style={{ color: C.gold }}>
+                  {seedDate
+                    ? `${seedDate} 北京时间 22:00 ${lotteryName}开奖号码`
+                    : `开奖当天北京时间 22:00 ${lotteryName}开奖号码`
+                  }
+                </span>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* 底部：去验证链接 */}
-      <div className="px-4 pb-4 border-t" style={{ borderColor: C.border }}>
+      {/* 底部：验证链接（辅助蓝色） */}
+      <div className="px-4 pb-4" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
         <a
           href={officialUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 text-xs pt-3"
-          style={{ color: C.gold }}
+          style={{ color: '#64B5F6' }}
           onClick={e => e.stopPropagation()}
         >
-          <ExternalLink className="w-3 h-3" />
-          <span>去官方彩票网站验证原始数据 →</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+          <span style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}>去官方彩票网站验证原始数据</span>
+          <span style={{ color: C.darkSub }}>（官方来源）</span>
         </a>
       </div>
       {/* 数据获取时间提示 */}
@@ -463,7 +531,9 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
 
   return (
     <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-      <div className="flex items-center gap-2 mb-3">
+      {/* Section 标题：左侧品牌色装饰条 */}
+      <div className="flex items-center gap-2.5 mb-3">
+        <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
         <ShieldCheck className="w-4 h-4" style={{ color: C.red }} />
         <span className="text-sm font-bold" style={{ color: C.text }}>开奖算法说明</span>
         <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: C.redLight, color: C.red }}>
@@ -475,7 +545,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
       {(isStock || isLottery) ? (
         <div className="space-y-3">
           {/* 取数方式 */}
-          <div className="text-xs rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+          <div className="text-xs rounded-xl p-3" style={{ background: C.formulaBg, border: `1px solid ${C.formulaBorder}` }}>
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               <span className="font-semibold" style={{ color: C.text }}>取数方式</span>
               <button
@@ -509,7 +579,7 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             </div>
             {/* 展开的详细说明 */}
             {showTip && (
-              <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.border}`, color: C.sub }}>
+              <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${C.formulaBorder}`, color: C.sub }}>
                 取 <span style={{ color: C.red }}>{seedLabel}</span>小数点后两位，除以参与人数，
                 <strong style={{ color: C.text }}>余数直接对应中奖编号：余数 0→00号，余数 1→01号，余数 2→02号，以此类推</strong>。没有特例，不需要加一，每个人都有对应的余数。
               </div>
@@ -715,15 +785,18 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
             );
           })()}
 
-          {/* 可验证说明 */}
-          <div className="flex items-start gap-1.5">
-            <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#4CAF50' }} />
-            <span className="text-xs" style={{ color: C.sub }}>第三方公开数据，主办方无法干预；任何人可用手机计算器独立验证</span>
+          {/* 可验证说明 + 验证入口 */}
+          <div className="rounded-xl p-3 flex items-start gap-2" style={{ background: C.linkBlueBg, border: `1px solid rgba(21,101,192,0.15)` }}>
+            <CheckCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: C.linkBlue }} />
+            <div className="flex-1">
+              <div className="text-xs font-semibold mb-0.5" style={{ color: C.linkBlue }}>第三方公开数据，任何人可独立验证</div>
+              <div className="text-xs" style={{ color: C.sub }}>主办方无法干预开奖结果，用手机计算器即可复现全部计算过程</div>
+            </div>
           </div>
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="rounded-xl p-3 font-mono text-xs" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+          <div className="rounded-xl p-3 font-mono text-xs" style={{ background: C.formulaBg, border: `1px solid ${C.formulaBorder}` }}>
             <div style={{ color: C.sub }}>// 随机种子算法</div>
             <div style={{ color: C.text }}>种子 = SHA256(时间戳 + 活动ID + 随机熵)</div>
             <div style={{ color: C.text }}>中奖者 = 参与者列表[种子哈希 % 参与人数]</div>
@@ -1319,9 +1392,11 @@ export default function LotteryActivity() {
         {/* ── 3. 第三方开奖校验区 ── */}
         {hasExternalSeed && (
           <div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
               <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
               <span className="text-sm font-bold" style={{ color: C.text }}>第三方开奖数据</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded ml-auto" style={{ background: C.goldLight, color: C.gold, border: `1px solid rgba(203,164,113,0.3)` }}>官方来源</span>
             </div>
             {isStock && (
               <StockBoard
@@ -1352,7 +1427,8 @@ export default function LotteryActivity() {
         {/* ── 5. 开奖结果（已结束时展示）── */}
         {isCompleted && (
           <div>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.gold }} />
               <Trophy className="w-4 h-4" style={{ color: C.gold }} />
               <span className="text-sm font-bold" style={{ color: C.text }}>开奖结果</span>
             </div>
@@ -1362,7 +1438,8 @@ export default function LotteryActivity() {
 
         {/* ── 6. 奖项详情 ── */}
         <div>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
             <Gift className="w-4 h-4" style={{ color: C.red }} />
             <span className="text-sm font-bold" style={{ color: C.text }}>奖项设置</span>
           </div>
@@ -1373,7 +1450,10 @@ export default function LotteryActivity() {
                 className="flex items-center gap-3 rounded-2xl px-4 py-3 border"
                 style={{ background: C.card, borderColor: C.border }}
               >
-                <span className="text-xl flex-shrink-0">{["🥇", "🥈", "🥉", "🏅", "🎖️"][idx] ?? "🎁"}</span>
+                <span
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                  style={{ background: idx === 0 ? C.gold : idx === 1 ? '#9E9E9E' : idx === 2 ? '#A1887F' : C.border, color: idx < 3 ? '#fff' : C.sub }}
+                >{idx + 1}</span>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate" style={{ color: C.text }}>{prize.name}</div>
                   {prize.description && (
@@ -1394,7 +1474,8 @@ export default function LotteryActivity() {
         {/* ── 7. 参与者名单 ── */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ background: C.red }} />
               <Users className="w-4 h-4" style={{ color: C.red }} />
               <span className="text-sm font-bold" style={{ color: C.text }}>参与者名单</span>
             </div>
@@ -1427,20 +1508,32 @@ export default function LotteryActivity() {
             className="rounded-2xl p-6 border text-center"
             style={{ background: C.card, borderColor: C.border }}
           >
-            <h3 className="font-bold mb-6" style={{ color: C.red }}>🎊 开始抽奖！</h3>
+            <h3 className="font-bold mb-6" style={{ color: C.red }}>开始抽奖</h3>
             {activity.instant_style === "scratch" && (
               <ScratchCard prizeName={drawing ? "..." : "刮开查看"} onReveal={handleInstantDraw} />
             )}
             {(activity.instant_style === "wheel" || !activity.instant_style) && (
               <div className="flex flex-col items-center gap-4">
-                <div className="text-6xl cursor-pointer select-none transition-transform active:scale-90" onClick={handleInstantDraw}>🎡</div>
+                <button
+                  onClick={handleInstantDraw}
+                  className="w-20 h-20 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                  style={{ background: `radial-gradient(circle at 35% 35%, ${C.red}, ${C.redDark})`, boxShadow: `0 6px 20px rgba(183,28,28,0.4)` }}
+                >
+                  <Star className="w-9 h-9 text-white" />
+                </button>
                 <p className="text-sm" style={{ color: C.sub }}>点击开始抽奖</p>
               </div>
             )}
             {activity.instant_style === "egg" && (
               <div className="flex flex-col items-center gap-4">
-                <div className="text-8xl cursor-pointer select-none transition-transform active:scale-90" onClick={handleInstantDraw}>🥚</div>
-                <p className="text-sm" style={{ color: C.sub }}>点击金蛋，查看您的奖品</p>
+                <button
+                  onClick={handleInstantDraw}
+                  className="w-20 h-20 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                  style={{ background: `radial-gradient(circle at 35% 35%, ${C.gold}, #A0784A)`, boxShadow: `0 6px 20px rgba(203,164,113,0.5)` }}
+                >
+                  <Gift className="w-9 h-9 text-white" />
+                </button>
+                <p className="text-sm" style={{ color: C.sub }}>点击开启奖品</p>
               </div>
             )}
           </div>
@@ -1452,7 +1545,9 @@ export default function LotteryActivity() {
             className="rounded-2xl p-6 border text-center"
             style={{ background: C.redLight, borderColor: C.red }}
           >
-            <div className="text-5xl mb-3">🎉</div>
+            <div className="w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: C.redLight }}>
+              <Trophy className="w-7 h-7" style={{ color: C.red }} />
+            </div>
             <div className="text-2xl font-bold mb-1" style={{ color: C.red }}>{drawResult.prize.name}</div>
             {drawResult.prize.description && (
               <div className="text-sm mb-4" style={{ color: C.sub }}>{drawResult.prize.description}</div>
