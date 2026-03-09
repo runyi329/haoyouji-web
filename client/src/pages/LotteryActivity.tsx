@@ -124,32 +124,32 @@ function SeedTimingInfo({ seedValue, seedSource, drawAt, seedDate, seedType }: {
   const elapsedM = Math.floor((elapsedSec % 3600) / 60);
   const elapsedS = elapsedSec % 60;
   return (
-    <div className="px-4 pb-3 pt-1 flex items-center gap-1.5 flex-wrap" style={{ borderTop: `1px solid ${C.darkBorder}` }}>
-      <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.darkSub }} />
+    <div className="px-4 pb-3 pt-1 flex items-center gap-1.5 flex-wrap" style={{ borderTop: `1px solid ${C.border}` }}>
+      <Clock className="w-3 h-3 flex-shrink-0" style={{ color: C.sub }} />
       {hasData ? (
-        <span className="text-xs font-mono" style={{ color: C.darkSub }}>
+        <span className="text-xs font-mono" style={{ color: C.sub }}>
           数据已获取{fetchedAt ? `·${fetchedAt}` : (seedDate ? `·${seedDate}` : '')}
         </span>
       ) : isPast ? (
-        <span className="text-xs font-mono flex items-center gap-2" style={{ color: '#F59E0B' }}>
+        <span className="text-xs font-mono flex items-center gap-2" style={{ color: '#D97706' }}>
           <span>{isStock ? '收盘后' : '开奖后'}数据获取中...</span>
           <span
             className="text-xs font-mono px-1.5 py-0.5 rounded"
-            style={{ background: 'rgba(245,158,11,0.15)', color: '#F59E0B', letterSpacing: '0.05em' }}
+            style={{ background: 'rgba(217,119,6,0.1)', color: '#D97706', letterSpacing: '0.05em' }}
           >
             +{elapsedH > 0 ? `${String(elapsedH).padStart(2,'0')}:` : ''}{String(elapsedM).padStart(2,'0')}:{String(elapsedS).padStart(2,'0')}
           </span>
         </span>
       ) : targetTime ? (
-        <span className="text-xs font-mono" style={{ color: C.darkSub }}>
+        <span className="text-xs font-mono" style={{ color: C.sub }}>
           距{isStock ? '收盘' : '开奖'}还有&nbsp;
-          {countdown.d > 0 && <span style={{ color: C.darkText }}>{countdown.d}天</span>}
-          {(countdown.d > 0 || countdown.h > 0) && <span style={{ color: C.darkText }}>{countdown.h}时</span>}
-          <span style={{ color: C.darkText }}>{countdown.m}分{countdown.s}秒</span>
+          {countdown.d > 0 && <span style={{ color: C.text }}>{countdown.d}天</span>}
+          {(countdown.d > 0 || countdown.h > 0) && <span style={{ color: C.text }}>{countdown.h}时</span>}
+          <span style={{ color: C.text }}>{countdown.m}分{countdown.s}秒</span>
           &nbsp;·&nbsp;{isStock ? '15:00 收盘' : '22:00 开奖'}
         </span>
       ) : (
-        <span className="text-xs font-mono" style={{ color: C.darkSub }}>等待开奖日期确定...</span>
+        <span className="text-xs font-mono" style={{ color: C.sub }}>等待开奖日期确定...</span>
       )}
     </div>
   );
@@ -195,19 +195,18 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.border}` }}>
       {/* 标题栏 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.darkBorder }}>
+      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.border, background: C.bg }}>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-xs font-mono" style={{ color: C.darkSub }}>MARKET DATA</span>
+          <TrendingUp className="w-3.5 h-3.5" style={{ color: C.red }} />
+          <span className="text-xs font-semibold" style={{ color: C.text }}>{indexName}</span>
         </div>
-        <span className="text-xs font-mono" style={{ color: C.darkSub }}>{indexCode}</span>
+        <span className="text-xs font-mono" style={{ color: C.sub }}>{indexCode}</span>
       </div>
 
       {/* 指数名称 + 价格 */}
       <div className="px-4 pt-4 pb-3">
-        <div className="text-xs mb-1 font-mono tracking-widest" style={{ color: C.darkSub }}>{indexName}</div>
         {price ? (
           <div className="flex items-end gap-3">
             <span
@@ -224,28 +223,28 @@ function StockBoard({ seedType, seedValue, seedSource, drawAt, seedDate }: {
             )}
           </div>
         ) : (
-          <div className="text-2xl font-mono" style={{ color: C.darkSub }}>待获取</div>
+          <div className="text-2xl font-mono" style={{ color: C.sub }}>待获取</div>
         )}
       </div>
 
       {/* 尾数提取区 */}
       {tailDigits && (
-        <div className="mx-4 mb-4 rounded-xl p-3" style={{ background: C.darkCard, border: `1px solid ${C.darkBorder}` }}>
-          <div className="text-xs mb-2 flex items-center gap-1" style={{ color: C.darkSub }}>
+        <div className="mx-4 mb-4 rounded-xl p-3" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+          <div className="text-xs mb-2 flex items-center gap-1" style={{ color: C.sub }}>
             <Hash className="w-3 h-3" />
             <span>收盘价尾数提取</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono" style={{ color: C.darkSub }}>
+            <span className="text-xs font-mono" style={{ color: C.sub }}>
               {price?.replace('.', '')}
             </span>
-            <span className="text-xs" style={{ color: C.darkSub }}>→ 取末两位 →</span>
+            <span className="text-xs" style={{ color: C.sub }}>→ 取末两位 →</span>
             <div className="flex gap-1">
               {tailDigits.split('').map((d, i) => (
                 <span
                   key={i}
                   className="w-8 h-8 rounded-lg flex items-center justify-center text-lg font-bold font-mono"
-                  style={{ background: C.red, color: '#fff', boxShadow: `0 0 12px ${C.red}66` }}
+                  style={{ background: C.red, color: '#fff' }}
                 >
                   {d}
                 </span>
@@ -313,15 +312,15 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
   }
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: C.darkBg }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: C.card, border: `1px solid ${C.border}` }}>
       {/* 标题栏 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.darkBorder }}>
+      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.border, background: C.bg }}>
         <div className="flex items-center gap-2">
-          <Star className="w-3.5 h-3.5" style={{ color: C.gold }} />
-          <span className="text-xs font-bold tracking-widest" style={{ color: C.darkText }}>{lotteryName}</span>
+          <Gift className="w-3.5 h-3.5" style={{ color: C.red }} />
+          <span className="text-xs font-semibold" style={{ color: C.text }}>{lotteryName}</span>
         </div>
         {issueNo && (
-          <span className="text-xs font-mono" style={{ color: C.darkSub }}>第 {issueNo} 期</span>
+          <span className="text-xs font-mono" style={{ color: C.sub }}>第 {issueNo} 期</span>
         )}
       </div>
 
@@ -336,7 +335,7 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
                   className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
                   style={{
                     background: 'radial-gradient(circle at 35% 35%, #EF5350, #B71C1C)',
-                    boxShadow: '0 3px 8px rgba(183,28,28,0.5), inset 0 1px 2px rgba(255,255,255,0.3)',
+                    boxShadow: '0 3px 8px rgba(183,28,28,0.3), inset 0 1px 2px rgba(255,255,255,0.3)',
                   }}
                 >
                   {n}
@@ -348,7 +347,7 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
                   className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
                   style={{
                     background: 'radial-gradient(circle at 35% 35%, #42A5F5, #1565C0)',
-                    boxShadow: '0 3px 8px rgba(21,101,192,0.5), inset 0 1px 2px rgba(255,255,255,0.3)',
+                    boxShadow: '0 3px 8px rgba(21,101,192,0.3), inset 0 1px 2px rgba(255,255,255,0.3)',
                   }}
                 >
                   {n}
@@ -356,7 +355,7 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
               ))}
             </div>
             {drawTime && (
-              <div className="text-center text-xs" style={{ color: C.darkSub }}>
+              <div className="text-center text-xs" style={{ color: C.sub }}>
                 开奖时间：{drawTime}
               </div>
             )}
@@ -369,22 +368,22 @@ function LotteryBalls({ seedType, seedValue, seedSource, drawAt, seedDate }: {
                   key={i}
                   className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold"
                   style={{
-                    background: i < (isSSQ ? 6 : 5) ? 'rgba(211,47,47,0.3)' : 'rgba(21,101,192,0.3)',
-                    color: C.darkSub,
-                    border: `1px dashed ${C.darkBorder}`,
+                    background: i < (isSSQ ? 6 : 5) ? 'rgba(211,47,47,0.1)' : 'rgba(21,101,192,0.1)',
+                    color: C.sub,
+                    border: `1px dashed ${C.border}`,
                   }}
                 >
                   ?
                 </div>
               ))}
             </div>
-            <div className="text-xs" style={{ color: C.darkSub }}>等待开奖数据...</div>
+            <div className="text-xs" style={{ color: C.sub }}>等待开奖数据...</div>
           </div>
         )}
       </div>
 
       {/* 底部：去验证链接 */}
-      <div className="px-4 pb-4 border-t" style={{ borderColor: C.darkBorder }}>
+      <div className="px-4 pb-4 border-t" style={{ borderColor: C.border }}>
         <a
           href={officialUrl}
           target="_blank"
@@ -413,61 +412,61 @@ function AlgorithmBox({ seedType, mode, seedDate }: { seedType?: string | null; 
   }[seedType ?? ''] ?? '随机种子';
 
   return (
-    <div className="rounded-2xl p-4" style={{ background: C.darkBg, border: `1px solid ${C.darkBorder}` }}>
+    <div className="rounded-2xl p-4" style={{ background: C.card, border: `1px solid ${C.border}` }}>
       <div className="flex items-center gap-2 mb-3">
-        <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} />
-        <span className="text-sm font-bold" style={{ color: C.darkText }}>开奖算法说明</span>
-        <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: 'rgba(203,164,113,0.15)', color: C.gold }}>
+        <ShieldCheck className="w-4 h-4" style={{ color: C.red }} />
+        <span className="text-sm font-bold" style={{ color: C.text }}>开奖算法说明</span>
+        <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: C.redLight, color: C.red }}>
           可验证
         </span>
       </div>
 
       {/* 公式框 */}
-      <div className="rounded-xl p-3 mb-3 font-mono text-xs" style={{ background: C.darkCard, border: `1px solid ${C.darkBorder}` }}>
+      <div className="rounded-xl p-3 mb-3 font-mono text-xs" style={{ background: C.bg, border: `1px solid ${C.border}` }}>
         {isStock || isLottery ? (
           <div className="space-y-1.5">
-            <div style={{ color: C.darkSub }}>// 开奖计算公式</div>
-            <div style={{ color: '#82AAFF' }}>
-              幸运码 = <span style={{ color: C.gold }}>{seedName}</span>
+            <div style={{ color: C.sub }}>// 开奖计算公式</div>
+            <div style={{ color: C.text }}>
+              幸运码 = <span style={{ color: C.red }}>{seedName}</span>
             </div>
-            <div style={{ color: '#82AAFF' }}>
+            <div style={{ color: C.text }}>
               中奖者 = 参与者列表[幸运码 % 参与人数]
             </div>
           </div>
         ) : (
           <div className="space-y-1.5">
-            <div style={{ color: C.darkSub }}>// 随机种子算法</div>
-            <div style={{ color: '#82AAFF' }}>
+            <div style={{ color: C.sub }}>// 随机种子算法</div>
+            <div style={{ color: C.text }}>
               种子 = SHA256(时间戳 + 活动ID + 随机熵)
             </div>
-            <div style={{ color: '#82AAFF' }}>
+            <div style={{ color: C.text }}>
               中奖者 = 参与者列表[种子哈希 % 参与人数]
             </div>
           </div>
         )}
       </div>
 
-      <div className="text-xs space-y-1" style={{ color: C.darkSub }}>
+      <div className="text-xs space-y-1" style={{ color: C.sub }}>
         <div className="flex items-start gap-1.5">
-          <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#66BB6A' }} />
+          <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#4CAF50' }} />
           <span>开奖前公示随机种子哈希，开奖后公开完整种子，任何人可独立验证</span>
         </div>
         {(isStock || isLottery) && (
           <div className="flex items-start gap-1.5">
-            <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#66BB6A' }} />
+            <CheckCircle className="w-3 h-3 mt-0.5 flex-shrink-0" style={{ color: '#4CAF50' }} />
             <span>开奖依据来自第三方公开数据，主办方无法干预结果</span>
           </div>
         )}
         {(isStock || isLottery) && (
-          <div className="flex items-start gap-1.5 mt-1 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(203,164,113,0.1)', border: '1px solid rgba(203,164,113,0.2)' }}>
-            <span className="text-xs" style={{ color: C.gold }}>
-              📅 开奖依据日期：
-              <strong style={{ color: '#FFFFFF' }}>
+          <div className="flex items-start gap-1.5 mt-1 px-2 py-1.5 rounded-lg" style={{ background: C.goldLight, border: `1px solid ${C.gold}33` }}>
+            <span className="text-xs" style={{ color: C.sub }}>
+              开奖依据日期：
+              <strong style={{ color: C.text }}>
                 {seedDate ? seedDate : '开奖当天最新数据'}
               </strong>
-              {seedDate && isStock && <span style={{ color: C.darkSub }}>（上交所收盘价）</span>}
-              {seedDate && seedType === 'ssq' && <span style={{ color: C.darkSub }}>（双色球开奖号码）</span>}
-              {seedDate && seedType === 'dlt' && <span style={{ color: C.darkSub }}>（大乐透开奖号码）</span>}
+              {seedDate && isStock && <span style={{ color: C.sub }}>（上交所收盘价）</span>}
+              {seedDate && seedType === 'ssq' && <span style={{ color: C.sub }}>（双色球开奖号码）</span>}
+              {seedDate && seedType === 'dlt' && <span style={{ color: C.sub }}>（大乐透开奖号码）</span>}
             </span>
           </div>
         )}
