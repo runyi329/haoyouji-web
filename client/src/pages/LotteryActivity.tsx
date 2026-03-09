@@ -1249,9 +1249,9 @@ export default function LotteryActivity() {
 
       {/* ── 1. Hero 区：奖品大图 + 倒计时 ── */}
       <div className="relative" style={{ minHeight: '220px' }}>
-        {activity.cover_image_url ? (
+        {(activity.banner_image_url || activity.cover_image_url) ? (
           <img
-            src={activity.cover_image_url}
+            src={activity.banner_image_url || activity.cover_image_url}
             alt={activity.title}
             className="w-full object-cover"
             style={{ height: '220px' }}

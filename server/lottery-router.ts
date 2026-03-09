@@ -199,6 +199,8 @@ export const lotteryRouter = router({
       externalSeedType: z.enum(['sh_index', 'sz_index', 'ssq', 'dlt']).optional(),
       externalSeedDate: z.string().optional(),
       participantScale: z.enum(['small', 'large']).optional(),
+      coverImageUrl: z.string().nullable().optional(),
+      bannerImageUrl: z.string().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { activityId, ...fields } = input;
@@ -225,6 +227,8 @@ export const lotteryRouter = router({
       if (fields.externalSeedType !== undefined) { updates.push("external_seed_type=?"); values.push(fields.externalSeedType); }
       if (fields.externalSeedDate !== undefined) { updates.push("external_seed_date=?"); values.push(fields.externalSeedDate); }
       if (fields.participantScale !== undefined) { updates.push("participant_scale=?"); values.push(fields.participantScale); }
+      if (fields.coverImageUrl !== undefined) { updates.push("cover_image_url=?"); values.push(fields.coverImageUrl); }
+      if (fields.bannerImageUrl !== undefined) { updates.push("banner_image_url=?"); values.push(fields.bannerImageUrl); }
 
       if (updates.length === 0) return { success: true };
       values.push(activityId);
@@ -850,7 +854,60 @@ export const lotteryRouter = router({
       return { success: true };
     }),
 
-  // ── 公平性验证 ────────────────────────────
+  //  // ── AI 生成活动文案和图片 ──────────────────
+  aiGenerate: protectedProcedure
+    .input(z.object({
+      activityId: z.number(),
+      prompt: z.string().min(1).max(500), // 组织者描述
+      generateTypes: z.array(z.enum(['description', 'cover', 'banner'])), // 生成类型
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await ensureOrganizer(input.activityId, ctx.user.id);
+      const { invokeLLM } = await import('./_core/llm');
+      const { generateImage } = await import('./_core/imageGeneration');
+      const { storagePut } = await import('./storage');
+
+      const result: { description?: string; coverImageUrl?: string; bannerImageUrl?: string } = {};
+
+      // 1. 生成活动文案
+      if (input.generateTypes.includes('description')) {
+        const llmRes = await invokeLLM({
+          messages: [
+            {
+              role: 'system',
+              content: '你是一个抽奖活动文案撰写助手。根据组织者的描述，生成一段简洁吸引人的抽奖活动说明，100字以内，语气轻松活泼，突出奖品价値和参与方式，不要加任何标题或分隔符。',
+            },
+            {
+              role: 'user',
+              content: `抽奖活动描述：${input.prompt}`,
+            },
+          ],
+        });
+        result.description = llmRes.choices?.[0]?.message?.content as string ?? '';
+      }
+
+      // 2. 生成封面图（正方形，列表页卡片图）
+      if (input.generateTypes.includes('cover')) {
+        const coverPrompt = `抽奖活动封面图，正方形构图，色彩鲜艳喜庆风格，突出奖品元素。活动主题：${input.prompt}。无文字。`;
+        const coverRes = await generateImage({ prompt: coverPrompt });
+        if (coverRes.url) {
+          result.coverImageUrl = coverRes.url;
+        }
+      }
+
+      // 3. 生成横幅图（详情页顶部横幅）
+      if (input.generateTypes.includes('banner')) {
+        const bannerPrompt = `抽奖活动横幅图，宽屏16:9比例，展示活动氛围和奖品元素，色彩温暖喜庆，层次丰富。活动主题：${input.prompt}。无文字。`;
+        const bannerRes = await generateImage({ prompt: bannerPrompt });
+        if (bannerRes.url) {
+          result.bannerImageUrl = bannerRes.url;
+        }
+      }
+
+      return result;
+    }),
+
+  // ── 公平性验证 ────────────────────────
   verifyFairness: publicProcedure
     .input(z.object({ activityId: z.number() }))
     .query(async ({ input }) => {
