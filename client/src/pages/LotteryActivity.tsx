@@ -910,12 +910,12 @@ function ParticipantGrid({ activityId }: { activityId: number }) {
                 )}
               </div>
               {/* 昵称 */}
-              <span className="text-[10px] text-center truncate w-full" style={{ color: C.sub }}>
+              <span className="text-xs text-center truncate w-full" style={{ color: C.sub }}>
                 {p.display_name}
               </span>
               {/* 抽奖编号 */}
               <span
-                className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full"
+                className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-full"
                 style={{ background: C.redLight, color: C.red }}
               >
                 抽奖编号 {no}
