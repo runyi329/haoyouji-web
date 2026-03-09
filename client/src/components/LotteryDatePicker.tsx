@@ -83,13 +83,14 @@ interface Props {
   value: string; // "YYYY-MM-DD"
   onChange: (v: string) => void;
   seedType: string;
-  maxDate?: string; // 最大可选日期，默认今天
+  maxDate?: string; // 最大可选日期，不传则不限制（允许选未来日期）
 }
 
 export function LotteryDatePicker({ value, onChange, seedType, maxDate }: Props) {
   const today = new Date();
   const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate());
-  const limitStr = maxDate || todayStr;
+  // maxDate 不传时不限制（允许选未来日期）
+  const limitStr = maxDate ?? null;
 
   const initDate = value ? new Date(value + "T00:00:00") : today;
   const [viewYear, setViewYear] = useState(initDate.getFullYear());
@@ -121,7 +122,7 @@ export function LotteryDatePicker({ value, onChange, seedType, maxDate }: Props)
       {/* 提示说明 */}
       {label && (
         <div className="px-3 py-2 text-xs" style={{ backgroundColor: "#FFF8E1", color: "#F57F17", borderBottom: "1px solid #FFE082" }}>
-          📅 {label}
+          {label}
         </div>
       )}
 
@@ -161,7 +162,7 @@ export function LotteryDatePicker({ value, onChange, seedType, maxDate }: Props)
           const valid = isValidDate(dateStr, seedType);
           const isToday = dateStr === todayStr;
           const isSelected = dateStr === value;
-          const isFuture = dateStr > limitStr;
+          const isFuture = limitStr ? dateStr > limitStr : false;
           const disabled = !valid || isFuture;
 
           return (
