@@ -118,6 +118,7 @@ export async function initDatabase() {
         title VARCHAR(100) NOT NULL,
         description TEXT,
         cover_image_url TEXT,
+        banner_image_url TEXT,
         mode ENUM('instant','scheduled','milestone') NOT NULL DEFAULT 'scheduled',
         instant_style ENUM('scratch','wheel','flip','egg') DEFAULT 'scratch',
         draw_at DATETIME DEFAULT NULL,
@@ -220,6 +221,7 @@ export async function initDatabase() {
         { name: 'external_seed_value', def: 'VARCHAR(255) DEFAULT NULL' },
         { name: 'external_seed_source', def: 'TEXT DEFAULT NULL' },
         { name: 'participant_scale', def: "ENUM('small','large') NOT NULL DEFAULT 'small'" },
+        { name: 'banner_image_url', def: 'TEXT DEFAULT NULL' },
       ];
       for (const col of lotteryNewCols) {
         await safeAddColumn(dbConn2, 'lottery_activities', col.name, col.def);
