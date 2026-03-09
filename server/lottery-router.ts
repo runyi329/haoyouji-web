@@ -854,57 +854,66 @@ export const lotteryRouter = router({
       return { success: true };
     }),
 
-  //  // ── AI 生成活动文案和图片 ──────────────────
-  aiGenerate: protectedProcedure
+  // ── AI 生成活动文案（DeepSeek）──────────────────
+  aiGenerateDescription: protectedProcedure
     .input(z.object({
       activityId: z.number(),
-      prompt: z.string().min(1).max(500), // 组织者描述
-      generateTypes: z.array(z.enum(['description', 'cover', 'banner'])), // 生成类型
+      prompt: z.string().min(1).max(500),
     }))
     .mutation(async ({ input, ctx }) => {
       await ensureOrganizer(input.activityId, ctx.user.id);
       const { invokeLLM } = await import('./_core/llm');
-      const { generateImage } = await import('./_core/imageGeneration');
+      const llmRes = await invokeLLM({
+        messages: [
+          {
+            role: 'system',
+            content: '你是一个抽奖活动文案撰写助手。根据组织者的描述，生成一段简洁吸引人的抽奖活动说明，100字以内，语气轻松活泼，突出奖品价值和参与方式，不要加任何标题或分隔符。',
+          },
+          {
+            role: 'user',
+            content: `抽奖活动描述：${input.prompt}`,
+          },
+        ],
+      });
+      const description = llmRes.choices?.[0]?.message?.content as string ?? '';
+      return { description };
+    }),
+
+  // ── AI 生成活动图片（Pollinations.AI，免费无需 Key）──────────────────
+  aiGenerateImage: protectedProcedure
+    .input(z.object({
+      activityId: z.number(),
+      prompt: z.string().min(1).max(500),
+      imageType: z.enum(['cover', 'banner']),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await ensureOrganizer(input.activityId, ctx.user.id);
       const { storagePut } = await import('./storage');
 
-      const result: { description?: string; coverImageUrl?: string; bannerImageUrl?: string } = {};
+      const isBanner = input.imageType === 'banner';
+      const width = isBanner ? 768 : 512;
+      const height = isBanner ? 432 : 512;
+      const styleHint = isBanner
+        ? 'wide banner 16:9 format, festive warm atmosphere, prizes and celebration elements, Chinese lucky theme'
+        : 'square format, vibrant festive style, gift prizes highlighted, Chinese celebration theme';
+      const fullPrompt = `lottery event ${isBanner ? 'banner' : 'cover art'}, ${styleHint}, ${input.prompt}, no text, no watermark`;
 
-      // 1. 生成活动文案
-      if (input.generateTypes.includes('description')) {
-        const llmRes = await invokeLLM({
-          messages: [
-            {
-              role: 'system',
-              content: '你是一个抽奖活动文案撰写助手。根据组织者的描述，生成一段简洁吸引人的抽奖活动说明，100字以内，语气轻松活泼，突出奖品价値和参与方式，不要加任何标题或分隔符。',
-            },
-            {
-              role: 'user',
-              content: `抽奖活动描述：${input.prompt}`,
-            },
-          ],
-        });
-        result.description = llmRes.choices?.[0]?.message?.content as string ?? '';
+      try {
+        const encodedPrompt = encodeURIComponent(fullPrompt);
+        const seed = Math.floor(Math.random() * 100000);
+        const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true`;
+        const imgRes = await fetch(url, { signal: AbortSignal.timeout(30000) });
+        if (!imgRes.ok) throw new Error(`图片服务返回 ${imgRes.status}`);
+        const buffer = Buffer.from(await imgRes.arrayBuffer());
+        const { url: s3Url } = await storagePut(
+          `ai-generated/${Date.now()}-${seed}.jpg`,
+          buffer,
+          'image/jpeg'
+        );
+        return { url: s3Url };
+      } catch (e: any) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `图片生成失败：${e.message}` });
       }
-
-      // 2. 生成封面图（正方形，列表页卡片图）
-      if (input.generateTypes.includes('cover')) {
-        const coverPrompt = `抽奖活动封面图，正方形构图，色彩鲜艳喜庆风格，突出奖品元素。活动主题：${input.prompt}。无文字。`;
-        const coverRes = await generateImage({ prompt: coverPrompt });
-        if (coverRes.url) {
-          result.coverImageUrl = coverRes.url;
-        }
-      }
-
-      // 3. 生成横幅图（详情页顶部横幅）
-      if (input.generateTypes.includes('banner')) {
-        const bannerPrompt = `抽奖活动横幅图，宽屏16:9比例，展示活动氛围和奖品元素，色彩温暖喜庆，层次丰富。活动主题：${input.prompt}。无文字。`;
-        const bannerRes = await generateImage({ prompt: bannerPrompt });
-        if (bannerRes.url) {
-          result.bannerImageUrl = bannerRes.url;
-        }
-      }
-
-      return result;
     }),
 
   // ── 公平性验证 ────────────────────────
