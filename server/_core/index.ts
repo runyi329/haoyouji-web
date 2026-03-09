@@ -263,6 +263,60 @@ async function startServer() {
     }, 60 * 1000); // 每分钟检查一次
     console.log('[定时备份] 已注册，每天北京时间凌晨 02:00 自动执行');
     // ──────────────────────────────────────────────────────
+
+    // ─── 股票类抽奖自动开奖任务（北京时间 15:01/15:02/15:03 触发）───
+    // 上证/深证收盘时间为北京时间 15:00（UTC 07:00）
+    // 策略：15:01 首次尝试，失败则 15:02、15:03 各重试一次
+    // 只处理 draw_at 日期 = 今天 且 external_seed_type 为股票类的活动
+    const stockDrawAttempted = new Map<string, number>(); // key: 'YYYY-MM-DD_activityId', value: 尝试次数
+    setInterval(async () => {
+      try {
+        const now = new Date();
+        const bjHour = (now.getUTCHours() + 8) % 24;
+        const bjMinute = now.getUTCMinutes();
+        // 只在 15:01、15:02、15:03 执行
+        if (bjHour !== 15 || bjMinute < 1 || bjMinute > 3) return;
+
+        const todayBJ = new Date(now.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+        const { getDbConnection } = await import('../db');
+        const conn = await getDbConnection();
+        if (!conn) return;
+
+        // 查询今天到期的股票类活动（状态为 active 或 open）
+        const [rows] = await conn.execute(
+          `SELECT id, title, external_seed_type, draw_at FROM lottery_activities
+           WHERE (status='active' OR status='open')
+             AND auto_draw_enabled=1
+             AND external_seed_type IN ('sh_index', 'sz_index')
+             AND DATE(CONVERT_TZ(draw_at, '+00:00', '+08:00')) = ?`,
+          [todayBJ]
+        ) as any[];
+
+        if (!Array.isArray(rows) || rows.length === 0) return;
+
+        const { executeDrawForActivity } = await import('../lottery-router');
+        for (const activity of rows) {
+          const attemptKey = `${todayBJ}_${activity.id}`;
+          const attempts = stockDrawAttempted.get(attemptKey) || 0;
+          if (attempts >= 3) continue; // 已尝试3次，放弃
+
+          stockDrawAttempted.set(attemptKey, attempts + 1);
+          console.log(`[自动开奖] 尝试第${attempts + 1}次 - 活动「${activity.title}」(id=${activity.id})`);
+
+          const result = await executeDrawForActivity(activity.id);
+          if (result.success) {
+            console.log(`[自动开奖] ✅ 活动「${activity.title}」开奖成功，共 ${result.winners?.length || 0} 位获奖者`);
+            stockDrawAttempted.set(attemptKey, 99); // 标记已成功，不再重试
+          } else {
+            console.warn(`[自动开奖] ⚠️ 活动「${activity.title}」第${attempts + 1}次失败: ${result.error}`);
+          }
+        }
+      } catch (err) {
+        console.error('[自动开奖] 定时任务执行出错:', err);
+      }
+    }, 60 * 1000); // 每分钟检查一次
+    console.log('[自动开奖] 已注册，每天北京时间 15:01-15:03 自动触发股票类抽奖开奖');
+    // ──────────────────────────────────────────────────────
   });
 }
 

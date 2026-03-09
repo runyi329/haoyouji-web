@@ -98,6 +98,127 @@ function weightedDraw(
 }
 
 // ─────────────────────────────────────────────
+// 核心开奖逻辑（可被定时任务直接调用）
+// ─────────────────────────────────────────────
+
+/**
+ * 对指定活动执行开奖（含外部数据获取）
+ * 返回 { success, winners, finalSeed, error }
+ */
+export async function executeDrawForActivity(activityId: number): Promise<{ success: boolean; winners?: any[]; finalSeed?: string; error?: string }> {
+  try {
+    const [activity] = await _execQuery(`SELECT * FROM lottery_activities WHERE id=?`, [activityId]) as any[];
+    if (!activity) return { success: false, error: '活动不存在' };
+    if (activity.status !== 'active' && activity.status !== 'open') return { success: false, error: `活动状态为 ${activity.status}，不可开奖` };
+
+    // 标记为开奖中
+    await _execQuery(`UPDATE lottery_activities SET status='drawing' WHERE id=?`, [activityId]);
+
+    const participants = await _execQuery(
+      `SELECT * FROM lottery_participants WHERE activity_id=? AND status='confirmed'`, [activityId]
+    ) as any[];
+    const prizes = await _execQuery(
+      `SELECT * FROM lottery_prizes WHERE activity_id=? ORDER BY sort_order ASC`, [activityId]
+    ) as any[];
+
+    // 获取外部数据种子
+    let externalSeedValue: string | null = null;
+    let externalSeedSource: string | null = null;
+    if (activity.external_seed_type) {
+      try {
+        const seedDate = activity.external_seed_date ? new Date(activity.external_seed_date) : new Date();
+        const dateStr = seedDate.toISOString().split('T')[0];
+        if (activity.external_seed_type === 'sh_index' || activity.external_seed_type === 'sz_index') {
+          const symbol = activity.external_seed_type === 'sh_index' ? '000001.SS' : '399001.SZ';
+          const indexName = activity.external_seed_type === 'sh_index' ? '上证指数' : '深证成指';
+          const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=5d`;
+          const resp = await fetch(yahooUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+          const data = await resp.json() as any;
+          const result = data?.chart?.result?.[0];
+          if (result) {
+            const timestamps: number[] = result.timestamp || [];
+            const closes: number[] = result.indicators?.quote?.[0]?.close || [];
+            let bestClose = closes[closes.length - 1];
+            for (let i = 0; i < timestamps.length; i++) {
+              const d = new Date(timestamps[i] * 1000).toISOString().split('T')[0];
+              if (d <= dateStr && closes[i]) bestClose = closes[i];
+            }
+            if (bestClose) {
+              externalSeedValue = bestClose.toFixed(2);
+              externalSeedSource = `${indexName}(${symbol}) ${dateStr} 收盘价: ${externalSeedValue} 点 | 数据来源: Yahoo Finance`;
+              await _execQuery(
+                `UPDATE lottery_activities SET external_seed_value=?, external_seed_source=? WHERE id=?`,
+                [externalSeedValue, externalSeedSource, activityId]
+              );
+            } else {
+              // 数据还未更新，回滚状态
+              await _execQuery(`UPDATE lottery_activities SET status='active' WHERE id=?`, [activityId]);
+              return { success: false, error: `${indexName}收盘价数据暂未更新，稍后重试` };
+            }
+          }
+        }
+      } catch (err) {
+        // 获取外部数据失败，回滚状态
+        await _execQuery(`UPDATE lottery_activities SET status='active' WHERE id=?`, [activityId]);
+        return { success: false, error: `获取外部数据失败: ${(err as Error).message}` };
+      }
+    }
+
+    // 计算最终种子
+    let finalSeed = activity.random_seed;
+    if (externalSeedValue) {
+      finalSeed = crypto.createHash('sha256').update(`${activity.random_seed}:external:${externalSeedValue}`).digest('hex');
+    }
+    if (activity.use_participant_seed) {
+      const allSeeds = participants.map((p: any) => p.participant_seed).filter(Boolean).join(':');
+      finalSeed = crypto.createHash('sha256').update(`${finalSeed}:${allSeeds}`).digest('hex');
+    }
+
+    // 洗牌
+    const shuffled = seededShuffle(
+      participants.map((p: any) => ({ id: p.id, userId: p.user_id, name: p.display_name, weight: 1 })),
+      finalSeed
+    );
+
+    // 分配中奖者
+    const winners: Array<{ prizeId: number; prizeName: string; participantId: number; winnerName: string; drawIndex: number }> = [];
+    const usedParticipantIds = new Set<number>();
+    for (const prize of prizes) {
+      if (prize.is_consolation) continue;
+      const available = shuffled.filter((p: any) => !usedParticipantIds.has(p.id));
+      const count = Math.min(prize.quantity, available.length);
+      for (let i = 0; i < count; i++) {
+        const winner = available[i];
+        winners.push({ prizeId: prize.id, prizeName: prize.name, participantId: winner.id, winnerName: winner.name, drawIndex: winners.length });
+        usedParticipantIds.add(winner.id);
+      }
+    }
+    const consolationPrize = prizes.find((p: any) => p.is_consolation);
+    if (consolationPrize) {
+      const remaining = shuffled.filter((p: any) => !usedParticipantIds.has(p.id));
+      for (const p of remaining) {
+        winners.push({ prizeId: consolationPrize.id, prizeName: consolationPrize.name, participantId: p.id, winnerName: p.name, drawIndex: winners.length });
+      }
+    }
+
+    // 写入结果
+    for (const w of winners) {
+      await _execQuery(
+        `INSERT INTO lottery_results (activity_id, prize_id, participant_id, winner_id, winner_name, random_seed, draw_index)
+         SELECT ?, ?, ?, lp.user_id, ?, ?, ? FROM lottery_participants lp WHERE lp.id=?`,
+        [activityId, w.prizeId, w.participantId, w.winnerName, finalSeed, w.drawIndex, w.participantId]
+      );
+    }
+
+    await _execQuery(`UPDATE lottery_activities SET status='completed', random_seed=? WHERE id=?`, [finalSeed, activityId]);
+    return { success: true, winners, finalSeed };
+  } catch (err) {
+    console.error(`[自动开奖] 活动 ${activityId} 开奖失败:`, err);
+    return { success: false, error: (err as Error).message };
+  }
+}
+
+// ─────────────────────────────────────────────
 // 路由定义
 // ─────────────────────────────────────────────
 
