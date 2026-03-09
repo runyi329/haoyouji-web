@@ -578,31 +578,10 @@ function AlgorithmBox({ seedType, mode, seedDate, participantCount, participantS
                 <div className="px-3 py-2.5 flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-xs" style={{ color: C.text }}>取数方式：</span>
                   <span style={{ color: C.sub }} className="text-xs">例：</span>
-                  <span className="font-mono font-bold text-sm" style={{ color: C.text }}>
+                  <span className="font-mono font-bold text-xs" style={{ color: C.text }}>
                     4162.<span style={{ color: C.red, border: `1.5px solid ${C.red}`, borderRadius: '3px', padding: '0 2px', display: 'inline-block', lineHeight: 1.3 }}>88</span>
                   </span>
                   <span style={{ color: C.sub }} className="text-xs">→ 取 <strong style={{ color: C.red }}>88</strong></span>
-                  <button
-                    ref={algoHelpRef}
-                    type="button"
-                    onClick={() => setShowTip(v => !v)}
-                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: C.border, color: C.sub, fontSize: 9, fontWeight: 700, lineHeight: 1 }}
-                  >?</button>
-                  <Tooltip
-                    isOpen={showTip}
-                    onClose={() => setShowTip(false)}
-                    triggerRef={algoHelpRef as React.RefObject<HTMLElement>}
-                    content={
-                      <div className="space-y-1">
-                        <div className="font-bold text-sm pb-1 border-b border-gray-200" style={{ color: C.red }}>取数方式说明</div>
-                        <div className="text-xs leading-relaxed" style={{ color: '#444' }}>
-                          取 <span style={{ color: C.red }}>{seedLabel}</span> 小数点后两位作为开奖基数，
-                          除以参与人数取余数，<strong>余数直接对应中奖编号</strong>：余数 0 → 00号，余数 1 → 01号，以此类推。没有特例，不需要加一。
-                        </div>
-                      </div>
-                    }
-                  />
                 </div>
                 {/* 分隔线 */}
                 <div style={{ borderTop: `1px solid ${C.formulaBorder}` }} />
