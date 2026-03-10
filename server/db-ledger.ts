@@ -399,9 +399,9 @@ export async function getUserLedgers(userId: number, isArchived: boolean = false
 
       // 统一架构后：opinion_book 类型直接用 ledger.id 跳转，不再需要 opinionBookId
 
-      // 对 custom_ae 类型账本，额外查询进行中的抽奖数量
+      // 对 custom_ae / custom_af 类型账本，额外查询进行中的抽奖数量
       let activeLotteryCount = 0;
-      if (ledger.type === 'custom_ae') {
+      if (ledger.type === 'custom_ae' || ledger.type === 'custom_af') {
         try {
           const lotteryRows = await db
             .select({ count: sql<number>`count(*)` })
