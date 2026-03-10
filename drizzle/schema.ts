@@ -1546,3 +1546,22 @@ export const userPredictions = mysqlTable("user_predictions", {
   index("user_predictions_user_idx").on(table.userId),
   index("user_predictions_event_idx").on(table.eventId),
 ]);
+
+// AF 委托订单表
+export const afOrders = mysqlTable("af_orders", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int().notNull(),
+  userId: int().notNull(),
+  coin: varchar({ length: 10 }).notNull(),
+  side: varchar({ length: 10 }).notNull(),
+  limitPrice: varchar({ length: 50 }).notNull(),
+  amount: varchar({ length: 50 }).notNull(),
+  quantity: varchar({ length: 50 }).notNull(),
+  status: varchar({ length: 20 }).default('pending').notNull(),
+  createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("af_orders_ledger_idx").on(table.ledgerId),
+  index("af_orders_user_idx").on(table.userId),
+  index("af_orders_coin_idx").on(table.coin),
+]);

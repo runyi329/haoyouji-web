@@ -8538,6 +8538,50 @@ export const appRouter = router({
         );
         return combined;
       }),
+    // AF 提交委托订单
+    afSubmitOrder: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        coin: z.string(),
+        side: z.enum(['buy', 'sell']),
+        limitPrice: z.string(),
+        amount: z.string(),
+        quantity: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        await db.execute(
+          sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, created_at, updated_at)
+              VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', NOW(), NOW())`
+        );
+        return { success: true };
+      }),
+    // AF 查询委托订单（该账本所有币种）
+    afGetOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        const rows = await db.execute(
+          sql`SELECT id, coin, side, limit_price, amount, quantity, status, created_at
+              FROM af_orders
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+              ORDER BY created_at DESC
+              LIMIT 100`
+        ) as any;
+        const list = ((rows[0] || rows) as any[]).map((r: any) => ({
+          id: r.id,
+          coin: r.coin,
+          side: r.side,
+          limitPrice: r.limit_price,
+          amount: r.amount,
+          quantity: r.quantity,
+          status: r.status,
+          createdAt: r.created_at,
+        }));
+        return list;
+      }),
     // OKX 行情代理（国内服务器可访问，替代 Binance）
     getBinanceTicker: publicProcedure
       .input(z.object({ symbol: z.string() }))
