@@ -640,7 +640,7 @@ export default function CryptoPrediction() {
               {ordersLoading ? (
                 <div className="space-y-2 pt-1">
                   {[1,2,3].map(i => (
-                    <div key={i} className="grid items-center gap-1 py-1.5" style={{gridTemplateColumns:'3fr 1.5fr 1.5fr 2fr 1.5fr 1.5fr'}}>
+                    <div key={i} className="grid items-center gap-1 py-1.5" style={{gridTemplateColumns:'10fr 3fr 2fr 3fr 3fr 2fr'}}>
                       {[90,60,55,65,55,40].map((w, j) => (
                         <div key={j} className={`h-2.5 bg-[#2A2E39] rounded-full animate-pulse ${j > 0 ? 'ml-auto' : ''}`} style={{width:`${w}%`}} />
                       ))}
@@ -651,6 +651,15 @@ export default function CryptoPrediction() {
                 <div className="text-center py-5 text-gray-500 text-xs">暂无委托记录</div>
               ) : (
                 <div>
+                  {/* 表头 */}
+                  <div className="grid text-[10px] text-gray-500 pb-1.5 mb-0.5 border-b border-[#2A2E39]" style={{gridTemplateColumns:'10fr 3fr 2fr 3fr 3fr 2fr'}}>
+                    <span>日期</span>
+                    <span className="text-center">币种</span>
+                    <span className="text-center">方向</span>
+                    <span className="text-right">数量</span>
+                    <span className="text-right">状态</span>
+                    <span></span>
+                  </div>
                   {orders.map((order) => {
                     const createdAt = order.createdAt ? new Date(order.createdAt) : null;
                     const timeStr = createdAt ? (() => {
@@ -664,11 +673,11 @@ export default function CryptoPrediction() {
                     })() : '--';
                     return (
                       <div key={order.id} className="py-2 border-b border-[#1C2127]">
-                        <div className="grid text-[10px] items-center" style={{gridTemplateColumns:'3fr 1.5fr 1.5fr 2fr 1.5fr 1.5fr'}}>
-                          <span className="text-gray-400 truncate">{timeStr}</span>
+                        <div className="grid text-[10px] items-center" style={{gridTemplateColumns:'10fr 3fr 2fr 3fr 3fr 2fr'}}>
+                          <span className="text-gray-400 whitespace-nowrap">{timeStr}</span>
                           <span className="text-white font-medium text-center">{order.coin}</span>
                           <span className={`text-center ${order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}`}>
-                            {order.side === 'buy' ? '委买' : '委卖'}
+                            {order.side === 'buy' ? '买' : '卖'}
                           </span>
                           <span className="text-right text-gray-300">{parseFloat(order.quantity).toFixed(4)}</span>
                           <span className={`text-right ${
