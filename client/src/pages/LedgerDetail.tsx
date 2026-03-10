@@ -523,7 +523,7 @@ export default function LedgerDetail() {
             <div className="grid grid-cols-2 gap-3">
               {/* 卡片 1：总资产估值 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
-                <div className="text-xs text-white/70 mb-1">总资产估值</div>
+                <div className="text-xs text-white/70 mb-1">余额</div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-lg font-bold text-white">
                     {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
