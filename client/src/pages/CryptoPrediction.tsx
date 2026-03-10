@@ -305,6 +305,10 @@ function OrderDetail({ order, timeStr, ledgerId }: {
           <span className="text-gray-300">{parseFloat(order.amount).toFixed(2)} USDT</span>
         </div>
         <div className="flex justify-between">
+          <span className="text-gray-500">成交价值 <span className="text-yellow-500">(5.25倍)</span></span>
+          <span className="text-yellow-400">{(parseFloat(order.amount) * 5.25).toFixed(2)} USDT</span>
+        </div>
+        <div className="flex justify-between">
           <span className="text-gray-500">委托数量</span>
           <span className="text-gray-300">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
         </div>
