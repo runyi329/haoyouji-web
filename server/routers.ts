@@ -8850,22 +8850,22 @@ export const appRouter = router({
 
         // 查询该订单的所有档位触发记录
         const triggerRows = await db.execute(
-          sql`SELECT tier, trigger_price, triggered_at FROM af_order_tier_triggers
-              WHERE order_id = ${input.orderId}
+          sql`SELECT tier, triggerPrice, triggeredAt FROM af_order_tier_triggers
+              WHERE orderId = ${input.orderId}
               ORDER BY tier ASC`
         ) as any;
         const triggers: Array<{ tier: number; triggerPrice: string; triggeredAt: string }> =
           ((triggerRows[0] || triggerRows) as any[]).map((r: any) => ({
             tier: r.tier,
-            triggerPrice: r.trigger_price,
-            triggeredAt: r.triggered_at,
+            triggerPrice: r.triggerPrice,
+            triggeredAt: r.triggeredAt,
           }));
 
         // 查询该币种最近一次扫描记录
         const scanRows = await db.execute(
-          sql`SELECT low_price, scanned_at FROM af_price_scan_logs
+          sql`SELECT lowPrice, scannedAt FROM af_price_scan_logs
               WHERE coin = ${order.coin}
-              ORDER BY scanned_at DESC LIMIT 1`
+              ORDER BY scannedAt DESC LIMIT 1`
         ) as any;
         const lastScan = (scanRows[0]?.[0] ?? scanRows[0]) || null;
 
@@ -8878,11 +8878,11 @@ export const appRouter = router({
           buyPrice: order.limit_price,
           coin: order.coin,
           scanStatus: {
-            lastScanAt: coinStatus?.lastScanAt || (lastScan?.scanned_at ?? null),
-            lastLowPrice: coinStatus?.lastLowPrice || (lastScan?.low_price ?? null),
+            lastScanAt: coinStatus?.lastScanAt || (lastScan?.scannedAt ? new Date(lastScan.scannedAt).toISOString() : null),
+            lastLowPrice: coinStatus?.lastLowPrice || (lastScan?.lowPrice ?? null),
             scanning: coinStatus?.scanning || false,
           },
-          latestLowPrice: lastScan?.low_price ?? null,
+          latestLowPrice: lastScan?.lowPrice ?? null,
         };
       }),
     // OKX 行情代理（国内服务器可访问，替代 Binance）

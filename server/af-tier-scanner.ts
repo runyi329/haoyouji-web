@@ -6,8 +6,6 @@
  * - 档位：每跌10%一档，共9档（1/1 → 1/9）
  */
 
-import { sql } from "drizzle-orm";
-
 // 币种 → 交易所 symbol 映射
 const COIN_SYMBOLS: Record<string, string> = {
   BTC: "BTCUSDT",
@@ -43,9 +41,11 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number; scanFrom: D
     if (r.ok) {
       const j: any = await r.json();
       if (j.status === "ok" && j.data?.length > 0) {
-        const low = Math.min(...j.data.map((k: any) => k.low));
-        console.log(`[AF扫描] 火币 ${coin} 4h最低价: ${low}`);
-        return { low, scanFrom, scanTo: now };
+        const low = Math.min(...j.data.map((k: any) => parseFloat(k.low)));
+        if (!isNaN(low) && low > 0) {
+          console.log(`[AF扫描] 火币 ${coin} 4h最低价: ${low}`);
+          return { low, scanFrom, scanTo: now };
+        }
       }
     }
   } catch (e) {
@@ -63,8 +63,10 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number; scanFrom: D
       const json: any = await res.json();
       if (json.code === "0" && json.data?.length > 0) {
         const low = Math.min(...json.data.map((k: any[]) => parseFloat(k[3])));
-        console.log(`[AF扫描] OKX ${coin} 4h最低价: ${low}`);
-        return { low, scanFrom, scanTo: now };
+        if (!isNaN(low) && low > 0) {
+          console.log(`[AF扫描] OKX ${coin} 4h最低价: ${low}`);
+          return { low, scanFrom, scanTo: now };
+        }
       }
     }
   } catch (e) {
@@ -102,9 +104,9 @@ export async function runTierScan() {
       const { low, scanFrom, scanTo } = priceData;
       const lowStr = low.toString();
 
-      // 2. 记录扫描日志
+      // 2. 记录扫描日志（使用驼峰列名）
       await conn.execute(
-        `INSERT INTO af_price_scan_logs (coin, symbol, scan_from, scan_to, low_price, scanned_at)
+        `INSERT INTO af_price_scan_logs (coin, symbol, scanFrom, scanTo, lowPrice, scannedAt)
          VALUES (?, ?, ?, ?, ?, NOW())`,
         [coin, COIN_SYMBOLS[coin], scanFrom.toISOString().slice(0, 19).replace("T", " "), scanTo.toISOString().slice(0, 19).replace("T", " "), lowStr]
       );
@@ -133,17 +135,17 @@ export async function runTierScan() {
         if (currentTier <= 0) continue; // 未达到第1档，不触发
         const tierToTrigger = Math.min(currentTier, 9); // 最多9档
 
-        // 5. 查询该订单已触发的最高档位
+        // 5. 查询该订单已触发的最高档位（使用驼峰列名）
         const [existing] = await conn.execute(
-          `SELECT MAX(tier) as max_tier FROM af_order_tier_triggers WHERE order_id = ?`,
+          `SELECT MAX(tier) as maxTier FROM af_order_tier_triggers WHERE orderId = ?`,
           [order.id]
         ) as any[];
-        const maxTriggered = parseInt(existing?.[0]?.max_tier ?? "0") || 0;
+        const maxTriggered = parseInt(existing?.[0]?.maxTier ?? "0") || 0;
 
         // 6. 只触发尚未记录的新档位（不可逆）
         for (let tier = maxTriggered + 1; tier <= tierToTrigger; tier++) {
           await conn.execute(
-            `INSERT INTO af_order_tier_triggers (order_id, ledger_id, coin, buy_price, tier, trigger_price, triggered_at, created_at)
+            `INSERT INTO af_order_tier_triggers (orderId, ledgerId, coin, buyPrice, tier, triggerPrice, triggeredAt, createdAt)
              VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
             [order.id, order.ledger_id, coin, order.limit_price, tier, lowStr]
           );
