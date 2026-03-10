@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Bitcoin, RefreshCw, ChevronLeft, TrendingUp, Users, CheckCircle2, Circle, Loader2, AlertCircle } from "lucide-react";
+import { Bitcoin, RefreshCw, ChevronLeft, TrendingUp, Users, CheckCircle2, Circle, Loader2, AlertCircle, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 
 // ============================================================
@@ -34,6 +34,43 @@ function formatEndDate(dateStr: string | null): string {
   const months = Math.floor(days / 30);
   if (months < 12) return `${months}个月后截止`;
   return `${Math.floor(months / 12)}年后截止`;
+}
+
+// ============================================================
+// 骨架屏卡片（加载占位符）
+// ============================================================
+
+function EventCardSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+      {/* 题目占位 */}
+      <div className="px-4 pt-4 pb-3">
+        <div className="h-4 bg-gray-100 rounded-full w-full animate-pulse mb-2" />
+        <div className="h-4 bg-gray-100 rounded-full w-3/4 animate-pulse mb-3" />
+        <div className="flex gap-3">
+          <div className="h-3 bg-gray-100 rounded-full w-24 animate-pulse" />
+          <div className="h-3 bg-gray-100 rounded-full w-20 animate-pulse" />
+        </div>
+      </div>
+      {/* 选项按钮占位 */}
+      <div className="px-4 pb-4 space-y-2">
+        <div className="h-12 bg-gray-50 rounded-xl border border-gray-100 animate-pulse flex items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full bg-gray-200" />
+            <div className="h-3 w-8 bg-gray-200 rounded-full" />
+          </div>
+          <div className="h-5 w-12 bg-gray-200 rounded-full" />
+        </div>
+        <div className="h-12 bg-gray-50 rounded-xl border border-gray-100 animate-pulse flex items-center justify-between px-4">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded-full bg-gray-200" />
+            <div className="h-3 w-12 bg-gray-200 rounded-full" />
+          </div>
+          <div className="h-5 w-12 bg-gray-200 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ============================================================
@@ -208,12 +245,12 @@ export default function CryptoPrediction() {
   const ledgerId = parseInt(params?.id || "0");
   const [activeCoin, setActiveCoin] = useState<"BTC" | "ETH">("BTC");
 
-  const { data, isLoading, refetch, isFetching } = trpc.prediction.listEvents.useQuery(
+  const { data, isLoading, error, refetch, isFetching } = trpc.prediction.listEvents.useQuery(
     { ledgerId, coin: activeCoin, limit: 30 },
-    { 
+    {
       enabled: !!ledgerId,
-      staleTime: 5 * 60 * 1000, // 5分钟缓存
-      retry: 2,
+      staleTime: 5 * 60 * 1000,
+      retry: 1,
     }
   );
 
@@ -223,6 +260,72 @@ export default function CryptoPrediction() {
   };
 
   const events: PredictionEvent[] = (data?.events || []) as PredictionEvent[];
+
+  // 渲染内容区域
+  const renderContent = () => {
+    // 1. 加载中 → 显示骨架屏占位卡片
+    if (isLoading) {
+      return (
+        <>
+          <EventCardSkeleton />
+          <EventCardSkeleton />
+          <EventCardSkeleton />
+        </>
+      );
+    }
+
+    // 2. 请求出错 → 显示错误状态（带重试按钮）
+    if (error) {
+      return (
+        <div className="bg-white rounded-2xl border border-red-100 px-5 py-8 flex flex-col items-center gap-3 text-center">
+          <WifiOff className="w-10 h-10 text-red-300" />
+          <p className="text-sm font-medium text-gray-700">数据加载失败</p>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            {error.message || "无法连接到 Polymarket，请检查网络后重试"}
+          </p>
+          <button
+            onClick={handleRefresh}
+            disabled={isFetching}
+            className="mt-1 flex items-center gap-2 bg-[#D32F2F] text-white px-5 py-2.5 rounded-xl text-sm font-medium active:bg-[#B71C1C] disabled:opacity-60"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+            重新加载
+          </button>
+        </div>
+      );
+    }
+
+    // 3. 加载成功但无数据 → 显示空状态（带容器）
+    if (events.length === 0) {
+      return (
+        <div className="bg-white rounded-2xl border border-gray-100 px-5 py-8 flex flex-col items-center gap-3 text-center">
+          <Bitcoin className="w-12 h-12 text-gray-200" />
+          <p className="text-sm font-medium text-gray-600">暂无 {activeCoin} 竞猜事件</p>
+          <p className="text-xs text-gray-400 leading-relaxed">
+            Polymarket 当前没有活跃的 {activeCoin} 预测市场，请稍后再试
+          </p>
+          <button
+            onClick={handleRefresh}
+            disabled={isFetching}
+            className="mt-1 flex items-center gap-2 bg-gray-100 text-gray-600 px-5 py-2.5 rounded-xl text-sm font-medium active:bg-gray-200 disabled:opacity-60"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+            重新加载
+          </button>
+        </div>
+      );
+    }
+
+    // 4. 有数据 → 渲染真实卡片
+    return events.map((event) => (
+      <EventCard
+        key={event.id}
+        event={event}
+        ledgerId={ledgerId}
+        onPredicted={() => refetch()}
+      />
+    ));
+  };
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
@@ -236,7 +339,7 @@ export default function CryptoPrediction() {
           <button
             onClick={handleRefresh}
             disabled={isFetching}
-            className="flex items-center gap-1 text-xs text-[#D32F2F] px-2 py-1 rounded-lg active:bg-red-50"
+            className="flex items-center gap-1 text-xs text-[#D32F2F] px-2 py-1 rounded-lg active:bg-red-50 disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
             刷新
@@ -270,37 +373,9 @@ export default function CryptoPrediction() {
         </p>
       </div>
 
-      {/* 事件列表 */}
+      {/* 事件列表容器 —— 始终存在，内容随状态切换 */}
       <div className="px-4 pt-3 pb-24">
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Loader2 className="w-8 h-8 text-[#D32F2F] animate-spin" />
-            <p className="text-sm text-gray-400">加载中...</p>
-          </div>
-        ) : events.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <Bitcoin className="w-14 h-14 text-gray-200" />
-            <p className="text-base text-gray-400 font-medium">暂无 {activeCoin} 竞猜事件</p>
-            <p className="text-sm text-gray-400">正在从 Polymarket 加载数据，请稍候...</p>
-            <button
-              onClick={handleRefresh}
-              disabled={isFetching}
-              className="mt-2 flex items-center gap-2 bg-[#D32F2F] text-white px-5 py-2.5 rounded-xl text-sm font-medium active:bg-[#B71C1C]"
-            >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-              重新加载
-            </button>
-          </div>
-        ) : (
-          events.map((event) => (
-            <EventCard
-              key={event.id}
-              event={event}
-              ledgerId={ledgerId}
-              onPredicted={() => refetch()}
-            />
-          ))
-        )}
+        {renderContent()}
       </div>
     </div>
   );
