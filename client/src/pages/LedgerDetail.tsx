@@ -540,7 +540,7 @@ export default function LedgerDetail() {
               </div>
               {/* 卡片 2 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
-                <div className="text-xs text-white/70 mb-1">总推荐人数</div>
+                <div className="text-xs text-white/70 mb-1">推荐</div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-lg font-bold text-white">0</span>
                   <span className="text-xs text-white/60">人</span>
@@ -548,7 +548,7 @@ export default function LedgerDetail() {
               </div>
               {/* 卡片 3 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
-                <div className="text-xs text-white/70 mb-1">初始金额</div>
+                <div className="text-xs text-white/70 mb-1">仓位</div>
                 <div className="text-lg font-bold text-white">--</div>
                 <div className="text-xs text-white/60 mt-1">待接入数据</div>
               </div>
