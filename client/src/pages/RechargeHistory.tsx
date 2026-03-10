@@ -1,5 +1,5 @@
 import { useLocation, useSearch } from "wouter";
-import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Wallet, Clock, ArrowDownCircle, Settings2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Wallet, Clock, ArrowDownCircle } from "lucide-react";
 import { trpc } from "../lib/trpc";
 
 export default function RechargeHistory() {
@@ -76,7 +76,7 @@ export default function RechargeHistory() {
           <div className="bg-white rounded-lg overflow-hidden">
             <div className="px-4 py-3 border-b">
               <h2 className="font-semibold text-gray-900">充值明细</h2>
-              <p className="text-xs text-gray-400 mt-0.5">包含充值到账及管理员调账</p>
+              <p className="text-xs text-gray-400 mt-0.5">包含充值到账及系统结算</p>
             </div>
 
             {isLoading ? (
@@ -100,10 +100,8 @@ export default function RechargeHistory() {
                     <div key={item.id} className="px-4 py-3">
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          {isRecharge ? (
+                          {isRecharge && (
                             <ArrowDownCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                          ) : (
-                            <Settings2 className="w-4 h-4 text-blue-500 flex-shrink-0" />
                           )}
                           <span className="font-medium text-gray-900">
                             +{item.amount.toFixed(2)} USDT
@@ -115,11 +113,11 @@ export default function RechargeHistory() {
                             : 'bg-blue-100 text-blue-700'
                         }`}>
                           <CheckCircle2 className="w-3 h-3 mr-1" />
-                          {isRecharge ? '充值到账' : '管理员调账'}
+                          {isRecharge ? '充值到账' : '系统结算'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>{item.note || '-'}</span>
+                        <span>{isRecharge ? (item.note || '-') : ''}</span>
                         <span>{formatDate(item.createdAt)}</span>
                       </div>
                     </div>
