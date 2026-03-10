@@ -495,6 +495,17 @@ export default function CryptoPrediction() {
     onError: (e) => toast.error("提交失败", { description: e.message }),
   });
 
+  // 用户自助撤单
+  const cancelOrderMutation = trpc.ledger.afCancelOrder.useMutation({
+    onSuccess: () => {
+      toast.success("撤单成功，资金已退回");
+      utils.ledger.afGetOrders.invalidate({ ledgerId });
+      utils.ledger.afGetAvailableSell.invalidate({ ledgerId, coin: coin.name });
+      utils.ledger.afGetMyTotalAsset.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error("撤单失败", { description: e.message }),
+  });
+
   // Binance 行情（后端代理）
   const { data: tickerData, isLoading: tickerLoading, refetch: refetchTicker } =
     trpc.ledger.getBinanceTicker.useQuery({ symbol: coin.symbol }, { staleTime: 30000, refetchInterval: 30000 });
@@ -876,11 +887,27 @@ export default function CryptoPrediction() {
                              order.status === 'cancelled' ? '已撤' :
                              '委托中'}
                           </span>
-                          <button
-                            onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
-                            className="text-right text-[#D32F2F] text-[10px] font-medium">
-                            详情
-                          </button>
+                          <div className="flex flex-col items-end gap-0.5">
+                            {order.status === 'pending' && (
+                              <button
+                                onClick={() => {
+                                  if (window.confirm('确认撤销该委托单？')) {
+                                    cancelOrderMutation.mutate({ ledgerId, orderId: order.id });
+                                  }
+                                }}
+                                disabled={cancelOrderMutation.isPending}
+                                className="text-gray-400 text-[9px] font-medium">
+                                撤单
+                              </button>
+                            )}
+                            {order.status !== 'pending' && (
+                              <button
+                                onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
+                                className="text-[#D32F2F] text-[9px] font-medium">
+                                详情
+                              </button>
+                            )}
+                          </div>
                         </div>
                         {/* 详情展开 */}
                         {orderDetailId === order.id && (

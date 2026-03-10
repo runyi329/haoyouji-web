@@ -8802,6 +8802,38 @@ export const appRouter = router({
         }
         return { success: true };
       }),
+    // AF 用户自助撤单（仅限委托中的订单）
+    afCancelOrder: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), orderId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        // 查询订单，确认属于当前用户且状态为 pending
+        const orderRows = await db.execute(
+          sql`SELECT id, user_id, coin, side, amount, status FROM af_orders
+              WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const order = (orderRows[0]?.[0] ?? orderRows[0]);
+        if (!order) throw new Error('订单不存在');
+        if (order.status !== 'pending') throw new Error('只有委托中的订单才能撤单');
+        const amount = parseFloat(order.amount || '0');
+        const side = order.side;
+        // 撤单：买单退回冻结金额，卖单扣回已预加余额
+        const balanceAdjust = side === 'buy' ? amount : -amount;
+        const balanceNote = `用户撤单 ${side === 'buy' ? '委买' : '委卖'} ${order.coin} ${amount} USDT`;
+        if (Math.abs(balanceAdjust) > 0.001) {
+          await db.execute(
+            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                VALUES (${input.ledgerId}, ${ctx.user.id}, ${balanceAdjust}, ${balanceNote}, NOW(), NOW())`
+          );
+        }
+        // 更新订单状态为已撤
+        await db.execute(
+          sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+              WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
+        );
+        return { success: true };
+      }),
     // AF 查询订单的收益权档位触发记录 + 扫描状态
     afGetTierData: protectedProcedure
       .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
