@@ -138,6 +138,11 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: isDiet }
   );
+  // AF 账本：总资产估值（充值到账 + 手动调账）
+  const { data: afTotalAsset } = trpc.ledger.afGetMyTotalAsset.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF }
+  );
   const dietConfig = (dietStats as any)?.config;
   const dietInitialWeight = dietConfig ? Number(dietConfig.initialWeight) : null;
   const dietTargetWeight = dietConfig ? Number(dietConfig.targetWeight) : null;
@@ -516,11 +521,13 @@ export default function LedgerDetail() {
         {isCustomAF && (
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
-              {/* 卡片 1 */}
+              {/* 卡片 1：总资产估值 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
                 <div className="text-xs text-white/70 mb-1">总资产估值</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold text-white">0.00</span>
+                  <span className="text-lg font-bold text-white">
+                    {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
+                  </span>
                   <span className="text-xs text-white/60">USDT</span>
                 </div>
               </div>
