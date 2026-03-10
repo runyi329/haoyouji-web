@@ -1028,6 +1028,9 @@ export const appRouter = router({
         email: z.string().email().optional(),
         realName: z.string().optional(),
         idCardNumber: z.string().optional(),
+        phone: z.string().optional(),
+        company: z.string().optional(),
+        business: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db_instance = await getDb();
@@ -1039,6 +1042,9 @@ export const appRouter = router({
         if (input.email !== undefined) updateData.email = input.email;
         if (input.realName !== undefined) updateData.realName = input.realName;
         if (input.idCardNumber !== undefined) updateData.idCardNumber = input.idCardNumber;
+        if (input.phone !== undefined) updateData.phone = input.phone;
+        if (input.company !== undefined) updateData.company = input.company;
+        if (input.business !== undefined) updateData.business = input.business;
         
         if (Object.keys(updateData).length > 0) {
           await db_instance.update(users).set(updateData).where(eq(users.id, ctx.user.id));

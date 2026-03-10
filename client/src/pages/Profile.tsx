@@ -545,6 +545,11 @@ export default function Profile() {
             <h2 className="text-xl font-bold text-white truncate">
               {user.name || user.username}
             </h2>
+            {((user as any).company || (user as any).business) && (
+              <div className="mt-0.5 text-white/80 text-xs truncate">
+                {(user as any).company}{(user as any).company && (user as any).business ? " · " : ""}{(user as any).business}
+              </div>
+            )}
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
                 {user.role === "super_admin" ? "超级管理员" : user.role === "admin" ? "管理员" : "普通用户"}
