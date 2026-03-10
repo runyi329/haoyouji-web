@@ -270,6 +270,7 @@ export default function CryptoPrediction() {
   // 委托交易面板状态
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [orderAmount, setOrderAmount] = useState("");
+  const [orderPrice, setOrderPrice] = useState("");
   const [sliderPct, setSliderPct] = useState(0);
 
   // 可用余额（账本总资产）
@@ -433,15 +434,22 @@ export default function CryptoPrediction() {
               </button>
             </div>
 
-            {/* 限价委托标签（固定，不可切换） */}
-            <div className="bg-[#1C2127] rounded-xl px-4 py-2.5 flex items-center justify-between">
-              <span className="text-sm text-gray-300">限价委托</span>
-              <span className="text-xs text-gray-500">固定</span>
+            {/* 限价委托价格输入框 */}
+            <div className="bg-[#1C2127] rounded-xl px-4 py-3 flex items-center gap-3">
+              <span className="text-sm text-gray-400 w-14">限价委托</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="输入价格"
+                value={orderPrice}
+                onChange={(e) => setOrderPrice(e.target.value)}
+                className="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-600"
+              />
+              <span className="text-sm text-white opacity-50">USDT</span>
             </div>
-
             {/* 金额输入框 */}
             <div className="bg-[#1C2127] rounded-xl px-4 py-3 flex items-center gap-3">
-              <span className="text-xs text-gray-500 w-8">金额</span>
+              <span className="text-sm text-gray-400 w-14">金额</span>
               <input
                 type="number"
                 inputMode="decimal"
@@ -459,7 +467,7 @@ export default function CryptoPrediction() {
                 }}
                 className="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-600"
               />
-              <span className="text-xs text-white opacity-50">USDT</span>
+              <span className="text-sm text-white opacity-50">USDT</span>
             </div>
 
             {/* 5档进度条 */}
@@ -551,7 +559,7 @@ export default function CryptoPrediction() {
               <span className="text-xs text-gray-300">
                 {(() => {
                   const amt = parseFloat(orderAmount);
-                  const price = parseFloat(ticker?.lastPrice || "0");
+                  const price = parseFloat(orderPrice) || parseFloat(ticker?.lastPrice || "0");
                   if (!isNaN(amt) && amt > 0 && price > 0) {
                     const qty = amt / price;
                     return `${qty.toFixed(8)} ${coin.name}`;
@@ -565,10 +573,13 @@ export default function CryptoPrediction() {
             <button
               onClick={() => {
                 const amt = parseFloat(orderAmount);
+                const price = parseFloat(orderPrice);
+                if (!price || price <= 0) { toast.error("请输入委托价格"); return; }
                 if (!amt || amt <= 0) { toast.error("请输入金额"); return; }
                 if (amt > availableUsdt) { toast.error("金额超过可用余额"); return; }
+                const qty = (amt / price).toFixed(8);
                 toast.success(`委${orderSide === "buy" ? "买" : "卖"} ${coin.name} 委托已提交`, {
-                  description: `金额：${amt.toFixed(2)} USDT`
+                  description: `价格：${price} USDT · 金额：${amt.toFixed(2)} USDT · 数量：${qty} ${coin.name}`
                 });
               }}
               className={`w-full py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity ${
