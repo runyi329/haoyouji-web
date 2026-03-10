@@ -399,7 +399,7 @@ export default function LedgerDetail() {
               </div>
             )}
             {/* 普通账本：查找按鈕 */}
-            {!isCustomAE && !isDiet && (
+            {!isCustomAE && !isDiet && !isCustomAF && (
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                 style={{ backgroundColor: '#FFFFFF' }}
@@ -409,7 +409,7 @@ export default function LedgerDetail() {
               </div>
             )}
             {/* 普通账本：数据统计按鈕 */}
-            {!isCustomAE && !isDiet && (
+            {!isCustomAE && !isDiet && !isCustomAF && (
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                 style={{ backgroundColor: '#FFFFFF' }}
@@ -467,7 +467,7 @@ export default function LedgerDetail() {
           </div>
         )}
         {/* 普通账本：统计面板（总收入/总结余/总支出）*/}
-        {!isCustomAE && !isDiet && (
+        {!isCustomAE && !isDiet && !isCustomAF && (
           <div className="px-4 pt-2 pb-1 relative">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="relative">
@@ -1115,7 +1115,7 @@ export default function LedgerDetail() {
       </div>}
 
       {/* 底部添加按钮：非 custom_ae 账本显示 */}
-      {!isCustomAE && !isDiet && (
+      {!isCustomAE && !isDiet && !isCustomAF && (
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
