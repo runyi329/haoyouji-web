@@ -56,6 +56,7 @@ MIGRATIONS=(
   "drizzle/migrations/create_record_logs.sql"
   "drizzle/migrations/create_beauty_tables.sql"
   "drizzle/migrations/create_opinion_tables.sql"
+  "migrations/create_af_tier_tables.sql"
 )
 
 # 执行每个迁移文件
