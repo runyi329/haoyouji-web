@@ -484,6 +484,14 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/af-recharge-manage`)}
  />
  )}
+ {/* AF 型订单管理入口 */}
+ {ledgerData?.type === 'custom_af' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="订单管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/af-order-manage`)}
+ />
+ )}
  {(ledgerData?.type === 'custom_ae' || ledgerData?.type === 'custom_af') && ledgerData?.userRole !== 'owner' && ledgerData?.userRole !== 'admin' && (
  <SettingItem
  label="我的抽奖"
