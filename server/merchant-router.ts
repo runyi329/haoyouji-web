@@ -858,14 +858,36 @@ export const merchantRouter = router({
       .where(eq(merchants.userId, ctx.user.id))
       .limit(1);
 
-    // 方案A：查不到记录时，自动以 username 作为 merchantCode 创建默认商家记录
+    // 方案A：查不到记录时，先尝试通过 openId/username 匹配已有商家记录并绑定 userId
     if (!rows || rows.length === 0) {
-      const username = ctx.user.username || ctx.user.openId || `user_${ctx.user.id}`;
-      const shopName = username;
+      // 生产库 users 表可能没有 username 字段，用 openId 作为备选 merchantCode
+      const userIdentifier = (ctx.user as any).username || ctx.user.openId || `user_${ctx.user.id}`;
+      // 先尝试查找已存在的同名商家记录（如 liulifan 已手动建好但 userId 为空）
+      try {
+        const existingByCode = await db
+          .select()
+          .from(merchants)
+          .where(eq(merchants.merchantCode, userIdentifier))
+          .limit(1);
+        if (existingByCode && existingByCode.length > 0) {
+          // 找到了，绑定 userId
+          await db
+            .update(merchants)
+            .set({ userId: ctx.user.id })
+            .where(eq(merchants.merchantCode, userIdentifier));
+          rows = existingByCode;
+        }
+      } catch (_e) { /* ignore */ }
+    }
+
+    // 仍然没有记录，自动创建
+    if (!rows || rows.length === 0) {
+      const userIdentifier = (ctx.user as any).username || ctx.user.openId || `user_${ctx.user.id}`;
+      const shopName = userIdentifier;
       try {
         await db.insert(merchants).values({
           userId: ctx.user.id,
-          merchantCode: username,
+          merchantCode: userIdentifier,
           shopName,
           status: 'active',
           isVerified: 0,
@@ -876,7 +898,7 @@ export const merchantRouter = router({
           .where(eq(merchants.userId, ctx.user.id))
           .limit(1);
       } catch (e) {
-        // merchantCode 可能已存在（并发创建），再查一次
+        // merchantCode 已存在（并发或重复），再查一次
         rows = await db
           .select()
           .from(merchants)
@@ -900,7 +922,8 @@ export const merchantRouter = router({
       contactPhone: m.contact_phone || m.contactPhone,
       aboutUs: m.about_us,
       officialWebsite: m.official_website,
-      splashImage: m.splash_image,
+      // splash_image 字段可能尚未迁移，安全读取
+      splashImage: m.splash_image ?? null,
     };
   }),
 
@@ -1066,7 +1089,21 @@ export const merchantRouter = router({
       console.log(`[Splash] 开机图压缩: ${origKB}KB → ${newKB}KB`);
       const key = `merchant-splash/${merchantId}-splash-${Date.now()}.webp`;
       const url = await uploadImageToCOS(compressed, 'avatars', key);
-      await db.update(merchants).set({ splash_image: url } as any).where(eq(merchants.id, merchantId));
+      try {
+        // splash_image 字段可能尚未迁移，先尝试直接更新
+        await db.update(merchants).set({ splash_image: url } as any).where(eq(merchants.id, merchantId));
+      } catch (e: any) {
+        if (e?.message?.includes('splash_image') || e?.code === 'ER_BAD_FIELD_ERROR') {
+          // 字段不存在，用原生 SQL 添加字段后再更新
+          const rawConn = (db as any).session?.client || (db as any)._client;
+          if (rawConn) {
+            await rawConn.execute('ALTER TABLE merchants ADD COLUMN IF NOT EXISTS splash_image TEXT');
+            await db.update(merchants).set({ splash_image: url } as any).where(eq(merchants.id, merchantId));
+          }
+        } else {
+          throw e;
+        }
+      }
       return { url };
     }),
 
