@@ -921,6 +921,10 @@ export const users = mysqlTable("users", {
 	walletEnabled: tinyint('wallet_enabled').default(0).notNull(),
 	highestLevelAchieved: varchar('highest_level_achieved', { length: 50 }).default('partner'),
 	lastViewedSharingAt: timestamp('last_viewed_sharing_at', { mode: 'string' }),
+	realName: varchar('real_name', { length: 50 }),
+	phone: varchar('phone', { length: 20 }),
+	company: varchar('company', { length: 100 }),
+	business: varchar('business', { length: 200 }),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),
