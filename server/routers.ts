@@ -8460,6 +8460,30 @@ export const appRouter = router({
         );
         return { success: true };
       }),
+
+    // 查询当前用户在 AF 账本的总资产估值（充值到账 + 手动调账）
+    afGetMyTotalAsset: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        // 充值到账总额（recharge_orders status=completed）
+        const rechargeRows = await db.execute(
+          sql`SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as total FROM recharge_orders WHERE user_id = ${ctx.user.id} AND status = 'completed'`
+        ) as any;
+        const recharged = parseFloat(rechargeRows[0]?.[0]?.total || rechargeRows[0]?.total || '0');
+        // 手动调账总额（af_manual_balances）
+        let manual = 0;
+        try {
+          const manualRows = await db.execute(
+            sql`SELECT COALESCE(SUM(amount), 0) as total FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
+          ) as any;
+          manual = parseFloat(manualRows[0]?.[0]?.total || manualRows[0]?.total || '0');
+        } catch (_) {
+          // 表不存在时忽略
+        }
+        return { total: recharged + manual };
+      }),
   }),
   
   // 銀行列表管理

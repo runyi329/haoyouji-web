@@ -31,8 +31,11 @@ export default function AfRechargeManage() {
   const [tab, setTab] = useState<"recharge" | "manual">("recharge");
 
   // 手动调账弹窗状态
+  // isEditing=true 表示编辑已有记录，false 表示新增
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [editTarget, setEditTarget] = useState<any>(null); // null=新增，有值=编辑
+  const [isEditing, setIsEditing] = useState(false);
+  const [editRecordId, setEditRecordId] = useState<number | undefined>(undefined);
+  const [selectedUserId, setSelectedUserId] = useState<number | undefined>(undefined);
   const [editAmount, setEditAmount] = useState("");
   const [editNote, setEditNote] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
@@ -49,7 +52,8 @@ export default function AfRechargeManage() {
     onSuccess: () => {
       toast.success("保存成功");
       setShowEditDialog(false);
-      setEditTarget(null);
+      setEditRecordId(undefined);
+      setSelectedUserId(undefined);
       setEditAmount("");
       setEditNote("");
       refetchManual();
@@ -68,14 +72,18 @@ export default function AfRechargeManage() {
   });
 
   const openAdd = () => {
-    setEditTarget(null);
+    setIsEditing(false);
+    setEditRecordId(undefined);
+    setSelectedUserId(undefined);
     setEditAmount("");
     setEditNote("");
     setShowEditDialog(true);
   };
 
   const openEdit = (record: any) => {
-    setEditTarget(record);
+    setIsEditing(true);
+    setEditRecordId(record.id);
+    setSelectedUserId(record.userId || record.user_id);
     setEditAmount(String(record.amount));
     setEditNote(record.note || "");
     setShowEditDialog(true);
@@ -87,10 +95,14 @@ export default function AfRechargeManage() {
       toast.error("请输入有效的数字");
       return;
     }
+    if (!isEditing && !selectedUserId) {
+      toast.error("请先选择成员");
+      return;
+    }
     upsertMutation.mutate({
       ledgerId,
-      id: editTarget?.id,
-      userId: editTarget?.userId,
+      id: isEditing ? editRecordId : undefined,
+      userId: selectedUserId!,
       amount,
       note: editNote,
     });
@@ -139,7 +151,6 @@ export default function AfRechargeManage() {
       {/* 充值记录 Tab */}
       {tab === "recharge" && (
         <div className="px-4 pt-4 space-y-3">
-          {/* 跳转后台充值管理 */}
           <button
             onClick={() => setLocation("/admin/recharge/orders")}
             className="w-full bg-white rounded-2xl px-4 py-4 flex items-center justify-between shadow-sm"
@@ -212,7 +223,8 @@ export default function AfRechargeManage() {
               </div>
             )}
             {manualRecords?.map((record: any) => {
-              const member = members?.find((m: any) => m.userId === record.userId);
+              const uid = record.userId || record.user_id;
+              const member = members?.find((m: any) => m.userId === uid);
               return (
                 <div
                   key={record.id}
@@ -227,7 +239,7 @@ export default function AfRechargeManage() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 truncate">
-                      {member?.nickname || member?.username || `用户 ${record.userId}`}
+                      {member?.nickname || member?.username || `用户 ${uid}`}
                     </div>
                     {record.note && (
                       <div className="text-xs text-gray-400 truncate">{record.note}</div>
@@ -263,19 +275,19 @@ export default function AfRechargeManage() {
       {/* 新增/编辑弹窗 */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="mx-4 rounded-2xl">
-          <DialogTitle>{editTarget ? "编辑市值" : "新增手动调账"}</DialogTitle>
+          <DialogTitle>{isEditing ? "编辑市值" : "新增手动调账"}</DialogTitle>
 
           {/* 选择用户（仅新增时显示） */}
-          {!editTarget && (
+          {!isEditing && (
             <div className="space-y-2">
               <label className="text-sm text-gray-600">选择成员</label>
               <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-xl p-2">
                 {members?.map((m: any) => (
                   <button
                     key={m.userId}
-                    onClick={() => setEditTarget({ ...editTarget, userId: m.userId })}
+                    onClick={() => setSelectedUserId(m.userId)}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-colors ${
-                      editTarget?.userId === m.userId
+                      selectedUserId === m.userId
                         ? "bg-red-50 text-red-600"
                         : "hover:bg-gray-50"
                     }`}
