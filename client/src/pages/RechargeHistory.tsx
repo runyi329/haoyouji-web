@@ -100,9 +100,6 @@ export default function RechargeHistory() {
                     <div key={item.id} className="px-4 py-3">
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          {isRecharge && (
-                            <ArrowDownCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                          )}
                           <span className="font-medium text-gray-900">
                             +{item.amount.toFixed(2)} USDT
                           </span>
@@ -112,7 +109,6 @@ export default function RechargeHistory() {
                             ? 'bg-green-100 text-green-700'
                             : 'bg-blue-100 text-blue-700'
                         }`}>
-                          <CheckCircle2 className="w-3 h-3 mr-1" />
                           {isRecharge ? '充值到账' : '系统结算'}
                         </span>
                       </div>
@@ -161,7 +157,6 @@ export default function RechargeHistory() {
                           <span className="text-xs text-gray-400 ml-2">{order.network}</span>
                         </div>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${config.bgColor} ${config.color}`}>
-                          <StatusIcon className="w-3 h-3 mr-1" />
                           {config.label}
                         </span>
                       </div>
