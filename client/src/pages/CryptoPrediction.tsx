@@ -626,11 +626,19 @@ export default function CryptoPrediction() {
             >
               {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : `卖出 ${coin.name}`}
             </button>
-            {/* 当前委托订单列表 */}
+            {/* 当前委托订单列表 - 独立渲染，不依赖 K 线图加载状态 */}
             <div className="mt-4">
               <div className="text-sm font-semibold text-white mb-2">当前委托</div>
               {ordersLoading ? (
-                <div className="text-center py-5 text-gray-500 text-xs">加载中...</div>
+                <div className="space-y-2 pt-1">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="grid items-center gap-1 py-1.5" style={{gridTemplateColumns:'2fr 1.5fr 2fr 2fr 2fr 1.5fr 2fr'}}>
+                      {[80,60,70,65,75,55,70].map((w, j) => (
+                        <div key={j} className={`h-2.5 bg-[#2A2E39] rounded-full animate-pulse ${j > 0 ? 'ml-auto' : ''}`} style={{width:`${w}%`}} />
+                      ))}
+                    </div>
+                  ))}
+                </div>
               ) : orders.length === 0 ? (
                 <div className="text-center py-5 text-gray-500 text-xs">暂无委托记录</div>
               ) : (

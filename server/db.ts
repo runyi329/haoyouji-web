@@ -48,7 +48,8 @@ let _db: ReturnType<typeof drizzle> | null = null;
 let _guestDb: ReturnType<typeof drizzle> | null = null;
 let _ledgerDb: ReturnType<typeof drizzle> | null = null;
 
-// 存储原始 mysql2 connection
+// 存储原始 mysql2 connection（使用连接池）
+let _pool: mysql.Pool | null = null;
 let _connection: mysql.Connection | null = null;
 let _guestConnection: mysql.Connection | null = null;
 
@@ -88,16 +89,20 @@ export async function getDb(forceGuest: boolean = false) {
         const isTencentCloud = dbUrl.includes('124.223.54.69') || dbUrl.includes('tencentcloud');
         const isLocalhost = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
         
-        const connection = await mysql.createConnection({
+        // 使用连接池替代单连接，避免每次请求重新建立 TCP 连接
+        const pool = mysql.createPool({
           uri: dbUrl,
+          connectionLimit: 10,
           connectTimeout: 30000,
           enableKeepAlive: true,
           keepAliveInitialDelay: 0,
           ssl: isLocalhost ? false : { rejectUnauthorized: false },
           charset: 'utf8mb4',
+          waitForConnections: true,
+          queueLimit: 0,
         });
-        _connection = connection;
-        _db = drizzle(connection);
+        _pool = pool;
+        _db = drizzle(pool);
         
         let dbType = "Manus数据库";
         if (isTencentCloud) dbType = "腾讯云数据库";
@@ -131,6 +136,12 @@ export async function getLedgerDb() {
 export async function getDbConnection(forceGuest: boolean = false): Promise<mysql.Connection | null> {
   // 先调用 getDb() 确保连接已创建
   await getDb(false);
+  
+  // 如果有连接池，直接使用池的 query 方法（不需要手动 release）
+  // 返回一个代理对象，将 execute 委托给连接池
+  if (_pool) {
+    return _pool as unknown as mysql.Connection;
+  }
   
   // 统一返回腾讯云数据库连接，不再区分游客/真实用户
   return _connection;
