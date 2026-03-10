@@ -210,18 +210,17 @@ export default function CryptoPrediction() {
 
   const { data, isLoading, refetch, isFetching } = trpc.prediction.listEvents.useQuery(
     { ledgerId, coin: activeCoin, limit: 30 },
-    { enabled: !!ledgerId }
+    { 
+      enabled: !!ledgerId,
+      staleTime: 5 * 60 * 1000, // 5分钟缓存
+      retry: 2,
+    }
   );
 
-  const syncMutation = trpc.prediction.syncPolymarket.useMutation({
-    onSuccess: (res) => {
-      toast.success("同步完成", { description: `已同步 ${res.synced} 条 ${activeCoin} 竞猜事件` });
-      refetch();
-    },
-    onError: (e) => {
-      toast.error("同步失败", { description: e.message });
-    },
-  });
+  const handleRefresh = () => {
+    refetch();
+    toast.info(`正在刷新 ${activeCoin} 数据...`);
+  };
 
   const events: PredictionEvent[] = (data?.events || []) as PredictionEvent[];
 
@@ -235,12 +234,12 @@ export default function CryptoPrediction() {
           </button>
           <h1 className="text-base font-semibold text-gray-800 flex-1">加密货币竞猜</h1>
           <button
-            onClick={() => syncMutation.mutate({ coin: activeCoin })}
-            disabled={syncMutation.isPending || isFetching}
+            onClick={handleRefresh}
+            disabled={isFetching}
             className="flex items-center gap-1 text-xs text-[#D32F2F] px-2 py-1 rounded-lg active:bg-red-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${(syncMutation.isPending || isFetching) ? "animate-spin" : ""}`} />
-            同步
+            <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? "animate-spin" : ""}`} />
+            刷新
           </button>
         </div>
 
@@ -282,14 +281,14 @@ export default function CryptoPrediction() {
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <Bitcoin className="w-14 h-14 text-gray-200" />
             <p className="text-base text-gray-400 font-medium">暂无 {activeCoin} 竞猜事件</p>
-            <p className="text-sm text-gray-400">点击右上角「同步」拉取最新数据</p>
+            <p className="text-sm text-gray-400">正在从 Polymarket 加载数据，请稍候...</p>
             <button
-              onClick={() => syncMutation.mutate({ coin: activeCoin })}
-              disabled={syncMutation.isPending}
+              onClick={handleRefresh}
+              disabled={isFetching}
               className="mt-2 flex items-center gap-2 bg-[#D32F2F] text-white px-5 py-2.5 rounded-xl text-sm font-medium active:bg-[#B71C1C]"
             >
-              <RefreshCw className={`w-4 h-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
-              立即同步 Polymarket 数据
+              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+              重新加载
             </button>
           </div>
         ) : (
