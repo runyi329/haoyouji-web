@@ -129,18 +129,18 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
           </div>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="p-3 space-y-3">
           {/* 成功图标 */}
-          <div className="bg-white rounded-lg p-8 text-center">
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="w-12 h-12 text-green-500" />
+          <div className="bg-white rounded-lg p-5 text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="w-8 h-8 text-green-500" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">转账确认已提交</h2>
-            <p className="text-gray-500">系统正在扫描链上交易，确认到账后将自动入账</p>
+            <h2 className="text-lg font-bold text-gray-900 mb-1">转账确认已提交</h2>
+            <p className="text-sm text-gray-500">系统正在扫描链上交易，确认到账后将自动入账</p>
           </div>
 
           {/* 订单信息 */}
-          <div className="bg-white rounded-lg p-4 space-y-3">
+          <div className="bg-white rounded-lg p-3 space-y-2.5">
             <div className="flex justify-between items-center">
               <span className="text-gray-500">订单号</span>
               <span className="font-mono text-sm">{order.orderNo}</span>
@@ -163,10 +163,9 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
           </div>
 
           {/* 提示 */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="font-medium text-blue-900 mb-2">💡 温馨提示</div>
-            <ul className="text-sm text-blue-800 space-y-1.5">
-              <li>• 系统将自动扫描链上交易并匹配您的订单</li>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="text-sm font-medium text-blue-900 mb-1.5">温馨提示</div>
+            <ul className="text-xs text-blue-800 space-y-1">
               <li>• 通常1-3分钟内即可确认到账</li>
               <li>• 您可以在充值记录中查看订单状态</li>
               <li>• 如果超过30分钟未到账，请联系管理员处理</li>
@@ -174,16 +173,16 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
           </div>
 
           {/* 操作按钮 */}
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <button
               onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}` : '/recharge/history')}
-              className="w-full bg-[#D32F2F] text-white py-4 rounded-lg font-medium"
+              className="w-full bg-[#D32F2F] text-white py-3.5 rounded-lg font-medium"
             >
               查看充值记录
             </button>
             <button
               onClick={() => { setOrder(null); setSubmitted(false); }}
-              className="w-full bg-white border border-gray-300 text-gray-700 py-4 rounded-lg font-medium"
+              className="w-full bg-white border border-gray-300 text-gray-700 py-3.5 rounded-lg font-medium"
             >
               继续充值
             </button>
