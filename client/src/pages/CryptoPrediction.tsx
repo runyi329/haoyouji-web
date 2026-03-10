@@ -272,6 +272,8 @@ export default function CryptoPrediction() {
   const [orderAmount, setOrderAmount] = useState("");
   const [orderPrice, setOrderPrice] = useState("");
   const [sliderPct, setSliderPct] = useState(0);
+  // 订单详情展开状态
+  const [orderDetailId, setOrderDetailId] = useState<number | null>(null);
 
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
@@ -579,13 +581,16 @@ export default function CryptoPrediction() {
 
             {/* 可买/可卖数量 */}
             <div className="flex items-center justify-between px-1">
-              <span className="text-xs text-gray-500">可{orderSide === "buy" ? "买" : "卖"}</span>
+              <span className="text-xs text-gray-500">
+                可{orderSide === "buy" ? "买" : "卖"}
+                {orderSide === "buy" && <span className="text-yellow-400 ml-1">(5.25倍)</span>}
+              </span>
               <span className="text-xs text-gray-300">
                 {orderSide === "buy" ? (() => {
                   const amt = parseFloat(orderAmount);
                   const price = parseFloat(orderPrice) || parseFloat(ticker?.lastPrice || "0");
                   if (!isNaN(amt) && amt > 0 && price > 0) {
-                    const qty = amt / price;
+                    const qty = (amt / price) * 5.25;
                     return `${qty.toFixed(8)} ${coin.name}`;
                   }
                   return `-- ${coin.name}`;
@@ -608,7 +613,10 @@ export default function CryptoPrediction() {
                   const sellQty = (amt / price);
                   if (sellQty > availableSellQty) { toast.error(`委卖数量超过可卖数量（可卖 ${availableSellQty.toFixed(8)} ${coin.name}）`); return; }
                 }
-                const qty = (amt / price).toFixed(8);
+                // 委买数量 × 5.25倍，委卖不加倍
+                const qty = orderSide === 'buy'
+                  ? ((amt / price) * 5.25).toFixed(8)
+                  : (amt / price).toFixed(8);
                 submitOrderMutation.mutate({
                   ledgerId,
                   coin: coin.name,
@@ -632,8 +640,8 @@ export default function CryptoPrediction() {
               {ordersLoading ? (
                 <div className="space-y-2 pt-1">
                   {[1,2,3].map(i => (
-                    <div key={i} className="grid items-center gap-1 py-1.5" style={{gridTemplateColumns:'2fr 1.5fr 2fr 2fr 2fr 1.5fr 2fr'}}>
-                      {[80,60,70,65,75,55,70].map((w, j) => (
+                    <div key={i} className="grid items-center gap-1 py-1.5" style={{gridTemplateColumns:'3fr 1.5fr 1.5fr 2fr 1.5fr 1.5fr'}}>
+                      {[90,60,55,65,55,40].map((w, j) => (
                         <div key={j} className={`h-2.5 bg-[#2A2E39] rounded-full animate-pulse ${j > 0 ? 'ml-auto' : ''}`} style={{width:`${w}%`}} />
                       ))}
                     </div>
@@ -643,37 +651,91 @@ export default function CryptoPrediction() {
                 <div className="text-center py-5 text-gray-500 text-xs">暂无委托记录</div>
               ) : (
                 <div>
-                  {/* 表头 */}
-                  <div className="grid text-[10px] text-gray-500 px-1 pb-1 border-b border-[#2A2E39]" style={{gridTemplateColumns:'2fr 1.5fr 2fr 2fr 2fr 1.5fr 2fr'}}>
-                    <span>币种</span>
-                    <span>方向</span>
-                    <span className="text-right">价格</span>
-                    <span className="text-right">数量</span>
-                    <span className="text-right">金额</span>
-                    <span className="text-right">状态</span>
-                    <span className="text-right">类型</span>
-                  </div>
-                  {orders.map((order) => (
-                    <div key={order.id} className="grid text-[10px] py-1.5 border-b border-[#1C2127] items-center" style={{gridTemplateColumns:'2fr 1.5fr 2fr 2fr 2fr 1.5fr 2fr'}}>
-                      <span className="text-white font-medium">{order.coin}</span>
-                      <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
-                        {order.side === 'buy' ? '委买' : '委卖'}
-                      </span>
-                      <span className="text-right text-gray-300">{parseFloat(order.limitPrice).toLocaleString()}</span>
-                      <span className="text-right text-gray-400">{parseFloat(order.quantity).toFixed(4)}</span>
-                      <span className="text-right text-gray-300">{parseFloat(order.amount).toFixed(2)}</span>
-                      <span className={`text-right ${
-                        order.status === 'completed' ? 'text-[#26a69a]' :
-                        order.status === 'cancelled' ? 'text-gray-500' :
-                        'text-yellow-400'
-                      }`}>
-                        {order.status === 'completed' ? '已成交' :
-                         order.status === 'cancelled' ? '已撤' :
-                         '委托中'}
-                      </span>
-                      <span className="text-right text-gray-400 truncate">{(order as any).orderType || '无损合约'}</span>
-                    </div>
-                  ))}
+                  {orders.map((order) => {
+                    const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+                    const timeStr = createdAt ? (() => {
+                      const y = createdAt.getFullYear();
+                      const mo = String(createdAt.getMonth()+1).padStart(2,'0');
+                      const d = String(createdAt.getDate()).padStart(2,'0');
+                      const h = String(createdAt.getHours()).padStart(2,'0');
+                      const mi = String(createdAt.getMinutes()).padStart(2,'0');
+                      const s = String(createdAt.getSeconds()).padStart(2,'0');
+                      return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+                    })() : '--';
+                    return (
+                      <div key={order.id} className="py-2 border-b border-[#1C2127]">
+                        <div className="grid text-[10px] items-center" style={{gridTemplateColumns:'3fr 1.5fr 1.5fr 2fr 1.5fr 1.5fr'}}>
+                          <span className="text-gray-400 truncate">{timeStr}</span>
+                          <span className="text-white font-medium text-center">{order.coin}</span>
+                          <span className={`text-center ${order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}`}>
+                            {order.side === 'buy' ? '委买' : '委卖'}
+                          </span>
+                          <span className="text-right text-gray-300">{parseFloat(order.quantity).toFixed(4)}</span>
+                          <span className={`text-right ${
+                            order.status === 'completed' ? 'text-[#26a69a]' :
+                            order.status === 'cancelled' ? 'text-gray-500' :
+                            'text-yellow-400'
+                          }`}>
+                            {order.status === 'completed' ? '已成交' :
+                             order.status === 'cancelled' ? '已撤' :
+                             '委托中'}
+                          </span>
+                          <button
+                            onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
+                            className="text-right text-[#D32F2F] text-[10px] font-medium">
+                            详情
+                          </button>
+                        </div>
+                        {/* 详情展开 */}
+                        {orderDetailId === order.id && (
+                          <div className="mt-2 bg-[#1C2127] rounded-xl p-3 space-y-1.5 text-[10px]">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">币种</span>
+                              <span className="text-white">{order.coin}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">方向</span>
+                              <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
+                                {order.side === 'buy' ? '委买' : '委卖'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">委托价格</span>
+                              <span className="text-gray-300">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">实际投入</span>
+                              <span className="text-gray-300">{parseFloat(order.amount).toFixed(2)} USDT</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">委托数量</span>
+                              <span className="text-gray-300">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">类型</span>
+                              <span className="text-gray-400">{(order as any).orderType || '无损合约'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">状态</span>
+                              <span className={`${
+                                order.status === 'completed' ? 'text-[#26a69a]' :
+                                order.status === 'cancelled' ? 'text-gray-500' :
+                                'text-yellow-400'
+                              }`}>
+                                {order.status === 'completed' ? '已成交' :
+                                 order.status === 'cancelled' ? '已撤单' :
+                                 '委托中'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">下单时间</span>
+                              <span className="text-gray-400">{timeStr}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
