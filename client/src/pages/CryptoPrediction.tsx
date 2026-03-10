@@ -402,7 +402,13 @@ export default function CryptoPrediction() {
             { key: "spot", label: "无损现货" },
             { key: "market", label: "行情评估" },
           ].map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key as any)}
+            <button key={t.key} onClick={() => {
+              if (t.key === "spot" || t.key === "market") {
+                toast.info("暂未开放");
+                return;
+              }
+              setTab(t.key as any);
+            }}
               className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === t.key ? "bg-[#D32F2F] text-white" : "text-gray-400"}`}>
               {t.label}
             </button>
