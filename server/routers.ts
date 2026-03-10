@@ -8600,6 +8600,8 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const { getLedgerDb } = await import('./db');
         const db = await getLedgerDb();
+        // 确保 order_type 字段存在（兼容旧数据库）
+        try { await db.execute(sql`ALTER TABLE af_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(50) NOT NULL DEFAULT ''`); } catch (_) {}
         const rows = await db.execute(
           sql`SELECT id, coin, side, limit_price, amount, quantity, status, COALESCE(order_type,'') as order_type, created_at
               FROM af_orders
@@ -8657,6 +8659,8 @@ export const appRouter = router({
         ) as any;
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+        // 确保 order_type 字段存在（兼容旧数据库）
+        try { await db.execute(sql`ALTER TABLE af_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(50) NOT NULL DEFAULT ''`); } catch (_) {}
         const rows = await db.execute(
           sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at,
                      u.username, u.nickname
