@@ -66,6 +66,7 @@ import CustomABManager from "./admin/CustomABManager";
 import CustomACManager from "./admin/CustomACManager";
 import CustomADManager from "./admin/CustomADManager";
 import CustomAEManager from "./admin/CustomAEManager";
+import CustomAFManager from "./admin/CustomAFManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 
 // 定制账本类型配置表（新增类型只需在此添加）
@@ -104,6 +105,13 @@ const CUSTOM_LEDGER_TYPES = [
     name: "共享抽奖",
     desc: "以共享账本为底座，支持即时刻刻乐、定时开奖、阶段解锁三种模式，内置公平验证机制",
     component: CustomAEManager,
+  },
+  {
+    key: "AF",
+    label: "AF 型",
+    name: "AF 定制",
+    desc: "AF 型定制账本，仅管理员可创建，普通用户需被邀请才能进入",
+    component: CustomAFManager,
   },
 ];
 
