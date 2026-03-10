@@ -498,7 +498,6 @@ export default function CryptoPrediction() {
   // 用户自助撤单
   const cancelOrderMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => {
-      toast.success("撤单成功，资金已退回");
       utils.ledger.afGetOrders.invalidate({ ledgerId });
       utils.ledger.afGetAvailableSell.invalidate({ ledgerId, coin: coin.name });
       utils.ledger.afGetMyTotalAsset.invalidate({ ledgerId });
