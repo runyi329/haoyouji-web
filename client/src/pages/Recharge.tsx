@@ -390,7 +390,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
 
         {/* 温馨提示 */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="font-medium text-blue-900 mb-2">💡 温馨提示</div>
+          <div className="font-medium text-blue-900 mb-2">温馨提示</div>
           <ul className="text-sm text-blue-800 space-y-1.5">
             <li>• 最低充值金额：1 USDT</li>
             <li>• 到账时间：1-3分钟（区块确认后自动到账）</li>
