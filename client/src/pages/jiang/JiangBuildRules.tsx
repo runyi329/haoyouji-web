@@ -543,6 +543,237 @@ const CHAPTERS: Chapter[] = [
     ],
   },
   {
+    num: "十一",
+    title: "开发规则",
+    articles: [
+      {
+        id: "11.1",
+        title: "商家子页面目录结构规范",
+        type: "list",
+        content: [
+          "每个商家的所有页面放在 client/src/pages/{merchantCode}/ 目录下，例如 beauty/、wine/、jiang/。",
+          "商家首页命名为 {Name}Home.tsx，设置页为 {Name}Settings.tsx，个人中心为 {Name}Profile.tsx。",
+          "公共组件放在 client/src/components/ 下，商家专属组件放在商家目录内。",
+        ],
+      },
+      {
+        id: "11.2",
+        title: "薄包装页写法（新商家接入示例）",
+        type: "list",
+        content: [
+          "新商家建站时，首页只需一个薄包装页，引入通用组件（MerchantHomePage、MerchantSettingsPage），传入 merchantCode 即可。",
+          "不要在薄包装页写业务逻辑，所有逻辑放在通用组件或 tRPC 接口中。",
+          "路由在 App.tsx 中注册，格式：<Route path='/{merchantCode}' component={XxxHome} />。",
+        ],
+      },
+      {
+        id: "11.3",
+        title: "路由与访问控制规范",
+        type: "list",
+        content: [
+          "商家首页路由（如 /beauty、/wine）：公开访问，无需登录。",
+          "商家设置路由（如 /beauty/settings）：需要登录，且只有商家本人（merchantCode 匹配）才能访问。",
+          "管理员后台路由（如 /admin）：需要 role=admin，用 adminProcedure 保护。",
+          "分享页路由（如 /share/wine/product/:id）：公开访问，无需登录，不走 HomeEntry 登录检查。",
+        ],
+      },
+      {
+        id: "11.4",
+        title: "图片上传规范（强制）",
+        type: "list",
+        content: [
+          "所有图片上传到腾讯云 COS，数据库只存 CDN URL，禁止存 base64 或 blob。",
+          "上传前在服务端用 sharp 压缩：Logo 压缩到 400×400px WebP，封面图 1200×630px WebP，开机图宽最大 1200px WebP，质量均为 85%。",
+          "前端直接传 base64 给接口，服务端处理压缩和上传，前端无需额外处理。",
+        ],
+      },
+      {
+        id: "11.5",
+        title: "微信爬虫服务端注入方案",
+        type: "list",
+        content: [
+          "微信分享卡片需要 OG Meta 标签（og:title、og:image、og:description）。",
+          "前端通过 useMerchantOG() Hook 动态注入，传入 merchantCode 自动读取商家设置的分享标题/图片。",
+          "服务端在 HTML 模板中预注入默认 OG 标签，防止微信爬虫抓取时读不到。",
+        ],
+      },
+    ],
+  },
+  {
+    num: "十四",
+    title: "新商家建站流程",
+    articles: [
+      {
+        id: "14.1",
+        title: "建站五步流程",
+        type: "list",
+        content: [
+          "Step 1：在 merchants 表插入商家记录（merchantCode、shopName、themeColor 等基础信息）。",
+          "Step 2：在 client/src/pages/{merchantCode}/ 目录下创建薄包装页（首页、设置页、个人中心）。",
+          "Step 3：在 App.tsx 中注册路由（首页、设置、个人中心、商品详情、分享页）。",
+          "Step 4：在底部导航 BottomNav 中为该商家添加中间按钮入口。",
+          "Step 5：接入开机画面（按第二十五章规范），商家上传开机图后自动生效。",
+        ],
+      },
+      {
+        id: "14.2",
+        title: "建站必须实现的固定功能",
+        type: "list",
+        content: [
+          "首页三大入口：分享、注册/登录、个人中心（§1.3 强制规则）。",
+          "底部三按钮导航：人脉 / 商家名称 / 钱脉（§2.1 强制规则）。",
+          "商家设置：名称、Logo、封面图、简介、分享标题、开机画面（§10 通用设置组件）。",
+          "商品管理：录入、上架、下架（§4 商品体系）。",
+          "开机画面：接入 SplashScreen 组件，每次会话首次进入显示（§25 开机画面规范）。",
+        ],
+      },
+    ],
+  },
+  {
+    num: "十六",
+    title: "红白金13色设计系统",
+    articles: [
+      {
+        id: "16.1",
+        title: "核心色板（13色）",
+        type: "list",
+        content: [
+          "主红色 #D32F2F：按钮、强调、重要标签，全局主色。",
+          "深红色 #B71C1C：按钮按下态、深色背景上的红色元素。",
+          "浅红/粉红 #FFCDD2：红色背景的浅色版，用于标签底色、卡片背景。",
+          "纯白 #FFFFFF：主要文字、卡片背景、图标。",
+          "米白 #F9F9F9：页面大底色、卡片底色。",
+          "浅灰 #EEEEEE：分割线、边框、禁用态背景。",
+          "中灰 #9E9E9E：次要文字、占位符、辅助说明。",
+          "深灰 #424242：正文文字、次级标题。",
+          "纯黑 #0A0A0F：深色页面背景（如建站规则页）。",
+          "金色 #FFD700：VIP标签、等级标识、高亮装饰。",
+          "深金 #B8860B：金色的深色版，用于深色背景上的金色元素。",
+          "浅金 #FFF8E1：金色背景的浅色版，用于VIP卡片背景。",
+          "透明红 rgba(211,47,47,0.1~0.3)：红色元素的半透明背景。",
+        ],
+      },
+      {
+        id: "16.2",
+        title: "配色使用原则",
+        type: "list",
+        content: [
+          "每个页面主色不超过3种，避免色彩混乱。",
+          "深色页面（如建站规则）：背景 #0A0A0F，文字 #CCCCDD，强调 #D32F2F。",
+          "浅色页面（如商家首页）：背景 #F9F9F9，文字 #424242，强调 #D32F2F。",
+          "禁止在同一页面同时使用金色和大面积红色，避免视觉冲突。",
+          "商家可自定义主题色（themeColor），但必须在红白金色系范围内。",
+        ],
+      },
+    ],
+  },
+  {
+    num: "二十",
+    title: "基础设施配置规范（腾讯云）",
+    articles: [
+      {
+        id: "20.1",
+        title: "腾讯云 COS 对象存储规范",
+        type: "list",
+        content: [
+          "Bucket：haoyouji-images-1396946788，地域：ap-shanghai。",
+          "所有图片上传路径格式：{merchantCode}/{type}/{filename}-{timestamp}.webp。",
+          "Bucket 设置为公读私写，CDN URL 直接可访问，无需签名。",
+          "上传使用服务端 COS SDK，前端传 base64，服务端解码后上传。",
+        ],
+      },
+      {
+        id: "20.2",
+        title: "腾讯云 MySQL 数据库规范",
+        type: "list",
+        content: [
+          "数据库版本：MySQL 8.0，使用 Drizzle ORM 管理 Schema。",
+          "Schema 变更流程：修改 drizzle/schema.ts → 执行 pnpm db:push → 验证生产数据库。",
+          "禁止直接在生产数据库执行 DDL，必须通过 Drizzle 迁移。",
+          "所有时间戳字段使用 UTC 毫秒时间戳（bigint），前端显示时转换为本地时区。",
+        ],
+      },
+      {
+        id: "20.3",
+        title: "服务器部署规范",
+        type: "list",
+        content: [
+          "服务器：腾讯云轻量应用服务器，Node.js 运行时，PM2 进程管理。",
+          "部署命令：git pull && pnpm install && pnpm build && pm2 restart haoyouji。",
+          "数据库迁移命令（新增字段时必须执行）：pnpm db:push。",
+          "日志查看：pm2 logs haoyouji --lines 100。",
+          "GitHub Actions 自动部署：push 到 main 分支后自动触发构建和部署。",
+        ],
+      },
+    ],
+  },
+  {
+    num: "二十一",
+    title: "AI 商品图处理规范",
+    articles: [
+      {
+        id: "21.1",
+        title: "AI 生成商品图的使用场景",
+        type: "list",
+        content: [
+          "商家没有专业商品图时，可使用 AI 生成高质量商品主图。",
+          "AI 生成图片通过 server/_core/imageGeneration.ts 的 generateImage() 函数调用。",
+          "生成的图片自动上传到 COS，返回 CDN URL，直接存入商品 mainImageUrl 字段。",
+        ],
+      },
+      {
+        id: "21.2",
+        title: "AI 图片质量要求",
+        type: "list",
+        content: [
+          "生成尺寸：800×800px 正方形，白底或纯色背景。",
+          "Prompt 必须包含：商品名称、品类、主要特征、白底背景、专业产品摄影风格。",
+          "生成后人工审核，不符合要求的重新生成，禁止使用模糊或与商品不符的图片。",
+          "AI 生成图片仅作为临时替代，商家有条件时应替换为真实商品图。",
+        ],
+      },
+    ],
+  },
+  {
+    num: "二十二",
+    title: "认证、路由与部署运维规范",
+    articles: [
+      {
+        id: "22.1",
+        title: "自建密码登录实现",
+        type: "list",
+        content: [
+          "登录接口：trpc.auth.loginWithPassword，传入 username + password。",
+          "Token 存储：localStorage('auth-token') + Cookie app_session_id（双保险）。",
+          "登出操作：清除 localStorage token 和所有 React Query 缓存。",
+          "认证状态读取：所有页面通过 useAuth() Hook 读取，禁止直接操作 Cookie。",
+        ],
+      },
+      {
+        id: "22.2",
+        title: "useAuth Hook 使用规范",
+        type: "list",
+        content: [
+          "基础用法：const { user, loading, isAuthenticated, logout } = useAuth()。",
+          "需要强制登录的页面：useAuth({ redirectOnUnauthenticated: true })。",
+          "禁止在页面中直接读取 localStorage 或 Cookie 判断登录态，统一用 useAuth()。",
+          "loading 为 true 时显示骨架屏，避免页面闪烁。",
+        ],
+      },
+      {
+        id: "22.3",
+        title: "tRPC 接口安全规范",
+        type: "list",
+        content: [
+          "公开接口使用 publicProcedure，无需登录即可调用（如商品列表、商家公开信息）。",
+          "需要登录的接口使用 protectedProcedure，ctx.user 自动注入当前用户。",
+          "管理员接口使用 adminProcedure（在 protectedProcedure 基础上检查 role=admin）。",
+          "禁止在 publicProcedure 中返回用户隐私数据（手机号、密码、余额等）。",
+        ],
+      },
+    ],
+  },
+  {
     num: "二十三",
     title: "商品展示铁规（手机端固定区域规范）",
     articles: [
@@ -643,6 +874,70 @@ const CHAPTERS: Chapter[] = [
           "购买按钮：详情页吸底显示，分享页吸底显示（点击后跳转登录再回详情页）。",
           "分享按钮：两者都有，但分享页的分享按钮更突出。",
           "ref= 邀请码：两者都携带，存储到 localStorage（7天有效期）。",
+        ],
+      },
+    ],
+  },
+  {
+    num: "二十五",
+    title: "开机画面规范（Splash Screen）",
+    articles: [
+      {
+        id: "25.1",
+        title: "功能定义与时长规范",
+        type: "list",
+        content: [
+          "开机画面是用户首次进入商家主页时，在主页内容加载前全屏展示的品牌图片动画。",
+          "停留时长：2.5秒（业界标准：App Store 规范 ≤3秒，微信小程序常见 2~3秒）。",
+          "淡出动画：0.5秒渐隐过渡，总占用时间 3秒。",
+          "触发条件：每次会话（sessionStorage）只显示一次，刷新页面不重复显示。",
+          "跳过方式：点击画面任意位置可立即跳过，右下角显示"点击跳过"提示。",
+        ],
+      },
+      {
+        id: "25.2",
+        title: "技术实现规范",
+        type: "list",
+        content: [
+          "前端通用组件：client/src/components/SplashScreen.tsx，所有商家主页统一使用。",
+          "后端公开接口：trpc.merchant.getMerchantPublicSettings（含 splashImage 字段）。",
+          "后端上传接口：trpc.merchant.uploadSplashImage（需登录，自动压缩为 WebP）。",
+          "数据库字段：merchants.splash_image（text 类型，存储 COS CDN URL）。",
+          "仅当 splashImage 有值时才显示开机画面，未设置时直接进入主页。",
+        ],
+      },
+      {
+        id: "25.3",
+        title: "新商家建站接入规范（强制）",
+        type: "list",
+        content: [
+          "所有新建商家主页必须接入开机画面功能，这是建站标准配置之一。",
+          "sessionStorage key 格式：_${merchantCode}_splash_shown，每个商家独立。",
+          "SplashScreen 组件放在主页 return 的最顶层，确保覆盖所有内容。",
+          "调用 trpc.merchant.getMerchantPublicSettings 获取开机图，enabled 条件为 showSplash。",
+        ],
+      },
+      {
+        id: "25.4",
+        title: "图片上传压缩规范",
+        type: "list",
+        content: [
+          "开机图：宽最大 1200px，高按原始比例，WebP 格式，质量 85%，不裁剪。",
+          "建议尺寸：750×1334px（竖版，适配手机全屏）。",
+          "Logo：400×400px，WebP，质量 85%，裁剪为 1:1 正方形。",
+          "封面图：1200×630px，WebP，质量 85%，裁剪为 1200:630 比例。",
+          "所有图片上传均在服务端用 sharp 库处理，前端传 base64 即可。",
+        ],
+      },
+      {
+        id: "25.5",
+        title: "商家设置中的开机画面模块",
+        type: "list",
+        content: [
+          "位置：MerchantSettingsPage 中，位于"关于我们"下方。",
+          "功能：图片预览区（点击上传/更换）、建议尺寸说明、停留时长说明。",
+          "上传后服务端自动压缩，前端实时预览新图片。",
+          "未上传时显示虚线占位框，提示"点击上传开机画面图"。",
         ],
       },
     ],
@@ -757,7 +1052,7 @@ export default function JiangBuildRules() {
             <BookOpen className="w-5 h-5 text-[#D32F2F]" />
             <div>
               <div className="text-sm font-bold text-white leading-tight">建站规则</div>
-              <div className="text-[10px] text-[#D32F2F] leading-tight">脉动共享商盟架构规则 v1.7</div>
+              <div className="text-[10px] text-[#D32F2F] leading-tight">脉动共享商盟架构规则 v1.8</div>
             </div>
           </div>
         </div>
@@ -776,7 +1071,7 @@ export default function JiangBuildRules() {
                 本文档定义了所有在脉动网平台上开发的商家网站的完整架构规则。凡涉及新商家建站、功能扩展、UI设计等工作，均以本文档为准。
               </div>
               <div className="flex items-center gap-3 mt-2">
-                <span className="text-[10px] text-[#444466]">版本 v1.7</span>
+                <span className="text-[10px] text-[#444466]">版本 v1.8</span>
                 <span className="text-[10px] text-[#444466]">{CHAPTERS.length} 章 · {totalArticles} 条</span>
                 <span className="text-[10px] bg-[#D32F2F]/20 text-[#D32F2F] px-2 py-0.5 rounded-full">权威文档</span>
               </div>
