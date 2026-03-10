@@ -525,9 +525,11 @@ export default function LedgerDetail() {
             <div className="grid grid-cols-2 gap-3">
               {/* 卡片 1 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
-                <div className="text-xs text-white/70 mb-1">最新余额</div>
-                <div className="text-lg font-bold text-white">--</div>
-                <div className="text-xs text-white/60 mt-1">待接入数据</div>
+                <div className="text-xs text-white/70 mb-1">总资产估值</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-lg font-bold text-white">0.00</span>
+                  <span className="text-xs text-white/60">USDT</span>
+                </div>
               </div>
               {/* 卡片 2 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
