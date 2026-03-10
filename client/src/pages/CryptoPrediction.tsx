@@ -609,38 +609,37 @@ export default function CryptoPrediction() {
             >
               {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : `卖出 ${coin.name}`}
             </button>
-          </div>
-
-          {/* 全局委托订单列表 */}
-          <div className="mt-4">
-            <div className="text-sm font-semibold text-white mb-3">当前委托</div>
-            {ordersLoading ? (
-              <div className="text-center py-6 text-gray-500 text-sm">加载中...</div>
-            ) : orders.length === 0 ? (
-              <div className="text-center py-6 text-gray-500 text-sm">暂无委托记录</div>
-            ) : (
-              <div className="space-y-2">
-                {/* 表头 */}
-                <div className="grid grid-cols-5 text-xs text-gray-500 px-1 pb-1 border-b border-[#2A2E39]">
-                  <span>币种</span>
-                  <span>方向</span>
-                  <span className="text-right">价格</span>
-                  <span className="text-right">金额</span>
-                  <span className="text-right">数量</span>
-                </div>
-                {orders.map((order) => (
-                  <div key={order.id} className="grid grid-cols-5 text-xs py-2 border-b border-[#1C2127] items-center">
-                    <span className="text-white font-medium">{order.coin}</span>
-                    <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
-                      {order.side === 'buy' ? '委买' : '委卖'}
-                    </span>
-                    <span className="text-right text-gray-300">{parseFloat(order.limitPrice).toLocaleString()}</span>
-                    <span className="text-right text-gray-300">{order.amount}</span>
-                    <span className="text-right text-gray-400">{parseFloat(order.quantity).toFixed(4)}</span>
+            {/* 当前委托订单列表 */}
+            <div className="mt-4">
+              <div className="text-sm font-semibold text-white mb-3">当前委托</div>
+              {ordersLoading ? (
+                <div className="text-center py-6 text-gray-500 text-sm">加载中...</div>
+              ) : orders.length === 0 ? (
+                <div className="text-center py-6 text-gray-500 text-sm">暂无委托记录</div>
+              ) : (
+                <div className="space-y-2">
+                  {/* 表头 */}
+                  <div className="grid grid-cols-5 text-xs text-gray-500 px-1 pb-1 border-b border-[#2A2E39]">
+                    <span>币种</span>
+                    <span>方向</span>
+                    <span className="text-right">价格</span>
+                    <span className="text-right">金额</span>
+                    <span className="text-right">数量</span>
                   </div>
-                ))}
-              </div>
-            )}
+                  {orders.map((order) => (
+                    <div key={order.id} className="grid grid-cols-5 text-xs py-2 border-b border-[#1C2127] items-center">
+                      <span className="text-white font-medium">{order.coin}</span>
+                      <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
+                        {order.side === 'buy' ? '委买' : '委卖'}
+                      </span>
+                      <span className="text-right text-gray-300">{parseFloat(order.limitPrice).toLocaleString()}</span>
+                      <span className="text-right text-gray-300">{order.amount}</span>
+                      <span className="text-right text-gray-400">{parseFloat(order.quantity).toFixed(4)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
