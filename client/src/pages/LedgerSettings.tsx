@@ -476,6 +476,14 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/lottery/list/${ledgerId}`)}
  />
  )}
+ {/* AF 型充值管理入口 */}
+ {ledgerData?.type === 'custom_af' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="充值管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/af-recharge-manage`)}
+ />
+ )}
  {(ledgerData?.type === 'custom_ae' || ledgerData?.type === 'custom_af') && ledgerData?.userRole !== 'owner' && ledgerData?.userRole !== 'admin' && (
  <SettingItem
  label="我的抽奖"
