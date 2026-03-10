@@ -10,7 +10,18 @@ interface RechargeProps {
 }
 
 export default function Recharge({ hideHeader = false, hideBalance = false }: RechargeProps = {}) {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  // 解析来源参数，支持从账本跳转过来后返回
+  const searchParams = new URLSearchParams(location.split('?')[1] || '');
+  const fromLedger = searchParams.get('from') === 'ledger';
+  const fromLedgerId = searchParams.get('ledgerId');
+  const handleBack = () => {
+    if (fromLedger && fromLedgerId) {
+      setLocation(`/ledger/${fromLedgerId}`);
+    } else {
+      window.history.back();
+    }
+  };
   const [amount, setAmount] = useState<string>("");
   const [network, setNetwork] = useState<"TRC20" | "ERC20" | "BEP20" | "APTOS" | "SOLANA">("TRC20");
   const [order, setOrder] = useState<any>(null);
@@ -311,7 +322,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
       {!hideHeader && (<div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
-            <button onClick={() => window.history.back()} className="mr-3">
+            <button onClick={handleBack} className="mr-3">
               <ArrowLeft className="w-6 h-6" />
             </button>
             <h1 className="text-lg font-semibold">充值</h1>

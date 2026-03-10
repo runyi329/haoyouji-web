@@ -377,7 +377,7 @@ export default function LedgerDetail() {
                 </div>
               )}
               <button
-                onClick={() => setLocation('/recharge')}
+                onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}`)}
                 className="px-3 py-1 rounded-full text-sm font-medium border border-white/60 text-white"
                 style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
               >
