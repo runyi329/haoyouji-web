@@ -1,8 +1,63 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
-import { getDb } from "./db";
+import { getDb, getDbConnection } from "./db";
 import { predictionEvents, userPredictions } from "../drizzle/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+
+// 自动建表（如果生产库还没执行 pnpm db:push）
+async function ensurePredictionTables() {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS prediction_events (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        polymarket_event_id VARCHAR(100) NOT NULL,
+        polymarket_market_id VARCHAR(100) NOT NULL,
+        coin ENUM('BTC','ETH') NOT NULL,
+        question TEXT NOT NULL,
+        description TEXT,
+        outcomes JSON NOT NULL,
+        outcome_prices JSON NOT NULL,
+        volume VARCHAR(50),
+        end_date TIMESTAMP NULL,
+        image_url TEXT,
+        active TINYINT NOT NULL DEFAULT 1,
+        closed TINYINT NOT NULL DEFAULT 0,
+        synced_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_market_id (polymarket_market_id),
+        INDEX prediction_events_coin_idx (coin),
+        INDEX prediction_events_market_idx (polymarket_market_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS user_predictions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ledger_id INT NOT NULL,
+        user_id INT NOT NULL,
+        event_id INT NOT NULL,
+        selected_outcome VARCHAR(50) NOT NULL,
+        selected_index INT NOT NULL,
+        note TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_user_event_ledger (ledger_id, user_id, event_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('[prediction] Tables ensured');
+  } catch (e) {
+    console.error('[prediction] ensurePredictionTables error:', e);
+  }
+}
+
+let tablesEnsured = false;
+async function ensureOnce() {
+  if (!tablesEnsured) {
+    await ensurePredictionTables();
+    tablesEnsured = true;
+  }
+}
 
 // ============================================================
 // Polymarket 数据同步
@@ -46,7 +101,15 @@ async function fetchPolymarketEvents(coin: "BTC" | "ETH"): Promise<any[]> {
           outcomes: JSON.parse(market.outcomes || '["Yes","No"]'),
           outcomePrices: JSON.parse(market.outcomePrices || '["0.5","0.5"]'),
           volume: String(market.volume || "0"),
-          endDate: market.endDate || event.endDate,
+          endDate: (() => {
+            const raw = market.endDate || event.endDate;
+            if (!raw) return null;
+            try {
+              const d = new Date(raw);
+              if (isNaN(d.getTime())) return null;
+              return d.toISOString().slice(0, 19).replace('T', ' ');
+            } catch { return null; }
+          })(),
           imageUrl: market.image || market.icon || null,
           active: 1,
           closed: 0,
@@ -69,6 +132,9 @@ export const predictionRouter = router({
   syncPolymarket: protectedProcedure
     .input(z.object({ coin: z.enum(["BTC", "ETH"]) }))
     .mutation(async ({ input }) => {
+      // 确保表存在
+      await ensureOnce();
+
       const events = await fetchPolymarketEvents(input.coin);
       if (!events.length) return { synced: 0 };
 
