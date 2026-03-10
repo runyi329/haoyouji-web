@@ -128,48 +128,12 @@ async function fetchPolymarketEvents(coin: "BTC" | "ETH"): Promise<any[]> {
 // ============================================================
 
 export const predictionRouter = router({
-  // 同步 Polymarket 数据（管理员调用，或定时触发）
+  // 直接从 Polymarket 实时拉取数据（不存数据库，最简单可靠）
   syncPolymarket: protectedProcedure
     .input(z.object({ coin: z.enum(["BTC", "ETH"]) }))
     .mutation(async ({ input }) => {
-      // 确保表存在
-      await ensureOnce();
-
       const events = await fetchPolymarketEvents(input.coin);
-      if (!events.length) return { synced: 0 };
-
-      const db = await getDb();
-      let synced = 0;
-      for (const ev of events) {
-        // 用 polymarketMarketId 做 upsert
-        const existing = await db
-          .select({ id: predictionEvents.id })
-          .from(predictionEvents)
-          .where(eq(predictionEvents.polymarketMarketId, ev.polymarketMarketId))
-          .limit(1);
-
-        if (existing.length > 0) {
-          // 更新价格和状态
-          await db
-            .update(predictionEvents)
-            .set({
-              outcomePrices: ev.outcomePrices,
-              volume: ev.volume,
-              active: ev.active,
-              closed: ev.closed,
-              syncedAt: new Date().toISOString().slice(0, 19).replace("T", " "),
-            })
-            .where(eq(predictionEvents.polymarketMarketId, ev.polymarketMarketId));
-        } else {
-          await db.insert(predictionEvents).values({
-            ...ev,
-            syncedAt: new Date().toISOString().slice(0, 19).replace("T", " "),
-          });
-        }
-        synced++;
-      }
-
-      return { synced };
+      return { synced: events.length, events };
     }),
 
   // 获取某个账本的竞猜事件列表（按 coin 分类）
@@ -181,43 +145,20 @@ export const predictionRouter = router({
         limit: z.number().default(20),
       })
     )
-    .query(async ({ ctx, input }) => {
-      const db = await getDb();
-      // 获取事件列表
-      const events = await db
-        .select()
-        .from(predictionEvents)
-        .where(
-          and(
-            eq(predictionEvents.coin, input.coin),
-            eq(predictionEvents.active, 1),
-            eq(predictionEvents.closed, 0)
-          )
-        )
-        .orderBy(desc(predictionEvents.syncedAt))
-        .limit(input.limit);
-
-      if (!events.length) return { events: [] };
-
-      // 获取当前用户在这些事件上的预测
-      const eventIds = events.map((e) => e.id);
-      const myPredictions = await db
-        .select()
-        .from(userPredictions)
-        .where(
-          and(
-            eq(userPredictions.ledgerId, input.ledgerId),
-            eq(userPredictions.userId, ctx.user.id),
-            inArray(userPredictions.eventId, eventIds)
-          )
-        );
-
-      const predictionMap = new Map(myPredictions.map((p) => [p.eventId, p]));
-
+    .query(async ({ input }) => {
+      // 直接实时从 Polymarket 拉取，不依赖数据库
+      const events = await fetchPolymarketEvents(input.coin);
+      const limited = events.slice(0, input.limit);
       return {
-        events: events.map((e) => ({
-          ...e,
-          myPrediction: predictionMap.get(e.id) || null,
+        events: limited.map((e, idx) => ({
+          id: idx + 1,
+          question: e.question,
+          outcomes: e.outcomes,
+          outcomePrices: e.outcomePrices,
+          volume: e.volume,
+          endDate: e.endDate,
+          imageUrl: e.imageUrl,
+          myPrediction: null, // 无数据库时不记录预测
         })),
       };
     }),
