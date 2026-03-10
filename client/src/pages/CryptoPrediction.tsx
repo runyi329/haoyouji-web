@@ -280,6 +280,24 @@ export default function CryptoPrediction() {
   );
   const availableUsdt = (assetData as any)?.total ?? 0;
 
+  // 委托订单
+  const utils = trpc.useUtils();
+  const { data: ordersData, isLoading: ordersLoading } = trpc.ledger.afGetOrders.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId, staleTime: 10000 }
+  );
+  const orders: any[] = (ordersData as any[]) || [];
+  const submitOrderMutation = trpc.ledger.afSubmitOrder.useMutation({
+    onSuccess: () => {
+      toast.success("委托已提交");
+      setOrderAmount("");
+      setOrderPrice("");
+      setSliderPct(0);
+      utils.ledger.afGetOrders.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error("提交失败", { description: e.message }),
+  });
+
   // Binance 行情（后端代理）
   const { data: tickerData, isLoading: tickerLoading, refetch: refetchTicker } =
     trpc.ledger.getBinanceTicker.useQuery({ symbol: coin.symbol }, { staleTime: 30000, refetchInterval: 30000 });
@@ -576,16 +594,53 @@ export default function CryptoPrediction() {
                 if (!amt || amt <= 0) { toast.error("请输入金额"); return; }
                 if (amt > availableUsdt) { toast.error("金额超过可用余额"); return; }
                 const qty = (amt / price).toFixed(8);
-                toast.success(`委${orderSide === "buy" ? "买" : "卖"} ${coin.name} 委托已提交`, {
-                  description: `价格：${price} USDT · 金额：${amt.toFixed(2)} USDT · 数量：${qty} ${coin.name}`
+                submitOrderMutation.mutate({
+                  ledgerId,
+                  coin: coin.name,
+                  side: orderSide,
+                  limitPrice: price.toString(),
+                  amount: amt.toFixed(2),
+                  quantity: qty,
                 });
               }}
               className={`w-full py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity ${
                 orderSide === "buy" ? "bg-[#26a69a]" : "bg-[#ef5350]"
               } ${(!orderAmount || parseFloat(orderAmount) <= 0) ? "opacity-50" : "opacity-100"}`}
             >
-              {orderSide === "buy" ? `买入 ${coin.name}` : `卖出 ${coin.name}`}
+              {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : `卖出 ${coin.name}`}
             </button>
+          </div>
+
+          {/* 全局委托订单列表 */}
+          <div className="mt-4">
+            <div className="text-sm font-semibold text-white mb-3">当前委托</div>
+            {ordersLoading ? (
+              <div className="text-center py-6 text-gray-500 text-sm">加载中...</div>
+            ) : orders.length === 0 ? (
+              <div className="text-center py-6 text-gray-500 text-sm">暂无委托记录</div>
+            ) : (
+              <div className="space-y-2">
+                {/* 表头 */}
+                <div className="grid grid-cols-5 text-xs text-gray-500 px-1 pb-1 border-b border-[#2A2E39]">
+                  <span>币种</span>
+                  <span>方向</span>
+                  <span className="text-right">价格</span>
+                  <span className="text-right">金额</span>
+                  <span className="text-right">数量</span>
+                </div>
+                {orders.map((order) => (
+                  <div key={order.id} className="grid grid-cols-5 text-xs py-2 border-b border-[#1C2127] items-center">
+                    <span className="text-white font-medium">{order.coin}</span>
+                    <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
+                      {order.side === 'buy' ? '委买' : '委卖'}
+                    </span>
+                    <span className="text-right text-gray-300">{parseFloat(order.limitPrice).toLocaleString()}</span>
+                    <span className="text-right text-gray-300">{order.amount}</span>
+                    <span className="text-right text-gray-400">{parseFloat(order.quantity).toFixed(4)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
