@@ -1046,7 +1046,6 @@ export default function LedgerDetail() {
               </div>
               <div className="text-left flex-1">
                 <div className="text-white font-semibold text-base">比特币 (BTC)</div>
-                <div className="text-white/80 text-xs mt-0.5">Polymarket 实时预测数据</div>
               </div>
               <ChevronRight className="w-5 h-5 text-white/70" />
             </button>
@@ -1060,7 +1059,6 @@ export default function LedgerDetail() {
               </div>
               <div className="text-left flex-1">
                 <div className="text-white font-semibold text-base">以太坊 (ETH)</div>
-                <div className="text-white/80 text-xs mt-0.5">Polymarket 实时预测数据</div>
               </div>
               <ChevronRight className="w-5 h-5 text-white/70" />
             </button>
@@ -1075,14 +1073,9 @@ export default function LedgerDetail() {
               </div>
               <div className="text-left flex-1">
                 <div className="text-white font-semibold text-base">索拉纳 (SOL)</div>
-                <div className="text-white/80 text-xs mt-0.5">Polymarket 实时预测数据</div>
               </div>
               <ChevronRight className="w-5 h-5 text-white/70" />
             </button>
-            {/* 说明 */}
-            <div className="text-center text-xs text-gray-400 pt-2">
-              数据来源 Polymarket · 仅供参考 · 不涉及资金
-            </div>
           </div>
         </div>
       )}
