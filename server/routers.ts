@@ -8578,8 +8578,6 @@ export const appRouter = router({
         if (json.code !== '0') throw new Error('K线数据获取失败');
         return (json.data as any[]).reverse().map((k: any[]) => ({ openTime: parseInt(k[0]), open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]) }));
       }),
-        }));
-      }),
   }),
   
   // 銀行列表管理
