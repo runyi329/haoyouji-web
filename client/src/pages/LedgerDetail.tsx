@@ -381,7 +381,14 @@ export default function LedgerDetail() {
                 className="px-3 py-1 rounded-full text-sm font-medium border border-white/60 text-white"
                 style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
               >
-                充值
+                充値
+              </button>
+              <button
+                onClick={() => setLocation('/parent/profile/invite')}
+                className="px-3 py-1 rounded-full text-sm font-medium border border-white/60 text-white"
+                style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+              >
+                邀请
               </button>
               <button
                 onClick={() => setLocation('/ledger')}
