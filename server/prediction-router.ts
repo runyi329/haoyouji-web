@@ -65,7 +65,7 @@ async function ensureOnce() {
 
 // Cloudflare Worker 代理 URL（新加坡/全球边缘节点，解决腾讯云无法访问境外 API 的问题）
 // 部署后替换为实际的 Worker URL
-const POLYMARKET_PROXY_URL = process.env.POLYMARKET_PROXY_URL || "https://polymarket-proxy.haoyouji.workers.dev";
+const POLYMARKET_PROXY_URL = process.env.POLYMARKET_PROXY_URL || "https://polymarket-proxy.runyihongkong.workers.dev";
 
 async function fetchPolymarketEvents(coin: "BTC" | "ETH"): Promise<any[]> {
   try {
