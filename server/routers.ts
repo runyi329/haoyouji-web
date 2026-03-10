@@ -8787,6 +8787,19 @@ export const appRouter = router({
             sql`UPDATE af_orders SET ${sql.raw(updates.join(', '))}, updated_at = NOW() WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
           );
         }
+        // 如果订单变为已成交，立即触发一次扫描（不等四小时）
+        if (newStatus === 'completed' && oldStatus !== 'completed' && order.side === 'buy') {
+          // 异步触发，不阻塞当前请求
+          setTimeout(async () => {
+            try {
+              const { runTierScan } = await import('./af-tier-scanner');
+              console.log(`[AF扫描] 订单#${input.orderId} 已成交，立即触发收益权扫描...`);
+              await runTierScan();
+            } catch (e) {
+              console.error('[AF扫描] 立即扫描失败:', e);
+            }
+          }, 500);
+        }
         return { success: true };
       }),
     // AF 查询订单的收益权档位触发记录 + 扫描状态

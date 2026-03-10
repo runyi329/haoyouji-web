@@ -409,9 +409,14 @@ function OrderDetail({ order, timeStr, ledgerId }: {
                   {trigger ? new Date(trigger.triggeredAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '--'}
                 </span>
                 <span className={`text-right ${
-                  isTriggered ? 'text-[#ef5350]' : 'text-gray-700'
+                  isTriggered ? 'text-[#ef5350]' : 'text-gray-500'
                 }`}>
-                  {trigger ? parseFloat(trigger.triggerPrice).toLocaleString() : '--'}
+                  {trigger
+                    ? parseFloat(trigger.triggerPrice).toLocaleString()
+                    : parseFloat(order.limitPrice) > 0
+                      ? (parseFloat(order.limitPrice) * (1 - tier * 0.1)).toFixed(2)
+                      : '--'
+                  }
                 </span>
               </div>
             );
