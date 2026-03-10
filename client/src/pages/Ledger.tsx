@@ -734,7 +734,7 @@ export default function Ledger() {
                         )}
                       </div>
                       {/* 展开/收起按钮：custom_aa 类型仅 super_admin 可见 */}
-                      {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && (
+                      {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && (ledger as any).userRole === 'member') && (
                         <button
                           className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
                           onClick={(e) => {
@@ -822,7 +822,7 @@ export default function Ledger() {
                   </div>
 
                   {/* 操作按钮区 - 默认折叠，opinion_book类型不显示 */}
-                  {expandedLedgerIds.has(ledger.id) && (ledger as any).type !== 'opinion_book' && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && (
+                  {expandedLedgerIds.has(ledger.id) && (ledger as any).type !== 'opinion_book' && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && (ledger as any).userRole === 'member') && (
                   <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
                     {activeTab === "active" && (
                       <>
@@ -954,7 +954,7 @@ export default function Ledger() {
                                     <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                                     {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                   </div>
-                                  {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && (
+                                  {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && (ledger as any).userRole === 'member') && (
                                     <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
                                       <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
                                     </button>
@@ -970,7 +970,7 @@ export default function Ledger() {
                                 </div>
                                 )}
                               </div>
-                              {expandedLedgerIds.has(ledger.id) && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && (
+                              {expandedLedgerIds.has(ledger.id) && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && (ledger as any).userRole === 'member') && (
                                 <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
                                   <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/filter`); }}>搜索</button>
                                   <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setInvitingLedgerId(ledger.id); setShowInviteDialog(true); }}>共享</button>
@@ -1015,7 +1015,7 @@ export default function Ledger() {
                                   <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
                                   {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                 </div>
-                                {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && (
+                                {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && (ledger as any).userRole === 'member') && (
                                   <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
                                     <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
                                   </button>
@@ -1031,7 +1031,7 @@ export default function Ledger() {
                               </div>
                               )}
                             </div>
-                            {expandedLedgerIds.has(ledger.id) && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && (
+                            {expandedLedgerIds.has(ledger.id) && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && (ledger as any).userRole === 'member') && (
                               <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
                                 <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledger.id}/filter`); }}>搜索</button>
                                 <button className="text-xs h-8 rounded-xl bg-[#FAF3ED] text-[#757575] font-medium hover:bg-gray-100 transition-colors" onClick={(e) => { e.stopPropagation(); setInvitingLedgerId(ledger.id); setShowInviteDialog(true); }}>共享</button>
