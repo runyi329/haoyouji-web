@@ -900,6 +900,7 @@ export const merchantRouter = router({
       contactPhone: m.contact_phone || m.contactPhone,
       aboutUs: m.about_us,
       officialWebsite: m.official_website,
+      splashImage: m.splash_image,
     };
   }),
 
@@ -921,6 +922,28 @@ export const merchantRouter = router({
         shareLogo: m.share_logo || m.shopLogoUrl,
         shareCoverImage: m.share_cover_image,
         shareDescription: m.share_description || m.shopDescription,
+      };
+    }),
+
+  // 获取商家公开设置（包括开机图，公开接口）
+  getMerchantPublicSettings: publicProcedure
+    .input(z.object({ merchantCode: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const rows = await db
+        .select()
+        .from(merchants)
+        .where(eq(merchants.merchantCode, input.merchantCode))
+        .limit(1);
+      if (!rows || rows.length === 0) return null;
+      const m = rows[0] as any;
+      return {
+        shareTitle: m.share_title || m.shopName,
+        shareLogo: m.share_logo || m.shopLogoUrl,
+        shareCoverImage: m.share_cover_image,
+        shareDescription: m.share_description || m.shopDescription,
+        splashImage: m.splash_image || null,
       };
     }),
 
@@ -1012,6 +1035,38 @@ export const merchantRouter = router({
       const key = `merchant-covers/${merchantId}-cover-${Date.now()}.webp`;
       const url = await uploadImageToCOS(compressed, 'avatars', key);
       await db.update(merchants).set({ share_cover_image: url }).where(eq(merchants.id, merchantId));
+      return { url };
+    }),
+
+  // 上传商家开机画面（自动压缩为WebP，最大宽1200px）
+  uploadSplashImage: protectedProcedure
+    .input(z.object({
+      base64: z.string(),
+      mimeType: z.string().default('image/jpeg'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const rows = await db
+        .select({ id: merchants.id })
+        .from(merchants)
+        .where(eq(merchants.userId, ctx.user.id))
+        .limit(1);
+      if (!rows || rows.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "未找到商家信息" });
+      const merchantId = rows[0].id;
+
+      const buffer = Buffer.from(input.base64, 'base64');
+      // 开机画面压缩：最大宽1200px，保持原始比例
+      const compressed = await sharp(buffer)
+        .resize({ width: 1200, withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toBuffer();
+      const origKB = Math.round(buffer.length / 1024);
+      const newKB = Math.round(compressed.length / 1024);
+      console.log(`[Splash] 开机图压缩: ${origKB}KB → ${newKB}KB`);
+      const key = `merchant-splash/${merchantId}-splash-${Date.now()}.webp`;
+      const url = await uploadImageToCOS(compressed, 'avatars', key);
+      await db.update(merchants).set({ splash_image: url } as any).where(eq(merchants.id, merchantId));
       return { url };
     }),
 

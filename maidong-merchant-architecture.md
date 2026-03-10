@@ -2797,3 +2797,94 @@ export function WineProductDetail() {
 ---
 
 *本文档为脉动共享商盟产品架构的权威规则文档，所有开发工作以此为准。如有规则变更，需更新文档版本号并记录变更内容。*
+
+---
+## 二十五、开机画面规范（Splash Screen）
+
+> **v1.8 新增**：所有商家主页统一支持开机画面功能，商家可在商家设置中上传开机图片，用户每次会话首次进入主页时自动播放。
+
+### 25.1 功能定义
+
+**开机画面**是用户首次进入商家主页时，在主页内容加载前全屏展示的品牌图片动画。其核心作用是强化品牌印象、展示活动信息、提升用户进入体验。
+
+| 属性 | 规格 |
+|------|------|
+| 停留时长 | **2.5秒**（业界标准：App Store 规范 ≤3秒，微信小程序常见 2~3秒） |
+| 淡出动画 | 0.5秒渐隐过渡 |
+| 总占用时间 | 3秒（2.5秒停留 + 0.5秒淡出） |
+| 触发条件 | 每次会话（sessionStorage）只显示一次 |
+| 跳过方式 | 点击画面任意位置可立即跳过 |
+| 图片格式 | 上传后自动压缩为 WebP，最大宽 1200px，质量 85% |
+| 建议尺寸 | 750×1334px（竖版，适配手机全屏） |
+
+### 25.2 技术实现
+
+**前端组件**：`client/src/components/SplashScreen.tsx`
+
+```tsx
+// 通用开机画面组件，所有商家主页统一使用
+<SplashScreen
+  imageUrl={splashImageUrl}
+  duration={2500}
+  storageKey="_beauty_splash_shown"
+  onFinish={() => setShowSplash(false)}
+/>
+```
+
+**后端接口**：
+- `merchant.getMerchantPublicSettings`（公开接口）：返回商家的开机图 URL（`splashImage` 字段）
+- `merchant.uploadSplashImage`（需登录）：上传开机图，自动压缩为 WebP
+
+**数据库字段**：`merchants.splash_image`（text 类型，存储 COS URL）
+
+### 25.3 商家设置集成
+
+在通用商家设置页面 `MerchantSettingsPage` 中，"开机画面"模块位于"关于我们"下方，包含：
+- 图片预览区（点击上传/更换）
+- 建议尺寸说明（750×1334px 竖版）
+- 停留时长说明（2.5秒 + 0.5秒淡出）
+- 上传后服务端自动压缩（无需前端处理）
+
+### 25.4 新商家建站时的接入规范
+
+凡新建商家主页，**必须**按以下步骤接入开机画面功能：
+
+1. 在主页组件中调用 `trpc.merchant.getMerchantPublicSettings.useQuery({ merchantCode: 'xxx' })`
+2. 仅当 `splashImage` 有值时才显示 `SplashScreen` 组件
+3. 使用商家专属的 sessionStorage key（格式：`_${merchantCode}_splash_shown`）
+4. `SplashScreen` 组件放在主页 `return` 的最顶层
+
+```tsx
+// 标准接入模板
+const SPLASH_KEY = `_${merchantCode}_splash_shown`;
+const [showSplash, setShowSplash] = useState(() => !sessionStorage.getItem(SPLASH_KEY));
+const settingsQuery = trpc.merchant.getMerchantPublicSettings.useQuery(
+  { merchantCode },
+  { enabled: showSplash }
+);
+const splashImageUrl = settingsQuery.data?.splashImage;
+
+return (
+  <div>
+    {showSplash && splashImageUrl && (
+      <SplashScreen
+        imageUrl={splashImageUrl}
+        duration={2500}
+        storageKey={SPLASH_KEY}
+        onFinish={() => setShowSplash(false)}
+      />
+    )}
+    {/* 主页内容 */}
+  </div>
+);
+```
+
+### 25.5 图片上传压缩规范
+
+| 图片类型 | 最大尺寸 | 压缩格式 | 质量 | 是否裁剪 |
+|---------|---------|---------|------|---------|
+| 商家 Logo | 400×400px | WebP | 85% | 是（1:1 正方形） |
+| 分享封面图 | 1200×630px | WebP | 85% | 是（1200:630 比例） |
+| **开机画面** | **宽最大 1200px，高按比例** | **WebP** | **85%** | **否（保持原始比例）** |
+
+所有图片上传均在服务端使用 `sharp` 库处理，前端无需额外处理，直接传 base64 即可。
