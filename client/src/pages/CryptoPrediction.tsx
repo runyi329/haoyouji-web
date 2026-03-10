@@ -472,15 +472,36 @@ export default function CryptoPrediction() {
 
             {/* 5档进度条 */}
             <div className="px-0">
-              <div className="relative h-7 flex items-center">
+              <div className="relative h-8 flex items-center select-none">
                 {/* 底部轨道 */}
                 <div className="absolute left-0 right-0 h-0.5 bg-[#2A2E39] rounded-full" />
-                {/* 已选轨道 */}
+                {/* 已选轨道（白色） */}
                 <div
                   className="absolute left-0 h-0.5 rounded-full"
+                  style={{ width: `${sliderPct}%`, backgroundColor: "#ffffff" }}
+                />
+                {/* 5个静态小档位点 */}
+                {[0, 25, 50, 75, 100].map((pct, idx) => {
+                  let leftPx: string;
+                  if (idx === 0) leftPx = '0px';
+                  else if (idx === 4) leftPx = 'calc(100% - 6px)';
+                  else leftPx = `calc(${pct}% - 3px)`;
+                  return (
+                    <div
+                      key={pct}
+                      className="absolute w-1.5 h-1.5 rounded-full z-10 pointer-events-none"
+                      style={{
+                        left: leftPx,
+                        backgroundColor: sliderPct >= pct ? "#ffffff" : "#3A3E49"
+                      }}
+                    />
+                  );
+                })}
+                {/* 拖动圆点（实时跟随） */}
+                <div
+                  className="absolute w-4 h-4 rounded-full bg-white shadow-lg z-20 pointer-events-none"
                   style={{
-                    width: sliderPct === 0 ? '0%' : `${sliderPct}%`,
-                    backgroundColor: orderSide === "buy" ? "#26a69a" : "#ef5350"
+                    left: sliderPct === 0 ? '0px' : sliderPct === 100 ? 'calc(100% - 16px)' : `calc(${sliderPct}% - 8px)`
                   }}
                 />
                 {/* 透明 range input 支持拖动 */}
@@ -496,37 +517,8 @@ export default function CryptoPrediction() {
                     const amt = availableUsdt > 0 ? (availableUsdt * val / 100) : 0;
                     setOrderAmount(amt > 0 ? amt.toFixed(2) : "");
                   }}
-                  className="absolute inset-0 w-full opacity-0 cursor-pointer z-20"
+                  className="absolute inset-0 w-full opacity-0 cursor-pointer z-30"
                 />
-                {/* 5个档位点 - 第一个靠左端，最后一个靠右端 */}
-                {[0, 25, 50, 75, 100].map((pct, idx) => {
-                  let leftStyle: string;
-                  if (idx === 0) leftStyle = '0px';
-                  else if (idx === 4) leftStyle = 'calc(100% - 14px)';
-                  else leftStyle = `calc(${pct}% - 7px)`;
-                  return (
-                    <button
-                      key={pct}
-                      onClick={() => {
-                        setSliderPct(pct);
-                        const amt = availableUsdt > 0 ? (availableUsdt * pct / 100) : 0;
-                        setOrderAmount(amt > 0 ? amt.toFixed(2) : "");
-                      }}
-                      className="absolute z-10"
-                      style={{ left: leftStyle }}
-                    >
-                      <div
-                        className={`w-3.5 h-3.5 rounded-full border-2 transition-all ${
-                          sliderPct >= pct
-                            ? orderSide === "buy"
-                              ? "bg-[#26a69a] border-[#26a69a]"
-                              : "bg-[#ef5350] border-[#ef5350]"
-                            : "bg-[#0B0E11] border-[#2A2E39]"
-                        }`}
-                      />
-                    </button>
-                  );
-                })}
               </div>
               {/* 百分比标签 */}
               <div className="flex justify-between mt-1">
