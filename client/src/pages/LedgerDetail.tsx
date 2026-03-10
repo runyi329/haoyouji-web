@@ -1034,30 +1034,45 @@ export default function LedgerDetail() {
       {isCustomAF && (
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4 space-y-3">
-            {/* BTC 竞猜入口 */}
+            {/* BTC 入口 */}
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction`)}
               className="w-full bg-gradient-to-r from-[#F7931A] to-[#E8820A] rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
             >
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl">
-                ₿
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
+                <img src="https://assets.coingecko.com/coins/images/1/large/bitcoin.png" alt="BTC" className="w-9 h-9 object-contain" />
               </div>
               <div className="text-left flex-1">
-                <div className="text-white font-semibold text-base">比特币 (BTC) 竞猜</div>
+                <div className="text-white font-semibold text-base">比特币 (BTC)</div>
                 <div className="text-white/80 text-xs mt-0.5">Polymarket 实时预测数据</div>
               </div>
               <ChevronRight className="w-5 h-5 text-white/70" />
             </button>
-            {/* ETH 竞猜入口 */}
+            {/* ETH 入口 */}
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=ETH`)}
               className="w-full bg-gradient-to-r from-[#627EEA] to-[#4A6CD4] rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
             >
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl">
-                Ξ
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
+                <img src="https://assets.coingecko.com/coins/images/279/large/ethereum.png" alt="ETH" className="w-9 h-9 object-contain" />
               </div>
               <div className="text-left flex-1">
-                <div className="text-white font-semibold text-base">以太坊 (ETH) 竞猜</div>
+                <div className="text-white font-semibold text-base">以太坊 (ETH)</div>
+                <div className="text-white/80 text-xs mt-0.5">Polymarket 实时预测数据</div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-white/70" />
+            </button>
+            {/* SOL 入口 */}
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=SOL`)}
+              className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+              style={{ background: 'linear-gradient(to right, #9945FF, #14F195)' }}
+            >
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
+                <img src="https://assets.coingecko.com/coins/images/4128/large/solana.png" alt="SOL" className="w-9 h-9 object-contain" />
+              </div>
+              <div className="text-left flex-1">
+                <div className="text-white font-semibold text-base">索拉纳 (SOL)</div>
                 <div className="text-white/80 text-xs mt-0.5">Polymarket 实时预测数据</div>
               </div>
               <ChevronRight className="w-5 h-5 text-white/70" />
