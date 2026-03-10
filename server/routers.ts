@@ -8525,7 +8525,7 @@ export const appRouter = router({
       }),
 
     // Binance 行情代理（解决前端跨域/封锁问题）
-    getBinanceTicker: protectedProcedure
+    getBinanceTicker: publicProcedure
       .input(z.object({ symbol: z.string() }))
       .query(async ({ input }) => {
         const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${input.symbol}`);
@@ -8533,7 +8533,7 @@ export const appRouter = router({
         return res.json();
       }),
 
-    getBinanceKlines: protectedProcedure
+    getBinanceKlines: publicProcedure
       .input(z.object({
         symbol: z.string(),
         interval: z.string(),
