@@ -360,22 +360,8 @@ export default function LedgerDetail() {
               )}
               <span className="text-base font-semibold">{ledgerData.name}</span>
             </div>
-            {/* 右侧：搜索、图表、设置图标 + 返回按钮 */}
+            {/* 右侧：设置图标 + 返回按钮 */}
             <div className="flex items-center gap-2">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
-                style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
-                onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
-              >
-                <Search className="w-4 h-4 text-white" />
-              </div>
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
-                style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
-                onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
-              >
-                <BarChart3 className="w-4 h-4 text-white" />
-              </div>
               {(isOwner || isAdmin) && (
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
