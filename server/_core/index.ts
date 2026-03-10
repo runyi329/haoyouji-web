@@ -134,7 +134,7 @@ async function initRedCubeProduct() {
       name: '红立方光焕能舱',
       description,
       price: '30000.00',
-      imageUrl: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/redcube-hero_f052e330.jpg',
+      imageUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/redcube-hero_f052e330.webp',
       brandId,
       categoryId,
       specification: '型号 RQ-22',

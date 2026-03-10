@@ -20,8 +20,8 @@ import WineTabBar from "./WineTabBar";
 import BottomNav from "@/components/BottomNav";
 import ShareSheet from "@/components/ShareSheet";
 
-const HERO_BG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/wine-hero-banner_b83f1a40.jpg";
-const ABOUT_BG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/wine-about-bg_24a554e9.jpg";
+const HERO_BG = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/wine-hero-banner_b83f1a40.webp";
+const ABOUT_BG = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/wine-about-bg_24a554e9.webp";
 
 const WINE_INFO = {
   name: "红酒文化商会",

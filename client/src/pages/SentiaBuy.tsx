@@ -9,7 +9,7 @@ import { useLocation } from "wouter";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
 
-const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.png";
+const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.webp";
 const SNT_PRICE = 0.04; // USDT per SNT
 const SENTIA_SESSION_KEY = "sentia-auth-token"; // sessionStorage key，关闭浏览器自动清除
 

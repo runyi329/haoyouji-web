@@ -328,10 +328,10 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/yNdunTloulJArwlY.jpg" 
+                src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/yNdunTloulJArwlY.webp" 
                 alt="我们的数据谁在赚钱海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/yNdunTloulJArwlY.jpg')}
+                onClick={() => setPreviewImage('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/yNdunTloulJArwlY.webp')}
               />
             </div>
           </div>
@@ -411,10 +411,10 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hzwbYkVZJnEjisDu.jpg" 
+                src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hzwbYkVZJnEjisDu.webp" 
                 alt="我们的人脉有什么价值海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hzwbYkVZJnEjisDu.jpg')}
+                onClick={() => setPreviewImage('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hzwbYkVZJnEjisDu.webp')}
               />
             </div>
           </div>
@@ -540,10 +540,10 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/oECpcLjZmbRuIuuO.jpg" 
+                src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oECpcLjZmbRuIuuO.webp" 
                 alt="资本眼里的用户价值海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage('https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/oECpcLjZmbRuIuuO.jpg')}
+                onClick={() => setPreviewImage('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oECpcLjZmbRuIuuO.webp')}
               />
             </div>
           </div>
@@ -739,10 +739,10 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/oHGzHPCONtyApGMj.jpg" 
+                src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oHGzHPCONtyApGMj.webp" 
                 alt="脉动网的价值估值逻辑海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage("https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/oHGzHPCONtyApGMj.jpg")}
+                onClick={() => setPreviewImage("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oHGzHPCONtyApGMj.webp")}
               />
             </div>
           </div>
@@ -881,10 +881,10 @@ export default function AssetReport() {
             <div className="font-bold text-gray-900 mb-3 text-center">分享海报</div>
             <div className="space-y-2">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hAoSbkXclaLpcFbw.jpg" 
+                src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hAoSbkXclaLpcFbw.webp" 
                 alt="为什么你和资本看到的价值不同海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage("https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hAoSbkXclaLpcFbw.jpg")}
+                onClick={() => setPreviewImage("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hAoSbkXclaLpcFbw.webp")}
               />
             </div>
           </div>
@@ -988,10 +988,10 @@ export default function AssetReport() {
             <div className="text-xs text-gray-500 mb-2">点击查看大图</div>
             <div className="relative">
               <img 
-                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/LCDRnxTTlZoqtsgY.jpg" 
+                src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/LCDRnxTTlZoqtsgY.webp" 
                 alt="人脉做减法收入做乘法海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage("https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/LCDRnxTTlZoqtsgY.jpg")}
+                onClick={() => setPreviewImage("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/LCDRnxTTlZoqtsgY.webp")}
               />
             </div>
           </div>

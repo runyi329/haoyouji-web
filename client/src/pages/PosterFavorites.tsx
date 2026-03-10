@@ -46,7 +46,7 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '用别人的老婆赚钱 → KTV看到了',
     category: 'marketing',
     series: '脉动网宣传系列',
-    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/BIdmlhaAMFmWlZUX.png',
+    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/BIdmlhaAMFmWlZUX.webp',
     tags: ['营销', '宣传', '脉动网'],
   },
   {
@@ -55,7 +55,7 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '用别人的汽车赚钱 → 滴滴看到了',
     category: 'marketing',
     series: '脉动网宣传系列',
-    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/DoomGMXoSjZsKEqJ.png',
+    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/DoomGMXoSjZsKEqJ.webp',
     tags: ['营销', '宣传', '脉动网'],
   },
   {
@@ -64,7 +64,7 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '用别人的才艺赚钱 → 抖音看到了',
     category: 'marketing',
     series: '脉动网宣传系列',
-    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/QSPiOfWTShXrGIVA.png',
+    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/QSPiOfWTShXrGIVA.webp',
     tags: ['营销', '宣传', '脉动网'],
   },
   {
@@ -73,7 +73,7 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '用别人的厨房赚钱 → 美团看到了',
     category: 'marketing',
     series: '脉动网宣传系列',
-    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/PLMlWEvujJloqzez.png',
+    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/PLMlWEvujJloqzez.webp',
     tags: ['营销', '宣传', '脉动网'],
   },
   {
@@ -82,7 +82,7 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '用别人的金钱赚钱 → 银行看到了',
     category: 'marketing',
     series: '脉动网宣传系列',
-    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/NKpRvVPDdxJHWlqe.png',
+    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/NKpRvVPDdxJHWlqe.webp',
     tags: ['营销', '宣传', '脉动网'],
   },
   {
@@ -91,7 +91,7 @@ const POSTER_TEMPLATES: PosterTemplate[] = [
     description: '用别人的生命赚钱 → 保险看到了',
     category: 'marketing',
     series: '脉动网宣传系列',
-    templateUrl: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hJkCQwvjpIMuwwlz.png',
+    templateUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hJkCQwvjpIMuwwlz.webp',
     tags: ['营销', '宣传', '脉动网'],
   },
 ];

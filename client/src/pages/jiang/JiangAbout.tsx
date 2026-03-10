@@ -9,7 +9,7 @@ import JiangTabBar from "./JiangTabBar";
 import BottomNav from "@/components/BottomNav";
 import { MessageCircle, Phone, Mail, MapPin, Cpu, Zap, Shield, LogIn, Share2 } from "lucide-react";
 
-const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
+const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp";
 
 const VALUES = [
   {

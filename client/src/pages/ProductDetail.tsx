@@ -17,17 +17,17 @@ import BottomNav from '@/components/BottomNav';
 // 图片资源常量
 // ============================================================
 const IMG = {
-  compute:   'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp',
-  contacts:  'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-contacts-crm-GyKiajFycpxw8PBo8pfRUS.webp',
-  ledger:    'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-ledger-custom-RA4QS7aUex96Wu6jMDhoST.webp',
-  homepage:  'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-homepage-custom-6zUitHprMjFVkZZFYrSuQD.webp',
-  enterprise:'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-enterprise-suite-QVQP6uuGzUaJyibqEgyvoq.webp',
-  computeUsecase:   'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/detail-compute-usecase-2MHMaLUV8UNnZjJed5TuSf.webp',
-  contactsFeatures: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/detail-contacts-features-3uapVynEydfJWPJyJzKTes.webp',
-  ledgerFeatures:   'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/detail-ledger-features-Apx7sSQvj2EBLttPNyu6bJ.webp',
-  serviceGuarantee: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/detail-service-guarantee-6UTuHcizg8rLktbZ96EGed.webp',
-  deliveryProcess:  'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/detail-delivery-process-SRzDnodowNftinKk3mvgKe.webp',
-  homepageShowcase: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/detail-homepage-showcase-4wXDTwydwrZSTrX773ZDcC.webp',
+  compute:   'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp',
+  contacts:  'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-contacts-crm-GyKiajFycpxw8PBo8pfRUS.webp',
+  ledger:    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-ledger-custom-RA4QS7aUex96Wu6jMDhoST.webp',
+  homepage:  'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-homepage-custom-6zUitHprMjFVkZZFYrSuQD.webp',
+  enterprise:'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-enterprise-suite-QVQP6uuGzUaJyibqEgyvoq.webp',
+  computeUsecase:   'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/detail-compute-usecase-2MHMaLUV8UNnZjJed5TuSf.webp',
+  contactsFeatures: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/detail-contacts-features-3uapVynEydfJWPJyJzKTes.webp',
+  ledgerFeatures:   'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/detail-ledger-features-Apx7sSQvj2EBLttPNyu6bJ.webp',
+  serviceGuarantee: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/detail-service-guarantee-6UTuHcizg8rLktbZ96EGed.webp',
+  deliveryProcess:  'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/detail-delivery-process-SRzDnodowNftinKk3mvgKe.webp',
+  homepageShowcase: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/detail-homepage-showcase-4wXDTwydwrZSTrX773ZDcC.webp',
 };
 
 // ============================================================

@@ -12,7 +12,7 @@ import JiangTabBar from "./JiangTabBar";
 import BottomNav from "@/components/BottomNav";
 import { ShoppingCart, ChevronRight, Tag, LogIn, Share2 } from "lucide-react";
 
-const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
+const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp";
 
 const CATEGORIES = [
   { key: "all", label: "全部" },
@@ -33,7 +33,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "入门体验",
     tagColor: "#0277BD",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp",
     color: "#0277BD",
   },
   {
@@ -45,7 +45,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "省¥10.5",
     tagColor: "#FF6B35",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp",
     color: "#0277BD",
   },
   {
@@ -57,7 +57,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "最划算",
     tagColor: "#D32F2F",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp",
     color: "#0277BD",
   },
   {
@@ -69,7 +69,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "企业首选",
     tagColor: "#4A148C",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp",
     color: "#4A148C",
   },
   // 人脉管理软件
@@ -82,7 +82,7 @@ const PRODUCTS = [
     unit: "/年",
     tag: "最受欢迎",
     tagColor: "#D32F2F",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-contacts-crm-GyKiajFycpxw8PBo8pfRUS.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-contacts-crm-GyKiajFycpxw8PBo8pfRUS.webp",
     color: "#7C3AED",
   },
   {
@@ -94,7 +94,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "最划算",
     tagColor: "#7B1FA2",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-contacts-crm-GyKiajFycpxw8PBo8pfRUS.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-contacts-crm-GyKiajFycpxw8PBo8pfRUS.webp",
     color: "#7C3AED",
   },
   // 定制账本
@@ -107,7 +107,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "入门首选",
     tagColor: "#2E7D32",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-ledger-custom-RA4QS7aUex96Wu6jMDhoST.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-ledger-custom-RA4QS7aUex96Wu6jMDhoST.webp",
     color: "#D32F2F",
   },
   {
@@ -119,7 +119,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "团队推荐",
     tagColor: "#1565C0",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-ledger-custom-RA4QS7aUex96Wu6jMDhoST.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-ledger-custom-RA4QS7aUex96Wu6jMDhoST.webp",
     color: "#D32F2F",
   },
   // 主页定制
@@ -132,7 +132,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "快速交付",
     tagColor: "#2E7D32",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-homepage-custom-6zUitHprMjFVkZZFYrSuQD.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-homepage-custom-6zUitHprMjFVkZZFYrSuQD.webp",
     color: "#2E7D32",
   },
   {
@@ -144,7 +144,7 @@ const PRODUCTS = [
     unit: "一次性",
     tag: "旗舰定制",
     tagColor: "#B8860B",
-    img: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-enterprise-suite-QVQP6uuGzUaJyibqEgyvoq.webp",
+    img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-enterprise-suite-QVQP6uuGzUaJyibqEgyvoq.webp",
     color: "#B8860B",
     isConsult: true,
   },

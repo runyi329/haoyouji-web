@@ -9169,7 +9169,7 @@ export const appRouter = router({
 
         const DEMO_NAME = '麻六记·北京区域意见簿';
         const DEMO_DESC = '麻六记北京区域顾客意见收集平台（演示账本）';
-        const MALUJI_LOGO = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji-logo_40f7da5d.png';
+        const MALUJI_LOGO = 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/maluji-logo_40f7da5d.webp';
         const ownerId = ctx.user.id;
 
         // 检查是否已存在
