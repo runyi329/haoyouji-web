@@ -49,6 +49,21 @@ import ExcelJS from "exceljs";
 //   console.error("[DB Init] Failed to initialize database:", err);
 // });
 
+
+// ===== 行情数据内存缓存（30秒TTL，避免重复请求外部API）=====
+const _marketCache = new Map<string, { data: any; ts: number }>();
+const MARKET_CACHE_TTL = 30_000; // 30秒
+function getCache(key: string): any | null {
+  const entry = _marketCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > MARKET_CACHE_TTL) { _marketCache.delete(key); return null; }
+  return entry.data;
+}
+function setCache(key: string, data: any): void {
+  _marketCache.set(key, { data, ts: Date.now() });
+}
+// ================================================================
+
 export const appRouter = router({
   system: systemRouter,
   equity: equityRouter,
@@ -8527,6 +8542,9 @@ export const appRouter = router({
     getBinanceTicker: publicProcedure
       .input(z.object({ symbol: z.string() }))
       .query(async ({ input }) => {
+        const cacheKey = `ticker:${input.symbol}`;
+        const cached = getCache(cacheKey);
+        if (cached) return cached;
         // BTCUSDT -> BTC-USDT
         const instId = input.symbol.replace(/^(BTC|ETH|SOL|BNB|XRP|ADA|DOGE)(USDT)$/, '$1-$2');
         // 先尝试火币（国内最稳定），失败则用 OKX
@@ -8540,7 +8558,8 @@ export const appRouter = router({
               const last = t.close;
               const open = t.open;
               const pct = open ? (((last - open) / open) * 100).toFixed(4) : '0';
-              return { symbol: input.symbol, lastPrice: String(last), priceChangePercent: pct, highPrice: String(t.high), lowPrice: String(t.low), volume: String(t.amount), weightedAvgPrice: String(last), openPrice: String(open) };
+              const r1 = { symbol: input.symbol, lastPrice: String(last), priceChangePercent: pct, highPrice: String(t.high), lowPrice: String(t.low), volume: String(t.amount), weightedAvgPrice: String(last), openPrice: String(open) };
+              setCache(cacheKey, r1); return r1;
             }
           }
         } catch {}
@@ -8550,11 +8569,15 @@ export const appRouter = router({
         const json: any = await res.json();
         if (json.code !== '0' || !json.data?.[0]) throw new Error('行情数据获取失败');
         const d = json.data[0];
-        return { symbol: input.symbol, lastPrice: d.last, priceChangePercent: d.open24h && d.last ? (((parseFloat(d.last) - parseFloat(d.open24h)) / parseFloat(d.open24h)) * 100).toFixed(4) : '0', highPrice: d.high24h, lowPrice: d.low24h, volume: d.vol24h, weightedAvgPrice: d.last, openPrice: d.open24h };
+        const r2 = { symbol: input.symbol, lastPrice: d.last, priceChangePercent: d.open24h && d.last ? (((parseFloat(d.last) - parseFloat(d.open24h)) / parseFloat(d.open24h)) * 100).toFixed(4) : '0', highPrice: d.high24h, lowPrice: d.low24h, volume: d.vol24h, weightedAvgPrice: d.last, openPrice: d.open24h };
+        setCache(cacheKey, r2); return r2;
       }),
     getBinanceKlines: publicProcedure
       .input(z.object({ symbol: z.string(), interval: z.string(), limit: z.number().default(60) }))
       .query(async ({ input }) => {
+        const cacheKey = `klines:${input.symbol}:${input.interval}:${input.limit}`;
+        const cached = getCache(cacheKey);
+        if (cached) return cached;
         const instId = input.symbol.replace(/^(BTC|ETH|SOL|BNB|XRP|ADA|DOGE)(USDT)$/, '$1-$2');
         const barMap: Record<string, string> = { '1m':'1m','3m':'3m','5m':'5m','15m':'15m','30m':'30m','1h':'1H','2h':'2H','4h':'4H','6h':'6H','12h':'12H','1d':'1D','3d':'3D','1w':'1W','1M':'1M' };
         const bar = barMap[input.interval] || '1H';
@@ -8567,7 +8590,8 @@ export const appRouter = router({
           if (r.ok) {
             const j: any = await r.json();
             if (j.status === 'ok' && j.data?.length > 0) {
-              return (j.data as any[]).reverse().map((k: any) => ({ openTime: k.id * 1000, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.amount }));
+              const kr1 = (j.data as any[]).reverse().map((k: any) => ({ openTime: k.id * 1000, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.amount }));
+              setCache(cacheKey, kr1); return kr1;
             }
           }
         } catch {}
@@ -8576,7 +8600,8 @@ export const appRouter = router({
         if (!res.ok) throw new Error('K线数据获取失败');
         const json: any = await res.json();
         if (json.code !== '0') throw new Error('K线数据获取失败');
-        return (json.data as any[]).reverse().map((k: any[]) => ({ openTime: parseInt(k[0]), open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]) }));
+        const kr2 = (json.data as any[]).reverse().map((k: any[]) => ({ openTime: parseInt(k[0]), open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]) }));
+        setCache(cacheKey, kr2); return kr2;
       }),
   }),
   
