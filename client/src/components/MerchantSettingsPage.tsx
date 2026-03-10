@@ -107,6 +107,7 @@ export default function MerchantSettingsPage({
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const splashInputRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   const { data: settings, isLoading, refetch } = trpc.merchant.getMerchantSettings.useQuery();
@@ -215,7 +216,28 @@ export default function MerchantSettingsPage({
     });
   };
 
-  const isUploading = uploadLogoMutation.isPending || uploadCoverMutation.isPending;
+  const uploadSplashMutation = trpc.merchant.uploadSplashImage.useMutation({
+    onSuccess: () => { toast.success("开机图上传成功"); refetch(); },
+    onError: (e) => toast.error("上传失败", { description: e.message }),
+  });
+
+  // 开机图直接上传（无需裁剪）
+  const handleSplashFileSelect = (file: File) => {
+    if (!file) return;
+    if (file.size > 16 * 1024 * 1024) {
+      toast.error("文件过大", { description: "请选择 16MB 以内的图片" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const base64 = dataUrl.split(',')[1];
+      uploadSplashMutation.mutate({ base64, mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const isUploading = uploadLogoMutation.isPending || uploadCoverMutation.isPending || uploadSplashMutation.isPending;
 
   if (isLoading) {
     return (
@@ -412,7 +434,47 @@ export default function MerchantSettingsPage({
           <p className="text-xs text-gray-600 mt-1 text-right">{form.aboutUs.length}/500</p>
         </div>
 
-        {/* 底部保存按钮 */}
+        {/* 开机画面设置 */}
+        <div
+          className="rounded-2xl p-4 border"
+          style={{ backgroundColor: cardBgColor, borderColor: `${resolvedBorderColor}20` }}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-1 h-5 rounded-full" style={{ backgroundColor: accentColor }} />
+            <h2 className="font-semibold text-sm" style={{ color: accentColor }}>开机画面</h2>
+            <span className="text-xs text-gray-500 ml-1">· 用户进入主页时显示的开机动画</span>
+          </div>
+          <div
+            className="w-full rounded-xl border-2 border-dashed flex flex-col items-center justify-center overflow-hidden cursor-pointer relative group"
+            style={{ borderColor: `${resolvedBorderColor}50`, backgroundColor: bgColor, minHeight: '140px' }}
+            onClick={() => splashInputRef.current?.click()}
+          >
+            {settings?.splashImage ? (
+              <>
+                <img src={settings.splashImage} alt="开机画面" className="w-full object-contain" style={{ maxHeight: '200px' }} />
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                  <Image className="w-6 h-6 text-white" />
+                  <span className="text-white text-xs">点击更换</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <Image className="w-8 h-8 opacity-40 mb-1" style={{ color: resolvedBorderColor }} />
+                <span className="text-xs text-gray-500">点击上传开机画面图</span>
+                <span className="text-xs text-gray-600 mt-0.5">支持任意比例，自动压缩</span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <p className="text-xs text-gray-500">建议尺寸：<span className="font-mono text-gray-400">750×1334px</span> · 竖版 · 自动压缩WebP</p>
+            {uploadSplashMutation.isPending && <p className="text-xs" style={{ color: accentColor }}>上传中...</p>}
+          </div>
+          <p className="text-xs text-gray-600 mt-1">开机动画停留 <span className="font-mono text-gray-400">2.5秒</span>，然后淡出进入主页</p>
+          <input ref={splashInputRef} type="file" accept="image/*" className="hidden"
+            onChange={(e) => { if (e.target.files?.[0]) { handleSplashFileSelect(e.target.files[0]); e.target.value = ""; } }} />
+        </div>
+
+        {/* 底部保存按鈕 */}
         <button
           onClick={handleSave}
           disabled={updateMutation.isPending}

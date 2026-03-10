@@ -6,6 +6,7 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useEffect } from "react";
+import SplashScreen from "@/components/SplashScreen";
 import { useMerchantOG } from "@/hooks/useMerchantOG";
 import {
   Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut, Share2
@@ -57,6 +58,20 @@ export default function BeautyHome() {
   const [, setLocation] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // 开机画面状态
+  const SPLASH_KEY = '_beauty_splash_shown';
+  const [showSplash, setShowSplash] = useState(() => {
+    // 每次会话只显示一次
+    return !sessionStorage.getItem(SPLASH_KEY);
+  });
+  // 获取商家设置（包括开机图）
+  const settingsQuery = trpc.merchant.getMerchantPublicSettings.useQuery(
+    { merchantCode: 'liulifan' },
+    { enabled: showSplash }
+  );
+  const splashImageUrl = settingsQuery.data?.splashImage;
+
   // 动态注入商家 OG Meta 标签，微信分享显示商家设置的标题/图片
   useMerchantOG('liulifan', { url: `${window.location.origin}/beauty` });
   // 查询奢贝积分和权限
@@ -119,6 +134,15 @@ export default function BeautyHome() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
+      {/* 开机画面 */}
+      {showSplash && splashImageUrl && (
+        <SplashScreen
+          imageUrl={splashImageUrl}
+          duration={2500}
+          storageKey={SPLASH_KEY}
+          onFinish={() => setShowSplash(false)}
+        />
+      )}
       {/* 顶部 Banner */}
       <div className="relative bg-gradient-to-br from-rose-400 via-pink-400 to-rose-300 text-white overflow-hidden">
         <div className="absolute inset-0 opacity-10">

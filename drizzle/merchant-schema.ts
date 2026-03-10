@@ -46,6 +46,7 @@ export const merchants = mysqlTable("merchants", {
   contact_phone: varchar("contact_phone", { length: 20 }),     // 商家客服电话
   about_us: text("about_us"),                                  // 关于我们正文
   official_website: varchar("official_website", { length: 200 }), // 商家官网
+  splash_image: text("splash_image"),                              // 开机画面图片 URL（v1.4 新增）
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => [
