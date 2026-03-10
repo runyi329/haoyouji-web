@@ -8484,6 +8484,45 @@ export const appRouter = router({
         }
         return { total: recharged + manual };
       }),
+    // AF 充值记录 + 手动调账记录合并（供用户查看）
+    afGetMyRechargeHistory: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        // 1. 充值订单（recharge_orders，仅 completed 状态）
+        const rechargeRows = await db.execute(
+          sql`SELECT id, amount, created_at FROM recharge_orders WHERE user_id = ${ctx.user.id} AND status = 'completed' ORDER BY created_at DESC LIMIT 100`
+        ) as any;
+        const rechargeList = ((rechargeRows[0] || rechargeRows) as any[]).map((r: any) => ({
+          id: `r_${r.id}`,
+          amount: parseFloat(r.amount),
+          sourceType: 'recharge' as const,
+          note: '充值到账',
+          createdAt: r.created_at,
+        }));
+        // 2. 手动调账记录（af_manual_balances）
+        let manualList: any[] = [];
+        try {
+          const manualRows = await db.execute(
+            sql`SELECT id, amount, note, created_at FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} ORDER BY created_at DESC`
+          ) as any;
+          manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => ({
+            id: `m_${r.id}`,
+            amount: parseFloat(r.amount),
+            sourceType: 'manual' as const,
+            note: r.note || '管理员调账',
+            createdAt: r.created_at,
+          }));
+        } catch (_) {
+          // 表不存在时忽略
+        }
+        // 3. 合并并按时间倒序排列
+        const combined = [...rechargeList, ...manualList].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+        return combined;
+      }),
   }),
   
   // 銀行列表管理
