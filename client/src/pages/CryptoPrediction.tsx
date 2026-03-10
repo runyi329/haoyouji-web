@@ -573,56 +573,7 @@ export default function CryptoPrediction() {
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
           <span className="text-base font-semibold">{coin.fullName}（{coin.name}）</span>
         </div>
-        <button onClick={() => { refetchTicker(); refetchKlines(); }}
-          disabled={klinesLoading || tickerLoading}
-          className="w-8 h-8 rounded-full flex items-center justify-center bg-white/20">
-          <RefreshCw className={`w-3.5 h-3.5 text-white ${(klinesLoading || tickerLoading) ? "animate-spin" : ""}`} />
-        </button>
-      </div>
 
-      {/* K 线图区域（固定，不随 Tab 切换） */}
-      <div className="bg-[#131722]">
-        <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className={`text-2xl font-bold ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
-                {formatPrice(ticker?.lastPrice)}
-              </span>
-              <span className="text-xs text-gray-400">USDT</span>
-            </div>
-            <div className={`flex items-center gap-1 text-sm mt-0.5 ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
-              {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-              {isUp ? "+" : ""}{priceChange.toFixed(2)}%
-            </div>
-          </div>
-          <div className="text-right text-xs text-gray-400 space-y-1">
-            <div>24H高 <span className="text-white">{formatPrice(ticker?.highPrice)}</span></div>
-            <div>24H低 <span className="text-white">{formatPrice(ticker?.lowPrice)}</span></div>
-            <div>成交量 <span className="text-white">{formatVol(ticker?.volume)}</span></div>
-          </div>
-        </div>
-        <div className="flex gap-1 px-4 pb-2">
-          {INTERVALS.map((iv) => (
-            <button key={iv.value} onClick={() => setIntervalVal(iv.value)}
-              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${interval === iv.value ? "bg-[#2A2E39] text-white" : "text-gray-500"}`}>
-              {iv.label}
-            </button>
-          ))}
-        </div>
-        <div className="px-2 pb-3" style={{ minHeight: 168 }}>
-          {klinesLoading && bars.length === 0 ? (
-            <div className="flex items-center justify-center" style={{ height: 160 }}>
-              <span className="text-gray-500 text-sm">加载行情数据...</span>
-            </div>
-          ) : bars.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2" style={{ height: 160 }}>
-              <span className="text-gray-500 text-sm">行情数据加载失败</span>
-              <button onClick={() => refetchKlines()} className="text-xs text-blue-400">点击重试</button>
-            </div>
-          ) : (
-            <KlineChart bars={bars} coinColor={coin.color} />
-          )}
-        </div>
       </div>
 
       {/* 三 Tab 切换 */}
