@@ -1,11 +1,12 @@
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, Wallet } from "lucide-react";
 import { trpc } from "../lib/trpc";
 
 export default function RechargeHistory() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
+  const search = useSearch();
   // 解析来源参数
-  const searchParams = new URLSearchParams(location.split('?')[1] || '');
+  const searchParams = new URLSearchParams(search);
   const fromLedgerId = searchParams.get('ledgerId');
   const backToRecharge = fromLedgerId
     ? `/recharge?from=ledger&ledgerId=${fromLedgerId}`

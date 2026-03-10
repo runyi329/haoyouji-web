@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, Copy, Check, Clock, Wallet, AlertCircle, CheckCircle2, History } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
@@ -10,9 +10,10 @@ interface RechargeProps {
 }
 
 export default function Recharge({ hideHeader = false, hideBalance = false }: RechargeProps = {}) {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
+  const search = useSearch();
   // 解析来源参数，支持从账本跳转过来后返回
-  const searchParams = new URLSearchParams(location.split('?')[1] || '');
+  const searchParams = new URLSearchParams(search);
   const fromLedger = searchParams.get('from') === 'ledger';
   const fromLedgerId = searchParams.get('ledgerId');
   const handleBack = () => {
@@ -121,7 +122,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
         {/* 顶部导航 */}
         <div className="bg-white border-b sticky top-0 z-10">
           <div className="flex items-center px-4 py-3">
-            <button onClick={() => setLocation("/recharge/history")} className="mr-3">
+            <button onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}` : '/recharge/history')} className="mr-3">
               <ArrowLeft className="w-6 h-6" />
             </button>
             <h1 className="text-lg font-semibold">提交成功</h1>
