@@ -37,6 +37,7 @@ export default function AfRechargeManage() {
   const [editRecordId, setEditRecordId] = useState<number | undefined>(undefined);
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>(undefined);
   const [editAmount, setEditAmount] = useState("");
+  const [editDirection, setEditDirection] = useState<"add" | "sub">("add"); // 增加或减少
   const [editNote, setEditNote] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
@@ -76,6 +77,7 @@ export default function AfRechargeManage() {
     setEditRecordId(undefined);
     setSelectedUserId(undefined);
     setEditAmount("");
+    setEditDirection("add");
     setEditNote("");
     setShowEditDialog(true);
   };
@@ -84,26 +86,29 @@ export default function AfRechargeManage() {
     setIsEditing(true);
     setEditRecordId(record.id);
     setSelectedUserId(record.userId || record.user_id);
-    setEditAmount(String(record.amount));
+    const amt = Number(record.amount);
+    setEditDirection(amt >= 0 ? "add" : "sub");
+    setEditAmount(String(Math.abs(amt)));
     setEditNote(record.note || "");
     setShowEditDialog(true);
   };
 
   const handleSave = () => {
-    const amount = parseFloat(editAmount);
-    if (isNaN(amount)) {
-      toast.error("请输入有效的数字");
+    const absAmount = parseFloat(editAmount);
+    if (isNaN(absAmount) || absAmount <= 0) {
+      toast.error("请输入大于 0 的数字");
       return;
     }
     if (!isEditing && !selectedUserId) {
       toast.error("请先选择成员");
       return;
     }
+    const finalAmount = editDirection === "sub" ? -absAmount : absAmount;
     upsertMutation.mutate({
       ledgerId,
       id: isEditing ? editRecordId : undefined,
       userId: selectedUserId!,
-      amount,
+      amount: finalAmount,
       note: editNote,
     });
   };
@@ -246,8 +251,8 @@ export default function AfRechargeManage() {
                     )}
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="text-base font-bold text-gray-900">
-                      {Number(record.amount).toFixed(2)}
+                    <div className={`text-base font-bold ${Number(record.amount) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                      {Number(record.amount) >= 0 ? '+' : ''}{Number(record.amount).toFixed(2)}
                       <span className="text-xs text-gray-400 font-normal ml-1">USDT</span>
                     </div>
                   </div>
@@ -275,7 +280,7 @@ export default function AfRechargeManage() {
       {/* 新增/编辑弹窗 */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="mx-4 rounded-2xl">
-          <DialogTitle>{isEditing ? "编辑市值" : "新增手动调账"}</DialogTitle>
+          <DialogTitle>{isEditing ? "编辑调账" : "新增调账"}</DialogTitle>
 
           {/* 选择用户（仅新增时显示） */}
           {!isEditing && (
@@ -307,14 +312,41 @@ export default function AfRechargeManage() {
           )}
 
           <div className="space-y-3 mt-2">
+            {/* 增/减切换 */}
             <div>
-              <label className="text-sm text-gray-600 mb-1 block">市值金额（USDT）</label>
+              <label className="text-sm text-gray-600 mb-1 block">调账方向</label>
+              <div className="flex rounded-xl overflow-hidden border border-gray-200">
+                <button
+                  onClick={() => setEditDirection("add")}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                    editDirection === "add"
+                      ? "bg-green-500 text-white"
+                      : "bg-white text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  + 增加
+                </button>
+                <button
+                  onClick={() => setEditDirection("sub")}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                    editDirection === "sub"
+                      ? "bg-red-500 text-white"
+                      : "bg-white text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  - 减少
+                </button>
+              </div>
+            </div>
+            <div>
+              <label className="text-sm text-gray-600 mb-1 block">金额（USDT）</label>
               <Input
                 type="number"
-                placeholder="请输入金额"
+                placeholder="请输入正数金额"
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
                 className="rounded-xl"
+                min="0"
               />
             </div>
             <div>
