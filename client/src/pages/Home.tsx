@@ -236,7 +236,7 @@ export default function Home() {
     },
     {
       id: 4,
-      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maidong_poster_1280x720_876d1051.jpg",
+      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/maidong_poster_1280x720_876d1051.webp",
       title: "脉动周周赢"
     }
   ];

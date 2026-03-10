@@ -1044,7 +1044,7 @@ export default function LedgerDetail() {
               className="w-full bg-gradient-to-r from-[#F7931A] to-[#E8820A] rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
             >
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="https://assets.coingecko.com/coins/images/1/large/bitcoin.png" alt="BTC" className="w-9 h-9 object-contain" />
+                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/bitcoin.webp" alt="BTC" className="w-9 h-9 object-contain" />
               </div>
               <div className="text-left flex-1">
                 <div className="text-white font-semibold text-base">比特币 (BTC)</div>
@@ -1057,7 +1057,7 @@ export default function LedgerDetail() {
               className="w-full bg-gradient-to-r from-[#627EEA] to-[#4A6CD4] rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
             >
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="https://assets.coingecko.com/coins/images/279/large/ethereum.png" alt="ETH" className="w-9 h-9 object-contain" />
+                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ethereum.webp" alt="ETH" className="w-9 h-9 object-contain" />
               </div>
               <div className="text-left flex-1">
                 <div className="text-white font-semibold text-base">以太坊 (ETH)</div>
@@ -1071,7 +1071,7 @@ export default function LedgerDetail() {
               style={{ background: 'linear-gradient(to right, #9945FF, #14F195)' }}
             >
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
-                <img src="https://assets.coingecko.com/coins/images/4128/large/solana.png" alt="SOL" className="w-9 h-9 object-contain" />
+                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/solana.webp" alt="SOL" className="w-9 h-9 object-contain" />
               </div>
               <div className="text-left flex-1">
                 <div className="text-white font-semibold text-base">索拉纳 (SOL)</div>

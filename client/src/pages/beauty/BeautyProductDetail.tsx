@@ -23,13 +23,13 @@ import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
 /* ─── 图片资源 ─── */
 const IMG = {
   // 压缩版图片（手机端优化，加载更快）
-  interiorGlow: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_interior-glow_85c7e788.jpg",
-  scienceDiagram: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_science-diagram_74b6138b.jpg",
-  lifestyleWoman: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_lifestyle-woman_6ce2894a.jpg",
-  benefitsIcons: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_benefits-icons_c59852e6.jpg",
-  certification: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_interior-glow_85c7e788.jpg",
-  heroOld: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_hero-old_0b3dfbfe.jpg",
-  lifestyle: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/compressed_lifestyle_acf1f032.jpg",
+  interiorGlow: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/compressed_interior-glow_85c7e788.webp",
+  scienceDiagram: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/compressed_science-diagram_74b6138b.webp",
+  lifestyleWoman: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/compressed_lifestyle-woman_6ce2894a.webp",
+  benefitsIcons: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/compressed_benefits-icons_c59852e6.webp",
+  certification: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/compressed_interior-glow_85c7e788.webp",
+  heroOld: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/compressed_hero-old_0b3dfbfe.webp",
+  lifestyle: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/compressed_lifestyle_acf1f032.webp",
 };
 
 /* ─── 功效数据 ─── */

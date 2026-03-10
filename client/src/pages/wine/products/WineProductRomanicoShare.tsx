@@ -16,7 +16,7 @@ import { trpc } from "@/lib/trpc";
 import ShareSheet from "@/components/ShareSheet";
 import { useMerchantOG } from "@/hooks/useMerchantOG";
 
-const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
+const CDN = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
 const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
 
 const CAROUSEL_IMAGES = [

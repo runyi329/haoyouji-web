@@ -13,7 +13,7 @@ const CATEGORIES = [
     id: 'contacts',
     name: '人脉管理软件',
     icon: Users,
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-contacts-4fLDcpWoC7ZCAT35ypvu8N.webp',
+    image: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-contacts-4fLDcpWoC7ZCAT35ypvu8N.webp',
     desc: '专业人脉关系管理，让每一段关系都产生价值',
     products: [
       { id: 'contacts-monthly', name: '月度会员', price: 28, unit: '/月', tag: '', tagColor: '' },
@@ -26,7 +26,7 @@ const CATEGORIES = [
     id: 'ledger',
     name: '共享账本定制',
     icon: BookOpen,
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-ledger-NQcVJ5YtbWDun8Aoa4XYAe.webp',
+    image: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-ledger-NQcVJ5YtbWDun8Aoa4XYAe.webp',
     desc: '多人共享记账，团队财务一目了然',
     products: [
       { id: 'ledger-basic', name: '基础定制版', price: 299, unit: '一次性', tag: '入门首选', tagColor: '#2E7D32' },
@@ -39,7 +39,7 @@ const CATEGORIES = [
     id: 'compute',
     name: '算力购买',
     icon: Cpu,
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-compute-2bXPVJV4rgCSkDNJEdtAFQ.webp',
+    image: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-compute-2bXPVJV4rgCSkDNJEdtAFQ.webp',
     desc: 'AI算力驱动智能分析，让数据为你工作',
     products: [
       { id: 'compute-100', name: '100算力包', price: 9.9, unit: '一次性', tag: '体验装', tagColor: '#0277BD' },

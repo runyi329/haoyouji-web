@@ -13,7 +13,7 @@ const CATEGORIES = [
     icon: Cpu,
     color: '#0D47A1',
     bgGradient: 'from-[#0D47A1] to-[#1565C0]',
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp',
+    image: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-compute-pack-WtVSRTePjVQ8okgiDZTLxC.webp',
     desc: 'AI算力驱动智能分析，永不过期，随买随用',
     products: [
       { id: 'compute-99', name: '体验算力包（100点）', price: 9.9, unit: '一次性', tag: '入门体验', tagColor: '#0277BD' },
@@ -28,7 +28,7 @@ const CATEGORIES = [
     icon: Users,
     color: '#1A237E',
     bgGradient: 'from-[#1A237E] to-[#283593]',
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-contacts-crm-GyKiajFycpxw8PBo8pfRUS.webp',
+    image: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-contacts-crm-GyKiajFycpxw8PBo8pfRUS.webp',
     desc: '专业人脉CRM系统，系统化管理每一段关系',
     products: [
       { id: 'contacts-yearly', name: '人脉管理年度版', price: 198, unit: '/年', tag: '最受欢迎', tagColor: '#D32F2F' },
@@ -41,7 +41,7 @@ const CATEGORIES = [
     icon: BookOpen,
     color: '#1B5E20',
     bgGradient: 'from-[#1B5E20] to-[#2E7D32]',
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-ledger-custom-RA4QS7aUex96Wu6jMDhoST.webp',
+    image: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-ledger-custom-RA4QS7aUex96Wu6jMDhoST.webp',
     desc: '量身定制专属账本，3-7天交付，满足各类记账需求',
     products: [
       { id: 'ledger-basic', name: '定制账本基础版', price: 299, unit: '一次性', tag: '入门首选', tagColor: '#2E7D32' },
@@ -54,7 +54,7 @@ const CATEGORIES = [
     icon: Zap,
     color: '#B71C1C',
     bgGradient: 'from-[#B71C1C] to-[#D32F2F]',
-    image: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-homepage-custom-6zUitHprMjFVkZZFYrSuQD.webp',
+    image: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-homepage-custom-6zUitHprMjFVkZZFYrSuQD.webp',
     desc: 'AI全程参与，快速交付专属商家主页，含商城/预约/会员',
     products: [
       { id: 'homepage-basic', name: '商家主页基础版', price: 1299, unit: '一次性', tag: '快速交付', tagColor: '#2E7D32' },

@@ -482,7 +482,7 @@ function GuestView({ ledgerId, branches, allCategories }: { ledgerId: number; br
           {/* 右侧：麻六记商标（透明背景，高度与评分区对齐） */}
           <div className="flex-shrink-0 flex items-center justify-center" style={{ width: '130px' }}>
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji_logo_transparent_82ed2c56.png"
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/maluji_logo_transparent_82ed2c56.webp"
               alt="麻六记 MALUJI"
               className="object-contain"
               style={{ width: '110px', height: '110px', filter: 'drop-shadow(0 2px 10px rgba(0,0,0,0.45))' }}
@@ -957,7 +957,7 @@ function ManagerView({ ledgerId, isOwner, branches }: { ledgerId: number; isOwne
         <div className="px-4 pt-3 pb-2 flex items-center gap-3 flex-shrink-0">
           <div className="flex-shrink-0">
             <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.9)" }}>
-              <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/maluji-logo_6fe47d51.png" alt="麻六记" className="w-10 h-10 object-contain" />
+              <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/maluji-logo_6fe47d51.webp" alt="麻六记" className="w-10 h-10 object-contain" />
             </div>
           </div>
           <div className="flex-1 min-w-0 flex items-center justify-between gap-2">

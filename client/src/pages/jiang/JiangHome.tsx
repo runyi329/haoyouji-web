@@ -12,10 +12,10 @@ import { Cpu, Zap, Code2, Layers, ArrowRight, ChevronRight } from "lucide-react"
 import { toast } from "sonner";
 
 // CDN 资源
-const SENTIA_ICON = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png";
-const PRODUCT_CONTACTS = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-contacts-4fLDcpWoC7ZCAT35ypvu8N.webp";
-const PRODUCT_LEDGER = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-ledger-NQcVJ5YtbWDun8Aoa4XYAe.webp";
-const PRODUCT_COMPUTE = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/product-compute-2bXPVJV4rgCSkDNJEdtAFQ.webp";
+const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp";
+const PRODUCT_CONTACTS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-contacts-4fLDcpWoC7ZCAT35ypvu8N.webp";
+const PRODUCT_LEDGER = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-ledger-NQcVJ5YtbWDun8Aoa4XYAe.webp";
+const PRODUCT_COMPUTE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-compute-2bXPVJV4rgCSkDNJEdtAFQ.webp";
 
 // AI 全链路流程步骤
 const AI_STEPS = [

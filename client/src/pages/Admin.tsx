@@ -1104,7 +1104,7 @@ export default function Admin() {
             <Card className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <img
-                  src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/sentia-icon-v1_cfb26d59.png"
+                  src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp"
                   alt="Sentia"
                   className="w-10 h-10 rounded-full"
                 />
