@@ -127,7 +127,7 @@ export default function LedgerDetail() {
 
   // 减肥账本数据
   const isDiet = (ledgerData as any)?.type === 'diet' || (ledgerData as any)?.type === 'custom_ac';
-  const isCustomAE = (ledgerData as any)?.type === 'custom_ae';
+  const isCustomAE = (ledgerData as any)?.type === 'custom_ae' || (ledgerData as any)?.type === 'custom_af';
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isDietCoach = isDiet && (isOwner || isAdmin);
