@@ -403,54 +403,7 @@ export default function CryptoPrediction() {
         {/* 无损合约 */}
         {tab === "contract" && (
           <div className="space-y-3">
-            <div className="bg-[#131722] rounded-2xl p-4">
-              <div className="text-sm font-semibold text-white mb-2">无损合约策略</div>
-              <div className="text-xs text-gray-400 leading-relaxed">
-                通过对冲机制，在合约交易中锁定本金安全，利用资金费率和价差获取收益，实现低风险稳健增值。
-              </div>
-            </div>
-            <div className="bg-[#131722] rounded-2xl p-4">
-              <div className="text-xs text-gray-400 mb-3">当前参考价格</div>
-              <div className="flex items-center gap-3">
-                <img src={coin.imgUrl} alt={coin.name} className="w-8 h-8 object-contain"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                <div>
-                  <div className={`text-base font-bold ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
-                    {formatPrice(ticker?.lastPrice)} USDT
-                  </div>
-                  <div className="text-xs text-gray-400">{coin.fullName}（{coin.name}）</div>
-                </div>
-              </div>
-            </div>
-            {analysis && (
-              <div className="bg-[#131722] rounded-2xl p-4">
-                <div className="text-xs text-gray-400 mb-3">技术指标参考</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1">MA5</div>
-                    <div className={`text-sm font-medium ${analysis.last >= analysis.ma5 ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
-                      {formatPrice(analysis.ma5)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1">MA20</div>
-                    <div className={`text-sm font-medium ${analysis.last >= analysis.ma20 ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
-                      {formatPrice(analysis.ma20)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1">RSI(14)</div>
-                    <div className={`text-sm font-medium ${analysis.rsi > 70 ? "text-[#ef5350]" : analysis.rsi < 30 ? "text-[#26a69a]" : "text-white"}`}>
-                      {analysis.rsi.toFixed(1)}{analysis.rsi > 70 ? " 超买" : analysis.rsi < 30 ? " 超卖" : ""}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-500 mb-1">综合评估</div>
-                    <div className="text-sm font-medium text-white">{analysis.sentiment}</div>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* 内容待编辑 */}
           </div>
         )}
 
