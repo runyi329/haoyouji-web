@@ -8613,6 +8613,31 @@ export const appRouter = router({
         }));
         return list;
       }),
+    // AF 查询可卖数量（已成交买入的币种数量总和）
+    afGetAvailableSell: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), coin: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        // 已成交买入的数量总和
+        const buyRows = await db.execute(
+          sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
+              FROM af_orders
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+                AND coin = ${input.coin} AND side = 'buy' AND status = 'completed'`
+        ) as any;
+        const bought = parseFloat((buyRows[0]?.[0]?.total ?? buyRows[0]?.total ?? '0').toString());
+        // 已成交卖出的数量总和
+        const sellRows = await db.execute(
+          sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
+              FROM af_orders
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+                AND coin = ${input.coin} AND side = 'sell' AND status = 'completed'`
+        ) as any;
+        const sold = parseFloat((sellRows[0]?.[0]?.total ?? sellRows[0]?.total ?? '0').toString());
+        const available = Math.max(0, bought - sold);
+        return { coin: input.coin, available };
+      }),
     // OKX 行情代理（国内服务器可访问，替代 Binance）
     getBinanceTicker: publicProcedure
       .input(z.object({ symbol: z.string() }))

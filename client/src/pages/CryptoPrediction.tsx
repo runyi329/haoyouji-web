@@ -287,6 +287,12 @@ export default function CryptoPrediction() {
     { enabled: !!ledgerId, staleTime: 10000 }
   );
   const orders: any[] = (ordersData as any[]) || [];
+  // 可卖数量（已成交买入 - 已成交卖出）
+  const { data: availableSellData } = trpc.ledger.afGetAvailableSell.useQuery(
+    { ledgerId, coin: coin.name },
+    { enabled: !!ledgerId, staleTime: 10000 }
+  );
+  const availableSellQty = (availableSellData as any)?.available ?? 0;
   const submitOrderMutation = trpc.ledger.afSubmitOrder.useMutation({
     onSuccess: () => {
       toast.success("委托已提交");
@@ -294,6 +300,8 @@ export default function CryptoPrediction() {
       setOrderPrice("");
       setSliderPct(0);
       utils.ledger.afGetOrders.invalidate({ ledgerId });
+      utils.ledger.afGetAvailableSell.invalidate({ ledgerId, coin: coin.name });
+      utils.ledger.afGetMyTotalAsset.invalidate({ ledgerId });
     },
     onError: (e) => toast.error("提交失败", { description: e.message }),
   });
@@ -569,11 +577,11 @@ export default function CryptoPrediction() {
               </div>
             </div>
 
-            {/* 可买数量 */}
+            {/* 可买/可卖数量 */}
             <div className="flex items-center justify-between px-1">
               <span className="text-xs text-gray-500">可{orderSide === "buy" ? "买" : "卖"}</span>
               <span className="text-xs text-gray-300">
-                {(() => {
+                {orderSide === "buy" ? (() => {
                   const amt = parseFloat(orderAmount);
                   const price = parseFloat(orderPrice) || parseFloat(ticker?.lastPrice || "0");
                   if (!isNaN(amt) && amt > 0 && price > 0) {
@@ -581,18 +589,25 @@ export default function CryptoPrediction() {
                     return `${qty.toFixed(8)} ${coin.name}`;
                   }
                   return `-- ${coin.name}`;
-                })()}
+                })() : `${availableSellQty > 0 ? availableSellQty.toFixed(8) : "0.00000000"} ${coin.name}`}
               </span>
             </div>
 
-            {/* 确认按钮 */}
+            {/* 确认按鈕 */}
             <button
               onClick={() => {
                 const amt = parseFloat(orderAmount);
                 const price = parseFloat(orderPrice);
                 if (!price || price <= 0) { toast.error("请输入委托价格"); return; }
                 if (!amt || amt <= 0) { toast.error("请输入金额"); return; }
-                if (amt > availableUsdt) { toast.error("金额超过可用余额"); return; }
+                if (orderSide === "buy") {
+                  if (amt > availableUsdt) { toast.error("金额超过可用余额"); return; }
+                } else {
+                  // 委卖：检查可卖数量
+                  if (availableSellQty <= 0) { toast.error("暂无已成交的持仓，无法委卖"); return; }
+                  const sellQty = (amt / price);
+                  if (sellQty > availableSellQty) { toast.error(`委卖数量超过可卖数量（可卖 ${availableSellQty.toFixed(8)} ${coin.name}）`); return; }
+                }
                 const qty = (amt / price).toFixed(8);
                 submitOrderMutation.mutate({
                   ledgerId,
@@ -603,9 +618,10 @@ export default function CryptoPrediction() {
                   quantity: qty,
                 });
               }}
+              disabled={orderSide === "sell" && availableSellQty <= 0}
               className={`w-full py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity ${
                 orderSide === "buy" ? "bg-[#26a69a]" : "bg-[#ef5350]"
-              } ${(!orderAmount || parseFloat(orderAmount) <= 0) ? "opacity-50" : "opacity-100"}`}
+              } ${(!orderAmount || parseFloat(orderAmount) <= 0 || (orderSide === "sell" && availableSellQty <= 0)) ? "opacity-50" : "opacity-100"}`}
             >
               {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : `卖出 ${coin.name}`}
             </button>
@@ -618,23 +634,33 @@ export default function CryptoPrediction() {
                 <div className="text-center py-6 text-gray-500 text-sm">暂无委托记录</div>
               ) : (
                 <div className="space-y-2">
-                  {/* 表头 */}
-                  <div className="grid grid-cols-5 text-xs text-gray-500 px-1 pb-1 border-b border-[#2A2E39]">
+                  {/* 表头：币种 方向 价格 数量 金额 状态 */}
+                  <div className="grid grid-cols-6 text-xs text-gray-500 px-1 pb-1 border-b border-[#2A2E39]">
                     <span>币种</span>
                     <span>方向</span>
                     <span className="text-right">价格</span>
-                    <span className="text-right">金额</span>
                     <span className="text-right">数量</span>
+                    <span className="text-right">金额</span>
+                    <span className="text-right">状态</span>
                   </div>
                   {orders.map((order) => (
-                    <div key={order.id} className="grid grid-cols-5 text-xs py-2 border-b border-[#1C2127] items-center">
+                    <div key={order.id} className="grid grid-cols-6 text-xs py-2 border-b border-[#1C2127] items-center">
                       <span className="text-white font-medium">{order.coin}</span>
                       <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
                         {order.side === 'buy' ? '委买' : '委卖'}
                       </span>
                       <span className="text-right text-gray-300">{parseFloat(order.limitPrice).toLocaleString()}</span>
-                      <span className="text-right text-gray-300">{order.amount}</span>
                       <span className="text-right text-gray-400">{parseFloat(order.quantity).toFixed(4)}</span>
+                      <span className="text-right text-gray-300">{order.amount}</span>
+                      <span className={`text-right text-xs ${
+                        order.status === 'completed' ? 'text-[#26a69a]' :
+                        order.status === 'cancelled' ? 'text-gray-500' :
+                        'text-yellow-400'
+                      }`}>
+                        {order.status === 'completed' ? '已成交' :
+                         order.status === 'cancelled' ? '已撤销' :
+                         '委托中'}
+                      </span>
                     </div>
                   ))}
                 </div>
