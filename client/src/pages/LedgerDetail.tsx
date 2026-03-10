@@ -345,91 +345,144 @@ export default function LedgerDetail() {
     <div className="min-h-screen bg-[var(--bg-cream)]">
       {/* 顶部区域 */}
       <div className="pb-4" style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
-        {/* 标题栏 */}
-        <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-          <button
-            onClick={() => setLocation("/ledger")}
-            className="p-1 -ml-2"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
-          <div className="flex items-center flex-1">
-            <h1 className="text-lg font-medium">{ledgerData.name}</h1>
-          </div>
-        </div>
-
-        {/* 成员头像和功能按鈕 */}
-        <div className="px-4 py-2 flex items-center justify-between">
-          {/* 左侧：普通账本显示所有共享成员头像；定制账本只显示当前用户 */}
-          <div className="flex items-center gap-1">
-            {!isCustomAE ? (
-              // 普通账本 / 减肥账本：显示所有成员头像
-              (membersData && membersData.length > 0 ? membersData : (user ? [{ username: user.username, avatar: user.avatar, nickname: user.nickname }] : [])).slice(0, 6).map((m: any, i: number) => (
-                <UserAvatar
-                  key={i}
-                  username={m.username || m.user?.username}
-                  avatar={m.avatar || m.user?.avatar}
-                  nickname={m.nickname || m.user?.nickname}
-                  size="md"
-                />
-              ))
-            ) : (
-              // AE 抽奖箱：只显示当前用户
-              user && (
+        {/* AF 账本：顶部一行（头像+名字 左，图标+返回 右）*/}
+        {isCustomAF ? (
+          <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+            {/* 左侧：头像 + 账本名 */}
+            <div className="flex items-center gap-2">
+              {user && (
                 <UserAvatar
                   username={user.username}
                   avatar={user.avatar}
                   nickname={user.nickname}
                   size="md"
                 />
-              )
-            )}
-          </div>
-
-          {/* 功能按鈕（靠右） */}
-          <div className="flex items-center gap-2">
-            {/* 减肥账本教练：学员管理按鈕 */}
-            {isDietCoach && (
+              )}
+              <span className="text-base font-semibold">{ledgerData.name}</span>
+            </div>
+            {/* 右侧：搜索、图表、设置图标 + 返回按钮 */}
+            <div className="flex items-center gap-2">
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-                style={{ backgroundColor: '#FFFFFF' }}
-                onClick={() => setLocation(`/ledger/${ledgerId}/diet-members`)}
-              >
-                <Users className="w-5 h-5" style={{ color: '#D32F2F' }} />
-              </div>
-            )}
-            {/* 普通账本：查找按鈕 */}
-            {!isCustomAE && !isDiet && !isCustomAF && (
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-                style={{ backgroundColor: '#FFFFFF' }}
+                className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
                 onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
               >
-                <Search className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                <Search className="w-4 h-4 text-white" />
               </div>
-            )}
-            {/* 普通账本：数据统计按鈕 */}
-            {!isCustomAE && !isDiet && !isCustomAF && (
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-                style={{ backgroundColor: '#FFFFFF' }}
+                className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
                 onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
               >
-                <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                <BarChart3 className="w-4 h-4 text-white" />
               </div>
-            )}
-            {/* 管理员或创建者：设置按鈕 */}
-            {(isOwner || isAdmin) && (
-              <div 
-                className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
-                style={{ backgroundColor: '#FFFFFF' }}
-                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+              {(isOwner || isAdmin) && (
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+                  onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+                >
+                  <Settings className="w-4 h-4 text-white" />
+                </div>
+              )}
+              <button
+                onClick={() => setLocation('/ledger')}
+                className="px-3 py-1 rounded-full text-sm font-medium border border-white/60 text-white"
+                style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
               >
-                <Settings className="w-5 h-5" style={{ color: '#D32F2F' }} />
-              </div>
-            )}
+                返回
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <>
+            {/* 标题栏 */}
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+              <button
+                onClick={() => setLocation("/ledger")}
+                className="p-1 -ml-2"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              <div className="flex items-center flex-1">
+                <h1 className="text-lg font-medium">{ledgerData.name}</h1>
+              </div>
+            </div>
+
+            {/* 成员头像和功能按鈕 */}
+            <div className="px-4 py-2 flex items-center justify-between">
+              {/* 左侧：普通账本显示所有共享成员头像；定制账本只显示当前用户 */}
+              <div className="flex items-center gap-1">
+                {!isCustomAE ? (
+                  // 普通账本 / 减肥账本：显示所有成员头像
+                  (membersData && membersData.length > 0 ? membersData : (user ? [{ username: user.username, avatar: user.avatar, nickname: user.nickname }] : [])).slice(0, 6).map((m: any, i: number) => (
+                    <UserAvatar
+                      key={i}
+                      username={m.username || m.user?.username}
+                      avatar={m.avatar || m.user?.avatar}
+                      nickname={m.nickname || m.user?.nickname}
+                      size="md"
+                    />
+                  ))
+                ) : (
+                  // AE 抽奖箱：只显示当前用户
+                  user && (
+                    <UserAvatar
+                      username={user.username}
+                      avatar={user.avatar}
+                      nickname={user.nickname}
+                      size="md"
+                    />
+                  )
+                )}
+              </div>
+
+              {/* 功能按鈕（靠右） */}
+              <div className="flex items-center gap-2">
+                {/* 减肥账本教练：学员管理按鈕 */}
+                {isDietCoach && (
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                    style={{ backgroundColor: '#FFFFFF' }}
+                    onClick={() => setLocation(`/ledger/${ledgerId}/diet-members`)}
+                  >
+                    <Users className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                  </div>
+                )}
+                {/* 普通账本：查找按鈕 */}
+                {!isCustomAE && !isDiet && !isCustomAF && (
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                    style={{ backgroundColor: '#FFFFFF' }}
+                    onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
+                  >
+                    <Search className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                  </div>
+                )}
+                {/* 普通账本：数据统计按鈕 */}
+                {!isCustomAE && !isDiet && !isCustomAF && (
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                    style={{ backgroundColor: '#FFFFFF' }}
+                    onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
+                  >
+                    <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                  </div>
+                )}
+                {/* 管理员或创建者：设置按鈕 */}
+                {(isOwner || isAdmin) && (
+                  <div 
+                    className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                    style={{ backgroundColor: '#FFFFFF' }}
+                    onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+                  >
+                    <Settings className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* 减肥账本：保留进度面板 */}
         {isDiet && (
@@ -464,6 +517,37 @@ export default function LedgerDetail() {
                 <div className="text-sm">{isDietCoach ? '在学员管理中为成员设置减肥档案' : '等待教练设置你的减肥档案'}</div>
               </div>
             )}
+          </div>
+        )}
+        {/* AF 账本：2×2 数据容器 */}
+        {isCustomAF && (
+          <div className="px-4 pt-2 pb-4">
+            <div className="grid grid-cols-2 gap-3">
+              {/* 卡片 1 */}
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
+                <div className="text-xs text-white/70 mb-1">最新余额</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-xs text-white/60 mt-1">待接入数据</div>
+              </div>
+              {/* 卡片 2 */}
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
+                <div className="text-xs text-white/70 mb-1">保证金</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-xs text-white/60 mt-1">待接入数据</div>
+              </div>
+              {/* 卡片 3 */}
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
+                <div className="text-xs text-white/70 mb-1">初始金额</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-xs text-white/60 mt-1">待接入数据</div>
+              </div>
+              {/* 卡片 4 */}
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
+                <div className="text-xs text-white/70 mb-1">累计盈亏</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-xs text-white/60 mt-1">待接入数据</div>
+              </div>
+            </div>
           </div>
         )}
         {/* 普通账本：统计面板（总收入/总结余/总支出）*/}
