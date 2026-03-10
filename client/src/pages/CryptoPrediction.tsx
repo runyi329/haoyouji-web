@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Bitcoin, RefreshCw, ChevronLeft, TrendingUp, Users, CheckCircle2, Circle, Loader2, AlertCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 // ============================================================
 // 工具函数
@@ -60,7 +60,6 @@ function EventCard({
   ledgerId: number;
   onPredicted: () => void;
 }) {
-  const { toast } = useToast();
   const [selected, setSelected] = useState<number | null>(
     event.myPrediction ? event.myPrediction.selectedIndex : null
   );
@@ -68,11 +67,11 @@ function EventCard({
 
   const submitMutation = trpc.prediction.submitPrediction.useMutation({
     onSuccess: () => {
-      toast({ title: "预测已提交 ✓", description: "你的观点已记录" });
+      toast.success("预测已提交 ✓", { description: "你的观点已记录" });
       onPredicted();
     },
     onError: (e) => {
-      toast({ title: "提交失败", description: e.message, variant: "destructive" });
+      toast.error("提交失败", { description: e.message });
     },
   });
 
@@ -95,7 +94,7 @@ function EventCard({
   const hasPredicted = selected !== null;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3 relative">
       {/* 题目 */}
       <div className="px-4 pt-4 pb-3">
         <p className="text-sm font-medium text-gray-800 leading-relaxed">{event.question}</p>
@@ -189,7 +188,7 @@ function EventCard({
         </div>
       )}
 
-      {/* 加载中 */}
+      {/* 加载中遮罩 */}
       {submitMutation.isPending && (
         <div className="absolute inset-0 flex items-center justify-center bg-white/50 rounded-2xl">
           <Loader2 className="w-5 h-5 animate-spin text-[#D32F2F]" />
@@ -208,7 +207,6 @@ export default function CryptoPrediction() {
   const [, setLocation] = useLocation();
   const ledgerId = parseInt(params?.id || "0");
   const [activeCoin, setActiveCoin] = useState<"BTC" | "ETH">("BTC");
-  const { toast } = useToast();
 
   const { data, isLoading, refetch, isFetching } = trpc.prediction.listEvents.useQuery(
     { ledgerId, coin: activeCoin, limit: 30 },
@@ -217,11 +215,11 @@ export default function CryptoPrediction() {
 
   const syncMutation = trpc.prediction.syncPolymarket.useMutation({
     onSuccess: (res) => {
-      toast({ title: `同步完成`, description: `已同步 ${res.synced} 条 ${activeCoin} 竞猜事件` });
+      toast.success("同步完成", { description: `已同步 ${res.synced} 条 ${activeCoin} 竞猜事件` });
       refetch();
     },
     onError: (e) => {
-      toast({ title: "同步失败", description: e.message, variant: "destructive" });
+      toast.error("同步失败", { description: e.message });
     },
   });
 
