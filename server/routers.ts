@@ -8789,6 +8789,57 @@ export const appRouter = router({
         }
         return { success: true };
       }),
+    // AF 查询订单的收益权档位触发记录 + 扫描状态
+    afGetTierData: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        // 验证订单属于该用户
+        const orderRows = await db.execute(
+          sql`SELECT id, coin, limit_price, status FROM af_orders
+              WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const order = (orderRows[0]?.[0] ?? orderRows[0]);
+        if (!order) return { triggers: [], scanStatus: null, latestLowPrice: null };
+
+        // 查询该订单的所有档位触发记录
+        const triggerRows = await db.execute(
+          sql`SELECT tier, trigger_price, triggered_at FROM af_order_tier_triggers
+              WHERE order_id = ${input.orderId}
+              ORDER BY tier ASC`
+        ) as any;
+        const triggers: Array<{ tier: number; triggerPrice: string; triggeredAt: string }> =
+          ((triggerRows[0] || triggerRows) as any[]).map((r: any) => ({
+            tier: r.tier,
+            triggerPrice: r.trigger_price,
+            triggeredAt: r.triggered_at,
+          }));
+
+        // 查询该币种最近一次扫描记录
+        const scanRows = await db.execute(
+          sql`SELECT low_price, scanned_at FROM af_price_scan_logs
+              WHERE coin = ${order.coin}
+              ORDER BY scanned_at DESC LIMIT 1`
+        ) as any;
+        const lastScan = (scanRows[0]?.[0] ?? scanRows[0]) || null;
+
+        // 从内存状态获取扫描信息
+        const { scanStatus } = await import('../af-tier-scanner');
+        const coinStatus = scanStatus[order.coin] || null;
+
+        return {
+          triggers,
+          buyPrice: order.limit_price,
+          coin: order.coin,
+          scanStatus: {
+            lastScanAt: coinStatus?.lastScanAt || (lastScan?.scanned_at ?? null),
+            lastLowPrice: coinStatus?.lastLowPrice || (lastScan?.low_price ?? null),
+            scanning: coinStatus?.scanning || false,
+          },
+          latestLowPrice: lastScan?.low_price ?? null,
+        };
+      }),
     // OKX 行情代理（国内服务器可访问，替代 Binance）
     getBinanceTicker: publicProcedure
       .input(z.object({ symbol: z.string() }))

@@ -253,7 +253,189 @@ function EventCard({ event, ledgerId, onPredicted }: {
   );
 }
 
-// ─── 主页面 ───────────────────────────────────────────────────
+// ─── 收益权档位详情组件 ──────────────────────────────────────
+const TIER_LABELS = [
+  { tier: 1, drop: '-10%', ratio: '1/2', pct: '50%' },
+  { tier: 2, drop: '-20%', ratio: '1/3', pct: '33.3%' },
+  { tier: 3, drop: '-30%', ratio: '1/4', pct: '25%' },
+  { tier: 4, drop: '-40%', ratio: '1/5', pct: '20%' },
+  { tier: 5, drop: '-50%', ratio: '1/6', pct: '16.7%' },
+  { tier: 6, drop: '-60%', ratio: '1/7', pct: '14.3%' },
+  { tier: 7, drop: '-70%', ratio: '1/8', pct: '12.5%' },
+  { tier: 8, drop: '-80%', ratio: '1/9', pct: '11.1%' },
+  { tier: 9, drop: '-90%', ratio: '1/10', pct: '10%' },
+];
+
+function OrderDetail({ order, timeStr, ledgerId }: {
+  order: any; timeStr: string; ledgerId: number;
+}) {
+  const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
+    { orderId: order.id, ledgerId },
+    { enabled: order.status === 'completed' && order.side === 'buy' }
+  );
+
+  // 计算当前所在档位
+  const triggeredTiers = new Set((tierData?.triggers || []).map((t: any) => t.tier));
+  const maxTriggered = triggeredTiers.size > 0 ? Math.max(...Array.from(triggeredTiers)) : 0;
+  const currentTier = maxTriggered; // 0 = 未触发任何档
+
+  const isContract = !order.orderType || order.orderType === '无损合约';
+  const isCompleted = order.status === 'completed';
+
+  return (
+    <div className="mt-2 bg-[#1C2127] rounded-xl p-3 space-y-2 text-[10px]">
+      {/* 基本信息 */}
+      <div className="space-y-1.5">
+        <div className="flex justify-between">
+          <span className="text-gray-500">币种</span>
+          <span className="text-white">{order.coin}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">方向</span>
+          <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
+            {order.side === 'buy' ? '买入' : '卖出'}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">委托价格</span>
+          <span className="text-gray-300">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">实际投入</span>
+          <span className="text-gray-300">{parseFloat(order.amount).toFixed(2)} USDT</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">委托数量</span>
+          <span className="text-gray-300">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">类型</span>
+          <span className="text-gray-400">{order.orderType || '无损合约'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">状态</span>
+          <span className={order.status === 'completed' ? 'text-[#26a69a]' : order.status === 'cancelled' ? 'text-gray-500' : 'text-yellow-400'}>
+            {order.status === 'completed' ? '已成交' : order.status === 'cancelled' ? '已撤单' : '委托中'}
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-500">下单时间</span>
+          <span className="text-gray-400">{timeStr}</span>
+        </div>
+      </div>
+
+      {/* 收益权档位表（仅已成交且为无损合约的买入订单显示） */}
+      {isCompleted && isContract && order.side === 'buy' && (
+        <div className="pt-2 border-t border-[#2A2E39]">
+          {/* 扫描状态栏 */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[#D32F2F] font-semibold">收益权监控</span>
+            {tierData?.scanStatus ? (
+              <div className="flex items-center gap-1">
+                {tierData.scanStatus.scanning ? (
+                  <><Loader2 className="w-2.5 h-2.5 animate-spin text-yellow-400" />
+                  <span className="text-yellow-400">扫描中...</span></>
+                ) : (
+                  <><span className="w-1.5 h-1.5 rounded-full bg-[#26a69a] inline-block animate-pulse" />
+                  <span className="text-[#26a69a]">实时监控中</span></>
+                )}
+              </div>
+            ) : tierLoading ? (
+              <span className="text-gray-500">加载中...</span>
+            ) : (
+              <span className="text-gray-500">待启动</span>
+            )}
+          </div>
+
+          {/* 扫描信息 */}
+          {tierData?.scanStatus?.lastScanAt && (
+            <div className="bg-[#0D1117] rounded-lg p-2 mb-2 space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">上次扫描</span>
+                <span className="text-gray-400">{new Date(tierData.scanStatus.lastScanAt).toLocaleString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">4h区间最低价</span>
+                <span className="text-[#ef5350]">{tierData.scanStatus.lastLowPrice ? parseFloat(tierData.scanStatus.lastLowPrice).toLocaleString() + ' USDT' : '--'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">扫描频率</span>
+                <span className="text-gray-400">每4小时一次</span>
+              </div>
+            </div>
+          )}
+
+          {/* 收益权档位表 */}
+          <div className="text-gray-500 mb-1.5">收益权档位表</div>
+          {/* 表头 */}
+          <div className="grid grid-cols-4 text-[9px] text-gray-600 mb-1 px-1">
+            <span>跌幅档</span>
+            <span className="text-center">收益权</span>
+            <span className="text-center">触发时间</span>
+            <span className="text-right">触发价格</span>
+          </div>
+
+          {/* 第0档：未触发，收益权100% */}
+          <div className={`grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5 ${
+            currentTier === 0 ? 'bg-[#26a69a]/20 border border-[#26a69a]/40' : 'bg-[#0D1117]'
+          }`}>
+            <span className={currentTier === 0 ? 'text-[#26a69a] font-semibold' : 'text-gray-500'}>基准</span>
+            <span className={`text-center font-semibold ${ currentTier === 0 ? 'text-[#26a69a]' : 'text-gray-500' }`}>100%</span>
+            <span className="text-center text-gray-600">--</span>
+            <span className="text-right text-gray-600">{parseFloat(order.limitPrice).toLocaleString()}</span>
+          </div>
+
+          {/* 9档 */}
+          {TIER_LABELS.map(({ tier, drop, ratio, pct }) => {
+            const trigger = (tierData?.triggers || []).find((t: any) => t.tier === tier);
+            const isCurrentTier = currentTier === tier;
+            const isTriggered = triggeredTiers.has(tier);
+            return (
+              <div key={tier} className={`grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5 ${
+                isCurrentTier ? 'bg-[#ef5350]/20 border border-[#ef5350]/40' :
+                isTriggered ? 'bg-[#2A2E39]' : 'bg-[#0D1117]'
+              }`}>
+                <span className={`${
+                  isCurrentTier ? 'text-[#ef5350] font-semibold' :
+                  isTriggered ? 'text-gray-400' : 'text-gray-600'
+                }`}>{drop}</span>
+                <span className={`text-center font-semibold ${
+                  isCurrentTier ? 'text-[#ef5350]' :
+                  isTriggered ? 'text-gray-400' : 'text-gray-600'
+                }`}>{pct}</span>
+                <span className={`text-center text-[9px] ${
+                  isTriggered ? 'text-gray-500' : 'text-gray-700'
+                }`}>
+                  {trigger ? new Date(trigger.triggeredAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '--'}
+                </span>
+                <span className={`text-right ${
+                  isTriggered ? 'text-[#ef5350]' : 'text-gray-700'
+                }`}>
+                  {trigger ? parseFloat(trigger.triggerPrice).toLocaleString() : '--'}
+                </span>
+              </div>
+            );
+          })}
+
+          {/* 当前收益权摘要 */}
+          <div className="mt-2 bg-[#0D1117] rounded-lg p-2 flex justify-between items-center">
+            <span className="text-gray-500">当前收益权</span>
+            <span className={`font-bold text-sm ${
+              currentTier === 0 ? 'text-[#26a69a]' : 'text-[#ef5350]'
+            }`}>
+              {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
+              <span className="text-gray-500 text-[9px] ml-1">
+                ({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 主页面 ───────────────────────────────────────────────
 export default function CryptoPrediction() {
   const [, params] = useRoute("/ledger/:id/crypto-prediction");
   const [, setLocation] = useLocation();
@@ -697,50 +879,7 @@ export default function CryptoPrediction() {
                         </div>
                         {/* 详情展开 */}
                         {orderDetailId === order.id && (
-                          <div className="mt-2 bg-[#1C2127] rounded-xl p-3 space-y-1.5 text-[10px]">
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">币种</span>
-                              <span className="text-white">{order.coin}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">方向</span>
-                              <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
-                                {order.side === 'buy' ? '委买' : '委卖'}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">委托价格</span>
-                              <span className="text-gray-300">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">实际投入</span>
-                              <span className="text-gray-300">{parseFloat(order.amount).toFixed(2)} USDT</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">委托数量</span>
-                              <span className="text-gray-300">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">类型</span>
-                              <span className="text-gray-400">{(order as any).orderType || '无损合约'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">状态</span>
-                              <span className={`${
-                                order.status === 'completed' ? 'text-[#26a69a]' :
-                                order.status === 'cancelled' ? 'text-gray-500' :
-                                'text-yellow-400'
-                              }`}>
-                                {order.status === 'completed' ? '已成交' :
-                                 order.status === 'cancelled' ? '已撤单' :
-                                 '委托中'}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">下单时间</span>
-                              <span className="text-gray-400">{timeStr}</span>
-                            </div>
-                          </div>
+                          <OrderDetail order={order} timeStr={timeStr} ledgerId={ledgerId} />
                         )}
                       </div>
                     );
