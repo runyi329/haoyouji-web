@@ -8638,6 +8638,144 @@ export const appRouter = router({
         const available = Math.max(0, bought - sold);
         return { coin: input.coin, available };
       }),
+    // 管理员：查询该账本所有用户的所有订单
+    afAdminGetOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        // 验证是否是 owner 或 admin
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+        const rows = await db.execute(
+          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, o.created_at,
+                     u.username, u.nickname
+              FROM af_orders o
+              LEFT JOIN users u ON u.id = o.user_id
+              WHERE o.ledger_id = ${input.ledgerId}
+              ORDER BY o.created_at DESC
+              LIMIT 500`
+        ) as any;
+        const list = ((rows[0] || rows) as any[]).map((r: any) => ({
+          id: r.id,
+          userId: r.user_id,
+          username: r.username || '',
+          nickname: r.nickname || '',
+          coin: r.coin,
+          side: r.side,
+          limitPrice: r.limit_price,
+          amount: r.amount,
+          quantity: r.quantity,
+          status: r.status,
+          createdAt: r.created_at,
+        }));
+        return list;
+      }),
+    // 管理员：修改订单参数和状态（含余额联动）
+    afAdminUpdateOrder: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        orderId: z.number(),
+        // 可修改字段
+        limitPrice: z.string().optional(),
+        amount: z.string().optional(),
+        quantity: z.string().optional(),
+        status: z.enum(['pending', 'completed', 'cancelled']).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        // 验证是否是 owner 或 admin
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+        // 获取原订单信息
+        const orderRows = await db.execute(
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+        ) as any;
+        const order = (orderRows[0]?.[0] ?? orderRows[0]);
+        if (!order) throw new Error('订单不存在');
+        const oldStatus = order.status;
+        const oldAmount = parseFloat(order.amount || '0');
+        const newAmount = input.amount ? parseFloat(input.amount) : oldAmount;
+        const newStatus = input.status || oldStatus;
+        const userId = order.user_id;
+        const coin = order.coin;
+        const side = order.side;
+        // 确保 af_manual_balances 表存在
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS af_manual_balances (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            user_id INT NOT NULL,
+            amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+            note VARCHAR(255) DEFAULT '',
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            INDEX idx_ledger (ledger_id)
+          )
+        `);
+        // 余额调整逻辑
+        let balanceAdjust = 0;
+        let balanceNote = '';
+        // 1. 状态变化：待定→已成交
+        if (oldStatus === 'pending' && newStatus === 'completed') {
+          if (side === 'sell') {
+            // 委卖成交：卖出时已加了余额，无需额外操作
+            balanceAdjust = 0;
+          }
+          // 委买成交：买入时已扣了余额，无需额外操作
+        }
+        // 2. 状态变化：待定→已撤单
+        if (oldStatus === 'pending' && newStatus === 'cancelled') {
+          if (side === 'buy') {
+            // 委买撤单：退回已扣除的金额
+            balanceAdjust = oldAmount;
+            balanceNote = `撤单退回 委买 ${coin} ${oldAmount} USDT`;
+          } else {
+            // 委卖撤单：扣回已增加的金额
+            balanceAdjust = -oldAmount;
+            balanceNote = `撤单扣回 委卖 ${coin} ${oldAmount} USDT`;
+          }
+        }
+        // 3. 金额参数修改（仅当状态为 pending 时）
+        if (input.amount && newStatus === 'pending' && Math.abs(newAmount - oldAmount) > 0.001) {
+          const diff = newAmount - oldAmount;
+          if (side === 'buy') {
+            // 买入金额增加 -> 多扣；减少 -> 少扣
+            balanceAdjust += -diff;
+            balanceNote = `订单调整 委买 ${coin} 金额 ${oldAmount} -> ${newAmount} USDT`;
+          } else {
+            // 卖出金额增加 -> 多加；减少 -> 少加
+            balanceAdjust += diff;
+            balanceNote = `订单调整 委卖 ${coin} 金额 ${oldAmount} -> ${newAmount} USDT`;
+          }
+        }
+        // 执行余额调整
+        if (Math.abs(balanceAdjust) > 0.001) {
+          await db.execute(
+            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                VALUES (${input.ledgerId}, ${userId}, ${balanceAdjust}, ${balanceNote || '订单调整'}, NOW(), NOW())`
+          );
+        }
+        // 构建动态 UPDATE
+        const updates: string[] = [];
+        if (input.limitPrice !== undefined) updates.push(`limit_price = '${input.limitPrice.replace(/'/g, '')}'`);
+        if (input.amount !== undefined) updates.push(`amount = '${input.amount.replace(/'/g, '')}'`);
+        if (input.quantity !== undefined) updates.push(`quantity = '${input.quantity.replace(/'/g, '')}'`);
+        if (input.status !== undefined) updates.push(`status = '${input.status}'`);
+        if (updates.length > 0) {
+          await db.execute(
+            sql`UPDATE af_orders SET ${sql.raw(updates.join(', '))}, updated_at = NOW() WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
+          );
+        }
+        return { success: true };
+      }),
     // OKX 行情代理（国内服务器可访问，替代 Binance）
     getBinanceTicker: publicProcedure
       .input(z.object({ symbol: z.string() }))
