@@ -1565,3 +1565,32 @@ export const afOrders = mysqlTable("af_orders", {
   index("af_orders_user_idx").on(table.userId),
   index("af_orders_coin_idx").on(table.coin),
 ]);
+
+// AF 无损合约收益权档位触发记录表
+export const afOrderTierTriggers = mysqlTable("af_order_tier_triggers", {
+  id: int().autoincrement().notNull(),
+  orderId: int().notNull(),           // 关联 af_orders.id
+  ledgerId: int().notNull(),
+  coin: varchar({ length: 10 }).notNull(),
+  buyPrice: varchar({ length: 50 }).notNull(),   // 买入委托价格（基准价）
+  tier: int().notNull(),              // 档位编号 1~9（1=跌10%，2=跌20%...）
+  triggerPrice: varchar({ length: 50 }).notNull(), // 触发时的价格
+  triggeredAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(), // 触发时间
+  createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  index("af_tier_order_idx").on(table.orderId),
+  index("af_tier_ledger_idx").on(table.ledgerId),
+]);
+
+// AF 无损合约价格扫描记录（记录每次4小时扫描的最低价）
+export const afPriceScanLogs = mysqlTable("af_price_scan_logs", {
+  id: int().autoincrement().notNull(),
+  coin: varchar({ length: 10 }).notNull(),
+  symbol: varchar({ length: 20 }).notNull(),       // 如 ETHUSDT
+  scanFrom: timestamp({ mode: 'string' }).notNull(), // 扫描区间开始
+  scanTo: timestamp({ mode: 'string' }).notNull(),   // 扫描区间结束
+  lowPrice: varchar({ length: 50 }).notNull(),       // 区间最低价
+  scannedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  index("af_scan_coin_idx").on(table.coin),
+]);

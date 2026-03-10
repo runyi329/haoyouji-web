@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { getDb } from "../db";
 import { startScanner } from "../blockchain-scanner";
+import { startTierScanner } from "../af-tier-scanner";
 import { ensureBeautyTables } from "../db-beauty-init";
 
 async function initFieldCategories() {
@@ -250,6 +251,9 @@ async function startServer() {
     
     // 启动区块链扫描器（收款地址从数据库读取，无需环境变量）
     startScanner();
+
+    // 启动无损合约收益权档位扫描器（每4小时扫描一次）
+    startTierScanner();
 
     // ─── 内嵌定时备份任务（每天北京时间凌晨 2:00 执行）───
     // 北京时间 = UTC+8，凌晨 2:00 BJT = UTC 18:00（前一天）
