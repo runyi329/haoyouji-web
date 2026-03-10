@@ -8439,19 +8439,7 @@ export const appRouter = router({
             sql`UPDATE af_manual_balances SET amount = ${input.amount}, note = ${input.note || ''}, updated_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
           );
         } else {
-          // 先确保表存在
-          await db.execute(sql`
-            CREATE TABLE IF NOT EXISTS af_manual_balances (
-              id INT AUTO_INCREMENT PRIMARY KEY,
-              ledger_id INT NOT NULL,
-              user_id INT NOT NULL,
-              amount DECIMAL(18,2) NOT NULL DEFAULT 0,
-              note VARCHAR(255) DEFAULT '',
-              created_at DATETIME NOT NULL,
-              updated_at DATETIME NOT NULL,
-              INDEX idx_ledger (ledger_id)
-            )
-          `);
+          // af_manual_balances 表已通过 deploy.yml 创建
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${input.ledgerId}, ${input.userId}, ${input.amount}, ${input.note || ''}, NOW(), NOW())`
           );
@@ -8552,29 +8540,14 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { getLedgerDb } = await import('./db');
         const db = await getLedgerDb();
-        // 确保 af_orders 表有 order_type 字段
-        try {
-          await db.execute(sql`ALTER TABLE af_orders ADD COLUMN order_type VARCHAR(50) DEFAULT '' AFTER status`);
-        } catch (_) { /* 字段已存在则忽略 */ }
+        // order_type 字段已通过 deploy.yml 建表时创建，无需每次 ALTER TABLE
         // 1. 插入委托订单
         const orderType = input.orderType || '无损合约';
         await db.execute(
           sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, order_type, created_at, updated_at)
               VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
         );
-        // 2. 确保 af_manual_balances 表存在
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS af_manual_balances (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            ledger_id INT NOT NULL,
-            user_id INT NOT NULL,
-            amount DECIMAL(18,2) NOT NULL DEFAULT 0,
-            note VARCHAR(255) DEFAULT '',
-            created_at DATETIME NOT NULL,
-            updated_at DATETIME NOT NULL,
-            INDEX idx_ledger (ledger_id)
-          )
-        `);
+        // 2. af_manual_balances 表已通过 deploy.yml 创建，无需每次 CREATE TABLE
         // 3. 根据买卖方向调整余额
         const amountNum = parseFloat(input.amount);
         if (!isNaN(amountNum) && amountNum > 0) {
@@ -8715,19 +8688,7 @@ export const appRouter = router({
         const userId = order.user_id;
         const coin = order.coin;
         const side = order.side;
-        // 确保 af_manual_balances 表存在
-        await db.execute(sql`
-          CREATE TABLE IF NOT EXISTS af_manual_balances (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            ledger_id INT NOT NULL,
-            user_id INT NOT NULL,
-            amount DECIMAL(18,2) NOT NULL DEFAULT 0,
-            note VARCHAR(255) DEFAULT '',
-            created_at DATETIME NOT NULL,
-            updated_at DATETIME NOT NULL,
-            INDEX idx_ledger (ledger_id)
-          )
-        `);
+        // af_manual_balances 表已通过 deploy.yml 创建
         // 余额调整逻辑
         let balanceAdjust = 0;
         let balanceNote = '';

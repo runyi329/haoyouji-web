@@ -63,6 +63,9 @@ jobs:
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "CREATE TABLE IF NOT EXISTS af_orders (id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, user_id INT NOT NULL, coin VARCHAR(10) NOT NULL, side VARCHAR(10) NOT NULL, limit_price VARCHAR(50) NOT NULL, amount VARCHAR(50) NOT NULL, quantity VARCHAR(50) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending', order_type VARCHAR(50) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX af_orders_ledger_idx (ledger_id), INDEX af_orders_user_idx (user_id), INDEX af_orders_coin_idx (coin))" || true
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE af_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(50) NOT NULL DEFAULT ''" || true
             echo "✅ af_orders表确认完成"
+            echo "📊 确保af_manual_balances表存在..."
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "CREATE TABLE IF NOT EXISTS af_manual_balances (id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, user_id INT NOT NULL, amount DECIMAL(18,2) NOT NULL DEFAULT 0, note VARCHAR(255) DEFAULT '', created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, INDEX idx_ledger (ledger_id), INDEX idx_user (user_id))" || true
+            echo "✅ af_manual_balances表确认完成"
             echo "💳 注入支付宝环境变量..."
             node /root/haoyouji-web/scripts/inject-alipay-env.cjs
             echo "🔄 重启服务（使用 ecosystem.config.cjs 确保 COS 环境变量持久化）..."
