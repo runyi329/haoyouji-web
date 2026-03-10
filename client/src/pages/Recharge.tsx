@@ -175,7 +175,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
           {/* 操作按钮 */}
           <div className="space-y-3">
             <button
-              onClick={() => setLocation("/recharge/history")}
+              onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}` : '/recharge/history')}
               className="w-full bg-[#D32F2F] text-white py-4 rounded-lg font-medium"
             >
               查看充值记录
@@ -328,7 +328,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
             <h1 className="text-lg font-semibold">充值</h1>
           </div>
           <button
-            onClick={() => setLocation("/recharge/history")}
+            onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}` : '/recharge/history')}
             className="flex items-center text-sm text-gray-600 hover:text-[#D32F2F]"
           >
             <History className="w-4 h-4 mr-1" />

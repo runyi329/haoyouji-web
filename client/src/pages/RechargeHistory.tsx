@@ -3,7 +3,13 @@ import { ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, Wallet } from "lu
 import { trpc } from "../lib/trpc";
 
 export default function RechargeHistory() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
+  // 解析来源参数
+  const searchParams = new URLSearchParams(location.split('?')[1] || '');
+  const fromLedgerId = searchParams.get('ledgerId');
+  const backToRecharge = fromLedgerId
+    ? `/recharge?from=ledger&ledgerId=${fromLedgerId}`
+    : '/recharge';
 
   const ordersQuery = trpc.recharge.getMyOrders.useQuery({ limit: 50 });
   const balanceQuery = trpc.recharge.getBalance.useQuery();
@@ -33,7 +39,7 @@ export default function RechargeHistory() {
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">
-          <button onClick={() => setLocation("/recharge")} className="mr-3">
+          <button onClick={() => setLocation(backToRecharge)} className="mr-3">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <h1 className="text-lg font-semibold">充值记录</h1>
@@ -65,7 +71,7 @@ export default function RechargeHistory() {
               <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">暂无充值记录</p>
               <button
-                onClick={() => setLocation("/recharge")}
+                onClick={() => setLocation(backToRecharge)}
                 className="mt-4 px-6 py-2 bg-[#D32F2F] text-white rounded-lg text-sm"
               >
                 去充值
