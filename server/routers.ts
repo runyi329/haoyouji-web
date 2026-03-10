@@ -8551,10 +8551,41 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const { getLedgerDb } = await import('./db');
         const db = await getLedgerDb();
+        // 1. 插入委托订单
         await db.execute(
           sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, created_at, updated_at)
               VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', NOW(), NOW())`
         );
+        // 2. 确保 af_manual_balances 表存在
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS af_manual_balances (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            user_id INT NOT NULL,
+            amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+            note VARCHAR(255) DEFAULT '',
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            INDEX idx_ledger (ledger_id)
+          )
+        `);
+        // 3. 根据买卖方向调整余额
+        const amountNum = parseFloat(input.amount);
+        if (!isNaN(amountNum) && amountNum > 0) {
+          if (input.side === 'buy') {
+            // 委托买入：扣除余额（负数）
+            await db.execute(
+              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                  VALUES (${input.ledgerId}, ${ctx.user.id}, ${-amountNum}, ${`委托买入 ${input.coin} ${input.amount} USDT`}, NOW(), NOW())`
+            );
+          } else {
+            // 委托卖出：增加余额（正数）
+            await db.execute(
+              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                  VALUES (${input.ledgerId}, ${ctx.user.id}, ${amountNum}, ${`委托卖出 ${input.coin} ${input.amount} USDT`}, NOW(), NOW())`
+            );
+          }
+        }
         return { success: true };
       }),
     // AF 查询委托订单（该账本所有币种）
