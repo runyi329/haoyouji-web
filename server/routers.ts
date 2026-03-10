@@ -8670,7 +8670,7 @@ export const appRouter = router({
         const db = await getLedgerDb();
         // 验证是否是 owner 或 admin
         const roleRows = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
@@ -8715,11 +8715,11 @@ export const appRouter = router({
         const db = await getLedgerDb();
         // 验证是否是 owner 或 admin
         const roleRows = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+         sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
-        // 获取原订单信息
+        // 查询原始订单信息
         const orderRows = await db.execute(
           sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
