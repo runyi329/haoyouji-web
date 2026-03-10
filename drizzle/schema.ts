@@ -1507,3 +1507,42 @@ export * from "./lottery-schema";
 // ===== 用户类型导出 =====
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+// ===== AF型竞猜账本 - Polymarket数据表 =====
+export const predictionEvents = mysqlTable("prediction_events", {
+  id: int().autoincrement().notNull(),
+  polymarketEventId: varchar({ length: 100 }).notNull(),
+  polymarketMarketId: varchar({ length: 100 }).notNull(),
+  coin: mysqlEnum(['BTC', 'ETH']).notNull(),
+  question: text().notNull(),
+  description: text(),
+  outcomes: json().$type<string[]>().notNull(),
+  outcomePrices: json().$type<string[]>().notNull(),
+  volume: varchar({ length: 50 }),
+  endDate: timestamp({ mode: 'string' }),
+  imageUrl: text(),
+  active: tinyint().default(1).notNull(),
+  closed: tinyint().default(0).notNull(),
+  syncedAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("prediction_events_coin_idx").on(table.coin),
+  index("prediction_events_market_idx").on(table.polymarketMarketId),
+]);
+
+export const userPredictions = mysqlTable("user_predictions", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int().notNull(),
+  userId: int().notNull(),
+  eventId: int().notNull(),
+  selectedOutcome: varchar({ length: 50 }).notNull(),
+  selectedIndex: int().notNull(),
+  note: text(),
+  createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("user_predictions_ledger_idx").on(table.ledgerId),
+  index("user_predictions_user_idx").on(table.userId),
+  index("user_predictions_event_idx").on(table.eventId),
+]);

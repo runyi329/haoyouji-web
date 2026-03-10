@@ -127,7 +127,8 @@ export default function LedgerDetail() {
 
   // 减肥账本数据
   const isDiet = (ledgerData as any)?.type === 'diet' || (ledgerData as any)?.type === 'custom_ac';
-  const isCustomAE = (ledgerData as any)?.type === 'custom_ae' || (ledgerData as any)?.type === 'custom_af';
+  const isCustomAE = (ledgerData as any)?.type === 'custom_ae';
+  const isCustomAF = (ledgerData as any)?.type === 'custom_af';
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isDietCoach = isDiet && (isOwner || isAdmin);
@@ -945,8 +946,48 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* 记账记录列表 —— 非 custom_ae 账本显示 */}
-      {!isCustomAE && <div className={`flex-1 px-4 pb-20 space-y-3`}>
+      {/* 加密货币竞猜入口 —— 仅 custom_af 账本 */}
+      {isCustomAF && (
+        <div className="flex-1 px-4 pb-20">
+          <div className="mt-4 space-y-3">
+            {/* BTC 竞猜入口 */}
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction`)}
+              className="w-full bg-gradient-to-r from-[#F7931A] to-[#E8820A] rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+            >
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl">
+                ₿
+              </div>
+              <div className="text-left flex-1">
+                <div className="text-white font-semibold text-base">比特币 (BTC) 竞猜</div>
+                <div className="text-white/80 text-xs mt-0.5">Polymarket 实时预测数据</div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-white/70" />
+            </button>
+            {/* ETH 竞猜入口 */}
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=ETH`)}
+              className="w-full bg-gradient-to-r from-[#627EEA] to-[#4A6CD4] rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+            >
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-2xl">
+                Ξ
+              </div>
+              <div className="text-left flex-1">
+                <div className="text-white font-semibold text-base">以太坊 (ETH) 竞猜</div>
+                <div className="text-white/80 text-xs mt-0.5">Polymarket 实时预测数据</div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-white/70" />
+            </button>
+            {/* 说明 */}
+            <div className="text-center text-xs text-gray-400 pt-2">
+              数据来源 Polymarket · 仅供参考 · 不涉及资金
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 记账记录列表 —— 非 custom_ae / custom_af 账本显示 */}
+      {!isCustomAE && !isCustomAF && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>

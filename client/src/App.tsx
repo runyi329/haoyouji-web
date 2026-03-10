@@ -164,6 +164,8 @@ const PaymentResult = lazy(() => import("./pages/PaymentResult"));
 const SentiaHome = lazy(() => import("./pages/SentiaHome"));
 // AE 共享抽奖
 const LotteryCreate = lazy(() => import("./pages/LotteryCreate"));
+// AF 加密货币竞猜
+const CryptoPrediction = lazy(() => import("./pages/CryptoPrediction"));
 const LotteryEdit = lazy(() => import("./pages/LotteryEdit"));
 const LotteryActivity = lazy(() => import("./pages/LotteryActivity"));
 const LotteryList = lazy(() => import("./pages/LotteryList"));
@@ -434,6 +436,8 @@ function Router() {
         {/* AB 共享意见本 - 游客扫码页面（新架构：ledgerId + categoryId） */}
         {/* AE 共享抽奖 */}
         <Route path="/lottery/create" component={LotteryCreate} />
+        {/* AF 加密货币竞猜 */}
+        <Route path="/ledger/:id/crypto-prediction" component={CryptoPrediction} />
         <Route path="/lottery/edit/:activityId" component={LotteryEdit} />
         <Route path="/lottery/list/:ledgerId" component={LotteryList} />
         <Route path="/lottery/:activityId/draw" component={LotteryDrawScreen} />
