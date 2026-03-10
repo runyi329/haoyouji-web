@@ -616,6 +616,7 @@ export default function CryptoPrediction() {
                   limitPrice: price.toString(),
                   amount: amt.toFixed(2),
                   quantity: qty,
+                  orderType: '无损合约',
                 });
               }}
               disabled={orderSide === "sell" && availableSellQty <= 0}
@@ -627,40 +628,42 @@ export default function CryptoPrediction() {
             </button>
             {/* 当前委托订单列表 */}
             <div className="mt-4">
-              <div className="text-sm font-semibold text-white mb-3">当前委托</div>
+              <div className="text-sm font-semibold text-white mb-2">当前委托</div>
               {ordersLoading ? (
-                <div className="text-center py-6 text-gray-500 text-sm">加载中...</div>
+                <div className="text-center py-5 text-gray-500 text-xs">加载中...</div>
               ) : orders.length === 0 ? (
-                <div className="text-center py-6 text-gray-500 text-sm">暂无委托记录</div>
+                <div className="text-center py-5 text-gray-500 text-xs">暂无委托记录</div>
               ) : (
-                <div className="space-y-2">
-                  {/* 表头：币种 方向 价格 数量 金额 状态 */}
-                  <div className="grid grid-cols-6 text-xs text-gray-500 px-1 pb-1 border-b border-[#2A2E39]">
+                <div>
+                  {/* 表头 */}
+                  <div className="grid text-[10px] text-gray-500 px-1 pb-1 border-b border-[#2A2E39]" style={{gridTemplateColumns:'2fr 1.5fr 2fr 2fr 2fr 1.5fr 2fr'}}>
                     <span>币种</span>
                     <span>方向</span>
                     <span className="text-right">价格</span>
                     <span className="text-right">数量</span>
                     <span className="text-right">金额</span>
                     <span className="text-right">状态</span>
+                    <span className="text-right">类型</span>
                   </div>
                   {orders.map((order) => (
-                    <div key={order.id} className="grid grid-cols-6 text-xs py-2 border-b border-[#1C2127] items-center">
+                    <div key={order.id} className="grid text-[10px] py-1.5 border-b border-[#1C2127] items-center" style={{gridTemplateColumns:'2fr 1.5fr 2fr 2fr 2fr 1.5fr 2fr'}}>
                       <span className="text-white font-medium">{order.coin}</span>
                       <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
                         {order.side === 'buy' ? '委买' : '委卖'}
                       </span>
                       <span className="text-right text-gray-300">{parseFloat(order.limitPrice).toLocaleString()}</span>
                       <span className="text-right text-gray-400">{parseFloat(order.quantity).toFixed(4)}</span>
-                      <span className="text-right text-gray-300">{order.amount}</span>
-                      <span className={`text-right text-xs ${
+                      <span className="text-right text-gray-300">{parseFloat(order.amount).toFixed(2)}</span>
+                      <span className={`text-right ${
                         order.status === 'completed' ? 'text-[#26a69a]' :
                         order.status === 'cancelled' ? 'text-gray-500' :
                         'text-yellow-400'
                       }`}>
                         {order.status === 'completed' ? '已成交' :
-                         order.status === 'cancelled' ? '已撤销' :
+                         order.status === 'cancelled' ? '已撤' :
                          '委托中'}
                       </span>
+                      <span className="text-right text-gray-400 truncate">{(order as any).orderType || '无损合约'}</span>
                     </div>
                   ))}
                 </div>

@@ -8547,14 +8547,20 @@ export const appRouter = router({
         limitPrice: z.string(),
         amount: z.string(),
         quantity: z.string(),
+        orderType: z.string().optional(), // 无损合约 / 无损现货 / 行情评估
       }))
       .mutation(async ({ ctx, input }) => {
         const { getLedgerDb } = await import('./db');
         const db = await getLedgerDb();
+        // 确保 af_orders 表有 order_type 字段
+        try {
+          await db.execute(sql`ALTER TABLE af_orders ADD COLUMN order_type VARCHAR(50) DEFAULT '' AFTER status`);
+        } catch (_) { /* 字段已存在则忽略 */ }
         // 1. 插入委托订单
+        const orderType = input.orderType || '无损合约';
         await db.execute(
-          sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, created_at, updated_at)
-              VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', NOW(), NOW())`
+          sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, order_type, created_at, updated_at)
+              VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
         );
         // 2. 确保 af_manual_balances 表存在
         await db.execute(sql`
@@ -8595,7 +8601,7 @@ export const appRouter = router({
         const { getLedgerDb } = await import('./db');
         const db = await getLedgerDb();
         const rows = await db.execute(
-          sql`SELECT id, coin, side, limit_price, amount, quantity, status, created_at
+          sql`SELECT id, coin, side, limit_price, amount, quantity, status, COALESCE(order_type,'') as order_type, created_at
               FROM af_orders
               WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
               ORDER BY created_at DESC
@@ -8609,6 +8615,7 @@ export const appRouter = router({
           amount: r.amount,
           quantity: r.quantity,
           status: r.status,
+          orderType: r.order_type || '',
           createdAt: r.created_at,
         }));
         return list;
@@ -8651,7 +8658,7 @@ export const appRouter = router({
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         const rows = await db.execute(
-          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, o.created_at,
+          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at,
                      u.username, u.nickname
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
@@ -8670,6 +8677,7 @@ export const appRouter = router({
           amount: r.amount,
           quantity: r.quantity,
           status: r.status,
+          orderType: r.order_type || '',
           createdAt: r.created_at,
         }));
         return list;
