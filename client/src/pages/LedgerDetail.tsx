@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 const LedgerDetailAA = lazy(() => import('./LedgerDetailAA'));
-const LedgerDetailAF = lazy(() => import('./LedgerDetailAF'));
 const MemoLedgerPage = lazy(() => import('./MemoLedgerPage'));
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -172,18 +171,6 @@ export default function LedgerDetail() {
     }
   }, [ledgerId]);
 
-  // 定制账本(AF)：使用专用UI（K线图 + 三Tab）
-  if (!isLoading && !error && isCustomAF && ledgerData) {
-    return (
-      <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-[#0B0E11]"><div className="text-gray-400">加载中...</div></div>}>
-        <LedgerDetailAF
-          ledgerId={ledgerId}
-          ledgerData={ledgerData}
-          user={user}
-        />
-      </Suspense>
-    );
-  }
   // 定制账本(AD)：永忆
   const isCustomAD = (ledgerData as any)?.type === 'custom_ad';
   if (!isLoading && !error && isCustomAD && ledgerData) {

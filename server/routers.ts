@@ -8523,6 +8523,37 @@ export const appRouter = router({
         );
         return combined;
       }),
+
+    // Binance 行情代理（解决前端跨域/封锁问题）
+    getBinanceTicker: protectedProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${input.symbol}`);
+        if (!res.ok) throw new Error('Binance API error');
+        return res.json();
+      }),
+
+    getBinanceKlines: protectedProcedure
+      .input(z.object({
+        symbol: z.string(),
+        interval: z.string(),
+        limit: z.number().default(60),
+      }))
+      .query(async ({ input }) => {
+        const res = await fetch(
+          `https://api.binance.com/api/v3/klines?symbol=${input.symbol}&interval=${input.interval}&limit=${input.limit}`
+        );
+        if (!res.ok) throw new Error('Binance API error');
+        const raw: any[] = await res.json();
+        return raw.map((k: any[]) => ({
+          openTime: k[0],
+          open: parseFloat(k[1]),
+          high: parseFloat(k[2]),
+          low: parseFloat(k[3]),
+          close: parseFloat(k[4]),
+          volume: parseFloat(k[5]),
+        }));
+      }),
   }),
   
   // 銀行列表管理
