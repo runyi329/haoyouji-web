@@ -22,6 +22,14 @@ export default function RechargeHistory() {
     { enabled: !ledgerId }
   );
   const balanceQuery = trpc.recharge.getBalance.useQuery();
+  // 如果有 ledgerId，使用 AF 账本总资产（充值到账 + 手动调账）
+  const { data: afAssetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
+    { ledgerId: ledgerId! },
+    { enabled: !!ledgerId, staleTime: 30000 }
+  );
+  const displayBalance = ledgerId && afAssetData != null
+    ? (afAssetData as any).total
+    : balanceQuery.data;
 
   // 格式化时间
   const formatDate = (dateStr: string | Date) => {
@@ -67,7 +75,7 @@ export default function RechargeHistory() {
             <span className="text-sm opacity-90">当前余额</span>
           </div>
           <div className="text-2xl font-bold">
-            {balanceQuery.data?.toFixed(2) || '0.00'} USDT
+            {displayBalance != null ? parseFloat(String(displayBalance)).toFixed(2) : '0.00'} USDT
           </div>
         </div>
 
