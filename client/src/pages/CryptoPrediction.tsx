@@ -283,7 +283,7 @@ function OrderDetail({ order, timeStr, ledgerId }: {
   const isCompleted = order.status === 'completed';
 
   return (
-    <div className="mt-2 bg-[#1C2127] rounded-xl p-3 space-y-2 text-[10px]">
+    <div className="mt-2 bg-[#1C2127] rounded-xl p-3 space-y-2 text-sm">
       {/* 基本信息 */}
       <div className="space-y-1.5">
         <div className="flex justify-between">
@@ -372,7 +372,7 @@ function OrderDetail({ order, timeStr, ledgerId }: {
           {/* 收益权档位表 */}
           <div className="text-gray-500 mb-1.5">收益权档位表</div>
           {/* 表头 */}
-          <div className="grid grid-cols-4 text-[9px] text-gray-600 mb-1 px-1">
+          <div className="grid grid-cols-4 text-xs text-gray-600 mb-1 px-1">
             <span>跌幅档</span>
             <span className="text-center">收益权</span>
             <span className="text-center">触发时间</span>
@@ -407,7 +407,7 @@ function OrderDetail({ order, timeStr, ledgerId }: {
                   isCurrentTier ? 'text-[#ef5350]' :
                   isTriggered ? 'text-gray-400' : 'text-gray-600'
                 }`}>{pct}</span>
-                <span className={`text-center text-[9px] ${
+                <span className={`text-center text-xs ${
                   isTriggered ? 'text-gray-500' : 'text-gray-700'
                 }`}>
                   {trigger ? new Date(trigger.triggeredAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '--'}
@@ -433,7 +433,7 @@ function OrderDetail({ order, timeStr, ledgerId }: {
               currentTier === 0 ? 'text-[#26a69a]' : 'text-[#ef5350]'
             }`}>
               {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
-              <span className="text-gray-500 text-[9px] ml-1">
+              <span className="text-gray-500 text-xs ml-1">
                 ({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})
               </span>
             </span>
