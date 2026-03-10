@@ -16,7 +16,7 @@ const COIN_SYMBOLS: Record<string, string> = {
 };
 
 // 最近一次扫描状态（供前端查询）
-export const scanStatus: Record<string, {
+const scanStatus: Record<string, {
   lastScanAt: string;
   lastLowPrice: string;
   scanning: boolean;
@@ -157,6 +157,13 @@ export async function runTierScan() {
   }
 
   console.log("[AF扫描] 本次扫描完成");
+}
+
+/**
+ * 获取指定币种的扫描状态
+ */
+export function getScanStatus(coin: string) {
+  return scanStatus[coin] || null;
 }
 
 /**
