@@ -459,6 +459,8 @@ export default function CryptoPrediction() {
   const [orderAmount, setOrderAmount] = useState("");
   const [orderPrice, setOrderPrice] = useState("");
   const [sliderPct, setSliderPct] = useState(0);
+  // 委卖时选中的买入订单 id
+  const [selectedSellOrderId, setSelectedSellOrderId] = useState<number | null>(null);
   // 订单详情展开状态
   const [orderDetailId, setOrderDetailId] = useState<number | null>(null);
 
@@ -657,7 +659,7 @@ export default function CryptoPrediction() {
                 委买
               </button>
               <button
-                onClick={() => { setOrderSide("sell"); setOrderAmount(""); setSliderPct(0); }}
+                onClick={() => { setOrderSide("sell"); setOrderAmount(""); setSliderPct(0); setSelectedSellOrderId(null); setOrderPrice(""); }}
                 className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
                   orderSide === "sell" ? "bg-[#ef5350] text-white" : "bg-[#1C2127] text-gray-400"
                 }`}>
@@ -678,156 +680,191 @@ export default function CryptoPrediction() {
               />
               <span className="text-sm text-white opacity-50">USDT</span>
             </div>
-            {/* 金额输入框 */}
-            <div className="bg-[#1C2127] rounded-xl px-4 py-3 flex items-center gap-3">
-              <span className="text-sm text-gray-400 w-14">金额</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="0.00"
-                value={orderAmount}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setOrderAmount(val);
-                  const num = parseFloat(val);
-                  if (!isNaN(num) && availableUsdt > 0) {
-                    setSliderPct(Math.min(100, Math.round((num / availableUsdt) * 100)));
-                  } else {
-                    setSliderPct(0);
-                  }
-                }}
-                className="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-600"
-              />
-              <span className="text-sm text-white opacity-50">USDT</span>
-            </div>
 
-            {/* 5档进度条 */}
-            <div className="px-0">
-              <div className="relative h-8 flex items-center select-none">
-                {/* 底部轨道 */}
-                <div className="absolute left-0 right-0 h-0.5 bg-[#2A2E39] rounded-full" />
-                {/* 已选轨道（白色） */}
-                <div
-                  className="absolute left-0 h-0.5 rounded-full"
-                  style={{ width: `${sliderPct}%`, backgroundColor: "#ffffff" }}
-                />
-                {/* 5个静态小档位点 */}
-                {[0, 25, 50, 75, 100].map((pct, idx) => {
-                  let leftPx: string;
-                  if (idx === 0) leftPx = '0px';
-                  else if (idx === 4) leftPx = 'calc(100% - 6px)';
-                  else leftPx = `calc(${pct}% - 3px)`;
-                  return (
-                    <div
-                      key={pct}
-                      className="absolute w-1.5 h-1.5 rounded-full z-10 pointer-events-none"
-                      style={{
-                        left: leftPx,
-                        backgroundColor: sliderPct >= pct ? "#ffffff" : "#3A3E49"
+            {/* 委买模式：金额输入 + 进度条 + 可用余额 */}
+            {orderSide === "buy" && (
+              <>
+                {/* 金额输入框 */}
+                <div className="bg-[#1C2127] rounded-xl px-4 py-3 flex items-center gap-3">
+                  <span className="text-sm text-gray-400 w-14">金额</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={orderAmount}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setOrderAmount(val);
+                      const num = parseFloat(val);
+                      if (!isNaN(num) && availableUsdt > 0) {
+                        setSliderPct(Math.min(100, Math.round((num / availableUsdt) * 100)));
+                      } else {
+                        setSliderPct(0);
+                      }
+                    }}
+                    className="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-600"
+                  />
+                  <span className="text-sm text-white opacity-50">USDT</span>
+                </div>
+                {/* 5档进度条 */}
+                <div className="px-0">
+                  <div className="relative h-8 flex items-center select-none">
+                    <div className="absolute left-0 right-0 h-0.5 bg-[#2A2E39] rounded-full" />
+                    <div className="absolute left-0 h-0.5 rounded-full" style={{ width: `${sliderPct}%`, backgroundColor: "#ffffff" }} />
+                    {[0, 25, 50, 75, 100].map((pct, idx) => {
+                      let leftPx: string;
+                      if (idx === 0) leftPx = '0px';
+                      else if (idx === 4) leftPx = 'calc(100% - 6px)';
+                      else leftPx = `calc(${pct}% - 3px)`;
+                      return (
+                        <div key={pct} className="absolute w-1.5 h-1.5 rounded-full z-10 pointer-events-none"
+                          style={{ left: leftPx, backgroundColor: sliderPct >= pct ? "#ffffff" : "#3A3E49" }} />
+                      );
+                    })}
+                    <div className="absolute w-4 h-4 rounded-full bg-white shadow-lg z-20 pointer-events-none"
+                      style={{ left: sliderPct === 0 ? '0px' : sliderPct === 100 ? 'calc(100% - 16px)' : `calc(${sliderPct}% - 8px)` }} />
+                    <input type="range" min={0} max={100} step={1} value={sliderPct}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setSliderPct(val);
+                        const amt = availableUsdt > 0 ? (availableUsdt * val / 100) : 0;
+                        setOrderAmount(amt > 0 ? amt.toFixed(2) : "");
                       }}
-                    />
-                  );
-                })}
-                {/* 拖动圆点（实时跟随） */}
-                <div
-                  className="absolute w-4 h-4 rounded-full bg-white shadow-lg z-20 pointer-events-none"
-                  style={{
-                    left: sliderPct === 0 ? '0px' : sliderPct === 100 ? 'calc(100% - 16px)' : `calc(${sliderPct}% - 8px)`
-                  }}
-                />
-                {/* 透明 range input 支持拖动 */}
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={sliderPct}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setSliderPct(val);
-                    const amt = availableUsdt > 0 ? (availableUsdt * val / 100) : 0;
-                    setOrderAmount(amt > 0 ? amt.toFixed(2) : "");
-                  }}
-                  className="absolute inset-0 w-full opacity-0 cursor-pointer z-30"
-                />
-              </div>
-              {/* 百分比标签 */}
-              <div className="flex justify-between mt-1">
-                {["0%", "25%", "50%", "75%", "100%"].map((label) => (
-                  <span key={label} className="text-xs text-gray-600">{label}</span>
-                ))}
-              </div>
-            </div>
+                      className="absolute inset-0 w-full opacity-0 cursor-pointer z-30" />
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    {["0%", "25%", "50%", "75%", "100%"].map((label) => (
+                      <span key={label} className="text-xs text-gray-600">{label}</span>
+                    ))}
+                  </div>
+                </div>
+                {/* 可用金额 + 充値按钮 */}
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-gray-500">可用</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-300">
+                      {availableUsdt > 0 ? availableUsdt.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"} USDT
+                    </span>
+                    <button onClick={() => setLocation(`/recharge?ledgerId=${ledgerId}`)}
+                      className="w-5 h-5 rounded-full bg-[#2A2E39] flex items-center justify-center text-gray-400 hover:bg-[#3A3E49] transition-colors" title="充値">
+                      <span className="text-xs leading-none">+</span>
+                    </button>
+                  </div>
+                </div>
+                {/* 可买数量 */}
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs text-gray-500">可买 <span className="text-yellow-400 ml-1">(5.25倍)</span></span>
+                  <span className="text-xs text-gray-300">
+                    {(() => {
+                      const amt = parseFloat(orderAmount);
+                      const price = parseFloat(orderPrice) || parseFloat(ticker?.lastPrice || "0");
+                      if (!isNaN(amt) && amt > 0 && price > 0) {
+                        return `${((amt / price) * 5.25).toFixed(8)} ${coin.name}`;
+                      }
+                      return `-- ${coin.name}`;
+                    })()}
+                  </span>
+                </div>
+              </>
+            )}
 
-            {/* 可用金额 + 充值按钮 */}
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs text-gray-500">可用</span>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-300">
-                  {availableUsdt > 0 ? availableUsdt.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"} USDT
-                </span>
-                <button
-                  onClick={() => setLocation(`/recharge?ledgerId=${ledgerId}`)}
-                  className="w-5 h-5 rounded-full bg-[#2A2E39] flex items-center justify-center text-gray-400 hover:bg-[#3A3E49] transition-colors"
-                  title="充值"
-                >
-                  <span className="text-xs leading-none">+</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 可买/可卖数量 */}
-            <div className="flex items-center justify-between px-1">
-              <span className="text-xs text-gray-500">
-                可{orderSide === "buy" ? "买" : "卖"}
-                {orderSide === "buy" && <span className="text-yellow-400 ml-1">(5.25倍)</span>}
-              </span>
-              <span className="text-xs text-gray-300">
-                {orderSide === "buy" ? (() => {
-                  const amt = parseFloat(orderAmount);
-                  const price = parseFloat(orderPrice) || parseFloat(ticker?.lastPrice || "0");
-                  if (!isNaN(amt) && amt > 0 && price > 0) {
-                    const qty = (amt / price) * 5.25;
-                    return `${qty.toFixed(8)} ${coin.name}`;
-                  }
-                  return `-- ${coin.name}`;
-                })() : `${availableSellQty > 0 ? availableSellQty.toFixed(8) : "0.00000000"} ${coin.name}`}
-              </span>
-            </div>
+            {/* 委卖模式：已成交买入订单列表选择 */}
+            {orderSide === "sell" && (() => {
+              const completedBuyOrders = (ordersData as any[] || []).filter(
+                (o: any) => o.side === 'buy' && o.status === 'completed' && o.coin === coin.name
+              );
+              return (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500 px-1">选择要卖出的订单（无损合约必须一次性全部卖出）</p>
+                  {completedBuyOrders.length === 0 ? (
+                    <p className="text-xs text-gray-600 px-1">暂无已成交的买入订单</p>
+                  ) : (
+                    completedBuyOrders.map((o: any) => {
+                      const isSelected = selectedSellOrderId === o.id;
+                      return (
+                        <div
+                          key={o.id}
+                          onClick={() => {
+                            setSelectedSellOrderId(isSelected ? null : o.id);
+                            if (!isSelected) {
+                              // 自动填入该订单全部数量对应的金额
+                              setOrderAmount(parseFloat(o.amount).toFixed(2));
+                            } else {
+                              setOrderAmount("");
+                            }
+                          }}
+                          className={`rounded-xl px-4 py-3 cursor-pointer border transition-colors ${
+                            isSelected
+                              ? 'bg-[#2A1A1A] border-[#ef5350]'
+                              : 'bg-[#1C2127] border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-xs text-white font-medium">{o.coin}</span>
+                              <span className="text-[10px] text-gray-500">委托价 {parseFloat(o.limitPrice).toLocaleString()} USDT</span>
+                            </div>
+                            <div className="flex flex-col items-end gap-0.5">
+                              <span className="text-xs text-white">{parseFloat(o.quantity).toFixed(6)} {o.coin}</span>
+                              <span className="text-[10px] text-gray-500">金额 {parseFloat(o.amount).toFixed(2)} USDT</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  {selectedSellOrderId && (
+                    <p className="text-[10px] text-[#ef5350] px-1">无损合约订单必须一次性全部卖出</p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* 确认按鈕 */}
             <button
               onClick={() => {
-                const amt = parseFloat(orderAmount);
                 const price = parseFloat(orderPrice);
                 if (!price || price <= 0) { toast.error("请输入委托价格"); return; }
-                if (!amt || amt <= 0) { toast.error("请输入金额"); return; }
                 if (orderSide === "buy") {
+                  const amt = parseFloat(orderAmount);
+                  if (!amt || amt <= 0) { toast.error("请输入金额"); return; }
                   if (amt > availableUsdt) { toast.error("金额超过可用余额"); return; }
+                  const qty = ((amt / price) * 5.25).toFixed(8);
+                  submitOrderMutation.mutate({
+                    ledgerId,
+                    coin: coin.name,
+                    side: 'buy',
+                    limitPrice: price.toString(),
+                    amount: amt.toFixed(2),
+                    quantity: qty,
+                    orderType: '无损合约',
+                  });
                 } else {
-                  // 委卖：检查可卖数量
-                  if (availableSellQty <= 0) { toast.error("暂无已成交的持仓，无法委卖"); return; }
-                  const sellQty = (amt / price);
-                  if (sellQty > availableSellQty) { toast.error(`委卖数量超过可卖数量（可卖 ${availableSellQty.toFixed(8)} ${coin.name}）`); return; }
+                  // 委卖：必须选中一个订单
+                  if (!selectedSellOrderId) { toast.error("请选择要卖出的订单"); return; }
+                  const selectedOrder = (ordersData as any[] || []).find((o: any) => o.id === selectedSellOrderId);
+                  if (!selectedOrder) { toast.error("订单不存在"); return; }
+                  const qty = parseFloat(selectedOrder.quantity).toFixed(8);
+                  const amt = parseFloat(selectedOrder.amount).toFixed(2);
+                  submitOrderMutation.mutate({
+                    ledgerId,
+                    coin: coin.name,
+                    side: 'sell',
+                    limitPrice: price.toString(),
+                    amount: amt,
+                    quantity: qty,
+                    orderType: '无损合约',
+                  });
                 }
-                // 委买数量 × 5.25倍，委卖不加倍
-                const qty = orderSide === 'buy'
-                  ? ((amt / price) * 5.25).toFixed(8)
-                  : (amt / price).toFixed(8);
-                submitOrderMutation.mutate({
-                  ledgerId,
-                  coin: coin.name,
-                  side: orderSide,
-                  limitPrice: price.toString(),
-                  amount: amt.toFixed(2),
-                  quantity: qty,
-                  orderType: '无损合约',
-                });
               }}
-              disabled={orderSide === "sell" && availableSellQty <= 0}
+              disabled={orderSide === "sell" && !selectedSellOrderId}
               className={`w-full py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity ${
                 orderSide === "buy" ? "bg-[#26a69a]" : "bg-[#ef5350]"
-              } ${(!orderAmount || parseFloat(orderAmount) <= 0 || (orderSide === "sell" && availableSellQty <= 0)) ? "opacity-50" : "opacity-100"}`}
+              } ${(
+                orderSide === "buy"
+                  ? (!orderAmount || parseFloat(orderAmount) <= 0)
+                  : !selectedSellOrderId
+              ) ? "opacity-50" : "opacity-100"}`}
             >
               {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : `卖出 ${coin.name}`}
             </button>
