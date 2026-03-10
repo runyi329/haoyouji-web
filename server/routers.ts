@@ -8384,9 +8384,85 @@ export const appRouter = router({
         await dbLedger.updateMyInitialBalances(input.ledgerId, input.targetUserId, input.balances);
         return { success: true };
       }),
+
+    // AF 手动调账 - 获取列表
+    afGetManualBalances: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        const rows = await db.execute(
+          sql`SELECT * FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} ORDER BY created_at DESC`
+        );
+        return (rows as any)[0] as any[];
+      }),
+
+    // AF 手动调账 - 新增或更新
+    afUpsertManualBalance: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        id: z.number().optional(),
+        userId: z.number(),
+        amount: z.number(),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        if (input.id) {
+          await db.execute(
+            sql`UPDATE af_manual_balances SET amount = ${input.amount}, note = ${input.note || ''}, updated_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+          );
+        } else {
+          // 先确保表存在
+          await db.execute(sql`
+            CREATE TABLE IF NOT EXISTS af_manual_balances (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              ledger_id INT NOT NULL,
+              user_id INT NOT NULL,
+              amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+              note VARCHAR(255) DEFAULT '',
+              created_at DATETIME NOT NULL,
+              updated_at DATETIME NOT NULL,
+              INDEX idx_ledger (ledger_id)
+            )
+          `);
+          await db.execute(
+            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${input.ledgerId}, ${input.userId}, ${input.amount}, ${input.note || ''}, NOW(), NOW())`
+          );
+        }
+        return { success: true };
+      }),
+
+    // AF 手动调账 - 删除
+    afDeleteManualBalance: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const { getLedgerDb } = await import('./db');
+        const db = await getLedgerDb();
+        await db.execute(
+          sql`DELETE FROM af_manual_balances WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+        );
+        return { success: true };
+      }),
   }),
   
-  // 银行列表管理
+  // 銀行列表管理
   banks: router({
     // 搜索银行
     search: protectedProcedure

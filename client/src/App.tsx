@@ -102,6 +102,7 @@ const PendingOverview = lazy(() => import("./pages/PendingOverview"));
 const CreateLedgerType = lazy(() => import("./pages/CreateLedgerType"));
 const CreateLedger = lazy(() => import("./pages/CreateLedger"));
 const LedgerSettings = lazy(() => import("./pages/LedgerSettings"));
+const AfRechargeManage = lazy(() => import("./pages/AfRechargeManage"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
@@ -349,6 +350,7 @@ function Router() {
         <Route path="/ledger/create" component={CreateLedger} />
         <Route path="/ledger/join/:token" component={JoinLedger} />
         <Route path="/ledger/:id/settings" component={LedgerSettings} />
+        <Route path="/ledger/:id/af-recharge-manage" component={AfRechargeManage} />
         <Route path="/ledger/:id/aa-initial-balance" component={LedgerAAInitialBalance} />
         <Route path="/ledger/:id/admin-transactions" component={AdminTransactionList} />
         <Route path="/ledger/:id/import" component={LedgerImport} />
