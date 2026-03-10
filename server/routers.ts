@@ -8824,9 +8824,9 @@ export const appRouter = router({
         ) as any;
         const lastScan = (scanRows[0]?.[0] ?? scanRows[0]) || null;
 
-        // 从内存状态获取扫描信息
-        const { scanStatus } = await import('../af-tier-scanner');
-        const coinStatus = scanStatus[order.coin] || null;
+        // 从全局内存状态获取扫描信息
+        const { getScanStatus } = await import('./af-tier-scanner');
+        const coinStatus = getScanStatus(order.coin);
 
         return {
           triggers,
