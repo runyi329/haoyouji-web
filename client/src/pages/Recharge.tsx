@@ -35,6 +35,16 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
   const balanceQuery = trpc.recharge.getBalance.useQuery();
+  // 如果有 ledgerId，使用 AF 账本总资产（充値到账 + 手动调账）
+  const afLedgerId = fromLedgerId ? parseInt(fromLedgerId) : 0;
+  const { data: afAssetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
+    { ledgerId: afLedgerId },
+    { enabled: !!afLedgerId, staleTime: 30000 }
+  );
+  // 实际显示的余额：有 ledgerId 时用 AF 账本总资产，否则用普通余额
+  const displayBalance = afLedgerId && afAssetData != null
+    ? (afAssetData as any).total
+    : balanceQuery.data;
 
 
 
@@ -345,7 +355,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
             <span className="text-sm opacity-90">当前余额</span>
           </div>
           <div className="text-3xl font-bold">
-            {balanceQuery.data?.toFixed(2) || '0.00'} USDT
+            {displayBalance != null ? parseFloat(String(displayBalance)).toFixed(2) : '0.00'} USDT
           </div>
         </div>)}
 
