@@ -944,6 +944,50 @@ export const appRouter = router({
                 inviteCount: sql`${users.inviteCount} + 1`,
               })
               .where(eq(users.id, inviter.id));
+            
+            // 自动将新用户加入邀请者的 AF（custom_af）类型账本
+            try {
+              const afLedgers = await dbConn
+                .select({ id: ledgers.id })
+                .from(ledgers)
+                .where(
+                  and(
+                    eq(ledgers.ownerId, inviter.id),
+                    eq(ledgers.type, 'custom_af')
+                  )
+                );
+              
+              for (const afLedger of afLedgers) {
+                // 检查是否已经是成员
+                const existing = await dbConn
+                  .select({ id: ledgerMembers.id })
+                  .from(ledgerMembers)
+                  .where(
+                    and(
+                      eq(ledgerMembers.ledgerId, afLedger.id),
+                      eq(ledgerMembers.userId, user.id)
+                    )
+                  )
+                  .limit(1);
+                
+                if (existing.length === 0) {
+                  await dbConn.insert(ledgerMembers).values({
+                    ledgerId: afLedger.id,
+                    userId: user.id,
+                    role: 'member',
+                    memberType: 'real',
+                    permissionView: 'all',
+                    permissionAdd: 'all',
+                    permissionEdit: 'own',
+                    permissionDelete: 'own',
+                  });
+                  console.log(`[邀请注册] 新用户 ${user.id} 自动加入 AF 账本 ${afLedger.id}`);
+                }
+              }
+            } catch (afErr) {
+              console.error('[邀请注册] 自动加入AF账本失败:', afErr);
+              // 不影响注册流程
+            }
           }
         }
         
@@ -8632,7 +8676,7 @@ export const appRouter = router({
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         const rows = await db.execute(
           sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at,
-                     u.username, u.nickname
+                     u.username, COALESCE(u.name,'') as user_name
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               WHERE o.ledger_id = ${input.ledgerId}
@@ -8643,7 +8687,7 @@ export const appRouter = router({
           id: r.id,
           userId: r.user_id,
           username: r.username || '',
-          nickname: r.nickname || '',
+          nickname: r.user_name || r.username || '',
           coin: r.coin,
           side: r.side,
           limitPrice: r.limit_price,
