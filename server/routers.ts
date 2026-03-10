@@ -8523,35 +8523,61 @@ export const appRouter = router({
         );
         return combined;
       }),
-
-    // Binance 行情代理（解决前端跨域/封锁问题）
+    // OKX 行情代理（国内服务器可访问，替代 Binance）
     getBinanceTicker: publicProcedure
       .input(z.object({ symbol: z.string() }))
       .query(async ({ input }) => {
-        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${input.symbol}`);
-        if (!res.ok) throw new Error('Binance API error');
-        return res.json();
+        // BTCUSDT -> BTC-USDT
+        const instId = input.symbol.replace(/^(BTC|ETH|SOL|BNB|XRP|ADA|DOGE)(USDT)$/, '$1-$2');
+        // 先尝试火币（国内最稳定），失败则用 OKX
+        try {
+          const sym = input.symbol.toLowerCase();
+          const r = await fetch(`https://api.huobi.pro/market/detail/merged?symbol=${sym}`, { signal: AbortSignal.timeout(5000) });
+          if (r.ok) {
+            const j: any = await r.json();
+            if (j.status === 'ok' && j.tick) {
+              const t = j.tick;
+              const last = t.close;
+              const open = t.open;
+              const pct = open ? (((last - open) / open) * 100).toFixed(4) : '0';
+              return { symbol: input.symbol, lastPrice: String(last), priceChangePercent: pct, highPrice: String(t.high), lowPrice: String(t.low), volume: String(t.amount), weightedAvgPrice: String(last), openPrice: String(open) };
+            }
+          }
+        } catch {}
+        // 备用：OKX
+        const res = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${instId}`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error('行情数据获取失败');
+        const json: any = await res.json();
+        if (json.code !== '0' || !json.data?.[0]) throw new Error('行情数据获取失败');
+        const d = json.data[0];
+        return { symbol: input.symbol, lastPrice: d.last, priceChangePercent: d.open24h && d.last ? (((parseFloat(d.last) - parseFloat(d.open24h)) / parseFloat(d.open24h)) * 100).toFixed(4) : '0', highPrice: d.high24h, lowPrice: d.low24h, volume: d.vol24h, weightedAvgPrice: d.last, openPrice: d.open24h };
       }),
-
     getBinanceKlines: publicProcedure
-      .input(z.object({
-        symbol: z.string(),
-        interval: z.string(),
-        limit: z.number().default(60),
-      }))
+      .input(z.object({ symbol: z.string(), interval: z.string(), limit: z.number().default(60) }))
       .query(async ({ input }) => {
-        const res = await fetch(
-          `https://api.binance.com/api/v3/klines?symbol=${input.symbol}&interval=${input.interval}&limit=${input.limit}`
-        );
-        if (!res.ok) throw new Error('Binance API error');
-        const raw: any[] = await res.json();
-        return raw.map((k: any[]) => ({
-          openTime: k[0],
-          open: parseFloat(k[1]),
-          high: parseFloat(k[2]),
-          low: parseFloat(k[3]),
-          close: parseFloat(k[4]),
-          volume: parseFloat(k[5]),
+        const instId = input.symbol.replace(/^(BTC|ETH|SOL|BNB|XRP|ADA|DOGE)(USDT)$/, '$1-$2');
+        const barMap: Record<string, string> = { '1m':'1m','3m':'3m','5m':'5m','15m':'15m','30m':'30m','1h':'1H','2h':'2H','4h':'4H','6h':'6H','12h':'12H','1d':'1D','3d':'3D','1w':'1W','1M':'1M' };
+        const bar = barMap[input.interval] || '1H';
+        // 先尝试火币 K 线
+        try {
+          const huobiPeriod: Record<string, string> = { '1m':'1min','5m':'5min','15m':'15min','30m':'30min','1h':'60min','4h':'4hour','1d':'1day','1w':'1week' };
+          const period = huobiPeriod[input.interval] || '60min';
+          const sym = input.symbol.toLowerCase();
+          const r = await fetch(`https://api.huobi.pro/market/history/kline?symbol=${sym}&period=${period}&size=${input.limit}`, { signal: AbortSignal.timeout(5000) });
+          if (r.ok) {
+            const j: any = await r.json();
+            if (j.status === 'ok' && j.data?.length > 0) {
+              return (j.data as any[]).reverse().map((k: any) => ({ openTime: k.id * 1000, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.amount }));
+            }
+          }
+        } catch {}
+        // 备用：OKX
+        const res = await fetch(`https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=${bar}&limit=${input.limit}`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) throw new Error('K线数据获取失败');
+        const json: any = await res.json();
+        if (json.code !== '0') throw new Error('K线数据获取失败');
+        return (json.data as any[]).reverse().map((k: any[]) => ({ openTime: parseInt(k[0]), open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]) }));
+      }),
         }));
       }),
   }),
