@@ -1,0 +1,6 @@
+name = "polymarket-proxy"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# 免费套餐已足够：每天 10 万次请求
+# 部署命令：npx wrangler deploy
