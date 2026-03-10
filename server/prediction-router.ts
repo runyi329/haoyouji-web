@@ -60,67 +60,35 @@ async function ensureOnce() {
 }
 
 // ============================================================
-// Polymarket 数据同步
+// Polymarket 数据获取（通过 Cloudflare Worker 代理）
 // ============================================================
 
-const POLYMARKET_API = "https://gamma-api.polymarket.com";
-
-// BTC 和 ETH 的关键词过滤
-const COIN_KEYWORDS: Record<string, string[]> = {
-  BTC: ["bitcoin", "btc"],
-  ETH: ["ethereum", "eth"],
-};
+// Cloudflare Worker 代理 URL（新加坡/全球边缘节点，解决腾讯云无法访问境外 API 的问题）
+// 部署后替换为实际的 Worker URL
+const POLYMARKET_PROXY_URL = process.env.POLYMARKET_PROXY_URL || "https://polymarket-proxy.haoyouji.workers.dev";
 
 async function fetchPolymarketEvents(coin: "BTC" | "ETH"): Promise<any[]> {
-  const keywords = COIN_KEYWORDS[coin];
-  const results: any[] = [];
-
   try {
-    // 拉取 crypto 分类下最热门的 50 个活跃事件
-    const res = await fetch(
-      `${POLYMARKET_API}/events?limit=50&active=true&closed=false&order=volume&ascending=false&tag_slug=crypto`,
-      { signal: AbortSignal.timeout(10000) }
-    );
-    if (!res.ok) throw new Error(`Polymarket API error: ${res.status}`);
-    const data: any[] = await res.json();
-
-    for (const event of data) {
-      const title = (event.title || "").toLowerCase();
-      const isMatch = keywords.some((kw) => title.includes(kw));
-      if (!isMatch) continue;
-
-      // 每个 event 下可能有多个 market（如多个价格区间）
-      for (const market of event.markets || []) {
-        if (market.closed) continue;
-        results.push({
-          polymarketEventId: String(event.id),
-          polymarketMarketId: String(market.id),
-          coin,
-          question: market.question || event.title,
-          description: market.description || "",
-          outcomes: JSON.parse(market.outcomes || '["Yes","No"]'),
-          outcomePrices: JSON.parse(market.outcomePrices || '["0.5","0.5"]'),
-          volume: String(market.volume || "0"),
-          endDate: (() => {
-            const raw = market.endDate || event.endDate;
-            if (!raw) return null;
-            try {
-              const d = new Date(raw);
-              if (isNaN(d.getTime())) return null;
-              return d.toISOString().slice(0, 19).replace('T', ' ');
-            } catch { return null; }
-          })(),
-          imageUrl: market.image || market.icon || null,
-          active: 1,
-          closed: 0,
-        });
-      }
+    const url = `${POLYMARKET_PROXY_URL}/events?coin=${coin}&limit=30`;
+    console.log(`[prediction] 请求代理: ${url}`);
+    
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(15000),
+      headers: { "Accept": "application/json" },
+    });
+    
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Worker 代理返回 ${res.status}: ${text.substring(0, 200)}`);
     }
+    
+    const data = await res.json() as { events: any[]; count: number };
+    console.log(`[prediction] ${coin} 获取到 ${data.count ?? data.events?.length ?? 0} 条数据`);
+    return data.events || [];
   } catch (e) {
     console.error(`[prediction] fetchPolymarketEvents(${coin}) error:`, e);
+    return [];
   }
-
-  return results;
 }
 
 // ============================================================
