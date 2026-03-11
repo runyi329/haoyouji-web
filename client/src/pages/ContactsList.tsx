@@ -2408,9 +2408,7 @@ export default function ContactsList() {
           setBackfillDate("");
         }
       }}>
-        <DialogContent
-          style={{ width: 'calc(100vw - 2rem)', maxWidth: '400px', padding: '24px 20px', boxSizing: 'border-box', overflow: 'hidden' }}
-        >
+        <DialogContent className="p-5 overflow-hidden">
           <DialogHeader>
             <DialogTitle>记录沟通</DialogTitle>
             <DialogDescription>
@@ -2470,14 +2468,15 @@ export default function ContactsList() {
             )}
             {/* 补记日期选择器（点击补记后展开） */}
             {showBackfillDatePicker && (
-              <div style={{ width: '100%', boxSizing: 'border-box', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="border border-gray-200 rounded-lg bg-gray-50 p-3 flex flex-col gap-2">
                 <Label className="text-sm text-gray-600 block">选择联络日期</Label>
                 <input
                   type="date"
                   value={backfillDate}
                   max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setBackfillDate(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '6px', padding: '8px 12px', fontSize: '14px', outline: 'none', display: 'block' }}
+                  className="border border-gray-300 rounded-md px-3 py-2 text-sm outline-none block"
+                  style={{ width: '100%', boxSizing: 'border-box' }}
                 />
                 <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
                   <Button
