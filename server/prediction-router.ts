@@ -100,7 +100,7 @@ const COIN_KEYWORDS: Record<string, string[]> = {
   ETH: ["ethereum", "eth"],
 };
 
-async function fetchPolymarketEvents(coin: "BTC" | "ETH", limit = 30): Promise<any[]> {
+async function fetchPolymarketEvents(coin: "BTC" | "ETH" | "SOL", limit = 30): Promise<any[]> {
   try {
     const url = `${POLYMARKET_API}/events?limit=50&active=true&closed=false&order=volume&ascending=false&tag_slug=crypto`;
     console.log(`[prediction] 直接请求 Polymarket API: ${url}`);
@@ -170,7 +170,7 @@ async function hashQuestion(question: string): Promise<string> {
 // ============================================================
 // 从数据库缓存读取事件（所有用户和管理员列表都走这里）
 // ============================================================
-async function getCachedEvents(coin: "BTC" | "ETH", conn: any): Promise<any[]> {
+async function getCachedEvents(coin: "BTC" | "ETH" | "SOL", conn: any): Promise<any[]> {
   const [rows] = await conn.execute(
     `SELECT question, outcomes, outcome_prices, volume, end_date, image_url, refreshed_at
      FROM polymarket_cache WHERE coin = ? ORDER BY id ASC`,
@@ -194,7 +194,7 @@ async function getCachedEvents(coin: "BTC" | "ETH", conn: any): Promise<any[]> {
 export const predictionRouter = router({
   // ★ 管理员：刷新 Polymarket 缓存（需要有网络的环境下调用）
   refreshCache: protectedProcedure
-    .input(z.object({ coin: z.enum(["BTC", "ETH"]) }))
+    .input(z.object({ coin: z.enum(["BTC", "ETH", "SOL"]) }))
     .mutation(async ({ input }) => {
       await ensureOnce();
       const conn = await getDbConnection();
@@ -239,7 +239,7 @@ export const predictionRouter = router({
   // ★ 前端直接传入事件数据存入数据库（前端直接请求Worker，再通过此接口存入数据库）
   saveCache: protectedProcedure
     .input(z.object({
-      coin: z.enum(["BTC", "ETH"]),
+      coin: z.enum(["BTC", "ETH", "SOL"]),
       events: z.array(z.object({
         question: z.string(),
         outcomes: z.array(z.string()),
@@ -290,7 +290,7 @@ export const predictionRouter = router({
 
   // ★ 查询缓存最后更新时间
   getCacheStatus: protectedProcedure
-    .input(z.object({ coin: z.enum(["BTC", "ETH"]) }))
+    .input(z.object({ coin: z.enum(["BTC", "ETH", "SOL"]) }))
     .query(async ({ input }) => {
       await ensureOnce();
       const conn = await getDbConnection();
@@ -311,7 +311,7 @@ export const predictionRouter = router({
     .input(
       z.object({
         ledgerId: z.number(),
-        coin: z.enum(["BTC", "ETH"]),
+        coin: z.enum(["BTC", "ETH", "SOL"]),
         limit: z.number().default(20),
       })
     )
@@ -428,7 +428,7 @@ export const predictionRouter = router({
   getVisibleQuestions: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
-      coin: z.enum(["BTC", "ETH"]),
+      coin: z.enum(["BTC", "ETH", "SOL"]),
     }))
     .query(async ({ input }) => {
       await ensureOnce();
@@ -446,7 +446,7 @@ export const predictionRouter = router({
   listEventsForAdmin: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
-      coin: z.enum(["BTC", "ETH"]),
+      coin: z.enum(["BTC", "ETH", "SOL"]),
     }))
     .query(async ({ input }) => {
       await ensureOnce();
@@ -470,8 +470,11 @@ export const predictionRouter = router({
         events: cached.map((e: any, idx: number) => ({
           id: idx + 1,
           question: e.question,
+          outcomes: e.outcomes || [],
+          outcomePrices: e.outcomePrices || [],
           volume: e.volume || null,
           endDate: e.endDate || null,
+          imageUrl: e.imageUrl || null,
           refreshedAt: e.refreshedAt || null,
           visible: visibilityMap.get(e.question) ?? false,
         })),
@@ -483,7 +486,7 @@ export const predictionRouter = router({
   setEventVisibility: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
-      coin: z.enum(["BTC", "ETH"]),
+      coin: z.enum(["BTC", "ETH", "SOL"]),
       question: z.string(),
       visible: z.boolean(),
     }))

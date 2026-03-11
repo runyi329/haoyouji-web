@@ -9,7 +9,7 @@ export default function MarketEvalSettings() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 1;
-  const [coin, setCoin] = useState<"BTC" | "ETH">("BTC");
+  const [coin, setCoin] = useState<"BTC" | "ETH" | "SOL">("BTC");
 
   const utils = trpc.useUtils();
 
@@ -72,7 +72,7 @@ export default function MarketEvalSettings() {
     setIsRefreshing(true);
     try {
       // 前端直接请求 Cloudflare Worker（5G可访问）
-      const res = await fetch(`${WORKER_URL}/events?coin=${coin}&limit=30`, {
+      const res = await fetch(`${WORKER_URL}/events?coin=${coin}&limit=100`, {
         signal: AbortSignal.timeout(20000),
         headers: { "Accept": "application/json" },
       });
@@ -126,7 +126,7 @@ export default function MarketEvalSettings() {
 
       {/* 币种切换 */}
       <div className="flex gap-2 px-4 py-3">
-        {(["BTC", "ETH"] as const).map((c) => (
+        {(["BTC", "ETH", "SOL"] as const).map((c) => (
           <button
             key={c}
             onClick={() => setCoin(c)}
@@ -213,6 +213,24 @@ export default function MarketEvalSettings() {
                   <p className="text-sm text-gray-800 leading-relaxed break-words">
                     {event.question}
                   </p>
+                  {/* 赔率盘口 */}
+                  {event.outcomes && event.outcomes.length > 0 && (
+                    <div className="flex gap-2 mt-2">
+                      {event.outcomes.map((outcome: string, oi: number) => {
+                        const price = event.outcomePrices?.[oi];
+                        const pct = price ? Math.round(parseFloat(price) * 100) : null;
+                        const isYes = oi === 0;
+                        return (
+                          <div key={oi} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${
+                            isYes ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-600"
+                          }`}>
+                            <span>{outcome === "Yes" ? "会" : outcome === "No" ? "不会" : outcome}</span>
+                            {pct !== null && <span className="font-bold">{pct}%</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div className="flex items-center gap-3 mt-1.5">
                     {event.volume && (
                       <span className="text-xs text-gray-400">
