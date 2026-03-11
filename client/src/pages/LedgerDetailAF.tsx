@@ -435,7 +435,7 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
           <SpotTab ledgerId={ledgerId} coin={coin} ticker={ticker} />
         )}
         {tab === "market" && (
-          <MarketTab coin={coin} klines={klines} ticker={ticker} />
+          <MarketTab ledgerId={ledgerId} coin={coin} klines={klines} ticker={ticker} />
         )}
       </div>
     </div>
@@ -553,14 +553,17 @@ function SpotTab({
 
 // ─── 行情评估 Tab ───────────────────────────────────────────────
 function MarketTab({
+  ledgerId,
   coin,
   klines,
   ticker,
 }: {
+  ledgerId: number;
   coin: (typeof COINS)[0];
   klines: KlineBar[];
   ticker: TickerData | null;
 }) {
+  const [, setLocation] = useLocation();
   // 简单技术指标计算
   const analysis = (() => {
     if (klines.length < 20) return null;
@@ -675,6 +678,19 @@ function MarketTab({
           </div>
         </div>
       )}
+
+      {/* Polymarket 行情预测入口 */}
+      <button
+        onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=${coin.name}`)}
+        className="w-full rounded-2xl p-4 flex items-center justify-between"
+        style={{ backgroundColor: coin.color }}
+      >
+        <div className="text-left">
+          <div className="text-white font-semibold text-sm">Polymarket 行情预测</div>
+          <div className="text-white/70 text-xs mt-0.5">查看 {coin.name} 全球预测市场赔率</div>
+        </div>
+        <ChevronRight className="w-5 h-5 text-white/70" />
+      </button>
 
       {/* 免责声明 */}
       <div className="bg-[#1C2127] rounded-xl px-3 py-2">
