@@ -118,16 +118,24 @@ export const predictionRouter = router({
       const events = await fetchPolymarketEvents(input.coin);
       const limited = events.slice(0, input.limit);
       return {
-        events: limited.map((e, idx) => ({
-          id: idx + 1,
-          question: e.question,
-          outcomes: e.outcomes,
-          outcomePrices: e.outcomePrices,
-          volume: e.volume,
-          endDate: e.endDate,
-          imageUrl: e.imageUrl,
-          myPrediction: null, // 无数据库时不记录预测
-        })),
+        events: limited.map((e, idx) => {
+          // Worker 返回的是 odds:[{outcome, probability, payout}]
+          // 前端期望的是 outcomes:[] 和 outcomePrices:[]
+          const odds: Array<{ outcome: string; probability: number; payout: number }> = e.odds || [];
+          const outcomes = odds.map((o) => o.outcome);
+          // outcomePrices 存小数形式的概率（如 0.155 表示 15.5%）
+          const outcomePrices = odds.map((o) => String(o.probability / 100));
+          return {
+            id: idx + 1,
+            question: e.question,
+            outcomes,
+            outcomePrices,
+            volume: e.volume,
+            endDate: e.endDate,
+            imageUrl: e.imageUrl || null,
+            myPrediction: null,
+          };
+        }),
       };
     }),
 
