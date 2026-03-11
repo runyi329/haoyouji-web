@@ -2408,7 +2408,7 @@ export default function ContactsList() {
           setBackfillDate("");
         }
       }}>
-        <DialogContent>
+        <DialogContent className="px-5">
           <DialogHeader>
             <DialogTitle>记录沟通</DialogTitle>
             <DialogDescription>
@@ -2418,18 +2418,18 @@ export default function ContactsList() {
               }
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex-col gap-3">
+          <div className="flex flex-col gap-3 pb-4">
             {!contactToRecord?.hasTodayInteraction && (
               <>
                 {/* 联络方式选择（可选） */}
-                <div className="w-full">
+                <div>
                   <Label className="text-sm text-gray-500 mb-2 block">联络方式（可选）</Label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <Button
                       type="button"
                       variant={contactMethod === "会面" ? "default" : "outline"}
                       onClick={() => setContactMethod(contactMethod === "会面" ? "" : "会面")}
-                      className="flex-1"
+                      className="flex-1 h-9 text-sm px-0"
                     >
                       会面
                     </Button>
@@ -2437,7 +2437,7 @@ export default function ContactsList() {
                       type="button"
                       variant={contactMethod === "电话" ? "default" : "outline"}
                       onClick={() => setContactMethod(contactMethod === "电话" ? "" : "电话")}
-                      className="flex-1"
+                      className="flex-1 h-9 text-sm px-0"
                     >
                       电话
                     </Button>
@@ -2445,23 +2445,23 @@ export default function ContactsList() {
                       type="button"
                       variant={contactMethod === "微信" ? "default" : "outline"}
                       onClick={() => setContactMethod(contactMethod === "微信" ? "" : "微信")}
-                      className="flex-1"
+                      className="flex-1 h-9 text-sm px-0"
                     >
                       微信
                     </Button>
                   </div>
                 </div>
                 {/* 互动重要性评分（可选） */}
-                <div className="w-full">
+                <div>
                   <Label className="text-sm text-gray-500 mb-2 block">互动重要性评分（可选）</Label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     {[1, 2, 3, 4, 5].map((score) => (
                       <Button
                         key={score}
                         type="button"
                         variant={importanceScore === score ? "default" : "outline"}
                         onClick={() => setImportanceScore(importanceScore === score ? 0 : score)}
-                        className="flex-1"
+                        className="flex-1 h-9 text-sm px-0"
                       >
                         {score}分
                       </Button>
@@ -2469,32 +2469,32 @@ export default function ContactsList() {
                   </div>
                 </div>
                 {/* 备注输入 */}
-                <div className="w-full">
+                <div>
                   <Input
                     placeholder="输入备注（可选）"
                     value={quickContactNote}
                     onChange={(e) => setQuickContactNote(e.target.value)}
+                    className="w-full"
                   />
                 </div>
               </>
             )}
             {/* 补记日期选择器（点击补记后展开） */}
             {showBackfillDatePicker && (
-              <div className="w-full space-y-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+              <div className="space-y-2 p-3 border border-gray-200 rounded-lg bg-gray-50">
                 <Label className="text-sm text-gray-600 block">选择联络日期</Label>
                 <input
                   type="date"
                   value={backfillDate}
                   max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setBackfillDate(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent box-border"
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                   <Button
                     onClick={confirmBackfillInteraction}
                     disabled={!backfillDate || recordInteractionMutation.isPending}
-                    className="flex-1 bg-[#A80000] hover:bg-[#8B0000] text-white"
-                    size="sm"
+                    className="flex-1 bg-[#A80000] hover:bg-[#8B0000] text-white h-9 text-sm"
                   >
                     {recordInteractionMutation.isPending ? "记录中..." : "保存补记"}
                   </Button>
@@ -2504,8 +2504,7 @@ export default function ContactsList() {
                       setShowBackfillDatePicker(false);
                       setBackfillDate("");
                     }}
-                    className="flex-1"
-                    size="sm"
+                    className="flex-1 h-9 text-sm"
                   >
                     收起
                   </Button>
@@ -2520,7 +2519,7 @@ export default function ContactsList() {
               {recordInteractionMutation.isPending ? "记录中..." : "确认记录"}
             </Button>
             {/* 取消 + 补记 并排一行 */}
-            <div className="flex gap-2 w-full">
+            <div className="flex gap-1.5">
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -2541,7 +2540,6 @@ export default function ContactsList() {
                 onClick={() => {
                   setShowBackfillDatePicker(!showBackfillDatePicker);
                   if (!showBackfillDatePicker) {
-                    // 默认选中昨天
                     const yesterday = new Date();
                     yesterday.setDate(yesterday.getDate() - 1);
                     setBackfillDate(yesterday.toISOString().split('T')[0]);
@@ -2552,7 +2550,7 @@ export default function ContactsList() {
                 {showBackfillDatePicker ? "收起补记" : "补记"}
               </Button>
             </div>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
       
