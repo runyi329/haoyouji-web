@@ -5480,27 +5480,34 @@ export const appRouter = router({
       .input(z.object({
         contactId: z.number(),
         note: z.string().optional(),
+        interactionDate: z.string().optional(), // 补记时传入自定义日期（ISO字符串）
       }))
       .mutation(async ({ ctx, input }) => {
-        // 检查今天是否已经记录过联络（基于北京时间）
-        const hasTodayInteraction = await dbContacts.hasTodayInteraction(input.contactId);
-        if (hasTodayInteraction) {
-          throw new TRPCError({ 
-            code: "BAD_REQUEST", 
-            message: "今天已经记录过联络，每天只能记录一次" 
-          });
+        // 如果是补记（传入了自定义日期），跳过今日重复检查
+        if (!input.interactionDate) {
+          // 检查今天是否已经记录过联络（基于北京时间）
+          const hasTodayInteraction = await dbContacts.hasTodayInteraction(input.contactId);
+          if (hasTodayInteraction) {
+            throw new TRPCError({ 
+              code: "BAD_REQUEST", 
+              message: "今天已经记录过联络，每天只能记录一次" 
+            });
+          }
         }
+        
+        // 使用传入的日期或当前时间
+        const recordDate = input.interactionDate ? new Date(input.interactionDate) : new Date();
         
         const interactionId = await dbContacts.createContactInteraction({
           contactId: input.contactId,
-          interactionDate: new Date(),
+          interactionDate: recordDate,
           note: input.note,
         });
         
         // 奖励积分：每次联络
         await addPointsForAction(ctx.user.id, 'communication', input.contactId);
         
-        return { id: interactionId };
+        return { id: interactionId, isBackfill: !!input.interactionDate };
       }),
 
     // 获取联络历史
