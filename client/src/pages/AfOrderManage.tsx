@@ -60,19 +60,19 @@ export default function AfOrderManage() {
 
   const saveEdit = () => {
     if (!editState) return;
-    // 自动重算金额（价格 × 数量）
+    // 金额(amount)固定不变，数量根据新价格自动重算
     const price = parseFloat(editState.limitPrice);
-    const qty = parseFloat(editState.quantity);
-    let finalAmount = editState.amount;
-    if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
-      finalAmount = (price * qty).toFixed(2);
+    const amount = parseFloat(editState.amount);
+    let finalQuantity = editState.quantity;
+    if (!isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
+      finalQuantity = (amount / price).toFixed(8);
     }
     updateMutation.mutate({
       ledgerId,
       orderId: editState.orderId,
       limitPrice: editState.limitPrice,
-      amount: finalAmount,
-      quantity: editState.quantity,
+      amount: editState.amount,
+      quantity: finalQuantity,
       status: editState.status,
     });
   };
@@ -105,13 +105,13 @@ export default function AfOrderManage() {
             {(orders as any[]).map((order) => {
               const isEditing = editingId === order.id;
               const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
-              // 计算编辑时的实时金额
-              let previewAmount = editState?.amount ?? "";
+              // 计算编辑时的实时数量（金额固定，数量 = 金额 / 新价格）
+              let previewQuantity = editState?.quantity ?? "";
               if (isEditing && editState) {
                 const p = parseFloat(editState.limitPrice);
-                const q = parseFloat(editState.quantity);
-                if (!isNaN(p) && !isNaN(q) && p > 0 && q > 0) {
-                  previewAmount = (p * q).toFixed(2);
+                const a = parseFloat(editState.amount);
+                if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
+                  previewQuantity = (a / p).toFixed(8);
                 }
               }
 
@@ -184,31 +184,22 @@ export default function AfOrderManage() {
                         <span>{parseFloat(order.limitPrice).toLocaleString()}</span>
                       )}
                     </div>
-                    {/* 数量 */}
+                    {/* 数量（自动重算） */}
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400 text-xs w-10">数量</span>
                       {isEditing ? (
-                        <input
-                          type="number"
-                          value={editState!.quantity}
-                          onChange={(e) => setEditState({ ...editState!, quantity: e.target.value })}
-                          className="border border-gray-300 rounded px-2 py-0.5 text-sm w-28"
-                        />
+                        <span className="text-orange-500 font-medium">
+                          {previewQuantity || editState!.quantity}
+                          <span className="text-xs text-gray-400 ml-1">（自动计算）</span>
+                        </span>
                       ) : (
                         <span>{parseFloat(order.quantity).toFixed(6)}</span>
                       )}
                     </div>
-                    {/* 金额 */}
+                    {/* 金额（固定不变） */}
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400 text-xs w-10">金额</span>
-                      {isEditing ? (
-                        <span className="text-orange-500 font-medium">
-                          {previewAmount || editState!.amount} USDT
-                          <span className="text-xs text-gray-400 ml-1">（自动计算）</span>
-                        </span>
-                      ) : (
-                        <span>{parseFloat(order.amount).toFixed(2)} USDT</span>
-                      )}
+                      <span>{parseFloat(order.amount).toFixed(2)} USDT</span>
                     </div>
                     {/* 状态 */}
                     <div className="flex items-center gap-1">

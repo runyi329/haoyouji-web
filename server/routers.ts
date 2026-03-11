@@ -8869,10 +8869,21 @@ export const appRouter = router({
           );
         }
         // 构建动态 UPDATE
+        // 重要逻辑：金额(amount)固定不变，修改价格时自动重算数量
         const updates: string[] = [];
-        if (input.limitPrice !== undefined) updates.push(`limit_price = '${input.limitPrice.replace(/'/g, '')}'`);
-        if (input.amount !== undefined) updates.push(`amount = '${input.amount.replace(/'/g, '')}'`);
-        if (input.quantity !== undefined) updates.push(`quantity = '${input.quantity.replace(/'/g, '')}'`);
+        if (input.limitPrice !== undefined) {
+          updates.push(`limit_price = '${input.limitPrice.replace(/'/g, '')}' `);
+          // 价格变化时，自动重算数量 = amount / 新价格
+          const newPrice = parseFloat(input.limitPrice);
+          if (!isNaN(newPrice) && newPrice > 0) {
+            const recalcQty = (oldAmount / newPrice).toFixed(8);
+            updates.push(`quantity = '${recalcQty}'`);
+          }
+        } else if (input.quantity !== undefined) {
+          // 仅在没有改价格时才允许直接修改数量
+          updates.push(`quantity = '${input.quantity.replace(/'/g, '')}'`);
+        }
+        // amount 不允许修改，始终保持不变
         if (input.status !== undefined) updates.push(`status = '${input.status}'`);
         if (updates.length > 0) {
           await db.execute(
