@@ -2408,7 +2408,9 @@ export default function ContactsList() {
           setBackfillDate("");
         }
       }}>
-        <DialogContent className="px-5 overflow-hidden w-[calc(100vw-2rem)] max-w-sm sm:max-w-md">
+        <DialogContent
+          style={{ width: 'calc(100vw - 2rem)', maxWidth: '400px', padding: '24px 20px', boxSizing: 'border-box', overflow: 'hidden' }}
+        >
           <DialogHeader>
             <DialogTitle>记录沟通</DialogTitle>
             <DialogDescription>
@@ -2418,50 +2420,37 @@ export default function ContactsList() {
               }
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-3 pb-4 w-full min-w-0">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingBottom: '8px', width: '100%', boxSizing: 'border-box' }}>
             {!contactToRecord?.hasTodayInteraction && (
               <>
                 {/* 联络方式选择（可选） */}
-                <div>
+                <div style={{ width: '100%', boxSizing: 'border-box' }}>
                   <Label className="text-sm text-gray-500 mb-2 block">联络方式（可选）</Label>
-                  <div className="flex gap-1.5">
-                    <Button
-                      type="button"
-                      variant={contactMethod === "会面" ? "default" : "outline"}
-                      onClick={() => setContactMethod(contactMethod === "会面" ? "" : "会面")}
-                      className="flex-1 h-9 text-sm px-0"
-                    >
-                      会面
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={contactMethod === "电话" ? "default" : "outline"}
-                      onClick={() => setContactMethod(contactMethod === "电话" ? "" : "电话")}
-                      className="flex-1 h-9 text-sm px-0"
-                    >
-                      电话
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={contactMethod === "微信" ? "default" : "outline"}
-                      onClick={() => setContactMethod(contactMethod === "微信" ? "" : "微信")}
-                      className="flex-1 h-9 text-sm px-0"
-                    >
-                      微信
-                    </Button>
+                  <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+                    {["会面", "电话", "微信"].map((method) => (
+                      <Button
+                        key={method}
+                        type="button"
+                        variant={contactMethod === method ? "default" : "outline"}
+                        onClick={() => setContactMethod(contactMethod === method ? "" : method)}
+                        style={{ flex: 1, height: '36px', fontSize: '14px', padding: 0, minWidth: 0 }}
+                      >
+                        {method}
+                      </Button>
+                    ))}
                   </div>
                 </div>
                 {/* 互动重要性评分（可选） */}
-                <div>
+                <div style={{ width: '100%', boxSizing: 'border-box' }}>
                   <Label className="text-sm text-gray-500 mb-2 block">互动重要性评分（可选）</Label>
-                  <div className="flex gap-1.5">
+                  <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
                     {[1, 2, 3, 4, 5].map((score) => (
                       <Button
                         key={score}
                         type="button"
                         variant={importanceScore === score ? "default" : "outline"}
                         onClick={() => setImportanceScore(importanceScore === score ? 0 : score)}
-                        className="flex-1 h-9 text-sm px-0"
+                        style={{ flex: 1, height: '36px', fontSize: '14px', padding: 0, minWidth: 0 }}
                       >
                         {score}分
                       </Button>
@@ -2469,33 +2458,32 @@ export default function ContactsList() {
                   </div>
                 </div>
                 {/* 备注输入 */}
-                <div>
+                <div style={{ width: '100%', boxSizing: 'border-box' }}>
                   <Input
                     placeholder="输入备注（可选）"
                     value={quickContactNote}
                     onChange={(e) => setQuickContactNote(e.target.value)}
-                    className="w-full"
+                    style={{ width: '100%', boxSizing: 'border-box' }}
                   />
                 </div>
               </>
             )}
             {/* 补记日期选择器（点击补记后展开） */}
             {showBackfillDatePicker && (
-              <div className="space-y-2 p-3 border border-gray-200 rounded-lg bg-gray-50 w-full min-w-0 overflow-hidden">
+              <div style={{ width: '100%', boxSizing: 'border-box', padding: '12px', border: '1px solid #e5e7eb', borderRadius: '8px', backgroundColor: '#f9fafb', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <Label className="text-sm text-gray-600 block">选择联络日期</Label>
                 <input
                   type="date"
                   value={backfillDate}
                   max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setBackfillDate(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                  className="block border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: '6px', padding: '8px 12px', fontSize: '14px', outline: 'none', display: 'block' }}
                 />
-                <div className="flex gap-1.5">
+                <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
                   <Button
                     onClick={confirmBackfillInteraction}
                     disabled={!backfillDate || recordInteractionMutation.isPending}
-                    className="flex-1 bg-[#A80000] hover:bg-[#8B0000] text-white h-9 text-sm"
+                    style={{ flex: 1, backgroundColor: '#A80000', color: 'white', height: '36px', fontSize: '14px', minWidth: 0 }}
                   >
                     {recordInteractionMutation.isPending ? "记录中..." : "保存补记"}
                   </Button>
@@ -2505,7 +2493,7 @@ export default function ContactsList() {
                       setShowBackfillDatePicker(false);
                       setBackfillDate("");
                     }}
-                    className="flex-1 h-9 text-sm"
+                    style={{ flex: 1, height: '36px', fontSize: '14px', minWidth: 0 }}
                   >
                     收起
                   </Button>
@@ -2515,12 +2503,12 @@ export default function ContactsList() {
             <Button 
               onClick={confirmRecordInteraction}
               disabled={recordInteractionMutation.isPending || contactToRecord?.hasTodayInteraction}
-              className="w-full bg-[#A80000] hover:bg-[#8B0000] text-white"
+              style={{ width: '100%', backgroundColor: '#A80000', color: 'white', boxSizing: 'border-box' }}
             >
               {recordInteractionMutation.isPending ? "记录中..." : "确认记录"}
             </Button>
             {/* 取消 + 补记 并排一行 */}
-            <div className="flex gap-1.5">
+            <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
               <Button 
                 variant="outline" 
                 onClick={() => {
@@ -2532,7 +2520,7 @@ export default function ContactsList() {
                   setShowBackfillDatePicker(false);
                   setBackfillDate("");
                 }}
-                className="flex-1"
+                style={{ flex: 1, minWidth: 0 }}
               >
                 取消
               </Button>
@@ -2546,7 +2534,7 @@ export default function ContactsList() {
                     setBackfillDate(yesterday.toISOString().split('T')[0]);
                   }
                 }}
-                className="flex-1 border-[#A80000] text-[#A80000] hover:bg-red-50"
+                style={{ flex: 1, minWidth: 0, borderColor: '#A80000', color: '#A80000' }}
               >
                 {showBackfillDatePicker ? "收起补记" : "补记"}
               </Button>
