@@ -24,7 +24,7 @@ import { trpc } from "@/lib/trpc";
 import {
   User, Share2, Settings, ShoppingBag, MessageCircle, Info,
   ChevronRight, LogIn, LogOut, Cpu, BookOpen, ExternalLink,
-  ShoppingCart, Store
+  ShoppingCart, Store, TrendingUp
 } from "lucide-react";
 import JiangTabBar from "./JiangTabBar";
 import BottomNav from "@/components/BottomNav";
@@ -109,6 +109,12 @@ export default function JiangProfile() {
           label: "建站规则",
           desc: "脉动共享商盟完整架构文档",
           onPress: () => setLocation("/jiang/build-rules"),
+        },
+        {
+          icon: <TrendingUp className="w-4 h-4" />,
+          label: "OKX AI 交易助手",
+          desc: "实时行情、持仓分析、AI 对话",
+          onPress: () => setLocation("/jiang/okx-trader"),
         },
       ],
     }] : []),

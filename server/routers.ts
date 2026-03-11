@@ -38,6 +38,7 @@ import { dietRouter } from "./diet-router";
 import { merchantRouter } from "./merchant-router";
 import { lotteryRouter } from "./lottery-router";
 import { predictionRouter } from "./prediction-router";
+import { okxTraderRouter } from "./okx-trader-router";
 import * as dbMemo from "./db-memo";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
@@ -73,6 +74,7 @@ export const appRouter = router({
   merchant: merchantRouter,
   lottery: lotteryRouter,
   prediction: predictionRouter,
+  okxTrader: okxTraderRouter,
 
   // 支付账户管理
   paymentAccounts: router({
