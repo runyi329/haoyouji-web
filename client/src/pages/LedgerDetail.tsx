@@ -538,13 +538,28 @@ export default function LedgerDetail() {
                   <span className="text-xs text-white/60">USDT</span>
                 </div>
               </div>
-              {/* 卡片 2：推荐人数（与脉动首页推荐好友人数一致） */}
+              {/* 卡片 2：推荐人数（YJH 显示直推+间推，其他用户显示总推荐） */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
                 <div className="text-xs text-white/70 mb-1">推荐</div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold text-white">{(afTotalAsset as any)?.inviteCount ?? 0}</span>
-                  <span className="text-xs text-white/60">人</span>
-                </div>
+                {((afTotalAsset as any)?.directReferralCount > 0 || (afTotalAsset as any)?.indirectReferralCount > 0) ? (
+                  <div className="space-y-0.5">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-bold text-white">直推</span>
+                      <span className="text-lg font-bold text-white">{(afTotalAsset as any)?.directReferralCount ?? 0}</span>
+                      <span className="text-xs text-white/60">人</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-bold text-white">间推</span>
+                      <span className="text-lg font-bold text-white">{(afTotalAsset as any)?.indirectReferralCount ?? 0}</span>
+                      <span className="text-xs text-white/60">人</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg font-bold text-white">{(afTotalAsset as any)?.inviteCount ?? 0}</span>
+                    <span className="text-xs text-white/60">人</span>
+                  </div>
+                )}
               </div>
               {/* 卡片 3 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>

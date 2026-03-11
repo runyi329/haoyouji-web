@@ -8604,7 +8604,47 @@ export const appRouter = router({
           );
           inviteCount = Number((inviteRows as any)[0]?.[0]?.invite_count ?? (inviteRows as any)[0]?.invite_count ?? 0);
         } catch (_) {}
-        return { total: recharged + manual, inviteCount };
+        
+        // YJH 专属：计算直推和间推人数（无限层级递归）
+        const YJH_USER_ID = 4957151;
+        let directReferralCount = 0;
+        let indirectReferralCount = 0;
+        if (ctx.user.id === YJH_USER_ID) {
+          try {
+            // 直推人数
+            const directRows = await db.execute(
+              sql`SELECT COUNT(*) as cnt FROM users WHERE invited_by_user_id = ${YJH_USER_ID}`
+            ) as any;
+            directReferralCount = Number((directRows as any)[0]?.[0]?.cnt ?? (directRows as any)[0]?.cnt ?? 0);
+            
+            // 间推人数（BFS递归，无限层级）
+            let queue: number[] = [];
+            // 先获取直推用户ID列表
+            const directIdRows = await db.execute(
+              sql`SELECT id FROM users WHERE invited_by_user_id = ${YJH_USER_ID}`
+            ) as any;
+            const directIds = ((directIdRows as any)[0] || directIdRows).map((r: any) => r.id || r[0]);
+            queue = [...directIds];
+            
+            while (queue.length > 0) {
+              const batch = queue.splice(0, 100); // 每次处理100个
+              const placeholders = batch.map(() => '?').join(',');
+              const childRows = await db.execute(
+                sql.raw(`SELECT id FROM users WHERE invited_by_user_id IN (${placeholders})`, batch)
+              ) as any;
+              const children = ((childRows as any)[0] || childRows);
+              for (const child of children) {
+                const childId = child.id || child[0];
+                indirectReferralCount++;
+                queue.push(childId);
+              }
+            }
+          } catch (e) {
+            console.error('[AF] YJH间推统计失败:', e);
+          }
+        }
+        
+        return { total: recharged + manual, inviteCount, directReferralCount, indirectReferralCount };
       }),
     // AF 充值记录 + 手动调账记录合并（供用户查看）
     afGetMyRechargeHistory: protectedProcedure
@@ -8946,6 +8986,51 @@ export const appRouter = router({
                     VALUES (${input.ledgerId}, ${giftUserId}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, '1.5', ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
               );
               console.log(`[AF赠送] 订单#${input.orderId} 成交（成交价:${actualPrice}, 实际花费:${actualSpend.toFixed(2)}, 赠送市值:${giftAmount}），已为推荐人(${giftUserId})生成1.5倍赠送订单`);
+              
+              // ========== YJH 专属 1.0 倍赠予逻辑 ==========
+              // 递归查找下单人的推荐链，如果 YJH 在链上，为 YJH 额外生成 1.0 倍赠予订单
+              const YJH_USER_ID = 4957151;
+              // 下单人本身就是 YJH 则不生成（自己给自己没意义）
+              if (userId !== YJH_USER_ID) {
+                try {
+                  let currentUserId = userId;
+                  let foundYjh = false;
+                  const visited = new Set<number>();
+                  
+                  // 沿推荐链向上查找 YJH
+                  while (currentUserId && !foundYjh) {
+                    if (visited.has(currentUserId)) break; // 防止循环
+                    visited.add(currentUserId);
+                    
+                    const parentRows = await giftDb.execute(
+                      sql`SELECT id, invited_by_user_id FROM users WHERE id = ${currentUserId} LIMIT 1`
+                    ) as any;
+                    const parentUser = (parentRows[0]?.[0] ?? parentRows[0]);
+                    const parentId = parentUser?.invited_by_user_id;
+                    
+                    if (!parentId) break;
+                    if (parentId === YJH_USER_ID) {
+                      foundYjh = true;
+                    } else {
+                      currentUserId = parentId;
+                    }
+                  }
+                  
+                  if (foundYjh) {
+                    // 为 YJH 生成 1.0 倍赠予订单
+                    const yjhGiftAmount = (actualSpend * 1.0).toFixed(8);
+                    const yjhGiftQuantity = actualPrice > 0 ? (actualSpend * 1.0 / actualPrice).toFixed(8) : '0';
+                    
+                    await giftDb.execute(
+                      sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
+                          VALUES (${input.ledgerId}, ${YJH_USER_ID}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${yjhGiftAmount}, ${yjhGiftQuantity}, 'completed', 1, '1.0', ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
+                    );
+                    console.log(`[AF赠送-YJH专属] 订单#${input.orderId} 下单人(${userId})在YJH推荐链上，已为YJH(${YJH_USER_ID})生成1.0倍赠送订单(${yjhGiftAmount})`);
+                  }
+                } catch (yjhErr) {
+                  console.error('[AF赠送-YJH专属] 生成1.0倍赠送订单失败:', yjhErr);
+                }
+              }
             } catch (e) {
               console.error('[AF赠送] 生成赠送订单失败:', e);
             }
