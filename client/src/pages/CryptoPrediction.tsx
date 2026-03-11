@@ -254,16 +254,19 @@ function EventCard({ event, ledgerId, onPredicted }: {
 }
 
 // ─── 收益权档位详情组件 ──────────────────────────────────────
+// 收益权计算逻辑：
+// 基准(第0档) = 100 × 0.75 × 0.7 = 52.5 → 对客户显示 100%
+// 第N档(N≥2) = 100 ÷ N × 0.7，再除以52.5得到对客户百分比
 const TIER_LABELS = [
-  { tier: 1, drop: '-10%', ratio: '1/2', pct: '50%' },
-  { tier: 2, drop: '-20%', ratio: '1/3', pct: '33.3%' },
-  { tier: 3, drop: '-30%', ratio: '1/4', pct: '25%' },
-  { tier: 4, drop: '-40%', ratio: '1/5', pct: '20%' },
-  { tier: 5, drop: '-50%', ratio: '1/6', pct: '16.7%' },
-  { tier: 6, drop: '-60%', ratio: '1/7', pct: '14.3%' },
-  { tier: 7, drop: '-70%', ratio: '1/8', pct: '12.5%' },
-  { tier: 8, drop: '-80%', ratio: '1/9', pct: '11.1%' },
-  { tier: 9, drop: '-90%', ratio: '1/10', pct: '10%' },
+  { tier: 1, drop: '-10%', ratio: '1/2', pct: '66.7%' },
+  { tier: 2, drop: '-20%', ratio: '1/3', pct: '44.4%' },
+  { tier: 3, drop: '-30%', ratio: '1/4', pct: '33.3%' },
+  { tier: 4, drop: '-40%', ratio: '1/5', pct: '26.7%' },
+  { tier: 5, drop: '-50%', ratio: '1/6', pct: '22.2%' },
+  { tier: 6, drop: '-60%', ratio: '1/7', pct: '19.0%' },
+  { tier: 7, drop: '-70%', ratio: '1/8', pct: '16.7%' },
+  { tier: 8, drop: '-80%', ratio: '1/9', pct: '14.8%' },
+  { tier: 9, drop: '-90%', ratio: '1/10', pct: '13.3%' },
 ];
 
 function OrderDetail({ order, timeStr, ledgerId }: {
