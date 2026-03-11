@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { ArrowLeft, User, Lock, Eye, EyeOff } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -121,10 +121,14 @@ export default function Login() {
     });
   };
 
+  // 注册提交锁（useRef确保同步更新，不受React批量更新影响）
+  const registerSubmittingRef = useRef(false);
+
   // 注册处理 - 只通过按钮点击触发
   const handleRegister = () => {
-    // 防止重复提交
-    if (registerMutation.isPending) {
+    // 双重防护：useRef锁 + isPending
+    if (registerSubmittingRef.current || registerMutation.isPending) {
+      console.log('[Register] 阻止重复提交');
       return;
     }
     if (!regUsername || !regPassword) {
@@ -147,11 +151,20 @@ export default function Login() {
       toast.error("请先阅读并同意隐私条款和用户协议");
       return;
     }
+    // 立即加锁，防止快速双击
+    registerSubmittingRef.current = true;
     registerMutation.mutate({
       username: regUsername,
       password: regPassword,
       name: regName || undefined,
       inviteCode: regInviteCode || undefined,
+    }, {
+      onSettled: () => {
+        // 无论成功失败，3秒后解锁（防止网络错误后永久锁死）
+        setTimeout(() => {
+          registerSubmittingRef.current = false;
+        }, 3000);
+      },
     });
   };
 

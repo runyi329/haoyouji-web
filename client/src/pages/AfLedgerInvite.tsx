@@ -18,7 +18,7 @@ export default function AfLedgerInvite() {
 
   // 使用用户固定邀请码生成邀请链接（与上方邀请码保持一致）
   const inviteLink = inviteCode
-    ? `https://jiangyuchen.cn/register?invite=${inviteCode}`
+    ? `https://jiangyuchen.cn/login?invite=${inviteCode}`
     : "";
 
   // 生成二维码
