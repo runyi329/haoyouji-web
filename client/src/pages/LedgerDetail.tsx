@@ -349,7 +349,7 @@ export default function LedgerDetail() {
   return (
     <div className="min-h-screen bg-[var(--bg-cream)]">
       {/* 顶部区域 */}
-      <div className="pb-4" style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
+      <div className="pb-4" style={{ backgroundColor: isCustomAF ? undefined : '#D32F2F', background: isCustomAF ? 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' : undefined, color: '#FFFFFF' }}>
         {/* AF 账本：顶部一行（头像+名字 左，图标+返回 右）*/}
         {isCustomAF ? (
           <div className="px-4 pt-3 pb-2 flex items-center justify-between">
@@ -529,7 +529,7 @@ export default function LedgerDetail() {
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
               {/* 卡片 1：总资产估值 */}
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-xs text-white/70 mb-1">余额</div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-lg font-bold text-white">
@@ -539,7 +539,7 @@ export default function LedgerDetail() {
                 </div>
               </div>
               {/* 卡片 2：推荐人数（YJH 显示直推+间推，其他用户显示总推荐） */}
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-xs text-white/70 mb-1">推荐</div>
                 {((afTotalAsset as any)?.directReferralCount > 0 || (afTotalAsset as any)?.indirectReferralCount > 0) ? (
                   <div className="space-y-0.5">
@@ -562,13 +562,13 @@ export default function LedgerDetail() {
                 )}
               </div>
               {/* 卡片 3 */}
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-xs text-white/70 mb-1">仓位</div>
                 <div className="text-lg font-bold text-white">--</div>
                 <div className="text-xs text-white/60 mt-1">待接入数据</div>
               </div>
               {/* 卡片 4 */}
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-xs text-white/70 mb-1">累计盈亏</div>
                 <div className="text-lg font-bold text-white">--</div>
                 <div className="text-xs text-white/60 mt-1">待接入数据</div>
@@ -1063,42 +1063,50 @@ export default function LedgerDetail() {
             {/* BTC 入口 */}
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction`)}
-              className="w-full bg-gradient-to-r from-[#F7931A] to-[#E8820A] rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+              className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+              style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'rgba(247,147,26,0.12)' }}>
                 <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/bitcoin.webp" alt="BTC" className="w-9 h-9 object-contain" />
               </div>
               <div className="text-left flex-1">
-                <div className="text-white font-semibold text-base">比特币 (BTC)</div>
+                <div className="font-semibold text-base" style={{ color: '#1A2340' }}>比特币 (BTC)</div>
               </div>
-              <ChevronRight className="w-5 h-5 text-white/70" />
+              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#F7931A' }}>
+                <ChevronRight className="w-4 h-4 text-white" />
+              </div>
             </button>
             {/* ETH 入口 */}
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=ETH`)}
-              className="w-full bg-gradient-to-r from-[#627EEA] to-[#4A6CD4] rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+              className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+              style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'rgba(98,126,234,0.12)' }}>
                 <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ethereum.webp" alt="ETH" className="w-9 h-9 object-contain" />
               </div>
               <div className="text-left flex-1">
-                <div className="text-white font-semibold text-base">以太坊 (ETH)</div>
+                <div className="font-semibold text-base" style={{ color: '#1A2340' }}>以太坊 (ETH)</div>
               </div>
-              <ChevronRight className="w-5 h-5 text-white/70" />
+              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#627EEA' }}>
+                <ChevronRight className="w-4 h-4 text-white" />
+              </div>
             </button>
             {/* SOL 入口 */}
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=SOL`)}
               className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
-              style={{ background: 'linear-gradient(to right, #9945FF, #14F195)' }}
+              style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'rgba(153,69,255,0.12)' }}>
                 <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/solana.webp" alt="SOL" className="w-9 h-9 object-contain" />
               </div>
               <div className="text-left flex-1">
-                <div className="text-white font-semibold text-base">索拉纳 (SOL)</div>
+                <div className="font-semibold text-base" style={{ color: '#1A2340' }}>索拉纳 (SOL)</div>
               </div>
-              <ChevronRight className="w-5 h-5 text-white/70" />
+              <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #9945FF, #14F195)' }}>
+                <ChevronRight className="w-4 h-4 text-white" />
+              </div>
             </button>
           </div>
         </div>
