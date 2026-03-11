@@ -657,7 +657,7 @@ export default function CryptoPrediction() {
   return (
     <div className="min-h-screen bg-[#0B0E11] text-white pb-20">
       {/* 顶部导航 */}
-      <div className="sticky top-0 z-10 px-4 pt-3 pb-2 flex items-center justify-between bg-[#D32F2F]">
+      <div className="sticky top-0 z-50 px-4 pt-3 pb-2 flex items-center justify-between bg-[#D32F2F]">
         <div className="flex items-center gap-2">
           <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">
             <ChevronLeft className="w-5 h-5 text-white" />
