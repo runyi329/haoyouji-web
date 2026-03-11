@@ -8677,10 +8677,14 @@ export const appRouter = router({
         
         const db = await getLedgerDb();
         const rows = await db.execute(
-          sql`SELECT id, coin, side, limit_price, amount, quantity, status, COALESCE(order_type,'') as order_type, created_at
-              FROM af_orders
-              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
-              ORDER BY created_at DESC
+          sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at,
+                     COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
+                     o.source_order_id, o.source_user_id,
+                     COALESCE(su.username, '') as source_username
+              FROM af_orders o
+              LEFT JOIN users su ON su.id = o.source_user_id
+              WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${ctx.user.id}
+              ORDER BY o.created_at DESC
               LIMIT 100`
         ) as any;
         const list = ((rows[0] || rows) as any[]).map((r: any) => ({
@@ -8693,6 +8697,10 @@ export const appRouter = router({
           status: r.status,
           orderType: r.order_type || '',
           createdAt: r.created_at,
+          isGift: !!r.is_gift,
+          giftMultiplier: r.gift_multiplier || '',
+          sourceOrderId: r.source_order_id || null,
+          sourceUsername: r.source_username || '',
         }));
         return list;
       }),
@@ -8735,9 +8743,13 @@ export const appRouter = router({
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         const rows = await db.execute(
           sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at,
-                     u.username, COALESCE(u.name,'') as user_name
+                     u.username, COALESCE(u.name,'') as user_name,
+                     COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
+                     o.source_order_id, o.source_user_id,
+                     COALESCE(su.username, '') as source_username
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
+              LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId}
               ORDER BY o.created_at DESC
               LIMIT 500`
@@ -8755,6 +8767,10 @@ export const appRouter = router({
           status: r.status,
           orderType: r.order_type || '',
           createdAt: r.created_at,
+          isGift: !!r.is_gift,
+          giftMultiplier: r.gift_multiplier || '',
+          sourceOrderId: r.source_order_id || null,
+          sourceUsername: r.source_username || '',
         }));
         return list;
       }),
@@ -8780,7 +8796,7 @@ export const appRouter = router({
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询原始订单信息
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -8858,6 +8874,42 @@ export const appRouter = router({
               console.error('[AF扫描] 立即扫描失败:', e);
             }
           }, 500);
+        }
+        // ========== 赠送订单逻辑 ==========
+        // 当买入订单从 pending 变为 completed，且不是赠送订单本身，自动为推荐人生成 1.5 倍赠送订单
+        if (newStatus === 'completed' && oldStatus !== 'completed' && order.side === 'buy' && !order.is_gift) {
+          setTimeout(async () => {
+            try {
+              const giftDb = await getLedgerDb();
+              // 查询下单人的推荐人
+              const userRows = await giftDb.execute(
+                sql`SELECT id, invited_by_user_id, username FROM users WHERE id = ${userId} LIMIT 1`
+              ) as any;
+              const orderUser = (userRows[0]?.[0] ?? userRows[0]);
+              const referrerId = orderUser?.invited_by_user_id;
+              
+              // 计算赠送订单的金额和数量
+              // 原始订单：用户花 amount USDT，以 limit_price 价格买入，获得 quantity 个币（已含5.25倍放大）
+              // 赠送订单：市值 = 原花费 × 1.5，按同样价格算出对应币数
+              // 例：原花费1 USDT，价格2000 → 赠送市值=1.5 USDT，币数=1.5/2000=0.00075
+              const originalAmount = parseFloat(order.amount || '0');
+              const limitPrice = parseFloat(order.limit_price || '0');
+              // 赠送金额（市值）= 原花费 × 1.5
+              const giftAmount = (originalAmount * 1.5).toFixed(8);
+              // 赠送数量 = 赠送市值 / 委托价格
+              const giftQuantity = limitPrice > 0 ? (originalAmount * 1.5 / limitPrice).toFixed(8) : '0';
+              
+              // 生成赠送订单（userId 设为推荐人ID，如果没有推荐人则设为 0，后续绑定时更新）
+              const giftUserId = referrerId || 0;
+              await giftDb.execute(
+                sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, created_at, updated_at)
+                    VALUES (${input.ledgerId}, ${giftUserId}, ${coin}, 'buy', ${order.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, '1.5', ${input.orderId}, ${userId}, NOW(), NOW())`
+              );
+              console.log(`[AF赠送] 订单#${input.orderId} 成交，已为推荐人(${giftUserId})生成1.5倍赠送订单`);
+            } catch (e) {
+              console.error('[AF赠送] 生成赠送订单失败:', e);
+            }
+          }, 200);
         }
         return { success: true };
       }),

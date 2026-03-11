@@ -284,6 +284,18 @@ function OrderDetail({ order, timeStr, ledgerId }: {
 
   return (
     <div className="mt-2 bg-[#1C2127] rounded-xl p-3 space-y-2 text-sm">
+      {/* 赠送订单标记 */}
+      {order.isGift && (
+        <div className="flex items-center gap-2 bg-[#2A1215] rounded-lg px-3 py-2 border border-[#ef5350]/30">
+          <span className="text-[#ef5350] font-bold text-base animate-pulse">赠</span>
+          <div className="flex flex-col">
+            <span className="text-[#ef5350] text-xs font-medium">推荐人奖励订单 (1.5倍)</span>
+            {order.sourceUsername && (
+              <span className="text-gray-400 text-[10px]">来自 {order.sourceUsername}</span>
+            )}
+          </div>
+        </div>
+      )}
       {/* 基本信息 */}
       <div className="space-y-1.5">
         <div className="flex justify-between">
@@ -300,14 +312,23 @@ function OrderDetail({ order, timeStr, ledgerId }: {
           <span className="text-gray-500">委托价格</span>
           <span className="text-gray-300">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">实际投入</span>
-          <span className="text-gray-300">{parseFloat(order.amount).toFixed(2)} USDT</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">成交价值 <span className="text-yellow-500">(5.25倍)</span></span>
-          <span className="text-yellow-400">{(parseFloat(order.amount) * 5.25).toFixed(2)} USDT</span>
-        </div>
+        {order.isGift ? (
+          <div className="flex justify-between">
+            <span className="text-gray-500">赠送市值 <span className="text-[#ef5350]">(1.5倍)</span></span>
+            <span className="text-[#ef5350]">{parseFloat(order.amount).toFixed(2)} USDT</span>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-between">
+              <span className="text-gray-500">实际投入</span>
+              <span className="text-gray-300">{parseFloat(order.amount).toFixed(2)} USDT</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">成交价值 <span className="text-yellow-500">(5.25倍)</span></span>
+              <span className="text-yellow-400">{(parseFloat(order.amount) * 5.25).toFixed(2)} USDT</span>
+            </div>
+          </>
+        )}
         <div className="flex justify-between">
           <span className="text-gray-500">委托数量</span>
           <span className="text-gray-300">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
@@ -918,6 +939,7 @@ export default function CryptoPrediction() {
                           <span className="text-white font-medium text-center">{order.coin}</span>
                           <span className={`text-center ${order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}`}>
                             {order.side === 'buy' ? '买' : '卖'}
+                            {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold animate-pulse">赠</span>}
                           </span>
                           <span className="text-right text-gray-300">{parseFloat(order.quantity).toFixed(4)}</span>
                           <span className={`text-right ${

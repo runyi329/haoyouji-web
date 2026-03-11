@@ -123,6 +123,11 @@ export default function AfOrderManage() {
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                         {order.nickname || order.username || `用户${order.userId}`}
                       </span>
+                      {order.isGift && (
+                        <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-bold border border-red-200 animate-pulse">
+                          赠
+                        </span>
+                      )}
                       <span className="text-xs text-gray-400">{formatDate(order.createdAt)}</span>
                     </div>
                     {!isEditing ? (
@@ -224,6 +229,12 @@ export default function AfOrderManage() {
                     </div>
                   </div>
 
+                  {/* 赠送订单来源信息 */}
+                  {order.isGift && order.sourceUsername && (
+                    <div className="mt-2 text-xs text-red-400 bg-red-50 rounded-lg px-3 py-1.5 border border-red-100">
+                      推荐人奖励订单 (1.5倍) · 来自 <span className="font-medium text-red-500">{order.sourceUsername}</span>
+                    </div>
+                  )}
                   {/* 编辑时的余额说明 */}
                   {isEditing && (
                     <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">
