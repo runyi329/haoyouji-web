@@ -2476,7 +2476,7 @@ export default function ContactsList() {
                   max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setBackfillDate(e.target.value)}
                   className="border border-gray-300 rounded-md px-3 py-2 text-sm outline-none block"
-                  style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
+                  style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', WebkitAppearance: 'none', appearance: 'none' }}
                 />
                 <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
                   <Button
