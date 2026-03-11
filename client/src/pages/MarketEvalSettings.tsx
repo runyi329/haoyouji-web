@@ -86,16 +86,29 @@ export default function MarketEvalSettings() {
         return;
       }
       // 将数据通过 tRPC 存入数据库
+      // Worker 返回 odds 格式：[{outcome, probability, payout}]
       saveCacheMutation.mutate({
         coin,
-        events: workerEvents.map((e: any) => ({
-          question: e.question,
-          outcomes: e.outcomes || [],
-          outcomePrices: (e.outcomePrices || []).map(String),
-          volume: e.volume ? String(e.volume) : null,
-          endDate: e.endDate || null,
-          imageUrl: e.imageUrl || null,
-        })),
+        events: workerEvents.map((e: any) => {
+          // 兼容两种格式：新格式(odds数组) 和 旧格式(outcomes/outcomePrices)
+          let outcomes: string[] = [];
+          let outcomePrices: string[] = [];
+          if (e.odds && Array.isArray(e.odds)) {
+            outcomes = e.odds.map((o: any) => o.outcome || 'Yes');
+            outcomePrices = e.odds.map((o: any) => String((o.probability || 0) / 100));
+          } else {
+            outcomes = e.outcomes || [];
+            outcomePrices = (e.outcomePrices || []).map(String);
+          }
+          return {
+            question: e.question,
+            outcomes,
+            outcomePrices,
+            volume: e.volume ? String(e.volume) : null,
+            endDate: e.endDate || null,
+            imageUrl: e.imageUrl || null,
+          };
+        }),
       });
     } catch (err: any) {
       if (err.name === "TimeoutError" || err.name === "AbortError") {
