@@ -288,17 +288,24 @@ function OrderDetail({ order, timeStr, ledgerId }: {
   return (
     <div className="mt-2 bg-[#1C2127] rounded-xl p-3 space-y-2 text-sm">
       {/* 赠送订单标记 */}
-      {order.isGift && (
-        <div className="flex items-center gap-2 bg-[#2A1215] rounded-lg px-3 py-2 border border-[#ef5350]/30">
-          <span className="text-[#ef5350] font-bold text-base animate-pulse">赠</span>
+      {order.isGift && (() => {
+        const multiplier = (order as any).giftMultiplier || '1.5';
+        const is10 = multiplier === '1.0';
+        const labelText = is10 ? `间接推荐奖励订单 (${multiplier}倍)` : `推荐人奖励订单 (${multiplier}倍)`;
+        const colorClass = is10 ? 'text-amber-500' : 'text-[#ef5350]';
+        const bgClass = is10 ? 'bg-amber-950/30 border-amber-500/30' : 'bg-[#2A1215] border-[#ef5350]/30';
+        return (
+        <div className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${bgClass}`}>
+          <span className={`${colorClass} font-bold text-base animate-pulse`}>赠</span>
           <div className="flex flex-col">
-            <span className="text-[#ef5350] text-xs font-medium">推荐人奖励订单 (1.5倍)</span>
+            <span className={`${colorClass} text-xs font-medium`}>{labelText}</span>
             {order.sourceUsername && (
               <span className="text-gray-400 text-[10px]">来自 {order.sourceUsername}</span>
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
       {/* 基本信息 */}
       <div className="space-y-1.5">
         <div className="flex justify-between">
@@ -323,7 +330,7 @@ function OrderDetail({ order, timeStr, ledgerId }: {
               <span className="text-gray-300">{(order as any).sourceAmount ? parseFloat((order as any).sourceAmount).toFixed(2) : '--'} USDT</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">赠送市值 <span className="text-[#ef5350]">(1.5倍)</span></span>
+              <span className="text-gray-500">赠送市值 <span className={(order as any).giftMultiplier === '1.0' ? 'text-amber-500' : 'text-[#ef5350]'}>({(order as any).giftMultiplier || '1.5'}倍)</span></span>
               <span className="text-[#ef5350]">{parseFloat(order.amount).toFixed(2)} USDT</span>
             </div>
           </>
