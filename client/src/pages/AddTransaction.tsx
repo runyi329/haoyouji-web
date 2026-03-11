@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
+  AlertTriangle,
   ArrowLeft,
   Calendar,
   CheckCircle2,
@@ -129,6 +130,54 @@ const AddTransaction = () => {
   
   const [payer, setPayer] = useState("我自己");
   const [isPayerSheetOpen, setIsPayerSheetOpen] = useState(false);
+
+  // ===== 重复账目检测 =====
+  // 防抖金额（500ms）
+  const [debouncedAmount, setDebouncedAmount] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedAmount(amount), 500);
+    return () => clearTimeout(timer);
+  }, [amount]);
+
+  // 当天日期字符串
+  const selectedDateStr = useMemo(() => {
+    const y = selectedDate.getFullYear();
+    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const d = String(selectedDate.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }, [selectedDate]);
+
+  // 当前选中的最终类目 ID
+  const currentCategoryId = selectedCategoryPath.length > 0
+    ? selectedCategoryPath[selectedCategoryPath.length - 1]
+    : undefined;
+
+  const amountNum = debouncedAmount ? parseFloat(debouncedAmount) : undefined;
+  const hasAmountInput = !!amountNum && amountNum > 0;
+
+  const { data: dupData } = trpc.ledger.checkDuplicateTransaction.useQuery(
+    {
+      ledgerId,
+      type: transactionType,
+      amount: hasAmountInput ? amountNum : undefined,
+      categoryId: currentCategoryId,
+      date: selectedDateStr,
+      excludeId: isEditMode && editTransactionId ? editTransactionId : undefined,
+    },
+    { enabled: hasAmountInput && !isEditMode || (isEditMode && hasAmountInput) }
+  );
+
+  const duplicateWarnings = useMemo(() => {
+    if (!dupData?.duplicates || dupData.duplicates.length === 0) return [];
+    return dupData.duplicates.map((d) => {
+      const typeLabel = transactionType === 'income' ? '收入' : '支出';
+      if (d.matchType === 'both') {
+        return { text: `今天已有一笔相同类目和金额的${typeLabel}（${d.amount}元）`, id: d.id };
+      }
+      return { text: `今天已有一笔相同金额的${typeLabel}（${d.amount}元）`, id: d.id };
+    });
+  }, [dupData, transactionType]);
+  // ===== 重复检测结束 =====
   
   // 图片上传相关
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
@@ -960,7 +1009,28 @@ const AddTransaction = () => {
         </div>
       </div>
 
-      {/* 底部保存按钮 */}
+      {/* 重复账目警告提示 */}
+      {duplicateWarnings.length > 0 && (
+        <div className="flex-shrink-0 px-3 pt-2 bg-white">
+          <div className="space-y-1.5">
+            {duplicateWarnings.map((w, idx) => (
+              <div
+                key={idx}
+                className="flex items-start gap-2 px-3 py-2.5 bg-[#FFF5F5] border border-[#FFCDD2] rounded-xl cursor-pointer active:bg-[#FFEBEE]"
+                onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${w.id}`)}
+              >
+                <AlertTriangle className="w-4 h-4 text-[#D32F2F] flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-[#D32F2F] font-medium">{w.text}</p>
+                  <p className="text-xs text-[#E57373] mt-0.5">点击查看该账目（仍可继续保存）</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 底部保存按鈕 */}
       <div className="flex-shrink-0 p-3 bg-white border-t">
         <button
           className="w-full bg-[#D32F2F] text-white py-3 rounded-lg text-base font-semibold active:bg-[#B71C1C]"
