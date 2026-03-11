@@ -279,6 +279,9 @@ export default function ContactsList() {
   const [quickContactNote, setQuickContactNote] = useState("");
   const [contactMethod, setContactMethod] = useState<string>(""); // 联络方式：会面/电话/微信
   const [importanceScore, setImportanceScore] = useState<number>(0); // 互动重要性评分：1-5分
+  // 补记相关状态
+  const [showBackfillDatePicker, setShowBackfillDatePicker] = useState(false); // 是否显示补记日期选择器
+  const [backfillDate, setBackfillDate] = useState<string>(""); // 补记日期
   
   // 互动记录对话框状态
   const [showInteractionDialog, setShowInteractionDialog] = useState(false);
@@ -834,6 +837,44 @@ export default function ContactsList() {
       setQuickContactNote("");
       setContactMethod("");
       setImportanceScore(0);
+    }
+  };
+
+  // 补记确认：使用选定的历史日期记录联络
+  const confirmBackfillInteraction = () => {
+    if (contactToRecord && backfillDate) {
+      let note = quickContactNote.trim() || "补记联络";
+      if (contactMethod) {
+        note = `${contactMethod} - ${note}`;
+      }
+      if (importanceScore > 0) {
+        note = `${note} [重要性:${importanceScore}分]`;
+      }
+      // 将选定日期转为ISO字符串（当天中午）
+      const selectedDate = new Date(backfillDate + 'T12:00:00');
+      recordInteractionMutation.mutate({ 
+        contactId: contactToRecord.id,
+        note,
+        interactionDate: selectedDate.toISOString()
+      }, {
+        onSuccess: () => {
+          // 补记的日期如果是今天，则更新hasTodayInteraction
+          const today = new Date();
+          const selected = new Date(backfillDate);
+          const isToday = today.getFullYear() === selected.getFullYear() &&
+            today.getMonth() === selected.getMonth() &&
+            today.getDate() === selected.getDate();
+          if (isToday) {
+            setContactToRecord(prev => prev ? { ...prev, hasTodayInteraction: true } : null);
+          }
+          // 补记非当天日期，联络灯不变暗（不更新hasTodayInteraction）
+        }
+      });
+      setQuickContactNote("");
+      setContactMethod("");
+      setImportanceScore(0);
+      setShowBackfillDatePicker(false);
+      setBackfillDate("");
     }
   };
   
@@ -2363,6 +2404,8 @@ export default function ContactsList() {
           setQuickContactNote("");
           setContactMethod("");
           setImportanceScore(0);
+          setShowBackfillDatePicker(false);
+          setBackfillDate("");
         }
       }}>
         <DialogContent>
@@ -2435,26 +2478,80 @@ export default function ContactsList() {
                 </div>
               </>
             )}
+            {/* 补记日期选择器（点击补记后展开） */}
+            {showBackfillDatePicker && (
+              <div className="w-full space-y-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                <Label className="text-sm text-gray-600 block">选择联络日期</Label>
+                <input
+                  type="date"
+                  value={backfillDate}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setBackfillDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#A80000] focus:border-transparent"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={confirmBackfillInteraction}
+                    disabled={!backfillDate || recordInteractionMutation.isPending}
+                    className="flex-1 bg-[#A80000] hover:bg-[#8B0000] text-white"
+                    size="sm"
+                  >
+                    {recordInteractionMutation.isPending ? "记录中..." : "保存补记"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowBackfillDatePicker(false);
+                      setBackfillDate("");
+                    }}
+                    className="flex-1"
+                    size="sm"
+                  >
+                    收起
+                  </Button>
+                </div>
+              </div>
+            )}
             <Button 
               onClick={confirmRecordInteraction}
               disabled={recordInteractionMutation.isPending || contactToRecord?.hasTodayInteraction}
-              className="w-full"
+              className="w-full bg-[#A80000] hover:bg-[#8B0000] text-white"
             >
               {recordInteractionMutation.isPending ? "记录中..." : "确认记录"}
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setShowQuickContactDialog(false);
-                setContactToRecord(null);
-                setQuickContactNote("");
-                setContactMethod("");
-                setImportanceScore(0);
-              }}
-              className="w-full"
-            >
-              取消
-            </Button>
+            {/* 取消 + 补记 并排一行 */}
+            <div className="flex gap-2 w-full">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowQuickContactDialog(false);
+                  setContactToRecord(null);
+                  setQuickContactNote("");
+                  setContactMethod("");
+                  setImportanceScore(0);
+                  setShowBackfillDatePicker(false);
+                  setBackfillDate("");
+                }}
+                className="flex-1"
+              >
+                取消
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowBackfillDatePicker(!showBackfillDatePicker);
+                  if (!showBackfillDatePicker) {
+                    // 默认选中昨天
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    setBackfillDate(yesterday.toISOString().split('T')[0]);
+                  }
+                }}
+                className="flex-1 border-[#A80000] text-[#A80000] hover:bg-red-50"
+              >
+                {showBackfillDatePicker ? "收起补记" : "补记"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
