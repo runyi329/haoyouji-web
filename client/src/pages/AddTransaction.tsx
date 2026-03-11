@@ -1009,27 +1009,26 @@ const AddTransaction = () => {
         </div>
       </div>
 
-      {/* 重复账目警告提示 - 占满空白区域 */}
+      {/* 重复账目警告提示 - 固定高度，不遗挡上方操作区 */}
       {duplicateWarnings.length > 0 && (
-        <div className="flex-1 flex flex-col justify-center px-4 py-3 bg-white">
+        <div className="flex-shrink-0 px-4 py-2 bg-white">
           {duplicateWarnings.map((w, idx) => (
             <div
               key={idx}
-              className="animate-warn-flash flex-1 flex flex-col items-center justify-center gap-3 px-5 py-5 border-2 border-[#FFCDD2] rounded-2xl cursor-pointer"
-              style={{ minHeight: 120 }}
+              className="animate-warn-flash flex items-center gap-3 px-4 py-3.5 border-2 border-[#FFCDD2] rounded-2xl cursor-pointer"
               onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${w.id}`)}
             >
               {/* 闪动图标 */}
-              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[#FFEBEE]">
-                <AlertTriangle className="animate-icon-pulse w-7 h-7 text-[#D32F2F]" />
+              <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-[#FFEBEE]">
+                <AlertTriangle className="animate-icon-pulse w-6 h-6 text-[#D32F2F]" />
               </div>
-              {/* 主文字 */}
-              <div className="text-center">
+              {/* 文字区 */}
+              <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-[#D32F2F] leading-snug">{w.text}</p>
-                <p className="text-xs text-[#B71C1C] mt-1.5 font-medium">点击查看该账目</p>
+                <p className="text-[11px] text-[#E57373] mt-1">点此查看该账目，仍可继续保存</p>
               </div>
-              {/* 底部提示 */}
-              <p className="text-[11px] text-[#E57373] border border-[#FFCDD2] rounded-full px-3 py-1">仍可继续点下方「保存」按鈕</p>
+              {/* 右箭头 */}
+              <div className="flex-shrink-0 text-[#E57373] text-lg font-light">›</div>
             </div>
           ))}
         </div>
