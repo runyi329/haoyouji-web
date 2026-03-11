@@ -583,33 +583,34 @@ export default function CryptoPrediction() {
   const priceChange = ticker ? parseFloat(ticker.priceChangePercent) : 0;
   const isUp = priceChange >= 0;
 
-  // 竞猜（行情评估 Tab）- 走后端 tRPC，服务器端请求 Worker，国内 WiFi 也可访问
+  // 竞猜（行情评估 Tab）- 从数据库缓存读取，不依赖外网
   const predCoin = (coinKey === "SOL" ? "BTC" : coinKey) as "BTC" | "ETH";
 
-  // 走后端获取事件列表（含可见状态），服务器端请求 Cloudflare Worker，绕过国内 WiFi 拦截
-  const { data: eventsData, isLoading: predLoading, error: predErrorRaw, refetch: refetchPredQuery } = trpc.prediction.listEventsForAdmin.useQuery(
-    { ledgerId: ledgerId!, coin: predCoin },
+  const { data: eventsData, isLoading: predLoading, error: predErrorRaw, refetch: refetchPredQuery } = trpc.prediction.listEvents.useQuery(
+    { ledgerId: ledgerId!, coin: predCoin, limit: 20 },
     { enabled: !!ledgerId && tab === "market", staleTime: 30000, retry: 1 }
   );
   const predError = predErrorRaw ? (predErrorRaw instanceof Error ? predErrorRaw : new Error(predErrorRaw.message)) : null;
   const predFetching = false;
 
   // 把后端返回的事件格式转为前端 PredictionEvent 格式
-  const events: PredictionEvent[] = (eventsData?.events || []).map((e: any, idx: number) => ({
-    id: idx + 1,
+  const events: PredictionEvent[] = (eventsData?.events || []).map((e: any) => ({
+    id: e.id,
     question: e.question,
-    outcomes: (e.odds || []).map((o: any) => o.outcome),
-    outcomePrices: (e.odds || []).map((o: any) => String(o.probability / 100)),
+    outcomes: e.outcomes || [],
+    outcomePrices: e.outcomePrices || [],
     volume: e.volume || null,
     endDate: e.endDate || null,
     imageUrl: e.imageUrl || null,
     myPrediction: null,
   }));
 
-  // 可见事件列表（从后端 listEventsForAdmin 已包含 visible 字段）
-  const visibleQuestions: string[] = (eventsData?.events || [])
-    .filter((e: any) => e.visible)
-    .map((e: any) => e.question);
+  // 可见事件列表（通过管理员设置控制）
+  const { data: visibleData } = trpc.prediction.getVisibleQuestions.useQuery(
+    { ledgerId: ledgerId!, coin: predCoin },
+    { enabled: !!ledgerId && tab === "market", staleTime: 30000 }
+  );
+  const visibleQuestions: string[] = visibleData?.visibleQuestions || [];
 
   const refetchPred = () => { refetchPredQuery(); };
 

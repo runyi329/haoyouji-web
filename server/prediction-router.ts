@@ -60,6 +60,22 @@ async function ensurePredictionTables() {
         INDEX idx_ledger_visible (ledger_id, visible)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // ★ 新增：Polymarket 数据缓存表（管理员手动刷新后存入，用户从此表读取）
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS polymarket_cache (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        coin ENUM('BTC','ETH') NOT NULL,
+        question TEXT NOT NULL,
+        question_hash VARCHAR(64) NOT NULL,
+        outcomes JSON NOT NULL,
+        outcome_prices JSON NOT NULL,
+        volume VARCHAR(50),
+        end_date VARCHAR(50),
+        image_url TEXT,
+        refreshed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_coin_question (coin, question_hash)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
     console.log('[prediction] Tables ensured');
   } catch (e) {
     console.error('[prediction] ensurePredictionTables error:', e);
@@ -75,10 +91,9 @@ async function ensureOnce() {
 }
 
 // ============================================================
-// Polymarket 数据获取（通过 Cloudflare Worker 代理）
+// Polymarket 数据获取（直接请求 gamma-api，仅供管理员刷新时调用）
 // ============================================================
 
-// 直接请求 Polymarket Gamma API（不再依赖 Cloudflare Worker 中间层）
 const POLYMARKET_API = "https://gamma-api.polymarket.com";
 const COIN_KEYWORDS: Record<string, string[]> = {
   BTC: ["bitcoin", "btc"],
@@ -89,7 +104,7 @@ async function fetchPolymarketEvents(coin: "BTC" | "ETH", limit = 30): Promise<a
   try {
     const url = `${POLYMARKET_API}/events?limit=50&active=true&closed=false&order=volume&ascending=false&tag_slug=crypto`;
     console.log(`[prediction] 直接请求 Polymarket API: ${url}`);
-    
+
     const res = await fetch(url, {
       signal: AbortSignal.timeout(30000),
       headers: {
@@ -97,12 +112,12 @@ async function fetchPolymarketEvents(coin: "BTC" | "ETH", limit = 30): Promise<a
         "Accept": "application/json",
       },
     });
-    
+
     if (!res.ok) {
       const text = await res.text();
       throw new Error(`Polymarket API 返回 ${res.status}: ${text.substring(0, 200)}`);
     }
-    
+
     const data = await res.json() as any[];
     const keywords = COIN_KEYWORDS[coin];
     const results: any[] = [];
@@ -124,16 +139,10 @@ async function fetchPolymarketEvents(coin: "BTC" | "ETH", limit = 30): Promise<a
           outcomePrices = ["0.5", "0.5"];
         }
 
-        // 转换为 odds 格式（和 Worker 返回格式一致）
-        const odds = outcomes.map((outcome: string, i: number) => ({
-          outcome,
-          probability: Math.round(parseFloat(outcomePrices[i] || "0.5") * 100),
-          payout: parseFloat(outcomePrices[i] || "0.5") > 0 ? Math.round(100 / (parseFloat(outcomePrices[i]) * 100) * 100) / 100 : 0,
-        }));
-
         results.push({
           question: market.question || event.title,
-          odds,
+          outcomes,
+          outcomePrices,
           volume: String(market.volume || "0"),
           endDate: market.endDate || event.endDate || null,
           imageUrl: market.image || market.icon || null,
@@ -159,19 +168,93 @@ async function hashQuestion(question: string): Promise<string> {
 }
 
 // ============================================================
+// 从数据库缓存读取事件（所有用户和管理员列表都走这里）
+// ============================================================
+async function getCachedEvents(coin: "BTC" | "ETH", conn: any): Promise<any[]> {
+  const [rows] = await conn.execute(
+    `SELECT question, outcomes, outcome_prices, volume, end_date, image_url, refreshed_at
+     FROM polymarket_cache WHERE coin = ? ORDER BY id ASC`,
+    [coin]
+  );
+  return (rows as any[]).map((r: any) => ({
+    question: r.question,
+    outcomes: typeof r.outcomes === "string" ? JSON.parse(r.outcomes) : r.outcomes,
+    outcomePrices: typeof r.outcome_prices === "string" ? JSON.parse(r.outcome_prices) : r.outcome_prices,
+    volume: r.volume,
+    endDate: r.end_date,
+    imageUrl: r.image_url,
+    refreshedAt: r.refreshed_at,
+  }));
+}
+
+// ============================================================
 // tRPC Router
 // ============================================================
 
 export const predictionRouter = router({
-  // 直接从 Polymarket 实时拉取数据（不存数据库，最简单可靠）
-  syncPolymarket: protectedProcedure
+  // ★ 管理员：刷新 Polymarket 缓存（需要有网络的环境下调用）
+  refreshCache: protectedProcedure
     .input(z.object({ coin: z.enum(["BTC", "ETH"]) }))
     .mutation(async ({ input }) => {
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+
+      // 从 Polymarket 拉取最新数据
       const events = await fetchPolymarketEvents(input.coin);
-      return { synced: events.length, events };
+      if (events.length === 0) {
+        throw new Error("无法从 Polymarket 获取数据，请确保网络可访问（建议使用手机5G网络）");
+      }
+
+      // 写入数据库缓存（UPSERT）
+      for (const e of events) {
+        const qHash = await hashQuestion(e.question);
+        await conn.execute(
+          `INSERT INTO polymarket_cache (coin, question, question_hash, outcomes, outcome_prices, volume, end_date, image_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             outcomes = VALUES(outcomes),
+             outcome_prices = VALUES(outcome_prices),
+             volume = VALUES(volume),
+             end_date = VALUES(end_date),
+             image_url = VALUES(image_url),
+             refreshed_at = CURRENT_TIMESTAMP`,
+          [
+            input.coin,
+            e.question,
+            qHash,
+            JSON.stringify(e.outcomes),
+            JSON.stringify(e.outcomePrices),
+            e.volume || null,
+            e.endDate || null,
+            e.imageUrl || null,
+          ]
+        );
+      }
+
+      console.log(`[prediction] 缓存刷新完成: ${input.coin} ${events.length} 条`);
+      return { synced: events.length, coin: input.coin };
     }),
 
-  // 获取某个账本的竞猜事件列表（按 coin 分类）
+  // ★ 查询缓存最后更新时间
+  getCacheStatus: protectedProcedure
+    .input(z.object({ coin: z.enum(["BTC", "ETH"]) }))
+    .query(async ({ input }) => {
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) return { count: 0, lastRefreshed: null };
+      const [rows] = await conn.execute(
+        `SELECT COUNT(*) as cnt, MAX(refreshed_at) as last_refreshed FROM polymarket_cache WHERE coin = ?`,
+        [input.coin]
+      );
+      const row = (rows as any[])[0];
+      return {
+        count: row?.cnt ?? 0,
+        lastRefreshed: row?.last_refreshed ?? null,
+      };
+    }),
+
+  // 获取某个账本的竞猜事件列表（从数据库缓存读取）
   listEvents: protectedProcedure
     .input(
       z.object({
@@ -181,28 +264,24 @@ export const predictionRouter = router({
       })
     )
     .query(async ({ input }) => {
-      // 直接实时从 Polymarket 拉取，不依赖数据库
-      const events = await fetchPolymarketEvents(input.coin);
-      const limited = events.slice(0, input.limit);
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) return { events: [] };
+
+      const cached = await getCachedEvents(input.coin, conn);
+      const limited = cached.slice(0, input.limit);
+
       return {
-        events: limited.map((e, idx) => {
-          // Worker 返回的是 odds:[{outcome, probability, payout}]
-          // 前端期望的是 outcomes:[] 和 outcomePrices:[]
-          const odds: Array<{ outcome: string; probability: number; payout: number }> = e.odds || [];
-          const outcomes = odds.map((o) => o.outcome);
-          // outcomePrices 存小数形式的概率（如 0.155 表示 15.5%）
-          const outcomePrices = odds.map((o) => String(o.probability / 100));
-          return {
-            id: idx + 1,
-            question: e.question,
-            outcomes,
-            outcomePrices,
-            volume: e.volume,
-            endDate: e.endDate,
-            imageUrl: e.imageUrl || null,
-            myPrediction: null,
-          };
-        }),
+        events: limited.map((e, idx) => ({
+          id: idx + 1,
+          question: e.question,
+          outcomes: e.outcomes,
+          outcomePrices: e.outcomePrices,
+          volume: e.volume,
+          endDate: e.endDate,
+          imageUrl: e.imageUrl || null,
+          myPrediction: null,
+        })),
       };
     }),
 
@@ -233,7 +312,6 @@ export const predictionRouter = router({
         .limit(1);
 
       if (existing.length > 0) {
-        // 更新
         await db
           .update(userPredictions)
           .set({
@@ -243,7 +321,6 @@ export const predictionRouter = router({
           })
           .where(eq(userPredictions.id, existing[0].id));
       } else {
-        // 新建
         await db.insert(userPredictions).values({
           ledgerId: input.ledgerId,
           userId: ctx.user.id,
@@ -280,7 +357,6 @@ export const predictionRouter = router({
           )
         );
 
-      // 统计各选项票数
       const stats: Record<string, number> = {};
       for (const p of predictions) {
         stats[p.selectedOutcome] = (stats[p.selectedOutcome] || 0) + 1;
@@ -314,7 +390,7 @@ export const predictionRouter = router({
       return { visibleQuestions: questions };
     }),
 
-  // 管理员：获取所有事件（含勾选状态）
+  // 管理员：获取所有事件（含勾选状态，从数据库缓存读取）
   listEventsForAdmin: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
@@ -322,40 +398,32 @@ export const predictionRouter = router({
     }))
     .query(async ({ input }) => {
       await ensureOnce();
-      // 拉取 Polymarket 实时事件
-      const events = await fetchPolymarketEvents(input.coin);
-      
-      // 查询数据库中已有的可见性设置
       const conn = await getDbConnection();
-      if (!conn) {
-        return {
-          events: events.map((e: any, idx: number) => ({
-            id: idx + 1,
-            question: e.question,
-            volume: e.volume || null,
-            endDate: e.endDate || null,
-            visible: false,
-          })),
-        };
-      }
-      
-      const [rows] = await conn.execute(
+      if (!conn) return { events: [], cacheEmpty: true };
+
+      // 从缓存读取事件
+      const cached = await getCachedEvents(input.coin, conn);
+
+      // 查询可见性设置
+      const [visRows] = await conn.execute(
         `SELECT question_text, visible FROM market_eval_visible WHERE ledger_id = ? AND coin = ?`,
         [input.ledgerId, input.coin]
       );
       const visibilityMap = new Map<string, boolean>();
-      for (const r of rows as any[]) {
+      for (const r of visRows as any[]) {
         visibilityMap.set(r.question_text, r.visible === 1);
       }
-      
+
       return {
-        events: events.map((e: any, idx: number) => ({
+        events: cached.map((e: any, idx: number) => ({
           id: idx + 1,
           question: e.question,
           volume: e.volume || null,
           endDate: e.endDate || null,
+          refreshedAt: e.refreshedAt || null,
           visible: visibilityMap.get(e.question) ?? false,
         })),
+        cacheEmpty: cached.length === 0,
       };
     }),
 
@@ -371,17 +439,16 @@ export const predictionRouter = router({
       await ensureOnce();
       const conn = await getDbConnection();
       if (!conn) throw new Error("数据库连接失败");
-      
+
       const qHash = await hashQuestion(input.question);
-      
-      // UPSERT: 如果已存在则更新，不存在则插入
+
       await conn.execute(
         `INSERT INTO market_eval_visible (ledger_id, question_hash, question_text, coin, visible)
          VALUES (?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE visible = VALUES(visible), question_text = VALUES(question_text), updated_at = CURRENT_TIMESTAMP`,
         [input.ledgerId, qHash, input.question, input.coin, input.visible ? 1 : 0]
       );
-      
+
       return { success: true };
     }),
 });
