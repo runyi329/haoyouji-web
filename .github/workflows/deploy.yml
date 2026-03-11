@@ -61,13 +61,37 @@ jobs:
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SELECT id, book_id, branch_name, table_code FROM opinion_tables LIMIT 10;"
             echo "📊 确保af_orders表存在..."
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "CREATE TABLE IF NOT EXISTS af_orders (id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, user_id INT NOT NULL, coin VARCHAR(10) NOT NULL, side VARCHAR(10) NOT NULL, limit_price VARCHAR(50) NOT NULL, amount VARCHAR(50) NOT NULL, quantity VARCHAR(50) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending', order_type VARCHAR(50) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX af_orders_ledger_idx (ledger_id), INDEX af_orders_user_idx (user_id), INDEX af_orders_coin_idx (coin))" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE af_orders ADD COLUMN IF NOT EXISTS order_type VARCHAR(50) NOT NULL DEFAULT ''" || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='order_type';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN order_type VARCHAR(50) NOT NULL DEFAULT \"\"', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
             echo "📊 添加af_orders赠送订单字段..."
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE af_orders ADD COLUMN IF NOT EXISTS is_gift TINYINT NOT NULL DEFAULT 0" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE af_orders ADD COLUMN IF NOT EXISTS gift_multiplier VARCHAR(10) DEFAULT NULL" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE af_orders ADD COLUMN IF NOT EXISTS source_order_id INT DEFAULT NULL" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE af_orders ADD COLUMN IF NOT EXISTS source_user_id INT DEFAULT NULL" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE af_orders ADD INDEX IF NOT EXISTS af_orders_source_idx (source_order_id)" || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='is_gift';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN is_gift TINYINT NOT NULL DEFAULT 0', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='gift_multiplier';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN gift_multiplier VARCHAR(10) DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='source_order_id';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN source_order_id INT DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='source_user_id';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN source_user_id INT DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @idx_exists FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND INDEX_NAME='af_orders_source_idx';
+              SET @sql = IF(@idx_exists = 0, 'ALTER TABLE af_orders ADD INDEX af_orders_source_idx (source_order_id)', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
             echo "✅ af_orders赠送字段确认完成"
             echo "✅ af_orders表确认完成"
             echo "📊 确保af_manual_balances表存在..."
