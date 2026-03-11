@@ -8512,7 +8512,7 @@ export const appRouter = router({
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
         }
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         const rows = await db.execute(
           sql`SELECT * FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} ORDER BY created_at DESC`
@@ -8535,7 +8535,7 @@ export const appRouter = router({
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         if (input.id) {
           await db.execute(
@@ -8559,7 +8559,7 @@ export const appRouter = router({
         if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         await db.execute(
           sql`DELETE FROM af_manual_balances WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
@@ -8571,7 +8571,7 @@ export const appRouter = router({
     afGetMyTotalAsset: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         // 充值到账总额（recharge_orders status=completed）
         const rechargeRows = await db.execute(
@@ -8594,7 +8594,7 @@ export const appRouter = router({
     afGetMyRechargeHistory: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         // 1. 充值订单（recharge_orders，仅 completed 状态）
         const rechargeRows = await db.execute(
@@ -8641,7 +8641,7 @@ export const appRouter = router({
         orderType: z.string().optional(), // 无损合约 / 无损现货 / 行情评估
       }))
       .mutation(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         // order_type 字段已通过 deploy.yml 建表时创建，无需每次 ALTER TABLE
         // 1. 插入委托订单
@@ -8674,7 +8674,7 @@ export const appRouter = router({
     afGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         const rows = await db.execute(
           sql`SELECT id, coin, side, limit_price, amount, quantity, status, COALESCE(order_type,'') as order_type, created_at
@@ -8700,7 +8700,7 @@ export const appRouter = router({
     afGetAvailableSell: protectedProcedure
       .input(z.object({ ledgerId: z.number(), coin: z.string() }))
       .query(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         // 已成交买入的数量总和
         const buyRows = await db.execute(
@@ -8725,7 +8725,7 @@ export const appRouter = router({
     afAdminGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         // 验证是否是 owner 或 admin
         const roleRows = await db.execute(
@@ -8770,7 +8770,7 @@ export const appRouter = router({
         status: z.enum(['pending', 'completed', 'cancelled']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         // 验证是否是 owner 或 admin
         const roleRows = await db.execute(
@@ -8865,7 +8865,7 @@ export const appRouter = router({
     afCancelOrder: protectedProcedure
       .input(z.object({ ledgerId: z.number(), orderId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         // 查询订单，确认属于当前用户且状态为 pending
         const orderRows = await db.execute(
@@ -8897,7 +8897,7 @@ export const appRouter = router({
     afGetTierData: protectedProcedure
       .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const { getLedgerDb } = await import('./db');
+        
         const db = await getLedgerDb();
         // 验证订单属于该用户
         const orderRows = await db.execute(
