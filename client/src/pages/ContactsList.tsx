@@ -2468,7 +2468,7 @@ export default function ContactsList() {
             )}
             {/* 补记日期选择器（点击补记后展开） */}
             {showBackfillDatePicker && (
-              <div className="border border-gray-200 rounded-lg bg-gray-50 p-3 flex flex-col gap-2">
+              <div className="border border-gray-200 rounded-lg bg-gray-50 p-3 flex flex-col gap-2" style={{ maxWidth: '260px' }}>
                 <Label className="text-sm text-gray-600 block">选择联络日期</Label>
                 <input
                   type="date"
@@ -2476,9 +2476,9 @@ export default function ContactsList() {
                   max={new Date().toISOString().split('T')[0]}
                   onChange={(e) => setBackfillDate(e.target.value)}
                   className="border border-gray-300 rounded-md px-3 py-2 text-sm outline-none block"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
+                  style={{ width: '220px', boxSizing: 'border-box' }}
                 />
-                <div style={{ display: 'flex', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
+                <div style={{ display: 'flex', gap: '6px', width: '220px', boxSizing: 'border-box' }}>
                   <Button
                     onClick={confirmBackfillInteraction}
                     disabled={!backfillDate || recordInteractionMutation.isPending}
