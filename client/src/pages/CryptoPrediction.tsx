@@ -583,60 +583,35 @@ export default function CryptoPrediction() {
   const priceChange = ticker ? parseFloat(ticker.priceChangePercent) : 0;
   const isUp = priceChange >= 0;
 
-  // 竞猜（行情评估 Tab）- 前端直接 fetch Worker，绕过腾讯云服务器无法访问境外域名的限制
+  // 竞猜（行情评估 Tab）- 走后端 tRPC，服务器端请求 Worker，国内 WiFi 也可访问
   const predCoin = (coinKey === "SOL" ? "BTC" : coinKey) as "BTC" | "ETH";
 
-  // 获取管理员勾选的可见事件列表
-  const { data: visibleData } = trpc.prediction.getVisibleQuestions.useQuery(
-    { ledgerId, coin: predCoin },
-    { enabled: !!ledgerId && tab === "market", staleTime: 30000 }
+  // 走后端获取事件列表（含可见状态），服务器端请求 Cloudflare Worker，绕过国内 WiFi 拦截
+  const { data: eventsData, isLoading: predLoading, error: predErrorRaw, refetch: refetchPredQuery } = trpc.prediction.listEventsForAdmin.useQuery(
+    { ledgerId: ledgerId!, coin: predCoin },
+    { enabled: !!ledgerId && tab === "market", staleTime: 30000, retry: 1 }
   );
-  const visibleQuestions = visibleData?.visibleQuestions || [];
-  const [events, setEvents] = useState<PredictionEvent[]>([]);
-  const [predLoading, setPredLoading] = useState(false);
-  const [predError, setPredError] = useState<Error | null>(null);
-  const [predFetching, setPredFetching] = useState(false);
+  const predError = predErrorRaw ? (predErrorRaw instanceof Error ? predErrorRaw : new Error(predErrorRaw.message)) : null;
+  const predFetching = false;
 
-  const refetchPred = async () => {
-    setPredFetching(true);
-    try {
-      const res = await fetch(
-        `https://polymarket-proxy.runyihongkong.workers.dev/events?coin=${predCoin}&limit=30`,
-        {}
-      );
-      if (!res.ok) throw new Error(`请求失败 ${res.status}`);
-      const data = await res.json() as { events: any[] };
-      const mapped: PredictionEvent[] = (data.events || []).map((e: any, idx: number) => {
-        const odds: Array<{ outcome: string; probability: number }> = e.odds || [];
-        return {
-          id: idx + 1,
-          question: e.question,
-          outcomes: odds.map((o) => o.outcome),
-          outcomePrices: odds.map((o) => String(o.probability / 100)),
-          volume: e.volume || null,
-          endDate: e.endDate || null,
-          imageUrl: e.imageUrl || null,
-          myPrediction: null,
-        };
-      });
-      setEvents(mapped);
-      setPredError(null);
-    } catch (e) {
-      setPredError(e instanceof Error ? e : new Error("加载失败"));
-    } finally {
-      setPredLoading(false);
-      setPredFetching(false);
-    }
-  };
+  // 把后端返回的事件格式转为前端 PredictionEvent 格式
+  const events: PredictionEvent[] = (eventsData?.events || []).map((e: any, idx: number) => ({
+    id: idx + 1,
+    question: e.question,
+    outcomes: (e.odds || []).map((o: any) => o.outcome),
+    outcomePrices: (e.odds || []).map((o: any) => String(o.probability / 100)),
+    volume: e.volume || null,
+    endDate: e.endDate || null,
+    imageUrl: e.imageUrl || null,
+    myPrediction: null,
+  }));
 
-  useEffect(() => {
-    if (tab === "market") {
-      setPredLoading(true);
-      setEvents([]);
-      refetchPred();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, predCoin]);
+  // 可见事件列表（从后端 listEventsForAdmin 已包含 visible 字段）
+  const visibleQuestions: string[] = (eventsData?.events || [])
+    .filter((e: any) => e.visible)
+    .map((e: any) => e.question);
+
+  const refetchPred = () => { refetchPredQuery(); };
 
   // 技术指标
   const analysis = (() => {
