@@ -527,14 +527,53 @@ export default function CryptoPrediction() {
   const priceChange = ticker ? parseFloat(ticker.priceChangePercent) : 0;
   const isUp = priceChange >= 0;
 
-  // 竞猜（行情评估 Tab）
+  // 竞猜（行情评估 Tab）- 前端直接 fetch Worker，绕过腾讯云服务器无法访问境外域名的限制
   const predCoin = (coinKey === "SOL" ? "BTC" : coinKey) as "BTC" | "ETH";
-  const { data: predData, isLoading: predLoading, error: predError, refetch: refetchPred, isFetching: predFetching } =
-    trpc.prediction.listEvents.useQuery(
-      { ledgerId, coin: predCoin, limit: 30 },
-      { enabled: tab === "market" && !!ledgerId, staleTime: 5 * 60 * 1000, retry: 1 }
-    );
-  const events: PredictionEvent[] = ((predData as any)?.events || []) as PredictionEvent[];
+  const [events, setEvents] = useState<PredictionEvent[]>([]);
+  const [predLoading, setPredLoading] = useState(false);
+  const [predError, setPredError] = useState<Error | null>(null);
+  const [predFetching, setPredFetching] = useState(false);
+
+  const refetchPred = async () => {
+    setPredFetching(true);
+    try {
+      const res = await fetch(
+        `https://polymarket-proxy.runyihongkong.workers.dev/events?coin=${predCoin}&limit=30`,
+        { signal: AbortSignal.timeout(15000) }
+      );
+      if (!res.ok) throw new Error(`请求失败 ${res.status}`);
+      const data = await res.json() as { events: any[] };
+      const mapped: PredictionEvent[] = (data.events || []).map((e: any, idx: number) => {
+        const odds: Array<{ outcome: string; probability: number }> = e.odds || [];
+        return {
+          id: idx + 1,
+          question: e.question,
+          outcomes: odds.map((o) => o.outcome),
+          outcomePrices: odds.map((o) => String(o.probability / 100)),
+          volume: e.volume || null,
+          endDate: e.endDate || null,
+          imageUrl: e.imageUrl || null,
+          myPrediction: null,
+        };
+      });
+      setEvents(mapped);
+      setPredError(null);
+    } catch (e) {
+      setPredError(e instanceof Error ? e : new Error("加载失败"));
+    } finally {
+      setPredLoading(false);
+      setPredFetching(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "market") {
+      setPredLoading(true);
+      setEvents([]);
+      refetchPred();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, predCoin]);
 
   // 技术指标
   const analysis = (() => {
@@ -993,7 +1032,10 @@ export default function CryptoPrediction() {
               </p>
             </div>
             {predLoading ? (
-              <><EventCardSkeleton /><EventCardSkeleton /><EventCardSkeleton /></>
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
+                <p className="text-xs text-gray-500">正在加载预测数据...</p>
+              </div>
             ) : predError ? (
               <div className="bg-[#1C2127] rounded-2xl px-5 py-8 flex flex-col items-center gap-3 text-center">
                 <WifiOff className="w-10 h-10 text-gray-600" />
