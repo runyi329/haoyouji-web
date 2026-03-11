@@ -286,21 +286,19 @@ function OrderDetail({ order, timeStr, ledgerId }: {
   const isCompleted = order.status === 'completed';
 
   return (
-    <div className="mt-2 bg-[#1C2127] rounded-xl p-3 space-y-2 text-sm">
+    <div className="mt-2 rounded-xl p-3 space-y-2 text-sm" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
       {/* 赠送订单标记 */}
       {order.isGift && (() => {
         const multiplier = (order as any).giftMultiplier || '1.5';
         const is10 = multiplier === '1.0';
         const labelText = is10 ? `间接推荐奖励订单 (${multiplier}倍)` : `推荐人奖励订单 (${multiplier}倍)`;
-        const colorClass = is10 ? 'text-amber-500' : 'text-[#ef5350]';
-        const bgClass = is10 ? 'bg-amber-950/30 border-amber-500/30' : 'bg-[#2A1215] border-[#ef5350]/30';
         return (
-        <div className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${bgClass}`}>
-          <span className={`${colorClass} font-bold text-base animate-pulse`}>赠</span>
+        <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFF7ED', border: '1px solid rgba(245,158,11,0.3)' }}>
+          <span className="font-bold text-base animate-pulse" style={{ color: '#F59E0B' }}>赠</span>
           <div className="flex flex-col">
-            <span className={`${colorClass} text-xs font-medium`}>{labelText}</span>
+            <span className="text-xs font-medium" style={{ color: is10 ? '#F59E0B' : '#EF4444' }}>{labelText}</span>
             {order.sourceUsername && (
-              <span className="text-gray-400 text-[10px]">来自 {order.sourceUsername}</span>
+              <span className="text-[10px]" style={{ color: '#9CA3AF' }}>来自 {order.sourceUsername}</span>
             )}
           </div>
         </div>
@@ -309,12 +307,12 @@ function OrderDetail({ order, timeStr, ledgerId }: {
       {/* 基本信息 */}
       <div className="space-y-1.5">
         <div className="flex justify-between">
-          <span className="text-gray-500">币种</span>
-          <span className="text-white">{order.coin}</span>
+          <span style={{ color: '#9CA3AF' }}>币种</span>
+          <span style={{ color: '#1A2340' }}>{order.coin}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">方向</span>
-          <span className={order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
+          <span style={{ color: '#9CA3AF' }}>方向</span>
+          <span style={{ color: order.side === 'buy' ? '#1A56DB' : '#EF4444' }}>
             {order.side === 'buy' ? '买入' : '卖出'}
           </span>
         </div>
@@ -358,70 +356,82 @@ function OrderDetail({ order, timeStr, ledgerId }: {
           </>
         )}
         <div className="flex justify-between">
-          <span className="text-gray-500">持仓数量</span>
-          <span className="text-gray-300">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
+          <span style={{ color: '#9CA3AF' }}>委托价格</span>
+          <span style={{ color: '#1A2340' }}>{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">类型</span>
-          <span className="text-gray-400">{order.orderType || '无损合约'}</span>
+          <span style={{ color: '#9CA3AF' }}>实际投入</span>
+          <span style={{ color: '#1A2340' }}>{parseFloat(order.amount).toFixed(2)} USDT</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">状态</span>
-          <span className={order.status === 'completed' ? 'text-[#26a69a]' : order.status === 'cancelled' ? 'text-gray-500' : 'text-yellow-400'}>
-            {order.status === 'completed' ? '已成交' : order.status === 'cancelled' ? '已撤单' : '委托中'}
+          <span style={{ color: '#9CA3AF' }}>成交价值 <span style={{ color: '#1A56DB', fontWeight: 600 }}>(5.25倍)</span></span>
+          <span style={{ color: '#1A56DB', fontWeight: 600 }}>{(parseFloat(order.amount) * 5.25).toFixed(2)} USDT</span>
+        </div>
+        <div className="flex justify-between">
+          <span style={{ color: '#9CA3AF' }}>持仓数量</span>
+          <span style={{ color: '#1A2340' }}>{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
+        </div>
+        <div className="flex justify-between">
+          <span style={{ color: '#9CA3AF' }}>类型</span>
+          <span style={{ color: '#6B7A9A' }}>{order.orderType || '无损合约'}</span>
+        </div>
+        <div className="flex justify-between">
+          <span style={{ color: '#9CA3AF' }}>状态</span>
+          <span style={{ color: order.status === 'completed' ? '#0EA56A' : order.status === 'cancelled' ? '#9CA3AF' : '#F59E0B' }}>
+            {order.status === 'completed' ? '已成交' : order.status === 'cancelled' ? '已撒单' : '委托中'}
           </span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">下单时间</span>
-          <span className="text-gray-400">{timeStr}</span>
+          <span style={{ color: '#9CA3AF' }}>下单时间</span>
+          <span style={{ color: '#6B7A9A' }}>{timeStr}</span>
         </div>
       </div>
 
       {/* 收益权档位表（仅已成交且为无损合约的买入订单显示） */}
       {isCompleted && isContract && order.side === 'buy' && (
-        <div className="pt-2 border-t border-[#2A2E39]">
+        <div className="pt-2" style={{ borderTop: '1px solid #E0E8FF' }}>
           {/* 扫描状态栏 */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[#D32F2F] font-semibold">收益权监控</span>
+            <span className="font-semibold" style={{ color: '#1A56DB' }}>收益权监控</span>
             {tierData?.scanStatus ? (
               <div className="flex items-center gap-1">
                 {tierData.scanStatus.scanning ? (
-                  <><Loader2 className="w-2.5 h-2.5 animate-spin text-yellow-400" />
-                  <span className="text-yellow-400">扫描中...</span></>
+                  <><Loader2 className="w-2.5 h-2.5 animate-spin" style={{ color: '#F59E0B' }} />
+                  <span style={{ color: '#F59E0B' }}>扫描中...</span></>
                 ) : (
-                  <><span className="w-1.5 h-1.5 rounded-full bg-[#26a69a] inline-block animate-pulse" />
-                  <span className="text-[#26a69a]">实时监控中</span></>
+                  <><span className="w-1.5 h-1.5 rounded-full inline-block animate-pulse" style={{ backgroundColor: '#0EA56A' }} />
+                  <span style={{ color: '#0EA56A' }}>实时监控中</span></>
                 )}
               </div>
             ) : tierLoading ? (
-              <span className="text-gray-500">加载中...</span>
+              <span style={{ color: '#9CA3AF' }}>加载中...</span>
             ) : (
-              <span className="text-gray-500">待启动</span>
+              <span style={{ color: '#9CA3AF' }}>待启动</span>
             )}
           </div>
 
           {/* 扫描信息 */}
           {tierData?.scanStatus?.lastScanAt && (
-            <div className="bg-[#0D1117] rounded-lg p-2 mb-2 space-y-1">
+            <div className="rounded-lg p-2 mb-2 space-y-1" style={{ backgroundColor: '#F0F4FF' }}>
               <div className="flex justify-between">
-                <span className="text-gray-500">上次扫描</span>
-                <span className="text-gray-400">{new Date(tierData.scanStatus.lastScanAt).toLocaleString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
+                <span style={{ color: '#9CA3AF' }}>上次扫描</span>
+                <span style={{ color: '#6B7A9A' }}>{new Date(tierData.scanStatus.lastScanAt).toLocaleString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">4h区间最低价</span>
-                <span className="text-[#ef5350]">{tierData.scanStatus.lastLowPrice ? parseFloat(tierData.scanStatus.lastLowPrice).toLocaleString() + ' USDT' : '--'}</span>
+                <span style={{ color: '#9CA3AF' }}>4h区间最低价</span>
+                <span style={{ color: '#EF4444' }}>{tierData.scanStatus.lastLowPrice ? parseFloat(tierData.scanStatus.lastLowPrice).toLocaleString() + ' USDT' : '--'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">扫描频率</span>
-                <span className="text-gray-400">每4小时一次</span>
+                <span style={{ color: '#9CA3AF' }}>扫描频率</span>
+                <span style={{ color: '#6B7A9A' }}>每4小时一次</span>
               </div>
             </div>
           )}
 
           {/* 收益权档位表 */}
-          <div className="text-gray-500 mb-1.5">收益权档位表</div>
+          <div className="mb-1.5" style={{ color: '#6B7A9A' }}>收益权档位表</div>
           {/* 表头 */}
-          <div className="grid grid-cols-4 text-xs text-gray-600 mb-1 px-1">
+          <div className="grid grid-cols-4 text-xs mb-1 px-1" style={{ color: '#9CA3AF' }}>
             <span>跌幅档</span>
             <span className="text-center">收益权</span>
             <span className="text-center">触发时间</span>
@@ -429,13 +439,14 @@ function OrderDetail({ order, timeStr, ledgerId }: {
           </div>
 
           {/* 第0档：未触发，收益权100% */}
-          <div className={`grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5 ${
-            currentTier === 0 ? 'bg-[#26a69a]/20 border border-[#26a69a]/40' : 'bg-[#0D1117]'
-          }`}>
-            <span className={currentTier === 0 ? 'text-[#26a69a] font-semibold' : 'text-gray-500'}>基准</span>
-            <span className={`text-center font-semibold ${ currentTier === 0 ? 'text-[#26a69a]' : 'text-gray-500' }`}>100%</span>
-            <span className="text-center text-gray-600">--</span>
-            <span className="text-right text-gray-600">{parseFloat(order.limitPrice).toLocaleString()}</span>
+          <div className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
+            style={currentTier === 0
+              ? { backgroundColor: 'rgba(14,165,106,0.1)', border: '1px solid rgba(14,165,106,0.4)' }
+              : { backgroundColor: '#F8FAFF' }}>
+            <span style={{ color: currentTier === 0 ? '#0EA56A' : '#9CA3AF', fontWeight: currentTier === 0 ? 600 : 400 }}>基准</span>
+            <span className="text-center font-semibold" style={{ color: currentTier === 0 ? '#0EA56A' : '#9CA3AF' }}>100%</span>
+            <span className="text-center" style={{ color: '#C0C8D8' }}>--</span>
+            <span className="text-right" style={{ color: '#C0C8D8' }}>{parseFloat(order.limitPrice).toLocaleString()}</span>
           </div>
 
           {/* 9档 */}
@@ -444,26 +455,18 @@ function OrderDetail({ order, timeStr, ledgerId }: {
             const isCurrentTier = currentTier === tier;
             const isTriggered = triggeredTiers.has(tier);
             return (
-              <div key={tier} className={`grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5 ${
-                isCurrentTier ? 'bg-[#ef5350]/20 border border-[#ef5350]/40' :
-                isTriggered ? 'bg-[#2A2E39]' : 'bg-[#0D1117]'
-              }`}>
-                <span className={`${
-                  isCurrentTier ? 'text-[#ef5350] font-semibold' :
-                  isTriggered ? 'text-gray-400' : 'text-gray-600'
-                }`}>{drop}</span>
-                <span className={`text-center font-semibold ${
-                  isCurrentTier ? 'text-[#ef5350]' :
-                  isTriggered ? 'text-gray-400' : 'text-gray-600'
-                }`}>{pct}</span>
-                <span className={`text-center text-xs ${
-                  isTriggered ? 'text-gray-500' : 'text-gray-700'
-                }`}>
+              <div key={tier} className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
+                style={isCurrentTier
+                  ? { backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }
+                  : isTriggered
+                  ? { backgroundColor: '#EEF2FF' }
+                  : { backgroundColor: '#F8FAFF' }}>
+                <span style={{ color: isCurrentTier ? '#EF4444' : isTriggered ? '#6B7A9A' : '#C0C8D8', fontWeight: isCurrentTier ? 600 : 400 }}>{drop}</span>
+                <span className="text-center font-semibold" style={{ color: isCurrentTier ? '#EF4444' : isTriggered ? '#1A56DB' : '#C0C8D8' }}>{pct}</span>
+                <span className="text-center text-xs" style={{ color: isTriggered ? '#9CA3AF' : '#D0DBFF' }}>
                   {trigger ? new Date(trigger.triggeredAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '--'}
                 </span>
-                <span className={`text-right ${
-                  isTriggered ? 'text-[#ef5350]' : 'text-gray-500'
-                }`}>
+                <span className="text-right" style={{ color: isTriggered ? '#EF4444' : '#C0C8D8' }}>
                   {trigger
                     ? parseFloat(trigger.triggerPrice).toLocaleString()
                     : parseFloat(order.limitPrice) > 0
@@ -476,13 +479,11 @@ function OrderDetail({ order, timeStr, ledgerId }: {
           })}
 
           {/* 当前收益权摘要 */}
-          <div className="mt-2 bg-[#0D1117] rounded-lg p-2 flex justify-between items-center">
-            <span className="text-gray-500">当前收益权</span>
-            <span className={`font-bold text-sm ${
-              currentTier === 0 ? 'text-[#26a69a]' : 'text-[#ef5350]'
-            }`}>
+          <div className="mt-2 rounded-lg p-2 flex justify-between items-center" style={{ backgroundColor: '#EEF2FF' }}>
+            <span style={{ color: '#6B7A9A' }}>当前收益权</span>
+            <span className="font-bold text-sm" style={{ color: currentTier === 0 ? '#0EA56A' : '#EF4444' }}>
               {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
-              <span className="text-gray-500 text-xs ml-1">
+              <span className="text-xs ml-1" style={{ color: '#9CA3AF' }}>
                 ({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})
               </span>
             </span>
@@ -645,9 +646,9 @@ export default function CryptoPrediction() {
   })();
 
   return (
-    <div className="min-h-screen bg-[#0B0E11] text-white pb-20">
+    <div className="min-h-screen pb-20" style={{ background: '#F0F4FF', color: '#1A2340' }}>
       {/* 顶部导航 */}
-      <div className="sticky top-0 z-50 px-4 pt-3 pb-2 flex items-center justify-between bg-[#D32F2F]">
+      <div className="sticky top-0 z-50 px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
         <div className="flex items-center gap-2">
           <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">
             <ChevronLeft className="w-5 h-5 text-white" />
@@ -661,7 +662,7 @@ export default function CryptoPrediction() {
 
       {/* 三 Tab 切换 */}
       <div className="px-4 pt-3">
-        <div className="flex bg-[#1C2127] rounded-xl p-1 gap-1">
+        <div className="flex rounded-xl p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
           {[
             { key: "contract", label: isCustomAF ? "谷底增筹" : "无损合约" },
             { key: "spot", label: "无损现货" },
@@ -674,7 +675,10 @@ export default function CryptoPrediction() {
               }
               setTab(t.key as any);
             }}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === t.key ? "bg-[#D32F2F] text-white" : "text-gray-400"}`}>
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+                tab === t.key ? "text-white shadow-sm" : "text-gray-500"
+              }`}
+              style={tab === t.key ? { backgroundColor: '#1A56DB' } : {}}>
               {t.label}
             </button>
           ))}
@@ -688,43 +692,46 @@ export default function CryptoPrediction() {
         {tab === "contract" && (
           <div className="space-y-3 pb-4">
             {/* 委买 / 委卖 切换 */}
-            <div className="flex rounded-xl overflow-hidden border border-[#2A2E39]">
+            <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #D0DBFF' }}>
               <button
                 onClick={() => { setOrderSide("buy"); setOrderAmount(""); setSliderPct(0); }}
-                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-                  orderSide === "buy" ? "bg-[#26a69a] text-white" : "bg-[#1C2127] text-gray-400"
-                }`}>
+                className={`flex-1 py-2.5 text-sm font-semibold transition-all ${
+                  orderSide === "buy" ? "text-white" : "text-gray-500"
+                }`}
+                style={orderSide === "buy" ? { backgroundColor: '#1A56DB' } : { backgroundColor: '#F0F4FF' }}>
                 委买
               </button>
               <button
                 onClick={() => { setOrderSide("sell"); setOrderAmount(""); setSliderPct(0); setSelectedSellOrderId(null); setOrderPrice(""); }}
-                className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${
-                  orderSide === "sell" ? "bg-[#ef5350] text-white" : "bg-[#1C2127] text-gray-400"
-                }`}>
+                className={`flex-1 py-2.5 text-sm font-semibold transition-all ${
+                  orderSide === "sell" ? "text-white" : "text-gray-500"
+                }`}
+                style={orderSide === "sell" ? { backgroundColor: '#EF4444' } : { backgroundColor: '#F0F4FF' }}>
                 委卖
               </button>
             </div>
 
             {/* 限价委托价格输入框 */}
-            <div className="bg-[#1C2127] rounded-xl px-4 py-3 flex items-center gap-3">
-              <span className="text-sm text-gray-400 w-14">限价委托</span>
+            <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
+              <span className="text-sm w-14" style={{ color: '#6B7A9A' }}>限价委托</span>
               <input
                 type="number"
                 inputMode="decimal"
                 placeholder="输入价格"
                 value={orderPrice}
                 onChange={(e) => setOrderPrice(e.target.value)}
-                className="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-600"
+                className="flex-1 bg-transparent text-sm outline-none"
+                style={{ color: '#1A2340' }}
               />
-              <span className="text-sm text-white opacity-50">USDT</span>
+              <span className="text-sm" style={{ color: '#9CA3AF' }}>USDT</span>
             </div>
 
             {/* 委买模式：金额输入 + 进度条 + 可用余额 */}
             {orderSide === "buy" && (
               <>
                 {/* 金额输入框 */}
-                <div className="bg-[#1C2127] rounded-xl px-4 py-3 flex items-center gap-3">
-                  <span className="text-sm text-gray-400 w-14">金额</span>
+                <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
+                  <span className="text-sm w-14" style={{ color: '#6B7A9A' }}>金额</span>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -740,15 +747,16 @@ export default function CryptoPrediction() {
                         setSliderPct(0);
                       }
                     }}
-                    className="flex-1 bg-transparent text-white text-sm outline-none placeholder-gray-600"
+                    className="flex-1 bg-transparent text-sm outline-none"
+                    style={{ color: '#1A2340' }}
                   />
-                  <span className="text-sm text-white opacity-50">USDT</span>
+                  <span className="text-sm" style={{ color: '#9CA3AF' }}>USDT</span>
                 </div>
                 {/* 5档进度条 */}
                 <div className="px-0">
                   <div className="relative h-8 flex items-center select-none">
-                    <div className="absolute left-0 right-0 h-0.5 bg-[#2A2E39] rounded-full" />
-                    <div className="absolute left-0 h-0.5 rounded-full" style={{ width: `${sliderPct}%`, backgroundColor: "#ffffff" }} />
+                    <div className="absolute left-0 right-0 h-0.5 rounded-full" style={{ backgroundColor: '#D0DBFF' }} />
+                    <div className="absolute left-0 h-0.5 rounded-full" style={{ width: `${sliderPct}%`, backgroundColor: "#1A56DB" }} />
                     {[0, 25, 50, 75, 100].map((pct, idx) => {
                       let leftPx: string;
                       if (idx === 0) leftPx = '0px';
@@ -756,11 +764,11 @@ export default function CryptoPrediction() {
                       else leftPx = `calc(${pct}% - 3px)`;
                       return (
                         <div key={pct} className="absolute w-1.5 h-1.5 rounded-full z-10 pointer-events-none"
-                          style={{ left: leftPx, backgroundColor: sliderPct >= pct ? "#ffffff" : "#3A3E49" }} />
+                          style={{ left: leftPx, backgroundColor: sliderPct >= pct ? "#1A56DB" : "#D0DBFF" }} />
                       );
                     })}
-                    <div className="absolute w-4 h-4 rounded-full bg-white shadow-lg z-20 pointer-events-none"
-                      style={{ left: sliderPct === 0 ? '0px' : sliderPct === 100 ? 'calc(100% - 16px)' : `calc(${sliderPct}% - 8px)` }} />
+                    <div className="absolute w-4 h-4 rounded-full shadow-lg z-20 pointer-events-none"
+                      style={{ backgroundColor: '#1A56DB', left: sliderPct === 0 ? '0px' : sliderPct === 100 ? 'calc(100% - 16px)' : `calc(${sliderPct}% - 8px)` }} />
                     <input type="range" min={0} max={100} step={1} value={sliderPct}
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
@@ -778,21 +786,21 @@ export default function CryptoPrediction() {
                 </div>
                 {/* 可用金额 + 充値按钮 */}
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-xs text-gray-500">可用</span>
+                  <span className="text-xs" style={{ color: '#9CA3AF' }}>可用</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-300">
+                    <span className="text-xs" style={{ color: '#1A2340' }}>
                       {availableUsdt > 0 ? availableUsdt.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"} USDT
                     </span>
                     <button onClick={() => setLocation(`/recharge?ledgerId=${ledgerId}`)}
-                      className="w-5 h-5 rounded-full bg-[#2A2E39] flex items-center justify-center text-gray-400 hover:bg-[#3A3E49] transition-colors" title="充値">
+                      className="w-5 h-5 rounded-full flex items-center justify-center transition-colors" style={{ backgroundColor: '#E8EEFF', color: '#1A56DB' }} title="充值">
                       <span className="text-xs leading-none">+</span>
                     </button>
                   </div>
                 </div>
                 {/* 可买数量 */}
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-xs text-gray-500">可买 <span className="text-yellow-400 ml-1">(5.25倍)</span></span>
-                  <span className="text-xs text-gray-300">
+                  <span className="text-xs" style={{ color: '#9CA3AF' }}>可买 <span className="ml-1 font-semibold" style={{ color: '#1A56DB' }}>(5.25倍)</span></span>
+                  <span className="text-xs" style={{ color: '#1A2340' }}>
                     {(() => {
                       const amt = parseFloat(orderAmount);
                       const price = parseFloat(orderPrice) || parseFloat(ticker?.lastPrice || "0");
@@ -860,6 +868,7 @@ export default function CryptoPrediction() {
 
             {/* 确认按鈕 */}
             <button
+              style={orderSide === "buy" ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' } : { backgroundColor: '#EF4444' }}
               onClick={() => {
                 const price = parseFloat(orderPrice);
                 if (!price || price <= 0) { toast.error("请输入委托价格"); return; }
@@ -896,9 +905,7 @@ export default function CryptoPrediction() {
                 }
               }}
               disabled={orderSide === "sell" && !selectedSellOrderId}
-              className={`w-full py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity ${
-                orderSide === "buy" ? "bg-[#26a69a]" : "bg-[#ef5350]"
-              } ${(
+              className={`w-full py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity ${(
                 orderSide === "buy"
                   ? (!orderAmount || parseFloat(orderAmount) <= 0)
                   : !selectedSellOrderId
@@ -908,7 +915,7 @@ export default function CryptoPrediction() {
             </button>
             {/* 当前委托订单列表 - 独立渲染，不依赖 K 线图加载状态 */}
             <div className="mt-4">
-              <div className="text-sm font-semibold text-white mb-2">当前委托</div>
+              <div className="text-sm font-semibold mb-2" style={{ color: '#1A2340' }}>当前委托</div>
               {ordersLoading ? (
                 <div className="space-y-2 pt-1">
                   {[1,2,3].map(i => (
@@ -924,7 +931,7 @@ export default function CryptoPrediction() {
               ) : (
                 <div>
                   {/* 表头 */}
-                  <div className="grid text-[10px] text-gray-500 pb-1.5 mb-0.5 border-b border-[#2A2E39]" style={{gridTemplateColumns:'10fr 3fr 2fr 3fr 3fr 2fr'}}>
+                  <div className="grid text-[10px] pb-1.5 mb-0.5" style={{gridTemplateColumns:'10fr 3fr 2fr 3fr 3fr 2fr', color: '#9CA3AF', borderBottom: '1px solid #E0E8FF'}}>
                     <span>日期</span>
                     <span className="text-center">币种</span>
                     <span className="text-center">方向</span>
@@ -944,19 +951,19 @@ export default function CryptoPrediction() {
                       return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
                     })() : '--';
                     return (
-                      <div key={order.id} className="py-2 border-b border-[#1C2127]">
+                      <div key={order.id} className="py-2" style={{ borderBottom: '1px solid #EEF2FF' }}>
                         <div className="grid text-[10px] items-center" style={{gridTemplateColumns:'10fr 3fr 2fr 3fr 3fr 2fr'}}>
-                          <span className="text-gray-400 whitespace-nowrap">{timeStr}</span>
-                          <span className="text-white font-medium text-center">{order.coin}</span>
-                          <span className={`text-center ${order.side === 'buy' ? 'text-[#26a69a]' : 'text-[#ef5350]'}`}>
+                          <span className="whitespace-nowrap" style={{ color: '#6B7A9A' }}>{timeStr}</span>
+                          <span className="font-medium text-center" style={{ color: '#1A2340' }}>{order.coin}</span>
+                          <span className={`text-center ${order.side === 'buy' ? 'text-[#1A56DB]' : 'text-[#EF4444]'}`}>
                             {order.side === 'buy' ? '买' : '卖'}
                             {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold animate-pulse">赠</span>}
                           </span>
-                          <span className="text-right text-gray-300">{parseFloat(order.quantity).toFixed(4)}</span>
+                          <span className="text-right" style={{ color: '#1A2340' }}>{parseFloat(order.quantity).toFixed(4)}</span>
                           <span className={`text-right ${
-                            order.status === 'completed' ? 'text-[#26a69a]' :
-                            order.status === 'cancelled' ? 'text-gray-500' :
-                            'text-yellow-400'
+                            order.status === 'completed' ? 'text-[#0EA56A]' :
+                            order.status === 'cancelled' ? 'text-gray-400' :
+                            'text-[#F59E0B]'
                           }`}>
                             {order.status === 'completed' ? '已成交' :
                              order.status === 'cancelled' ? '已撤' :
@@ -978,7 +985,7 @@ export default function CryptoPrediction() {
                             {order.status !== 'pending' && (
                               <button
                                 onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
-                                className="text-[#D32F2F] text-[9px] font-medium">
+                                className="text-[9px] font-medium" style={{ color: '#1A56DB' }}>
                                 详情
                               </button>
                             )}

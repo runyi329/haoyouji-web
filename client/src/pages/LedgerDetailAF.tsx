@@ -262,11 +262,11 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0E11] text-white pb-20">
+    <div className="min-h-screen pb-20" style={{ background: '#F0F4FF', color: '#1A2340' }}>
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 px-4 pt-3 pb-2 flex items-center justify-between"
-        style={{ backgroundColor: "#D32F2F" }}
+        style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
       >
         <div className="flex items-center gap-2">
           {user && (
@@ -283,7 +283,7 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
           {(isOwner || isAdmin) && (
             <button
               className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: "rgba(255,255,255,0.18)" }}
+              style={{ backgroundColor: "rgba(255,255,255,0.22)" }}
               onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
             >
               <Settings className="w-4 h-4 text-white" />
@@ -291,15 +291,15 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
           )}
           <button
             onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}`)}
-            className="px-3 py-1 rounded-full text-sm font-medium border border-white/60 text-white"
-            style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+            className="px-3 py-1.5 rounded-full text-sm font-semibold border border-white/70 text-white"
+            style={{ backgroundColor: "rgba(255,255,255,0.18)", letterSpacing: '0.02em' }}
           >
             充值
           </button>
           <button
             onClick={() => setLocation("/ledger")}
-            className="px-3 py-1 rounded-full text-sm font-medium border border-white/60 text-white"
-            style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+            className="px-3 py-1.5 rounded-full text-sm font-semibold border border-white/70 text-white"
+            style={{ backgroundColor: "rgba(255,255,255,0.18)", letterSpacing: '0.02em' }}
           >
             返回
           </button>
@@ -307,14 +307,14 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
       </div>
 
       {/* 总资产卡片 */}
-      <div className="px-4 pt-3 pb-2" style={{ backgroundColor: "#D32F2F" }}>
-        <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: "rgba(0,0,0,0.22)" }}>
-          <div className="text-xs text-white/70 mb-1">我的总资产估值</div>
+      <div className="px-4 pt-3 pb-4" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
+        <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: "rgba(255,255,255,0.18)", backdropFilter: 'blur(8px)' }}>
+          <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.75)' }}>我的总资产估值</div>
           <div className="flex items-baseline gap-1">
             <span className="text-2xl font-bold text-white">
               {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : "0.00"}
             </span>
-            <span className="text-sm text-white/60">USDT</span>
+            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.65)' }}>USDT</span>
           </div>
         </div>
       </div>
@@ -325,12 +325,12 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
           <button
             key={c.symbol}
             onClick={() => setCoinIdx(i)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
               coinIdx === i
-                ? "text-white"
-                : "bg-[#1C2127] text-gray-400"
+                ? "text-white shadow-md"
+                : "text-gray-500"
             }`}
-            style={coinIdx === i ? { backgroundColor: c.color } : {}}
+            style={coinIdx === i ? { backgroundColor: c.color } : { backgroundColor: '#E8EEFF', border: '1px solid #D0DBFF' }}
           >
             <img src={c.imgUrl} alt={c.name} className="w-4 h-4 object-contain" />
             {c.name}
@@ -338,25 +338,26 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
         ))}
         <button
           onClick={fetchKline}
-          className="ml-auto w-8 h-8 rounded-full bg-[#1C2127] flex items-center justify-center"
+          className="ml-auto w-8 h-8 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: '#E8EEFF', border: '1px solid #D0DBFF' }}
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-gray-400 ${klineLoading ? "animate-spin" : ""}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${klineLoading ? "animate-spin" : ""}`} style={{ color: '#3B82F6' }} />
         </button>
       </div>
 
       {/* 行情数据区 */}
       <div className="px-4 pb-2">
-        <div className="bg-[#131722] rounded-2xl overflow-hidden">
+        <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#FFFFFF', boxShadow: '0 2px 12px rgba(26,86,219,0.08)', border: '1px solid #E0E8FF' }}>
           {/* 价格行 */}
           <div className="px-4 pt-3 pb-2 flex items-center justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <span className={`text-2xl font-bold ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
+                <span className={`text-2xl font-bold ${isUp ? "text-[#0EA56A]" : "text-[#EF4444]"}`}>
                   {formatPrice(ticker?.lastPrice)}
                 </span>
                 <span className="text-xs text-gray-400">USDT</span>
               </div>
-              <div className={`flex items-center gap-1 text-sm mt-0.5 ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
+              <div className={`flex items-center gap-1 text-sm mt-0.5 ${isUp ? "text-[#0EA56A]" : "text-[#EF4444]"}`}>
                 {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                 {isUp ? "+" : ""}{priceChange.toFixed(2)}%
               </div>
@@ -376,9 +377,10 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
                 onClick={() => setInterval(iv.value)}
                 className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                   interval === iv.value
-                    ? "bg-[#2A2E39] text-white"
-                    : "text-gray-500"
+                    ? "text-white"
+                    : "text-gray-400"
                 }`}
+                style={interval === iv.value ? { backgroundColor: '#1A56DB' } : {}}
               >
                 {iv.label}
               </button>
@@ -405,7 +407,7 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
 
       {/* 三 Tab 切换 */}
       <div className="px-4 pt-2">
-        <div className="flex bg-[#1C2127] rounded-xl p-1 gap-1">
+        <div className="flex rounded-xl p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
           {[
             { key: "contract", label: "无损合约" },
             { key: "spot", label: "无损现货" },
@@ -414,11 +416,12 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
             <button
               key={t.key}
               onClick={() => setTab(t.key as any)}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
                 tab === t.key
-                  ? "bg-[#D32F2F] text-white"
-                  : "text-gray-400"
+                  ? "text-white shadow-sm"
+                  : "text-gray-500"
               }`}
+              style={tab === t.key ? { backgroundColor: '#1A56DB' } : {}}
             >
               {t.label}
             </button>
@@ -458,23 +461,23 @@ function ContractTab({
   return (
     <div className="space-y-3">
       {/* 说明卡片 */}
-      <div className="bg-[#131722] rounded-2xl p-4">
-        <div className="text-sm font-semibold text-white mb-2">无损合约策略</div>
-        <div className="text-xs text-gray-400 leading-relaxed">
+      <div className="rounded-2xl p-4" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
+        <div className="text-sm font-semibold mb-2" style={{ color: '#1A2340' }}>无损合约策略</div>
+        <div className="text-xs leading-relaxed" style={{ color: '#6B7A9A' }}>
           通过对冲机制，在合约交易中锁定本金安全，利用资金费率和价差获取收益，实现低风险稳健增值。
         </div>
       </div>
 
       {/* 当前价格参考 */}
-      <div className="bg-[#131722] rounded-2xl p-4">
-        <div className="text-xs text-gray-400 mb-3">当前参考价格</div>
+      <div className="rounded-2xl p-4" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
+        <div className="text-xs mb-3" style={{ color: '#6B7A9A' }}>当前参考价格</div>
         <div className="flex items-center gap-3">
           <img src={coin.imgUrl} alt={coin.name} className="w-8 h-8 object-contain" />
           <div>
-            <div className="text-base font-bold text-white">
+            <div className="text-base font-bold" style={{ color: '#1A2340' }}>
               {currentPrice > 0 ? currentPrice.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"} USDT
             </div>
-            <div className="text-xs text-gray-400">{coin.fullName} ({coin.name})</div>
+            <div className="text-xs" style={{ color: '#6B7A9A' }}>{coin.fullName} ({coin.name})</div>
           </div>
         </div>
       </div>
@@ -511,37 +514,37 @@ function SpotTab({
 
   return (
     <div className="space-y-3">
-      <div className="bg-[#131722] rounded-2xl p-4">
-        <div className="text-sm font-semibold text-white mb-2">无损现货策略</div>
-        <div className="text-xs text-gray-400 leading-relaxed">
+      <div className="rounded-2xl p-4" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
+        <div className="text-sm font-semibold mb-2" style={{ color: '#1A2340' }}>无损现货策略</div>
+        <div className="text-xs leading-relaxed" style={{ color: '#6B7A9A' }}>
           通过网格交易与定投结合，在现货市场中分批建仓，利用价格波动自动低买高卖，降低持仓成本，实现无损增持。
         </div>
       </div>
 
-      <div className="bg-[#131722] rounded-2xl p-4">
-        <div className="text-xs text-gray-400 mb-3">实时行情</div>
+      <div className="rounded-2xl p-4" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
+        <div className="text-xs mb-3" style={{ color: '#6B7A9A' }}>实时行情</div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <div className="text-xs text-gray-500 mb-1">当前价</div>
-            <div className={`text-base font-bold ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
+            <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>当前价</div>
+            <div className={`text-base font-bold ${isUp ? "text-[#0EA56A]" : "text-[#EF4444]"}`}>
               {currentPrice > 0 ? currentPrice.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"}
             </div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 mb-1">24H涨跌</div>
-            <div className={`text-base font-bold ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>
+          <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>24H涨跌</div>
+          <div className={`text-base font-bold ${isUp ? "text-[#0EA56A]" : "text-[#EF4444]"}`}>
               {isUp ? "+" : ""}{change.toFixed(2)}%
             </div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 mb-1">24H最高</div>
-            <div className="text-sm text-white">
+            <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>24H最高</div>
+            <div className="text-sm" style={{ color: '#1A2340' }}>
               {ticker ? parseFloat(ticker.highPrice).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"}
             </div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 mb-1">24H最低</div>
-            <div className="text-sm text-white">
+            <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>24H最低</div>
+            <div className="text-sm" style={{ color: '#1A2340' }}>
               {ticker ? parseFloat(ticker.lowPrice).toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"}
             </div>
           </div>
