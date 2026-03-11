@@ -23,7 +23,7 @@ import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
-import { getDb, getDbConnection } from "./db";
+import { getDb, getDbConnection, getLedgerDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
@@ -7341,6 +7341,59 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         return await dbLedger.getDayRecords(input.ledgerId, ctx.user.id, input.date, input.memberIds);
+      }),
+
+    // 检测当天重复账目
+    checkDuplicateTransaction: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        type: z.enum(['income', 'expense']),
+        amount: z.number().optional(),
+        categoryId: z.number().optional(),
+        date: z.string(), // YYYY-MM-DD
+        excludeId: z.number().optional(), // 编辑模式排除自身
+      }))
+      .query(async ({ ctx, input }) => {
+        // 金额和类目都没有时不检测
+        if (!input.amount && !input.categoryId) return { duplicates: [] };
+        const db = await getLedgerDb();
+        if (!db) return { duplicates: [] };
+        // 查询当天该用户在该账本的所有记录
+        const conditions = [
+          eq(ledgerRecords.ledgerId, input.ledgerId),
+          eq(ledgerRecords.createdBy, ctx.user.id),
+          eq(ledgerRecords.type, input.type),
+          eq(ledgerRecords.recordDate, input.date),
+          sql`${ledgerRecords.deletedAt} IS NULL`,
+        ];
+        if (input.excludeId) {
+          conditions.push(sql`${ledgerRecords.id} != ${input.excludeId}`);
+        }
+        const records = await db
+          .select({
+            id: ledgerRecords.id,
+            amount: ledgerRecords.amount,
+            categoryId: ledgerRecords.categoryId,
+            description: ledgerRecords.description,
+          })
+          .from(ledgerRecords)
+          .where(and(...conditions));
+        // 匹配重复逻辑：金额+类目均相同 > 仅金额相同
+        const duplicates: Array<{ id: number; matchType: 'both' | 'amount_only'; amount: string; categoryId: number | null; description: string | null }> = [];
+        for (const r of records) {
+          const amountMatch = input.amount !== undefined && Math.abs(parseFloat(r.amount) - input.amount) < 0.001;
+          const categoryMatch = input.categoryId !== undefined && r.categoryId === input.categoryId;
+          if (amountMatch && categoryMatch) {
+            duplicates.push({ id: r.id, matchType: 'both', amount: r.amount, categoryId: r.categoryId, description: r.description });
+          } else if (amountMatch && !input.categoryId) {
+            // 只输入了金额，没有选类目
+            duplicates.push({ id: r.id, matchType: 'amount_only', amount: r.amount, categoryId: r.categoryId, description: r.description });
+          } else if (amountMatch) {
+            // 金额相同但类目不同
+            duplicates.push({ id: r.id, matchType: 'amount_only', amount: r.amount, categoryId: r.categoryId, description: r.description });
+          }
+        }
+        return { duplicates };
       }),
 
     // 添加记账记录
