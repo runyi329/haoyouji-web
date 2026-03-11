@@ -473,6 +473,13 @@ export default function CryptoPrediction() {
   // 订单详情展开状态
   const [orderDetailId, setOrderDetailId] = useState<number | null>(null);
 
+  // 账本信息（用于判断类型，定制 Tab 名称）
+  const { data: ledgerInfo } = trpc.ledger.getById.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId, staleTime: 60000 }
+  );
+  const isCustomAF = (ledgerInfo as any)?.type === 'custom_af';
+
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId },
@@ -624,7 +631,7 @@ export default function CryptoPrediction() {
       <div className="px-4 pt-3">
         <div className="flex bg-[#1C2127] rounded-xl p-1 gap-1">
           {[
-            { key: "contract", label: "无损合约" },
+            { key: "contract", label: isCustomAF ? "谷底增筹" : "无损合约" },
             { key: "spot", label: "无损现货" },
             { key: "market", label: "行情评估" },
           ].map((t) => (
