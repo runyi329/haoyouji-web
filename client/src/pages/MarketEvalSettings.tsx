@@ -28,8 +28,11 @@ export default function MarketEvalSettings() {
   const events = data?.events || [];
   const cacheEmpty = data?.cacheEmpty ?? (events.length === 0);
 
-  // 刷新缓存（管理员在有网络环境下调用）
-  const refreshMutation = trpc.prediction.refreshCache.useMutation({
+  const WORKER_URL = "https://polymarket-proxy.runyihongkong.workers.dev";
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // 存入数据库的 mutation
+  const saveCacheMutation = trpc.prediction.saveCache.useMutation({
     onSuccess: (result) => {
       toast.success(`刷新成功，已更新 ${result.synced} 条 ${result.coin} 事件数据`);
       refetch();
@@ -37,11 +40,7 @@ export default function MarketEvalSettings() {
       utils.prediction.listEventsForAdmin.invalidate({ ledgerId, coin });
     },
     onError: (e) => {
-      toast.error("刷新失败", {
-        description: e.message.includes("无法从 Polymarket")
-          ? "无法访问 Polymarket，请切换到手机5G网络后重试"
-          : e.message,
-      });
+      toast.error("存入失败", { description: e.message });
     },
   });
 
@@ -69,8 +68,44 @@ export default function MarketEvalSettings() {
     toggleMutation.mutate({ ledgerId, coin, question, visible: !currentVisible });
   };
 
-  const handleRefresh = () => {
-    refreshMutation.mutate({ coin });
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // 前端直接请求 Cloudflare Worker（5G可访问）
+      const res = await fetch(`${WORKER_URL}/events?coin=${coin}&limit=30`, {
+        signal: AbortSignal.timeout(20000),
+        headers: { "Accept": "application/json" },
+      });
+      if (!res.ok) {
+        throw new Error(`Worker 返回 ${res.status}`);
+      }
+      const data = await res.json() as { events: any[]; count: number };
+      const workerEvents = data.events || [];
+      if (workerEvents.length === 0) {
+        toast.error("未获取到数据", { description: "请确认已切换5G网络" });
+        return;
+      }
+      // 将数据通过 tRPC 存入数据库
+      saveCacheMutation.mutate({
+        coin,
+        events: workerEvents.map((e: any) => ({
+          question: e.question,
+          outcomes: e.outcomes || [],
+          outcomePrices: (e.outcomePrices || []).map(String),
+          volume: e.volume ? String(e.volume) : null,
+          endDate: e.endDate || null,
+          imageUrl: e.imageUrl || null,
+        })),
+      });
+    } catch (err: any) {
+      if (err.name === "TimeoutError" || err.name === "AbortError") {
+        toast.error("请求超时", { description: "请切换5G网络后重试" });
+      } else {
+        toast.error("刷新失败", { description: err.message || "请切换5G网络后重试" });
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   return (
@@ -122,14 +157,14 @@ export default function MarketEvalSettings() {
           </div>
           <button
             onClick={handleRefresh}
-            disabled={refreshMutation.isPending}
+            disabled={isRefreshing || saveCacheMutation.isPending}
             className="flex items-center gap-1.5 bg-[#B71C1C] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60 active:scale-95 transition-transform"
           >
-            <RefreshCw className={`w-4 h-4 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
-            {refreshMutation.isPending ? "刷新中..." : "刷新数据"}
+            <RefreshCw className={`w-4 h-4 ${(isRefreshing || saveCacheMutation.isPending) ? "animate-spin" : ""}`} />
+            {isRefreshing ? "获取中..." : saveCacheMutation.isPending ? "存入中..." : "刷新数据"}
           </button>
         </div>
-        {cacheEmpty && !refreshMutation.isPending && (
+        {cacheEmpty && !isRefreshing && !saveCacheMutation.isPending && (
           <div className="mt-3 flex items-start gap-2 bg-amber-50 rounded-lg px-3 py-2">
             <WifiOff className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
             <p className="text-xs text-amber-700 leading-relaxed">
