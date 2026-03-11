@@ -1562,12 +1562,18 @@ export const afOrders = mysqlTable("af_orders", {
   amount: varchar({ length: 50 }).notNull(),
   quantity: varchar({ length: 50 }).notNull(),
   status: varchar({ length: 20 }).default('pending').notNull(),
+  // 赠送订单相关字段
+  isGift: tinyint('is_gift').default(0).notNull(),           // 0=普通订单, 1=赠送订单
+  giftMultiplier: varchar('gift_multiplier', { length: 10 }), // 赠送倍数，如 "1.5"
+  sourceOrderId: int('source_order_id'),                      // 来源订单ID（触发赠送的原始订单）
+  sourceUserId: int('source_user_id'),                        // 下单人用户ID（触发赠送的人）
   createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
   index("af_orders_ledger_idx").on(table.ledgerId),
   index("af_orders_user_idx").on(table.userId),
   index("af_orders_coin_idx").on(table.coin),
+  index("af_orders_source_idx").on(table.sourceOrderId),
 ]);
 
 // AF 无损合约收益权档位触发记录表
