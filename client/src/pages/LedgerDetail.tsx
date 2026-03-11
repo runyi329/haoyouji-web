@@ -538,11 +538,11 @@ export default function LedgerDetail() {
                   <span className="text-xs text-white/60">USDT</span>
                 </div>
               </div>
-              {/* 卡片 2 */}
+              {/* 卡片 2：推荐人数（与脉动首页推荐好友人数一致） */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.18)' }}>
                 <div className="text-xs text-white/70 mb-1">推荐</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold text-white">0</span>
+                  <span className="text-lg font-bold text-white">{(afTotalAsset as any)?.inviteCount ?? 0}</span>
                   <span className="text-xs text-white/60">人</span>
                 </div>
               </div>
