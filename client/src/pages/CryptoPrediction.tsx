@@ -585,7 +585,7 @@ export default function CryptoPrediction() {
             { key: "market", label: "行情评估" },
           ].map((t) => (
             <button key={t.key} onClick={() => {
-              if (t.key === "spot" || t.key === "market") {
+              if (t.key === "spot") {
                 toast.info("暂未开放");
                 return;
               }
