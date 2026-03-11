@@ -646,7 +646,7 @@ const AddTransaction = () => {
   };
 
   const calendarDays = getCalendarDays();
-  const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
+  const weekDays = ["一", "二", "三", "四", "五", "六", "日"]; // 从周一开始，与日历数据对齐
 
   // 主题颜色数组
   const themeColors = ["bg-[#D32F2F]", "bg-[#CBA471]", "bg-[#4CAF50]", "bg-[#1976D2]"];
