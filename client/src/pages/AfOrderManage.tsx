@@ -105,13 +105,14 @@ export default function AfOrderManage() {
             {(orders as any[]).map((order) => {
               const isEditing = editingId === order.id;
               const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
-              // 计算编辑时的实时数量（金额固定，数量 = 金额 / 新价格）
+              // 计算编辑时的实时数量
+              // amount 是用户实际花费，成交价值 = amount × 5.25，quantity = 成交价值 / 新价格
               let previewQuantity = editState?.quantity ?? "";
               if (isEditing && editState) {
                 const p = parseFloat(editState.limitPrice);
                 const a = parseFloat(editState.amount);
                 if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
-                  previewQuantity = (a / p).toFixed(8);
+                  previewQuantity = (a * 5.25 / p).toFixed(8);
                 }
               }
 
@@ -231,7 +232,7 @@ export default function AfOrderManage() {
                     <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">
                       <p>· 修改状态为「已撤单」：{order.side === "buy" ? "将退回已扣余额" : "将扣回已加余额"}</p>
                       <p>· 修改金额参数：差额将以「调剂」记录体现在充值明细中</p>
-                      <p>· 金额 = 价格 × 数量（自动计算）</p>
+                      <p>· 数量 = 实际投入 × 5.25 / 价格（自动计算）</p>
                     </div>
                   )}
                 </div>

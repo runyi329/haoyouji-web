@@ -8873,10 +8873,11 @@ export const appRouter = router({
         const updates: string[] = [];
         if (input.limitPrice !== undefined) {
           updates.push(`limit_price = '${input.limitPrice.replace(/'/g, '')}' `);
-          // 价格变化时，自动重算数量 = amount / 新价格
+          // 价格变化时，自动重算数量
+          // amount 是用户实际花费，成交价值 = amount × 5.25，quantity = 成交价值 / 新价格
           const newPrice = parseFloat(input.limitPrice);
           if (!isNaN(newPrice) && newPrice > 0) {
-            const recalcQty = (oldAmount / newPrice).toFixed(8);
+            const recalcQty = (oldAmount * 5.25 / newPrice).toFixed(8);
             updates.push(`quantity = '${recalcQty}'`);
           }
         } else if (input.quantity !== undefined) {
@@ -8924,13 +8925,11 @@ export const appRouter = router({
               const referrerId = orderUser?.invited_by_user_id;
               
               // 计算赠送订单的金额和数量
-              // 注意：amount 字段存储的是 5.25 倍后的成交价值，不是用户实际花费
-              // 用户实际花费 = amount / 5.25
+              // amount 字段就是用户实际花费（如 5 元）
               // 赠送市值 = 实际花费 × 1.5，币数 = 赠送市值 / 实际成交价格
-              const dealValue = parseFloat(updatedOrder.amount || '0');  // 成交价值（5.25倍后）
-              const actualSpend = dealValue / 5.25;                      // 用户实际花费
+              const actualSpend = parseFloat(updatedOrder.amount || '0');  // 用户实际花费
               const actualPrice = parseFloat(updatedOrder.limit_price || '0');
-              const giftAmount = (actualSpend * 1.5).toFixed(8);         // 赠送市值 = 实际花费 × 1.5
+              const giftAmount = (actualSpend * 1.5).toFixed(8);           // 赠送市值 = 实际花费 × 1.5
               const giftQuantity = actualPrice > 0 ? (actualSpend * 1.5 / actualPrice).toFixed(8) : '0';
               
               // 生成赠送订单（userId 设为推荐人ID，如果没有推荐人则设为 0，后续绑定时更新）
@@ -8939,7 +8938,7 @@ export const appRouter = router({
                 sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
                     VALUES (${input.ledgerId}, ${giftUserId}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, '1.5', ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
               );
-              console.log(`[AF赠送] 订单#${input.orderId} 成交（成交价:${actualPrice}, 成交价值:${dealValue}, 实际花费:${actualSpend.toFixed(2)}, 赠送市值:${giftAmount}），已为推荐人(${giftUserId})生成1.5倍赠送订单`);
+              console.log(`[AF赠送] 订单#${input.orderId} 成交（成交价:${actualPrice}, 实际花费:${actualSpend.toFixed(2)}, 赠送市值:${giftAmount}），已为推荐人(${giftUserId})生成1.5倍赠送订单`);
             } catch (e) {
               console.error('[AF赠送] 生成赠送订单失败:', e);
             }
