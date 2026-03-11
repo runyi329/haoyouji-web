@@ -393,6 +393,8 @@ const AddTransaction = () => {
   };
 
   const isNonTradingDay = (date: Date): string | null => {
+    // 只有 AA 型账本（A 股账本）才限制交易日
+    if (!isCustomAA) return null;
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
