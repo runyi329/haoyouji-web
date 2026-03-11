@@ -236,6 +236,58 @@ export const predictionRouter = router({
       return { synced: events.length, coin: input.coin };
     }),
 
+  // ★ 前端直接传入事件数据存入数据库（前端直接请求Worker，再通过此接口存入数据库）
+  saveCache: protectedProcedure
+    .input(z.object({
+      coin: z.enum(["BTC", "ETH"]),
+      events: z.array(z.object({
+        question: z.string(),
+        outcomes: z.array(z.string()),
+        outcomePrices: z.array(z.string()),
+        volume: z.string().nullable().optional(),
+        endDate: z.string().nullable().optional(),
+        imageUrl: z.string().nullable().optional(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+
+      if (input.events.length === 0) {
+        throw new Error("事件列表为空");
+      }
+
+      // 写入数据库缓存（UPSERT）
+      for (const e of input.events) {
+        const qHash = await hashQuestion(e.question);
+        await conn.execute(
+          `INSERT INTO polymarket_cache (coin, question, question_hash, outcomes, outcome_prices, volume, end_date, image_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             outcomes = VALUES(outcomes),
+             outcome_prices = VALUES(outcome_prices),
+             volume = VALUES(volume),
+             end_date = VALUES(end_date),
+             image_url = VALUES(image_url),
+             refreshed_at = CURRENT_TIMESTAMP`,
+          [
+            input.coin,
+            e.question,
+            qHash,
+            JSON.stringify(e.outcomes),
+            JSON.stringify(e.outcomePrices),
+            e.volume || null,
+            e.endDate || null,
+            e.imageUrl || null,
+          ]
+        );
+      }
+
+      console.log(`[prediction] 前端存入缓存完成: ${input.coin} ${input.events.length} 条`);
+      return { synced: input.events.length, coin: input.coin };
+    }),
+
   // ★ 查询缓存最后更新时间
   getCacheStatus: protectedProcedure
     .input(z.object({ coin: z.enum(["BTC", "ETH"]) }))
