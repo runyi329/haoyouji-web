@@ -1,17 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
-
-const POLYMARKET_PROXY_URL = "https://polymarket-proxy.runyihongkong.workers.dev";
-
-interface PolymarketEvent {
-  question: string;
-  volume?: string;
-  endDate?: string;
-}
 
 export default function MarketEvalSettings() {
   const params = useParams();
@@ -19,45 +11,20 @@ export default function MarketEvalSettings() {
   const ledgerId = params?.id ? parseInt(params.id) : 1;
   const [coin, setCoin] = useState<"BTC" | "ETH">("BTC");
 
-  // 前端直接从浏览器请求 Worker（和行情评估页面一样，绕过腾讯云服务器无法访问境外域名的限制）
-  const [events, setEvents] = useState<PolymarketEvent[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setLoading(true);
-    setEvents([]);
-    fetch(`${POLYMARKET_PROXY_URL}/events?coin=${coin}&limit=30`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`请求失败 ${res.status}`);
-        return res.json() as Promise<{ events: any[] }>;
-      })
-      .then((data) => {
-        const mapped: PolymarketEvent[] = (data.events || []).map((e: any) => ({
-          question: e.question,
-          volume: e.volume || null,
-          endDate: e.endDate || null,
-        }));
-        setEvents(mapped);
-      })
-      .catch((e) => {
-        console.error("加载 Polymarket 事件失败:", e);
-        toast.error("加载事件失败", { description: e.message });
-      })
-      .finally(() => setLoading(false));
-  }, [coin]);
-
   const utils = trpc.useUtils();
 
-  // 从后端获取已勾选的 question 列表
-  const { data: visibleData } = trpc.prediction.getVisibleQuestions.useQuery({
-    ledgerId,
-    coin,
-  });
-  const visibleQuestions = new Set(visibleData?.visibleQuestions || []);
+  // 走后端 tRPC 获取事件列表（服务器端请求 Cloudflare Worker，绕过国内 WiFi 拦截）
+  const { data, isLoading, error, refetch } = trpc.prediction.listEventsForAdmin.useQuery(
+    { ledgerId, coin },
+    { staleTime: 60000, retry: 2 }
+  );
+
+  const events = data?.events || [];
 
   // 切换可见性
   const toggleMutation = trpc.prediction.setEventVisibility.useMutation({
     onSuccess: () => {
+      utils.prediction.listEventsForAdmin.invalidate({ ledgerId, coin });
       utils.prediction.getVisibleQuestions.invalidate({ ledgerId, coin });
     },
     onError: (e) => {
@@ -110,16 +77,26 @@ export default function MarketEvalSettings() {
       {/* 说明 */}
       <div className="px-4 pb-2">
         <p className="text-xs text-gray-500 leading-relaxed">
-          勾选后，对应的事件将在行情评估页面中显示给所有成员。默认全部不显示。
+          勾选后，对应的事件将在行情评估页面中显示给所有成员。未勾选任何事件时，默认显示全部。
         </p>
       </div>
 
       {/* 事件列表 */}
       <div className="px-4">
-        {loading ? (
+        {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
             <p className="text-sm text-gray-500">正在加载事件列表...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <p className="text-sm text-red-500">加载失败：{error.message}</p>
+            <button
+              onClick={() => refetch()}
+              className="px-4 py-2 bg-[#B71C1C] text-white rounded-lg text-sm"
+            >
+              重试
+            </button>
           </div>
         ) : events.length === 0 ? (
           <div className="text-center py-12">
@@ -127,38 +104,35 @@ export default function MarketEvalSettings() {
           </div>
         ) : (
           <div className="space-y-2">
-            {events.map((event, idx) => {
-              const isVisible = visibleQuestions.has(event.question);
-              return (
-                <div
-                  key={idx}
-                  className="bg-white rounded-xl p-4 flex items-start gap-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-800 leading-relaxed break-words">
-                      {event.question}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      {event.volume && (
-                        <span className="text-xs text-gray-400">
-                          交易量: ${Number(event.volume).toLocaleString()}
-                        </span>
-                      )}
-                      {event.endDate && (
-                        <span className="text-xs text-gray-400">
-                          截止: {new Date(event.endDate).toLocaleDateString("zh-CN")}
-                        </span>
-                      )}
-                    </div>
+            {events.map((event, idx) => (
+              <div
+                key={idx}
+                className="bg-white rounded-xl p-4 flex items-start gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800 leading-relaxed break-words">
+                    {event.question}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    {event.volume && (
+                      <span className="text-xs text-gray-400">
+                        交易量: ${Number(event.volume).toLocaleString()}
+                      </span>
+                    )}
+                    {event.endDate && (
+                      <span className="text-xs text-gray-400">
+                        截止: {new Date(event.endDate).toLocaleDateString("zh-CN")}
+                      </span>
+                    )}
                   </div>
-                  <Switch
-                    checked={isVisible}
-                    onCheckedChange={() => handleToggle(event.question, isVisible)}
-                    disabled={toggleMutation.isPending}
-                  />
                 </div>
-              );
-            })}
+                <Switch
+                  checked={event.visible}
+                  onCheckedChange={() => handleToggle(event.question, event.visible)}
+                  disabled={toggleMutation.isPending}
+                />
+              </div>
+            ))}
           </div>
         )}
       </div>

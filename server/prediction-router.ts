@@ -88,7 +88,7 @@ async function fetchPolymarketEvents(coin: "BTC" | "ETH"): Promise<any[]> {
     console.log(`[prediction] 请求代理: ${url}`);
     
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(30000),
       headers: { "Accept": "application/json" },
     });
     
