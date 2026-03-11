@@ -373,7 +373,7 @@ function OrderDetail({ order, timeStr, ledgerId }: {
         </div>
         <div className="flex justify-between">
           <span style={{ color: '#9CA3AF' }}>类型</span>
-          <span style={{ color: '#6B7A9A' }}>{order.orderType || '无损合约'}</span>
+          <span style={{ color: '#6B7A9A' }}>{order.orderType === '无损合约' ? '谷底增筹' : (order.orderType || '谷底增筹')}</span>
         </div>
         <div className="flex justify-between">
           <span style={{ color: '#9CA3AF' }}>状态</span>
