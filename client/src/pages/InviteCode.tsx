@@ -226,7 +226,7 @@ export default function InviteCode() {
             <h3 className="font-semibold text-lg mb-4">专属邀请链接</h3>
             <div className="space-y-3">
               <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg break-all text-sm font-mono">
-                {inviteInfo?.inviteLink || "https://jiangyuchen.cn/register?invite=------"}
+                {inviteInfo?.inviteLink || "https://jiangyuchen.cn/login?invite=------"}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Button

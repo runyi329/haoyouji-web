@@ -110,7 +110,7 @@ export function InvitationManager() {
       toast.error("该用户还没有邀请码");
       return;
     }
-    const link = `https://jiangyuchen.cn/register?invite=${code}`;
+    const link = `https://jiangyuchen.cn/login?invite=${code}`;
     navigator.clipboard.writeText(link);
     toast.success("邀请链接已复制");
   };
@@ -449,7 +449,7 @@ export function InvitationManager() {
                           <div className="flex items-center gap-2">
                             <Input
                               readOnly
-                              value={`https://jiangyuchen.cn/register?invite=${user.inviteCode}`}
+                              value={`https://jiangyuchen.cn/login?invite=${user.inviteCode}`}
                               className="font-mono text-xs"
                             />
                             <Button

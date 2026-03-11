@@ -138,9 +138,11 @@ export async function registerWithPassword(
   name?: string,
   email?: string
 ): Promise<{ success: boolean; userId?: number; error?: string }> {
+  console.log(`[registerWithPassword] 开始注册: username=${username}, name=${name || '(未提供)'}, email=${email || '(未提供)'}`);
   // 检查用户名是否已存在
   const existingUser = await db.getUserByUsername(username);
   if (existingUser) {
+    console.log(`[registerWithPassword] 用户名已存在: ${username}, 已有用户ID=${existingUser.id}`);
     return {
       success: false,
       error: "用户名已存在",
