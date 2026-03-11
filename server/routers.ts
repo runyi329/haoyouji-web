@@ -8589,15 +8589,13 @@ export const appRouter = router({
           // 表不存在时忽略
         }
         // 查询推荐人数（与脉动首页推荐好友人数一致，使用同一套邀请码）
+        // 注意：项目自己的数据库（ORIGINAL_DATABASE_URL）才有 invite_count 字段，需要用 getLedgerDb()
         let inviteCount = 0;
         try {
-          const mainDb = await getDb();
-          if (mainDb) {
-            const inviteRows = await mainDb.execute(
-              sql`SELECT invite_count FROM users WHERE id = ${ctx.user.id} LIMIT 1`
-            );
-            inviteCount = Number((inviteRows as any)[0]?.invite_count ?? 0);
-          }
+          const inviteRows = await db.execute(
+            sql`SELECT invite_count FROM users WHERE id = ${ctx.user.id} LIMIT 1`
+          );
+          inviteCount = Number((inviteRows as any)[0]?.[0]?.invite_count ?? (inviteRows as any)[0]?.invite_count ?? 0);
         } catch (_) {}
         return { total: recharged + manual, inviteCount };
       }),
