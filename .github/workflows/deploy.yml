@@ -92,6 +92,16 @@ jobs:
               SET @sql = IF(@idx_exists = 0, 'ALTER TABLE af_orders ADD INDEX af_orders_source_idx (source_order_id)', 'SELECT 1');
               PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
             " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='original_limit_price';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN original_limit_price VARCHAR(50) DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='source_amount';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN source_amount VARCHAR(50) DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
             echo "✅ af_orders赠送字段确认完成"
             echo "✅ af_orders表确认完成"
             echo "📊 确保af_manual_balances表存在..."

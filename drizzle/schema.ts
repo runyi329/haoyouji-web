@@ -1562,11 +1562,14 @@ export const afOrders = mysqlTable("af_orders", {
   amount: varchar({ length: 50 }).notNull(),
   quantity: varchar({ length: 50 }).notNull(),
   status: varchar({ length: 20 }).default('pending').notNull(),
+  // 原始委托价格（用户提交时的价格，管理员确认时可能修改 limit_price 为实际成交价）
+  originalLimitPrice: varchar('original_limit_price', { length: 50 }),
   // 赠送订单相关字段
   isGift: tinyint('is_gift').default(0).notNull(),           // 0=普通订单, 1=赠送订单
   giftMultiplier: varchar('gift_multiplier', { length: 10 }), // 赠送倍数，如 "1.5"
   sourceOrderId: int('source_order_id'),                      // 来源订单ID（触发赠送的原始订单）
   sourceUserId: int('source_user_id'),                        // 下单人用户ID（触发赠送的人）
+  sourceAmount: varchar('source_amount', { length: 50 }),     // 委托人实际投入金额（赠送订单用，显示“实际投入”）
   createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
