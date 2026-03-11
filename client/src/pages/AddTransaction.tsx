@@ -1009,24 +1009,29 @@ const AddTransaction = () => {
         </div>
       </div>
 
-      {/* 重复账目警告提示 */}
+      {/* 重复账目警告提示 - 占满空白区域 */}
       {duplicateWarnings.length > 0 && (
-        <div className="flex-shrink-0 px-3 pt-2 bg-white">
-          <div className="space-y-1.5">
-            {duplicateWarnings.map((w, idx) => (
-              <div
-                key={idx}
-                className="flex items-start gap-2 px-3 py-2.5 bg-[#FFF5F5] border border-[#FFCDD2] rounded-xl cursor-pointer active:bg-[#FFEBEE]"
-                onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${w.id}`)}
-              >
-                <AlertTriangle className="w-4 h-4 text-[#D32F2F] flex-shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-[#D32F2F] font-medium">{w.text}</p>
-                  <p className="text-xs text-[#E57373] mt-0.5">点击查看该账目（仍可继续保存）</p>
-                </div>
+        <div className="flex-1 flex flex-col justify-center px-4 py-3 bg-white">
+          {duplicateWarnings.map((w, idx) => (
+            <div
+              key={idx}
+              className="animate-warn-flash flex-1 flex flex-col items-center justify-center gap-3 px-5 py-5 border-2 border-[#FFCDD2] rounded-2xl cursor-pointer"
+              style={{ minHeight: 120 }}
+              onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${w.id}`)}
+            >
+              {/* 闪动图标 */}
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[#FFEBEE]">
+                <AlertTriangle className="animate-icon-pulse w-7 h-7 text-[#D32F2F]" />
               </div>
-            ))}
-          </div>
+              {/* 主文字 */}
+              <div className="text-center">
+                <p className="text-sm font-bold text-[#D32F2F] leading-snug">{w.text}</p>
+                <p className="text-xs text-[#B71C1C] mt-1.5 font-medium">点击查看该账目</p>
+              </div>
+              {/* 底部提示 */}
+              <p className="text-[11px] text-[#E57373] border border-[#FFCDD2] rounded-full px-3 py-1">仍可继续点下方「保存」按鈕</p>
+            </div>
+          ))}
         </div>
       )}
 
