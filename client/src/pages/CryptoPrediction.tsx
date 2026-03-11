@@ -602,7 +602,7 @@ export default function CryptoPrediction() {
     try {
       const res = await fetch(
         `https://polymarket-proxy.runyihongkong.workers.dev/events?coin=${predCoin}&limit=30`,
-        { signal: AbortSignal.timeout(15000) }
+        {}
       );
       if (!res.ok) throw new Error(`请求失败 ${res.status}`);
       const data = await res.json() as { events: any[] };
@@ -1088,8 +1088,8 @@ export default function CryptoPrediction() {
 
         {/* 行情评估（竞猜） */}
         {tab === "market" && (() => {
-          // 根据管理员勾选过滤事件
-          const filteredEvents = events.filter(e => visibleQuestions.includes(e.question));
+           // 根据管理员勾选过滤事件（如果管理员尚未设置任何勾选，默认显示全部）
+           const filteredEvents = visibleQuestions.length > 0 ? events.filter(e => visibleQuestions.includes(e.question)) : events;
           return (
           <div>
             {predLoading ? (
@@ -1114,7 +1114,7 @@ export default function CryptoPrediction() {
               <div className="bg-[#1C2127] rounded-2xl px-5 py-8 flex flex-col items-center gap-3 text-center">
                 <Bitcoin className="w-12 h-12 text-gray-600" />
                 <p className="text-sm font-medium text-gray-300">暂无 {coin.name} 行情评估数据</p>
-                <p className="text-xs text-gray-500">管理员尚未开启任何评估项目</p>
+                <p className="text-xs text-gray-500">暂无相关评估数据</p>
               </div>
             ) : (
               filteredEvents.map((event) => (
