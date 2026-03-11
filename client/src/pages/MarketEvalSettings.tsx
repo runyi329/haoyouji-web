@@ -26,9 +26,7 @@ export default function MarketEvalSettings() {
   useEffect(() => {
     setLoading(true);
     setEvents([]);
-    fetch(`${POLYMARKET_PROXY_URL}/events?coin=${coin}&limit=30`, {
-      signal: AbortSignal.timeout(15000),
-    })
+    fetch(`${POLYMARKET_PROXY_URL}/events?coin=${coin}&limit=30`)
       .then((res) => {
         if (!res.ok) throw new Error(`请求失败 ${res.status}`);
         return res.json() as Promise<{ events: any[] }>;
