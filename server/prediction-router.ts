@@ -45,6 +45,21 @@ async function ensurePredictionTables() {
         UNIQUE KEY uniq_user_event_ledger (ledger_id, user_id, event_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // 行情评估可见性设置表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS market_eval_visible (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ledger_id INT NOT NULL,
+        question_hash VARCHAR(64) NOT NULL COMMENT 'SHA-256 hash of question text',
+        question_text TEXT NOT NULL COMMENT 'Original question text for display',
+        coin ENUM('BTC','ETH') NOT NULL,
+        visible TINYINT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_ledger_question (ledger_id, question_hash),
+        INDEX idx_ledger_visible (ledger_id, visible)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
     console.log('[prediction] Tables ensured');
   } catch (e) {
     console.error('[prediction] ensurePredictionTables error:', e);
@@ -89,6 +104,12 @@ async function fetchPolymarketEvents(coin: "BTC" | "ETH"): Promise<any[]> {
     console.error(`[prediction] fetchPolymarketEvents(${coin}) error:`, e);
     return [];
   }
+}
+
+// 简单的 hash 函数，用于生成 question 的唯一标识
+async function hashQuestion(question: string): Promise<string> {
+  const { createHash } = await import("crypto");
+  return createHash("sha256").update(question).digest("hex");
 }
 
 // ============================================================
@@ -223,5 +244,98 @@ export const predictionRouter = router({
         total: predictions.length,
         distribution: stats,
       };
+    }),
+
+  // ============================================================
+  // 行情评估设置 API（管理员控制哪些事件对用户可见）
+  // ============================================================
+
+  // 获取已勾选为可见的事件 question 列表（供前端过滤用）
+  getVisibleQuestions: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      coin: z.enum(["BTC", "ETH"]),
+    }))
+    .query(async ({ input }) => {
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) return { visibleQuestions: [] };
+      const [rows] = await conn.execute(
+        `SELECT question_text FROM market_eval_visible WHERE ledger_id = ? AND coin = ? AND visible = 1`,
+        [input.ledgerId, input.coin]
+      );
+      const questions = (rows as any[]).map((r: any) => r.question_text);
+      return { visibleQuestions: questions };
+    }),
+
+  // 管理员：获取所有事件（含勾选状态）
+  listEventsForAdmin: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      coin: z.enum(["BTC", "ETH"]),
+    }))
+    .query(async ({ input }) => {
+      await ensureOnce();
+      // 拉取 Polymarket 实时事件
+      const events = await fetchPolymarketEvents(input.coin);
+      
+      // 查询数据库中已有的可见性设置
+      const conn = await getDbConnection();
+      if (!conn) {
+        return {
+          events: events.map((e: any, idx: number) => ({
+            id: idx + 1,
+            question: e.question,
+            volume: e.volume || null,
+            endDate: e.endDate || null,
+            visible: false,
+          })),
+        };
+      }
+      
+      const [rows] = await conn.execute(
+        `SELECT question_text, visible FROM market_eval_visible WHERE ledger_id = ? AND coin = ?`,
+        [input.ledgerId, input.coin]
+      );
+      const visibilityMap = new Map<string, boolean>();
+      for (const r of rows as any[]) {
+        visibilityMap.set(r.question_text, r.visible === 1);
+      }
+      
+      return {
+        events: events.map((e: any, idx: number) => ({
+          id: idx + 1,
+          question: e.question,
+          volume: e.volume || null,
+          endDate: e.endDate || null,
+          visible: visibilityMap.get(e.question) ?? false,
+        })),
+      };
+    }),
+
+  // 管理员：设置事件可见性
+  setEventVisibility: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      coin: z.enum(["BTC", "ETH"]),
+      question: z.string(),
+      visible: z.boolean(),
+    }))
+    .mutation(async ({ input }) => {
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      
+      const qHash = await hashQuestion(input.question);
+      
+      // UPSERT: 如果已存在则更新，不存在则插入
+      await conn.execute(
+        `INSERT INTO market_eval_visible (ledger_id, question_hash, question_text, coin, visible)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE visible = VALUES(visible), question_text = VALUES(question_text), updated_at = CURRENT_TIMESTAMP`,
+        [input.ledgerId, qHash, input.question, input.coin, input.visible ? 1 : 0]
+      );
+      
+      return { success: true };
     }),
 });

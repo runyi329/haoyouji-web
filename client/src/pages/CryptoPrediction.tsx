@@ -578,6 +578,13 @@ export default function CryptoPrediction() {
 
   // 竞猜（行情评估 Tab）- 前端直接 fetch Worker，绕过腾讯云服务器无法访问境外域名的限制
   const predCoin = (coinKey === "SOL" ? "BTC" : coinKey) as "BTC" | "ETH";
+
+  // 获取管理员勾选的可见事件列表
+  const { data: visibleData } = trpc.prediction.getVisibleQuestions.useQuery(
+    { ledgerId, coin: predCoin },
+    { enabled: !!ledgerId && tab === "market", staleTime: 30000 }
+  );
+  const visibleQuestions = visibleData?.visibleQuestions || [];
   const [events, setEvents] = useState<PredictionEvent[]>([]);
   const [predLoading, setPredLoading] = useState(false);
   const [predError, setPredError] = useState<Error | null>(null);
@@ -1073,14 +1080,11 @@ export default function CryptoPrediction() {
         )}
 
         {/* 行情评估（竞猜） */}
-        {tab === "market" && (
+        {tab === "market" && (() => {
+          // 根据管理员勾选过滤事件
+          const filteredEvents = events.filter(e => visibleQuestions.includes(e.question));
+          return (
           <div>
-            <div className="bg-[#1C2127] border border-[#2A2E39] rounded-xl px-3 py-2 flex items-start gap-2 mb-3">
-              <AlertCircle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-gray-400 leading-relaxed">
-                竞猜数据来自 <span className="font-semibold text-white">Polymarket</span> 预测市场，概率为实时市场价格，仅供参考，不构成投资建议。
-              </p>
-            </div>
             {predLoading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
@@ -1099,24 +1103,20 @@ export default function CryptoPrediction() {
                   重新加载
                 </button>
               </div>
-            ) : events.length === 0 ? (
+            ) : filteredEvents.length === 0 ? (
               <div className="bg-[#1C2127] rounded-2xl px-5 py-8 flex flex-col items-center gap-3 text-center">
                 <Bitcoin className="w-12 h-12 text-gray-600" />
-                <p className="text-sm font-medium text-gray-300">暂无 {coin.name} 竞猜事件</p>
-                <p className="text-xs text-gray-500">Polymarket 当前没有活跃的预测市场，请稍后再试</p>
-                <button onClick={() => refetchPred()} disabled={predFetching}
-                  className="mt-1 flex items-center gap-2 bg-[#2A2E39] text-gray-300 px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-60">
-                  <RefreshCw className={`w-4 h-4 ${predFetching ? "animate-spin" : ""}`} />
-                  重新加载
-                </button>
+                <p className="text-sm font-medium text-gray-300">暂无 {coin.name} 行情评估数据</p>
+                <p className="text-xs text-gray-500">管理员尚未开启任何评估项目</p>
               </div>
             ) : (
-              events.map((event) => (
+              filteredEvents.map((event) => (
                 <EventCard key={event.id} event={event} ledgerId={ledgerId} onPredicted={() => refetchPred()} />
               ))
             )}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       <div className="px-4 pt-2 pb-4">

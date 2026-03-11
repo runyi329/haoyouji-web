@@ -223,8 +223,8 @@ export default function AfOrderManage() {
 
                   {/* 赠送订单来源信息 */}
                   {order.isGift && order.sourceUsername && (
-                    <div className="mt-2 text-xs text-red-400 bg-red-50 rounded-lg px-3 py-1.5 border border-red-100">
-                      推荐人奖励订单 (1.5倍) · 来自 <span className="font-medium text-red-500">{order.sourceUsername}</span>
+                    <div className={`mt-2 text-xs rounded-lg px-3 py-1.5 border ${order.giftMultiplier === '1.0' ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-red-400 bg-red-50 border-red-100'}`}>
+                      {order.giftMultiplier === '1.0' ? '间接推荐奖励订单 (1.0倍)' : '推荐人奖励订单 (1.5倍)'} · 来自 <span className={`font-medium ${order.giftMultiplier === '1.0' ? 'text-amber-600' : 'text-red-500'}`}>{order.sourceUsername}</span>
                     </div>
                   )}
                   {/* 编辑时的余额说明 */}
