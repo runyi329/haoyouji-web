@@ -16,13 +16,9 @@ export default function AfLedgerInvite() {
   const { data: me } = trpc.auth.me.useQuery();
   const inviteCode: string = (me as any)?.inviteCode || "";
 
-  // 生成邀请 token（用于二维码链接）
-  const { data: inviteData } = trpc.ledger.generateInviteToken.useQuery(
-    { ledgerId: parseInt(ledgerId!) },
-    { enabled: !!ledgerId }
-  );
-  const inviteLink = inviteData?.token
-    ? `${window.location.origin}/ledger/join/${inviteData.token}`
+  // 使用用户固定邀请码生成邀请链接（与上方邀请码保持一致）
+  const inviteLink = inviteCode
+    ? `https://jiangyuchen.cn/register?invite=${inviteCode}`
     : "";
 
   // 生成二维码
