@@ -308,17 +308,35 @@ function OrderDetail({ order, timeStr, ledgerId }: {
             {order.side === 'buy' ? '买入' : '卖出'}
           </span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">委托价格</span>
-          <span className="text-gray-300">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
-        </div>
         {order.isGift ? (
-          <div className="flex justify-between">
-            <span className="text-gray-500">赠送市值 <span className="text-[#ef5350]">(1.5倍)</span></span>
-            <span className="text-[#ef5350]">{parseFloat(order.amount).toFixed(2)} USDT</span>
-          </div>
-        ) : (
+          /* 赠送订单：只显示成交价格（不显示委托价格） */
           <>
+            <div className="flex justify-between">
+              <span className="text-gray-500">成交价格</span>
+              <span className="text-gray-300">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">实际投入</span>
+              <span className="text-gray-300">{(order as any).sourceAmount ? parseFloat((order as any).sourceAmount).toFixed(2) : '--'} USDT</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">赠送市值 <span className="text-[#ef5350]">(1.5倍)</span></span>
+              <span className="text-[#ef5350]">{parseFloat(order.amount).toFixed(2)} USDT</span>
+            </div>
+          </>
+        ) : (
+          /* 普通订单：显示委托价格 + 实际成交价格（如果不同） */
+          <>
+            <div className="flex justify-between">
+              <span className="text-gray-500">委托价格</span>
+              <span className="text-gray-300">{parseFloat((order as any).originalLimitPrice || order.limitPrice).toLocaleString()} USDT</span>
+            </div>
+            {(order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">实际成交价格</span>
+                <span className="text-yellow-400">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-500">实际投入</span>
               <span className="text-gray-300">{parseFloat(order.amount).toFixed(2)} USDT</span>
@@ -330,7 +348,7 @@ function OrderDetail({ order, timeStr, ledgerId }: {
           </>
         )}
         <div className="flex justify-between">
-          <span className="text-gray-500">委托数量</span>
+          <span className="text-gray-500">持仓数量</span>
           <span className="text-gray-300">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
         </div>
         <div className="flex justify-between">
