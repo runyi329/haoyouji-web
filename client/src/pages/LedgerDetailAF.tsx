@@ -481,7 +481,7 @@ function ContractTab({
 
       {/* 进入竞猜 */}
       <button
-        onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=${coin.name}`)}
+        onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=${coin.name}&tab=market`)}
         className="w-full rounded-2xl p-4 flex items-center justify-between"
         style={{ backgroundColor: coin.color }}
       >
@@ -681,7 +681,7 @@ function MarketTab({
 
       {/* Polymarket 行情预测入口 */}
       <button
-        onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=${coin.name}`)}
+        onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=${coin.name}&tab=market`)}
         className="w-full rounded-2xl p-4 flex items-center justify-between"
         style={{ backgroundColor: coin.color }}
       >

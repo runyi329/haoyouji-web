@@ -456,7 +456,12 @@ export default function CryptoPrediction() {
   const coin = COIN_CONFIG[coinKey];
 
   const [interval, setIntervalVal] = useState("1h");
-  const [tab, setTab] = useState<"contract" | "spot" | "market">("contract");
+  const initialTab = (() => {
+    const t = urlParams.get("tab");
+    if (t === "market" || t === "spot" || t === "contract") return t;
+    return "contract";
+  })() as "contract" | "spot" | "market";
+  const [tab, setTab] = useState<"contract" | "spot" | "market">(initialTab);
 
   // 委托交易面板状态
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
