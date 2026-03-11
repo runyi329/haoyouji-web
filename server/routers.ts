@@ -8588,7 +8588,18 @@ export const appRouter = router({
         } catch (_) {
           // 表不存在时忽略
         }
-        return { total: recharged + manual };
+        // 查询推荐人数（与脉动首页推荐好友人数一致，使用同一套邀请码）
+        let inviteCount = 0;
+        try {
+          const mainDb = await getDb();
+          if (mainDb) {
+            const inviteRows = await mainDb.execute(
+              sql`SELECT invite_count FROM users WHERE id = ${ctx.user.id} LIMIT 1`
+            );
+            inviteCount = Number((inviteRows as any)[0]?.invite_count ?? 0);
+          }
+        } catch (_) {}
+        return { total: recharged + manual, inviteCount };
       }),
     // AF 充值记录 + 手动调账记录合并（供用户查看）
     afGetMyRechargeHistory: protectedProcedure
