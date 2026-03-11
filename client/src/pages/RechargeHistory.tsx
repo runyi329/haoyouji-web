@@ -104,12 +104,15 @@ export default function RechargeHistory() {
               <div className="divide-y">
                 {afData.map((item: any) => {
                   const isRecharge = item.sourceType === 'recharge';
+                  const amt = parseFloat(String(item.amount));
+                  const isPositive = amt >= 0;
+                  const amtDisplay = `${isPositive ? '+' : ''}${amt.toFixed(2)} USDT`;
                   return (
                     <div key={item.id} className="px-4 py-3">
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-900">
-                            +{item.amount.toFixed(2)} USDT
+                          <span className={`font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                            {amtDisplay}
                           </span>
                         </div>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
