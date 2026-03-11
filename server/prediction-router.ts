@@ -78,28 +78,74 @@ async function ensureOnce() {
 // Polymarket 数据获取（通过 Cloudflare Worker 代理）
 // ============================================================
 
-// Cloudflare Worker 代理 URL（新加坡/全球边缘节点，解决腾讯云无法访问境外 API 的问题）
-// 部署后替换为实际的 Worker URL
-const POLYMARKET_PROXY_URL = process.env.POLYMARKET_PROXY_URL || "https://polymarket-proxy.runyihongkong.workers.dev";
+// 直接请求 Polymarket Gamma API（不再依赖 Cloudflare Worker 中间层）
+const POLYMARKET_API = "https://gamma-api.polymarket.com";
+const COIN_KEYWORDS: Record<string, string[]> = {
+  BTC: ["bitcoin", "btc"],
+  ETH: ["ethereum", "eth"],
+};
 
-async function fetchPolymarketEvents(coin: "BTC" | "ETH"): Promise<any[]> {
+async function fetchPolymarketEvents(coin: "BTC" | "ETH", limit = 30): Promise<any[]> {
   try {
-    const url = `${POLYMARKET_PROXY_URL}/events?coin=${coin}&limit=30`;
-    console.log(`[prediction] 请求代理: ${url}`);
+    const url = `${POLYMARKET_API}/events?limit=50&active=true&closed=false&order=volume&ascending=false&tag_slug=crypto`;
+    console.log(`[prediction] 直接请求 Polymarket API: ${url}`);
     
     const res = await fetch(url, {
       signal: AbortSignal.timeout(30000),
-      headers: { "Accept": "application/json" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; haoyouji-proxy/1.0)",
+        "Accept": "application/json",
+      },
     });
     
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`Worker 代理返回 ${res.status}: ${text.substring(0, 200)}`);
+      throw new Error(`Polymarket API 返回 ${res.status}: ${text.substring(0, 200)}`);
     }
     
-    const data = await res.json() as { events: any[]; count: number };
-    console.log(`[prediction] ${coin} 获取到 ${data.count ?? data.events?.length ?? 0} 条数据`);
-    return data.events || [];
+    const data = await res.json() as any[];
+    const keywords = COIN_KEYWORDS[coin];
+    const results: any[] = [];
+
+    for (const event of data) {
+      const title = (event.title || "").toLowerCase();
+      const isMatch = keywords.some((kw: string) => title.includes(kw));
+      if (!isMatch) continue;
+
+      for (const market of event.markets || []) {
+        if (market.closed) continue;
+
+        let outcomes: string[], outcomePrices: string[];
+        try {
+          outcomes = typeof market.outcomes === "string" ? JSON.parse(market.outcomes) : market.outcomes || ["Yes", "No"];
+          outcomePrices = typeof market.outcomePrices === "string" ? JSON.parse(market.outcomePrices) : market.outcomePrices || ["0.5", "0.5"];
+        } catch {
+          outcomes = ["Yes", "No"];
+          outcomePrices = ["0.5", "0.5"];
+        }
+
+        // 转换为 odds 格式（和 Worker 返回格式一致）
+        const odds = outcomes.map((outcome: string, i: number) => ({
+          outcome,
+          probability: Math.round(parseFloat(outcomePrices[i] || "0.5") * 100),
+          payout: parseFloat(outcomePrices[i] || "0.5") > 0 ? Math.round(100 / (parseFloat(outcomePrices[i]) * 100) * 100) / 100 : 0,
+        }));
+
+        results.push({
+          question: market.question || event.title,
+          odds,
+          volume: String(market.volume || "0"),
+          endDate: market.endDate || event.endDate || null,
+          imageUrl: market.image || market.icon || null,
+        });
+
+        if (results.length >= limit) break;
+      }
+      if (results.length >= limit) break;
+    }
+
+    console.log(`[prediction] ${coin} 获取到 ${results.length} 条数据`);
+    return results;
   } catch (e) {
     console.error(`[prediction] fetchPolymarketEvents(${coin}) error:`, e);
     return [];
