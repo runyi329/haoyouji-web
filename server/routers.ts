@@ -8710,7 +8710,7 @@ export const appRouter = router({
                 WHERE ledger_id = ${input.ledgerId}
                   AND user_id = ${ctx.user.id}
                   AND side = 'sell'
-                  AND status IN ('pending', 'completed')
+                  AND status = 'pending'
                   AND source_order_id = ${input.sourceOrderId}
                 LIMIT 1`
           );
@@ -8744,6 +8744,7 @@ export const appRouter = router({
               sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                   VALUES (${input.ledgerId}, ${ctx.user.id}, ${-amountNum}, ${`委托买入 ${input.coin} ${input.amount} USDT`}, NOW(), NOW())`
             );
+          } // end if (input.side === 'buy')
           // 委托卖出：不动余额！等管理员确认成交后再计算并返还本金+收益
           // （原来这里会立即返还本金，已修复）
         }
@@ -8774,7 +8775,7 @@ export const appRouter = router({
         // 方法：对每个 pending/completed 卖单，尝试匹配对应的买入订单
         // 1. 有 source_order_id 的：直接用 source_order_id
         // 2. 没有 source_order_id 的旧卖单：按同币种找对应的最近一笔已成交买入订单
-        const activeSellOrders = allOrders.filter((r: any) => r.side === 'sell' && (r.status === 'pending' || r.status === 'completed'));
+        const activeSellOrders = allOrders.filter((r: any) => r.side === 'sell' && r.status === 'pending');
         const completedBuyOrders = allOrders.filter((r: any) => r.side === 'buy' && r.status === 'completed');
         
         const pendingSellBuyIds = new Set<number>();
