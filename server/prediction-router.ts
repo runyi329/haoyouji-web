@@ -3,6 +3,7 @@ import { router, protectedProcedure } from "./_core/trpc";
 import { getDb, getDbConnection } from "./db";
 import { predictionEvents, userPredictions } from "../drizzle/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import { invokeLLM } from "./_core/llm";
 
 // 自动建表（如果生产库还没执行 pnpm db:push）
 async function ensurePredictionTables() {
@@ -67,6 +68,7 @@ async function ensurePredictionTables() {
         coin ENUM('BTC','ETH') NOT NULL,
         question TEXT NOT NULL,
         question_hash VARCHAR(64) NOT NULL,
+        question_zh TEXT NULL COMMENT 'AI翻译的中文标题',
         outcomes JSON NOT NULL,
         outcome_prices JSON NOT NULL,
         volume VARCHAR(50),
@@ -172,12 +174,13 @@ async function hashQuestion(question: string): Promise<string> {
 // ============================================================
 async function getCachedEvents(coin: "BTC" | "ETH" | "SOL", conn: any): Promise<any[]> {
   const [rows] = await conn.execute(
-    `SELECT question, outcomes, outcome_prices, volume, end_date, image_url, refreshed_at
+    `SELECT question, question_zh, outcomes, outcome_prices, volume, end_date, image_url, refreshed_at
      FROM polymarket_cache WHERE coin = ? ORDER BY id ASC`,
     [coin]
   );
   return (rows as any[]).map((r: any) => ({
     question: r.question,
+    questionZh: r.question_zh || null,
     outcomes: typeof r.outcomes === "string" ? JSON.parse(r.outcomes) : r.outcomes,
     outcomePrices: typeof r.outcome_prices === "string" ? JSON.parse(r.outcome_prices) : r.outcome_prices,
     volume: r.volume,
@@ -185,6 +188,63 @@ async function getCachedEvents(coin: "BTC" | "ETH" | "SOL", conn: any): Promise<
     imageUrl: r.image_url,
     refreshedAt: r.refreshed_at,
   }));
+}
+
+// AI 批量翻译 Polymarket 标题（异步后台执行，不阻塞响应）
+async function translateQuestionsInBackground(coin: string, conn: any): Promise<void> {
+  try {
+    // 查找没有中文翻译的条目
+    const [rows] = await conn.execute(
+      `SELECT id, question FROM polymarket_cache WHERE coin = ? AND (question_zh IS NULL OR question_zh = '') ORDER BY id ASC`,
+      [coin]
+    );
+    const untranslated = rows as any[];
+    if (untranslated.length === 0) {
+      console.log(`[prediction] 所有 ${coin} 条目已有中文翻译，跳过`);
+      return;
+    }
+    console.log(`[prediction] 开始 AI 翻译 ${untranslated.length} 条 ${coin} 标题...`);
+
+    // 批量翻译（一次请求翻译所有，减少 API 调用次数）
+    const questions = untranslated.map((r: any, i: number) => `${i + 1}. ${r.question}`);
+    const prompt = `你是专业的加密货币金融翻译专家。请将以下 Polymarket 预测市场的英文问题翻译成准确、自然的中文。
+
+翻译要求：
+- 保留专有名词（公司名、代币名等）的英文，如 MicroStrategy、Bitcoin、BTC、ETH、SOL
+- 金额保留美元符号，如 $150k 翻译为「15万美元」
+- 日期格式："by December 31, 2026" 翻译为「在2026年12月31日前」
+- 语气自然，符合中文习惯
+- 只返回翻译结果，格式：序号. 中文翻译（每行一条）
+
+英文原文：
+${questions.join('\n')}`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: 'system', content: '你是专业的加密货币金融翻译专家，只返回翻译结果，不添加任何解释。' },
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    const content = response?.choices?.[0]?.message?.content || '';
+    const lines = content.split('\n').filter((l: string) => l.trim());
+
+    // 解析翻译结果并写入数据库
+    for (let i = 0; i < untranslated.length; i++) {
+      const line = lines[i] || '';
+      // 去掉序号前缀，如 "1. " 或 "①"
+      const translated = line.replace(/^\d+\.\s*/, '').replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/, '').trim();
+      if (translated) {
+        await conn.execute(
+          `UPDATE polymarket_cache SET question_zh = ? WHERE id = ?`,
+          [translated, untranslated[i].id]
+        );
+      }
+    }
+    console.log(`[prediction] AI 翻译完成: ${coin} ${untranslated.length} 条`);
+  } catch (e) {
+    console.error('[prediction] translateQuestionsInBackground error:', e);
+  }
 }
 
 // ============================================================
@@ -285,6 +345,10 @@ export const predictionRouter = router({
       }
 
       console.log(`[prediction] 前端存入缓存完成: ${input.coin} ${input.events.length} 条`);
+      // 异步后台翻译（不阻塞响应）
+      translateQuestionsInBackground(input.coin, conn).catch(e =>
+        console.error('[prediction] 后台翻译失败:', e)
+      );
       return { synced: input.events.length, coin: input.coin };
     }),
 
@@ -470,6 +534,7 @@ export const predictionRouter = router({
         events: cached.map((e: any, idx: number) => ({
           id: idx + 1,
           question: e.question,
+          questionZh: e.questionZh || null,
           outcomes: e.outcomes || [],
           outcomePrices: e.outcomePrices || [],
           volume: e.volume || null,

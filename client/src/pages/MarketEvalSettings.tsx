@@ -5,11 +5,16 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 
+// 序号字符：①②③...
+const CIRCLE_NUMS = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳"];
+
 export default function MarketEvalSettings() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 1;
   const [coin, setCoin] = useState<"BTC" | "ETH" | "SOL">("BTC");
+  // 语言 Tab：en = 英文，zh = 中文
+  const [lang, setLang] = useState<"en" | "zh">("en");
 
   const utils = trpc.useUtils();
 
@@ -28,13 +33,20 @@ export default function MarketEvalSettings() {
   const events = data?.events || [];
   const cacheEmpty = data?.cacheEmpty ?? (events.length === 0);
 
+  // 是否有中文翻译（任意一条有即视为已翻译）
+  const hasZhTranslation = events.some((e: any) => e.questionZh);
+  // 翻译进度
+  const zhCount = events.filter((e: any) => e.questionZh).length;
+
   const WORKER_URL = "https://polymarket-proxy.runyihongkong.workers.dev";
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 存入数据库的 mutation
   const saveCacheMutation = trpc.prediction.saveCache.useMutation({
     onSuccess: (result) => {
-      toast.success(`刷新成功，已更新 ${result.synced} 条 ${result.coin} 事件数据`);
+      toast.success(`刷新成功，已更新 ${result.synced} 条 ${result.coin} 事件数据`, {
+        description: "AI 正在后台翻译中文标题，约1分钟后刷新页面可查看",
+      });
       refetch();
       refetchStatus();
       utils.prediction.listEventsForAdmin.invalidate({ ledgerId, coin });
@@ -86,11 +98,9 @@ export default function MarketEvalSettings() {
         return;
       }
       // 将数据通过 tRPC 存入数据库
-      // Worker 返回 odds 格式：[{outcome, probability, payout}]
       saveCacheMutation.mutate({
         coin,
         events: workerEvents.map((e: any) => {
-          // 兼容两种格式：新格式(odds数组) 和 旧格式(outcomes/outcomePrices)
           let outcomes: string[] = [];
           let outcomePrices: string[] = [];
           if (e.odds && Array.isArray(e.odds)) {
@@ -166,6 +176,13 @@ export default function MarketEvalSettings() {
                   ? `上次刷新：${lastRefreshed}（共 ${cacheStatus?.count ?? 0} 条）`
                   : "尚未刷新，暂无缓存数据"}
               </p>
+              {events.length > 0 && (
+                <p className="text-xs mt-0.5" style={{ color: zhCount === events.length ? "#16a34a" : "#d97706" }}>
+                  {zhCount === events.length
+                    ? `✓ 中文翻译完成（${zhCount}/${events.length}）`
+                    : `AI 翻译中（${zhCount}/${events.length}）…刷新页面查看进度`}
+                </p>
+              )}
             </div>
           </div>
           <button
@@ -187,11 +204,36 @@ export default function MarketEvalSettings() {
         )}
       </div>
 
-      {/* 说明 */}
-      <div className="px-4 pb-2">
-        <p className="text-xs text-gray-500 leading-relaxed">
+      {/* 中英文 Tab + 说明 */}
+      <div className="px-4 pb-2 flex items-center justify-between">
+        <p className="text-xs text-gray-500 leading-relaxed flex-1 mr-3">
           勾选后，对应的事件将在行情评估页面中显示给所有成员。未勾选任何事件时，默认显示全部。
         </p>
+        {/* 语言切换 Tab */}
+        {events.length > 0 && (
+          <div className="flex rounded-lg overflow-hidden border border-gray-200 shrink-0">
+            <button
+              onClick={() => setLang("en")}
+              className={`px-3 py-1 text-xs font-medium transition-colors ${
+                lang === "en"
+                  ? "bg-[#B71C1C] text-white"
+                  : "bg-white text-gray-500"
+              }`}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setLang("zh")}
+              className={`px-3 py-1 text-xs font-medium transition-colors ${
+                lang === "zh"
+                  ? "bg-[#B71C1C] text-white"
+                  : "bg-white text-gray-500"
+              }`}
+            >
+              中文
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 事件列表 */}
@@ -217,53 +259,67 @@ export default function MarketEvalSettings() {
           </div>
         ) : (
           <div className="space-y-2">
-            {events.map((event, idx) => (
-              <div
-                key={idx}
-                className="bg-white rounded-xl p-4 flex items-start gap-3"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-800 leading-relaxed break-words">
-                    {event.question}
-                  </p>
-                  {/* 赔率盘口 */}
-                  {event.outcomes && event.outcomes.length > 0 && (
-                    <div className="flex gap-2 mt-2">
-                      {event.outcomes.map((outcome: string, oi: number) => {
-                        const price = event.outcomePrices?.[oi];
-                        const pct = price ? Math.round(parseFloat(price) * 100) : null;
-                        const isYes = oi === 0;
-                        return (
-                          <div key={oi} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${
-                            isYes ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-600"
-                          }`}>
-                            <span>{outcome === "Yes" ? "会" : outcome === "No" ? "不会" : outcome}</span>
-                            {pct !== null && <span className="font-bold">{pct}%</span>}
-                          </div>
-                        );
-                      })}
+            {events.map((event: any, idx: number) => {
+              const circleNum = CIRCLE_NUMS[idx] || `${idx + 1}.`;
+              const displayText = lang === "zh"
+                ? (event.questionZh || event.question)
+                : event.question;
+              const isTranslating = lang === "zh" && !event.questionZh;
+
+              return (
+                <div
+                  key={idx}
+                  className="bg-white rounded-xl p-4 flex items-start gap-3"
+                >
+                  {/* 序号 */}
+                  <span className="text-sm font-bold text-[#B71C1C] shrink-0 mt-0.5 w-6 text-center">
+                    {circleNum}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm leading-relaxed break-words ${
+                      isTranslating ? "text-gray-400 italic" : "text-gray-800"
+                    }`}>
+                      {isTranslating ? "翻译中..." : displayText}
+                    </p>
+                    {/* 赔率盘口 */}
+                    {event.outcomes && event.outcomes.length > 0 && (
+                      <div className="flex gap-2 mt-2">
+                        {event.outcomes.map((outcome: string, oi: number) => {
+                          const price = event.outcomePrices?.[oi];
+                          const pct = price ? Math.round(parseFloat(price) * 100) : null;
+                          const isYes = oi === 0;
+                          return (
+                            <div key={oi} className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium ${
+                              isYes ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-600"
+                            }`}>
+                              <span>{outcome === "Yes" ? "会" : outcome === "No" ? "不会" : outcome}</span>
+                              {pct !== null && <span className="font-bold">{pct}%</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3 mt-1.5">
+                      {event.volume && (
+                        <span className="text-xs text-gray-400">
+                          交易量: ${Number(event.volume).toLocaleString()}
+                        </span>
+                      )}
+                      {event.endDate && (
+                        <span className="text-xs text-gray-400">
+                          截止: {new Date(event.endDate).toLocaleDateString("zh-CN")}
+                        </span>
+                      )}
                     </div>
-                  )}
-                  <div className="flex items-center gap-3 mt-1.5">
-                    {event.volume && (
-                      <span className="text-xs text-gray-400">
-                        交易量: ${Number(event.volume).toLocaleString()}
-                      </span>
-                    )}
-                    {event.endDate && (
-                      <span className="text-xs text-gray-400">
-                        截止: {new Date(event.endDate).toLocaleDateString("zh-CN")}
-                      </span>
-                    )}
                   </div>
+                  <Switch
+                    checked={event.visible}
+                    onCheckedChange={() => handleToggle(event.question, event.visible)}
+                    disabled={toggleMutation.isPending}
+                  />
                 </div>
-                <Switch
-                  checked={event.visible}
-                  onCheckedChange={() => handleToggle(event.question, event.visible)}
-                  disabled={toggleMutation.isPending}
-                />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
