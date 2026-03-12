@@ -8859,7 +8859,8 @@ export const appRouter = router({
                      COALESCE(o.source_amount, '') as source_amount,
                      COALESCE(su.username, '') as source_username,
                      COALESCE(src.limit_price, '') as source_buy_price,
-                     COALESCE(src.quantity, '') as source_quantity
+                     COALESCE(src.quantity, '') as source_quantity,
+                     COALESCE(src.amount, '') as source_principal
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
@@ -8889,6 +8890,7 @@ export const appRouter = router({
           sourceAmount: r.source_amount || '',
           sourceBuyPrice: r.source_buy_price || '',
           sourceQuantity: r.source_quantity || '',
+          sourcePrincipal: r.source_principal || '',
         }));
         return list;
       }),
