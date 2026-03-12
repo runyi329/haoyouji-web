@@ -20,6 +20,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const isLiulifan = user?.username === 'liulifan';
   const isCx8618 = user?.username === 'cx8618';
   const isJiang = user?.username === 'jiang';
+  const isYJH = user?.username === 'YJH';
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
@@ -47,6 +48,10 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       // jiang：跳转到润仪算力研发中心
       setShowLedgerMenu(false);
       setLocation('/jiang');
+    } else if (isYJH) {
+      // YJH：跳转到数金研投网站
+      setShowLedgerMenu(false);
+      window.open('https://runyi.manus.space', '_blank');
     } else if (isLedgerPage) {
       // 钱脉页面：弹出选项菜单
       setShowLedgerMenu(!showLedgerMenu);
