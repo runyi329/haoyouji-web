@@ -8697,17 +8697,43 @@ export const appRouter = router({
         amount: z.string(),
         quantity: z.string(),
         orderType: z.string().optional(), // 无损合约 / 无损现货 / 行情评估
+        sourceOrderId: z.number().nullable().optional(), // 委托卖出时关联的原始买入订单ID
       }))
       .mutation(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+
+        // ★ 防重复委托卖出：同一买入订单已有未撤销的卖单时，拒绝提交
+        if (input.side === 'sell' && input.sourceOrderId) {
+          const existingRows = await db.execute(
+            sql`SELECT id FROM af_orders
+                WHERE ledger_id = ${input.ledgerId}
+                  AND user_id = ${ctx.user.id}
+                  AND side = 'sell'
+                  AND status IN ('pending', 'completed')
+                  AND source_order_id = ${input.sourceOrderId}
+                LIMIT 1`
+          );
+          const existing = (existingRows as any).rows || existingRows;
+          if (Array.isArray(existing) && existing.length > 0) {
+            throw new Error('该订单已有委托卖出记录，请先撤销后再重新委托');
+          }
+        }
+
         // order_type 字段已通过 deploy.yml 建表时创建，无需每次 ALTER TABLE
-        // 1. 插入委托订单
+        // 1. 插入委托订单（卖出时记录 source_order_id）
         const orderType = input.orderType || '无损合约';
-        await db.execute(
-          sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
-              VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
-        );
+        if (input.side === 'sell' && input.sourceOrderId) {
+          await db.execute(
+            sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, source_order_id, created_at, updated_at)
+                VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, ${input.sourceOrderId}, NOW(), NOW())`
+          );
+        } else {
+          await db.execute(
+            sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
+                VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
+          );
+        }
         // 2. af_manual_balances 表已通过 deploy.yml 创建，无需每次 CREATE TABLE
         // 3. 根据买卖方向调整余额
         const amountNum = parseFloat(input.amount);
