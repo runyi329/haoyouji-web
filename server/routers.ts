@@ -8891,7 +8891,26 @@ export const appRouter = router({
           sourceBuyPrice: r.source_buy_price || '',
           sourceQuantity: r.source_quantity || '',
           sourcePrincipal: r.source_principal || '',
+          equityTier: 0,
         }));
+        
+        // 为每个订单查询权益折扣档位
+        for (const order of list) {
+          if (order.side === 'sell' && order.sourceOrderId) {
+            const tierRows = await db.execute(
+              sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${order.sourceOrderId}`
+            ) as any;
+            const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
+            order.equityTier = maxTier;
+          } else if (order.side === 'buy') {
+            const tierRows = await db.execute(
+              sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${order.id}`
+            ) as any;
+            const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
+            order.equityTier = maxTier;
+          }
+        }
+        
         return list;
       }),
     // 管理员：修改订单参数和状态（含余额联动）
