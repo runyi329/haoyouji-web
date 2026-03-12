@@ -8857,10 +8857,13 @@ export const appRouter = router({
                      o.source_order_id, o.source_user_id,
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
                      COALESCE(o.source_amount, '') as source_amount,
-                     COALESCE(su.username, '') as source_username
+                     COALESCE(su.username, '') as source_username,
+                     COALESCE(src.limit_price, '') as source_buy_price,
+                     COALESCE(src.quantity, '') as source_quantity
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
+              LEFT JOIN af_orders src ON src.id = o.source_order_id AND src.ledger_id = ${input.ledgerId}
               WHERE o.ledger_id = ${input.ledgerId}
               ORDER BY o.created_at DESC
               LIMIT 500`
@@ -8884,6 +8887,8 @@ export const appRouter = router({
           sourceOrderId: r.source_order_id || null,
           sourceUsername: r.source_username || '',
           sourceAmount: r.source_amount || '',
+          sourceBuyPrice: r.source_buy_price || '',
+          sourceQuantity: r.source_quantity || '',
         }));
         return list;
       }),
