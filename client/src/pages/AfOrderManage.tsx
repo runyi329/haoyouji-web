@@ -13,9 +13,11 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 interface EditState {
   orderId: number;
   limitPrice: string;
+  actualSellPrice: string; // 卖单实际成交价（管理员输入）
   amount: string;
   quantity: string;
   status: "pending" | "completed" | "cancelled";
+  side: "buy" | "sell"; // 订单方向，用于判断是否显示实际卖出价输入框
 }
 
 export default function AfOrderManage() {
@@ -47,9 +49,11 @@ export default function AfOrderManage() {
     setEditState({
       orderId: order.id,
       limitPrice: order.limitPrice?.toString() ?? "",
+      actualSellPrice: "", // 管理员需要输入实际卖出价
       amount: order.amount?.toString() ?? "",
       quantity: order.quantity?.toString() ?? "",
       status: order.status as "pending" | "completed" | "cancelled",
+      side: order.side as "buy" | "sell",
     });
   };
 
@@ -60,17 +64,28 @@ export default function AfOrderManage() {
 
   const saveEdit = () => {
     if (!editState) return;
-    // 金额(amount)固定不变，数量根据新价格自动重算
-    const price = parseFloat(editState.limitPrice);
+    
+    // 如果是卖单且要确认成交，必须输入实际卖出价
+    const isConfirmingSell = editState.side === 'sell' && editState.status === 'completed';
+    if (isConfirmingSell && !editState.actualSellPrice) {
+      toast.error("请输入实际卖出价格");
+      return;
+    }
+    
+    // 卖单成交时，用实际卖出价作为 limitPrice（后端用此计算收益）
+    const finalLimitPrice = isConfirmingSell ? editState.actualSellPrice : editState.limitPrice;
+    
+    // 买单：金额(amount)固定不变，数量根据新价格自动重算
+    const price = parseFloat(finalLimitPrice);
     const amount = parseFloat(editState.amount);
     let finalQuantity = editState.quantity;
-    if (!isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
-      finalQuantity = (amount / price).toFixed(8);
+    if (editState.side === 'buy' && !isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
+      finalQuantity = (amount * 5.25 / price).toFixed(8);
     }
     updateMutation.mutate({
       ledgerId,
       orderId: editState.orderId,
-      limitPrice: editState.limitPrice,
+      limitPrice: finalLimitPrice,
       amount: editState.amount,
       quantity: finalQuantity,
       status: editState.status,
@@ -227,12 +242,38 @@ export default function AfOrderManage() {
                       {order.giftMultiplier === '1.0' ? '间接推荐奖励订单 (1.0倍)' : '推荐人奖励订单 (1.5倍)'} · 来自 <span className={`font-medium ${order.giftMultiplier === '1.0' ? 'text-amber-600' : 'text-red-500'}`}>{order.sourceUsername}</span>
                     </div>
                   )}
+                  {/* 卖单确认成交时：实际卖出价格输入框 */}
+                  {isEditing && editState?.side === 'sell' && editState?.status === 'completed' && (
+                    <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                      <p className="text-xs text-orange-600 font-medium mb-2">★ 确认卖单成交，请输入实际卖出价格</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span>
+                        <input
+                          type="number"
+                          placeholder="输入实际成交价格"
+                          value={editState!.actualSellPrice}
+                          onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })}
+                          className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500"
+                        />
+                        <span className="text-xs text-gray-400 whitespace-nowrap">USDT</span>
+                      </div>
+                      <p className="text-[10px] text-orange-400 mt-1">系统将根据此价格计算收益并返还本金+收益到用户余额</p>
+                    </div>
+                  )}
                   {/* 编辑时的余额说明 */}
                   {isEditing && (
                     <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">
-                      <p>· 修改状态为「已撤单」：{order.side === "buy" ? "将退回已扣余额" : "将扣回已加余额"}</p>
-                      <p>· 修改金额参数：差额将以「调剂」记录体现在充值明细中</p>
-                      <p>· 数量 = 实际投入 × 5.25 / 价格（自动计算）</p>
+                      {order.side === 'sell' ? (
+                        <>
+                          <p>· 卖单确认成交：返还本金 + 实际收益到用户余额</p>
+                          <p>· 卖单撤单：不动余额（提交时未扣除）</p>
+                        </>
+                      ) : (
+                        <>
+                          <p>· 修改状态为「已撤单」：将退回已扣余额</p>
+                          <p>· 数量 = 实际投入 × 5.25 / 价格（自动计算）</p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

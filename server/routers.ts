@@ -8744,13 +8744,8 @@ export const appRouter = router({
               sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                   VALUES (${input.ledgerId}, ${ctx.user.id}, ${-amountNum}, ${`委托买入 ${input.coin} ${input.amount} USDT`}, NOW(), NOW())`
             );
-          } else {
-            // 委托卖出：增加余额（正数）
-            await db.execute(
-              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-                  VALUES (${input.ledgerId}, ${ctx.user.id}, ${amountNum}, ${`委托卖出 ${input.coin} ${input.amount} USDT`}, NOW(), NOW())`
-            );
-          }
+          // 委托卖出：不动余额！等管理员确认成交后再计算并返还本金+收益
+          // （原来这里会立即返还本金，已修复）
         }
         return { success: true };
       }),
@@ -8906,8 +8901,51 @@ export const appRouter = router({
         // 1. 状态变化：待定→已成交
         if (oldStatus === 'pending' && newStatus === 'completed') {
           if (side === 'sell') {
-            // 委卖成交：卖出时已加了余额，无需额外操作
-            balanceAdjust = 0;
+            // 委卖成交：计算本金 + 实际收益（含收益权折扣）返还给用户
+            // 实际卖出价格 = 管理员输入的 limitPrice（如果有），否则用原始委托价
+            const sellPrice = input.limitPrice ? parseFloat(input.limitPrice) : parseFloat(order.limit_price || '0');
+            
+            // 查找关联的原始买入订单
+            const sourceOrderId = order.source_order_id;
+            let principal = oldAmount; // 本金（买入时花的USDT）
+            let profit = 0;
+            
+            if (sourceOrderId) {
+              const srcRows = await db.execute(
+                sql`SELECT id, limit_price, amount, quantity FROM af_orders WHERE id = ${sourceOrderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+              ) as any;
+              const srcOrder = (srcRows[0]?.[0] ?? srcRows[0]);
+              if (srcOrder) {
+                principal = parseFloat(srcOrder.amount || '0'); // 原始买入本金
+                const buyPrice = parseFloat(srcOrder.limit_price || '0');
+                const originalQty = parseFloat(srcOrder.quantity || '0');
+                
+                // 查询收益权最高档位（每跌10%一档，共9档）
+                const tierRows = await db.execute(
+                  sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE orderId = ${sourceOrderId}`
+                ) as any;
+                const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
+                
+                // 有效币数 = 原始币数 / (1 + 最高档位)
+                // 第0档：全额；第1档：1/2；第2档：1/3；...第9档：1/10
+                const effectiveQty = maxTier > 0 ? originalQty / (1 + maxTier) : originalQty;
+                
+                // 收益 = 有效币数 × (实际卖出价 - 买入委托价)
+                if (sellPrice > 0 && buyPrice > 0) {
+                  profit = effectiveQty * (sellPrice - buyPrice);
+                }
+                
+                console.log(`[AF卖单成交] 订单#${input.orderId} 关联买入#${sourceOrderId}: 本金=${principal}, 买入价=${buyPrice}, 卖出价=${sellPrice}, 原始币数=${originalQty}, 最高档位=${maxTier}, 有效币数=${effectiveQty.toFixed(8)}, 收益=${profit.toFixed(4)}`);
+              }
+            }
+            
+            // 返还金额 = 本金 + 收益（如果收益为负则不计入，仅返本金）
+            balanceAdjust = principal + Math.max(0, profit);
+            const tierInfo = (() => {
+              // 重新查一次档位（用于日志）
+              return '';
+            })();
+            balanceNote = `卖单成交 ${coin} 本金${principal.toFixed(2)}+收益${Math.max(0, profit).toFixed(4)} USDT`;
           }
           // 委买成交：买入时已扣了余额，无需额外操作
         }
@@ -8918,9 +8956,9 @@ export const appRouter = router({
             balanceAdjust = oldAmount;
             balanceNote = `撤单退回 委买 ${coin} ${oldAmount} USDT`;
           } else {
-            // 委卖撤单：扣回已增加的金额
-            balanceAdjust = -oldAmount;
-            balanceNote = `撤单扣回 委卖 ${coin} ${oldAmount} USDT`;
+            // 委卖撤单：提交时没有动过余额，撤单也不需要动余额
+            balanceAdjust = 0;
+            balanceNote = '';
           }
         }
         // 3. 金额参数修改（仅当状态为 pending 时）
