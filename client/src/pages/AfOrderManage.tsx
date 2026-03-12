@@ -64,7 +64,8 @@ export default function AfOrderManage() {
     const sellPrice = parseFloat(actualSellPrice);
     const buyPrice = parseFloat(order.sourceBuyPrice || '0');
     const coinQuantity = parseFloat(order.sourceQuantity || '0');
-    const principal = parseFloat(order.sourceAmount || '0');
+    // 使用源订单的本金（sourcePrincipal），这是用户购买时的实际投入
+    const principal = parseFloat(order.sourcePrincipal || '0');
 
     if (isNaN(sellPrice) || sellPrice <= 0 || isNaN(buyPrice) || buyPrice <= 0 || isNaN(coinQuantity) || coinQuantity <= 0) {
       return null;
