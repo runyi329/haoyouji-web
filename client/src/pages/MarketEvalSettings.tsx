@@ -273,40 +273,75 @@ export default function MarketEvalSettings() {
     });
   };
 
+  // 解析 Polymarket market 对象，处理 outcomes/outcomePrices 可能是字符串的情况
+  const parseMarket = (m: any, eventTitle: string) => {
+    let outcomes: string[], outcomePrices: string[];
+    try {
+      outcomes = typeof m.outcomes === "string" ? JSON.parse(m.outcomes) : (m.outcomes || ["Yes", "No"]);
+      outcomePrices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : (m.outcomePrices || ["0.5", "0.5"]);
+    } catch {
+      outcomes = ["Yes", "No"];
+      outcomePrices = ["0.5", "0.5"];
+    }
+    return {
+      question: m.question || eventTitle,
+      outcomes,
+      outcomePrices,
+      volume: String(m.volume || "0"),
+      endDate: m.endDate || null,
+      imageUrl: m.image || null,
+    };
+  };
+
+  // 精准 slug 映射（直接抓取指定事件）
+  const ETH_SLUGS: Record<string, string> = {
+    ETH: "what-price-will-ethereum-hit-in-march-2026",
+    BTC: "what-price-will-bitcoin-hit-in-march-2026",
+    SOL: "what-price-will-solana-hit-in-march-2026",
+  };
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      // 直接请求 Polymarket gamma-api（通过 Worker 代理）
-      const res = await fetch(`${WORKER_URL}/events?coin=${coin}&limit=100&grouped=true`, {
-        signal: AbortSignal.timeout(25000),
+      // 精准抓取指定事件（直接请求 Polymarket gamma-api）
+      const slug = ETH_SLUGS[coin];
+      const url = `https://gamma-api.polymarket.com/events?slug=${slug}`;
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(20000),
         headers: { "Accept": "application/json" },
       });
 
-      let rawData: any;
-      if (res.ok) {
-        rawData = await res.json();
-      } else {
-        // Worker 不支持 grouped 参数时，降级到直接请求 Polymarket
-        throw new Error(`Worker 返回 ${res.status}`);
+      if (!res.ok) throw new Error(`API 返回 ${res.status}`);
+      const allEvents = await res.json() as any[];
+
+      if (!allEvents || allEvents.length === 0) {
+        // 精准 slug 找不到，降级到按关键词搜索
+        throw new Error("精准slug未找到事件，降级搜索");
       }
 
-      // 解析 Worker 返回的数据
-      // 支持两种格式：{ eventGroups: [...] } 或 { events: [...] }
-      if (rawData.eventGroups && rawData.eventGroups.length > 0) {
-        // 新格式：已分组
-        saveCacheMutation.mutate({ coin, eventGroups: rawData.eventGroups });
-      } else if (rawData.events && rawData.events.length > 0) {
-        // 旧格式：扁平列表，需要在前端按事件分组
-        // 直接存为扁平格式（兼容旧逻辑）
-        saveCacheMutation.mutate({ coin, events: rawData.events });
-      } else {
-        toast.error("未获取到数据", { description: "请确认已切换5G网络" });
+      // 转换为事件组格式
+      const eventGroups: any[] = [];
+      for (const event of allEvents) {
+        const activeMarkets = (event.markets || []).filter((m: any) => !m.closed);
+        if (activeMarkets.length === 0) continue;
+        eventGroups.push({
+          eventTitle: event.title,
+          imageUrl: event.image || null,
+          markets: activeMarkets.map((m: any) => parseMarket(m, event.title)),
+        });
       }
+
+      if (eventGroups.length === 0) {
+        toast.error("未找到活跃事件", { description: "该事件可能已结束" });
+        return;
+      }
+
+      saveCacheMutation.mutate({ coin, eventGroups });
     } catch (err: any) {
-      // Worker 失败时，尝试直接请求 Polymarket gamma-api 并在前端分组
+      // 降级：按关键词搜索所有加密事件
       try {
         const directRes = await fetch(
-          `https://gamma-api.polymarket.com/events?limit=50&active=true&closed=false&order=volume&ascending=false&tag_slug=crypto`,
+          `https://gamma-api.polymarket.com/events?limit=100&active=true&order=volume&ascending=false&tag_slug=crypto`,
           { signal: AbortSignal.timeout(20000), headers: { "Accept": "application/json" } }
         );
         if (!directRes.ok) throw new Error(`Polymarket API 返回 ${directRes.status}`);
@@ -331,24 +366,7 @@ export default function MarketEvalSettings() {
           eventGroups.push({
             eventTitle: event.title,
             imageUrl: event.image || null,
-            markets: activeMarkets.map((m: any) => {
-              let outcomes: string[], outcomePrices: string[];
-              try {
-                outcomes = typeof m.outcomes === "string" ? JSON.parse(m.outcomes) : m.outcomes || ["Yes", "No"];
-                outcomePrices = typeof m.outcomePrices === "string" ? JSON.parse(m.outcomePrices) : m.outcomePrices || ["0.5", "0.5"];
-              } catch {
-                outcomes = ["Yes", "No"];
-                outcomePrices = ["0.5", "0.5"];
-              }
-              return {
-                question: m.question || event.title,
-                outcomes,
-                outcomePrices,
-                volume: String(m.volume || "0"),
-                endDate: m.endDate || event.endDate || null,
-                imageUrl: m.image || null,
-              };
-            }),
+            markets: activeMarkets.map((m: any) => parseMarket(m, event.title)),
           });
         }
 
