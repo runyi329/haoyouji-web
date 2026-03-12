@@ -8706,7 +8706,7 @@ export const appRouter = router({
         // ★ 防重复委托卖出：同一买入订单已有未撤销的卖单时，拒绝提交
         if (input.side === 'sell' && input.sourceOrderId) {
           const existingRows = await db.execute(
-            sql`SELECT id FROM af_orders
+            sql`SELECT id, status, source_order_id FROM af_orders
                 WHERE ledger_id = ${input.ledgerId}
                   AND user_id = ${ctx.user.id}
                   AND side = 'sell'
@@ -8714,7 +8714,8 @@ export const appRouter = router({
                   AND source_order_id = ${input.sourceOrderId}
                 LIMIT 1`
           );
-          const existing = (existingRows as any).rows || existingRows;
+          const existing = ((existingRows as any)[0] || (existingRows as any).rows || []) as any[];
+          console.log('[afSubmitOrder] 防重复检查 sourceOrderId=', input.sourceOrderId, '查询结果count:', existing.length);
           if (Array.isArray(existing) && existing.length > 0) {
             throw new Error('该订单已有委托卖出记录，请先撤销后再重新委托');
           }
