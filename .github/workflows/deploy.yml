@@ -114,11 +114,31 @@ jobs:
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE users ADD COLUMN IF NOT EXISTS real_name VARCHAR(50) DEFAULT NULL" || true
             echo "✅ users表新字段确认完成"
             echo "📊 确保users表邀请相关字段存在..."
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_by_user_id INT DEFAULT NULL" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE users ADD COLUMN IF NOT EXISTS invited_at DATETIME DEFAULT NULL" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_count INT NOT NULL DEFAULT 0" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_enabled TINYINT NOT NULL DEFAULT 0" || true
-            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_code VARCHAR(20) DEFAULT NULL" || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='invited_by_user_id';
+              SET @s = IF(@c=0, 'ALTER TABLE users ADD COLUMN invited_by_user_id INT DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='invited_at';
+              SET @s = IF(@c=0, 'ALTER TABLE users ADD COLUMN invited_at DATETIME DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='invite_count';
+              SET @s = IF(@c=0, 'ALTER TABLE users ADD COLUMN invite_count INT NOT NULL DEFAULT 0', 'SELECT 1');
+              PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='invite_enabled';
+              SET @s = IF(@c=0, 'ALTER TABLE users ADD COLUMN invite_enabled TINYINT NOT NULL DEFAULT 0', 'SELECT 1');
+              PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='invite_code';
+              SET @s = IF(@c=0, 'ALTER TABLE users ADD COLUMN invite_code VARCHAR(20) DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
             echo "✅ users表邀请字段确认完成"
             echo "💳 注入支付宝环境变量..."
             node /root/haoyouji-web/scripts/inject-alipay-env.cjs
