@@ -20,6 +20,16 @@ interface EditState {
   side: "buy" | "sell"; // 订单方向，用于判断是否显示实际卖出价输入框
 }
 
+interface ProfitCalculation {
+  coinQuantity: number;
+  buyPrice: number;
+  sellPrice: number;
+  unitProfit: number;
+  totalProfit: number;
+  totalRefund: number;
+  principal: number;
+}
+
 export default function AfOrderManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -43,6 +53,37 @@ export default function AfOrderManage() {
     },
     onError: (e) => toast.error("更新失败：" + e.message),
   });
+
+  // 计算卖单的实时利润
+  const calculateProfit = (order: any, actualSellPrice: string): ProfitCalculation | null => {
+    // 只对卖单计算
+    if (order.side !== 'sell' || !order.sourceOrderId) {
+      return null;
+    }
+
+    const sellPrice = parseFloat(actualSellPrice);
+    const buyPrice = parseFloat(order.sourceBuyPrice || '0');
+    const coinQuantity = parseFloat(order.sourceQuantity || '0');
+    const principal = parseFloat(order.sourceAmount || '0');
+
+    if (isNaN(sellPrice) || sellPrice <= 0 || isNaN(buyPrice) || buyPrice <= 0 || isNaN(coinQuantity) || coinQuantity <= 0) {
+      return null;
+    }
+
+    const unitProfit = sellPrice - buyPrice;
+    const totalProfit = coinQuantity * unitProfit;
+    const totalRefund = principal + Math.max(0, totalProfit);
+
+    return {
+      coinQuantity,
+      buyPrice,
+      sellPrice,
+      unitProfit,
+      totalProfit,
+      totalRefund,
+      principal,
+    };
+  };
 
   const startEdit = (order: any) => {
     setEditingId(order.id);
@@ -246,24 +287,73 @@ export default function AfOrderManage() {
                       {order.giftMultiplier === '1.0' ? '间接推荐奖励订单 (1.0倍)' : '推荐人奖励订单 (1.5倍)'} · 来自 <span className={`font-medium ${order.giftMultiplier === '1.0' ? 'text-amber-600' : 'text-red-500'}`}>{order.sourceUsername}</span>
                     </div>
                   )}
-                  {/* 卖单确认成交时：实际卖出价格输入框 */}
+                  
+                  {/* 卖单确认成交时：实际卖出价格输入框 + 实时利润计算 */}
                   {isEditing && editState?.side === 'sell' && editState?.status === 'completed' && (
-                    <div className="mt-3 bg-orange-50 border border-orange-200 rounded-lg p-3">
-                      <p className="text-xs text-orange-600 font-medium mb-2">★ 确认卖单成交，请输入实际卖出价格</p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span>
-                        <input
-                          type="number"
-                          placeholder="输入实际成交价格"
-                          value={editState!.actualSellPrice}
-                          onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })}
-                          className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500"
-                        />
-                        <span className="text-xs text-gray-400 whitespace-nowrap">USDT</span>
+                    <div className="mt-3 space-y-3">
+                      {/* 实际卖出价输入框 */}
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                        <p className="text-xs text-orange-600 font-medium mb-2">★ 确认卖单成交，请输入实际卖出价格</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span>
+                          <input
+                            type="number"
+                            placeholder="输入实际成交价格"
+                            value={editState!.actualSellPrice}
+                            onChange={(e) => setEditState({ ...editState!, actualSellPrice: e.target.value })}
+                            className="border border-orange-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-orange-500"
+                          />
+                          <span className="text-xs text-gray-400 whitespace-nowrap">USDT</span>
+                        </div>
                       </div>
-                      <p className="text-[10px] text-orange-400 mt-1">系统将根据此价格计算收益并返还本金+收益到用户余额</p>
+
+                      {/* 实时利润计算显示 */}
+                      {editState!.actualSellPrice && calculateProfit(order, editState!.actualSellPrice) && (() => {
+                        const calc = calculateProfit(order, editState!.actualSellPrice)!;
+                        return (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
+                            <p className="text-xs font-medium text-blue-600">实时利润计算</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">持币数量</span>
+                                <span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">买入价</span>
+                                <span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">卖出价</span>
+                                <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">单位收益</span>
+                                <span className={`font-medium ${calc.unitProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {calc.unitProfit >= 0 ? '+' : ''}{calc.unitProfit.toFixed(2)} USDT
+                                </span>
+                              </div>
+                              <div className="col-span-2 border-t border-blue-200 pt-2 mt-1 flex justify-between">
+                                <span className="text-gray-600 font-medium">总收益</span>
+                                <span className={`font-bold text-base ${calc.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {calc.totalProfit >= 0 ? '+' : ''}{calc.totalProfit.toFixed(4)} USDT
+                                </span>
+                              </div>
+                              <div className="col-span-2 flex justify-between bg-white rounded px-2 py-1.5">
+                                <span className="text-gray-700 font-medium">返还金额</span>
+                                <span className="font-bold text-green-600 text-base">{calc.totalRefund.toFixed(2)} USDT</span>
+                              </div>
+                            </div>
+                            <p className="text-[10px] text-blue-500 mt-2">
+                              本金 + 收益 = {calc.principal.toFixed(2)} + {Math.max(0, calc.totalProfit).toFixed(4)} = {calc.totalRefund.toFixed(2)} USDT
+                            </p>
+                          </div>
+                        );
+                      })()}
+
+                      <p className="text-[10px] text-orange-400">系统将根据此价格计算收益并返还本金+收益到用户余额</p>
                     </div>
                   )}
+                  
                   {/* 编辑时的余额说明 */}
                   {isEditing && (
                     <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">
