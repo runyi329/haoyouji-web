@@ -8908,7 +8908,7 @@ export const appRouter = router({
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询原始订单信息
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -9007,16 +9007,17 @@ export const appRouter = router({
           );
         }
         // 构建动态 UPDATE
-        // 重要逻辑：金额(amount)固定不变，修改价格时自动重算数量
+        // 重要逻辑：买单金额(amount)固定不变，修改价格时自动重算数量；卖单数量不重算（保持买入时的实际持仓量）
         const updates: string[] = [];
         if (input.limitPrice !== undefined) {
           updates.push(`limit_price = '${input.limitPrice.replace(/'/g, '')}' `);
-          // 价格变化时，自动重算数量
-          // amount 是用户实际花费，成交价值 = amount × 5.25，quantity = 成交价值 / 新价格
-          const newPrice = parseFloat(input.limitPrice);
-          if (!isNaN(newPrice) && newPrice > 0) {
-            const recalcQty = (oldAmount * 5.25 / newPrice).toFixed(8);
-            updates.push(`quantity = '${recalcQty}'`);
+          // 只有买单才根据新价格重算数量；卖单的数量是买入时的实际持仓，不应重算
+          if (side === 'buy') {
+            const newPrice = parseFloat(input.limitPrice);
+            if (!isNaN(newPrice) && newPrice > 0) {
+              const recalcQty = (oldAmount * 5.25 / newPrice).toFixed(8);
+              updates.push(`quantity = '${recalcQty}'`);
+            }
           }
         } else if (input.quantity !== undefined) {
           // 仅在没有改价格时才允许直接修改数量

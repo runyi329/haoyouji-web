@@ -76,18 +76,21 @@ export default function AfOrderManage() {
     const finalLimitPrice = isConfirmingSell ? editState.actualSellPrice : editState.limitPrice;
     
     // 买单：金额(amount)固定不变，数量根据新价格自动重算
+    // 卖单：数量是买入时的实际持仓，不重算，直接使用原始数量
     const price = parseFloat(finalLimitPrice);
     const amount = parseFloat(editState.amount);
     let finalQuantity = editState.quantity;
     if (editState.side === 'buy' && !isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
       finalQuantity = (amount * 5.25 / price).toFixed(8);
     }
+    // 卖单不传 quantity，让后端保持原始持仓量不变
+    const submitQuantity = editState.side === 'sell' ? undefined : finalQuantity;
     updateMutation.mutate({
       ledgerId,
       orderId: editState.orderId,
       limitPrice: finalLimitPrice,
       amount: editState.amount,
-      quantity: finalQuantity,
+      quantity: submitQuantity, // 卖单不传quantity，保持原始持仓量
       status: editState.status,
     });
   };
@@ -121,9 +124,10 @@ export default function AfOrderManage() {
               const isEditing = editingId === order.id;
               const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
               // 计算编辑时的实时数量
-              // amount 是用户实际花费，成交价值 = amount × 5.25，quantity = 成交价值 / 新价格
+              // 买单：amount 是用户实际花费，成交价值 = amount × 5.25，quantity = 成交价值 / 新价格
+              // 卖单：数量是买入时的实际持仓，不重算
               let previewQuantity = editState?.quantity ?? "";
-              if (isEditing && editState) {
+              if (isEditing && editState && editState.side === 'buy') {
                 const p = parseFloat(editState.limitPrice);
                 const a = parseFloat(editState.amount);
                 if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
