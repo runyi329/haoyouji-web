@@ -228,6 +228,22 @@ export async function initDatabase() {
       }
     }
 
+    // 确保 users 表有 invited_at 和 invited_by_user_id 字段（兼容旧部署）
+    const dbConn3 = await getDbConnection();
+    if (dbConn3) {
+      const userInviteCols = [
+        { name: 'invited_by_user_id', def: 'INT DEFAULT NULL COMMENT \'邀请人用户ID\'' },
+        { name: 'invited_at', def: 'DATETIME DEFAULT NULL COMMENT \'被邀请时间\'' },
+        { name: 'invite_count', def: 'INT NOT NULL DEFAULT 0 COMMENT \'邀请人数\'' },
+        { name: 'invite_enabled', def: 'TINYINT NOT NULL DEFAULT 0 COMMENT \'是否开启邀请\'' },
+        { name: 'invite_code', def: 'VARCHAR(20) DEFAULT NULL COMMENT \'邀请码\'' },
+      ];
+      for (const col of userInviteCols) {
+        await safeAddColumn(dbConn3, 'users', col.name, col.def);
+      }
+      console.log('[DB Init] ✅ users invite columns checked');
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
