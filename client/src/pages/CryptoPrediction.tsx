@@ -819,12 +819,7 @@ export default function CryptoPrediction() {
               const completedBuyOrders = (ordersData as any[] || []).filter(
                 (o: any) => o.side === 'buy' && o.status === 'completed' && o.coin === coin.name
               );
-              // 已有未撤销卖单的买入订单ID集合
-              const pendingSellSourceIds = new Set(
-                (ordersData as any[] || [])
-                  .filter((o: any) => o.side === 'sell' && (o.status === 'pending' || o.status === 'completed') && o.sourceOrderId)
-                  .map((o: any) => o.sourceOrderId)
-              );
+              // 使用后端返回的 hasPendingSell 字段（已兼容旧数据）
               return (
                 <div className="space-y-2">
                   <p className="text-xs text-gray-500 px-1">选择要卖出的订单（无损合约必须一次性全部卖出）</p>
@@ -833,7 +828,7 @@ export default function CryptoPrediction() {
                   ) : (
                     completedBuyOrders.map((o: any) => {
                       const isSelected = selectedSellOrderId === o.id;
-                      const hasPendingSell = pendingSellSourceIds.has(o.id);
+                      const hasPendingSell = !!o.hasPendingSell; // 后端已处理旧数据兼容
                       return (
                         <div
                           key={o.id}

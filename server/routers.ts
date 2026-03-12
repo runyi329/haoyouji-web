@@ -8768,7 +8768,28 @@ export const appRouter = router({
               ORDER BY o.created_at DESC
               LIMIT 100`
         ) as any;
-        const list = ((rows[0] || rows) as any[]).map((r: any) => ({
+        const allOrders = ((rows[0] || rows) as any[]);
+        
+        // 构建「已有未撤销卖单的买入订单ID」集合（兼容旧数据）
+        // 方法：对每个 pending/completed 卖单，尝试匹配对应的买入订单
+        // 1. 有 source_order_id 的：直接用 source_order_id
+        // 2. 没有 source_order_id 的旧卖单：按同币种找对应的最近一笔已成交买入订单
+        const activeSellOrders = allOrders.filter((r: any) => r.side === 'sell' && (r.status === 'pending' || r.status === 'completed'));
+        const completedBuyOrders = allOrders.filter((r: any) => r.side === 'buy' && r.status === 'completed');
+        
+        const pendingSellBuyIds = new Set<number>();
+        for (const sell of activeSellOrders) {
+          if (sell.source_order_id) {
+            // 有明确关联：直接添加
+            pendingSellBuyIds.add(sell.source_order_id);
+          } else {
+            // 旧卖单没有 source_order_id：按同币种找最近的已成交买入订单匹配
+            const matchBuy = completedBuyOrders.find((b: any) => b.coin === sell.coin && !pendingSellBuyIds.has(b.id));
+            if (matchBuy) pendingSellBuyIds.add(matchBuy.id);
+          }
+        }
+        
+        const list = allOrders.map((r: any) => ({
           id: r.id,
           coin: r.coin,
           side: r.side,
@@ -8784,6 +8805,8 @@ export const appRouter = router({
           sourceOrderId: r.source_order_id || null,
           sourceUsername: r.source_username || '',
           sourceAmount: r.source_amount || '',
+          // 新字段：该买入订单是否已有未撤销的卖单（包含旧数据兼容）
+          hasPendingSell: r.side === 'buy' && r.status === 'completed' ? pendingSellBuyIds.has(r.id) : false,
         }));
         return list;
       }),
