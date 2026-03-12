@@ -930,22 +930,23 @@ export const appRouter = router({
             .where(eq(users.inviteCode, input.inviteCode));
           
           if (inviter) {
-            // 更新新用户的邀请信息
-            await dbConn
-              .update(users)
-              .set({
-                invitedByUserId: inviter.id,
-                invitedAt: new Date().toISOString(),
-              })
-              .where(eq(users.id, user.id));
-            
-            // 更新邀请者的邀请计数
-            await dbConn
-              .update(users)
-              .set({
-                inviteCount: sql`${users.inviteCount} + 1`,
-              })
-              .where(eq(users.id, inviter.id));
+            // 更新新用户的邀请信息（用原始SQL避免字段不存在时报错）
+            try {
+              const rawConn = await getDbConnection();
+              if (rawConn) {
+                await rawConn.execute(
+                  'UPDATE users SET invited_by_user_id = ?, invited_at = NOW() WHERE id = ?',
+                  [inviter.id, user.id]
+                );
+                await rawConn.execute(
+                  'UPDATE users SET invite_count = COALESCE(invite_count, 0) + 1 WHERE id = ?',
+                  [inviter.id]
+                );
+              }
+            } catch (inviteUpdateErr) {
+              console.error('[邀请注册] 更新邀请信息失败（字段可能不存在）:', inviteUpdateErr);
+              // 不影响注册流程，用户已成功注册
+            }
             
             // 自动将新用户加入邀请者的 AF（custom_af）类型账本
             try {
