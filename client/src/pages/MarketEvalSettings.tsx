@@ -8,23 +8,139 @@ import { Switch } from "@/components/ui/switch";
 // 序号字符：①②③...
 const CIRCLE_NUMS = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳"];
 
+// ============================================================
+// 编译版计算逻辑
+// ============================================================
+
+// 高胜率分界线（≥70% 胜率 → 年化；< 70% → 倍数）
+const HIGH_WIN_THRESHOLD = 0.70;
+
+interface CompiledOdds {
+  type: "annualized" | "multiplier";
+  // 年化类型
+  annualizedPct?: number;    // 年化收益率，如 19.4
+  daysLeft?: number;         // 剩余天数
+  winProb?: number;          // 胜率 %
+  // 倍数类型
+  multiplier?: number;       // 倍数，如 6.25
+  winProbPct?: number;       // 胜率 %
+}
+
+/**
+ * 计算编译版赔率展示
+ * @param outcomes  结果数组，如 ["Yes","No"]
+ * @param outcomePrices 概率数组，如 ["0.84","0.16"]（对应 No/Yes 的概率）
+ * @param endDate   截止日期字符串
+ */
+function compileOdds(
+  outcomes: string[],
+  outcomePrices: string[],
+  endDate: string | null
+): CompiledOdds | null {
+  if (!outcomes || outcomes.length === 0 || !outcomePrices || outcomePrices.length === 0) {
+    return null;
+  }
+
+  // 找 "Yes" 对应的概率（第一个 outcome 通常是 Yes）
+  const yesIdx = outcomes.findIndex(
+    (o) => o.toLowerCase() === "yes" || o.toLowerCase() === "会"
+  );
+  const targetIdx = yesIdx >= 0 ? yesIdx : 0;
+  const prob = parseFloat(outcomePrices[targetIdx] || "0");
+
+  if (isNaN(prob) || prob <= 0 || prob >= 1) return null;
+
+  if (prob >= HIGH_WIN_THRESHOLD) {
+    // ── 高胜率：折算年化 ──
+    // 净收益率 = (1 - prob) / prob
+    const netReturn = (1 - prob) / prob;
+
+    // 计算剩余天数
+    let daysLeft = 30; // 默认30天
+    if (endDate) {
+      const end = new Date(endDate);
+      const now = new Date();
+      const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      if (diff > 0) daysLeft = diff;
+    }
+
+    // 年化 = 净收益率 / 剩余天数 × 365
+    const annualizedPct = (netReturn / daysLeft) * 365 * 100;
+
+    return {
+      type: "annualized",
+      annualizedPct: Math.round(annualizedPct * 10) / 10,
+      daysLeft,
+      winProb: Math.round(prob * 100),
+    };
+  } else {
+    // ── 低胜率：折算倍数 ──
+    // 倍数 = 1 / prob（买1元，赢 1/prob 元）
+    const multiplier = 1 / prob;
+
+    return {
+      type: "multiplier",
+      multiplier: Math.round(multiplier * 10) / 10,
+      winProbPct: Math.round(prob * 100),
+    };
+  }
+}
+
+// ============================================================
+// 编译版赔率展示组件
+// ============================================================
+function CompiledOddsDisplay({ compiled }: { compiled: CompiledOdds | null }) {
+  if (!compiled) return null;
+
+  if (compiled.type === "annualized") {
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+          <span className="text-xs text-emerald-600">年化收益</span>
+          <span className="text-base font-bold text-emerald-700">
+            {compiled.annualizedPct}%
+          </span>
+        </div>
+        <div className="text-xs text-gray-400">
+          胜率 {compiled.winProb}% · 剩余 {compiled.daysLeft} 天
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <div className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 rounded-lg px-3 py-1.5">
+        <span className="text-xs text-orange-600">赔率</span>
+        <span className="text-base font-bold text-orange-700">
+          {compiled.multiplier}倍
+        </span>
+      </div>
+      <div className="text-xs text-gray-400">
+        胜率 {compiled.winProbPct}%
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// 主组件
+// ============================================================
 export default function MarketEvalSettings() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 1;
   const [coin, setCoin] = useState<"BTC" | "ETH" | "SOL">("BTC");
-  // 语言 Tab：en = 英文，zh = 中文
-  const [lang, setLang] = useState<"en" | "zh">("en");
+  // 三个版本 Tab
+  const [tab, setTab] = useState<"raw" | "zh" | "compiled">("raw");
 
   const utils = trpc.useUtils();
 
-  // 查询缓存状态（最后刷新时间 + 条数）
   const { data: cacheStatus, refetch: refetchStatus } = trpc.prediction.getCacheStatus.useQuery(
     { coin },
     { staleTime: 10000 }
   );
 
-  // 从数据库缓存读取事件列表（含可见性设置）
   const { data, isLoading, error, refetch } = trpc.prediction.listEventsForAdmin.useQuery(
     { ledgerId, coin },
     { staleTime: 10000, retry: 1 }
@@ -32,16 +148,11 @@ export default function MarketEvalSettings() {
 
   const events = data?.events || [];
   const cacheEmpty = data?.cacheEmpty ?? (events.length === 0);
-
-  // 是否有中文翻译（任意一条有即视为已翻译）
-  const hasZhTranslation = events.some((e: any) => e.questionZh);
-  // 翻译进度
   const zhCount = events.filter((e: any) => e.questionZh).length;
 
   const WORKER_URL = "https://polymarket-proxy.runyihongkong.workers.dev";
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // 存入数据库的 mutation
   const saveCacheMutation = trpc.prediction.saveCache.useMutation({
     onSuccess: (result) => {
       toast.success(`刷新成功，已更新 ${result.synced} 条 ${result.coin} 事件数据`, {
@@ -65,7 +176,6 @@ export default function MarketEvalSettings() {
       })
     : null;
 
-  // 切换可见性
   const toggleMutation = trpc.prediction.setEventVisibility.useMutation({
     onSuccess: () => {
       utils.prediction.listEventsForAdmin.invalidate({ ledgerId, coin });
@@ -83,21 +193,17 @@ export default function MarketEvalSettings() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      // 前端直接请求 Cloudflare Worker（5G可访问）
       const res = await fetch(`${WORKER_URL}/events?coin=${coin}&limit=100`, {
         signal: AbortSignal.timeout(20000),
         headers: { "Accept": "application/json" },
       });
-      if (!res.ok) {
-        throw new Error(`Worker 返回 ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Worker 返回 ${res.status}`);
       const data = await res.json() as { events: any[]; count: number };
       const workerEvents = data.events || [];
       if (workerEvents.length === 0) {
         toast.error("未获取到数据", { description: "请确认已切换5G网络" });
         return;
       }
-      // 将数据通过 tRPC 存入数据库
       saveCacheMutation.mutate({
         coin,
         events: workerEvents.map((e: any) => {
@@ -131,15 +237,18 @@ export default function MarketEvalSettings() {
     }
   };
 
+  const TAB_LABELS = [
+    { key: "raw", label: "原始" },
+    { key: "zh", label: "翻译" },
+    { key: "compiled", label: "编译" },
+  ] as const;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-10 bg-[#B71C1C] text-white">
         <div className="flex items-center justify-between h-14 px-4">
-          <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-            className="p-2 -ml-2"
-          >
+          <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-2 -ml-2">
             <ChevronLeft className="w-5 h-5" />
           </button>
           <span className="text-base font-semibold">竞猜事件设置</span>
@@ -154,9 +263,7 @@ export default function MarketEvalSettings() {
             key={c}
             onClick={() => setCoin(c)}
             className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              coin === c
-                ? "bg-[#B71C1C] text-white"
-                : "bg-white text-gray-600 border border-gray-200"
+              coin === c ? "bg-[#B71C1C] text-white" : "bg-white text-gray-600 border border-gray-200"
             }`}
           >
             {c}
@@ -204,34 +311,35 @@ export default function MarketEvalSettings() {
         )}
       </div>
 
-      {/* 中英文 Tab + 说明 */}
-      <div className="px-4 pb-2 flex items-center justify-between">
-        <p className="text-xs text-gray-500 leading-relaxed flex-1 mr-3">
-          勾选后，对应的事件将在行情评估页面中显示给所有成员。未勾选任何事件时，默认显示全部。
-        </p>
-        {/* 语言切换 Tab */}
-        {events.length > 0 && (
-          <div className="flex rounded-lg overflow-hidden border border-gray-200 shrink-0">
-            <button
-              onClick={() => setLang("en")}
-              className={`px-3 py-1 text-xs font-medium transition-colors ${
-                lang === "en"
-                  ? "bg-[#B71C1C] text-white"
-                  : "bg-white text-gray-500"
-              }`}
-            >
-              EN
-            </button>
-            <button
-              onClick={() => setLang("zh")}
-              className={`px-3 py-1 text-xs font-medium transition-colors ${
-                lang === "zh"
-                  ? "bg-[#B71C1C] text-white"
-                  : "bg-white text-gray-500"
-              }`}
-            >
-              中文
-            </button>
+      {/* 三版本 Tab + 说明 */}
+      <div className="px-4 pb-2">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-gray-500 leading-relaxed flex-1 mr-3">
+            勾选后，对应事件将在行情评估页面显示给成员。三个版本打勾状态同步。
+          </p>
+          {events.length > 0 && (
+            <div className="flex rounded-lg overflow-hidden border border-gray-200 shrink-0">
+              {TAB_LABELS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`px-3 py-1 text-xs font-medium transition-colors ${
+                    tab === key ? "bg-[#B71C1C] text-white" : "bg-white text-gray-500"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 编译版说明 */}
+        {tab === "compiled" && events.length > 0 && (
+          <div className="bg-blue-50 rounded-lg px-3 py-2 mb-2">
+            <p className="text-xs text-blue-700 leading-relaxed">
+              <span className="font-semibold">编译版</span>：胜率 ≥70% 显示<span className="text-emerald-600 font-medium">年化收益率</span>，胜率 &lt;70% 显示<span className="text-orange-600 font-medium">赔率倍数</span>。前端用户看到的是此版本。
+            </p>
           </div>
         )}
       </div>
@@ -246,10 +354,7 @@ export default function MarketEvalSettings() {
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-12 gap-3">
             <p className="text-sm text-red-500">加载失败：{error.message}</p>
-            <button
-              onClick={() => refetch()}
-              className="px-4 py-2 bg-[#B71C1C] text-white rounded-lg text-sm"
-            >
+            <button onClick={() => refetch()} className="px-4 py-2 bg-[#B71C1C] text-white rounded-lg text-sm">
               重试
             </button>
           </div>
@@ -261,28 +366,38 @@ export default function MarketEvalSettings() {
           <div className="space-y-2">
             {events.map((event: any, idx: number) => {
               const circleNum = CIRCLE_NUMS[idx] || `${idx + 1}.`;
-              const displayText = lang === "zh"
-                ? (event.questionZh || event.question)
-                : event.question;
-              const isTranslating = lang === "zh" && !event.questionZh;
+              const compiled = compileOdds(event.outcomes, event.outcomePrices, event.endDate);
+
+              // 根据 Tab 决定显示的标题
+              let displayTitle: string;
+              let titleStyle = "text-gray-800";
+              if (tab === "raw") {
+                displayTitle = event.question;
+              } else if (tab === "zh") {
+                if (event.questionZh) {
+                  displayTitle = event.questionZh;
+                } else {
+                  displayTitle = "翻译中...";
+                  titleStyle = "text-gray-400 italic";
+                }
+              } else {
+                // 编译版：优先用中文翻译，没有就用英文
+                displayTitle = event.questionZh || event.question;
+              }
 
               return (
-                <div
-                  key={idx}
-                  className="bg-white rounded-xl p-4 flex items-start gap-3"
-                >
+                <div key={idx} className="bg-white rounded-xl p-4 flex items-start gap-3">
                   {/* 序号 */}
                   <span className="text-sm font-bold text-[#B71C1C] shrink-0 mt-0.5 w-6 text-center">
                     {circleNum}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm leading-relaxed break-words ${
-                      isTranslating ? "text-gray-400 italic" : "text-gray-800"
-                    }`}>
-                      {isTranslating ? "翻译中..." : displayText}
+                    <p className={`text-sm leading-relaxed break-words ${titleStyle}`}>
+                      {displayTitle}
                     </p>
-                    {/* 赔率盘口 */}
-                    {event.outcomes && event.outcomes.length > 0 && (
+
+                    {/* 原始版 / 翻译版：显示原始赔率 */}
+                    {(tab === "raw" || tab === "zh") && event.outcomes && event.outcomes.length > 0 && (
                       <div className="flex gap-2 mt-2">
                         {event.outcomes.map((outcome: string, oi: number) => {
                           const price = event.outcomePrices?.[oi];
@@ -299,6 +414,10 @@ export default function MarketEvalSettings() {
                         })}
                       </div>
                     )}
+
+                    {/* 编译版：显示年化/倍数 */}
+                    {tab === "compiled" && <CompiledOddsDisplay compiled={compiled} />}
+
                     <div className="flex items-center gap-3 mt-1.5">
                       {event.volume && (
                         <span className="text-xs text-gray-400">
@@ -312,6 +431,7 @@ export default function MarketEvalSettings() {
                       )}
                     </div>
                   </div>
+                  {/* 打勾开关（三个版本共用，状态同步） */}
                   <Switch
                     checked={event.visible}
                     onCheckedChange={() => handleToggle(event.question, event.visible)}
