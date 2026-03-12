@@ -8948,7 +8948,7 @@ export const appRouter = router({
                 
                 // 查询收益权最高档位（每跌10%一档，共9档）
                 const tierRows = await db.execute(
-                  sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE orderId = ${sourceOrderId}`
+                  sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${sourceOrderId}`
                 ) as any;
                 const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
                 
@@ -9179,22 +9179,22 @@ export const appRouter = router({
 
         // 查询该订单的所有档位触发记录
         const triggerRows = await db.execute(
-          sql`SELECT tier, triggerPrice, triggeredAt FROM af_order_tier_triggers
-              WHERE orderId = ${input.orderId}
+          sql`SELECT tier, trigger_price, triggered_at FROM af_order_tier_triggers
+              WHERE order_id = ${input.orderId}
               ORDER BY tier ASC`
         ) as any;
         const triggers: Array<{ tier: number; triggerPrice: string; triggeredAt: string }> =
           ((triggerRows[0] || triggerRows) as any[]).map((r: any) => ({
             tier: r.tier,
-            triggerPrice: r.triggerPrice,
-            triggeredAt: r.triggeredAt,
+            triggerPrice: r.trigger_price,
+            triggeredAt: r.triggered_at
           }));
 
         // 查询该币种最近一次扫描记录
         const scanRows = await db.execute(
-          sql`SELECT lowPrice, scannedAt FROM af_price_scan_logs
+          sql`SELECT low_price, scanned_at FROM af_price_scan_logs
               WHERE coin = ${order.coin}
-              ORDER BY scannedAt DESC LIMIT 1`
+              ORDER BY scanned_at DESC LIMIT 1`
         ) as any;
         const lastScan = (scanRows[0]?.[0] ?? scanRows[0]) || null;
 
@@ -9207,11 +9207,11 @@ export const appRouter = router({
           buyPrice: order.limit_price,
           coin: order.coin,
           scanStatus: {
-            lastScanAt: coinStatus?.lastScanAt || (lastScan?.scannedAt ? new Date(lastScan.scannedAt).toISOString() : null),
-            lastLowPrice: coinStatus?.lastLowPrice || (lastScan?.lowPrice ?? null),
+            lastScanAt: coinStatus?.lastScanAt || (lastScan?.scanned_at ? new Date(lastScan.scanned_at).toISOString() : null),
+            lowestPrice: coinStatus?.lowestPrice || lastScan?.low_price || null,
             scanning: coinStatus?.scanning || false,
           },
-          latestLowPrice: lastScan?.lowPrice ?? null,
+          latestLowPrice: lastScan?.low_price ?? null,
         };
       }),
     // OKX 行情代理（国内服务器可访问，替代 Binance）
