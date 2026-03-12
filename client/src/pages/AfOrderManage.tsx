@@ -28,6 +28,8 @@ interface ProfitCalculation {
   totalProfit: number;
   totalRefund: number;
   principal: number;
+  equityTier: number;
+  effectiveQuantity: number;
 }
 
 export default function AfOrderManage() {
@@ -64,15 +66,18 @@ export default function AfOrderManage() {
     const sellPrice = parseFloat(actualSellPrice);
     const buyPrice = parseFloat(order.sourceBuyPrice || '0');
     const coinQuantity = parseFloat(order.sourceQuantity || '0');
-    // 使用源订单的本金（sourcePrincipal），这是用户购买时的实际投入
     const principal = parseFloat(order.sourcePrincipal || '0');
+    const equityTier = order.equityTier || 0;
 
     if (isNaN(sellPrice) || sellPrice <= 0 || isNaN(buyPrice) || buyPrice <= 0 || isNaN(coinQuantity) || coinQuantity <= 0) {
       return null;
     }
 
+    // 有效币数 = 原始币数 / (1 + 最高档位)
+    const effectiveQuantity = equityTier > 0 ? coinQuantity / (1 + equityTier) : coinQuantity;
+
     const unitProfit = sellPrice - buyPrice;
-    const totalProfit = coinQuantity * unitProfit;
+    const totalProfit = effectiveQuantity * unitProfit;
     const totalRefund = principal + Math.max(0, totalProfit);
 
     return {
@@ -83,6 +88,8 @@ export default function AfOrderManage() {
       totalProfit,
       totalRefund,
       principal,
+      equityTier,
+      effectiveQuantity,
     };
   };
 
@@ -326,6 +333,16 @@ export default function AfOrderManage() {
                               <div className="flex justify-between">
                                 <span className="text-gray-600">卖出价</span>
                                 <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">权益折扣档位</span>
+                                <span className="font-medium text-amber-600">
+                                  {calc.equityTier === 0 ? '100%（第0档）' : `${(100 / (1 + calc.equityTier)).toFixed(1)}%（第${calc.equityTier}档）`}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">有效币数</span>
+                                <span className="font-medium text-gray-800">{calc.effectiveQuantity.toFixed(6)} {order.coin}</span>
                               </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-600">单位收益</span>
