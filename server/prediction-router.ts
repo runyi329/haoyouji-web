@@ -78,6 +78,19 @@ async function ensurePredictionTables() {
         UNIQUE KEY uniq_coin_question (coin, question_hash)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // ★ 自动迁移：如果旧表没有 question_zh 字段，自动添加
+    try {
+      await conn.execute(
+        `ALTER TABLE polymarket_cache ADD COLUMN question_zh TEXT NULL COMMENT 'AI翻译的中文标题'`
+      );
+      console.log('[prediction] 自动迁移：已添加 question_zh 字段');
+    } catch (alterErr: any) {
+      // 字段已存在时会报错，忽略即可
+      if (!alterErr.message?.includes('Duplicate column')) {
+        // 非重复字段错误才记录
+        console.log('[prediction] question_zh 字段已存在，跳过迁移');
+      }
+    }
     console.log('[prediction] Tables ensured');
   } catch (e) {
     console.error('[prediction] ensurePredictionTables error:', e);
