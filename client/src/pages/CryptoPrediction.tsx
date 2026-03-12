@@ -819,6 +819,12 @@ export default function CryptoPrediction() {
               const completedBuyOrders = (ordersData as any[] || []).filter(
                 (o: any) => o.side === 'buy' && o.status === 'completed' && o.coin === coin.name
               );
+              // 已有未撤销卖单的买入订单ID集合
+              const pendingSellSourceIds = new Set(
+                (ordersData as any[] || [])
+                  .filter((o: any) => o.side === 'sell' && (o.status === 'pending' || o.status === 'completed') && o.sourceOrderId)
+                  .map((o: any) => o.sourceOrderId)
+              );
               return (
                 <div className="space-y-2">
                   <p className="text-xs text-gray-500 px-1">选择要卖出的订单（无损合约必须一次性全部卖出）</p>
@@ -827,22 +833,25 @@ export default function CryptoPrediction() {
                   ) : (
                     completedBuyOrders.map((o: any) => {
                       const isSelected = selectedSellOrderId === o.id;
+                      const hasPendingSell = pendingSellSourceIds.has(o.id);
                       return (
                         <div
                           key={o.id}
                           onClick={() => {
+                            if (hasPendingSell) return; // 已委托卖出，不可选择
                             setSelectedSellOrderId(isSelected ? null : o.id);
                             if (!isSelected) {
-                              // 自动填入该订单全部数量对应的金额
                               setOrderAmount(parseFloat(o.amount).toFixed(2));
                             } else {
                               setOrderAmount("");
                             }
                           }}
-                          className={`rounded-xl px-4 py-3 cursor-pointer border transition-colors ${
-                            isSelected
-                              ? 'bg-[#2A1A1A] border-[#ef5350]'
-                              : 'bg-[#1C2127] border-transparent'
+                          className={`rounded-xl px-4 py-3 border transition-colors ${
+                            hasPendingSell
+                              ? 'bg-[#1C2127] border-transparent opacity-50 cursor-not-allowed'
+                              : isSelected
+                                ? 'bg-[#2A1A1A] border-[#ef5350] cursor-pointer'
+                                : 'bg-[#1C2127] border-transparent cursor-pointer'
                           }`}
                         >
                           <div className="flex items-center justify-between">
@@ -851,7 +860,11 @@ export default function CryptoPrediction() {
                               <span className="text-[10px] text-gray-500">委托价 {parseFloat(o.limitPrice).toLocaleString()} USDT</span>
                             </div>
                             <div className="flex flex-col items-end gap-0.5">
-                              <span className="text-xs text-white">{parseFloat(o.quantity).toFixed(6)} {o.coin}</span>
+                              {hasPendingSell ? (
+                                <span className="text-[10px] bg-yellow-600 text-white px-1.5 py-0.5 rounded">委托中</span>
+                              ) : (
+                                <span className="text-xs text-white">{parseFloat(o.quantity).toFixed(6)} {o.coin}</span>
+                              )}
                               <span className="text-[10px] text-gray-500">金额 {parseFloat(o.amount).toFixed(2)} USDT</span>
                             </div>
                           </div>
@@ -901,6 +914,7 @@ export default function CryptoPrediction() {
                     amount: amt,
                     quantity: qty,
                     orderType: '无损合约',
+                    sourceOrderId: selectedSellOrderId, // 关联原始买入订单ID，用于防重复委托
                   });
                 }
               }}
