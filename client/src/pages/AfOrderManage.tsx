@@ -10,6 +10,20 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   cancelled: { label: "已撤单", color: "text-gray-400" },
 };
 
+// 权益折扣率映射表（相对于52.5的百分比）
+const EQUITY_DISCOUNT_RATES: Record<number, number> = {
+  0: 1.0,      // 第0档：100%
+  1: 0.6667,   // 第1档：66.67%
+  2: 0.4444,   // 第2档：44.44%
+  3: 0.3333,   // 第3档：33.33%
+  4: 0.2667,   // 第4档：26.67%
+  5: 0.2222,   // 第5档：22.22%
+  6: 0.1905,   // 第6档：19.05%
+  7: 0.1667,   // 第7档：16.67%
+  8: 0.1481,   // 第8档：14.81%
+  9: 0.1333,   // 第9档：13.33%
+};
+
 interface EditState {
   orderId: number;
   limitPrice: string;
@@ -73,8 +87,10 @@ export default function AfOrderManage() {
       return null;
     }
 
-    // 有效币数 = 原始币数 / (1 + 最高档位)
-    const effectiveQuantity = equityTier > 0 ? coinQuantity / (1 + equityTier) : coinQuantity;
+    // 根据权益折扣档位计算有效币数
+    // 有效币数 = 原始币数 × 折扣率
+    const discountRate = EQUITY_DISCOUNT_RATES[equityTier] || 1.0;
+    const effectiveQuantity = coinQuantity * discountRate;
 
     const unitProfit = sellPrice - buyPrice;
     const totalProfit = effectiveQuantity * unitProfit;
@@ -337,7 +353,10 @@ export default function AfOrderManage() {
                               <div className="flex justify-between">
                                 <span className="text-gray-600">权益折扣档位</span>
                                 <span className="font-medium text-amber-600">
-                                  {calc.equityTier === 0 ? '100%（第0档）' : `${(100 / (1 + calc.equityTier)).toFixed(1)}%（第${calc.equityTier}档）`}
+                                  {(() => {
+                                    const rate = EQUITY_DISCOUNT_RATES[calc.equityTier] || 1.0;
+                                    return `${(rate * 100).toFixed(2)}%（第${calc.equityTier}档）`;
+                                  })()}
                                 </span>
                               </div>
                               <div className="flex justify-between">

@@ -8972,15 +8972,29 @@ export const appRouter = router({
                 const buyPrice = parseFloat(srcOrder.limit_price || '0');
                 const originalQty = parseFloat(srcOrder.quantity || '0');
                 
-                // 查询收益权最高档位（每跌10%一档，共9档）
+                // 查询收益权最高档位
                 const tierRows = await db.execute(
                   sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${sourceOrderId}`
                 ) as any;
                 const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
                 
-                // 有效币数 = 原始币数 / (1 + 最高档位)
-                // 第0档：全额；第1档：1/2；第2档：1/3；...第9档：1/10
-                const effectiveQty = maxTier > 0 ? originalQty / (1 + maxTier) : originalQty;
+                // 权益折扣率映射表（相对于52.5的百分比）
+                const equityDiscountRates: Record<number, number> = {
+                  0: 1.0,      // 第0档：100%
+                  1: 0.6667,   // 第1档：66.67%
+                  2: 0.4444,   // 第2档：44.44%
+                  3: 0.3333,   // 第3档：33.33%
+                  4: 0.2667,   // 第4档：26.67%
+                  5: 0.2222,   // 第5档：22.22%
+                  6: 0.1905,   // 第6档：19.05%
+                  7: 0.1667,   // 第7档：16.67%
+                  8: 0.1481,   // 第8档：14.81%
+                  9: 0.1333,   // 第9档：13.33%
+                };
+                
+                // 有效币数 = 原始币数 × 折扣率
+                const discountRate = equityDiscountRates[maxTier] || 1.0;
+                const effectiveQty = originalQty * discountRate;
                 
                 // 收益 = 有效币数 × (实际卖出价 - 买入委托价)
                 if (sellPrice > 0 && buyPrice > 0) {
