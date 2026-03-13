@@ -1,7 +1,17 @@
 import { useState } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
-import { ChevronLeft, Plus, Trash2, Edit2, Check, X, AlertCircle, Users } from 'lucide-react';
+import { ChevronLeft, Plus, Trash2, Edit2, Check, X, AlertCircle, Users, Calculator } from 'lucide-react';
+
+// 权益系数表：第0档×0.75，第1档÷2，第2档÷3...
+const EQUITY_COEFFS = [0.75, 0.5, 0.3333, 0.25, 0.2, 0.1667, 0.1429, 0.125, 0.1111, 0.1];
+const EQUITY_LABELS = ['第0档(基准)', '第1档(跌10%)', '第2档(跌20%)', '第3档(跌30%)', '第4档(跌40%)', '第5档(跌50%)', '第6档(跌60%)', '第7档(跌70%)', '第8档(跌80%)', '第9档(跌90%)'];
+
+// 计算某档位下某拨比的赠予金额
+function calcGift(invest: number, tier: number, ratio: number): number {
+  const coeff = tier === 0 ? 0.75 : 1 / (tier + 1);
+  return invest * 10 * coeff * 0.3 * (ratio / 100);
+}
 
 export default function AfPayoutManage() {
   const { id: ledgerId } = useParams<{ id: string }>();
@@ -17,6 +27,10 @@ export default function AfPayoutManage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editRatio, setEditRatio] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
+  // 计算示例的投入金额
+  const [exampleInvest, setExampleInvest] = useState('1000');
+  // 展开的档位（默认展开第0档）
+  const [expandedTier, setExpandedTier] = useState<number | null>(0);
 
   // 获取所有成员
   const { data: members = [], isLoading: membersLoading } = trpc.ledger.afGetMembersForPayout.useQuery(
@@ -73,6 +87,8 @@ export default function AfPayoutManage() {
     setRatioMutation.mutate({ ledgerId: lid, sourceUserId: selectedSourceUserId, beneficiaryUserId: r.beneficiaryUserId, ratio });
   };
 
+  const investAmount = parseFloat(exampleInvest) || 1000;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
@@ -90,7 +106,8 @@ export default function AfPayoutManage() {
             <AlertCircle className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-700 space-y-1">
               <p className="font-medium">拨比规则说明</p>
-              <p>赠予金额 = 实际投入 × 10 × 0.3 × 拨比%</p>
+              <p>赠予金额 = 实际投入 × 10 × 权益系数 × 0.3 × 拨比%</p>
+              <p className="text-xs text-blue-600">权益系数：第0档×0.75，第1档÷2，第2档÷3，以此类推</p>
               <p>每位下单人的所有上级拨比之和应等于 <strong>100%</strong></p>
               <p>只有配置了拨比的下单人，其订单成交后才会自动生成赠予订单</p>
             </div>
@@ -288,17 +305,85 @@ export default function AfPayoutManage() {
               ))}
             </div>
 
-            {/* 底部计算示例 */}
+            {/* 详细计算明细（各档位） */}
             {ratios.length > 0 && (
-              <div className="mx-4 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="text-xs font-medium text-amber-700 mb-1.5">计算示例（投入 1000 USDT）</div>
-                <div className="text-xs text-amber-600 space-y-0.5">
-                  <div>基数 = 1000 × 10 × 0.3 = <strong>3000 USDT</strong></div>
-                  {ratios.map(r => (
-                    <div key={r.id}>
-                      {r.name || r.username}：3000 × {r.ratio}% = <strong>{(3000 * r.ratio / 100).toFixed(2)} USDT</strong>
-                    </div>
-                  ))}
+              <div className="mx-4 mb-4 space-y-2">
+                {/* 投入金额输入 */}
+                <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <Calculator className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <span className="text-xs text-amber-700 font-medium">模拟投入金额：</span>
+                  <input
+                    type="number"
+                    value={exampleInvest}
+                    onChange={e => setExampleInvest(e.target.value)}
+                    min="1"
+                    step="100"
+                    className="flex-1 border border-amber-300 rounded px-2 py-1 text-sm text-center bg-white focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  />
+                  <span className="text-xs text-amber-700">USDT</span>
+                </div>
+
+                {/* 各档位计算明细 */}
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="bg-gray-100 px-3 py-2 text-xs font-medium text-gray-600 flex justify-between">
+                    <span>档位（价格跌幅）</span>
+                    <span>各受益人获赠金额</span>
+                  </div>
+                  {EQUITY_COEFFS.map((coeff, tier) => {
+                    const isExpanded = expandedTier === tier;
+                    const totalGiftThisTier = investAmount * 10 * coeff * 0.3;
+                    return (
+                      <div key={tier} className="border-t border-gray-100">
+                        {/* 档位标题行（可点击展开） */}
+                        <button
+                          className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors ${isExpanded ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+                          onClick={() => setExpandedTier(isExpanded ? null : tier)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 ${tier === 0 ? 'bg-green-500' : tier <= 3 ? 'bg-blue-500' : tier <= 6 ? 'bg-orange-500' : 'bg-red-500'}`}>
+                              {tier}
+                            </span>
+                            <span className="text-gray-700 font-medium">{EQUITY_LABELS[tier]}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500">基数 {totalGiftThisTier.toFixed(2)}</span>
+                            <span className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
+                          </div>
+                        </button>
+
+                        {/* 展开后的详细计算 */}
+                        {isExpanded && (
+                          <div className="bg-blue-50 px-3 pb-2 space-y-1">
+                            {/* 公式说明 */}
+                            <div className="text-xs text-blue-600 py-1 border-b border-blue-100">
+                              {investAmount} × 10 × {tier === 0 ? '0.75' : `1÷${tier + 1}≈${coeff.toFixed(4)}`} × 0.3 = <strong>{totalGiftThisTier.toFixed(4)} USDT</strong>
+                            </div>
+                            {/* 每个受益人 */}
+                            {ratios.map(r => {
+                              const giftAmt = calcGift(investAmount, tier, r.ratio);
+                              return (
+                                <div key={r.id} className="flex items-center justify-between text-xs py-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center text-white text-xs font-bold">
+                                      {(r.name || r.username || '?')[0].toUpperCase()}
+                                    </div>
+                                    <span className="text-gray-700">{r.name || r.username}</span>
+                                    <span className="text-gray-400">×{r.ratio}%</span>
+                                  </div>
+                                  <span className="font-bold text-green-700">+{giftAmt.toFixed(2)} USDT</span>
+                                </div>
+                              );
+                            })}
+                            {/* 合计 */}
+                            <div className="flex justify-between text-xs pt-1 border-t border-blue-100 font-medium">
+                              <span className="text-blue-700">合计赠出</span>
+                              <span className="text-blue-700">{(totalGiftThisTier * totalRatio / 100).toFixed(2)} USDT</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

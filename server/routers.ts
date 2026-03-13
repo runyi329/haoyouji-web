@@ -9186,8 +9186,18 @@ export const appRouter = router({
               
               const actualSpend = parseFloat(updatedOrder.amount || '0');
               const actualPrice = parseFloat(updatedOrder.limit_price || '0');
-              // 原始赠予基数 = 实际投入 × 10 × 0.3
-              const baseGiftAmount = actualSpend * 10 * 0.3;
+              
+              // 查询该订单的权益档位（tier）
+              const tierRows2 = await giftDb.execute(
+                sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${input.orderId}`
+              ) as any;
+              const equityTier = parseInt((tierRows2[0]?.[0]?.maxTier ?? tierRows2[0]?.maxTier ?? '0').toString()) || 0;
+              
+              // 权益系数：第0档 × 0.75，第1档 ÷ 2，第2档 ÷ 3，以此类推
+              const equityCoeff = equityTier === 0 ? 0.75 : 1 / (equityTier + 1);
+              
+              // 赠予基数 = 实际投入 × 10 × 权益系数 × 0.3
+              const baseGiftAmount = actualSpend * 10 * equityCoeff * 0.3;
               
               // 查询该下单人（userId）在该账本的所有拨比配置
               const ratioRows = await giftDb.execute(

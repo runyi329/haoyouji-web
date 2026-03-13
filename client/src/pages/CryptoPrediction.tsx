@@ -331,6 +331,15 @@ function OrderDetail({ order, timeStr, ledgerId }: {
               <span className="text-gray-500">赠送市值 <span className={(order as any).giftMultiplier === '1.0' ? 'text-amber-500' : 'text-[#ef5350]'}>({(order as any).giftMultiplier || '1.5'}倍)</span></span>
               <span className="text-[#ef5350]">{parseFloat(order.amount).toFixed(2)} USDT</span>
             </div>
+            {/* 获赠比例：赠予金额 / 源订单投入金额 */}
+            {(order as any).sourceAmount && parseFloat((order as any).sourceAmount) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">获赠比例</span>
+                <span className="font-bold" style={{ color: '#F59E0B' }}>
+                  {(parseFloat(order.amount) / parseFloat((order as any).sourceAmount) * 100).toFixed(2)}%
+                </span>
+              </div>
+            )}
           </>
         ) : (
           /* 普通订单：显示委托价格 + 实际成交价格（如果不同） */
