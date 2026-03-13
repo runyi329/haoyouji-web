@@ -67,6 +67,8 @@ export default function SharingSettings() {
   const [sharedVisibleCount, setSharedVisibleCount] = useState(BATCH_SIZE);
   // 朋友介绍区域折叠状态
   const [introducedExpanded, setIntroducedExpanded] = useState(false);
+  // 共享给我的朋友介绍折叠状态
+  const [sharedIntroducedExpanded, setSharedIntroducedExpanded] = useState(false);
   const listEndRef = useRef<HTMLDivElement>(null);
   
   // 获取我的共享连接列表（我共享给别人的）
@@ -588,7 +590,7 @@ export default function SharingSettings() {
                           {introducedExpanded && introducedConns.map((conn: any) => (
                             <div
                               key={conn.id}
-                              className="flex items-center gap-3 p-3 rounded-xl bg-white border border-[#FFE0B2] ml-3 hover:shadow-sm transition-all"
+                              className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 ml-3 hover:shadow-sm transition-all"
                             >
                               <div
                                 className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
@@ -608,7 +610,6 @@ export default function SharingSettings() {
                                 </div>
                                 <p className="text-xs text-gray-400 mt-0.5 truncate">
                                   @{conn.receiverUsername}
-                                  {conn.introducerName && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>由{conn.introducerName}介绍</span>}
                                 </p>
                               </div>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
@@ -732,7 +733,73 @@ export default function SharingSettings() {
               </div>
             ) : (
               <>
-                {visibleSharedToMe.map((conn: any) => {
+                {/* 共享给我的列表：朋友介绍折叠，直接共享正常显示 */}
+                {(() => {
+                  const sharedIntroducedConns = visibleSharedToMe.filter((c: any) => c.introducerName);
+                  const sharedDirectConns = visibleSharedToMe.filter((c: any) => !c.introducerName);
+                  return (
+                    <>
+                      {sharedIntroducedConns.length > 0 && (
+                        <>
+                          {/* 共享给我的朋友介绍折叠行 */}
+                          <button
+                            onClick={() => setSharedIntroducedExpanded(v => !v)}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all"
+                          >
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[#FFEBEE]">
+                              <Handshake className="h-5 w-5" style={{ color: '#D32F2F' }} />
+                            </div>
+                            <div className="flex-1 min-w-0 text-left">
+                              <p className="font-semibold text-sm text-gray-900">朋友介绍</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{sharedIntroducedConns.length} 人</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {sharedIntroducedExpanded
+                                ? <ChevronUp className="h-4 w-4 text-gray-400" />
+                                : <ChevronDown className="h-4 w-4 text-gray-400" />
+                              }
+                            </div>
+                          </button>
+                          {/* 展开后显示介绍连接列表 */}
+                          {sharedIntroducedExpanded && sharedIntroducedConns.map((conn: any) => {
+                            const canIntroduce = hasIntroduceAuth(conn.id);
+                            return (
+                              <div
+                                key={conn.id}
+                                className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 ml-3 hover:shadow-sm transition-all"
+                              >
+                                <div
+                                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
+                                  style={{ backgroundColor: getAvatarColor(conn.sharerName || conn.sharerUsername) }}
+                                >
+                                  {conn.sharerAvatar ? (
+                                    <img src={conn.sharerAvatar} alt={conn.sharerName} className="w-full h-full object-cover"
+                                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.textContent = getInitial(conn.sharerName || conn.sharerUsername); }} />
+                                  ) : getInitial(conn.sharerName || conn.sharerUsername)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">{conn.sharerName}</p>
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#E8F5E9] text-[#4CAF50] text-[10px] font-medium flex-shrink-0">
+                                      <Users className="h-2.5 w-2.5" />{conn.sharedContactCount || 0}人
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-0.5 truncate">@{conn.sharerUsername}</p>
+                                </div>
+                                {canIntroduce && (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-purple-500 hover:text-purple-700 hover:bg-purple-50 flex-shrink-0"
+                                    onClick={() => { setIntroduceConnectionId(conn.id); setShowIntroduceQrDialog(true); }} title="介绍给他人">
+                                    <QrCode className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <ChevronRight className="h-4 w-4 text-gray-300 flex-shrink-0" />
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                      {/* 直接共享的连接正常显示 */}
+                      {sharedDirectConns.map((conn: any) => {
                   const canIntroduce = hasIntroduceAuth(conn.id);
                   return (
                     <div
@@ -800,6 +867,9 @@ export default function SharingSettings() {
                     </div>
                   );
                 })}
+                    </>
+                  );
+                })()}
                 
                 {/* 无限加载触发器 */}
                 {hasMoreShared && (
