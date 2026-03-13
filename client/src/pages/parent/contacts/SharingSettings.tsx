@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Bell, QrCode, Camera, UserPlus } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Bell, QrCode, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -58,6 +58,9 @@ export default function SharingSettings() {
   // 介绍二维码弹窗状态
   const [showIntroduceQrDialog, setShowIntroduceQrDialog] = useState(false);
   const [introduceConnectionId, setIntroduceConnectionId] = useState<number | null>(null);
+  // 授权确认弹窗状态
+  const [showAuthorizeDialog, setShowAuthorizeDialog] = useState(false);
+  const [pendingAuthorize, setPendingAuthorize] = useState<{ connectionId: number; receiverId: number; receiverName: string; isCurrentlyAuthorized: boolean } | null>(null);
   
   // 无限加载状态
   const [myVisibleCount, setMyVisibleCount] = useState(BATCH_SIZE);
@@ -327,10 +330,18 @@ export default function SharingSettings() {
     }
   }, [deleteConnection]);
 
-  // 处理授权/取消授权
-  const handleAuthorize = useCallback((connectionId: number, receiverId: number) => {
-    authorizeIntroduce.mutate({ connectionId, authorizedToUserId: receiverId });
-  }, [authorizeIntroduce]);
+  // 处理授权/取消授权 - 先弹确认框
+  const handleAuthorize = useCallback((connectionId: number, receiverId: number, receiverName: string, isCurrentlyAuthorized: boolean) => {
+    setPendingAuthorize({ connectionId, receiverId, receiverName, isCurrentlyAuthorized });
+    setShowAuthorizeDialog(true);
+  }, []);
+  // 确认授权
+  const confirmAuthorize = useCallback(() => {
+    if (!pendingAuthorize) return;
+    authorizeIntroduce.mutate({ connectionId: pendingAuthorize.connectionId, authorizedToUserId: pendingAuthorize.receiverId });
+    setShowAuthorizeDialog(false);
+    setPendingAuthorize(null);
+  }, [pendingAuthorize, authorizeIntroduce]);
 
   // 检查某条连接是否已授权
   const isAuthorized = useCallback((connectionId: number, receiverId: number) => {
@@ -581,11 +592,7 @@ export default function SharingSettings() {
                             <Users className="h-2.5 w-2.5" />
                             {conn.sharedContactCount || 0}人
                           </span>
-                          {authorized && (
-                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-medium flex-shrink-0">
-                              已授权
-                            </span>
-                          )}
+
                         </div>
                         <p className="text-xs text-gray-400 mt-0.5 truncate">
                           @{conn.receiverUsername}
@@ -594,22 +601,18 @@ export default function SharingSettings() {
                       </div>
                       
                       {/* 操作按钮：授权按钮 + 删除按钮 */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`h-8 px-2 text-xs font-medium transition-colors ${
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <button
+                          className={`h-7 px-2.5 rounded-md text-xs font-medium transition-all ${
                             authorized
-                              ? 'text-amber-600 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40'
-                              : 'text-gray-500 hover:text-amber-600 hover:bg-amber-50'
+                              ? 'bg-[#D32F2F] text-white hover:bg-[#B71C1C]'
+                              : 'bg-transparent text-gray-400 border border-gray-200 hover:border-gray-300 hover:text-gray-500'
                           }`}
-                          onClick={() => handleAuthorize(conn.id, conn.receiverId)}
+                          onClick={() => handleAuthorize(conn.id, conn.receiverId, conn.receiverName || conn.receiverUsername, authorized)}
                           disabled={authorizeIntroduce.isPending}
-                          title={authorized ? '点击取消授权' : '授权对方可介绍你给他人'}
                         >
-                          <UserPlus className="h-3.5 w-3.5 mr-1" />
-                          {authorized ? '已授权' : '授权'}
-                        </Button>
+                          {authorized ? '已授权' : '未授权'}
+                        </button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1006,6 +1009,52 @@ export default function SharingSettings() {
               取消
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* 授权确认弹窗 */}
+      <Dialog open={showAuthorizeDialog} onOpenChange={(open) => { setShowAuthorizeDialog(open); if (!open) setPendingAuthorize(null); }}>
+        <DialogContent className="max-w-[300px] rounded-2xl p-0 overflow-hidden border-0 shadow-2xl">
+          <div className="bg-white dark:bg-gray-900">
+            {/* 顶部红色标题区 */}
+            <div className="bg-[#D32F2F] px-5 pt-5 pb-4">
+              <h3 className="text-white font-bold text-base text-center">
+                {pendingAuthorize?.isCurrentlyAuthorized ? '取消授权' : '授权确认'}
+              </h3>
+            </div>
+            {/* 内容区 */}
+            <div className="px-5 py-5 text-center">
+              {pendingAuthorize?.isCurrentlyAuthorized ? (
+                <p className="text-gray-700 dark:text-gray-200 text-sm leading-relaxed">
+                  取消对 <span className="font-semibold text-[#D32F2F]">{pendingAuthorize?.receiverName}</span> 的授权后，对方将无法再代你介绍人脉
+                </p>
+              ) : (
+                <p className="text-gray-700 dark:text-gray-200 text-sm leading-relaxed">
+                  您将授权给 <span className="font-semibold text-[#D32F2F]">{pendingAuthorize?.receiverName}</span>，把你介绍给他的人脉圈
+                </p>
+              )}
+            </div>
+            {/* 按钮区 */}
+            <div className="flex border-t border-gray-100 dark:border-gray-800">
+              <button
+                className="flex-1 py-3.5 text-sm text-gray-500 dark:text-gray-400 font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                onClick={() => { setShowAuthorizeDialog(false); setPendingAuthorize(null); }}
+              >
+                取消
+              </button>
+              <div className="w-px bg-gray-100 dark:bg-gray-800" />
+              <button
+                className={`flex-1 py-3.5 text-sm font-semibold transition-colors ${
+                  pendingAuthorize?.isCurrentlyAuthorized
+                    ? 'text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    : 'text-[#D32F2F] hover:bg-red-50 dark:hover:bg-red-900/10'
+                }`}
+                onClick={confirmAuthorize}
+                disabled={authorizeIntroduce.isPending}
+              >
+                {pendingAuthorize?.isCurrentlyAuthorized ? '确认取消' : '确认授权'}
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
