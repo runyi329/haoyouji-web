@@ -64,9 +64,9 @@ export default function AfPayoutManage() {
   // 已配置受益人的userId集合
   const configuredBeneficiaryIds = new Set(ratios.map(r => r.beneficiaryUserId));
 
-  // 可选受益人（排除已配置的和下单人自己）
+  // 可选受益人（排除已配置的，但允许下单人自己成为受益人）
   const availableBeneficiaries = members.filter(
-    m => m.userId !== selectedSourceUserId && !configuredBeneficiaryIds.has(m.userId)
+    m => !configuredBeneficiaryIds.has(m.userId)
   );
 
   const selectedMember = members.find(m => m.userId === selectedSourceUserId);
@@ -211,7 +211,7 @@ export default function AfPayoutManage() {
                     <option value="">选择受益人...</option>
                     {availableBeneficiaries.map(m => (
                       <option key={m.userId} value={m.userId}>
-                        {m.name || m.username} (@{m.username})
+                        {m.name || m.username} (@{m.username}){m.userId === selectedSourceUserId ? ' ★本人' : ''}
                       </option>
                     ))}
                   </select>
