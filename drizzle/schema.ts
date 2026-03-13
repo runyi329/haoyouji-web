@@ -1635,6 +1635,8 @@ export const agPromptImages = mysqlTable("ag_prompt_images", {
   imageKey: text('image_key').notNull(),             // COS key（用于删除）
   promptText: text('prompt_text'),                   // 提示词文字（可为空）
   title: varchar('title', { length: 200 }),          // 可选标题
+  tags: text('tags'),                                // 标签（JSON数组字符串）
+  author: varchar('author', { length: 100 }),        // 来源作者
   uploadedBy: int('uploaded_by').notNull(),          // 上传者用户ID
   sortOrder: int('sort_order').default(0).notNull(), // 排序权重（越大越靠前）
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
