@@ -374,7 +374,14 @@ export default function SharingSettings() {
                 onClick={() => setShowScanDialog(true)}
                 title="扫一扫"
               >
-                <Camera className="h-5 w-5" />
+                {/* 扫一扫标识 SVG */}
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                  <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                </svg>
               </Button>
               {/* 手动添加 */}
               <Button
@@ -819,7 +826,7 @@ export default function SharingSettings() {
 
       {/* 我的二维码对话框 */}
       <Dialog open={showMyQrDialog} onOpenChange={setShowMyQrDialog}>
-        <DialogContent className="max-w-xs !top-[30%]">
+        <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <QrCode className="h-5 w-5 text-[#D32F2F]" />
@@ -867,7 +874,7 @@ export default function SharingSettings() {
         if (!open) stopScanner();
         setShowScanDialog(open);
       }}>
-        <DialogContent className="max-w-xs !top-[20%]">
+        <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Camera className="h-5 w-5 text-[#D32F2F]" />
