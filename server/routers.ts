@@ -24,7 +24,7 @@ import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories } from "../drizzle/schema";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
@@ -6405,10 +6405,180 @@ export const appRouter = router({
           await createOneWayConnection(scanner.id, qrOwner.id, '扫码双向共享');
           resultMsg = `与 ${qrOwner.name || qrOwner.username} 已建立双向共享`;
         }
-        return { success: true, message: resultMsg };
+         return { success: true, message: resultMsg };
+      }),
+
+    // 授权某人可以代为介绍我（A授权我，我才能介绍A给别人）
+    // 调用者：A（共享给我的那个人），connectionId是A共享给我的连接ID，authorizedTo是我的ID
+    authorizeIntroduce: protectedProcedure
+      .input(z.object({
+        connectionId: z.number().int().positive(), // A共享给我的连接ID
+        authorizedToUserId: z.number().int().positive(), // 被授权人（我）的ID
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 验证这条连接确实是 ctx.user 共享给 authorizedToUserId 的
+        const [conn] = await dbConn.select().from(contactSharingConnections)
+          .where(and(
+            eq(contactSharingConnections.id, input.connectionId),
+            eq(contactSharingConnections.sharerId, ctx.user.id),
+            eq(contactSharingConnections.receiverId, input.authorizedToUserId),
+          ));
+        if (!conn) throw new TRPCError({ code: 'NOT_FOUND', message: '未找到对应的共享连接' });
+        // 检查是否已授权
+        const [existing] = await dbConn.select().from(sharingAuthorizations)
+          .where(and(
+            eq(sharingAuthorizations.connectionId, input.connectionId),
+            eq(sharingAuthorizations.authorizedBy, ctx.user.id),
+            eq(sharingAuthorizations.authorizedTo, input.authorizedToUserId),
+          ));
+        if (existing) {
+          // 切换授权状态
+          const newActive = existing.isActive === 1 ? 0 : 1;
+          await dbConn.update(sharingAuthorizations)
+            .set({ isActive: newActive })
+            .where(eq(sharingAuthorizations.id, existing.id));
+          return { success: true, isActive: newActive === 1 };
+        }
+        // 新建授权
+        await dbConn.insert(sharingAuthorizations).values({
+          connectionId: input.connectionId,
+          authorizedBy: ctx.user.id,
+          authorizedTo: input.authorizedToUserId,
+          isActive: 1,
+        });
+        return { success: true, isActive: true };
+      }),
+
+    // 获取我共享给某人的授权状态列表（用于"我共享的人"列表显示授权按钮状态）
+    getMyAuthorizationStatus: protectedProcedure
+      .query(async ({ ctx }) => {
+        const dbConn = await getDb();
+        if (!dbConn) return [];
+        // 查询我共享给别人的所有连接，以及对应的授权状态
+        const rows = await dbConn.select({
+          connectionId: sharingAuthorizations.connectionId,
+          authorizedTo: sharingAuthorizations.authorizedTo,
+          isActive: sharingAuthorizations.isActive,
+        }).from(sharingAuthorizations)
+          .where(eq(sharingAuthorizations.authorizedBy, ctx.user.id));
+        return rows;
+      }),
+
+    // 获取别人授权我可以介绍的列表（用于"共享给我的人"列表显示介绍二维码图标）
+    getAuthorizedToIntroduce: protectedProcedure
+      .query(async ({ ctx }) => {
+        const dbConn = await getDb();
+        if (!dbConn) return [];
+        const rows = await dbConn.select({
+          connectionId: sharingAuthorizations.connectionId,
+          authorizedBy: sharingAuthorizations.authorizedBy,
+          isActive: sharingAuthorizations.isActive,
+        }).from(sharingAuthorizations)
+          .where(and(
+            eq(sharingAuthorizations.authorizedTo, ctx.user.id),
+            eq(sharingAuthorizations.isActive, 1),
+          ));
+        return rows;
+      }),
+
+    // 生成介绍二维码（我介绍A给别人扫）
+    getIntroduceQrCode: protectedProcedure
+      .input(z.object({
+        connectionId: z.number().int().positive(), // A共享给我的连接ID
+      }))
+      .query(async ({ ctx, input }) => {
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 验证授权有效
+        const [auth] = await dbConn.select().from(sharingAuthorizations)
+          .where(and(
+            eq(sharingAuthorizations.connectionId, input.connectionId),
+            eq(sharingAuthorizations.authorizedTo, ctx.user.id),
+            eq(sharingAuthorizations.isActive, 1),
+          ));
+        if (!auth) throw new TRPCError({ code: 'FORBIDDEN', message: '未获得介绍授权' });
+        // 获取A的信息
+        const [conn] = await dbConn.select().from(contactSharingConnections)
+          .where(eq(contactSharingConnections.id, input.connectionId));
+        if (!conn) throw new TRPCError({ code: 'NOT_FOUND', message: '连接不存在' });
+        const aUser = await db.getUserById(conn.sharerId);
+        const meUser = await db.getUserById(ctx.user.id);
+        if (!aUser || !meUser) throw new TRPCError({ code: 'NOT_FOUND', message: '用户不存在' });
+        // 生成介绍二维码内容
+        const qrContent = JSON.stringify({
+          type: 'sharing_introduce',
+          targetUsername: aUser.username, // 被介绍人A的用户名
+          introducerUsername: meUser.username, // 介绍人（我）的用户名
+          introducerName: meUser.name || meUser.username,
+        });
+        return {
+          qrContent,
+          targetName: aUser.name || aUser.username,
+          introducerName: meUser.name || meUser.username,
+        };
+      }),
+
+    // 扫介绍二维码：C扫码后，建立A-C和C-A的双向共享，并记录介绍人
+    addByIntroduceQrCode: protectedProcedure
+      .input(z.object({
+        qrContent: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        let parsed: { type: string; targetUsername: string; introducerUsername: string; introducerName: string };
+        try {
+          parsed = JSON.parse(input.qrContent);
+        } catch {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的二维码' });
+        }
+        if (parsed.type !== 'sharing_introduce' || !parsed.targetUsername || !parsed.introducerUsername) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的介绍二维码' });
+        }
+        const targetUser = await db.getUserByUsername(parsed.targetUsername);
+        const introducerUser = await db.getUserByUsername(parsed.introducerUsername);
+        if (!targetUser) throw new TRPCError({ code: 'NOT_FOUND', message: '找不到被介绍人' });
+        if (!introducerUser) throw new TRPCError({ code: 'NOT_FOUND', message: '找不到介绍人' });
+        const scanner = ctx.user; // C
+        if (scanner.id === targetUser.id) throw new TRPCError({ code: 'BAD_REQUEST', message: '不能扫自己的介绍码' });
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const defaultFields = ['name', 'title', 'gender', 'occupation', 'address', 'region', 'wechat', 'phone', 'tags'];
+        const createIntroducedConnection = async (sharerId: number, receiverId: number) => {
+          const existing = await db.getSharingConnection(sharerId, receiverId);
+          if (existing) return null;
+          const connId = await db.createSharingConnection({
+            sharerId,
+            receiverId,
+            status: 'active',
+            note: `由${parsed.introducerName}介绍`,
+          });
+          // 写入介绍人信息
+          await dbConn.update(contactSharingConnections)
+            .set({
+              introducerId: introducerUser.id,
+              introducerName: parsed.introducerName,
+            })
+            .where(eq(contactSharingConnections.id, connId));
+          for (const fieldName of defaultFields) {
+            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: true });
+          }
+          await addPointsForAction(sharerId, 'share_contact', connId);
+          await dbConn.insert(sharingNotifications).values({
+            receiverId,
+            actorId: sharerId,
+            actorName: (await db.getUserById(sharerId))?.name || `用户${sharerId}`,
+            type: 'added',
+          });
+          return connId;
+        };
+        // 建立双向连接：A共享给C，C共享给A
+        await createIntroducedConnection(targetUser.id, scanner.id);
+        await createIntroducedConnection(scanner.id, targetUser.id);
+        const targetName = targetUser.name || targetUser.username;
+        return { success: true, message: `已与 ${targetName} 建立双向共享（由${parsed.introducerName}介绍）` };
       }),
   }),
-
   // 锦炼计数系统
   exercise: router({
     // 获取锻炼项目列表
