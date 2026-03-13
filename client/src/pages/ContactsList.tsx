@@ -2037,12 +2037,11 @@ export default function ContactsList() {
                           <span className="flex items-center gap-0.5">
                             <Handshake className="h-4 w-4" style={{ color: '#A80000' }} />
                             {contact._introducerName ? (
-                              // 通过介绍建立的连接：显示共享者名字 + 介绍人标注
-                              <span className="text-xs text-muted-foreground">
-                                {contact._sharedBy}
-                                <span className="ml-1 text-[10px] px-1 py-0.5 rounded" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>
-                                  {contact._introducerName}介绍
-                                </span>
+                              // 通过介绍建立的连接：据手图标 + 共享者 + × + 介绍人介绍，字号一致
+                              <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                                <span>{contact._sharedBy}</span>
+                                <span className="text-gray-300 mx-0.5">×</span>
+                                <span>{contact._introducerName}介绍</span>
                               </span>
                             ) : (
                               // 直接共享：只显示共享者名字
