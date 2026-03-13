@@ -197,3 +197,101 @@ export async function deleteMemoItem(id: number, userId: number): Promise<void> 
   await db.execute(sql`UPDATE memo_items SET deletedAt = NOW() WHERE id = ${id} AND userId = ${userId}`);
   console.log(`[memo] deleteMemoItem id=${id}`);
 }
+
+// ===== 提示词库 =====
+let _promptTableEnsured = false;
+
+export async function ensurePromptTables() {
+  if (_promptTableEnsured) return;
+  const db = await getLedgerDb();
+  if (!db) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS memo_prompts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ledgerId INT NOT NULL,
+        userId INT NOT NULL,
+        category VARCHAR(50) NOT NULL DEFAULT 'image',
+        content TEXT NOT NULL,
+        sortOrder INT DEFAULT 0,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        deletedAt TIMESTAMP NULL DEFAULT NULL,
+        INDEX idx_prompt_ledger (ledgerId),
+        INDEX idx_prompt_ledger_cat (ledgerId, category)
+      )
+    `);
+    console.log('[memo] memo_prompts 表已就绪');
+    _promptTableEnsured = true;
+  } catch (e: any) {
+    console.warn('[memo] ensurePromptTables:', e?.message);
+    _promptTableEnsured = true;
+  }
+}
+
+export interface PromptItem {
+  id: number;
+  ledgerId: number;
+  userId: number;
+  category: string;
+  content: string;
+  sortOrder: number;
+  createdAt: string;
+}
+
+function parsePromptRows(result: any): any[] {
+  if (Array.isArray(result) && result.length >= 1) {
+    const first = result[0];
+    if (Array.isArray(first)) return first;
+    if (first && typeof first === 'object' && Array.isArray((first as any).rows)) return (first as any).rows;
+    return result;
+  }
+  return [];
+}
+
+export async function getPrompts(ledgerId: number, category?: string): Promise<PromptItem[]> {
+  await ensurePromptTables();
+  const db = await getLedgerDb();
+  if (!db) return [];
+  let result: any;
+  if (category && category !== 'all') {
+    result = await db.execute(sql`
+      SELECT * FROM memo_prompts
+      WHERE ledgerId = ${ledgerId} AND category = ${category} AND deletedAt IS NULL
+      ORDER BY sortOrder ASC, createdAt DESC
+    `);
+  } else {
+    result = await db.execute(sql`
+      SELECT * FROM memo_prompts
+      WHERE ledgerId = ${ledgerId} AND deletedAt IS NULL
+      ORDER BY category ASC, sortOrder ASC, createdAt DESC
+    `);
+  }
+  return parsePromptRows(result);
+}
+
+export async function createPrompts(data: {
+  ledgerId: number;
+  userId: number;
+  category: string;
+  contents: string[];
+}): Promise<void> {
+  await ensurePromptTables();
+  const db = await getLedgerDb();
+  if (!db) throw new Error('数据库不可用');
+  for (const content of data.contents) {
+    const trimmed = content.trim();
+    if (!trimmed) continue;
+    await db.execute(sql`
+      INSERT INTO memo_prompts (ledgerId, userId, category, content)
+      VALUES (${data.ledgerId}, ${data.userId}, ${data.category}, ${trimmed})
+    `);
+  }
+}
+
+export async function deletePrompt(id: number, userId: number): Promise<void> {
+  await ensurePromptTables();
+  const db = await getLedgerDb();
+  if (!db) throw new Error('数据库不可用');
+  await db.execute(sql`UPDATE memo_prompts SET deletedAt = NOW() WHERE id = ${id} AND userId = ${userId}`);
+}
