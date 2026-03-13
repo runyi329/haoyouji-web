@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Bell, QrCode, Camera } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, ChevronDown, ChevronUp, Bell, QrCode, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -65,6 +65,8 @@ export default function SharingSettings() {
   // 无限加载状态
   const [myVisibleCount, setMyVisibleCount] = useState(BATCH_SIZE);
   const [sharedVisibleCount, setSharedVisibleCount] = useState(BATCH_SIZE);
+  // 朋友介绍区域折叠状态
+  const [introducedExpanded, setIntroducedExpanded] = useState(false);
   const listEndRef = useRef<HTMLDivElement>(null);
   
   // 获取我的共享连接列表（我共享给别人的）
@@ -555,7 +557,71 @@ export default function SharingSettings() {
               </div>
             ) : (
               <>
-                {visibleMyConnections.map((conn: any) => {
+                {/* 朋友介绍区域：有介绍人的连接默认折叠 */}
+                {(() => {
+                  const introducedConns = visibleMyConnections.filter((c: any) => c.introducerId);
+                  const directConns = visibleMyConnections.filter((c: any) => !c.introducerId);
+                  return (
+                    <>
+                      {introducedConns.length > 0 && (
+                        <>
+                          {/* 折叠标题行 */}
+                          <button
+                            onClick={() => setIntroducedExpanded(v => !v)}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-[#FFF8F0] to-[#FFF3E0] border border-[#FFE0B2] hover:border-[#FFCC80] transition-all"
+                          >
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%)' }}>
+                              <Users className="h-5 w-5 text-white" />
+                            </div>
+                            <div className="flex-1 min-w-0 text-left">
+                              <p className="font-semibold text-sm text-gray-900">朋友介绍</p>
+                              <p className="text-xs text-gray-500 mt-0.5">共 {introducedConns.length} 人，点击展开查看</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="text-xs font-bold text-[#D32F2F] bg-[#FFEBEE] px-2 py-0.5 rounded-full">{introducedConns.length}人</span>
+                              {introducedExpanded
+                                ? <ChevronUp className="h-4 w-4 text-[#D32F2F]" />
+                                : <ChevronDown className="h-4 w-4 text-[#D32F2F]" />
+                              }
+                            </div>
+                          </button>
+                          {/* 展开后显示介绍连接列表 */}
+                          {introducedExpanded && introducedConns.map((conn: any) => (
+                            <div
+                              key={conn.id}
+                              className="flex items-center gap-3 p-3 rounded-xl bg-white border border-[#FFE0B2] ml-3 hover:shadow-sm transition-all"
+                            >
+                              <div
+                                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
+                                style={{ backgroundColor: getAvatarColor(conn.receiverName || conn.receiverUsername) }}
+                              >
+                                {conn.receiverAvatar ? (
+                                  <img src={conn.receiverAvatar} alt={conn.receiverName} className="w-full h-full object-cover"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.textContent = getInitial(conn.receiverName || conn.receiverUsername); }} />
+                                ) : getInitial(conn.receiverName || conn.receiverUsername)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-sm truncate text-gray-900">{conn.receiverName}</p>
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#F5F5F5] text-[#1976D2] text-[10px] font-medium flex-shrink-0">
+                                    <Users className="h-2.5 w-2.5" />{conn.sharedContactCount || 0}人
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-400 mt-0.5 truncate">
+                                  @{conn.receiverUsername}
+                                  {conn.introducerName && <span className="ml-1.5 text-[10px] px-1 py-0.5 rounded" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>由{conn.introducerName}介绍</span>}
+                                </p>
+                              </div>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
+                                onClick={() => handleDeleteConnection(conn.id)} title="删除连接">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                      {/* 直接共享的连接正常显示 */}
+                      {directConns.map((conn: any) => {
                   const authorized = isAuthorized(conn.id, conn.receiverId);
                   return (
                     <div
@@ -629,6 +695,9 @@ export default function SharingSettings() {
                     </div>
                   );
                 })}
+                    </>
+                  );
+                })()}
                 
                 {/* 无限加载触发器 */}
                 {hasMoreMy && (
