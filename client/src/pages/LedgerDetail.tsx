@@ -544,12 +544,12 @@ export default function LedgerDetail() {
                 {((afTotalAsset as any)?.directReferralCount > 0 || (afTotalAsset as any)?.indirectReferralCount > 0) ? (
                   <div className="space-y-0.5">
                     <div className="flex items-baseline gap-1">
-                      <span className="text-sm font-bold text-white">直推</span>
+                      <span className="text-sm font-bold text-white">直接伙伴</span>
                       <span className="text-lg font-bold text-white">{(afTotalAsset as any)?.directReferralCount ?? 0}</span>
                       <span className="text-xs text-white/60">人</span>
                     </div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-sm font-bold text-white">间推</span>
+                      <span className="text-sm font-bold text-white">延伸伙伴</span>
                       <span className="text-lg font-bold text-white">{(afTotalAsset as any)?.indirectReferralCount ?? 0}</span>
                       <span className="text-xs text-white/60">人</span>
                     </div>
