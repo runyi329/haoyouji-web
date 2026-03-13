@@ -16,7 +16,7 @@ const COIN_SYMBOLS: Record<string, string> = {
 // 最近一次扫描状态（供前端查询）
 const scanStatus: Record<string, {
   lastScanAt: string;
-  lastLowPrice: string;
+  lowestPrice: string;
   scanning: boolean;
 }> = {};
 
@@ -91,28 +91,32 @@ export async function runTierScan() {
 
   for (const coin of Object.keys(COIN_SYMBOLS)) {
     try {
-      scanStatus[coin] = { ...scanStatus[coin], scanning: true, lastScanAt: scanStatus[coin]?.lastScanAt || "" };
+      scanStatus[coin] = { ...scanStatus[coin], scanning: true, lastScanAt: scanStatus[coin]?.lastScanAt || "", lowestPrice: scanStatus[coin]?.lowestPrice || "" };
 
       // 1. 获取4小时最低价
       const priceData = await fetch4hLowPrice(coin);
       if (!priceData) {
         console.warn(`[AF扫描] ${coin} 价格获取失败，跳过`);
-        scanStatus[coin] = { scanning: false, lastScanAt: new Date().toISOString(), lastLowPrice: scanStatus[coin]?.lastLowPrice || "--" };
+        scanStatus[coin] = { scanning: false, lastScanAt: new Date().toISOString(), lowestPrice: scanStatus[coin]?.lowestPrice || "--" };
         continue;
       }
 
       const { low, scanFrom, scanTo } = priceData;
       const lowStr = low.toString();
 
-      // 2. 记录扫描日志（使用驼峰列名）
-      await conn.execute(
-        `INSERT INTO af_price_scan_logs (coin, symbol, scanFrom, scanTo, lowPrice, scannedAt)
-         VALUES (?, ?, ?, ?, ?, NOW())`,
-        [coin, COIN_SYMBOLS[coin], scanFrom.toISOString().slice(0, 19).replace("T", " "), scanTo.toISOString().slice(0, 19).replace("T", " "), lowStr]
-      );
+      // 2. 记录扫描日志（使用下划线列名）
+      try {
+        await conn.execute(
+          `INSERT INTO af_price_scan_logs (coin, low_price, scanned_at, created_at)
+           VALUES (?, ?, NOW(), NOW())`,
+          [coin, lowStr]
+        );
+      } catch (logErr) {
+        console.warn(`[AF扫描] 写入价格日志失败:`, logErr);
+      }
 
-      // 更新扫描状态
-      scanStatus[coin] = { scanning: false, lastScanAt: new Date().toISOString(), lastLowPrice: lowStr };
+      // 更新内存扫描状态
+      scanStatus[coin] = { scanning: false, lastScanAt: new Date().toISOString(), lowestPrice: lowStr };
 
       // 3. 查询该币种所有已成交买入订单（无损合约）
       const [orders] = await conn.execute(
@@ -122,7 +126,10 @@ export async function runTierScan() {
         [coin]
       ) as any[];
 
-      if (!Array.isArray(orders) || orders.length === 0) continue;
+      if (!Array.isArray(orders) || orders.length === 0) {
+        console.log(`[AF扫描] ${coin} 无已成交无损合约买入订单`);
+        continue;
+      }
 
       for (const order of orders) {
         const buyPrice = parseFloat(order.limit_price);
@@ -132,12 +139,15 @@ export async function runTierScan() {
         const dropPct = (buyPrice - low) / buyPrice; // 正数表示下跌
         const currentTier = Math.floor(dropPct / 0.1); // 0=未跌10%, 1=跌10-20%, ...
 
-        if (currentTier <= 0) continue; // 未达到第1档，不触发
+        if (currentTier <= 0) {
+          console.log(`[AF扫描] 订单#${order.id} ${coin} 未达到第1档 (买入:${buyPrice}, 当前最低:${low}, 跌幅:${(dropPct*100).toFixed(2)}%)`);
+          continue;
+        }
         const tierToTrigger = Math.min(currentTier, 9); // 最多9档
 
-        // 5. 查询该订单已触发的最高档位（使用驼峰列名）
+        // 5. 查询该订单已触发的最高档位（使用下划线列名）
         const [existing] = await conn.execute(
-          `SELECT MAX(tier) as maxTier FROM af_order_tier_triggers WHERE orderId = ?`,
+          `SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ?`,
           [order.id]
         ) as any[];
         const maxTriggered = parseInt(existing?.[0]?.maxTier ?? "0") || 0;
@@ -145,16 +155,20 @@ export async function runTierScan() {
         // 6. 只触发尚未记录的新档位（不可逆）
         for (let tier = maxTriggered + 1; tier <= tierToTrigger; tier++) {
           await conn.execute(
-            `INSERT INTO af_order_tier_triggers (orderId, ledgerId, coin, buyPrice, tier, triggerPrice, triggeredAt, createdAt)
-             VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-            [order.id, order.ledger_id, coin, order.limit_price, tier, lowStr]
+            `INSERT INTO af_order_tier_triggers (order_id, ledger_id, coin, tier, trigger_price, triggered_at, created_at)
+             VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
+            [order.id, order.ledger_id, coin, tier, lowStr]
           );
-          console.log(`[AF扫描] ✅ 订单#${order.id} ${coin} 触发第${tier}档 (买入价:${buyPrice}, 当前最低:${low})`);
+          console.log(`[AF扫描] ✅ 订单#${order.id} ${coin} 触发第${tier}档 (买入价:${buyPrice}, 当前最低:${low}, 跌幅:${(dropPct*100).toFixed(2)}%)`);
+        }
+
+        if (maxTriggered >= tierToTrigger) {
+          console.log(`[AF扫描] 订单#${order.id} ${coin} 已在第${maxTriggered}档，当前档位${tierToTrigger}，无需新增`);
         }
       }
     } catch (err) {
       console.error(`[AF扫描] ${coin} 处理出错:`, err);
-      scanStatus[coin] = { scanning: false, lastScanAt: new Date().toISOString(), lastLowPrice: scanStatus[coin]?.lastLowPrice || "--" };
+      scanStatus[coin] = { scanning: false, lastScanAt: new Date().toISOString(), lowestPrice: scanStatus[coin]?.lowestPrice || "--" };
     }
   }
 
