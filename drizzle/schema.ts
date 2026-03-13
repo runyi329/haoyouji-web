@@ -235,6 +235,11 @@ export const contactSharingPermissions = mysqlTable("contact_sharing_permissions
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
+export type ContactSharingConnection = typeof contactSharingConnections.$inferSelect;
+export type InsertContactSharingConnection = typeof contactSharingConnections.$inferInsert;
+export type ContactSharingPermission = typeof contactSharingPermissions.$inferSelect;
+export type InsertContactSharingPermission = typeof contactSharingPermissions.$inferInsert;
+
 export const contactTagRelations = mysqlTable("contact_tag_relations", {
 	id: int().autoincrement().notNull(),
 	contactId: int().notNull(),
