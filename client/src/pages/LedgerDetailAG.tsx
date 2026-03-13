@@ -2,9 +2,9 @@
  * LedgerDetailAG.tsx - AG型定制账本：共享图片助记词（只读浏览模式）
  *
  * 布局参照 OpenNana 卡片风格：
- *   - 图片有圆角，左右有边距（不贴边），按原始比例完整显示
+ *   - 图片有圆角，左右有边距，按原始比例完整显示
  *   - 图片下方一行：标题文字 + 右侧复制图标
- *   - 点击图片可全屏查看大图
+ *   - 点击图片弹出白色底部抽屉（仿OpenNana详情页）
  *
  * 权限：
  *   - 所有成员只读浏览，可复制提示词
@@ -22,7 +22,6 @@ import {
   ImageIcon,
   Users,
   X,
-  ZoomIn,
 } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -44,11 +43,39 @@ interface PromptImage {
   createdAt: string;
 }
 
+/** 解析 prompt_text 中的中英文内容 */
+function parsePrompt(text: string | null): { zh: string; en: string } {
+  if (!text) return { zh: "", en: "" };
+  const zhMatch = text.match(/【中文提示词】\n([\s\S]*?)(?=\n\n【English Prompt】|$)/);
+  const enMatch = text.match(/【English Prompt】\n([\s\S]*?)$/);
+  return {
+    zh: zhMatch ? zhMatch[1].trim() : "",
+    en: enMatch ? enMatch[1].trim() : text.trim(),
+  };
+}
+
+/** 提取标签（# 后面的部分，用 、分隔） */
+function parseTags(title: string | null): string[] {
+  if (!title) return [];
+  const hashIdx = title.indexOf("  #");
+  if (hashIdx < 0) return [];
+  return title.slice(hashIdx + 3).split("、").map(t => t.trim()).filter(Boolean);
+}
+
+/** 提取主标题（去掉 # 标签部分） */
+function getShortTitle(title: string | null): string {
+  if (!title) return "";
+  const hashIdx = title.indexOf("  #");
+  return hashIdx > 0 ? title.slice(0, hashIdx) : title;
+}
+
 export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user }: Props) {
   const [, setLocation] = useLocation();
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   const [selectedImage, setSelectedImage] = useState<PromptImage | null>(null);
-  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [copiedZh, setCopiedZh] = useState(false);
+  const [copiedEn, setCopiedEn] = useState(false);
+  const [copiedCard, setCopiedCard] = useState<number | null>(null);
 
   // 获取图片列表
   const { data: images = [], isLoading } = trpc.ledger.getAgPromptImages.useQuery(
@@ -56,24 +83,16 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
     { refetchOnMount: true }
   );
 
-  // 复制提示词
-  const copyPrompt = (id: number, text: string, e?: React.MouseEvent) => {
-    e?.stopPropagation();
+  const copyText = (text: string, type: "zh" | "en" | "card", id?: number) => {
     navigator.clipboard.writeText(text).then(() => {
-      setCopiedId(id);
-      toast.success("提示词已复制");
-      setTimeout(() => setCopiedId(null), 2000);
+      toast.success("已复制");
+      if (type === "zh") { setCopiedZh(true); setTimeout(() => setCopiedZh(false), 2000); }
+      if (type === "en") { setCopiedEn(true); setTimeout(() => setCopiedEn(false), 2000); }
+      if (type === "card" && id) { setCopiedCard(id); setTimeout(() => setCopiedCard(null), 2000); }
     });
   };
 
   const memberCount = membersData?.length || 0;
-
-  // 提取标题（去掉 # 标签部分，只显示主标题）
-  const getShortTitle = (title: string | null) => {
-    if (!title) return "";
-    const hashIdx = title.indexOf("  #");
-    return hashIdx > 0 ? title.slice(0, hashIdx) : title;
-  };
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#F5F5F5" }}>
@@ -145,33 +164,25 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
           </div>
         ) : (
           <div className="pt-3 space-y-3">
+            {/* 总数 */}
+            <div className="px-4 text-xs text-gray-400">共 {(images as PromptImage[]).length} 个案例</div>
+
             {(images as PromptImage[]).map((img) => {
               const shortTitle = getShortTitle(img.title);
-
               return (
                 <div
                   key={img.id}
-                  className="mx-3 bg-white overflow-hidden"
+                  className="mx-3 bg-white overflow-hidden cursor-pointer"
                   style={{ borderRadius: "12px", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
+                  onClick={() => setSelectedImage(img)}
                 >
-                  {/* 图片区域：按原始比例完整显示，不裁剪 */}
-                  <div
-                    className="relative w-full cursor-pointer"
-                    onClick={() => setSelectedImage(img)}
-                  >
-                    <img
-                      src={img.imageUrl}
-                      alt={shortTitle || "提示词案例"}
-                      className="w-full h-auto block"
-                      style={{ display: "block" }}
-                      loading="lazy"
-                    />
-                    {/* 右下角放大图标 */}
-                    <div className="absolute bottom-2 right-2 w-7 h-7 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: "rgba(0,0,0,0.35)" }}>
-                      <ZoomIn className="w-3.5 h-3.5 text-white" />
-                    </div>
-                  </div>
+                  {/* 图片：按原始比例完整显示 */}
+                  <img
+                    src={img.imageUrl}
+                    alt={shortTitle || "提示词案例"}
+                    className="w-full h-auto block"
+                    loading="lazy"
+                  />
 
                   {/* 底部：标题 + 复制图标（一行） */}
                   <div className="flex items-center justify-between px-3 py-2.5 gap-2">
@@ -180,15 +191,15 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
                     </p>
                     {img.promptText && (
                       <button
-                        onClick={(e) => copyPrompt(img.id, img.promptText!, e)}
+                        onClick={(e) => { e.stopPropagation(); copyText(img.promptText!, "card", img.id); }}
                         className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full"
                         style={{
-                          backgroundColor: copiedId === img.id ? "#E8F5E9" : "#FFF8F0",
-                          color: copiedId === img.id ? "#4CAF50" : "#CBA471",
+                          backgroundColor: copiedCard === img.id ? "#E8F5E9" : "#FFF8F0",
+                          color: copiedCard === img.id ? "#4CAF50" : "#CBA471",
                         }}
                         title="复制提示词"
                       >
-                        {copiedId === img.id ? (
+                        {copiedCard === img.id ? (
                           <Check className="w-3.5 h-3.5" />
                         ) : (
                           <Copy className="w-3.5 h-3.5" />
@@ -203,54 +214,140 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
         )}
       </div>
 
-      {/* ===== 全屏图片查看器 ===== */}
-      {selectedImage && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col">
-          {/* 顶部栏 */}
-          <div className="flex items-center justify-between px-4 py-3 bg-black/80">
-            <button onClick={() => setSelectedImage(null)} className="text-white">
-              <X className="w-6 h-6" />
-            </button>
-            {selectedImage.title && (
-              <span className="text-white text-sm font-medium flex-1 text-center mx-4 truncate">
-                {getShortTitle(selectedImage.title)}
-              </span>
-            )}
-            {selectedImage.promptText && (
-              <button
-                onClick={(e) => copyPrompt(selectedImage.id, selectedImage.promptText!, e)}
-                className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg flex-shrink-0"
-                style={{ backgroundColor: "rgba(203,164,113,0.25)", color: "#CBA471" }}
-              >
-                {copiedId === selectedImage.id ? (
-                  <><Check className="w-3 h-3" />已复制</>
-                ) : (
-                  <><Copy className="w-3 h-3" />复制</>
+      {/* ===== 底部抽屉：仿OpenNana详情弹出框 ===== */}
+      {selectedImage && (() => {
+        const { zh, en } = parsePrompt(selectedImage.promptText);
+        const tags = parseTags(selectedImage.title);
+        const shortTitle = getShortTitle(selectedImage.title);
+
+        return (
+          <div
+            className="fixed inset-0 z-50 flex flex-col justify-end"
+            style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+            onClick={() => setSelectedImage(null)}
+          >
+            {/* 白色抽屉 */}
+            <div
+              className="w-full bg-white overflow-y-auto"
+              style={{ borderRadius: "20px 20px 0 0", maxHeight: "90vh" }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* 顶部把手 */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full" style={{ backgroundColor: "#E0E0E0" }} />
+              </div>
+
+              {/* 关闭按钮 */}
+              <div className="flex justify-end px-4 pb-1">
+                <button
+                  onClick={() => setSelectedImage(null)}
+                  className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: "#F0F0F0" }}
+                >
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="px-4 pb-8">
+                {/* 标题 */}
+                <h2 className="text-lg font-bold text-gray-900 leading-snug mb-2">
+                  {shortTitle || "提示词案例"}
+                </h2>
+
+                {/* 来源 + 模型 */}
+                <p className="text-xs text-gray-400 mb-3">
+                  来源：OpenNana &nbsp;·&nbsp; 模型：Nano banana pro
+                </p>
+
+                {/* 标签胶囊 */}
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {tags.map((tag, i) => (
+                      <span
+                        key={i}
+                        className="text-xs px-2.5 py-1 rounded-full"
+                        style={{ backgroundColor: "#F5F5F5", color: "#555", border: "1px solid #E8E8E8" }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 )}
-              </button>
-            )}
-          </div>
 
-          {/* 大图 */}
-          <div className="flex-1 flex items-center justify-center overflow-hidden">
-            <img
-              src={selectedImage.imageUrl}
-              alt={getShortTitle(selectedImage.title) || "提示词案例"}
-              className="max-w-full max-h-full object-contain"
-            />
-          </div>
+                {/* 示例图片 */}
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-1 h-4 rounded-full" style={{ backgroundColor: "#1976D2" }} />
+                    <span className="text-sm font-semibold text-gray-800">示例图片</span>
+                  </div>
+                  <img
+                    src={selectedImage.imageUrl}
+                    alt={shortTitle || "示例图片"}
+                    className="w-full h-auto block"
+                    style={{ borderRadius: "10px" }}
+                  />
+                </div>
 
-          {/* 底部提示词 */}
-          {selectedImage.promptText && (
-            <div className="px-4 py-4 max-h-52 overflow-y-auto"
-              style={{ backgroundColor: "rgba(0,0,0,0.85)" }}>
-              <p className="text-gray-300 text-xs leading-relaxed whitespace-pre-wrap">
-                {selectedImage.promptText}
-              </p>
+                {/* 提示词区域 */}
+                {(en || zh) && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-1 h-4 rounded-full" style={{ backgroundColor: "#1976D2" }} />
+                      <span className="text-sm font-semibold text-gray-800">提示词</span>
+                    </div>
+
+                    {/* English 卡片 */}
+                    {en && (
+                      <div className="mb-3 rounded-xl overflow-hidden" style={{ border: "1px solid #E8E8E8" }}>
+                        <div className="flex items-center justify-between px-3 py-2"
+                          style={{ backgroundColor: "#FAFAFA", borderBottom: "1px solid #F0F0F0" }}>
+                          <span className="text-xs font-semibold text-gray-500 tracking-wide">ENGLISH</span>
+                          <button
+                            onClick={() => copyText(en, "en")}
+                            className="text-xs font-medium flex items-center gap-1"
+                            style={{ color: copiedEn ? "#4CAF50" : "#1976D2" }}
+                          >
+                            {copiedEn ? <><Check className="w-3 h-3" />已复制</> : <>复制</>}
+                          </button>
+                        </div>
+                        <div className="px-3 py-3">
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap"
+                            style={{ fontFamily: "monospace", fontSize: "13px" }}>
+                            {en}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 中文卡片 */}
+                    {zh && (
+                      <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #E8E8E8" }}>
+                        <div className="flex items-center justify-between px-3 py-2"
+                          style={{ backgroundColor: "#FAFAFA", borderBottom: "1px solid #F0F0F0" }}>
+                          <span className="text-xs font-semibold text-gray-500 tracking-wide">中文</span>
+                          <button
+                            onClick={() => copyText(zh, "zh")}
+                            className="text-xs font-medium flex items-center gap-1"
+                            style={{ color: copiedZh ? "#4CAF50" : "#1976D2" }}
+                          >
+                            {copiedZh ? <><Check className="w-3 h-3" />已复制</> : <>复制</>}
+                          </button>
+                        </div>
+                        <div className="px-3 py-3">
+                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap"
+                            style={{ fontSize: "14px" }}>
+                            {zh}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* 成员列表弹层 */}
       {showMembersDialog && (
