@@ -64,12 +64,16 @@ export default function AfPayoutManage() {
   // 已配置受益人的userId集合
   const configuredBeneficiaryIds = new Set(ratios.map(r => r.beneficiaryUserId));
 
-  // 可选受益人（排除已配置的，但允许下单人自己成为受益人）
-  const availableBeneficiaries = members.filter(
-    m => !configuredBeneficiaryIds.has(m.userId)
-  );
-
   const selectedMember = members.find(m => m.userId === selectedSourceUserId);
+
+  // 获取当前下单人的上级链（含本人）
+  const selectedMemberAncestorChain: number[] = (selectedMember as any)?.ancestorChain || [];
+  
+  // 可选受益人：只能从下单人的上级链中选择（含本人），且排除已配置的
+  const availableBeneficiaries = members.filter(
+    m => !configuredBeneficiaryIds.has(m.userId) && 
+    (selectedMemberAncestorChain.length === 0 || selectedMemberAncestorChain.includes(m.userId))
+  );
 
   const handleSaveAdd = () => {
     if (!addBeneficiaryId || !addRatio || !selectedSourceUserId) return;
@@ -146,7 +150,17 @@ export default function AfPayoutManage() {
                       {(m.name || m.username || '?')[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{m.name || m.username}</div>
+                      <div className="font-medium truncate flex items-center gap-1.5">
+                        {m.name || m.username}
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full font-normal ${
+                          (m as any).generation === 1 ? 'bg-yellow-100 text-yellow-700' :
+                          (m as any).generation === 2 ? 'bg-blue-100 text-blue-700' :
+                          (m as any).generation === 3 ? 'bg-green-100 text-green-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          第{(m as any).generation || '?'}代
+                        </span>
+                      </div>
                       <div className="text-xs text-gray-400">@{m.username}</div>
                     </div>
                     {selectedSourceUserId === m.userId && (
@@ -211,7 +225,7 @@ export default function AfPayoutManage() {
                     <option value="">选择受益人...</option>
                     {availableBeneficiaries.map(m => (
                       <option key={m.userId} value={m.userId}>
-                        {m.name || m.username} (@{m.username}){m.userId === selectedSourceUserId ? ' ★本人' : ''}
+                        第{(m as any).generation || '?'}代 | {m.name || m.username} (@{m.username}){m.userId === selectedSourceUserId ? ' ★本人' : ''}
                       </option>
                     ))}
                   </select>
