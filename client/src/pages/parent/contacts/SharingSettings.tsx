@@ -1025,7 +1025,7 @@ export default function SharingSettings() {
             <div className="px-5 py-5 text-center">
               {pendingAuthorize?.isCurrentlyAuthorized ? (
                 <p className="text-gray-700 dark:text-gray-200 text-sm leading-relaxed">
-                  取消对 <span className="font-semibold text-[#D32F2F]">{pendingAuthorize?.receiverName}</span> 的授权后，对方将无法再代你介绍人脉
+                  取消授权给 <span className="font-semibold text-[#D32F2F]">{pendingAuthorize?.receiverName}</span> 后，对方将无法把你介绍给他的人脉
                 </p>
               ) : (
                 <p className="text-gray-700 dark:text-gray-200 text-sm leading-relaxed">
