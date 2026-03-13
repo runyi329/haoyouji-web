@@ -6318,28 +6318,31 @@ export const appRouter = router({
         }));
       }),
 
-    // 获取我的二维码内容（包含用户名）
+    // 获取我的二维码内容（支持三种模式）
+    // mode: 'receive' = 对方共享给我, 'give' = 我共享给对方, 'both' = 双向共享
     getMyQrCode: protectedProcedure
-      .query(async ({ ctx }) => {
+      .input(z.object({
+        mode: z.enum(['receive', 'give', 'both']).default('receive'),
+      }))
+      .query(async ({ ctx, input }) => {
         const user = await db.getUserById(ctx.user.id);
         if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: '用户不存在' });
-        // 二维码内容：编码为 JSON，包含用户名和类型标识
-        const qrContent = JSON.stringify({ type: 'sharing_add', username: user.username });
+        const qrContent = JSON.stringify({ type: 'sharing_add', username: user.username, mode: input.mode });
         return {
           qrContent,
           username: user.username,
           name: user.name || user.username,
+          mode: input.mode,
         };
       }),
 
-    // 通过扫码添加共享连接（扫对方二维码）
+    // 通过扫码添加共享连接（支持三种模式）
     addByQrCode: protectedProcedure
       .input(z.object({
         qrContent: z.string().min(1, '二维码内容不能为空'),
       }))
       .mutation(async ({ ctx, input }) => {
-        // 解析二维码内容
-        let parsed: { type: string; username: string };
+        let parsed: { type: string; username: string; mode?: string };
         try {
           parsed = JSON.parse(input.qrContent);
         } catch {
@@ -6348,46 +6351,61 @@ export const appRouter = router({
         if (parsed.type !== 'sharing_add' || !parsed.username) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的二维码类型' });
         }
-        // 查找目标用户
-        const receiver = await db.getUserByUsername(parsed.username);
-        if (!receiver) {
+        const mode = parsed.mode || 'receive'; // 默认对方共享给我
+        // 查找二维码所属用户（二维码持有者）
+        const qrOwner = await db.getUserByUsername(parsed.username);
+        if (!qrOwner) {
           throw new TRPCError({ code: 'NOT_FOUND', message: '找不到该用户' });
         }
-        // 不能添加自己
-        if (receiver.id === ctx.user.id) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: '不能添加自己' });
+        if (qrOwner.id === ctx.user.id) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '不能扫自己的二维码' });
         }
-        // 检查是否已存在连接
-        const existingConnection = await db.getSharingConnection(ctx.user.id, receiver.id);
-        if (existingConnection) {
-          throw new TRPCError({ code: 'CONFLICT', message: '已经添加过该用户' });
-        }
-        // 创建连接
-        const connectionId = await db.createSharingConnection({
-          sharerId: ctx.user.id,
-          receiverId: receiver.id,
-          status: 'active',
-          note: '扫码添加',
-        });
-        // 初始化默认权限
-        const defaultFields = ['name', 'title', 'gender', 'occupation', 'address', 'region', 'wechat', 'phone', 'tags'];
-        for (const fieldName of defaultFields) {
-          await db.createSharingPermission({ connectionId, fieldName, isShared: true });
-        }
-        // 奖励积分
-        await addPointsForAction(ctx.user.id, 'share_contact', connectionId);
-        // 发送通知
-        const currentUser = await db.getUserById(ctx.user.id);
+        const scanner = ctx.user; // 扫码者
         const dbConn = await getDb();
-        if (dbConn) {
-          await dbConn.insert(sharingNotifications).values({
-            receiverId: receiver.id,
-            actorId: ctx.user.id,
-            actorName: currentUser?.name || currentUser?.username || `用户${ctx.user.id}`,
-            type: 'added',
+        const currentUser = await db.getUserById(scanner.id);
+        const defaultFields = ['name', 'title', 'gender', 'occupation', 'address', 'region', 'wechat', 'phone', 'tags'];
+
+        // 辅助函数：创建单向连接
+        const createOneWayConnection = async (sharerId: number, receiverId: number, noteText: string) => {
+          const existing = await db.getSharingConnection(sharerId, receiverId);
+          if (existing) return null; // 已存在则跳过
+          const connId = await db.createSharingConnection({
+            sharerId,
+            receiverId,
+            status: 'active',
+            note: noteText,
           });
+          for (const fieldName of defaultFields) {
+            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: true });
+          }
+          await addPointsForAction(sharerId, 'share_contact', connId);
+          if (dbConn) {
+            await dbConn.insert(sharingNotifications).values({
+              receiverId,
+              actorId: sharerId,
+              actorName: (await db.getUserById(sharerId))?.name || `用户${sharerId}`,
+              type: 'added',
+            });
+          }
+          return connId;
+        };
+
+        let resultMsg = '';
+        if (mode === 'receive') {
+          // 对方共享给我：扫码者作为 receiver，qrOwner 作为 sharer
+          await createOneWayConnection(qrOwner.id, scanner.id, '扫码共享（对方共享给我）');
+          resultMsg = `${qrOwner.name || qrOwner.username} 的联系人已共享给你`;
+        } else if (mode === 'give') {
+          // 我共享给对方：扫码者作为 sharer，qrOwner 作为 receiver
+          await createOneWayConnection(scanner.id, qrOwner.id, '扫码共享（我共享给对方）');
+          resultMsg = `你的联系人已共享给 ${qrOwner.name || qrOwner.username}`;
+        } else if (mode === 'both') {
+          // 双向共享：同时建立两个方向的连接
+          await createOneWayConnection(qrOwner.id, scanner.id, '扫码双向共享');
+          await createOneWayConnection(scanner.id, qrOwner.id, '扫码双向共享');
+          resultMsg = `与 ${qrOwner.name || qrOwner.username} 已建立双向共享`;
         }
-        return { success: true, receiverName: receiver.name || receiver.username };
+        return { success: true, message: resultMsg };
       }),
   }),
 
