@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, ChevronDown, ChevronUp, Bell, QrCode, Camera } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, ChevronDown, ChevronUp, Bell, QrCode, Camera, Handshake } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
