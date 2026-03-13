@@ -815,19 +815,38 @@ export default function CryptoPrediction() {
                     </button>
                   </div>
                 </div>
-                {/* 可买数量 */}
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs" style={{ color: '#9CA3AF' }}>可买 <span className="ml-1 font-semibold" style={{ color: '#1A56DB' }}>(5.25倍)</span></span>
-                  <span className="text-xs" style={{ color: '#1A2340' }}>
-                    {(() => {
-                      const amt = parseFloat(orderAmount);
-                      const price = parseFloat(orderPrice) || parseFloat(ticker?.lastPrice || "0");
-                      if (!isNaN(amt) && amt > 0 && price > 0) {
-                        return `${((amt / price) * 5.25).toFixed(8)} ${coin.name}`;
-                      }
-                      return `-- ${coin.name}`;
-                    })()}
-                  </span>
+                {/* 可买数量 - 实时计算公式展示 */}
+                <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#EEF2FF', border: '1px solid #D0DBFF' }}>
+                  {(() => {
+                    const amt = parseFloat(orderAmount);
+                    const price = parseFloat(orderPrice);
+                    const hasAmt = !isNaN(amt) && amt > 0;
+                    const hasPrice = !isNaN(price) && price > 0;
+                    const qty = hasAmt && hasPrice ? ((amt / price) * 5.25) : null;
+                    return (
+                      <>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>可买数量（5.25倍杠杆）</span>
+                          <span className="text-sm font-bold" style={{ color: qty !== null ? '#1A2340' : '#9CA3AF' }}>
+                            {qty !== null ? `${qty.toFixed(6)} ${coin.name}` : `-- ${coin.name}`}
+                          </span>
+                        </div>
+                        <div className="text-xs" style={{ color: '#6B7A9A' }}>
+                          {hasAmt && hasPrice ? (
+                            <span>
+                              {amt.toLocaleString('en-US', { maximumFractionDigits: 2 })} ÷ {price.toLocaleString()} × 5.25 = <span className="font-semibold" style={{ color: '#1A56DB' }}>{qty!.toFixed(6)} {coin.name}</span>
+                            </span>
+                          ) : hasAmt && !hasPrice ? (
+                            <span style={{ color: '#EF4444' }}>请先选择委托价格</span>
+                          ) : !hasAmt && hasPrice ? (
+                            <span>请滑动选择金额</span>
+                          ) : (
+                            <span>选择价格并滑动金额后自动计算</span>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </>
             )}
