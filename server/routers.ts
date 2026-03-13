@@ -9156,88 +9156,70 @@ export const appRouter = router({
             }
           }, 500);
         }
-        // ========== 赠送订单逻辑 ==========
-        // 当买入订单从 pending 变为 completed，且不是赠送订单本身，自动为推荐人生成 1.5 倍赠送订单
+        // ========== 拨比赠送订单逻辑（新版：无限代，手动设置拨比）==========
+        // 当买入订单从 pending 变为 completed，且不是赠送订单本身
+        // 按照 af_payout_ratios 表中该下单人的所有上级拨比配置，生成对应的赠予订单
         if (newStatus === 'completed' && oldStatus !== 'completed' && order.side === 'buy' && !order.is_gift) {
           setTimeout(async () => {
             try {
               const giftDb = await getLedgerDb();
+              // 确保 af_payout_ratios 表存在
+              await giftDb.execute(sql`
+                CREATE TABLE IF NOT EXISTS af_payout_ratios (
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  ledger_id INT NOT NULL,
+                  beneficiary_user_id INT NOT NULL COMMENT '受益人（上级）的用户ID',
+                  source_user_id INT NOT NULL COMMENT '下单人（下级）的用户ID',
+                  ratio DECIMAL(5,2) NOT NULL COMMENT '拨比百分比，如20.00表示20%',
+                  created_at DATETIME DEFAULT NOW(),
+                  updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+                  UNIQUE KEY uq_payout (ledger_id, beneficiary_user_id, source_user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+              `);
+              
               // 重新读取订单数据（管理员可能已修改价格/金额/数量，必须用更新后的值）
               const updatedOrderRows = await giftDb.execute(
                 sql`SELECT id, user_id, coin, side, limit_price, amount, quantity FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
               ) as any;
               const updatedOrder = (updatedOrderRows[0]?.[0] ?? updatedOrderRows[0]);
-              if (!updatedOrder) { console.error('[AF赠送] 重新读取订单失败'); return; }
+              if (!updatedOrder) { console.error('[AF拨比赠送] 重新读取订单失败'); return; }
               
-              // 查询下单人的推荐人
-              const userRows = await giftDb.execute(
-                sql`SELECT id, invited_by_user_id, username FROM users WHERE id = ${userId} LIMIT 1`
-              ) as any;
-              const orderUser = (userRows[0]?.[0] ?? userRows[0]);
-              const referrerId = orderUser?.invited_by_user_id;
-              
-              // 计算赠送订单的金额和数量
-              // amount 字段就是用户实际花费（如 5 元）
-              // 赠送市值 = 实际花费 × 1.5，币数 = 赠送市值 / 实际成交价格
-              const actualSpend = parseFloat(updatedOrder.amount || '0');  // 用户实际花费
+              const actualSpend = parseFloat(updatedOrder.amount || '0');
               const actualPrice = parseFloat(updatedOrder.limit_price || '0');
-              const giftAmount = (actualSpend * 1.5).toFixed(8);           // 赠送市值 = 实际花费 × 1.5
-              const giftQuantity = actualPrice > 0 ? (actualSpend * 1.5 / actualPrice).toFixed(8) : '0';
+              // 原始赠予基数 = 实际投入 × 10 × 0.3
+              const baseGiftAmount = actualSpend * 10 * 0.3;
               
-              // 生成赠送订单（userId 设为推荐人ID，如果没有推荐人则设为 0，后续绑定时更新）
-              const giftUserId = referrerId || 0;
-              await giftDb.execute(
-                sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
-                    VALUES (${input.ledgerId}, ${giftUserId}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, '1.5', ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
-              );
-              console.log(`[AF赠送] 订单#${input.orderId} 成交（成交价:${actualPrice}, 实际花费:${actualSpend.toFixed(2)}, 赠送市值:${giftAmount}），已为推荐人(${giftUserId})生成1.5倍赠送订单`);
+              // 查询该下单人（userId）在该账本的所有拨比配置
+              const ratioRows = await giftDb.execute(
+                sql`SELECT beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id = ${input.ledgerId} AND source_user_id = ${userId}`
+              ) as any;
+              const ratios: Array<{ beneficiary_user_id: number; ratio: string }> = 
+                ((ratioRows[0] || ratioRows) as any[]).filter((r: any) => r && r.beneficiary_user_id);
               
-              // ========== YJH 专属 1.0 倍赠予逻辑 ==========
-              // 递归查找下单人的推荐链，如果 YJH 在链上，为 YJH 额外生成 1.0 倍赠予订单
-              const YJH_USER_ID = 4957151;
-              // 下单人本身就是 YJH 则不生成（自己给自己没意义）
-              if (userId !== YJH_USER_ID) {
-                try {
-                  let currentUserId = userId;
-                  let foundYjh = false;
-                  const visited = new Set<number>();
-                  
-                  // 沿推荐链向上查找 YJH
-                  while (currentUserId && !foundYjh) {
-                    if (visited.has(currentUserId)) break; // 防止循环
-                    visited.add(currentUserId);
-                    
-                    const parentRows = await giftDb.execute(
-                      sql`SELECT id, invited_by_user_id FROM users WHERE id = ${currentUserId} LIMIT 1`
-                    ) as any;
-                    const parentUser = (parentRows[0]?.[0] ?? parentRows[0]);
-                    const parentId = parentUser?.invited_by_user_id;
-                    
-                    if (!parentId) break;
-                    if (parentId === YJH_USER_ID) {
-                      foundYjh = true;
-                    } else {
-                      currentUserId = parentId;
-                    }
-                  }
-                  
-                  if (foundYjh) {
-                    // 为 YJH 生成 1.0 倍赠予订单
-                    const yjhGiftAmount = (actualSpend * 1.0).toFixed(8);
-                    const yjhGiftQuantity = actualPrice > 0 ? (actualSpend * 1.0 / actualPrice).toFixed(8) : '0';
-                    
-                    await giftDb.execute(
-                      sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
-                          VALUES (${input.ledgerId}, ${YJH_USER_ID}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${yjhGiftAmount}, ${yjhGiftQuantity}, 'completed', 1, '1.0', ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
-                    );
-                    console.log(`[AF赠送-YJH专属] 订单#${input.orderId} 下单人(${userId})在YJH推荐链上，已为YJH(${YJH_USER_ID})生成1.0倍赠送订单(${yjhGiftAmount})`);
-                  }
-                } catch (yjhErr) {
-                  console.error('[AF赠送-YJH专属] 生成1.0倍赠送订单失败:', yjhErr);
-                }
+              if (ratios.length === 0) {
+                console.log(`[AF拨比赠送] 订单#${input.orderId} 下单人(${userId})未配置拨比，跳过赠予`);
+                return;
+              }
+              
+              // 验证拨比总和是否为100%（允许±0.1的误差）
+              const totalRatio = ratios.reduce((sum: number, r: any) => sum + parseFloat(r.ratio), 0);
+              if (Math.abs(totalRatio - 100) > 0.1) {
+                console.warn(`[AF拨比赠送] 订单#${input.orderId} 下单人(${userId})拨比总和=${totalRatio}%，不等于100%，仍按比例生成`);
+              }
+              
+              // 为每个受益人生成赠予订单
+              for (const r of ratios) {
+                const ratio = parseFloat(r.ratio) / 100;
+                const giftAmount = (baseGiftAmount * ratio).toFixed(8);
+                const giftQuantity = actualPrice > 0 ? (parseFloat(giftAmount) / actualPrice).toFixed(8) : '0';
+                await giftDb.execute(
+                  sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
+                      VALUES (${input.ledgerId}, ${r.beneficiary_user_id}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, ${String(ratio.toFixed(4))}, ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
+                );
+                console.log(`[AF拨比赠送] 订单#${input.orderId} 下单人(${userId}) → 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 赠予金额:${giftAmount}`);
               }
             } catch (e) {
-              console.error('[AF赠送] 生成赠送订单失败:', e);
+              console.error('[AF拨比赠送] 生成赠送订单失败:', e);
             }
           }, 200);
         }
@@ -9359,6 +9341,107 @@ export const appRouter = router({
         const d = json.data[0];
         const r2 = { symbol: input.symbol, lastPrice: d.last, priceChangePercent: d.open24h && d.last ? (((parseFloat(d.last) - parseFloat(d.open24h)) / parseFloat(d.open24h)) * 100).toFixed(4) : '0', highPrice: d.high24h, lowPrice: d.low24h, volume: d.vol24h, weightedAvgPrice: d.last, openPrice: d.open24h };
         setCache(cacheKey, r2); return r2;
+      }),
+    // ========== AF 拨比管理 API ==========
+    // 获取某个下单人的所有拨比配置
+    afGetPayoutRatios: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), sourceUserId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证管理员权限
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 确保表存在
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS af_payout_ratios (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            beneficiary_user_id INT NOT NULL COMMENT '受益人（上级）的用户ID',
+            source_user_id INT NOT NULL COMMENT '下单人（下级）的用户ID',
+            ratio DECIMAL(5,2) NOT NULL COMMENT '拨比百分比，如20.00表示20%',
+            created_at DATETIME DEFAULT NOW(),
+            updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+            UNIQUE KEY uq_payout (ledger_id, beneficiary_user_id, source_user_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        const rows = await db.execute(
+          sql`SELECT r.id, r.beneficiary_user_id, r.ratio, u.username, u.name
+              FROM af_payout_ratios r
+              LEFT JOIN users u ON u.id = r.beneficiary_user_id
+              WHERE r.ledger_id = ${input.ledgerId} AND r.source_user_id = ${input.sourceUserId}
+              ORDER BY r.ratio DESC`
+        ) as any;
+        return ((rows[0] || rows) as any[]).filter((r: any) => r && r.id).map((r: any) => ({
+          id: r.id,
+          beneficiaryUserId: r.beneficiary_user_id,
+          ratio: parseFloat(r.ratio),
+          username: r.username || '',
+          name: r.name || '',
+        }));
+      }),
+    // 设置/更新拨比
+    afSetPayoutRatio: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        sourceUserId: z.number(),
+        beneficiaryUserId: z.number(),
+        ratio: z.number().min(0).max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        await db.execute(sql`
+          INSERT INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+          VALUES (${input.ledgerId}, ${input.sourceUserId}, ${input.beneficiaryUserId}, ${input.ratio})
+          ON DUPLICATE KEY UPDATE ratio = ${input.ratio}, updated_at = NOW()
+        `);
+        return { success: true };
+      }),
+    // 删除拨比
+    afDeletePayoutRatio: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        await db.execute(
+          sql`DELETE FROM af_payout_ratios WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+        );
+        return { success: true };
+      }),
+    // 获取账本所有成员列表（拨比管理页用）
+    afGetMembersForPayout: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const rows = await db.execute(
+          sql`SELECT lm.userId, u.username, u.name, u.avatar
+              FROM ledger_members lm
+              LEFT JOIN users u ON u.id = lm.userId
+              WHERE lm.ledgerId = ${input.ledgerId} AND lm.userId > 0
+              ORDER BY lm.createdAt ASC`
+        ) as any;
+        return ((rows[0] || rows) as any[]).filter((r: any) => r && r.userId).map((r: any) => ({
+          userId: r.userId,
+          username: r.username || '',
+          name: r.name || '',
+          avatar: r.avatar || '',
+        }));
       }),
     getBinanceKlines: publicProcedure
       .input(z.object({ symbol: z.string(), interval: z.string(), limit: z.number().default(60) }))
