@@ -64,6 +64,7 @@ export default function SharingSettings() {
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [showMyQrDialog, setShowMyQrDialog] = useState(false);
   const [showScanDialog, setShowScanDialog] = useState(false);
+  const [qrMode, setQrMode] = useState<'receive' | 'give' | 'both' | null>(null); // null=选择模式阶段
   const [isScanning, setIsScanning] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
@@ -99,16 +100,16 @@ export default function SharingSettings() {
     { enabled: searchUsername.length >= 2 }
   );
 
-  // 获取我的二维码
+  // 获取我的二维码（根据选择的模式）
   const { data: myQrData } = trpc.sharing.getMyQrCode.useQuery(
-    undefined,
-    { enabled: showMyQrDialog }
+    { mode: qrMode ?? 'receive' },
+    { enabled: showMyQrDialog && qrMode !== null }
   );
 
   // 通过扫码添加连接
   const addByQrCode = trpc.sharing.addByQrCode.useMutation({
     onSuccess: (data) => {
-      toast.success(`成功添加 ${data.receiverName}！`);
+      toast.success(data.message || '添加成功！');
       setShowScanDialog(false);
       utils.sharing.listMyConnections.invalidate();
       stopScanner();
@@ -825,7 +826,7 @@ export default function SharingSettings() {
       </Dialog>
 
       {/* 我的二维码对话框 */}
-      <Dialog open={showMyQrDialog} onOpenChange={setShowMyQrDialog}>
+      <Dialog open={showMyQrDialog} onOpenChange={(open) => { setShowMyQrDialog(open); if (!open) setQrMode(null); }}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -833,12 +834,65 @@ export default function SharingSettings() {
               我的二维码
             </DialogTitle>
             <DialogDescription>
-              让对方扫描此二维码，即可直接添加你为共享连接
+              {qrMode === null ? '请选择共享方式' : qrMode === 'receive' ? '对方扫码后，对方的联系人将共享给你' : qrMode === 'give' ? '对方扫码后，你的联系人将共享给对方' : '对方扫码后，双方互相共享联系人'}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-2">
-            {myQrData ? (
+            {qrMode === null ? (
+              // 模式选择界面
+              <div className="w-full flex flex-col gap-3">
+                <button
+                  onClick={() => setQrMode('receive')}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-gray-100 hover:border-[#D32F2F] hover:bg-red-50 transition-all text-left"
+                >
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-blue-600 text-lg">↙</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800">对方共享给我</p>
+                    <p className="text-xs text-gray-500">对方扫码后，对方的联系人共享给你</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setQrMode('give')}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-gray-100 hover:border-[#D32F2F] hover:bg-red-50 transition-all text-left"
+                >
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-green-600 text-lg">↗</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800">我共享给对方</p>
+                    <p className="text-xs text-gray-500">对方扫码后，你的联系人共享给对方</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setQrMode('both')}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border-2 border-gray-100 hover:border-[#D32F2F] hover:bg-red-50 transition-all text-left"
+                >
+                  <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-purple-600 text-lg">⇄</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800">双向共享</p>
+                    <p className="text-xs text-gray-500">对方扫码后，双方互相共享联系人</p>
+                  </div>
+                </button>
+              </div>
+            ) : myQrData ? (
+              // 显示二维码
               <>
+                <button onClick={() => setQrMode(null)} className="self-start text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                  ← 重新选择
+                </button>
+                <div className="w-full flex items-center justify-center gap-2 py-1">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                    qrMode === 'receive' ? 'bg-blue-100 text-blue-700' :
+                    qrMode === 'give' ? 'bg-green-100 text-green-700' :
+                    'bg-purple-100 text-purple-700'
+                  }`}>
+                    {qrMode === 'receive' ? '↙ 对方共享给我' : qrMode === 'give' ? '↗ 我共享给对方' : '⇄ 双向共享'}
+                  </span>
+                </div>
                 <div className="p-3 bg-white rounded-xl shadow-sm border border-gray-100">
                   <QRCodeSVG
                     value={myQrData.qrContent}
@@ -853,7 +907,6 @@ export default function SharingSettings() {
                   <p className="font-bold text-gray-800">{myQrData.name}</p>
                   <p className="text-sm text-gray-500">@{myQrData.username}</p>
                 </div>
-                <p className="text-xs text-gray-400 text-center">对方扫码后将自动添加你为共享伙伴</p>
               </>
             ) : (
               <div className="flex items-center justify-center h-[200px]">
@@ -862,7 +915,7 @@ export default function SharingSettings() {
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowMyQrDialog(false)} className="w-full">
+            <Button variant="outline" onClick={() => { setShowMyQrDialog(false); setQrMode(null); }} className="w-full">
               关闭
             </Button>
           </DialogFooter>
