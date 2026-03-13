@@ -9440,17 +9440,66 @@ export const appRouter = router({
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const rows = await db.execute(
-          sql`SELECT lm.userId, u.username, u.name, u.avatar
+          sql`SELECT lm.userId, u.username, u.name, u.avatar, u.invited_by_user_id
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
               WHERE lm.ledgerId = ${input.ledgerId} AND lm.userId > 0
               ORDER BY lm.createdAt ASC`
         ) as any;
-        return ((rows[0] || rows) as any[]).filter((r: any) => r && r.userId).map((r: any) => ({
+        const memberList = ((rows[0] || rows) as any[]).filter((r: any) => r && r.userId);
+        
+        // YJH是第1代，通过invited_by_user_id链计算每个人的代数和上级链
+        const YJH_USER_ID = 4957151;
+        // 构建userId -> invitedByUserId的映射（仅账本成员）
+        const memberMap = new Map<number, any>();
+        for (const r of memberList) {
+          memberMap.set(r.userId, r);
+        }
+        
+        // 计算某用户的代数（YJH=1代，YJH直推=2代，以此类推）
+        function getGeneration(userId: number): number {
+          if (userId === YJH_USER_ID) return 1;
+          let current = userId;
+          let gen = 1;
+          const visited = new Set<number>();
+          while (current && !visited.has(current)) {
+            visited.add(current);
+            const member = memberMap.get(current);
+            const parentId = member?.invited_by_user_id;
+            if (!parentId) return gen + 1; // 找不到上级，默认gen+1
+            if (parentId === YJH_USER_ID) return gen + 1;
+            gen++;
+            current = parentId;
+            if (gen > 20) break; // 防止死循环
+          }
+          return gen;
+        }
+        
+        // 获取某用户的上级链（从本人到YJH，包含本人）
+        function getAncestorChain(userId: number): number[] {
+          const chain: number[] = [userId];
+          let current = userId;
+          const visited = new Set<number>();
+          while (current && !visited.has(current)) {
+            visited.add(current);
+            const member = memberMap.get(current);
+            const parentId = member?.invited_by_user_id;
+            if (!parentId || !memberMap.has(parentId)) break;
+            chain.push(parentId);
+            if (parentId === YJH_USER_ID) break;
+            current = parentId;
+            if (chain.length > 20) break;
+          }
+          return chain;
+        }
+        
+        return memberList.map((r: any) => ({
           userId: r.userId,
           username: r.username || '',
           name: r.name || '',
           avatar: r.avatar || '',
+          generation: getGeneration(r.userId),
+          ancestorChain: getAncestorChain(r.userId), // 上级链userId数组（含本人）
         }));
       }),
     getBinanceKlines: publicProcedure
