@@ -26,6 +26,8 @@ import {
   StickyNote,
   ChevronRight,
   ClipboardList,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -460,6 +462,20 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   );
 }
 
+// ===== 提示词库分类 =====
+const PROMPT_CATEGORIES = [
+  { key: "image", label: "图片", color: "#1E88E5" },
+  { key: "video", label: "视频", color: "#E53935" },
+  { key: "ppt",   label: "PPT",  color: "#43A047" },
+];
+
+interface PromptItem {
+  id: number;
+  category: string;
+  content: string;
+  createdAt: string;
+}
+
 // ===== 主页面 =====
 export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
   ledgerId: number;
@@ -472,12 +488,38 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<MemoItem | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  // 提示词模式
+  const [promptMode, setPromptMode] = useState(false);
+  const [activePromptCat, setActivePromptCat] = useState("image");
+  const [selectedPrompts, setSelectedPrompts] = useState<Set<number>>(new Set());
+  const [showPromptAdd, setShowPromptAdd] = useState(false);
+  const [promptPasteText, setPromptPasteText] = useState("");
   const utils = trpc.useUtils();
 
   const { data: items = [], isLoading } = trpc.ledger.getMemoItems.useQuery({
     ledgerId,
     category: activeCategory === "all" ? undefined : activeCategory,
     keyword: keyword || undefined,
+  });
+
+  const { data: prompts = [], isLoading: promptsLoading } = trpc.ledger.getPrompts.useQuery(
+    { ledgerId, category: activePromptCat },
+    { enabled: promptMode, staleTime: 0, refetchOnMount: true }
+  );
+
+  const createPromptsMutation = trpc.ledger.createPrompts.useMutation({
+    onSuccess: () => {
+      toast.success("提示词已保存");
+      setPromptPasteText("");
+      setShowPromptAdd(false);
+      utils.ledger.getPrompts.invalidate({ ledgerId });
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  const deletePromptMutation = trpc.ledger.deletePrompt.useMutation({
+    onSuccess: () => utils.ledger.getPrompts.invalidate({ ledgerId }),
+    onError: e => toast.error(e.message),
   });
 
   const deleteMutation = trpc.ledger.deleteMemoItem.useMutation({
@@ -491,10 +533,35 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
     return counts;
   }, [items]);
 
+  const togglePromptSelect = (id: number) => {
+    setSelectedPrompts(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const copySelectedPrompts = () => {
+    const selected = (prompts as PromptItem[]).filter(p => selectedPrompts.has(p.id));
+    if (!selected.length) { toast.error("请先选择提示词"); return; }
+    navigator.clipboard.writeText(selected.map(p => p.content).join("\n")).then(() => {
+      toast.success(`已合并复制 ${selected.length} 条提示词`);
+      setSelectedPrompts(new Set());
+    });
+  };
+
+  const handleSavePrompts = () => {
+    const lines = promptPasteText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    if (!lines.length) { toast.error("请输入至少一条提示词"); return; }
+    createPromptsMutation.mutate({ ledgerId, category: activePromptCat, contents: lines });
+  };
+
+  const promptCatColor = PROMPT_CATEGORIES.find(c => c.key === activePromptCat)?.color || "#1E88E5";
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
-      <div className="bg-[#D32F2F] text-white sticky top-0 z-10">
+      <div className="text-white sticky top-0 z-10" style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F", transition: "background-color 0.3s" }}>
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-4 h-12">
           <button onClick={() => setLocation("/ledger")} className="p-1 -ml-2">
@@ -515,13 +582,19 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-base font-semibold truncate">{user?.nickname || user?.name || user?.username || "用户"}</p>
-            <p className="text-xs text-red-200 mt-0.5">共 {(items as any[]).length} 条备忘</p>
+            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.7)" }}>
+              {promptMode ? `${PROMPT_CATEGORIES.find(c => c.key === activePromptCat)?.label || ""}提示词库` : `共 ${(items as any[]).length} 条备忘`}
+            </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* 提示词按鈕：选中状态显示白色实心 */}
             <button
-              onClick={() => setLocation(`/ledger/${ledgerId}/prompt-library`)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0"
-              style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }}
+              onClick={() => { setPromptMode(!promptMode); setSelectedPrompts(new Set()); }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0 transition-all"
+              style={promptMode
+                ? { backgroundColor: "rgba(255,255,255,0.9)", color: promptCatColor }
+                : { backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }
+              }
               title="提示词库"
             >
               <ClipboardList className="w-3.5 h-3.5" />
@@ -538,80 +611,160 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
           </div>
         </div>
 
-        {/* 搜索栏 */}
-        <div className="px-4 pb-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-200" />
-            <input
-              value={keyword}
-              onChange={e => setKeyword(e.target.value)}
-              placeholder="搜索名称、内容..."
-              className="w-full pl-9 pr-4 py-2 rounded-xl bg-white/20 text-white placeholder-red-200 text-sm outline-none"
-            />
-            {keyword && (
-              <button onClick={() => setKeyword("")} className="absolute right-3 top-1/2 -translate-y-1/2">
-                <X className="w-4 h-4 text-red-200" />
-              </button>
-            )}
+        {/* 搜索栏（仅备忘模式显示） */}
+        {!promptMode && (
+          <div className="px-4 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-200" />
+              <input
+                value={keyword}
+                onChange={e => setKeyword(e.target.value)}
+                placeholder="搜索名称、内容..."
+                className="w-full pl-9 pr-4 py-2 rounded-xl bg-white/20 text-white placeholder-red-200 text-sm outline-none"
+              />
+              {keyword && (
+                <button onClick={() => setKeyword("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <X className="w-4 h-4 text-red-200" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* 分类标签栏 */}
-      <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto scrollbar-hide">
-        {CATEGORIES.map(cat => {
-          const Icon = cat.icon;
-          const count = categoryCounts[cat.key] || 0;
-          const isActive = activeCategory === cat.key;
-          return (
-            <button
-              key={cat.key}
-              onClick={() => setActiveCategory(cat.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap flex-shrink-0 transition-colors ${
-                isActive ? "text-white" : "text-gray-600 bg-gray-100"
-              }`}
-              style={isActive ? { backgroundColor: cat.color } : {}}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {cat.label}
-              {count > 0 && <span className={`text-xs ${isActive ? "opacity-80" : "text-gray-400"}`}>{count}</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 内容区 */}
-      <div className="px-4 py-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-gray-400">加载中...</div>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <StickyNote className="w-12 h-12 mb-3 opacity-30" />
-            <p className="text-sm">{keyword ? "没有找到相关备忘" : "还没有备忘，点击右下角 + 添加"}</p>
-          </div>
-        ) : (
-          (items as MemoItem[]).map(item => (
-            <MemoCard
-              key={item.id}
-              item={item}
-              onEdit={item => { setEditItem(item); setShowForm(true); }}
-              onDelete={id => setDeleteId(id)}
-            />
-          ))
         )}
       </div>
 
-      {/* 悬浮新建按钮 */}
+      {/* 分类标签栏 */}
+      {!promptMode ? (
+        <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto scrollbar-hide">
+          {CATEGORIES.map(cat => {
+            const Icon = cat.icon;
+            const count = categoryCounts[cat.key] || 0;
+            const isActive = activeCategory === cat.key;
+            return (
+              <button
+                key={cat.key}
+                onClick={() => setActiveCategory(cat.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap flex-shrink-0 transition-colors ${
+                  isActive ? "text-white" : "text-gray-600 bg-gray-100"
+                }`}
+                style={isActive ? { backgroundColor: cat.color } : {}}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {cat.label}
+                {count > 0 && <span className={`text-xs ${isActive ? "opacity-80" : "text-gray-400"}`}>{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-2">
+          {PROMPT_CATEGORIES.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => { setActivePromptCat(cat.key); setSelectedPrompts(new Set()); }}
+              className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={activePromptCat === cat.key
+                ? { backgroundColor: cat.color, color: "#fff" }
+                : { backgroundColor: "#F3F4F6", color: "#6B7280" }
+              }
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 多选操作栏（提示词模式） */}
+      {promptMode && selectedPrompts.size > 0 && (
+        <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between shadow-sm">
+          <span className="text-sm text-gray-600">已选 <span className="font-bold" style={{ color: promptCatColor }}>{selectedPrompts.size}</span> 条</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedPrompts(new Set())}
+              className="flex items-center gap-1 text-sm text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200"
+            >
+              <X className="w-3.5 h-3.5" /> 取消
+            </button>
+            <button
+              onClick={copySelectedPrompts}
+              className="flex items-center gap-1 text-sm text-white px-3 py-1.5 rounded-lg"
+              style={{ backgroundColor: promptCatColor }}
+            >
+              <Copy className="w-3.5 h-3.5" /> 合并复制
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 内容区 */}
+      <div className="px-4 py-4">
+        {!promptMode ? (
+          // 备忘内容
+          isLoading ? (
+            <div className="flex items-center justify-center py-20"><div className="text-gray-400">加载中...</div></div>
+          ) : items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+              <StickyNote className="w-12 h-12 mb-3 opacity-30" />
+              <p className="text-sm">{keyword ? "没有找到相关备忘" : "还没有备忘，点击右下角 + 添加"}</p>
+            </div>
+          ) : (
+            (items as MemoItem[]).map(item => (
+              <MemoCard
+                key={item.id}
+                item={item}
+                onEdit={item => { setEditItem(item); setShowForm(true); }}
+                onDelete={id => setDeleteId(id)}
+              />
+            ))
+          )
+        ) : (
+          // 提示词内容
+          promptsLoading ? (
+            <div className="flex items-center justify-center py-20"><div className="text-gray-400">加载中...</div></div>
+          ) : (prompts as PromptItem[]).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+              <ClipboardList className="w-12 h-12 mb-3 opacity-30" />
+              <p className="text-sm">还没有提示词，点击右下角 + 添加</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(prompts as PromptItem[]).map(p => {
+                const isSel = selectedPrompts.has(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className="bg-white rounded-xl px-4 py-3 flex items-start gap-3 border transition-all"
+                    style={isSel ? { borderColor: promptCatColor, borderWidth: 2 } : { borderColor: "#F3F4F6" }}
+                  >
+                    <button onClick={() => togglePromptSelect(p.id)} className="mt-0.5 flex-shrink-0" style={{ color: isSel ? promptCatColor : "#D1D5DB" }}>
+                      {isSel ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                    </button>
+                    <p className="flex-1 text-sm text-gray-700 leading-relaxed break-all">{p.content}</p>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => navigator.clipboard.writeText(p.content).then(() => toast.success("已复制"))} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" title="复制">
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => deletePromptMutation.mutate({ id: p.id })} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500" title="删除">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* 悬浮新建按鈕 */}
       <button
-        onClick={() => { setEditItem(null); setShowForm(true); }}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-[#D32F2F] text-white rounded-full shadow-lg flex items-center justify-center z-20"
+        onClick={() => promptMode ? setShowPromptAdd(true) : (setEditItem(null), setShowForm(true))}
+        className="fixed bottom-6 right-6 w-14 h-14 text-white rounded-full shadow-lg flex items-center justify-center z-20"
+        style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F" }}
       >
         <Plus className="w-6 h-6" />
       </button>
 
-      {/* 新建/编辑弹窗 */}
+      {/* 备忘新建/编辑弹窗 */}
       {showForm && (
         <MemoFormDialog
           open={showForm}
@@ -621,6 +774,39 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
           onSuccess={() => {}}
         />
       )}
+
+      {/* 提示词添加弹窗 */}
+      <Dialog open={showPromptAdd} onOpenChange={v => { if (!v) { setShowPromptAdd(false); setPromptPasteText(""); } }}>
+        <DialogContent className="mx-4 rounded-2xl p-0 overflow-hidden max-w-sm w-full">
+          <div className="px-5 py-4 text-white" style={{ backgroundColor: promptCatColor }}>
+            <DialogTitle className="text-base font-semibold text-white">
+              添加{PROMPT_CATEGORIES.find(c => c.key === activePromptCat)?.label}提示词
+            </DialogTitle>
+            <p className="text-xs mt-1 opacity-80">每行一条，支持粘贴批量导入</p>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <textarea
+              value={promptPasteText}
+              onChange={e => setPromptPasteText(e.target.value)}
+              placeholder={"在此粘贴或输入提示词\n每行一条，可批量导入"}
+              className="w-full h-48 text-sm border border-gray-200 rounded-xl px-3 py-2.5 outline-none resize-none text-gray-700 placeholder-gray-400"
+              style={{ lineHeight: "1.6" }}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowPromptAdd(false); setPromptPasteText(""); }}>取消</Button>
+              <Button
+                className="flex-1 text-white"
+                style={{ backgroundColor: promptCatColor }}
+                onClick={handleSavePrompts}
+                disabled={createPromptsMutation.isPending}
+              >
+                {createPromptsMutation.isPending ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 删除确认 */}
       <AlertDialog open={deleteId !== null} onOpenChange={v => !v && setDeleteId(null)}>
