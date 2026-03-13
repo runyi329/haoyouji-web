@@ -1,16 +1,15 @@
 /**
  * LedgerDetailAG.tsx - AG型定制账本：共享图片助记词（只读浏览模式）
  *
- * 布局参照 OpenNana 卡片风格：
- *   - 图片有圆角，左右有边距，按原始比例完整显示
- *   - 图片下方一行：标题文字 + 右侧复制图标
+ * 功能：
+ *   - 分页加载（每次20条，滚动到底自动加载更多）
+ *   - 顶部标签筛选栏（横向滚动）
+ *   - 搜索框（关键词搜索标题/提示词）
  *   - 点击图片弹出白色底部抽屉（仿OpenNana详情页）
  *
- * 权限：
- *   - 所有成员只读浏览，可复制提示词
- *   - 内容由管理员在后台批量导入
+ * 权限：所有成员只读浏览，内容由管理员批量导入
  */
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -22,6 +21,7 @@ import {
   ImageIcon,
   Users,
   X,
+  Search,
 } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -39,6 +39,8 @@ interface PromptImage {
   imageKey: string;
   promptText: string | null;
   title: string | null;
+  tags: string | null;
+  author: string | null;
   uploadedBy: number;
   createdAt: string;
 }
@@ -54,15 +56,18 @@ function parsePrompt(text: string | null): { zh: string; en: string } {
   };
 }
 
-/** 提取标签（# 后面的部分，用 、分隔） */
-function parseTags(title: string | null): string[] {
-  if (!title) return [];
-  const hashIdx = title.indexOf("  #");
-  if (hashIdx < 0) return [];
-  return title.slice(hashIdx + 3).split("、").map(t => t.trim()).filter(Boolean);
+/** 解析 tags JSON 数组 */
+function parseTags(tagsJson: string | null): string[] {
+  if (!tagsJson) return [];
+  try {
+    const arr = JSON.parse(tagsJson);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
 }
 
-/** 提取主标题（去掉 # 标签部分） */
+/** 从标题提取主标题（去掉 # 标签部分） */
 function getShortTitle(title: string | null): string {
   if (!title) return "";
   const hashIdx = title.indexOf("  #");
@@ -77,11 +82,73 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
   const [copiedEn, setCopiedEn] = useState(false);
   const [copiedCard, setCopiedCard] = useState<number | null>(null);
 
+  // 筛选状态
+  const [activeTag, setActiveTag] = useState<string>("");
+  const [searchText, setSearchText] = useState<string>("");
+  const [keyword, setKeyword] = useState<string>("");
+
+  // 分页状态
+  const [page, setPage] = useState(1);
+  const [allItems, setAllItems] = useState<PromptImage[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [total, setTotal] = useState(0);
+  const loaderRef = useRef<HTMLDivElement>(null);
+  const PAGE_SIZE = 20;
+
+  // 当筛选条件变化时重置分页
+  useEffect(() => {
+    setPage(1);
+    setAllItems([]);
+    setHasMore(true);
+  }, [activeTag, keyword]);
+
   // 获取图片列表
-  const { data: images = [], isLoading } = trpc.ledger.getAgPromptImages.useQuery(
-    { ledgerId },
-    { refetchOnMount: true }
+  const { data, isLoading, isFetching } = trpc.ledger.getAgPromptImages.useQuery(
+    {
+      ledgerId,
+      page,
+      pageSize: PAGE_SIZE,
+      tag: activeTag || undefined,
+      keyword: keyword || undefined,
+    },
+    { keepPreviousData: true }
   );
+
+  // 合并分页数据
+  useEffect(() => {
+    if (!data) return;
+    if (page === 1) {
+      setAllItems(data.items as PromptImage[]);
+    } else {
+      setAllItems(prev => [...prev, ...(data.items as PromptImage[])]);
+    }
+    setHasMore(data.hasMore);
+    setTotal(data.total);
+    if (data.allTags && data.allTags.length > 0) {
+      setAllTags(data.allTags);
+    }
+  }, [data, page]);
+
+  // 无限滚动：监听底部元素
+  const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
+    const target = entries[0];
+    if (target.isIntersecting && hasMore && !isFetching) {
+      setPage(prev => prev + 1);
+    }
+  }, [hasMore, isFetching]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(handleObserver, { threshold: 0.1 });
+    if (loaderRef.current) observer.observe(loaderRef.current);
+    return () => observer.disconnect();
+  }, [handleObserver]);
+
+  // 搜索防抖
+  useEffect(() => {
+    const timer = setTimeout(() => setKeyword(searchText), 400);
+    return () => clearTimeout(timer);
+  }, [searchText]);
 
   const copyText = (text: string, type: "zh" | "en" | "card", id?: number) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -147,27 +214,88 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
         </div>
       </div>
 
+      {/* ===== 搜索框 ===== */}
+      <div className="px-3 pt-3 pb-2">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+          style={{ backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8" }}>
+          <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+          <input
+            type="text"
+            placeholder="搜索标题或提示词..."
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            className="flex-1 text-sm text-gray-700 bg-transparent outline-none placeholder-gray-400"
+          />
+          {searchText && (
+            <button onClick={() => setSearchText("")}>
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ===== 标签筛选栏（横向滚动） ===== */}
+      {allTags.length > 0 && (
+        <div className="pb-2">
+          <div className="flex gap-2 overflow-x-auto px-3 pb-1 scrollbar-hide"
+            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+            {/* 全部 */}
+            <button
+              onClick={() => setActiveTag("")}
+              className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full font-medium"
+              style={{
+                backgroundColor: activeTag === "" ? "#D32F2F" : "#FFFFFF",
+                color: activeTag === "" ? "#FFFFFF" : "#555",
+                border: `1px solid ${activeTag === "" ? "#D32F2F" : "#E0E0E0"}`,
+              }}
+            >
+              全部
+            </button>
+            {allTags.map((tag, i) => (
+              <button
+                key={i}
+                onClick={() => setActiveTag(activeTag === tag ? "" : tag)}
+                className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full font-medium"
+                style={{
+                  backgroundColor: activeTag === tag ? "#D32F2F" : "#FFFFFF",
+                  color: activeTag === tag ? "#FFFFFF" : "#555",
+                  border: `1px solid ${activeTag === tag ? "#D32F2F" : "#E0E0E0"}`,
+                }}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ===== 图片列表 ===== */}
       <div className="pb-8">
-        {isLoading ? (
+        {isLoading && page === 1 ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-sm text-gray-400">加载中...</div>
           </div>
-        ) : (images as PromptImage[]).length === 0 ? (
+        ) : allItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 px-8">
             <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
               style={{ backgroundColor: "#FFEBEE" }}>
               <ImageIcon className="w-10 h-10" style={{ color: "#D32F2F" }} />
             </div>
-            <p className="text-base font-medium text-gray-700 mb-1">图库正在建设中</p>
-            <p className="text-sm text-gray-400 text-center">管理员正在整理 Nano Banana Pro 精选案例</p>
+            <p className="text-base font-medium text-gray-700 mb-1">
+              {keyword || activeTag ? "没有找到匹配的案例" : "图库正在建设中"}
+            </p>
+            <p className="text-sm text-gray-400 text-center">
+              {keyword || activeTag ? "换个关键词或标签试试" : "管理员正在整理 Nano Banana Pro 精选案例"}
+            </p>
           </div>
         ) : (
-          <div className="pt-3 space-y-3">
+          <div className="pt-2 space-y-3">
             {/* 总数 */}
-            <div className="px-4 text-xs text-gray-400">共 {(images as PromptImage[]).length} 个案例</div>
+            <div className="px-4 text-xs text-gray-400">
+              共 {total} 个案例{(keyword || activeTag) ? "（已筛选）" : ""}
+            </div>
 
-            {(images as PromptImage[]).map((img) => {
+            {allItems.map((img) => {
               const shortTitle = getShortTitle(img.title);
               return (
                 <div
@@ -176,11 +304,12 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
                   style={{ borderRadius: "12px", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
                   onClick={() => setSelectedImage(img)}
                 >
-                  {/* 图片：按原始比例完整显示 */}
+                  {/* 图片：按原始比例完整显示，不裁剪 */}
                   <img
                     src={img.imageUrl}
                     alt={shortTitle || "提示词案例"}
                     className="w-full h-auto block"
+                    style={{ borderRadius: "12px 12px 0 0" }}
                     loading="lazy"
                   />
 
@@ -210,6 +339,16 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
                 </div>
               );
             })}
+
+            {/* 无限滚动触发器 */}
+            <div ref={loaderRef} className="flex justify-center py-4">
+              {isFetching && (
+                <div className="text-xs text-gray-400">加载更多...</div>
+              )}
+              {!hasMore && allItems.length > 0 && (
+                <div className="text-xs text-gray-300">— 已加载全部 {total} 个案例 —</div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -217,8 +356,9 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
       {/* ===== 底部抽屉：仿OpenNana详情弹出框 ===== */}
       {selectedImage && (() => {
         const { zh, en } = parsePrompt(selectedImage.promptText);
-        const tags = parseTags(selectedImage.title);
+        const tags = parseTags(selectedImage.tags);
         const shortTitle = getShortTitle(selectedImage.title);
+        const author = selectedImage.author || "OpenNana";
 
         return (
           <div
@@ -237,7 +377,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
                 <div className="w-10 h-1 rounded-full" style={{ backgroundColor: "#E0E0E0" }} />
               </div>
 
-              {/* 关闭按钮 */}
+              {/* 关闭按钮（右上角） */}
               <div className="flex justify-end px-4 pb-1">
                 <button
                   onClick={() => setSelectedImage(null)}
@@ -250,13 +390,13 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
 
               <div className="px-4 pb-8">
                 {/* 标题 */}
-                <h2 className="text-lg font-bold text-gray-900 leading-snug mb-2">
+                <h2 className="text-lg font-bold text-gray-900 leading-snug mb-1.5">
                   {shortTitle || "提示词案例"}
                 </h2>
 
                 {/* 来源 + 模型 */}
                 <p className="text-xs text-gray-400 mb-3">
-                  来源：OpenNana &nbsp;·&nbsp; 模型：Nano banana pro
+                  来源：{author} &nbsp;·&nbsp; 模型：Nano banana pro
                 </p>
 
                 {/* 标签胶囊 */}
@@ -311,7 +451,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
                           </button>
                         </div>
                         <div className="px-3 py-3">
-                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap"
+                          <p className="text-gray-700 leading-relaxed whitespace-pre-wrap"
                             style={{ fontFamily: "monospace", fontSize: "13px" }}>
                             {en}
                           </p>
@@ -334,7 +474,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
                           </button>
                         </div>
                         <div className="px-3 py-3">
-                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap"
+                          <p className="text-gray-700 leading-relaxed whitespace-pre-wrap"
                             style={{ fontSize: "14px" }}>
                             {zh}
                           </p>

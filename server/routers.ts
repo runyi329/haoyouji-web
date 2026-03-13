@@ -26,7 +26,7 @@ import * as dbAIEmployee from "./db-ai-employee";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
-import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, isNull, inArray, like, or, gt } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
 import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
@@ -8740,20 +8740,70 @@ export const appRouter = router({
     // ===== AG型账本：图片助记词 CRUD =====
     // 获取AG账本的图片列表
     getAgPromptImages: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({
+        ledgerId: z.number(),
+        page: z.number().default(1),
+        pageSize: z.number().default(20),
+        tag: z.string().optional(),      // 标签筛选
+        keyword: z.string().optional(),  // 关键词搜索
+      }))
       .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 验证用户是账本成员
-        // AG账本图库对所有登录用户开放，无需验证成员身份
-        return await db
+        const { ledgerId, page, pageSize, tag, keyword } = input;
+        const offset = (page - 1) * pageSize;
+        // 构建查询条件
+        const conditions: any[] = [
+          eq(agPromptImages.ledgerId, ledgerId),
+          isNull(agPromptImages.deletedAt),
+        ];
+        if (tag) {
+          conditions.push(like(agPromptImages.tags, `%${tag}%`));
+        }
+        if (keyword) {
+          conditions.push(or(
+            like(agPromptImages.title, `%${keyword}%`),
+            like(agPromptImages.promptText, `%${keyword}%`),
+          ));
+        }
+        const items = await db
           .select()
           .from(agPromptImages)
+          .where(and(...conditions))
+          .orderBy(desc(agPromptImages.sortOrder), desc(agPromptImages.createdAt))
+          .limit(pageSize)
+          .offset(offset);
+        // 获取总数
+        const [countResult] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(agPromptImages)
+          .where(and(...conditions));
+        const total = countResult?.count ?? 0;
+        // 获取所有标签（用于筛选栏）
+        const allTagsRows = await db
+          .select({ tags: agPromptImages.tags })
+          .from(agPromptImages)
           .where(and(
-            eq(agPromptImages.ledgerId, input.ledgerId),
-            isNull(agPromptImages.deletedAt)
-          ))
-          .orderBy(desc(agPromptImages.sortOrder), desc(agPromptImages.createdAt));
+            eq(agPromptImages.ledgerId, ledgerId),
+            isNull(agPromptImages.deletedAt),
+          ));
+        const tagSet = new Set<string>();
+        for (const row of allTagsRows) {
+          if (row.tags) {
+            try {
+              const arr = JSON.parse(row.tags);
+              if (Array.isArray(arr)) arr.forEach((t: string) => tagSet.add(t));
+            } catch {}
+          }
+        }
+        return {
+          items,
+          total,
+          page,
+          pageSize,
+          hasMore: offset + items.length < total,
+          allTags: Array.from(tagSet).slice(0, 50),
+        };
       }),
     // 上传AG账本图片（接受base64，上传到COS，并保存记录）
     uploadAgPromptImage: protectedProcedure
