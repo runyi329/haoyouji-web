@@ -6317,6 +6317,78 @@ export const appRouter = router({
           avatar: u.avatar ?? null,
         }));
       }),
+
+    // 获取我的二维码内容（包含用户名）
+    getMyQrCode: protectedProcedure
+      .query(async ({ ctx }) => {
+        const user = await db.getUserById(ctx.user.id);
+        if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: '用户不存在' });
+        // 二维码内容：编码为 JSON，包含用户名和类型标识
+        const qrContent = JSON.stringify({ type: 'sharing_add', username: user.username });
+        return {
+          qrContent,
+          username: user.username,
+          name: user.name || user.username,
+        };
+      }),
+
+    // 通过扫码添加共享连接（扫对方二维码）
+    addByQrCode: protectedProcedure
+      .input(z.object({
+        qrContent: z.string().min(1, '二维码内容不能为空'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // 解析二维码内容
+        let parsed: { type: string; username: string };
+        try {
+          parsed = JSON.parse(input.qrContent);
+        } catch {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的二维码' });
+        }
+        if (parsed.type !== 'sharing_add' || !parsed.username) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的二维码类型' });
+        }
+        // 查找目标用户
+        const receiver = await db.getUserByUsername(parsed.username);
+        if (!receiver) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '找不到该用户' });
+        }
+        // 不能添加自己
+        if (receiver.id === ctx.user.id) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '不能添加自己' });
+        }
+        // 检查是否已存在连接
+        const existingConnection = await db.getSharingConnection(ctx.user.id, receiver.id);
+        if (existingConnection) {
+          throw new TRPCError({ code: 'CONFLICT', message: '已经添加过该用户' });
+        }
+        // 创建连接
+        const connectionId = await db.createSharingConnection({
+          sharerId: ctx.user.id,
+          receiverId: receiver.id,
+          status: 'active',
+          note: '扫码添加',
+        });
+        // 初始化默认权限
+        const defaultFields = ['name', 'title', 'gender', 'occupation', 'address', 'region', 'wechat', 'phone', 'tags'];
+        for (const fieldName of defaultFields) {
+          await db.createSharingPermission({ connectionId, fieldName, isShared: true });
+        }
+        // 奖励积分
+        await addPointsForAction(ctx.user.id, 'share_contact', connectionId);
+        // 发送通知
+        const currentUser = await db.getUserById(ctx.user.id);
+        const dbConn = await getDb();
+        if (dbConn) {
+          await dbConn.insert(sharingNotifications).values({
+            receiverId: receiver.id,
+            actorId: ctx.user.id,
+            actorName: currentUser?.name || currentUser?.username || `用户${ctx.user.id}`,
+            type: 'added',
+          });
+        }
+        return { success: true, receiverName: receiver.name || receiver.username };
+      }),
   }),
 
   // 锦炼计数系统

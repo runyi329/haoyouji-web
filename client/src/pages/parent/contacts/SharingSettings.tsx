@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Settings, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Shield, Bell, X } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Settings, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Shield, Bell, X, QrCode, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { QRCodeSVG } from "qrcode.react";
+import { Html5Qrcode } from "html5-qrcode";
 
 // 可共享的字段列表
 const SHAREABLE_FIELDS = [
@@ -60,6 +62,10 @@ export default function SharingSettings() {
   const [sharedSortBy, setSharedSortBy] = useState<'default' | 'count_desc' | 'count_asc'>('default');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
+  const [showMyQrDialog, setShowMyQrDialog] = useState(false);
+  const [showScanDialog, setShowScanDialog] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
   const [searchUsername, setSearchUsername] = useState("");
   const [connectionNote, setConnectionNote] = useState("");
@@ -92,7 +98,76 @@ export default function SharingSettings() {
     { query: searchUsername },
     { enabled: searchUsername.length >= 2 }
   );
-  
+
+  // 获取我的二维码
+  const { data: myQrData } = trpc.sharing.getMyQrCode.useQuery(
+    undefined,
+    { enabled: showMyQrDialog }
+  );
+
+  // 通过扫码添加连接
+  const addByQrCode = trpc.sharing.addByQrCode.useMutation({
+    onSuccess: (data) => {
+      toast.success(`成功添加 ${data.receiverName}！`);
+      setShowScanDialog(false);
+      utils.sharing.listMyConnections.invalidate();
+      stopScanner();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+      stopScanner();
+      setShowScanDialog(false);
+    },
+  });
+
+  // 停止扫码器
+  const stopScanner = useCallback(async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current.clear();
+      } catch {}
+      scannerRef.current = null;
+    }
+    setIsScanning(false);
+  }, []);
+
+  // 启动扫码器
+  const startScanner = useCallback(async () => {
+    setIsScanning(true);
+    try {
+      const scanner = new Html5Qrcode('qr-reader');
+      scannerRef.current = scanner;
+      await scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText) => {
+          await stopScanner();
+          addByQrCode.mutate({ qrContent: decodedText });
+        },
+        () => {}
+      );
+    } catch (err: any) {
+      toast.error('无法启动摄像头：' + (err?.message || '请允许摄像头权限'));
+      setIsScanning(false);
+    }
+  }, [stopScanner, addByQrCode]);
+
+  // 关闭扫码对话框时停止扫码
+  useEffect(() => {
+    if (!showScanDialog) {
+      stopScanner();
+    }
+  }, [showScanDialog, stopScanner]);
+
+  // 打开扫码对话框后自动启动扫码
+  useEffect(() => {
+    if (showScanDialog) {
+      const timer = setTimeout(() => startScanner(), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [showScanDialog]);
+
   // 创建连接
   const createConnection = trpc.sharing.createConnection.useMutation({
     onSuccess: (data) => {
@@ -280,14 +355,37 @@ export default function SharingSettings() {
             <h1 className="text-lg font-bold">共享设置</h1>
           </div>
           {activeTab === 'my' && (
-            <Button
-              size="sm"
-              onClick={() => setShowAddDialog(true)}
-              className="h-8 px-3 bg-[#D32F2F] hover:bg-[#D32F2F]-dark text-white"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              添加
-            </Button>
+            <div className="flex items-center gap-2">
+              {/* 我的二维码 */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-[#D32F2F]"
+                onClick={() => setShowMyQrDialog(true)}
+                title="我的二维码"
+              >
+                <QrCode className="h-5 w-5" />
+              </Button>
+              {/* 扫一扫 */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-[#D32F2F]"
+                onClick={() => setShowScanDialog(true)}
+                title="扫一扫"
+              >
+                <Camera className="h-5 w-5" />
+              </Button>
+              {/* 手动添加 */}
+              <Button
+                size="sm"
+                onClick={() => setShowAddDialog(true)}
+                className="h-8 px-3 bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                添加
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -714,6 +812,94 @@ export default function SharingSettings() {
               className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark text-white"
             >
               {updatePermissions.isPending ? "保存中..." : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 我的二维码对话框 */}
+      <Dialog open={showMyQrDialog} onOpenChange={setShowMyQrDialog}>
+        <DialogContent className="max-w-xs !top-[30%]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5 text-[#D32F2F]" />
+              我的二维码
+            </DialogTitle>
+            <DialogDescription>
+              让对方扫描此二维码，即可直接添加你为共享连接
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-2">
+            {myQrData ? (
+              <>
+                <div className="p-3 bg-white rounded-xl shadow-sm border border-gray-100">
+                  <QRCodeSVG
+                    value={myQrData.qrContent}
+                    size={200}
+                    bgColor="#ffffff"
+                    fgColor="#222222"
+                    level="M"
+                    includeMargin={false}
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-gray-800">{myQrData.name}</p>
+                  <p className="text-sm text-gray-500">@{myQrData.username}</p>
+                </div>
+                <p className="text-xs text-gray-400 text-center">对方扫码后将自动添加你为共享伙伴</p>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px]">
+                <p className="text-sm text-gray-400">加载中...</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowMyQrDialog(false)} className="w-full">
+              关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 扫一扫对话框 */}
+      <Dialog open={showScanDialog} onOpenChange={(open) => {
+        if (!open) stopScanner();
+        setShowScanDialog(open);
+      }}>
+        <DialogContent className="max-w-xs !top-[20%]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-[#D32F2F]" />
+              扫一扫添加
+            </DialogTitle>
+            <DialogDescription>
+              扫描对方的共享二维码，自动添加共享连接
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-3 py-2">
+            <div
+              id="qr-reader"
+              className="w-full rounded-xl overflow-hidden bg-black"
+              style={{ minHeight: '260px' }}
+            />
+            {!isScanning && (
+              <Button
+                onClick={startScanner}
+                className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white w-full"
+              >
+                <Camera className="h-4 w-4 mr-2" />
+                启动摄像头
+              </Button>
+            )}
+            {addByQrCode.isPending && (
+              <p className="text-sm text-gray-500">正在添加...</p>
+            )}
+            <p className="text-xs text-gray-400 text-center">将对方的二维码对准扫描框</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowScanDialog(false)} className="w-full">
+              取消
             </Button>
           </DialogFooter>
         </DialogContent>
