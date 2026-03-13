@@ -15,6 +15,13 @@ import {
 import { toast } from "sonner";
 
 // ─── 币种配置 ──────────────────────────────────────────────────
+// 每个币种的限价委托固定档位
+const LIMIT_PRICE_OPTIONS: Record<string, number[]> = {
+  BTC: [70000, 69000, 68000, 67000, 66000, 65000, 64000, 63000, 62000, 61000, 60000],
+  ETH: [2000, 1950, 1900, 1850, 1800, 1750, 1700, 1650, 1600, 1550, 1500],
+  SOL: [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50],
+};
+
 const COIN_CONFIG: Record<string, {
   symbol: string; name: string; fullName: string; color: string; imgUrl: string;
 }> = {
@@ -720,19 +727,21 @@ export default function CryptoPrediction() {
               </button>
             </div>
 
-            {/* 限价委托价格输入框 */}
+            {/* 限价委托价格下拉选择器 */}
             <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
-              <span className="text-sm w-14" style={{ color: '#6B7A9A' }}>限价委托</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="输入价格"
+              <span className="text-sm w-14 flex-shrink-0" style={{ color: '#6B7A9A' }}>限价委托</span>
+              <select
                 value={orderPrice}
                 onChange={(e) => setOrderPrice(e.target.value)}
                 className="flex-1 bg-transparent text-sm outline-none"
-                style={{ color: '#1A2340' }}
-              />
-              <span className="text-sm" style={{ color: '#9CA3AF' }}>USDT</span>
+                style={{ color: orderPrice ? '#1A2340' : '#9CA3AF', appearance: 'none', WebkitAppearance: 'none' }}
+              >
+                <option value="">选择价格</option>
+                {(LIMIT_PRICE_OPTIONS[coin.name] || []).map((p) => (
+                  <option key={p} value={p.toString()}>{p.toLocaleString()} USDT</option>
+                ))}
+              </select>
+              <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </div>
 
             {/* 委买模式：金额输入 + 进度条 + 可用余额 */}
