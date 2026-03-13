@@ -8537,6 +8537,39 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // ===== 提示词库 =====
+    getPrompts: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        category: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        return await dbMemo.getPrompts(input.ledgerId, input.category);
+      }),
+
+    createPrompts: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        category: z.string(),
+        contents: z.array(z.string()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbMemo.createPrompts({
+          ledgerId: input.ledgerId,
+          userId: ctx.user.id,
+          category: input.category,
+          contents: input.contents,
+        });
+        return { success: true };
+      }),
+
+    deletePrompt: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        await dbMemo.deletePrompt(input.id, ctx.user.id);
+        return { success: true };
+      }),
+
     // 获取当前用户的初始金额配置（定制账本AA）
     getMyInitialBalances: protectedProcedure
       .input(z.object({

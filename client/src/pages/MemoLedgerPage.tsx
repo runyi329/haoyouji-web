@@ -516,14 +516,25 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
             <p className="text-base font-semibold truncate">{user?.nickname || user?.name || user?.username || "用户"}</p>
             <p className="text-xs text-red-200 mt-0.5">共 {(items as any[]).length} 条备忘</p>
           </div>
-          <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-            className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-            title="账本设置"
-          >
-            <Settings className="w-5 h-5 text-white" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/prompt-library`)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0"
+              style={{ backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }}
+              title="提示词库"
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              提示词
+            </button>
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              title="账本设置"
+            >
+              <Settings className="w-5 h-5 text-white" />
+            </button>
+          </div>
         </div>
 
         {/* 搜索栏 */}
