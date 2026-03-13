@@ -9448,35 +9448,46 @@ export const appRouter = router({
         ) as any;
         const memberList = ((rows[0] || rows) as any[]).filter((r: any) => r && r.userId);
         
-        // YJH是第1代，通过invited_by_user_id链计算每个人的代数和上级链
+        // YJH是第1代，账本owner不标代数（generation=null）
         const YJH_USER_ID = 4957151;
+        // 找出账本owner
+        const ownerRoleRows = await db.execute(
+          sql`SELECT userId FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND role = 'owner' LIMIT 1`
+        ) as any;
+        const ownerUserId = (ownerRoleRows[0]?.[0] ?? ownerRoleRows[0])?.userId;
+        
         // 构建userId -> invitedByUserId的映射（仅账本成员）
         const memberMap = new Map<number, any>();
         for (const r of memberList) {
           memberMap.set(r.userId, r);
         }
         
-        // 计算某用户的代数（YJH=1代，YJH直推=2代，以此类推）
-        function getGeneration(userId: number): number {
+        // 计算某用户的代数（YJH=1代，YJH直推=2代，以此类推；owner返回null不标代数）
+        function getGeneration(userId: number): number | null {
+          if (userId === ownerUserId && userId !== YJH_USER_ID) return null; // owner不标代数
           if (userId === YJH_USER_ID) return 1;
+          // 从当前用户往上追溯，直到找到YJH
           let current = userId;
-          let gen = 1;
+          let steps = 0;
           const visited = new Set<number>();
           while (current && !visited.has(current)) {
             visited.add(current);
             const member = memberMap.get(current);
             const parentId = member?.invited_by_user_id;
-            if (!parentId) return gen + 1; // 找不到上级，默认gen+1
-            if (parentId === YJH_USER_ID) return gen + 1;
-            gen++;
+            if (!parentId) break; // 找不到上级，无法确定代数
+            if (parentId === YJH_USER_ID) return steps + 2; // 直接上级是YJH，则为第2代
+            steps++;
             current = parentId;
-            if (gen > 20) break; // 防止死循环
+            if (steps > 20) break;
           }
-          return gen;
+          // 如果追溯到了YJH本人
+          if (current === YJH_USER_ID) return steps + 1;
+          return null; // 无法追溯到YJH，不标代数
         }
         
-        // 获取某用户的上级链（从本人到YJH，包含本人）
+        // 获取某用户的上级链（从本人到YJH，包含本人；owner不在链中）
         function getAncestorChain(userId: number): number[] {
+          if (userId === ownerUserId && userId !== YJH_USER_ID) return []; // owner无上级链
           const chain: number[] = [userId];
           let current = userId;
           const visited = new Set<number>();
@@ -9484,7 +9495,8 @@ export const appRouter = router({
             visited.add(current);
             const member = memberMap.get(current);
             const parentId = member?.invited_by_user_id;
-            if (!parentId || !memberMap.has(parentId)) break;
+            if (!parentId || parentId === ownerUserId) break; // 不把owner加入链
+            if (!memberMap.has(parentId)) break;
             chain.push(parentId);
             if (parentId === YJH_USER_ID) break;
             current = parentId;
@@ -9498,8 +9510,8 @@ export const appRouter = router({
           username: r.username || '',
           name: r.name || '',
           avatar: r.avatar || '',
-          generation: getGeneration(r.userId),
-          ancestorChain: getAncestorChain(r.userId), // 上级链userId数组（含本人）
+          generation: getGeneration(r.userId), // owner为null不标代数
+          ancestorChain: getAncestorChain(r.userId),
         }));
       }),
     getBinanceKlines: publicProcedure

@@ -152,14 +152,16 @@ export default function AfPayoutManage() {
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate flex items-center gap-1.5">
                         {m.name || m.username}
-                        <span className={`text-xs w-5 h-5 inline-flex items-center justify-center rounded-full font-bold flex-shrink-0 ${
-                          (m as any).generation === 1 ? 'bg-yellow-100 text-yellow-700' :
-                          (m as any).generation === 2 ? 'bg-blue-100 text-blue-700' :
-                          (m as any).generation === 3 ? 'bg-green-100 text-green-700' :
-                          'bg-gray-100 text-gray-600'
-                        }`}>
-                          {(m as any).generation || '?'}
-                        </span>
+                        {(m as any).generation != null && (
+                          <span className={`text-xs w-5 h-5 inline-flex items-center justify-center rounded-full font-bold flex-shrink-0 ${
+                            (m as any).generation === 1 ? 'bg-yellow-100 text-yellow-700' :
+                            (m as any).generation === 2 ? 'bg-blue-100 text-blue-700' :
+                            (m as any).generation === 3 ? 'bg-green-100 text-green-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {(m as any).generation}
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-gray-400">@{m.username}</div>
                     </div>
@@ -225,7 +227,7 @@ export default function AfPayoutManage() {
                     <option value="">选择受益人...</option>
                     {availableBeneficiaries.map(m => (
                       <option key={m.userId} value={m.userId}>
-{(m as any).generation || '?'} | {m.name || m.username} (@{m.username}){m.userId === selectedSourceUserId ? ' ★本人' : ''}
+{(m as any).generation != null ? (m as any).generation + ' | ' : ''}{m.name || m.username} (@{m.username}){m.userId === selectedSourceUserId ? ' ★本人' : ''}
                       </option>
                     ))}
                   </select>
