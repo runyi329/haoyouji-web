@@ -14,40 +14,14 @@ jobs:
       - name: 📥 检出代码
         uses: actions/checkout@v4
 
-      - name: 📦 安装 pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: 📦 安装 Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-
-      - name: 📦 安装依赖
-        run: pnpm install
-
-      - name: 🔨 在 Runner 上构建前端
-        run: pnpm run build
-      
       - name: 🔑 配置SSH密鑰
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-
-      - name: 🚀 同步构建产物到服务器
-        run: |
-          rsync -avz --delete \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }}" \
-            dist/public/ \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/haoyouji-web/dist/public/
-          rsync -avz \
-            -e "ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }}" \
-            dist/index.js \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/haoyouji-web/dist/index.js
       
-      - name: 🚀 服务器执行迁移和重启
+      - name: 🚀 执行部署脚本
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
             set -e
@@ -56,7 +30,9 @@ jobs:
             echo "📥 拉取最新代码..."
             git pull --rebase origin main
             echo "📦 安装依赖..."
-            pnpm install --prod
+            pnpm install
+            echo "🔨 构建项目..."
+            pnpm run build
             echo "📊 执行数据库迁移..."
             bash scripts/post-deploy-migration.sh || true
             echo "📊 确保opinion表存在并更新结构..."
