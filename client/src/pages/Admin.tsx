@@ -67,6 +67,7 @@ import CustomACManager from "./admin/CustomACManager";
 import CustomADManager from "./admin/CustomADManager";
 import CustomAEManager from "./admin/CustomAEManager";
 import CustomAFManager from "./admin/CustomAFManager";
+import CustomAGManager from "./admin/CustomAGManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 
 // 定制账本类型配置表（新增类型只需在此添加）
@@ -112,6 +113,13 @@ const CUSTOM_LEDGER_TYPES = [
     name: "AF 定制",
     desc: "AF 型定制账本，仅管理员可创建，普通用户需被邀请才能进入",
     component: CustomAFManager,
+  },
+  {
+    key: "AG",
+    label: "AG 型",
+    name: "共享图片助记词",
+    desc: "AG 型定制账本（共享图片助记词），仅管理员可创建，普通用户需被邀请才能进入",
+    component: CustomAGManager,
   },
 ];
 
