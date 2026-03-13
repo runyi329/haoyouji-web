@@ -8745,14 +8745,18 @@ export const appRouter = router({
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         // 验证用户是账本成员
-        const [member] = await db
-          .select({ id: schema.ledgerMembers.id })
-          .from(schema.ledgerMembers)
-          .where(and(
-            eq(schema.ledgerMembers.ledgerId, input.ledgerId),
-            eq(schema.ledgerMembers.userId, ctx.user.id)
-          ));
-        if (!member) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        // admin can view all AG ledgers directly
+        const isAdmin = ctx.user.role === 'admin';
+        if (!isAdmin) {
+          const [member] = await db
+            .select({ id: schema.ledgerMembers.id })
+            .from(schema.ledgerMembers)
+            .where(and(
+              eq(schema.ledgerMembers.ledgerId, input.ledgerId),
+              eq(schema.ledgerMembers.userId, ctx.user.id)
+            ));
+          if (!member) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        }
         return await db
           .select()
           .from(agPromptImages)
