@@ -565,23 +565,22 @@ export default function SharingSettings() {
                     <>
                       {introducedConns.length > 0 && (
                         <>
-                          {/* 折叠标题行 */}
+                          {/* 折叠标题行 - 风格与其他行一致 */}
                           <button
                             onClick={() => setIntroducedExpanded(v => !v)}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-[#FFF8F0] to-[#FFF3E0] border border-[#FFE0B2] hover:border-[#FFCC80] transition-all"
+                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all"
                           >
-                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #D32F2F 0%, #B71C1C 100%)' }}>
-                              <Users className="h-5 w-5 text-white" />
+                            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 bg-[#FFEBEE]">
+                              <Handshake className="h-5 w-5" style={{ color: '#D32F2F' }} />
                             </div>
                             <div className="flex-1 min-w-0 text-left">
                               <p className="font-semibold text-sm text-gray-900">朋友介绍</p>
-                              <p className="text-xs text-gray-500 mt-0.5">共 {introducedConns.length} 人，点击展开查看</p>
+                              <p className="text-xs text-gray-400 mt-0.5">{introducedConns.length} 人</p>
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-xs font-bold text-[#D32F2F] bg-[#FFEBEE] px-2 py-0.5 rounded-full">{introducedConns.length}人</span>
                               {introducedExpanded
-                                ? <ChevronUp className="h-4 w-4 text-[#D32F2F]" />
-                                : <ChevronDown className="h-4 w-4 text-[#D32F2F]" />
+                                ? <ChevronUp className="h-4 w-4 text-gray-400" />
+                                : <ChevronDown className="h-4 w-4 text-gray-400" />
                               }
                             </div>
                           </button>
