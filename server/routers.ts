@@ -6181,10 +6181,29 @@ export const appRouter = router({
         // 一次性查询所有分享者信息（使用 IN 查询，支持几千个分享者）
         const sharers = await db.getUsersByIds(sharerIds);
         
-        return sharers.map((sharer: any) => ({
-          id: sharer.id.toString(),
-          name: sharer.username || `用户${sharer.id}`
-        }));
+        // 构建结果列表：直接共享者
+        const resultMap = new Map<string, { id: string; name: string }>();
+        for (const sharer of sharers) {
+          resultMap.set(sharer.id.toString(), {
+            id: sharer.id.toString(),
+            name: sharer.name || sharer.username || `用户${sharer.id}`
+          });
+        }
+        
+        // 如果连接有介绍人，将介绍人也加入筛选列表（去重）
+        for (const conn of connections) {
+          if ((conn as any).introducerId && (conn as any).introducerName) {
+            const introId = (conn as any).introducerId.toString();
+            if (!resultMap.has(introId)) {
+              resultMap.set(introId, {
+                id: introId,
+                name: (conn as any).introducerName
+              });
+            }
+          }
+        }
+        
+        return Array.from(resultMap.values());
       }),
 
     // 获取共享给我的人脉列表（数据聚合）
@@ -6248,6 +6267,9 @@ export const appRouter = router({
               id: contact.id,
               _sharedBy: sharer.name || sharer.username,
               _sharerUserId: conn.sharerId,
+              // 介绍人信息（如果这个连接是通过他人介绍建立的）
+              _introducerName: (conn as any).introducerName || null,
+              _introducerId: (conn as any).introducerId || null,
               createdAt: contact.createdAt,
               updatedAt: contact.updatedAt,
             };

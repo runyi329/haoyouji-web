@@ -602,17 +602,20 @@ export default function SharingSettings() {
                       
                       {/* 操作按钮：授权按钮 + 删除按钮 */}
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button
-                          className={`h-7 px-2.5 rounded-md text-xs font-medium transition-all ${
-                            authorized
-                              ? 'bg-[#D32F2F] text-white hover:bg-[#B71C1C]'
-                              : 'bg-transparent text-gray-400 border border-gray-200 hover:border-gray-300 hover:text-gray-500'
-                          }`}
-                          onClick={() => handleAuthorize(conn.id, conn.receiverId, conn.receiverName || conn.receiverUsername, authorized)}
-                          disabled={authorizeIntroduce.isPending}
-                        >
-                          {authorized ? '已授权' : '未授权'}
-                        </button>
+                        {/* 通过介绍建立的连接不显示授权按钮 */}
+                        {!conn.introducerId && (
+                          <button
+                            className={`h-7 px-2.5 rounded-md text-xs font-medium transition-all ${
+                              authorized
+                                ? 'bg-[#D32F2F] text-white hover:bg-[#B71C1C]'
+                                : 'bg-transparent text-gray-400 border border-gray-200 hover:border-gray-300 hover:text-gray-500'
+                            }`}
+                            onClick={() => handleAuthorize(conn.id, conn.receiverId, conn.receiverName || conn.receiverUsername, authorized)}
+                            disabled={authorizeIntroduce.isPending}
+                          >
+                            {authorized ? '已授权' : '未授权'}
+                          </button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"

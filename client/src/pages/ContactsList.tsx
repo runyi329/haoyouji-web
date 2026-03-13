@@ -655,9 +655,14 @@ export default function ContactsList() {
     
     // 如果选中了共享模式并且选择了特定共享人，进行过滤
     if (shareFilter === 'shared' && sharerFilter !== 'all') {
-      markedSharedContacts = markedSharedContacts.filter((contact: any) => 
-        contact._sharerUserId?.toString() === sharerFilter
-      );
+      markedSharedContacts = markedSharedContacts.filter((contact: any) => {
+        // 如果有介绍人，按介绍人 ID 筛选（介绍人的人连同介绍的人都归到介绍人名下）
+        if (contact._introducerId) {
+          return contact._introducerId?.toString() === sharerFilter;
+        }
+        // 没有介绍人，按共享者 ID 筛选
+        return contact._sharerUserId?.toString() === sharerFilter;
+      });
     }
     
     // 根据 shareFilter 返回对应的人脉列表
@@ -2031,7 +2036,18 @@ export default function ContactsList() {
                         {contact._isShared && contact._sharedBy && (
                           <span className="flex items-center gap-0.5">
                             <Handshake className="h-4 w-4" style={{ color: '#A80000' }} />
-                            <span className="text-xs text-muted-foreground">{contact._sharedBy}</span>
+                            {contact._introducerName ? (
+                              // 通过介绍建立的连接：显示共享者名字 + 介绍人标注
+                              <span className="text-xs text-muted-foreground">
+                                {contact._sharedBy}
+                                <span className="ml-1 text-[10px] px-1 py-0.5 rounded" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>
+                                  {contact._introducerName}介绍
+                                </span>
+                              </span>
+                            ) : (
+                              // 直接共享：只显示共享者名字
+                              <span className="text-xs text-muted-foreground">{contact._sharedBy}</span>
+                            )}
                           </span>
                         )}
                       </div>
