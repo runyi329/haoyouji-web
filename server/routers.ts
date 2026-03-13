@@ -24,7 +24,7 @@ import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories } from "../drizzle/schema";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
@@ -8736,6 +8736,99 @@ export const appRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AG定制账本' });
         }
         return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
+      }),
+    // ===== AG型账本：图片助记词 CRUD =====
+    // 获取AG账本的图片列表
+    getAgPromptImages: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证用户是账本成员
+        const [member] = await db
+          .select({ id: schema.ledgerMembers.id })
+          .from(schema.ledgerMembers)
+          .where(and(
+            eq(schema.ledgerMembers.ledgerId, input.ledgerId),
+            eq(schema.ledgerMembers.userId, ctx.user.id)
+          ));
+        if (!member) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        return await db
+          .select()
+          .from(agPromptImages)
+          .where(and(
+            eq(agPromptImages.ledgerId, input.ledgerId),
+            isNull(agPromptImages.deletedAt)
+          ))
+          .orderBy(desc(agPromptImages.sortOrder), desc(agPromptImages.createdAt));
+      }),
+    // 上传AG账本图片（接受base64，上传到COS，并保存记录）
+    uploadAgPromptImage: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        imageData: z.string(),   // base64 encoded image
+        promptText: z.string().optional(),
+        title: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [member] = await db
+          .select({ id: schema.ledgerMembers.id })
+          .from(schema.ledgerMembers)
+          .where(and(
+            eq(schema.ledgerMembers.ledgerId, input.ledgerId),
+            eq(schema.ledgerMembers.userId, ctx.user.id)
+          ));
+        if (!member) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const imageUrl = await uploadImageToCOS(input.imageData, 'ledger-photos');
+        await db.insert(agPromptImages).values({
+          ledgerId: input.ledgerId,
+          imageUrl,
+          imageKey: imageUrl,  // COS URL作为key
+          promptText: input.promptText || null,
+          title: input.title || null,
+          uploadedBy: ctx.user.id,
+          sortOrder: 0,
+        });
+        return { success: true, imageUrl };
+      }),
+    // 更新AG账本图片的提示词
+    updateAgPromptImage: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        promptText: z.string().optional(),
+        title: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [img] = await db.select().from(agPromptImages).where(eq(agPromptImages.id, input.id));
+        if (!img) throw new TRPCError({ code: 'NOT_FOUND', message: '图片不存在' });
+        if (img.uploadedBy !== ctx.user.id && ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能编辑自己上传的图片' });
+        }
+        await db.update(agPromptImages)
+          .set({ promptText: input.promptText ?? img.promptText, title: input.title ?? img.title })
+          .where(eq(agPromptImages.id, input.id));
+        return { success: true };
+      }),
+    // 删除AG账本图片
+    deleteAgPromptImage: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [img] = await db.select().from(agPromptImages).where(eq(agPromptImages.id, input.id));
+        if (!img) throw new TRPCError({ code: 'NOT_FOUND', message: '图片不存在' });
+        if (img.uploadedBy !== ctx.user.id && ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能删除自己上传的图片' });
+        }
+        await db.update(agPromptImages)
+          .set({ deletedAt: new Date().toISOString().slice(0, 19).replace('T', ' ') })
+          .where(eq(agPromptImages.id, input.id));
+        return { success: true };
       }),
     // ===== 备忘录条目 CRUD（AD型账本使用）=====
     // 获取备忘录列表

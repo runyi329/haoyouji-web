@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 const LedgerDetailAA = lazy(() => import('./LedgerDetailAA'));
+const LedgerDetailAG = lazy(() => import('./LedgerDetailAG'));
 const MemoLedgerPage = lazy(() => import('./MemoLedgerPage'));
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -192,6 +193,21 @@ export default function LedgerDetail() {
           membersData={membersData || []}
           transactionsData={transactionsData || []}
           refetchTransactions={refetchTransactions}
+          user={user}
+        />
+      </Suspense>
+    );
+  }
+
+  // 定制账本(AG)：共享图片助记词
+  const isCustomAG = (ledgerData as any)?.type === 'custom_ag';
+  if (!isLoading && !error && isCustomAG && ledgerData) {
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FAF3ED' }}><div style={{ color: '#222222' }}>加载中...</div></div>}>
+        <LedgerDetailAG
+          ledgerId={ledgerId}
+          ledgerData={ledgerData}
+          membersData={membersData || []}
           user={user}
         />
       </Suspense>
