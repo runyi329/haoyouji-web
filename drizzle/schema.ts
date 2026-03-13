@@ -199,8 +199,21 @@ export const contactSharingConnections = mysqlTable("contact_sharing_connections
 	receiverId: int().notNull(),
 	status: mysqlEnum(['pending','active','rejected']).default('pending').notNull(),
 	note: text(),
+	introducerId: int('introducer_id'), // 介绍人ID（如果是通过他人介绍建立的连接）
+	introducerName: varchar('introducer_name', { length: 100 }), // 介绍人名字
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+});
+
+// 共享授权表：A授权我可以代为介绍A给别人
+export const sharingAuthorizations = mysqlTable("sharing_authorizations", {
+	id: int().autoincrement().notNull(),
+	connectionId: int('connection_id').notNull(), // A共享给我的连接ID
+	authorizedBy: int('authorized_by').notNull(), // 授权人（A）
+	authorizedTo: int('authorized_to').notNull(), // 被授权人（我）
+	isActive: tinyint('is_active').default(1).notNull(),
+	createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
 export const sharingNotifications = mysqlTable("sharing_notifications", {

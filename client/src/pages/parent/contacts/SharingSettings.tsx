@@ -4,28 +4,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Plus, Trash2, Settings, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Shield, Bell, X, QrCode, Camera } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Users, Search, ArrowUpDown, ArrowUpRight, ArrowDownLeft, ChevronRight, Bell, QrCode, Camera, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { QRCodeSVG } from "qrcode.react";
 import { Html5Qrcode } from "html5-qrcode";
-
-// 可共享的字段列表
-const SHAREABLE_FIELDS = [
-  { name: 'name', label: '姓名', required: true },
-  { name: 'title', label: '昵称', required: false },
-  { name: 'gender', label: '性别', required: false },
-  { name: 'occupation', label: '职业', required: false },
-  { name: 'address', label: '地址', required: false },
-  { name: 'region', label: '地区', required: false },
-  { name: 'wechat', label: '微信', required: false },
-  { name: 'phone', label: '电话', required: false },
-  { name: 'tags', label: '标签', required: false },
-];
 
 // 每批加载的数量
 const BATCH_SIZE = 20;
@@ -61,23 +47,24 @@ export default function SharingSettings() {
   const [mySortBy, setMySortBy] = useState<'default' | 'count_desc' | 'count_asc'>('default');
   const [sharedSortBy, setSharedSortBy] = useState<'default' | 'count_desc' | 'count_asc'>('default');
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [showMyQrDialog, setShowMyQrDialog] = useState(false);
   const [showScanDialog, setShowScanDialog] = useState(false);
-  const [qrMode, setQrMode] = useState<'receive' | 'give' | 'both' | null>(null); // null=选择模式阶段
+  const [qrMode, setQrMode] = useState<'receive' | 'give' | 'both' | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const [selectedConnection, setSelectedConnection] = useState<any>(null);
   const [searchUsername, setSearchUsername] = useState("");
   const [connectionNote, setConnectionNote] = useState("");
-  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+
+  // 介绍二维码弹窗状态
+  const [showIntroduceQrDialog, setShowIntroduceQrDialog] = useState(false);
+  const [introduceConnectionId, setIntroduceConnectionId] = useState<number | null>(null);
   
   // 无限加载状态
   const [myVisibleCount, setMyVisibleCount] = useState(BATCH_SIZE);
   const [sharedVisibleCount, setSharedVisibleCount] = useState(BATCH_SIZE);
   const listEndRef = useRef<HTMLDivElement>(null);
   
-  // 获取我的共享连接列表
+  // 获取我的共享连接列表（我共享给别人的）
   const { data: myConnections, isLoading: loadingConnections } = trpc.sharing.listMyConnections.useQuery();
   
   // 获取共享给我的连接列表
@@ -86,6 +73,18 @@ export default function SharingSettings() {
   // 获取未读共享通知详情
   const { data: unreadNotifications } = trpc.sharing.getUnreadNotifications.useQuery();
   
+  // 获取我对外授权的状态（我授权了哪些人可以介绍我）
+  const { data: myAuthStatus } = trpc.sharing.getMyAuthorizationStatus.useQuery();
+
+  // 获取别人授权我可以介绍的列表
+  const { data: authorizedToIntroduce } = trpc.sharing.getAuthorizedToIntroduce.useQuery();
+
+  // 获取介绍二维码
+  const { data: introduceQrData } = trpc.sharing.getIntroduceQrCode.useQuery(
+    { connectionId: introduceConnectionId! },
+    { enabled: showIntroduceQrDialog && introduceConnectionId !== null }
+  );
+
   // 标记共享通知为已读
   const markAsRead = trpc.sharing.markAsRead.useMutation({
     onSuccess: () => {
@@ -106,18 +105,46 @@ export default function SharingSettings() {
     { enabled: showMyQrDialog && qrMode !== null }
   );
 
-  // 通过扫码添加连接
+  // 通过扫码添加连接（普通共享二维码）
   const addByQrCode = trpc.sharing.addByQrCode.useMutation({
     onSuccess: (data) => {
       toast.success(data.message || '添加成功！');
       setShowScanDialog(false);
       utils.sharing.listMyConnections.invalidate();
+      utils.sharing.listSharedToMe.invalidate();
       stopScanner();
     },
     onError: (error) => {
       toast.error(error.message);
       stopScanner();
       setShowScanDialog(false);
+    },
+  });
+
+  // 通过扫码添加介绍连接（介绍二维码）
+  const addByIntroduceQrCode = trpc.sharing.addByIntroduceQrCode.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message || '添加成功！');
+      setShowScanDialog(false);
+      utils.sharing.listMyConnections.invalidate();
+      utils.sharing.listSharedToMe.invalidate();
+      stopScanner();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+      stopScanner();
+      setShowScanDialog(false);
+    },
+  });
+
+  // 授权/取消授权
+  const authorizeIntroduce = trpc.sharing.authorizeIntroduce.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.isActive ? '已授权对方可以介绍你' : '已取消授权');
+      utils.sharing.getMyAuthorizationStatus.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message);
     },
   });
 
@@ -133,7 +160,7 @@ export default function SharingSettings() {
     setIsScanning(false);
   }, []);
 
-  // 启动扫码器
+  // 启动扫码器（智能识别普通二维码和介绍二维码）
   const startScanner = useCallback(async () => {
     setIsScanning(true);
     try {
@@ -144,7 +171,17 @@ export default function SharingSettings() {
         { fps: 10, qrbox: { width: 250, height: 250 } },
         async (decodedText) => {
           await stopScanner();
-          addByQrCode.mutate({ qrContent: decodedText });
+          // 判断二维码类型
+          try {
+            const parsed = JSON.parse(decodedText);
+            if (parsed.type === 'sharing_introduce') {
+              addByIntroduceQrCode.mutate({ qrContent: decodedText });
+            } else {
+              addByQrCode.mutate({ qrContent: decodedText });
+            }
+          } catch {
+            addByQrCode.mutate({ qrContent: decodedText });
+          }
         },
         () => {}
       );
@@ -152,7 +189,7 @@ export default function SharingSettings() {
       toast.error('无法启动摄像头：' + (err?.message || '请允许摄像头权限'));
       setIsScanning(false);
     }
-  }, [stopScanner, addByQrCode]);
+  }, [stopScanner, addByQrCode, addByIntroduceQrCode]);
 
   // 关闭扫码对话框时停止扫码
   useEffect(() => {
@@ -187,19 +224,6 @@ export default function SharingSettings() {
   const deleteConnection = trpc.sharing.deleteConnection.useMutation({
     onSuccess: () => {
       toast.success("已删除连接");
-      utils.sharing.listMyConnections.invalidate();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
-  
-  // 更新权限
-  const updatePermissions = trpc.sharing.updatePermissions.useMutation({
-    onSuccess: () => {
-      toast.success("权限配置已更新");
-      setShowPermissionDialog(false);
-      setSelectedConnection(null);
       utils.sharing.listMyConnections.invalidate();
     },
     onError: (error) => {
@@ -288,31 +312,6 @@ export default function SharingSettings() {
     markAsRead.mutate();
   }, []);
   
-  // 打开权限配置对话框
-  const openPermissionDialog = useCallback((connection: any) => {
-    setSelectedConnection(connection);
-    const initialPermissions: Record<string, boolean> = {};
-    SHAREABLE_FIELDS.forEach(field => {
-      const perm = connection.permissions?.find((p: any) => p.fieldName === field.name);
-      initialPermissions[field.name] = perm ? perm.isShared : true;
-    });
-    setPermissions(initialPermissions);
-    setShowPermissionDialog(true);
-  }, []);
-  
-  // 保存权限配置
-  const handleSavePermissions = useCallback(() => {
-    if (!selectedConnection) return;
-    const permissionsArray = Object.entries(permissions).map(([fieldName, isShared]) => ({
-      fieldName,
-      isShared,
-    }));
-    updatePermissions.mutate({
-      connectionId: selectedConnection.id,
-      permissions: permissionsArray,
-    });
-  }, [selectedConnection, permissions, updatePermissions]);
-  
   // 处理添加连接
   const handleAddConnection = useCallback((username: string) => {
     createConnection.mutate({
@@ -327,6 +326,24 @@ export default function SharingSettings() {
       deleteConnection.mutate({ connectionId });
     }
   }, [deleteConnection]);
+
+  // 处理授权/取消授权
+  const handleAuthorize = useCallback((connectionId: number, receiverId: number) => {
+    authorizeIntroduce.mutate({ connectionId, authorizedToUserId: receiverId });
+  }, [authorizeIntroduce]);
+
+  // 检查某条连接是否已授权
+  const isAuthorized = useCallback((connectionId: number, receiverId: number) => {
+    if (!myAuthStatus) return false;
+    const auth = myAuthStatus.find((a: any) => a.connectionId === connectionId && a.authorizedTo === receiverId);
+    return auth ? auth.isActive === 1 : false;
+  }, [myAuthStatus]);
+
+  // 检查某条"共享给我"的连接是否有介绍授权
+  const hasIntroduceAuth = useCallback((connectionId: number) => {
+    if (!authorizedToIntroduce) return false;
+    return authorizedToIntroduce.some((a: any) => a.connectionId === connectionId);
+  }, [authorizedToIntroduce]);
 
   // 统计数字
   const myCount = myConnections?.length || 0;
@@ -375,7 +392,6 @@ export default function SharingSettings() {
                 onClick={() => setShowScanDialog(true)}
                 title="扫一扫"
               >
-                {/* 扫一扫标识 SVG */}
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 7V5a2 2 0 0 1 2-2h2" />
                   <path d="M17 3h2a2 2 0 0 1 2 2v2" />
@@ -507,7 +523,7 @@ export default function SharingSettings() {
         {/* 列表区域 */}
         <div className="space-y-2">
           {activeTab === 'my' ? (
-            // ========== 我的共享连接列表 ==========
+            // ========== 我的共享连接列表（我共享给别人的）==========
             loadingConnections ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <div className="w-8 h-8 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin" />
@@ -528,71 +544,85 @@ export default function SharingSettings() {
               </div>
             ) : (
               <>
-                {visibleMyConnections.map((conn: any) => (
-                  <div
-                    key={conn.id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all"
-                  >
-                    {/* 头像 */}
+                {visibleMyConnections.map((conn: any) => {
+                  const authorized = isAuthorized(conn.id, conn.receiverId);
+                  return (
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
-                      style={{ backgroundColor: getAvatarColor(conn.receiverName || conn.receiverUsername) }}
+                      key={conn.id}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all"
                     >
-                      {conn.receiverAvatar ? (
-                        <img
-                          src={conn.receiverAvatar}
-                          alt={conn.receiverName}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                            (e.target as HTMLImageElement).parentElement!.textContent = getInitial(conn.receiverName || conn.receiverUsername);
-                          }}
-                        />
-                      ) : (
-                        getInitial(conn.receiverName || conn.receiverUsername)
-                      )}
-                    </div>
-                    
-                    {/* 信息 */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
-                          {conn.receiverName}
-                        </p>
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#F5F5F5] dark:bg-[#424242]/30 text-[#1976D2] dark:text-blue-400 text-[10px] font-medium flex-shrink-0">
-                          <Users className="h-2.5 w-2.5" />
-                          {conn.sharedContactCount || 0}人
-                        </span>
+                      {/* 头像 */}
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
+                        style={{ backgroundColor: getAvatarColor(conn.receiverName || conn.receiverUsername) }}
+                      >
+                        {conn.receiverAvatar ? (
+                          <img
+                            src={conn.receiverAvatar}
+                            alt={conn.receiverName}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).parentElement!.textContent = getInitial(conn.receiverName || conn.receiverUsername);
+                            }}
+                          />
+                        ) : (
+                          getInitial(conn.receiverName || conn.receiverUsername)
+                        )}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">
-                        @{conn.receiverUsername}
-                        {conn.note && <span className="ml-2 text-gray-300">· {conn.note}</span>}
-                      </p>
+                      
+                      {/* 信息 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
+                            {conn.receiverName}
+                          </p>
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#F5F5F5] dark:bg-[#424242]/30 text-[#1976D2] dark:text-blue-400 text-[10px] font-medium flex-shrink-0">
+                            <Users className="h-2.5 w-2.5" />
+                            {conn.sharedContactCount || 0}人
+                          </span>
+                          {authorized && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-[10px] font-medium flex-shrink-0">
+                              已授权
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">
+                          @{conn.receiverUsername}
+                          {conn.note && <span className="ml-2 text-gray-300">· {conn.note}</span>}
+                        </p>
+                      </div>
+                      
+                      {/* 操作按钮：授权按钮 + 删除按钮 */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-8 px-2 text-xs font-medium transition-colors ${
+                            authorized
+                              ? 'text-amber-600 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40'
+                              : 'text-gray-500 hover:text-amber-600 hover:bg-amber-50'
+                          }`}
+                          onClick={() => handleAuthorize(conn.id, conn.receiverId)}
+                          disabled={authorizeIntroduce.isPending}
+                          title={authorized ? '点击取消授权' : '授权对方可介绍你给他人'}
+                        >
+                          <UserPlus className="h-3.5 w-3.5 mr-1" />
+                          {authorized ? '已授权' : '授权'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-300 hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
+                          onClick={() => handleDeleteConnection(conn.id)}
+                          title="删除连接"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    
-                    {/* 操作按钮 */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-400 hover:text-[#D32F2F] hover:bg-gray-100"
-                        onClick={() => openPermissionDialog(conn)}
-                        title="权限设置"
-                      >
-                        <Shield className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-300 hover:text-[#D32F2F] hover:bg-[#FFEBEE]"
-                        onClick={() => handleDeleteConnection(conn.id)}
-                        title="删除连接"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
                 {/* 无限加载触发器 */}
                 {hasMoreMy && (
@@ -628,50 +658,74 @@ export default function SharingSettings() {
               </div>
             ) : (
               <>
-                {visibleSharedToMe.map((conn: any) => (
-                  <div
-                    key={conn.id}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all cursor-pointer active:scale-[0.99]"
-                  >
-                    {/* 头像 */}
+                {visibleSharedToMe.map((conn: any) => {
+                  const canIntroduce = hasIntroduceAuth(conn.id);
+                  return (
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
-                      style={{ backgroundColor: getAvatarColor(conn.sharerName || conn.sharerUsername) }}
+                      key={conn.id}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:shadow-sm transition-all"
                     >
-                      {conn.sharerAvatar ? (
-                        <img
-                          src={conn.sharerAvatar}
-                          alt={conn.sharerName}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                            (e.target as HTMLImageElement).parentElement!.textContent = getInitial(conn.sharerName || conn.sharerUsername);
-                          }}
-                        />
-                      ) : (
-                        getInitial(conn.sharerName || conn.sharerUsername)
-                      )}
-                    </div>
-                    
-                    {/* 信息 */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
-                          {conn.sharerName}
-                        </p>
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#E8F5E9] dark:bg-green-900/30 text-[#4CAF50] dark:text-green-400 text-[10px] font-medium flex-shrink-0">
-                          <Users className="h-2.5 w-2.5" />
-                          {conn.sharedContactCount || 0}人
-                        </span>
+                      {/* 头像 */}
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 overflow-hidden"
+                        style={{ backgroundColor: getAvatarColor(conn.sharerName || conn.sharerUsername) }}
+                      >
+                        {conn.sharerAvatar ? (
+                          <img
+                            src={conn.sharerAvatar}
+                            alt={conn.sharerName}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).parentElement!.textContent = getInitial(conn.sharerName || conn.sharerUsername);
+                            }}
+                          />
+                        ) : (
+                          getInitial(conn.sharerName || conn.sharerUsername)
+                        )}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">
-                        @{conn.sharerUsername}
-                      </p>
+                      
+                      {/* 信息 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
+                            {conn.sharerName}
+                          </p>
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-[#E8F5E9] dark:bg-green-900/30 text-[#4CAF50] dark:text-green-400 text-[10px] font-medium flex-shrink-0">
+                            <Users className="h-2.5 w-2.5" />
+                            {conn.sharedContactCount || 0}人
+                          </span>
+                          {conn.introducerName && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 text-[10px] font-medium flex-shrink-0">
+                              {conn.introducerName}介绍
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">
+                          @{conn.sharerUsername}
+                        </p>
+                      </div>
+                      
+                      {/* 介绍二维码按钮（仅当被授权时显示）*/}
+                      {canIntroduce && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-purple-500 hover:text-purple-700 hover:bg-purple-50 flex-shrink-0"
+                          onClick={() => {
+                            setIntroduceConnectionId(conn.id);
+                            setShowIntroduceQrDialog(true);
+                          }}
+                          title="介绍给他人"
+                        >
+                          <QrCode className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
+                      <ChevronRight className="h-4 w-4 text-gray-300 flex-shrink-0" />
                     </div>
-                    
-                    <ChevronRight className="h-4 w-4 text-gray-300 flex-shrink-0" />
-                  </div>
-                ))}
+                  );
+                })}
                 
                 {/* 无限加载触发器 */}
                 {hasMoreShared && (
@@ -726,21 +780,21 @@ export default function SharingSettings() {
                   </p>
                 ) : (
                   <div className="max-h-48 overflow-y-auto space-y-2">
-                    {searchResults.map((user: any) => (
+                    {searchResults.map((u: any) => (
                       <div
-                        key={user.id}
+                        key={u.id}
                         className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                        onClick={() => handleAddConnection(user.username)}
+                        onClick={() => handleAddConnection(u.username)}
                       >
                         <div
                           className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-                          style={{ backgroundColor: getAvatarColor(user.name || user.username) }}
+                          style={{ backgroundColor: getAvatarColor(u.name || u.username) }}
                         >
-                          {getInitial(user.name || user.username)}
+                          {getInitial(u.name || u.username)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{user.name || user.username}</p>
-                          <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
+                          <p className="font-medium text-sm truncate">{u.name || u.username}</p>
+                          <p className="text-xs text-muted-foreground truncate">@{u.username}</p>
                         </div>
                         <Plus className="h-4 w-4 text-[#D32F2F]" />
                       </div>
@@ -768,63 +822,6 @@ export default function SharingSettings() {
         </DialogContent>
       </Dialog>
 
-      {/* 权限配置对话框 */}
-      <Dialog open={showPermissionDialog} onOpenChange={setShowPermissionDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-[#D32F2F]" />
-              权限配置
-            </DialogTitle>
-            <DialogDescription>
-              设置 <span className="font-medium text-gray-700">{selectedConnection?.receiverName}</span> 可以查看的字段
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              默认全部共享，取消勾选的字段将不会展示给对方。
-            </p>
-            
-            <div className="space-y-3">
-              {SHAREABLE_FIELDS.map((field) => (
-                <div key={field.name} className="flex items-center justify-between py-1">
-                  <Label className="flex items-center gap-2 text-sm">
-                    {field.label}
-                    {field.required && (
-                      <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">必选</span>
-                    )}
-                  </Label>
-                  <Checkbox
-                    checked={permissions[field.name] ?? true}
-                    disabled={field.required}
-                    onCheckedChange={(checked) => {
-                      setPermissions(prev => ({
-                        ...prev,
-                        [field.name]: checked as boolean,
-                      }));
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPermissionDialog(false)}>
-              取消
-            </Button>
-            <Button 
-              onClick={handleSavePermissions} 
-              disabled={updatePermissions.isPending}
-              className="bg-[#D32F2F] hover:bg-[#D32F2F]-dark text-white"
-            >
-              {updatePermissions.isPending ? "保存中..." : "保存"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* 我的二维码对话框 */}
       <Dialog open={showMyQrDialog} onOpenChange={(open) => { setShowMyQrDialog(open); if (!open) setQrMode(null); }}>
         <DialogContent className="max-w-xs">
@@ -839,7 +836,6 @@ export default function SharingSettings() {
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-2">
             {qrMode === null ? (
-              // 模式选择界面
               <div className="w-full flex flex-col gap-3">
                 <button
                   onClick={() => setQrMode('receive')}
@@ -879,7 +875,6 @@ export default function SharingSettings() {
                 </button>
               </div>
             ) : myQrData ? (
-              // 显示二维码
               <>
                 <button onClick={() => setQrMode(null)} className="self-start text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
                   ← 重新选择
@@ -922,6 +917,55 @@ export default function SharingSettings() {
         </DialogContent>
       </Dialog>
 
+      {/* 介绍二维码对话框 */}
+      <Dialog open={showIntroduceQrDialog} onOpenChange={(open) => { setShowIntroduceQrDialog(open); if (!open) setIntroduceConnectionId(null); }}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5 text-purple-600" />
+              介绍二维码
+            </DialogTitle>
+            <DialogDescription>
+              将此二维码分享给他人，对方扫码后将与 {introduceQrData?.targetName} 建立双向共享，并显示你为介绍人
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-2">
+            {introduceQrData ? (
+              <>
+                <div className="w-full flex items-center justify-center gap-2 py-1">
+                  <span className="text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-700">
+                    介绍 {introduceQrData.targetName}
+                  </span>
+                </div>
+                <div className="p-3 bg-white rounded-xl shadow-sm border border-gray-100">
+                  <QRCodeSVG
+                    value={introduceQrData.qrContent}
+                    size={200}
+                    bgColor="#ffffff"
+                    fgColor="#222222"
+                    level="M"
+                    includeMargin={false}
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-gray-800">{introduceQrData.targetName}</p>
+                  <p className="text-sm text-gray-500">由 {introduceQrData.introducerName} 介绍</p>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px]">
+                <p className="text-sm text-gray-400">加载中...</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowIntroduceQrDialog(false)} className="w-full">
+              关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* 扫一扫对话框 */}
       <Dialog open={showScanDialog} onOpenChange={(open) => {
         if (!open) stopScanner();
@@ -934,7 +978,7 @@ export default function SharingSettings() {
               扫一扫添加
             </DialogTitle>
             <DialogDescription>
-              扫描对方的共享二维码，自动添加共享连接
+              扫描对方的共享二维码或介绍二维码，自动添加共享连接
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-3 py-2">
@@ -952,7 +996,7 @@ export default function SharingSettings() {
                 启动摄像头
               </Button>
             )}
-            {addByQrCode.isPending && (
+            {(addByQrCode.isPending || addByIntroduceQrCode.isPending) && (
               <p className="text-sm text-gray-500">正在添加...</p>
             )}
             <p className="text-xs text-gray-400 text-center">将对方的二维码对准扫描框</p>
