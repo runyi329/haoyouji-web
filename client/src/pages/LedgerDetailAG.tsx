@@ -318,13 +318,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
           </button>
         </div>
 
-        {/* 金色标签 */}
-        <div className="px-4 pb-3">
-          <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
-            style={{ backgroundColor: "rgba(203,164,113,0.2)", color: "#CBA471", border: "1px solid rgba(203,164,113,0.4)" }}>
-            Nano Banana Pro · 提示词图库
-          </span>
-        </div>
+
       </div>
 
       {/* ===== 搜索框 + 当前标签提示 ===== */}
