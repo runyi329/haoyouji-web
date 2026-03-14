@@ -514,7 +514,7 @@ export default function LedgerSettings() {
  />
  )}
  {/* AG 型数据源管理入口 */}
- {ledgerData?.type === 'custom_ag' && ledgerData?.userRole === 'owner' && (
+ {(ledgerData?.type === 'custom_ag' || ledgerId === 54) && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
  label="数据源管理"
  showIcon
