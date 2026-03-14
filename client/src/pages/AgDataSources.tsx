@@ -102,7 +102,7 @@ export default function AgDataSources() {
                     <div>
                       <div className="font-medium text-gray-900 text-sm">{source.name}</div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        共 {source.total_synced} 条 · 最大ID: {source.last_max_id}
+                        共 {source.totalSynced ?? 0} 条已同步
                       </div>
                     </div>
                   </div>
@@ -124,7 +124,7 @@ export default function AgDataSources() {
                 <div className="flex items-center gap-1.5 mt-3">
                   <Clock className="w-3.5 h-3.5 text-gray-400" />
                   <span className="text-xs text-gray-400">
-                    上次同步：{formatTime(source.last_synced_at)}
+                    上次同步：{formatTime(source.lastSyncedAt)}
                   </span>
                 </div>
               </div>
@@ -148,11 +148,11 @@ export default function AgDataSources() {
                     </button>
                     {showRule[source.id] && (
                       <div className="mt-2 p-3 bg-gray-50 rounded-lg text-xs text-gray-600 leading-relaxed">
-                        {source.sync_rule}
+                        {source.syncRule}
                         <div className="mt-2 pt-2 border-t border-gray-200 text-gray-400">
-                          <div>API 地址：{source.api_url}</div>
-                          <div>模型筛选：{source.model_name}</div>
-                          <div>当前最大ID：{source.last_max_id}（下次同步从此ID之后开始）</div>
+                          <div>API 地址：{source.apiUrl}</div>
+                          <div>模型：{source.modelName}</div>
+                          <div>增量同步：通过 imageKey 前缀去重，遇到已存在记录即停止</div>
                         </div>
                       </div>
                     )}
