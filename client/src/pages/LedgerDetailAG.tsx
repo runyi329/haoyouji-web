@@ -286,12 +286,15 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
               <Tag className="w-3 h-3" />
               <span className="max-w-[60px] truncate">{activeTag || "标签"}</span>
             </button>
-            <button
-              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-              className="text-white/90 hover:text-white"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
+            {/* 设置按钮：仅账本创建者可见 */}
+            {(user?.id === ledgerData?.ownerId || user?.id === ledgerData?.createdBy) && (
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+                className="text-white/90 hover:text-white"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
 
