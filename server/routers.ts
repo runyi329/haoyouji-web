@@ -8788,11 +8788,17 @@ export const appRouter = router({
             isNull(agPromptImages.deletedAt),
           ));
         const tagSet = new Set<string>();
+        const tagCountMap: Record<string, number> = {};
         for (const row of allTagsRows) {
           if (row.tags) {
             try {
               const arr = JSON.parse(row.tags);
-              if (Array.isArray(arr)) arr.forEach((t: string) => tagSet.add(t));
+              if (Array.isArray(arr)) {
+                arr.forEach((t: string) => {
+                  tagSet.add(t);
+                  tagCountMap[t] = (tagCountMap[t] || 0) + 1;
+                });
+              }
             } catch {}
           }
         }
@@ -8803,6 +8809,7 @@ export const appRouter = router({
           pageSize,
           hasMore: offset + items.length < total,
           allTags: Array.from(tagSet).slice(0, 50),
+          tagCounts: tagCountMap,
         };
       }),
     // 上传AG账本图片（接受base64，上传到COS，并保存记录）
