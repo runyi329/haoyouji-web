@@ -3,13 +3,13 @@
  *
  * 功能：
  *   - 分页加载（每次20条，滚动到底自动加载更多）
- *   - 顶部"标签"按钮 → 底部iOS风格标签选择弹出框
+ *   - 顶部"标签"按钮 → 底部iOS风格标签选择弹出框（胶囊网格布局）
  *   - 搜索框（关键词搜索标题/提示词）
  *   - 点击图片弹出白色底部抽屉（仿OpenNana详情页）
  *
  * 权限：所有成员只读浏览，内容由管理员批量导入
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -68,7 +68,7 @@ function parseTags(tagsJson: string | null): string[] {
   }
 }
 
-/** 判断是否为中文字符（含中文标点） */
+/** 判断是否为中文字符 */
 function isChinese(str: string): boolean {
   return /[\u4e00-\u9fa5]/.test(str);
 }
@@ -78,6 +78,84 @@ function getShortTitle(title: string | null): string {
   if (!title) return "";
   const hashIdx = title.indexOf("  #");
   return hashIdx > 0 ? title.slice(0, hashIdx) : title;
+}
+
+// 分类关键词映射（用于对标签进行归类排序）
+const TAG_CATEGORY_ORDER: Record<string, number> = {
+  // 风格类（0）
+  "电影感": 0, "超写实": 0, "写实": 0, "极简": 0, "超现实": 0, "复古": 0,
+  "赛博朋克": 0, "奢华": 0, "梦幻": 0, "唯美": 0, "科幻": 0, "奇幻": 0,
+  "哥特": 0, "千禧风": 0, "日系": 0, "韩系": 0, "复古风": 0, "极简风": 0,
+  "写实风": 0, "胶片": 0, "胶片感": 0, "胶片风": 0, "涂鸦风": 0, "漫画": 0,
+  "插画": 0, "动漫风": 0, "皮克斯": 0, "Q版": 0, "手绘": 0, "素描": 0,
+  "水彩": 0, "油画": 0, "暗黑": 0, "治愈": 0, "赛博风": 0, "未来感": 0,
+  // 人像类（1）
+  "人像": 1, "少女": 1, "自拍": 1, "写真": 1, "时尚": 1, "性感": 1,
+  "美少女": 1, "美女": 1, "女神": 1, "模特": 1, "肖像": 1, "俏皮": 1,
+  "甜妹": 1, "甜酷": 1, "纯欲": 1, "优雅": 1, "冷艳": 1, "金发": 1,
+  "红发": 1, "银发": 1, "雀斑": 1, "比基尼": 1, "情侣": 1, "情侣写真": 1,
+  "健身": 1, "运动风": 1, "韩系女神": 1, "网红": 1, "偶像": 1, "青春": 1,
+  // 摄影技法（2）
+  "特写": 2, "俯拍": 2, "广角": 2, "逆光": 2, "闪光灯": 2, "夜景": 2,
+  "微距": 2, "抓拍": 2, "仰拍": 2, "逼真": 2, "高清": 2, "超高清": 2,
+  "8K超清": 2, "8K高清": 2, "8K画质": 2, "高画质": 2, "高质感": 2,
+  "高对比": 2, "光影": 2, "暖光": 2, "柔光": 2, "霓虹": 2, "霓虹光": 2,
+  "电影质感": 2, "电影光": 2, "黄金时刻": 2, "晨光": 2, "阳光": 2,
+  // 场景类（3）
+  "街拍": 3, "卧室": 3, "居家": 3, "咖啡馆": 3, "夏日": 3, "雪景": 3,
+  "建筑": 3, "都市": 3, "海滩": 3, "厨房": 3, "图书馆": 3, "博物馆": 3,
+  "地标": 3, "纽约": 3, "土耳其": 3, "冬季": 3, "圣诞节": 3, "雨夜": 3,
+  "夜拍": 3, "日落": 3, "街头": 3, "街头风": 3, "工作室": 3, "影棚": 3,
+  // 创意/设计（4）
+  "信息图": 4, "九宫格": 4, "四宫格": 4, "微缩": 4, "微缩模型": 4,
+  "拼贴": 4, "分镜": 4, "等距": 4, "3D渲染": 4, "3D卡通": 4, "3D立体": 4,
+  "创意": 4, "创意广告": 4, "广告": 4, "商业": 4, "商业摄影": 4,
+  "商业广告": 4, "海报": 4, "品牌": 4, "平铺": 4, "折纸": 4, "纸艺": 4,
+  // 美食/产品（5）
+  "美食": 5, "美食摄影": 5, "产品摄影": 5, "芝士": 5, "草莓": 5,
+  "香蕉": 5, "甜点": 5, "甜品": 5, "香水": 5, "护肤": 5, "护肤品": 5,
+  "美妆": 5, "食谱": 5, "珠宝": 5, "豪车": 5, "奢侈品": 5,
+};
+
+/** 对标签进行分类排序，返回分组后的结构 */
+function categorizeTags(tagCounts: Record<string, number>): Array<{group: string; tags: Array<{name: string; count: number}>}> {
+  const groups: Record<string, Array<{name: string; count: number}>> = {
+    "热门": [],
+    "人像·风格": [],
+    "摄影·光影": [],
+    "场景·地点": [],
+    "创意·设计": [],
+    "美食·产品": [],
+    "其他": [],
+  };
+
+  const sortedTags = Object.entries(tagCounts).sort((a, b) => b[1] - a[1]);
+
+  for (const [tag, count] of sortedTags) {
+    if (!isChinese(tag)) continue;
+    const catOrder = TAG_CATEGORY_ORDER[tag];
+    if (count >= 20) {
+      groups["热门"].push({ name: tag, count });
+    } else if (catOrder === 0) {
+      groups["人像·风格"].push({ name: tag, count });
+    } else if (catOrder === 1) {
+      groups["人像·风格"].push({ name: tag, count });
+    } else if (catOrder === 2) {
+      groups["摄影·光影"].push({ name: tag, count });
+    } else if (catOrder === 3) {
+      groups["场景·地点"].push({ name: tag, count });
+    } else if (catOrder === 4) {
+      groups["创意·设计"].push({ name: tag, count });
+    } else if (catOrder === 5) {
+      groups["美食·产品"].push({ name: tag, count });
+    } else if (count >= 3) {
+      groups["其他"].push({ name: tag, count });
+    }
+  }
+
+  return Object.entries(groups)
+    .filter(([, tags]) => tags.length > 0)
+    .map(([group, tags]) => ({ group, tags }));
 }
 
 export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user }: Props) {
@@ -101,6 +179,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
   const [allItems, setAllItems] = useState<PromptImage[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [tagCounts, setTagCounts] = useState<Record<string, number>>({});
   const [total, setTotal] = useState(0);
   const loaderRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 20;
@@ -137,6 +216,10 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
     if (data.allTags && data.allTags.length > 0) {
       setAllTags(data.allTags);
     }
+    // 统计标签数量（从当前页数据中累积）
+    if (page === 1 && data.tagCounts) {
+      setTagCounts(data.tagCounts as Record<string, number>);
+    }
   }, [data, page]);
 
   // 无限滚动：监听底部元素
@@ -168,8 +251,8 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
     });
   };
 
-  // 只显示含中文的标签
-  const chineseTags = allTags.filter(isChinese);
+  // 分组标签（用于弹出框展示）
+  const groupedTags = useMemo(() => categorizeTags(tagCounts), [tagCounts]);
 
   const memberCount = membersData?.length || 0;
 
@@ -201,7 +284,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
               }}
             >
               <Tag className="w-3 h-3" />
-              <span>{activeTag || "标签"}</span>
+              <span className="max-w-[60px] truncate">{activeTag || "标签"}</span>
             </button>
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
@@ -268,6 +351,9 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
               style={{ backgroundColor: "#FFEBEE", color: "#D32F2F", border: "1px solid #FFCDD2" }}
             >
               {activeTag}
+              {tagCounts[activeTag] && (
+                <span className="opacity-70">({tagCounts[activeTag]})</span>
+              )}
               <button onClick={() => setActiveTag("")} className="ml-0.5">
                 <X className="w-3 h-3" />
               </button>
@@ -360,7 +446,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
         )}
       </div>
 
-      {/* ===== iOS风格标签选择弹出框 ===== */}
+      {/* ===== iOS风格标签选择弹出框（胶囊网格） ===== */}
       {showTagModal && (
         <div
           className="fixed inset-0 z-50 flex flex-col justify-end"
@@ -369,7 +455,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
         >
           <div
             className="w-full bg-white overflow-hidden"
-            style={{ borderRadius: "20px 20px 0 0", maxHeight: "75vh" }}
+            style={{ borderRadius: "20px 20px 0 0", maxHeight: "78vh" }}
             onClick={e => e.stopPropagation()}
           >
             {/* 顶部把手 */}
@@ -389,38 +475,80 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
               </button>
             </div>
 
-            {/* 标签列表（可滚动） */}
-            <div className="overflow-y-auto" style={{ maxHeight: "calc(75vh - 100px)" }}>
+            {/* 标签内容区（可滚动） */}
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(78vh - 100px)" }}>
               {/* 全部选项 */}
-              <button
-                className="w-full flex items-center justify-between px-5 py-3.5"
-                style={{ borderBottom: "1px solid #F8F8F8" }}
-                onClick={() => { setActiveTag(""); setShowTagModal(false); }}
-              >
-                <span className="text-sm font-medium" style={{ color: activeTag === "" ? "#D32F2F" : "#333" }}>
-                  全部
-                </span>
-                {activeTag === "" && (
-                  <Check className="w-4 h-4" style={{ color: "#D32F2F" }} />
-                )}
-              </button>
-
-              {/* 中文标签列表 */}
-              {chineseTags.map((tag, i) => (
+              <div className="px-4 pt-3 pb-2">
                 <button
-                  key={i}
-                  className="w-full flex items-center justify-between px-5 py-3.5"
-                  style={{ borderBottom: "1px solid #F8F8F8" }}
-                  onClick={() => { setActiveTag(tag); setShowTagModal(false); }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium"
+                  style={{
+                    backgroundColor: activeTag === "" ? "#D32F2F" : "#F5F5F5",
+                    color: activeTag === "" ? "#FFFFFF" : "#555",
+                    border: `1px solid ${activeTag === "" ? "#D32F2F" : "#E8E8E8"}`,
+                  }}
+                  onClick={() => { setActiveTag(""); setShowTagModal(false); }}
                 >
-                  <span className="text-sm" style={{ color: activeTag === tag ? "#D32F2F" : "#333" }}>
-                    {tag}
-                  </span>
-                  {activeTag === tag && (
-                    <Check className="w-4 h-4" style={{ color: "#D32F2F" }} />
-                  )}
+                  全部
+                  <span className="text-xs opacity-70">{total > 0 ? total : ""}</span>
                 </button>
-              ))}
+              </div>
+
+              {/* 分组标签 */}
+              {groupedTags.length > 0 ? (
+                groupedTags.map(({ group, tags }) => (
+                  <div key={group} className="px-4 pb-3">
+                    {/* 分组标题 */}
+                    <div className="flex items-center gap-2 mb-2 pt-1">
+                      <span className="text-xs font-semibold text-gray-400 tracking-wide">{group}</span>
+                      <div className="flex-1 h-px" style={{ backgroundColor: "#F0F0F0" }} />
+                    </div>
+                    {/* 胶囊标签网格 */}
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map(({ name, count }) => (
+                        <button
+                          key={name}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm"
+                          style={{
+                            backgroundColor: activeTag === name ? "#D32F2F" : "#F5F5F5",
+                            color: activeTag === name ? "#FFFFFF" : "#444",
+                            border: `1px solid ${activeTag === name ? "#D32F2F" : "#E8E8E8"}`,
+                            fontWeight: activeTag === name ? 600 : 400,
+                          }}
+                          onClick={() => { setActiveTag(name); setShowTagModal(false); }}
+                        >
+                          {name}
+                          <span
+                            className="text-xs"
+                            style={{ opacity: 0.65, fontSize: "11px" }}
+                          >
+                            {count}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                /* 数据还未加载时，直接用allTags展示（不分组） */
+                <div className="px-4 pb-3">
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {allTags.filter(isChinese).map((tag, i) => (
+                      <button
+                        key={i}
+                        className="inline-flex items-center px-3 py-1.5 rounded-full text-sm"
+                        style={{
+                          backgroundColor: activeTag === tag ? "#D32F2F" : "#F5F5F5",
+                          color: activeTag === tag ? "#FFFFFF" : "#444",
+                          border: `1px solid ${activeTag === tag ? "#D32F2F" : "#E8E8E8"}`,
+                        }}
+                        onClick={() => { setActiveTag(tag); setShowTagModal(false); }}
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 底部安全区 */}
               <div className="h-6" />
