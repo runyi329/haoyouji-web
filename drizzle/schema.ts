@@ -1626,23 +1626,24 @@ export const afPriceScanLogs = mysqlTable("af_price_scan_logs", {
   index("af_scan_coin_idx").on(table.coin),
 ]);
 
-// AG 型定制账本：图片助记词表
+// AG 型定制账本：图片提示词库
 // 每条记录 = 一张图片 + 对应的提示词文字
 export const agPromptImages = mysqlTable("ag_prompt_images", {
   id: int().autoincrement().notNull(),
   ledgerId: int('ledger_id').notNull(),              // 所属AG账本ID
-  imageUrl: text('image_url').notNull(),             // 图片URL（COS存储）
-  imageKey: text('image_key').notNull(),             // COS key（用于删除）
+  imageUrl: varchar('image_url', { length: 500 }).notNull(), // 图片URL（COS存储）
+  imageKey: varchar('image_key', { length: 500 }).notNull(), // COS key（用于删除）
   promptText: text('prompt_text'),                   // 提示词文字（可为空）
   title: varchar('title', { length: 200 }),          // 可选标题
   tags: text('tags'),                                // 标签（JSON数组字符串）
   author: varchar('author', { length: 100 }),        // 来源作者
-  uploadedBy: int('uploaded_by').notNull(),          // 上传者用户ID
+  uploadedBy: int('uploaded_by').default(1).notNull(), // 上传者用户ID
   sortOrder: int('sort_order').default(0).notNull(), // 排序权重（越大越靠前）
+  deletedAt: timestamp('deleted_at', { mode: 'string' }),
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
-  deletedAt: timestamp('deleted_at', { mode: 'string' }),
 }, (table) => [
   index("ag_prompt_ledger_idx").on(table.ledgerId),
   index("ag_prompt_uploader_idx").on(table.uploadedBy),
+  index("ag_prompt_deleted_idx").on(table.deletedAt),
 ]);
