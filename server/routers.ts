@@ -8812,6 +8812,77 @@ export const appRouter = router({
           tagCounts: tagCountMap,
         };
       }),
+    // 收藏/取消收藏AG图片
+    toggleAgFavorite: protectedProcedure
+      .input(z.object({
+        imageId: z.number(),
+        ledgerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const userId = ctx.user.id;
+        // 检查是否已收藏
+        const [existing] = await db.execute(
+          `SELECT id FROM ag_favorites WHERE user_id = ? AND image_id = ?`,
+          [userId, input.imageId]
+        ) as any[];
+        const rows = existing as any[];
+        if (rows && rows.length > 0) {
+          // 已收藏 -> 取消
+          await db.execute(
+            `DELETE FROM ag_favorites WHERE user_id = ? AND image_id = ?`,
+            [userId, input.imageId]
+          );
+          return { favorited: false };
+        } else {
+          // 未收藏 -> 添加
+          await db.execute(
+            `INSERT INTO ag_favorites (user_id, ledger_id, image_id) VALUES (?, ?, ?)`,
+            [userId, input.ledgerId, input.imageId]
+          );
+          return { favorited: true };
+        }
+      }),
+
+    // 获取用户在某账本的收藏列表
+    getAgFavorites: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const userId = ctx.user.id;
+        const rows = await db.execute(
+          `SELECT f.image_id, i.title, i.image_url, i.prompt_text, i.tags, i.created_at
+           FROM ag_favorites f
+           JOIN ag_prompt_images i ON i.id = f.image_id AND i.deleted_at IS NULL
+           WHERE f.user_id = ? AND f.ledger_id = ?
+           ORDER BY f.created_at DESC`,
+          [userId, input.ledgerId]
+        ) as any[];
+        const items = (rows[0] as any[]) || [];
+        return { items };
+      }),
+
+    // 获取用户在某账本收藏的image_id集合（用于前端判断是否已收藏）
+    getAgFavoriteIds: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const userId = ctx.user.id;
+        const rows = await db.execute(
+          `SELECT image_id FROM ag_favorites WHERE user_id = ? AND ledger_id = ?`,
+          [userId, input.ledgerId]
+        ) as any[];
+        const ids = ((rows[0] as any[]) || []).map((r: any) => r.image_id as number);
+        return { ids };
+      }),
+
     // 上传AG账本图片（接受base64，上传到COS，并保存记录）
     uploadAgPromptImage: protectedProcedure
       .input(z.object({
