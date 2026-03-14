@@ -244,6 +244,48 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ users invite columns checked');
     }
 
+    // 确保 AG 数据源相关表存在（ag_sync_sources / ag_sync_logs）
+    const dbConnAg = await getDbConnection();
+    if (dbConnAg) {
+      await dbConnAg.execute(`
+        CREATE TABLE IF NOT EXISTS \`ag_sync_sources\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`ledger_id\` INT NOT NULL,
+          \`name\` VARCHAR(100) NOT NULL,
+          \`api_url\` TEXT NOT NULL,
+          \`model_name\` VARCHAR(100) DEFAULT NULL,
+          \`sync_rule\` TEXT DEFAULT NULL,
+          \`status\` ENUM('active','inactive') NOT NULL DEFAULT 'active',
+          \`last_max_id\` INT NOT NULL DEFAULT 0,
+          \`total_synced\` INT NOT NULL DEFAULT 0,
+          \`last_synced_at\` DATETIME DEFAULT NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          INDEX \`idx_ag_sync_sources_ledger\` (\`ledger_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      await dbConnAg.execute(`
+        CREATE TABLE IF NOT EXISTS \`ag_sync_logs\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`source_id\` INT NOT NULL,
+          \`synced_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`new_count\` INT NOT NULL DEFAULT 0,
+          \`skip_count\` INT NOT NULL DEFAULT 0,
+          \`min_id\` INT DEFAULT NULL,
+          \`max_id\` INT DEFAULT NULL,
+          \`duration_ms\` INT DEFAULT NULL,
+          \`status\` ENUM('success','error') NOT NULL DEFAULT 'success',
+          \`error_msg\` TEXT DEFAULT NULL,
+          PRIMARY KEY (\`id\`),
+          INDEX \`idx_ag_sync_logs_source\` (\`source_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      // 确保 ag_prompt_images 表有 tags 和 author 字段
+      await safeAddColumn(dbConnAg, 'ag_prompt_images', 'tags', "TEXT DEFAULT NULL COMMENT 'tags JSON array'");
+      await safeAddColumn(dbConnAg, 'ag_prompt_images', 'author', "VARCHAR(255) DEFAULT NULL COMMENT 'author name'");
+      console.log('[DB Init] ✅ ag_sync_sources / ag_sync_logs tables checked/created');
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
