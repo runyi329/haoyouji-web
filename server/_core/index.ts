@@ -170,55 +170,49 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function initAgSyncSources() {
   try {
-    const { agSyncSources, ledgers } = await import('../../drizzle/schema');
-    const { eq } = await import('drizzle-orm');
-    const db = await getDb();
-    if (!db) return;
+    const { getDbConnection } = await import('../db');
+    const conn = await getDbConnection();
+    if (!conn) return;
 
-    // 动态查询 custom_ag 类型的账本 ID（不写死）
-    const agLedgers = await db.select({ id: ledgers.id })
-      .from(ledgers)
-      .where(eq(ledgers.type, 'custom_ag'))
-      .limit(1);
-    // 找不到 custom_ag 类型时，回退到固定 ID 54
-    const AG_LEDGER_ID = agLedgers.length > 0 ? agLedgers[0].id : 54;
-    console.log(`[AG初始化] 找到 AG 账本 ID: ${AG_LEDGER_ID}`);
+    // 动态查询 custom_ag 类型的账本 ID，找不到则用固定 ID 54
+    const [agRows] = await (conn as any).execute(
+      "SELECT id FROM ledgers WHERE type = 'custom_ag' LIMIT 1"
+    );
+    const AG_LEDGER_ID = (agRows as any[]).length > 0 ? (agRows as any[])[0].id : 54;
+    console.log(`[AG初始化] AG 账本 ID: ${AG_LEDGER_ID}`);
 
     // 预置数据源列表
     const presetSources = [
       {
         name: 'OpenNana',
-        apiUrl: 'https://api.opennana.com/api/prompts',
-        modelName: 'flux',
-        syncRule: '增量同步策略：API按ID降序返回数据，每次同步从第1页开始，遇到已存在的ID即停止。通常只需拉取1-2页即可获取所有新内容，避免重复下载全量数据。图片自动上传至腾讯云COS存储。',
+        api_url: 'https://api.opennana.com/api/prompts',
+        model_name: 'flux',
+        sync_rule: '增量同步策略：API按ID降序返回数据，每次同步从第1页开始，遇到已存在的ID即停止。通常只需拉取1-2页即可获取所有新内容，避免重复下载全量数据。图片自动上传至腾讯云COS存储。',
       },
       {
         name: 'aiart.pics',
-        apiUrl: 'https://aiart.pics/api/prompts',
-        modelName: 'nanoBanana-Pro',
-        syncRule: '增量同步策略：API使用offset分页（limit=20&offset=0），按publishedAt降序返回数据。每次同步从第1页开始，通过imageKey中的aiartpics_{id}_前缀判断是否已存在，遇到已存在的记录即停止。图片CDN地址为https://img1.aiart.pics/{path}，提示词在详情接口的prompts数组中，支持中文标题和标签。',
+        api_url: 'https://aiart.pics/api/prompts',
+        model_name: 'nanoBanana-Pro',
+        sync_rule: '增量同步策略：API使用offset分页（limit=20&offset=0），按publishedAt降序返回数据。每次同步从第1页开始，通过imageKey中的aiartpics_{id}_前缀判断是否已存在，遇到已存在的记录即停止。图片CDN地址为https://img1.aiart.pics/{path}，提示词在详情接口的prompts数组中，支持中文标题和标签。',
       },
     ];
 
     for (const source of presetSources) {
-      const [existing] = await db.select({ id: agSyncSources.id })
-        .from(agSyncSources)
-        .where(eq(agSyncSources.name, source.name))
-        .limit(1);
-      if (!existing) {
-        await db.insert(agSyncSources).values({
-          ledgerId: AG_LEDGER_ID,
-          name: source.name,
-          apiUrl: source.apiUrl,
-          modelName: source.modelName,
-          syncRule: source.syncRule,
-          status: 'active',
-          lastMaxId: 0,
-          totalSynced: 0,
-        });
+      const [existRows] = await (conn as any).execute(
+        'SELECT id FROM ag_sync_sources WHERE name = ? LIMIT 1',
+        [source.name]
+      );
+      if ((existRows as any[]).length === 0) {
+        await (conn as any).execute(
+          'INSERT INTO ag_sync_sources (ledger_id, name, api_url, model_name, sync_rule, status, last_max_id, total_synced) VALUES (?, ?, ?, ?, ?, \'active\', 0, 0)',
+          [AG_LEDGER_ID, source.name, source.api_url, source.model_name, source.sync_rule]
+        );
         console.log(`[AG初始化] 数据源「${source.name}」已创建`);
+      } else {
+        console.log(`[AG初始化] 数据源「${source.name}」已存在，跳过`);
       }
     }
+    console.log('[AG初始化] ✅ 数据源初始化完成');
   } catch (error) {
     console.error('[AG初始化] 数据源初始化失败:', error instanceof Error ? error.message : error);
   }
