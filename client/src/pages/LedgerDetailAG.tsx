@@ -260,16 +260,34 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
     <div className="min-h-screen" style={{ backgroundColor: "#F5F5F5" }}>
       {/* ===== 顶部红色区域 ===== */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
-        {/* 导航栏 */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <button
-            onClick={() => setLocation("/ledger/list")}
-            className="flex items-center gap-1 text-white/90 hover:text-white"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            <span className="text-sm">返回</span>
-          </button>
-          <h1 className="text-base font-semibold text-white truncate max-w-[160px]">
+        {/* 导航栏（含成员信息，合并为单行） */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-3">
+          {/* 左侧：返回 + 成员头像 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLocation("/ledger/list")}
+              className="flex items-center gap-1 text-white/90 hover:text-white"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              <span className="text-sm">返回</span>
+            </button>
+            <button
+              onClick={() => setShowMembersDialog(true)}
+              className="flex items-center gap-1"
+            >
+              <div className="flex -space-x-1.5">
+                {(membersData || []).slice(0, 3).map((m: any) => (
+                  <div key={m.id} className="w-6 h-6 rounded-full border-2 border-white overflow-hidden bg-gray-200">
+                    <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
+                  </div>
+                ))}
+              </div>
+              <span className="text-xs text-white/80 ml-0.5">
+                <span className="font-semibold" style={{ color: "#FFD700" }}>{memberCount}</span>
+              </span>
+            </button>
+          </div>
+          <h1 className="text-base font-semibold text-white truncate max-w-[110px]">
             {ledgerData?.name || "提示词图库"}
           </h1>
           {/* 右侧：标签按钮 + 设置 */}
@@ -296,26 +314,6 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
               </button>
             )}
           </div>
-        </div>
-
-        {/* 成员头像 + 数量 */}
-        <div className="px-4 pb-2">
-          <button
-            onClick={() => setShowMembersDialog(true)}
-            className="flex items-center gap-2"
-          >
-            <div className="flex -space-x-2">
-              {(membersData || []).slice(0, 5).map((m: any) => (
-                <div key={m.id} className="w-7 h-7 rounded-full border-2 border-white overflow-hidden bg-gray-200">
-                  <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
-                </div>
-              ))}
-            </div>
-            <span className="text-xs text-white/80 ml-1">
-              <span className="font-semibold" style={{ color: "#FFD700" }}>{memberCount}</span> 人共享
-            </span>
-            <Users className="w-3.5 h-3.5 text-white/60" />
-          </button>
         </div>
 
 
