@@ -170,13 +170,19 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 
 async function initAgSyncSources() {
   try {
-    const { agSyncSources } = await import('../../drizzle/schema');
+    const { agSyncSources, ledgers } = await import('../../drizzle/schema');
     const { eq } = await import('drizzle-orm');
     const db = await getDb();
     if (!db) return;
 
-    // AG 账本 ID：54（固定）
-    const AG_LEDGER_ID = 54;
+    // 动态查询 custom_ag 类型的账本 ID（不写死）
+    const agLedgers = await db.select({ id: ledgers.id })
+      .from(ledgers)
+      .where(eq(ledgers.type, 'custom_ag'))
+      .limit(1);
+    // 找不到 custom_ag 类型时，回退到固定 ID 54
+    const AG_LEDGER_ID = agLedgers.length > 0 ? agLedgers[0].id : 54;
+    console.log(`[AG初始化] 找到 AG 账本 ID: ${AG_LEDGER_ID}`);
 
     // 预置数据源列表
     const presetSources = [
