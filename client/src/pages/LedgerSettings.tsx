@@ -513,8 +513,8 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/lottery/list/${ledgerId}`)}
  />
  )}
- {/* AG 型数据源管理入口 */}
- {(ledgerData?.type === 'custom_ag' || ledgerId === 54) && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ {/* AG 型数据源管理入口：只要是54号账本就显示 */}
+ {ledgerId === 54 && (
  <SettingItem
  label="数据源管理"
  showIcon
