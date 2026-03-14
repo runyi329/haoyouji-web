@@ -472,24 +472,24 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
               </button>
             </div>
 
+            {/* 全部选项（固定在顶部，不随内容滚动） */}
+            <div className="px-4 pt-3 pb-2" style={{ borderBottom: "1px solid #F5F5F5" }}>
+              <button
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium"
+                style={{
+                  backgroundColor: activeTag === "" ? "#D32F2F" : "#F5F5F5",
+                  color: activeTag === "" ? "#FFFFFF" : "#555",
+                  border: `1px solid ${activeTag === "" ? "#D32F2F" : "#E8E8E8"}`,
+                }}
+                onClick={() => { setActiveTag(""); setShowTagModal(false); }}
+              >
+                全部
+                <span className="text-xs opacity-70">{total > 0 ? total : ""}</span>
+              </button>
+            </div>
             {/* 标签内容区（可滚动） */}
-            <div className="overflow-y-auto" style={{ maxHeight: "calc(78vh - 100px)" }}>
-              {/* 全部选项 */}
-              <div className="px-4 pt-3 pb-2">
-                <button
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium"
-                  style={{
-                    backgroundColor: activeTag === "" ? "#D32F2F" : "#F5F5F5",
-                    color: activeTag === "" ? "#FFFFFF" : "#555",
-                    border: `1px solid ${activeTag === "" ? "#D32F2F" : "#E8E8E8"}`,
-                  }}
-                  onClick={() => { setActiveTag(""); setShowTagModal(false); }}
-                >
-                  全部
-                  <span className="text-xs opacity-70">{total > 0 ? total : ""}</span>
-                </button>
-              </div>
-
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(78vh - 140px)" }}>
+              {/* 分组标签 */}
               {/* 分组标签 */}
               {groupedTags.length > 0 ? (
                 groupedTags.map(({ group, tags }) => (
