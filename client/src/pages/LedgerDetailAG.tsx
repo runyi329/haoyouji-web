@@ -260,20 +260,15 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
     <div className="min-h-screen" style={{ backgroundColor: "#F5F5F5" }}>
       {/* ===== 顶部红色区域 ===== */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
-        {/* 导航栏 */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <button
-            onClick={() => setLocation("/ledger/list")}
-            className="flex items-center gap-1 text-white/90 hover:text-white"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            <span className="text-sm">返回</span>
-          </button>
-          <h1 className="text-base font-semibold text-white truncate max-w-[160px]">
+        {/* 导航栏：标题靠左，右侧胶囊按钮组 */}
+        <div className="flex items-center px-4 pt-4 pb-2 gap-2">
+          {/* 标题靠左 */}
+          <h1 className="text-base font-semibold text-white flex-1 truncate">
             {ledgerData?.name || "提示词图库"}
           </h1>
-          {/* 右侧：标签按钮 + 设置 */}
-          <div className="flex items-center gap-2">
+          {/* 右侧按钮组 */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* 标签按钮（胶囊样式） */}
             <button
               onClick={() => setShowTagModal(true)}
               className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
@@ -285,6 +280,19 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
             >
               <Tag className="w-3 h-3" />
               <span className="max-w-[60px] truncate">{activeTag || "标签"}</span>
+            </button>
+            {/* 返回按钮（胶囊样式，与标签一致） */}
+            <button
+              onClick={() => setLocation("/ledger/list")}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: "rgba(255,255,255,0.15)",
+                color: "#FFFFFF",
+                border: "1px solid rgba(255,255,255,0.3)",
+              }}
+            >
+              <ChevronLeft className="w-3 h-3" />
+              <span>返回</span>
             </button>
             {/* 设置按钮：仅账本创建者可见 */}
             {(user?.id === ledgerData?.ownerId || user?.id === ledgerData?.createdBy) && (
