@@ -1647,3 +1647,41 @@ export const agPromptImages = mysqlTable("ag_prompt_images", {
   index("ag_prompt_uploader_idx").on(table.uploadedBy),
   index("ag_prompt_deleted_idx").on(table.deletedAt),
 ]);
+
+// AG 型数据源配置表（管理同步来源）
+export const agSyncSources = mysqlTable("ag_sync_sources", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  name: varchar('name', { length: 100 }).notNull(),
+  apiUrl: varchar('api_url', { length: 500 }).notNull(),
+  modelName: varchar('model_name', { length: 100 }),
+  syncRule: text('sync_rule'),
+  status: varchar('status', { length: 20 }).default('active').notNull(),
+  lastMaxId: int('last_max_id').default(0).notNull(),
+  totalSynced: int('total_synced').default(0).notNull(),
+  lastSyncedAt: timestamp('last_synced_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("ag_sync_sources_ledger_idx").on(table.ledgerId),
+]);
+
+// AG 型同步日志表（记录每次同步结果）
+export const agSyncLogs = mysqlTable("ag_sync_logs", {
+  id: int().autoincrement().notNull(),
+  sourceId: int('source_id').notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  status: varchar('status', { length: 20 }).notNull(),
+  newCount: int('new_count').default(0).notNull(),
+  skipCount: int('skip_count').default(0).notNull(),
+  maxIdBefore: int('max_id_before').default(0).notNull(),
+  maxIdAfter: int('max_id_after').default(0).notNull(),
+  durationMs: int('duration_ms').default(0).notNull(),
+  errorMsg: text('error_msg'),
+  triggeredBy: int('triggered_by'),
+  triggeredByName: varchar('triggered_by_name', { length: 100 }),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  index("ag_sync_logs_source_idx").on(table.sourceId),
+  index("ag_sync_logs_ledger_idx").on(table.ledgerId),
+]);

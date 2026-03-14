@@ -24,7 +24,7 @@ import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages } from "../drizzle/schema";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages, agSyncSources, agSyncLogs } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray, like, or, gt } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
@@ -8951,6 +8951,187 @@ export const appRouter = router({
           .where(eq(agPromptImages.id, input.id));
         return { success: true };
       }),
+    // ===== AG 数据源管理 =====
+    // 获取数据源列表
+    getAgSyncSources: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证是账本成员
+        const [member] = await db.select().from(schema.ledgerMembers).where(and(
+          eq(schema.ledgerMembers.ledgerId, input.ledgerId),
+          eq(schema.ledgerMembers.userId, ctx.user.id)
+        ));
+        if (!member) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const sources = await db.select().from(agSyncSources)
+          .where(eq(agSyncSources.ledgerId, input.ledgerId))
+          .orderBy(agSyncSources.id);
+        return { sources };
+      }),
+    // 获取同步日志
+    getAgSyncLogs: protectedProcedure
+      .input(z.object({ sourceId: z.number(), limit: z.number().default(20) }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const logs = await db.select().from(agSyncLogs)
+          .where(eq(agSyncLogs.sourceId, input.sourceId))
+          .orderBy(desc(agSyncLogs.id))
+          .limit(input.limit);
+        return { logs };
+      }),
+    // 触发增量同步
+    syncAgFromSource: protectedProcedure
+      .input(z.object({ sourceId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const startTime = Date.now();
+        // 获取数据源配置
+        const [source] = await db.select().from(agSyncSources).where(eq(agSyncSources.id, input.sourceId));
+        if (!source) throw new TRPCError({ code: 'NOT_FOUND', message: '数据源不存在' });
+        // 验证是账本owner
+        const [member] = await db.select().from(schema.ledgerMembers).where(and(
+          eq(schema.ledgerMembers.ledgerId, source.ledgerId),
+          eq(schema.ledgerMembers.userId, ctx.user.id)
+        ));
+        if (!member || member.role !== 'owner') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只有账本创建者可以触发同步' });
+        }
+        const maxIdBefore = source.lastMaxId || 0;
+        let newCount = 0;
+        let skipCount = 0;
+        let maxIdAfter = maxIdBefore;
+        let errorMsg: string | null = null;
+        try {
+          const { uploadImageToCOS } = await import('./cos-upload');
+          const baseApiUrl = source.apiUrl; // e.g. https://api.opennana.com/api/prompts
+          // 从第1页开始拉取，遇到已知ID停止
+          let page = 1;
+          let shouldStop = false;
+          while (!shouldStop) {
+            const listUrl = `${baseApiUrl}?page=${page}&limit=20`;
+            const resp = await fetch(listUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+            if (!resp.ok) throw new Error(`API请求失败: ${resp.status}`);
+            const json = await resp.json() as any;
+            const items: any[] = json.data?.items || [];
+            if (!items || items.length === 0) { shouldStop = true; break; }
+            for (const item of items) {
+              const externalId = item.id;
+              // 只处理图片类型
+              if (item.media_type !== 'image') { skipCount++; continue; }
+              // 检查是否已存在（通过imageKey包含externalId）
+              const [existing] = await db.select({ id: agPromptImages.id })
+                .from(agPromptImages)
+                .where(and(
+                  eq(agPromptImages.ledgerId, source.ledgerId),
+                  like(agPromptImages.imageKey, `%opennana_${externalId}_%`)
+                ))
+                .limit(1);
+              if (existing) {
+                // 遇到已存在的记录，停止同步
+                skipCount++;
+                shouldStop = true;
+                break;
+              }
+              // 新记录：拉取详情 + 下载图片 + 上传到COS
+              try {
+                // 拉取详情获取完整信息
+                const detailResp = await fetch(`${baseApiUrl}/${item.slug}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+                let detail: any = null;
+                if (detailResp.ok) {
+                  const detailJson = await detailResp.json() as any;
+                  detail = detailJson.data || detailJson;
+                }
+                // 获取图片URL（优先详情中的高清图，fallback到列表缩略图）
+                const imgUrl = (detail?.images && detail.images[0]) || item.cover_image;
+                if (!imgUrl) { skipCount++; continue; }
+                const imgResp = await fetch(imgUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+                if (!imgResp.ok) { skipCount++; continue; }
+                const imgBuffer = Buffer.from(await imgResp.arrayBuffer());
+                const fileKey = `ag-prompts/opennana_${externalId}_${Date.now()}.jpg`;
+                const cosUrl = await uploadImageToCOS(imgBuffer, 'ag-prompts', fileKey);
+                // 提取提示词（优先中文）
+                let promptText: string | null = null;
+                if (detail?.prompts && Array.isArray(detail.prompts)) {
+                  const zhPrompt = detail.prompts.find((p: any) => p.type === 'zh');
+                  const enPrompt = detail.prompts.find((p: any) => p.type === 'en');
+                  promptText = zhPrompt?.text || enPrompt?.text || null;
+                }
+                // 构建tags
+                const tags: string[] = [];
+                const tagSource = detail?.tags || item.tags;
+                if (tagSource) {
+                  if (Array.isArray(tagSource)) tags.push(...tagSource.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean));
+                  else if (typeof tagSource === 'string') tags.push(...tagSource.split(',').map((t: string) => t.trim()).filter(Boolean));
+                }
+                await db.insert(agPromptImages).values({
+                  ledgerId: source.ledgerId,
+                  imageUrl: cosUrl,
+                  imageKey: fileKey,
+                  promptText,
+                  title: item.title || null,
+                  tags: tags.length > 0 ? JSON.stringify(tags) : null,
+                  author: detail?.submitter_name || null,
+                  uploadedBy: ctx.user.id,
+                  sortOrder: 0,
+                });
+                if (externalId > maxIdAfter) maxIdAfter = externalId;
+                newCount++;
+              } catch (imgErr) {
+                console.error('[AG Sync] 图片处理失败:', imgErr);
+                skipCount++;
+              }
+            }
+            // 检查是否还有更多页
+            const hasMore = json.data?.pagination?.has_more;
+            if (!hasMore) { shouldStop = true; break; }
+            page++;
+            // 最多拉取20页防止无限循环
+            if (page > 20) shouldStop = true;
+          }
+          // 更新数据源状态
+          await db.update(agSyncSources)
+            .set({
+              lastMaxId: maxIdAfter,
+              totalSynced: (source.totalSynced || 0) + newCount,
+              lastSyncedAt: new Date().toISOString().slice(0, 19).replace('T', ' '),
+            })
+            .where(eq(agSyncSources.id, input.sourceId));
+          // 记录同步日志
+          await db.insert(agSyncLogs).values({
+            sourceId: input.sourceId,
+            ledgerId: source.ledgerId,
+            status: 'success',
+            newCount,
+            skipCount,
+            maxIdBefore,
+            maxIdAfter,
+            durationMs: Date.now() - startTime,
+            triggeredBy: ctx.user.id,
+            triggeredByName: ctx.user.username || ctx.user.name || null,
+          });
+          return { success: true, newCount, skipCount, durationMs: Date.now() - startTime };
+        } catch (err) {
+          errorMsg = err instanceof Error ? err.message : String(err);
+          // 记录失败日志
+          await db.insert(agSyncLogs).values({
+            sourceId: input.sourceId,
+            ledgerId: source.ledgerId,
+            status: 'failed',
+            newCount,
+            skipCount,
+            maxIdBefore,
+            maxIdAfter,
+            durationMs: Date.now() - startTime,
+            errorMsg,
+            triggeredBy: ctx.user.id,
+            triggeredByName: ctx.user.username || ctx.user.name || null,
+          });
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `同步失败: ${errorMsg}` });
+        }
+      }),
     // ===== 备忘录条目 CRUD（AD型账本使用）=====
     // 获取备忘录列表
     getMemoItems: protectedProcedure
@@ -11154,7 +11335,6 @@ export const adminFeatureRouter = router({
         }
       }
     }),
-
 });
 
 export type AppRouter = typeof appRouter;
