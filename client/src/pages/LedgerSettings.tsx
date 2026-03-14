@@ -513,6 +513,14 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/lottery/list/${ledgerId}`)}
  />
  )}
+ {/* AG 型数据源管理入口 */}
+ {ledgerData?.type === 'custom_ag' && ledgerData?.userRole === 'owner' && (
+ <SettingItem
+ label="数据源管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/ag-data-sources`)}
+ />
+ )}
  {/* / */}
  {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
