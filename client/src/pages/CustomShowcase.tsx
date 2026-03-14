@@ -100,20 +100,20 @@ const SCENE_LIST: SceneDetail[] = [
     ],
     aiFeature: "AI异常检测：实时监控收支数据，当发现异常大额支出或收入偏差时，立即向所有合伙人发出预警，保护共同利益。"
   },
-  { label: "家庭生活", icon: Home,          color: "#2E7D32", desc: "家庭共同账本，装修、旅行预算全家可见",
-    useCase: "适用于夫妻、家庭成员共同管理日常开销、装修预算、旅行计划等家庭财务场景。",
+  { label: "生图提示词簿", icon: Sparkles,   color: "#6A1B9A", desc: "AI生图提示词共享库，免费使用，24小时出图",
+    useCase: "适用于所有想用AI生成高质量图片却不知道如何描述画面的用户。无论是设计师、自媒体人还是普通用户，都能通过共享提示词库，快速找到心仪的画面风格，让AI创作从此不再迷茫。",
     solution: [
-      "共同账本：全家成员共同记账，收支一目了然",
-      "预算管理：设定月度预算，超支自动提醒",
-      "大项追踪：装修、购车、旅行等大项目独立核算",
-      "账单分析：自动分类统计，找出家庭最大开销项"
+      "即查即用：海量真实案例配图，找到喜欢的风格直接复制提示词",
+      "多人共建：所有人都可以贡献优质提示词，社区共同沉淀精华",
+      "标签分类：按风格、场景、技法精准筛选，秒找目标画面",
+      "持续更新：每日新增案例，始终保持与最新AI模型同步"
     ],
     painPoints: [
-      "财务透明：夫妻双方对家庭财务有共同认知，减少摩擦",
-      "超支控制：预算预警让家庭消费更有计划性",
-      "目标储蓄：可视化储蓄进度，激励全家共同努力"
+      "描述困难：不知道怎么写提示词？直接参照案例，一键复用",
+      "效果不稳：有了真实案例对照，出图效果可预期、可复现",
+      "资源分散：告别东拼西凑，所有优质提示词集中在一个地方"
     ],
-    aiFeature: "AI家庭财务顾问：分析家庭消费结构，识别不必要的重复支出，并根据收入水平推荐个性化的储蓄与投资建议。"
+    aiFeature: "AI提示词优化：根据你选择的案例风格，自动分析关键词组合规律，生成个性化提示词变体，帮助你在原有风格基础上进行二次创作，将AI创作效率提升10倍。"
   },
   { label: "社群运营", icon: Users,         color: "#6A1B9A", desc: "AA聚餐、团购分摊，自动计算人均",
     useCase: "适用于朋友聚餐AA、团购分摊、社群活动费用管理等多人协作场景。",
@@ -5145,16 +5145,20 @@ function DetailCard({ scene, onClose }: {
             <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 3 }}>定制案例</div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ fontSize: 20, fontWeight: 700, color: "#CBA471", lineHeight: 1.2 }}>{scene.label}</div>
-              {scene.label === "共享建议簿" && (
+              {(scene.label === "共享建议簿" || scene.label === "生图提示词簿") && (
                 <a
-                  href="/demo/opinion/44"
+                  href={scene.label === "生图提示词簿" ? "/ag/54" : "/demo/opinion/44"}
                   style={{
                     fontSize: 13, fontWeight: 800, color: "#fff",
-                    background: "linear-gradient(135deg,#C62828,#E53935)",
+                    background: scene.label === "生图提示词簿"
+                      ? "linear-gradient(135deg,#6A1B9A,#9C27B0)"
+                      : "linear-gradient(135deg,#C62828,#E53935)",
                     borderRadius: 20, padding: "5px 16px",
                     textDecoration: "none", letterSpacing: 1,
                     whiteSpace: "nowrap",
-                    boxShadow: "0 2px 12px rgba(198,40,40,0.5)",
+                    boxShadow: scene.label === "生图提示词簿"
+                      ? "0 2px 12px rgba(106,27,154,0.5)"
+                      : "0 2px 12px rgba(198,40,40,0.5)",
                     animation: "trialBounce 1.2s ease-in-out infinite",
                     display: "inline-block"
                   }}
@@ -5241,16 +5245,20 @@ function DetailCard({ scene, onClose }: {
         {/* 底部定制信息 */}
         <div style={{
           padding: "16px", borderRadius: 14,
-          background: "linear-gradient(135deg,rgba(203,164,113,0.2),rgba(198,40,40,0.15))",
-          border: "1px solid rgba(203,164,113,0.25)"
+          background: scene.label === "生图提示词簿"
+            ? "linear-gradient(135deg,rgba(106,27,154,0.2),rgba(156,39,176,0.15))"
+            : "linear-gradient(135deg,rgba(203,164,113,0.2),rgba(198,40,40,0.15))",
+          border: scene.label === "生图提示词簿"
+            ? "1px solid rgba(156,39,176,0.3)"
+            : "1px solid rgba(203,164,113,0.25)"
         }}>
           <div style={{ display: "flex", gap: 12 }}>
             <div style={{ flex: 1, textAlign: "center", padding: "10px 0", borderRadius: 10, backgroundColor: "rgba(0,0,0,0.25)" }}>
-              <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 4 }}>定制周期</div>
+              <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 4 }}>{scene.label === "生图提示词簿" ? "出图速度" : "定制周期"}</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: "#CBA471", lineHeight: 1 }}>24<span style={{ fontSize: 13, fontWeight: 600, marginLeft: 2 }}>小时</span></div>
             </div>
             <div style={{ flex: 1, textAlign: "center", padding: "10px 0", borderRadius: 10, backgroundColor: "rgba(0,0,0,0.25)" }}>
-              <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 4 }}>定制费用</div>
+              <div style={{ fontSize: 11, color: "#8B7355", marginBottom: 4 }}>{scene.label === "生图提示词簿" ? "使用费用" : "定制费用"}</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: "#CBA471", lineHeight: 1 }}>免费</div>
             </div>
           </div>
