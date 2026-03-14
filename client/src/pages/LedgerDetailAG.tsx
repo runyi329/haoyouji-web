@@ -3,7 +3,7 @@
  *
  * 功能：
  *   - 分页加载（每次20条，滚动到底自动加载更多）
- *   - 顶部标签筛选栏（横向滚动）
+ *   - 顶部"标签"按钮 → 底部iOS风格标签选择弹出框
  *   - 搜索框（关键词搜索标题/提示词）
  *   - 点击图片弹出白色底部抽屉（仿OpenNana详情页）
  *
@@ -22,6 +22,7 @@ import {
   Users,
   X,
   Search,
+  Tag,
 } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -67,6 +68,11 @@ function parseTags(tagsJson: string | null): string[] {
   }
 }
 
+/** 判断是否为中文字符（含中文标点） */
+function isChinese(str: string): boolean {
+  return /[\u4e00-\u9fa5]/.test(str);
+}
+
 /** 从标题提取主标题（去掉 # 标签部分） */
 function getShortTitle(title: string | null): string {
   if (!title) return "";
@@ -86,6 +92,9 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
   const [activeTag, setActiveTag] = useState<string>("");
   const [searchText, setSearchText] = useState<string>("");
   const [keyword, setKeyword] = useState<string>("");
+
+  // 标签弹出框
+  const [showTagModal, setShowTagModal] = useState(false);
 
   // 分页状态
   const [page, setPage] = useState(1);
@@ -159,6 +168,9 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
     });
   };
 
+  // 只显示含中文的标签
+  const chineseTags = allTags.filter(isChinese);
+
   const memberCount = membersData?.length || 0;
 
   return (
@@ -174,15 +186,30 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
             <ChevronLeft className="w-5 h-5" />
             <span className="text-sm">返回</span>
           </button>
-          <h1 className="text-base font-semibold text-white truncate max-w-[180px]">
+          <h1 className="text-base font-semibold text-white truncate max-w-[160px]">
             {ledgerData?.name || "提示词图库"}
           </h1>
-          <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-            className="text-white/90 hover:text-white"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+          {/* 右侧：标签按钮 + 设置 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowTagModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: activeTag ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)",
+                color: "#FFFFFF",
+                border: activeTag ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.3)",
+              }}
+            >
+              <Tag className="w-3 h-3" />
+              <span>{activeTag || "标签"}</span>
+            </button>
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+              className="text-white/90 hover:text-white"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* 成员头像 + 数量 */}
@@ -214,7 +241,7 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
         </div>
       </div>
 
-      {/* ===== 搜索框 ===== */}
+      {/* ===== 搜索框 + 当前标签提示 ===== */}
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
           style={{ backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8" }}>
@@ -232,42 +259,22 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
             </button>
           )}
         </div>
-      </div>
-
-      {/* ===== 标签筛选栏（横向滚动） ===== */}
-      {allTags.length > 0 && (
-        <div className="pb-2">
-          <div className="flex gap-2 overflow-x-auto px-3 pb-1 scrollbar-hide"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
-            {/* 全部 */}
-            <button
-              onClick={() => setActiveTag("")}
-              className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full font-medium"
-              style={{
-                backgroundColor: activeTag === "" ? "#D32F2F" : "#FFFFFF",
-                color: activeTag === "" ? "#FFFFFF" : "#555",
-                border: `1px solid ${activeTag === "" ? "#D32F2F" : "#E0E0E0"}`,
-              }}
+        {/* 当前激活标签提示条 */}
+        {activeTag && (
+          <div className="flex items-center gap-2 mt-2 px-1">
+            <span className="text-xs text-gray-500">当前标签：</span>
+            <span
+              className="text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1"
+              style={{ backgroundColor: "#FFEBEE", color: "#D32F2F", border: "1px solid #FFCDD2" }}
             >
-              全部
-            </button>
-            {allTags.map((tag, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveTag(activeTag === tag ? "" : tag)}
-                className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full font-medium"
-                style={{
-                  backgroundColor: activeTag === tag ? "#D32F2F" : "#FFFFFF",
-                  color: activeTag === tag ? "#FFFFFF" : "#555",
-                  border: `1px solid ${activeTag === tag ? "#D32F2F" : "#E0E0E0"}`,
-                }}
-              >
-                {tag}
+              {activeTag}
+              <button onClick={() => setActiveTag("")} className="ml-0.5">
+                <X className="w-3 h-3" />
               </button>
-            ))}
+            </span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ===== 图片列表 ===== */}
       <div className="pb-8">
@@ -352,6 +359,75 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
           </div>
         )}
       </div>
+
+      {/* ===== iOS风格标签选择弹出框 ===== */}
+      {showTagModal && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col justify-end"
+          style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+          onClick={() => setShowTagModal(false)}
+        >
+          <div
+            className="w-full bg-white overflow-hidden"
+            style={{ borderRadius: "20px 20px 0 0", maxHeight: "75vh" }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 顶部把手 */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full" style={{ backgroundColor: "#E0E0E0" }} />
+            </div>
+
+            {/* 标题栏 */}
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #F0F0F0" }}>
+              <span className="text-base font-semibold text-gray-900">选择标签</span>
+              <button
+                onClick={() => setShowTagModal(false)}
+                className="w-7 h-7 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: "#F0F0F0" }}
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {/* 标签列表（可滚动） */}
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(75vh - 100px)" }}>
+              {/* 全部选项 */}
+              <button
+                className="w-full flex items-center justify-between px-5 py-3.5"
+                style={{ borderBottom: "1px solid #F8F8F8" }}
+                onClick={() => { setActiveTag(""); setShowTagModal(false); }}
+              >
+                <span className="text-sm font-medium" style={{ color: activeTag === "" ? "#D32F2F" : "#333" }}>
+                  全部
+                </span>
+                {activeTag === "" && (
+                  <Check className="w-4 h-4" style={{ color: "#D32F2F" }} />
+                )}
+              </button>
+
+              {/* 中文标签列表 */}
+              {chineseTags.map((tag, i) => (
+                <button
+                  key={i}
+                  className="w-full flex items-center justify-between px-5 py-3.5"
+                  style={{ borderBottom: "1px solid #F8F8F8" }}
+                  onClick={() => { setActiveTag(tag); setShowTagModal(false); }}
+                >
+                  <span className="text-sm" style={{ color: activeTag === tag ? "#D32F2F" : "#333" }}>
+                    {tag}
+                  </span>
+                  {activeTag === tag && (
+                    <Check className="w-4 h-4" style={{ color: "#D32F2F" }} />
+                  )}
+                </button>
+              ))}
+
+              {/* 底部安全区 */}
+              <div className="h-6" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== 底部抽屉：仿OpenNana详情弹出框 ===== */}
       {selectedImage && (() => {
