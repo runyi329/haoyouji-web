@@ -9004,92 +9004,192 @@ export const appRouter = router({
         let skipCount = 0;
         let maxIdAfter = maxIdBefore;
         let errorMsg: string | null = null;
+        // 根据数据源名称判断同步策略
+        const isAiartPics = source.name === 'aiart.pics';
         try {
           const { uploadImageToCOS } = await import('./cos-upload');
-          const baseApiUrl = source.apiUrl; // e.g. https://api.opennana.com/api/prompts
-          // 从第1页开始拉取，遇到已知ID停止
-          let page = 1;
+          const baseApiUrl = source.apiUrl;
           let shouldStop = false;
-          while (!shouldStop) {
-            const listUrl = `${baseApiUrl}?page=${page}&limit=20`;
-            const resp = await fetch(listUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
-            if (!resp.ok) throw new Error(`API请求失败: ${resp.status}`);
-            const json = await resp.json() as any;
-            const items: any[] = json.data?.items || [];
-            if (!items || items.length === 0) { shouldStop = true; break; }
-            for (const item of items) {
-              const externalId = item.id;
-              // 只处理图片类型
-              if (item.media_type !== 'image') { skipCount++; continue; }
-              // 检查是否已存在（通过imageKey包含externalId）
-              const [existing] = await db.select({ id: agPromptImages.id })
-                .from(agPromptImages)
-                .where(and(
-                  eq(agPromptImages.ledgerId, source.ledgerId),
-                  like(agPromptImages.imageKey, `%opennana_${externalId}_%`)
-                ))
-                .limit(1);
-              if (existing) {
-                // 遇到已存在的记录，停止同步
-                skipCount++;
-                shouldStop = true;
-                break;
+
+          if (isAiartPics) {
+            // ===== aiart.pics 同步逻辑 =====
+            // API: GET /api/prompts?limit=20&offset=0，返回 {prompts:[], total, limit, offset}
+            // 详情: GET /api/prompts/{id}，返回 {success, data: {prompts:[], images:[{path}], tags:[], author:{name}, title:{zh,en}}}
+            // 图片CDN: https://img1.aiart.pics/{path}
+            const PAGE_SIZE = 20;
+            let offset = 0;
+            const total = 99999; // 先设大值，实际由API返回
+            let actualTotal = total;
+            while (!shouldStop) {
+              const listUrl = `${baseApiUrl}?limit=${PAGE_SIZE}&offset=${offset}`;
+              const resp = await fetch(listUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+              if (!resp.ok) throw new Error(`aiart.pics API请求失败: ${resp.status}`);
+              const json = await resp.json() as any;
+              const items: any[] = json.prompts || [];
+              actualTotal = json.total || actualTotal;
+              if (!items || items.length === 0) { shouldStop = true; break; }
+              for (const item of items) {
+                const externalId = item.id; // UUID字符串
+                // 只处理图片类型
+                if (item.mediaType !== 'image') { skipCount++; continue; }
+                // 检查是否已存在（通过imageKey包含aiartpics_{id}_）
+                const [existing] = await db.select({ id: agPromptImages.id })
+                  .from(agPromptImages)
+                  .where(and(
+                    eq(agPromptImages.ledgerId, source.ledgerId),
+                    like(agPromptImages.imageKey, `%aiartpics_${externalId}_%`)
+                  ))
+                  .limit(1);
+                if (existing) {
+                  // 遇到已存在的记录，停止同步
+                  skipCount++;
+                  shouldStop = true;
+                  break;
+                }
+                // 新记录：拉取详情 + 下载图片 + 上传到COS
+                try {
+                  // 拉取详情获取完整信息（含prompts文本）
+                  const detailResp = await fetch(`${baseApiUrl}/${externalId}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+                  let detail: any = null;
+                  if (detailResp.ok) {
+                    const detailJson = await detailResp.json() as any;
+                    detail = detailJson.data || detailJson;
+                  }
+                  // 获取图片URL：优先详情中第一张图片，CDN前缀 https://img1.aiart.pics/
+                  const imgPath = (detail?.images && detail.images[0]?.path) || (item.images && item.images[0]?.path);
+                  if (!imgPath) { skipCount++; continue; }
+                  const imgUrl = `https://img1.aiart.pics/${imgPath}`;
+                  const imgResp = await fetch(imgUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+                  if (!imgResp.ok) { skipCount++; continue; }
+                  const imgBuffer = Buffer.from(await imgResp.arrayBuffer());
+                  const fileKey = `ag-prompts/aiartpics_${externalId}_${Date.now()}.jpg`;
+                  const cosUrl = await uploadImageToCOS(imgBuffer, 'ag-prompts', fileKey);
+                  // 提取提示词（prompts数组中第一条文本，优先中文）
+                  let promptText: string | null = null;
+                  if (detail?.prompts && Array.isArray(detail.prompts) && detail.prompts.length > 0) {
+                    // aiart.pics 的 prompts 是字符串数组，取第一条
+                    promptText = detail.prompts[0] || null;
+                  }
+                  // 提取标题（优先中文）
+                  const titleZh = detail?.title?.zh || item.title?.zh || null;
+                  const titleEn = detail?.title?.en || item.title?.en || null;
+                  const titleText = titleZh || titleEn || null;
+                  // 构建tags
+                  const tags: string[] = [];
+                  const tagSource = detail?.tags || item.tags;
+                  if (tagSource && Array.isArray(tagSource)) {
+                    tags.push(...tagSource.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean));
+                  }
+                  // 作者名
+                  const authorName = detail?.author?.name || item.author?.name || null;
+                  await db.insert(agPromptImages).values({
+                    ledgerId: source.ledgerId,
+                    imageUrl: cosUrl,
+                    imageKey: fileKey,
+                    promptText,
+                    title: titleText,
+                    tags: tags.length > 0 ? JSON.stringify(tags) : null,
+                    author: authorName,
+                    uploadedBy: ctx.user.id,
+                    sortOrder: 0,
+                  });
+                  newCount++;
+                } catch (imgErr) {
+                  console.error('[AG Sync aiart.pics] 图片处理失败:', imgErr);
+                  skipCount++;
+                }
               }
-              // 新记录：拉取详情 + 下载图片 + 上传到COS
-              try {
-                // 拉取详情获取完整信息
-                const detailResp = await fetch(`${baseApiUrl}/${item.slug}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
-                let detail: any = null;
-                if (detailResp.ok) {
-                  const detailJson = await detailResp.json() as any;
-                  detail = detailJson.data || detailJson;
-                }
-                // 获取图片URL（优先详情中的高清图，fallback到列表缩略图）
-                const imgUrl = (detail?.images && detail.images[0]) || item.cover_image;
-                if (!imgUrl) { skipCount++; continue; }
-                const imgResp = await fetch(imgUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
-                if (!imgResp.ok) { skipCount++; continue; }
-                const imgBuffer = Buffer.from(await imgResp.arrayBuffer());
-                const fileKey = `ag-prompts/opennana_${externalId}_${Date.now()}.jpg`;
-                const cosUrl = await uploadImageToCOS(imgBuffer, 'ag-prompts', fileKey);
-                // 提取提示词（优先中文）
-                let promptText: string | null = null;
-                if (detail?.prompts && Array.isArray(detail.prompts)) {
-                  const zhPrompt = detail.prompts.find((p: any) => p.type === 'zh');
-                  const enPrompt = detail.prompts.find((p: any) => p.type === 'en');
-                  promptText = zhPrompt?.text || enPrompt?.text || null;
-                }
-                // 构建tags
-                const tags: string[] = [];
-                const tagSource = detail?.tags || item.tags;
-                if (tagSource) {
-                  if (Array.isArray(tagSource)) tags.push(...tagSource.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean));
-                  else if (typeof tagSource === 'string') tags.push(...tagSource.split(',').map((t: string) => t.trim()).filter(Boolean));
-                }
-                await db.insert(agPromptImages).values({
-                  ledgerId: source.ledgerId,
-                  imageUrl: cosUrl,
-                  imageKey: fileKey,
-                  promptText,
-                  title: item.title || null,
-                  tags: tags.length > 0 ? JSON.stringify(tags) : null,
-                  author: detail?.submitter_name || null,
-                  uploadedBy: ctx.user.id,
-                  sortOrder: 0,
-                });
-                if (externalId > maxIdAfter) maxIdAfter = externalId;
-                newCount++;
-              } catch (imgErr) {
-                console.error('[AG Sync] 图片处理失败:', imgErr);
-                skipCount++;
-              }
+              // 检查是否还有更多页
+              offset += PAGE_SIZE;
+              if (offset >= actualTotal) { shouldStop = true; break; }
+              // 最多拉取20页（400条）防止无限循环
+              if (offset >= PAGE_SIZE * 20) shouldStop = true;
             }
-            // 检查是否还有更多页
-            const hasMore = json.data?.pagination?.has_more;
-            if (!hasMore) { shouldStop = true; break; }
-            page++;
-            // 最多拉取20页防止无限循环
-            if (page > 20) shouldStop = true;
+          } else {
+            // ===== OpenNana 同步逻辑（原有逻辑）=====
+            // API: GET /api/prompts?page=1&limit=20，返回 {data: {items:[], pagination:{has_more}}}
+            let page = 1;
+            while (!shouldStop) {
+              const listUrl = `${baseApiUrl}?page=${page}&limit=20`;
+              const resp = await fetch(listUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+              if (!resp.ok) throw new Error(`API请求失败: ${resp.status}`);
+              const json = await resp.json() as any;
+              const items: any[] = json.data?.items || [];
+              if (!items || items.length === 0) { shouldStop = true; break; }
+              for (const item of items) {
+                const externalId = item.id;
+                // 只处理图片类型
+                if (item.media_type !== 'image') { skipCount++; continue; }
+                // 检查是否已存在（通过imageKey包含externalId）
+                const [existing] = await db.select({ id: agPromptImages.id })
+                  .from(agPromptImages)
+                  .where(and(
+                    eq(agPromptImages.ledgerId, source.ledgerId),
+                    like(agPromptImages.imageKey, `%opennana_${externalId}_%`)
+                  ))
+                  .limit(1);
+                if (existing) {
+                  // 遇到已存在的记录，停止同步
+                  skipCount++;
+                  shouldStop = true;
+                  break;
+                }
+                // 新记录：拉取详情 + 下载图片 + 上传到COS
+                try {
+                  // 拉取详情获取完整信息
+                  const detailResp = await fetch(`${baseApiUrl}/${item.slug}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+                  let detail: any = null;
+                  if (detailResp.ok) {
+                    const detailJson = await detailResp.json() as any;
+                    detail = detailJson.data || detailJson;
+                  }
+                  // 获取图片URL（优先详情中的高清图，fallback到列表缩略图）
+                  const imgUrl = (detail?.images && detail.images[0]) || item.cover_image;
+                  if (!imgUrl) { skipCount++; continue; }
+                  const imgResp = await fetch(imgUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(30000) });
+                  if (!imgResp.ok) { skipCount++; continue; }
+                  const imgBuffer = Buffer.from(await imgResp.arrayBuffer());
+                  const fileKey = `ag-prompts/opennana_${externalId}_${Date.now()}.jpg`;
+                  const cosUrl = await uploadImageToCOS(imgBuffer, 'ag-prompts', fileKey);
+                  // 提取提示词（优先中文）
+                  let promptText: string | null = null;
+                  if (detail?.prompts && Array.isArray(detail.prompts)) {
+                    const zhPrompt = detail.prompts.find((p: any) => p.type === 'zh');
+                    const enPrompt = detail.prompts.find((p: any) => p.type === 'en');
+                    promptText = zhPrompt?.text || enPrompt?.text || null;
+                  }
+                  // 构建tags
+                  const tags: string[] = [];
+                  const tagSource = detail?.tags || item.tags;
+                  if (tagSource) {
+                    if (Array.isArray(tagSource)) tags.push(...tagSource.map((t: any) => typeof t === 'string' ? t : t.name || '').filter(Boolean));
+                    else if (typeof tagSource === 'string') tags.push(...tagSource.split(',').map((t: string) => t.trim()).filter(Boolean));
+                  }
+                  await db.insert(agPromptImages).values({
+                    ledgerId: source.ledgerId,
+                    imageUrl: cosUrl,
+                    imageKey: fileKey,
+                    promptText,
+                    title: item.title || null,
+                    tags: tags.length > 0 ? JSON.stringify(tags) : null,
+                    author: detail?.submitter_name || null,
+                    uploadedBy: ctx.user.id,
+                    sortOrder: 0,
+                  });
+                  if (externalId > maxIdAfter) maxIdAfter = externalId;
+                  newCount++;
+                } catch (imgErr) {
+                  console.error('[AG Sync] 图片处理失败:', imgErr);
+                  skipCount++;
+                }
+              }
+              // 检查是否还有更多页
+              const hasMore = json.data?.pagination?.has_more;
+              if (!hasMore) { shouldStop = true; break; }
+              page++;
+              // 最多拉取20页防止无限循环
+              if (page > 20) shouldStop = true;
+            }
           }
           // 更新数据源状态
           await db.update(agSyncSources)
