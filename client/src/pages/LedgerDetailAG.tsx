@@ -319,6 +319,9 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
         </div>
 
 
+        {/* 预留内容区（扩大红色区域高度，后续可添加统计/公告/Banner） */}
+        <div className="px-4 pb-5" style={{ minHeight: 80 }}>
+        </div>
       </div>
 
       {/* ===== 搜索框 + 当前标签提示 ===== */}
