@@ -460,31 +460,29 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
               <div className="w-10 h-1 rounded-full" style={{ backgroundColor: "#E0E0E0" }} />
             </div>
 
-            {/* 标题栏 */}
+            {/* 标题栏（含全部按钮） */}
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #F0F0F0" }}>
-              <span className="text-base font-semibold text-gray-900">选择标签</span>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-semibold text-gray-900">选择标签</span>
+                <button
+                  className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium"
+                  style={{
+                    backgroundColor: activeTag === "" ? "#D32F2F" : "#F0F0F0",
+                    color: activeTag === "" ? "#FFFFFF" : "#555",
+                    border: `1px solid ${activeTag === "" ? "#D32F2F" : "#E0E0E0"}`,
+                  }}
+                  onClick={() => { setActiveTag(""); setShowTagModal(false); }}
+                >
+                  全部
+                  <span className="text-xs opacity-70">{total > 0 ? total : ""}</span>
+                </button>
+              </div>
               <button
                 onClick={() => setShowTagModal(false)}
                 className="w-7 h-7 rounded-full flex items-center justify-center"
                 style={{ backgroundColor: "#F0F0F0" }}
               >
                 <X className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-
-            {/* 全部选项（固定在顶部，不随内容滚动） */}
-            <div className="px-4 pt-3 pb-2" style={{ borderBottom: "1px solid #F5F5F5" }}>
-              <button
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-medium"
-                style={{
-                  backgroundColor: activeTag === "" ? "#D32F2F" : "#F5F5F5",
-                  color: activeTag === "" ? "#FFFFFF" : "#555",
-                  border: `1px solid ${activeTag === "" ? "#D32F2F" : "#E8E8E8"}`,
-                }}
-                onClick={() => { setActiveTag(""); setShowTagModal(false); }}
-              >
-                全部
-                <span className="text-xs opacity-70">{total > 0 ? total : ""}</span>
               </button>
             </div>
             {/* 标签内容区（可滚动） */}
