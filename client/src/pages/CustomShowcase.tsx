@@ -5147,7 +5147,7 @@ function DetailCard({ scene, onClose }: {
               <div style={{ fontSize: 20, fontWeight: 700, color: "#CBA471", lineHeight: 1.2 }}>{scene.label}</div>
               {(scene.label === "共享建议簿" || scene.label === "生图提示词簿") && (
                 <a
-                  href={scene.label === "生图提示词簿" ? "/ag/54" : "/demo/opinion/44"}
+                  href={scene.label === "生图提示词簿" ? "/ledger/54" : "/demo/opinion/44"}
                   style={{
                     fontSize: 13, fontWeight: 800, color: "#fff",
                     background: scene.label === "生图提示词簿"
