@@ -168,6 +168,56 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+async function initAgSyncSources() {
+  try {
+    const { agSyncSources } = await import('../../drizzle/schema');
+    const { eq } = await import('drizzle-orm');
+    const db = await getDb();
+    if (!db) return;
+
+    // AG 账本 ID：54（固定）
+    const AG_LEDGER_ID = 54;
+
+    // 预置数据源列表
+    const presetSources = [
+      {
+        name: 'OpenNana',
+        apiUrl: 'https://api.opennana.com/api/prompts',
+        modelName: 'flux',
+        syncRule: '增量同步策略：API按ID降序返回数据，每次同步从第1页开始，遇到已存在的ID即停止。通常只需拉取1-2页即可获取所有新内容，避免重复下载全量数据。图片自动上传至腾讯云COS存储。',
+      },
+      {
+        name: 'aiart.pics',
+        apiUrl: 'https://aiart.pics/api/prompts',
+        modelName: 'nanoBanana-Pro',
+        syncRule: '增量同步策略：API使用offset分页（limit=20&offset=0），按publishedAt降序返回数据。每次同步从第1页开始，通过imageKey中的aiartpics_{id}_前缀判断是否已存在，遇到已存在的记录即停止。图片CDN地址为https://img1.aiart.pics/{path}，提示词在详情接口的prompts数组中，支持中文标题和标签。',
+      },
+    ];
+
+    for (const source of presetSources) {
+      const [existing] = await db.select({ id: agSyncSources.id })
+        .from(agSyncSources)
+        .where(eq(agSyncSources.name, source.name))
+        .limit(1);
+      if (!existing) {
+        await db.insert(agSyncSources).values({
+          ledgerId: AG_LEDGER_ID,
+          name: source.name,
+          apiUrl: source.apiUrl,
+          modelName: source.modelName,
+          syncRule: source.syncRule,
+          status: 'active',
+          lastMaxId: 0,
+          totalSynced: 0,
+        });
+        console.log(`[AG初始化] 数据源「${source.name}」已创建`);
+      }
+    }
+  } catch (error) {
+    console.error('[AG初始化] 数据源初始化失败:', error instanceof Error ? error.message : error);
+  }
+}
+
 async function startServer() {
   // 初始化字段分类
   await initFieldCategories();
@@ -183,6 +233,9 @@ async function startServer() {
   // 添加管理员为企业成员
   const { addAdminAsMember } = await import('../add-admin-member');
   await addAdminAsMember();
+
+  // 初始化 AG 同步数据源（确保 OpenNana 和 aiart.pics 记录存在）
+  await initAgSyncSources();
   
   const app = express();
   const server = createServer(app);
