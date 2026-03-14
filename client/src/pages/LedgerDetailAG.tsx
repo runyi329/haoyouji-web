@@ -23,6 +23,7 @@ import {
   X,
   Search,
   Tag,
+  Heart,
 } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
 
@@ -173,6 +174,9 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
 
   // 标签弹出框
   const [showTagModal, setShowTagModal] = useState(false);
+  // 收藏相关
+  const [showFavModal, setShowFavModal] = useState(false);
+  const [favoritedIds, setFavoritedIds] = useState<Set<number>>(new Set());
 
   // 分页状态
   const [page, setPage] = useState(1);
@@ -268,6 +272,21 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
           </h1>
           {/* 右侧按钮组 */}
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* 收藏按钮（胶囊样式） */}
+            {user && (
+              <button
+                onClick={() => setShowFavModal(true)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: favoritedIds.size > 0 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)",
+                  color: "#FFFFFF",
+                  border: favoritedIds.size > 0 ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.3)",
+                }}
+              >
+                <Heart className="w-3 h-3" fill={favoritedIds.size > 0 ? "#fff" : "none"} />
+                <span>收藏{favoritedIds.size > 0 ? ` ${favoritedIds.size}` : ""}</span>
+              </button>
+            )}
             {/* 标签按钮（胶囊样式） */}
             <button
               onClick={() => setShowTagModal(true)}
@@ -324,11 +343,6 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
             </span>
             <Users className="w-3.5 h-3.5 text-white/60" />
           </button>
-        </div>
-
-
-        {/* 预留内容区（扩大红色区域高度，后续可添加统计/公告/Banner） */}
-        <div className="px-4 pb-5" style={{ minHeight: 80 }}>
         </div>
       </div>
 
@@ -419,23 +433,44 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
                     <p className="text-sm text-gray-800 leading-snug flex-1 truncate" style={{ fontWeight: 500 }}>
                       {shortTitle || "提示词案例"}
                     </p>
-                    {img.promptText && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); copyText(img.promptText!, "card", img.id); }}
-                        className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full"
-                        style={{
-                          backgroundColor: copiedCard === img.id ? "#E8F5E9" : "#FFF8F0",
-                          color: copiedCard === img.id ? "#4CAF50" : "#CBA471",
-                        }}
-                        title="复制提示词"
-                      >
-                        {copiedCard === img.id ? (
-                          <Check className="w-3.5 h-3.5" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {img.promptText && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); copyText(img.promptText!, "card", img.id); }}
+                          className="w-7 h-7 flex items-center justify-center rounded-full"
+                          style={{
+                            backgroundColor: copiedCard === img.id ? "#E8F5E9" : "#FFF8F0",
+                            color: copiedCard === img.id ? "#4CAF50" : "#CBA471",
+                          }}
+                          title="复制提示词"
+                        >
+                          {copiedCard === img.id ? (
+                            <Check className="w-3.5 h-3.5" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+                      {user && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavMutation.mutate({ imageId: img.id, ledgerId });
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded-full"
+                          style={{
+                            backgroundColor: favoritedIds.has(img.id) ? "#FFF0F0" : "#F5F5F5",
+                            color: favoritedIds.has(img.id) ? "#D32F2F" : "#BDBDBD",
+                          }}
+                          title={favoritedIds.has(img.id) ? "取消收藏" : "收藏"}
+                        >
+                          <Heart
+                            className="w-3.5 h-3.5"
+                            fill={favoritedIds.has(img.id) ? "#D32F2F" : "none"}
+                          />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
