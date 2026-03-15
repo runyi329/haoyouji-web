@@ -9466,94 +9466,84 @@ export const appRouter = router({
           }
         }
         console.log('[AF viewAs] final targetUserId:', targetUserId);
-        // 充值到账总额（recharge_orders status=completed）
-        const rechargeRows = await db.execute(
-          sql`SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as total FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed'`
-        ) as any;
-        const recharged = parseFloat(rechargeRows[0]?.[0]?.total || rechargeRows[0]?.total || '0');
-        // 手动调账总额（af_manual_balances）
-        let manual = 0;
-        try {
-          const manualRows = await db.execute(
-            sql`SELECT COALESCE(SUM(amount), 0) as total FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}`
-          ) as any;
-          manual = parseFloat(manualRows[0]?.[0]?.total || manualRows[0]?.total || '0');
-        } catch (_) {
-          // 表不存在时忽略
-        }
-        // 查询推荐人数（与脉动首页推荐好友人数一致，使用同一套邀请码）
-        // 注意：项目自己的数据库（ORIGINAL_DATABASE_URL）才有 invite_count 字段，需要用 getLedgerDb()
-        let inviteCount = 0;
-        try {
-          const inviteRows = await db.execute(
+
+        // ★ 并行执行所有查询，从 9 个串行压缩为 3 个并行
+        const [balanceResult, positionResult, userResult] = await Promise.all([
+          // 查询1：充值总额 + 手动调账（UNION 合并）
+          db.execute(
+            sql`SELECT
+              (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed') as recharged,
+              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual`
+          ).catch(() => [[{ recharged: '0', manual: '0' }]]),
+
+          // 查询2：仓位（所有币种 GROUP BY coin+side，1 个查询搞定）
+          db.execute(
+            sql`SELECT coin, side, COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
+                FROM af_orders
+                WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
+                  AND status = 'completed' AND coin IN ('BTC','ETH','SOL')
+                GROUP BY coin, side`
+          ).catch(() => [[]]),
+
+          // 查询3：用户信息（invite_count）
+          db.execute(
             sql`SELECT invite_count FROM users WHERE id = ${targetUserId} LIMIT 1`
-          );
-          inviteCount = Number((inviteRows as any)[0]?.[0]?.invite_count ?? (inviteRows as any)[0]?.invite_count ?? 0);
-        } catch (_) {}
-        
+          ).catch(() => [[{ invite_count: 0 }]]),
+        ]);
+
+        // 解析余额
+        const balRow = (balanceResult as any)[0]?.[0] ?? (balanceResult as any)[0];
+        const recharged = parseFloat(balRow?.recharged ?? '0');
+        const manual = parseFloat(balRow?.manual ?? '0');
+
+        // 解析仓位
+        const posRows: any[] = (positionResult as any)[0] || (positionResult as any) || [];
+        const positions: Record<string, number> = { BTC: 0, ETH: 0, SOL: 0 };
+        for (const row of posRows) {
+          const coin = row.coin;
+          const side = row.side;
+          const total = parseFloat((row.total ?? '0').toString());
+          if (coin in positions) {
+            if (side === 'buy') positions[coin] += total;
+            else if (side === 'sell') positions[coin] -= total;
+          }
+        }
+        for (const c of ['BTC', 'ETH', 'SOL']) positions[c] = Math.max(0, positions[c]);
+
+        // 解析推荐人数
+        const userRow = (userResult as any)[0]?.[0] ?? (userResult as any)[0];
+        const inviteCount = Number(userRow?.invite_count ?? 0);
+
         // YJH 专属：计算直推和间推人数（无限层级递归）
         const YJH_USER_ID = 4957151;
         let directReferralCount = 0;
         let indirectReferralCount = 0;
         if (targetUserId === YJH_USER_ID) {
           try {
-            // 直推人数
-            const directRows = await db.execute(
-              sql`SELECT COUNT(*) as cnt FROM users WHERE invited_by_user_id = ${YJH_USER_ID}`
-            ) as any;
+            const [directRows, directIdRows] = await Promise.all([
+              db.execute(sql`SELECT COUNT(*) as cnt FROM users WHERE invited_by_user_id = ${YJH_USER_ID}`),
+              db.execute(sql`SELECT id FROM users WHERE invited_by_user_id = ${YJH_USER_ID}`),
+            ]) as any[];
             directReferralCount = Number((directRows as any)[0]?.[0]?.cnt ?? (directRows as any)[0]?.cnt ?? 0);
-            
-            // 间推人数（BFS递归，无限层级）
-            let queue: number[] = [];
-            // 先获取直推用户ID列表
-            const directIdRows = await db.execute(
-              sql`SELECT id FROM users WHERE invited_by_user_id = ${YJH_USER_ID}`
-            ) as any;
             const directIds = ((directIdRows as any)[0] || directIdRows).map((r: any) => r.id || r[0]);
-            queue = [...directIds];
-            
+            let queue = [...directIds];
             while (queue.length > 0) {
-              const batch = queue.splice(0, 100); // 每次处理100个
+              const batch = queue.splice(0, 100);
               const placeholders = batch.map(() => '?').join(',');
               const childRows = await db.execute(
                 sql.raw(`SELECT id FROM users WHERE invited_by_user_id IN (${placeholders})`, batch)
               ) as any;
               const children = ((childRows as any)[0] || childRows);
               for (const child of children) {
-                const childId = child.id || child[0];
                 indirectReferralCount++;
-                queue.push(childId);
+                queue.push(child.id || child[0]);
               }
             }
           } catch (e) {
             console.error('[AF] YJH间推统计失败:', e);
           }
         }
-        
-        // 仓位计算：每个币的持仓 = 已成交买入数量（含获赠） - 已成交卖出数量
-        const coins = ['BTC', 'ETH', 'SOL'];
-        const positions: Record<string, number> = {};
-        for (const coin of coins) {
-          try {
-            const buyRows = await db.execute(
-              sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
-                  FROM af_orders
-                  WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
-                    AND coin = ${coin} AND side = 'buy' AND status = 'completed'`
-            ) as any;
-            const bought = parseFloat((buyRows[0]?.[0]?.total ?? buyRows[0]?.total ?? '0').toString());
-            const sellRows = await db.execute(
-              sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
-                  FROM af_orders
-                  WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
-                    AND coin = ${coin} AND side = 'sell' AND status = 'completed'`
-            ) as any;
-            const sold = parseFloat((sellRows[0]?.[0]?.total ?? sellRows[0]?.total ?? '0').toString());
-            positions[coin] = Math.max(0, bought - sold);
-          } catch (_) {
-            positions[coin] = 0;
-          }
-        }
+
         return { total: recharged + manual, inviteCount, directReferralCount, indirectReferralCount, positions };
       }),
     // AF 充值记录 + 手动调账记录合并（供用户查看）
