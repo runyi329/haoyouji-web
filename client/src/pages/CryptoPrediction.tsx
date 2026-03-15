@@ -313,25 +313,22 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             {order.coin}
           </span>
         </div>
-        {/* 赠送订单：类型行内展示 */}
+        {/* 赠送订单：类型 + 来源合并一行 */}
         {order.isGift && (() => {
           const multiplier = (order as any).giftMultiplier || '1.5';
           const is10 = multiplier === '1.0';
           return (
-            <>
-              <div className="flex justify-between">
-                <span style={{ color: '#9CA3AF' }}>订单类型</span>
-                <span className="font-medium" style={{ color: is10 ? '#F59E0B' : '#EF4444' }}>
-                  {is10 ? '间接推荐奖励' : '推荐人奖励'} ({multiplier}倍)
-                </span>
-              </div>
-              {order.sourceUsername && (
-                <div className="flex justify-between">
-                  <span style={{ color: '#9CA3AF' }}>来源</span>
-                  <span style={{ color: '#6B7A9A' }}>来自 {order.sourceUsername}</span>
-                </div>
-              )}
-            </>
+            <div className="flex justify-between">
+              <span style={{ color: '#9CA3AF' }}>订单类型</span>
+              <span style={{ color: '#1A2340' }}>
+                {order.sourceUsername && (
+                  <span className="font-medium px-1 rounded text-xs mr-1" style={{ backgroundColor: is10 ? '#FFFBEB' : '#EFF6FF', color: is10 ? '#F59E0B' : '#1A56DB' }}>
+                    {order.sourceUsername}
+                  </span>
+                )}
+                {is10 ? '间接推荐奖励' : '推荐人奖励'}
+              </span>
+            </div>
           );
         })()}
         {order.isGift ? (
