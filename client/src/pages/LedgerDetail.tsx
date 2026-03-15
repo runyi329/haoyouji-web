@@ -100,6 +100,14 @@ export default function LedgerDetail() {
   const [viewAsUserId, setViewAsUserId] = useState<number | null>(null);
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
   const [viewAsSearch, setViewAsSearch] = useState('');
+  const trpcUtils = trpc.useUtils();
+  // 视角切换时手动 invalidate 所有 AF 查询
+  const handleSwitchView = (userId: number | null) => {
+    setViewAsUserId(userId);
+    setShowViewAsPicker(false);
+    trpcUtils.ledger.afGetMyTotalAsset.invalidate();
+    trpcUtils.ledger.afGetMyRechargeHistory.invalidate();
+  };
   // 抽奖子 Tab：正在进行中 / 往期回顾
   const [lotteryTab, setLotteryTab] = useState<'active' | 'past'>('active');
   // 倒计时刻度（每秒更新）
@@ -1341,7 +1349,7 @@ export default function LedgerDetail() {
             })()} 的视角查看</span>
           </div>
           <button
-            onClick={() => setViewAsUserId(null)}
+            onClick={() => handleSwitchView(null)}
             className="px-3 py-1 rounded-full text-xs font-medium bg-white/90 text-gray-800"
           >
             切回我的视角
@@ -1381,7 +1389,7 @@ export default function LedgerDetail() {
               {viewAsUserId && (
                 <button
                   className="w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 bg-blue-50"
-                  onClick={() => { setViewAsUserId(null); setShowViewAsPicker(false); }}
+                  onClick={() => handleSwitchView(null)}
                 >
                   {user && <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="sm" />}
                   <div className="flex-1 text-left">
@@ -1403,7 +1411,7 @@ export default function LedgerDetail() {
                   className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 transition-colors ${
                     viewAsUserId === m.userId ? 'bg-amber-50' : 'hover:bg-gray-50'
                   }`}
-                  onClick={() => { setViewAsUserId(m.userId); setShowViewAsPicker(false); }}
+                  onClick={() => handleSwitchView(m.userId)}
                 >
                   <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
                   <div className="flex-1 text-left">
