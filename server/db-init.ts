@@ -260,10 +260,13 @@ export async function initDatabase() {
           \`total_synced\` INT NOT NULL DEFAULT 0,
           \`last_synced_at\` DATETIME DEFAULT NULL,
           \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (\`id\`),
           INDEX \`idx_ag_sync_sources_ledger\` (\`ledger_id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
+      // 确保已有表补上 updated_at 字段（兼容旧表）
+      await safeAddColumn(dbConnAg, 'ag_sync_sources', 'updated_at', 'TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
       await dbConnAg.execute(`
         CREATE TABLE IF NOT EXISTS \`ag_sync_logs\` (
           \`id\` INT NOT NULL AUTO_INCREMENT,
