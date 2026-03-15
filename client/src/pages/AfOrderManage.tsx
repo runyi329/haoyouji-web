@@ -337,11 +337,62 @@ export default function AfOrderManage() {
                         <span>{parseFloat(order.quantity).toFixed(6)}</span>
                       )}
                     </div>
-                    {/* 金额（固定不变） */}
+                    {/* 实际金额 */}
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">金额</span>
+                      <span className="text-gray-400 text-xs w-10">实际金额</span>
                       <span>{parseFloat(order.amount).toFixed(2)} USDT</span>
                     </div>
+                    {/* 订单价値 */}
+                    {order.side === 'buy' && (() => {
+                      const amount = parseFloat(order.amount);
+                      const tradeValue = order.isGift ? amount : amount * 5.25;
+                      return (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 text-xs w-10">订单价値</span>
+                          <span className="text-blue-600 font-medium">{tradeValue.toFixed(2)} USDT</span>
+                        </div>
+                      );
+                    })()}
+                    {/* 当前权益（买单显示，已成交卖单锁死） */}
+                    {order.side === 'buy' && order.status === 'completed' && (() => {
+                      const rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                      const pct = (rate * 100).toFixed(2);
+                      const tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
+                      return (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 text-xs w-10">当前权益</span>
+                          <span className="text-amber-600 font-medium">{pct}% <span className="text-xs text-gray-400">({tierLabel})</span></span>
+                        </div>
+                      );
+                    })()}
+                    {order.side === 'buy' && order.status === 'pending' && (() => {
+                      const rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                      const pct = (rate * 100).toFixed(2);
+                      const tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
+                      return (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 text-xs w-10">当前权益</span>
+                          <span className="text-amber-500 font-medium">{pct}% <span className="text-xs text-gray-400">({tierLabel}·实时)</span></span>
+                        </div>
+                      );
+                    })()}
+                    {/* 累计管理费（买单已成交显示，委托中实时跨，已卖出锁死） */}
+                    {order.side === 'buy' && order.status === 'completed' && (() => {
+                      const amount = parseFloat(order.amount);
+                      const tradeValue = order.isGift ? amount : amount * 5.25;
+                      const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+                      const confirmedDate = new Date(order.updatedAt || order.createdAt);
+                      const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+                      const todayDay = new Date(); todayDay.setHours(0,0,0,0);
+                      const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
+                      const totalFee = dailyFee * holdDays;
+                      return (
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 text-xs w-10">累计管理费</span>
+                          <span className="text-purple-600 font-medium">{totalFee.toFixed(4)} USDT <span className="text-xs text-gray-400">({holdDays}天 · {dailyFee.toFixed(4)}/天)</span></span>
+                        </div>
+                      );
+                    })()}
                     {/* 状态 */}
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400 text-xs w-10">状态</span>
