@@ -8,13 +8,14 @@ export default function RechargeHistory() {
   const searchParams = new URLSearchParams(search);
   const fromLedgerId = searchParams.get('ledgerId');
   const ledgerId = fromLedgerId ? parseInt(fromLedgerId) : null;
+  const viewAsUserId = searchParams.get('viewAs') ? parseInt(searchParams.get('viewAs')!) : undefined;
   const backToRecharge = fromLedgerId
     ? `/recharge?from=ledger&ledgerId=${fromLedgerId}`
     : '/recharge';
 
   // 如果是从 AF 账本进来，使用合并接口；否则使用普通接口
   const afHistoryQuery = trpc.ledger.afGetMyRechargeHistory.useQuery(
-    { ledgerId: ledgerId! },
+    { ledgerId: ledgerId!, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: !!ledgerId }
   );
   const normalOrdersQuery = trpc.recharge.getMyOrders.useQuery(
@@ -24,7 +25,7 @@ export default function RechargeHistory() {
   const balanceQuery = trpc.recharge.getBalance.useQuery();
   // 如果有 ledgerId，使用 AF 账本总资产（充值到账 + 手动调账）
   const { data: afAssetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
-    { ledgerId: ledgerId! },
+    { ledgerId: ledgerId!, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: !!ledgerId, staleTime: 30000 }
   );
   const displayBalance = ledgerId && afAssetData != null
