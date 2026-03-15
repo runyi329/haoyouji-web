@@ -813,19 +813,6 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* 提示词按鈕：选中状态显示白色实心 */}
-            <button
-              onClick={() => { setPromptMode(!promptMode); setSelectedPrompts(new Set()); }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold flex-shrink-0 transition-all"
-              style={promptMode
-                ? { backgroundColor: "rgba(255,255,255,0.9)", color: promptCatColor }
-                : { backgroundColor: "rgba(255,255,255,0.2)", color: "#fff" }
-              }
-              title="提示词库"
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              提示词
-            </button>
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
               className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
