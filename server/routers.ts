@@ -9457,11 +9457,15 @@ export const appRouter = router({
           const memberCheck = await db.execute(
             sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
           ) as any;
+          const rawResult = memberCheck;
+          console.log('[AF viewAs] memberCheck raw:', JSON.stringify(rawResult));
           const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
+          console.log('[AF viewAs] myRole:', myRole, 'viewAsUserId:', input.viewAsUserId, 'currentUserId:', ctx.user.id);
           if (myRole === 'owner' || myRole === 'admin') {
             targetUserId = input.viewAsUserId;
           }
         }
+        console.log('[AF viewAs] final targetUserId:', targetUserId);
         // 充值到账总额（recharge_orders status=completed）
         const rechargeRows = await db.execute(
           sql`SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as total FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed'`
