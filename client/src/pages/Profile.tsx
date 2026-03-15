@@ -447,19 +447,11 @@ export default function Profile() {
     return true;
   });
 
-  // 未读 Manus 消息数（仅管理员）
-  const isAdminUser = user.role === "admin" || user.role === "super_admin";
-  const { data: manusUnread } = trpc.manus.getUnreadCount.useQuery(undefined, {
-    refetchInterval: 30000,
-    enabled: isAdminUser,
-  });
-
   // 账户管理功能
   const accountFeatures: FeatureItem[] = [
     ...(user.role === "super_admin" ? [
       { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/admin") },
     ] : []),
-    ...(isAdminUser ? [{ id: "manus-chat", icon: MessageCircle, label: "Manus", color: "bg-gradient-to-br from-[#A80000] to-[#d44] text-white", badge: manusUnread?.count || null, onClick: () => navigate("/manus") }] : []),
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => toast("功能开发中") },
     { id: "privacy", icon: Settings, label: "隐私设置", color: "bg-slate-100 text-slate-600", badge: null, onClick: () => toast("功能开发中") },
