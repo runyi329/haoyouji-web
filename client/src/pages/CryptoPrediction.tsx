@@ -301,23 +301,6 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
   return (
     <div className="mt-2 rounded-xl p-3 space-y-2 text-sm" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
-      {/* 赠送订单标记 */}
-      {order.isGift && (() => {
-        const multiplier = (order as any).giftMultiplier || '1.5';
-        const is10 = multiplier === '1.0';
-        const labelText = is10 ? `间接推荐奖励订单 (${multiplier}倍)` : `推荐人奖励订单 (${multiplier}倍)`;
-        return (
-        <div className="flex items-center gap-2 rounded-lg px-3 py-2" style={{ backgroundColor: '#FFF7ED', border: '1px solid rgba(245,158,11,0.3)' }}>
-          <span className="font-bold text-base animate-pulse" style={{ color: '#F59E0B' }}>赠</span>
-          <div className="flex flex-col">
-            <span className="text-xs font-medium" style={{ color: is10 ? '#F59E0B' : '#EF4444' }}>{labelText}</span>
-            {order.sourceUsername && (
-              <span className="text-[10px]" style={{ color: '#9CA3AF' }}>来自 {order.sourceUsername}</span>
-            )}
-          </div>
-        </div>
-        );
-      })()}
       {/* 基本信息 */}
       <div className="space-y-1.5">
         <div className="flex justify-between">
@@ -330,6 +313,27 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             {order.side === 'buy' ? '买入' : '卖出'}
           </span>
         </div>
+        {/* 赠送订单：类型行内展示 */}
+        {order.isGift && (() => {
+          const multiplier = (order as any).giftMultiplier || '1.5';
+          const is10 = multiplier === '1.0';
+          return (
+            <>
+              <div className="flex justify-between">
+                <span style={{ color: '#9CA3AF' }}>订单类型</span>
+                <span className="font-medium" style={{ color: is10 ? '#F59E0B' : '#EF4444' }}>
+                  {is10 ? '间接推荐奖励' : '推荐人奖励'} ({multiplier}倍)
+                </span>
+              </div>
+              {order.sourceUsername && (
+                <div className="flex justify-between">
+                  <span style={{ color: '#9CA3AF' }}>来源</span>
+                  <span style={{ color: '#6B7A9A' }}>来自 {order.sourceUsername}</span>
+                </div>
+              )}
+            </>
+          );
+        })()}
         {order.isGift ? (
           /* 赠送订单：只显示成交价格（不显示委托价格） */
           <>
