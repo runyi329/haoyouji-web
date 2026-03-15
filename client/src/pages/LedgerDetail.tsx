@@ -1150,9 +1150,7 @@ export default function LedgerDetail() {
               className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
               style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'rgba(247,147,26,0.10)' }}>
-                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-9 h-9 object-contain" />
-              </div>
+              <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-12 h-12 object-contain rounded-full" />
               <div className="text-left flex-1">
                 <div className="font-semibold text-base" style={{ color: '#1A2340' }}>比特币 (BTC)</div>
               </div>
@@ -1166,9 +1164,7 @@ export default function LedgerDetail() {
               className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
               style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'rgba(98,126,234,0.10)' }}>
-                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-9 h-9 object-contain" />
-              </div>
+              <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-12 h-12 object-contain rounded-full" />
               <div className="text-left flex-1">
                 <div className="font-semibold text-base" style={{ color: '#1A2340' }}>以太坊 (ETH)</div>
               </div>
@@ -1182,9 +1178,7 @@ export default function LedgerDetail() {
               className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
               style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'rgba(0,210,150,0.10)' }}>
-                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-9 h-9 object-contain" />
-              </div>
+              <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-12 h-12 object-contain rounded-full" />
               <div className="text-left flex-1">
                 <div className="font-semibold text-base" style={{ color: '#1A2340' }}>索拉纳 (SOL)</div>
               </div>
