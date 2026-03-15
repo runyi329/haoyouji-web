@@ -301,28 +301,32 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
   return (
     <div className="mt-2 rounded-xl p-3 space-y-2 text-[13px]" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
-      {/* 基本信息 */}
-      <div className="space-y-1.5">
-        {/* 币种 + 方向合并一行 */}
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>币种</span>
-          <span style={{ color: '#1A2340' }}>
-            <span className="font-medium px-1 rounded text-xs mr-1" style={{ backgroundColor: order.side === 'buy' ? '#EFF6FF' : '#FEF2F2', color: order.side === 'buy' ? '#1A56DB' : '#EF4444' }}>
+      {/* 基本信息 - 统一风格：左侧标签灰色，右侧数值深色，强调数据用品牌色 */}
+      <div className="space-y-2">
+
+        {/* 币种：带买/卖标签 */}
+        <div className="flex justify-between items-center">
+          <span className="text-[#9CA3AF]">币种</span>
+          <span className="text-[#1E293B] font-medium">
+            <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold mr-1.5"
+              style={{ backgroundColor: order.side === 'buy' ? '#EFF6FF' : '#FEF2F2', color: order.side === 'buy' ? '#1A56DB' : '#EF4444' }}>
               {order.side === 'buy' ? '买' : '卖'}
             </span>
             {order.coin}
           </span>
         </div>
-        {/* 赠送订单：类型 + 来源合并一行 */}
+
+        {/* 赠送订单：类型 + 来源 */}
         {order.isGift && (() => {
           const multiplier = (order as any).giftMultiplier || '1.5';
           const is10 = multiplier === '1.0';
           return (
-            <div className="flex justify-between">
-              <span style={{ color: '#9CA3AF' }}>订单类型</span>
-              <span style={{ color: '#1A2340' }}>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">订单类型</span>
+              <span className="text-[#1E293B] font-medium">
                 {order.sourceUsername && (
-                  <span className="font-medium px-1 rounded text-xs mr-1" style={{ backgroundColor: is10 ? '#FFFBEB' : '#EFF6FF', color: is10 ? '#F59E0B' : '#1A56DB' }}>
+                  <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold mr-1.5"
+                    style={{ backgroundColor: is10 ? '#FFFBEB' : '#EFF6FF', color: is10 ? '#D97706' : '#1A56DB' }}>
                     {order.sourceUsername}
                   </span>
                 )}
@@ -331,84 +335,84 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             </div>
           );
         })()}
+
+        {/* 价格信息 */}
         {order.isGift ? (
-          /* 赠送订单：只显示成交价格（不显示委托价格） */
           <>
-            <div className="flex justify-between">
-              <span className="text-gray-500">成交价格</span>
-              <span className="text-gray-300">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">成交价格</span>
+              <span className="text-[#1E293B]">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">实际投入</span>
-              <span className="text-gray-300">{(order as any).sourceAmount ? parseFloat((order as any).sourceAmount).toFixed(2) : '--'} USDT</span>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">实际投入</span>
+              <span className="text-[#1E293B]">{(order as any).sourceAmount ? parseFloat((order as any).sourceAmount).toFixed(2) : '--'} USDT</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">赠送市值 <span className={(order as any).giftMultiplier === '1.0' ? 'text-amber-500' : 'text-[#ef5350]'}>({(order as any).giftMultiplier || '1.5'}倍)</span></span>
-              <span className="text-[#ef5350]">{parseFloat(order.amount).toFixed(2)} USDT</span>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">赠送市値</span>
+              <span className="font-semibold" style={{ color: (order as any).giftMultiplier === '1.0' ? '#D97706' : '#EF4444' }}>
+                {parseFloat(order.amount).toFixed(2)} USDT
+                <span className="ml-1 text-[11px] font-normal opacity-70">({(order as any).giftMultiplier || '1.5'}倍)</span>
+              </span>
             </div>
-            {/* 获赠比例：赠予金额 / 源订单投入金额 */}
             {(order as any).sourceAmount && parseFloat((order as any).sourceAmount) > 0 && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">获赠比例</span>
-                <span className="font-bold" style={{ color: '#F59E0B' }}>
+              <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">获赠比例</span>
+                <span className="font-semibold" style={{ color: '#D97706' }}>
                   {(parseFloat(order.amount) / parseFloat((order as any).sourceAmount) * 100).toFixed(2)}%
                 </span>
               </div>
             )}
           </>
         ) : (
-          /* 普通订单：显示委托价格 + 实际成交价格（如果不同） */
           <>
-            <div className="flex justify-between">
-              <span className="text-gray-500">委托价格</span>
-              <span className="text-gray-300">{parseFloat((order as any).originalLimitPrice || order.limitPrice).toLocaleString()} USDT</span>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">{(order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice ? '委托价格' : '成交价格'}</span>
+              <span className="text-[#1E293B]">{parseFloat((order as any).originalLimitPrice || order.limitPrice).toLocaleString()} USDT</span>
             </div>
             {(order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">实际成交价格</span>
-                <span className="text-yellow-400">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
+              <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">实际成交价</span>
+                <span className="font-semibold text-[#1A56DB]">{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
               </div>
             )}
-            <div className="flex justify-between">
-              <span className="text-gray-500">实际投入</span>
-              <span className="text-gray-300">{parseFloat(order.amount).toFixed(2)} USDT</span>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">实际投入</span>
+              <span className="text-[#1E293B]">{parseFloat(order.amount).toFixed(2)} USDT</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">成交价值 <span className="text-yellow-500">(5.25倍)</span></span>
-              <span className="text-yellow-400">{(parseFloat(order.amount) * 5.25).toFixed(2)} USDT</span>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">成交价値</span>
+              <span className="font-semibold text-[#1A56DB]">
+                {(parseFloat(order.amount) * 5.25).toFixed(2)} USDT
+                <span className="ml-1 text-[11px] font-normal opacity-60">(×5.25)</span>
+              </span>
             </div>
           </>
         )}
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>委托价格</span>
-          <span style={{ color: '#1A2340' }}>{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
+
+        {/* 持仓数量 */}
+        <div className="flex justify-between items-center">
+          <span className="text-[#9CA3AF]">持仓数量</span>
+          <span className="text-[#1E293B]">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
         </div>
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>实际投入</span>
-          <span style={{ color: '#1A2340' }}>{parseFloat(order.amount).toFixed(2)} USDT</span>
-        </div>
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>成交价值 <span style={{ color: '#1A56DB', fontWeight: 600 }}>(5.25倍)</span></span>
-          <span style={{ color: '#1A56DB', fontWeight: 600 }}>{(parseFloat(order.amount) * 5.25).toFixed(2)} USDT</span>
-        </div>
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>持仓数量</span>
-          <span style={{ color: '#1A2340' }}>{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
-        </div>
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>类型 / 状态</span>
-          <span style={{ color: '#6B7A9A' }}>
+
+        {/* 类型 + 状态 */}
+        <div className="flex justify-between items-center">
+          <span className="text-[#9CA3AF]">类型 / 状态</span>
+          <span className="text-[#1E293B]">
             {order.orderType === '无损合约' ? '谷底增筹' : (order.orderType || '谷底增筹')}
-            <span className="mx-1" style={{ color: '#D1D5DB' }}>·</span>
-            <span style={{ color: order.status === 'completed' ? '#0EA56A' : order.status === 'cancelled' ? '#9CA3AF' : '#F59E0B' }}>
+            <span className="mx-1.5 text-[#CBD5E1]">·</span>
+            <span style={{ color: order.status === 'completed' ? '#0EA56A' : order.status === 'cancelled' ? '#94A3B8' : '#F59E0B' }}>
               {order.status === 'completed' ? '已成交' : order.status === 'cancelled' ? '已撒单' : '委托中'}
             </span>
           </span>
         </div>
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>下单时间</span>
-          <span style={{ color: '#6B7A9A' }}>{timeStr}</span>
+
+        {/* 下单时间 */}
+        <div className="flex justify-between items-center">
+          <span className="text-[#9CA3AF]">下单时间</span>
+          <span className="text-[#64748B]">{timeStr}</span>
         </div>
+
       </div>
 
       {/* 收益权档位表（仅已成交且为无损合约的买入订单显示） */}
