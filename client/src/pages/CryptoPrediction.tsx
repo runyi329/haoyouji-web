@@ -303,14 +303,14 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     <div className="mt-2 rounded-xl p-3 space-y-2 text-sm" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
       {/* 基本信息 */}
       <div className="space-y-1.5">
+        {/* 币种 + 方向合并一行 */}
         <div className="flex justify-between">
           <span style={{ color: '#9CA3AF' }}>币种</span>
-          <span style={{ color: '#1A2340' }}>{order.coin}</span>
-        </div>
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>方向</span>
-          <span style={{ color: order.side === 'buy' ? '#1A56DB' : '#EF4444' }}>
-            {order.side === 'buy' ? '买入' : '卖出'}
+          <span style={{ color: '#1A2340' }}>
+            <span className="font-medium px-1 rounded text-xs mr-1" style={{ backgroundColor: order.side === 'buy' ? '#EFF6FF' : '#FEF2F2', color: order.side === 'buy' ? '#1A56DB' : '#EF4444' }}>
+              {order.side === 'buy' ? '买' : '卖'}
+            </span>
+            {order.coin}
           </span>
         </div>
         {/* 赠送订单：类型行内展示 */}
@@ -399,13 +399,13 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           <span style={{ color: '#1A2340' }}>{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
         </div>
         <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>类型</span>
-          <span style={{ color: '#6B7A9A' }}>{order.orderType === '无损合约' ? '谷底增筹' : (order.orderType || '谷底增筹')}</span>
-        </div>
-        <div className="flex justify-between">
-          <span style={{ color: '#9CA3AF' }}>状态</span>
-          <span style={{ color: order.status === 'completed' ? '#0EA56A' : order.status === 'cancelled' ? '#9CA3AF' : '#F59E0B' }}>
-            {order.status === 'completed' ? '已成交' : order.status === 'cancelled' ? '已撒单' : '委托中'}
+          <span style={{ color: '#9CA3AF' }}>类型 / 状态</span>
+          <span style={{ color: '#6B7A9A' }}>
+            {order.orderType === '无损合约' ? '谷底增筹' : (order.orderType || '谷底增筹')}
+            <span className="mx-1" style={{ color: '#D1D5DB' }}>·</span>
+            <span style={{ color: order.status === 'completed' ? '#0EA56A' : order.status === 'cancelled' ? '#9CA3AF' : '#F59E0B' }}>
+              {order.status === 'completed' ? '已成交' : order.status === 'cancelled' ? '已撒单' : '委托中'}
+            </span>
           </span>
         </div>
         <div className="flex justify-between">
