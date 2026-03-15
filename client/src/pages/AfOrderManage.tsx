@@ -268,8 +268,20 @@ export default function AfOrderManage() {
                 }
               }
 
+              // 生成订单编号：AF + 创建日期(YYMMDD) + 6位补零ID
+              const orderDate = new Date(order.createdAt);
+              const yy = String(orderDate.getFullYear()).slice(2);
+              const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
+              const dd = String(orderDate.getDate()).padStart(2, '0');
+              const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
+
               return (
                 <div key={order.id} className="bg-white rounded-xl p-4 shadow-sm">
+                  {/* 订单编号行 */}
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
+                    <span className="text-[11px] text-gray-400">{formatDate(order.createdAt)}</span>
+                  </div>
                   {/* 用户信息行 */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -281,7 +293,6 @@ export default function AfOrderManage() {
                           赠
                         </span>
                       )}
-                      <span className="text-xs text-gray-400">{formatDate(order.createdAt)}</span>
                     </div>
                     {!isEditing ? (
                       <button
