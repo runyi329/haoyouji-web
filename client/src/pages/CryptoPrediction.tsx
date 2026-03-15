@@ -1062,7 +1062,7 @@ export default function CryptoPrediction() {
             </button>
             {/* 当前委托订单列表 - 独立渲染，不依赖 K 线图加载状态 */}
             <div className="mt-4">
-              <div className="text-sm font-semibold mb-2" style={{ color: '#1A2340' }}>当前委托</div>
+              <div className="text-sm font-semibold mb-2" style={{ color: '#1A2340' }}>当前订单</div>
               {ordersLoading ? (
                 <div className="space-y-2 pt-1">
                   {[1,2,3].map(i => (
@@ -1125,14 +1125,14 @@ export default function CryptoPrediction() {
                                   }
                                 }}
                                 disabled={cancelOrderMutation.isPending}
-                                className="text-gray-400 text-[10px] font-medium">
+                                className="text-gray-400 text-xs font-medium">
                                 撒单
                               </button>
                             )}
                             {order.status !== 'pending' && (
                               <button
                                 onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
-                                className="text-[10px] font-medium" style={{ color: '#1A56DB' }}>
+                                className="text-xs font-medium" style={{ color: '#1A56DB' }}>
                                 详情
                               </button>
                             )}
