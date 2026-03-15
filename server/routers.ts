@@ -9912,6 +9912,80 @@ export const appRouter = router({
         
         return list;
       }),
+    // 管理员：订单和管理费统计
+    afAdminGetStats: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证权限
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+
+        // 1. 订单统计：普通订单数 + 赠送订单数（只统计买单）
+        const orderStatsRows = await db.execute(
+          sql`SELECT 
+                SUM(CASE WHEN side='buy' AND COALESCE(is_gift,0)=0 THEN 1 ELSE 0 END) as normalCount,
+                SUM(CASE WHEN side='buy' AND COALESCE(is_gift,0)=1 THEN 1 ELSE 0 END) as giftCount,
+                SUM(CASE WHEN side='buy' THEN 1 ELSE 0 END) as totalCount
+              FROM af_orders WHERE ledger_id = ${input.ledgerId}`
+        ) as any;
+        const os = (orderStatsRows[0]?.[0] ?? orderStatsRows[0] ?? {});
+        const normalCount = parseInt(os.normalCount || '0') || 0;
+        const giftCount = parseInt(os.giftCount || '0') || 0;
+        const totalCount = parseInt(os.totalCount || '0') || 0;
+
+        // 2. 管理费统计：查询所有买单，根据状态计算
+        //    公式：订单金额 ÷ 0.75 × 0.12 ÷ 365 × 持有天数
+        //    进行中 = 已成交且未卖出的买单（status='completed' 且没有对应卖单已成交）
+        //    已结清 = 已卖出的买单（对应卖单status='completed'）
+        const buyOrderRows = await db.execute(
+          sql`SELECT o.id, o.amount, o.status, o.updated_at, o.created_at,
+                     COALESCE(o.is_gift, 0) as is_gift,
+                     (SELECT COUNT(*) FROM af_orders s WHERE s.source_order_id = o.id AND s.side='sell' AND s.status='completed' AND s.ledger_id = ${input.ledgerId}) as sold
+              FROM af_orders o
+              WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy' AND o.status = 'completed'`
+        ) as any;
+        const buyOrders = ((buyOrderRows[0] || buyOrderRows) as any[]);
+
+        let ongoingFee = 0;   // 进行中管理费
+        let settledFee = 0;   // 已结清管理费
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+        for (const bo of buyOrders) {
+          const amount = parseFloat(bo.amount || '0');
+          if (amount <= 0) continue;
+          const dailyFee = amount / 0.75 * 0.12 / 365;
+          const confirmedDate = bo.updated_at ? new Date(bo.updated_at) : new Date(bo.created_at);
+          const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+
+          if (parseInt(bo.sold || '0') > 0) {
+            // 已结清：从确认日到今天（简化处理，实际应到卖出日）
+            // 查询卖出日期
+            const sellRows = await db.execute(
+              sql`SELECT updated_at FROM af_orders WHERE source_order_id = ${bo.id} AND side='sell' AND status='completed' AND ledger_id = ${input.ledgerId} ORDER BY updated_at DESC LIMIT 1`
+            ) as any;
+            const sellDate = (sellRows[0]?.[0]?.updated_at ?? sellRows[0]?.updated_at) ? new Date(sellRows[0]?.[0]?.updated_at ?? sellRows[0]?.updated_at) : now;
+            const sellDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
+            const holdDays = Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+            settledFee += dailyFee * holdDays;
+          } else {
+            // 进行中：从确认日到今天
+            const holdDays = Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+            ongoingFee += dailyFee * holdDays;
+          }
+        }
+
+        const totalFee = ongoingFee + settledFee;
+
+        return {
+          orders: { normalCount, giftCount, totalCount },
+          fees: { ongoingFee: +ongoingFee.toFixed(4), settledFee: +settledFee.toFixed(4), totalFee: +totalFee.toFixed(4) },
+        };
+      }),
     // 管理员：修改订单参数和状态（含余额联动）
     afAdminUpdateOrder: protectedProcedure
       .input(z.object({

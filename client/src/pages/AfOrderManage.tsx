@@ -55,6 +55,10 @@ export default function AfOrderManage() {
   const [editState, setEditState] = useState<EditState | null>(null);
 
   const utils = trpc.useUtils();
+  const { data: stats } = trpc.ledger.afAdminGetStats.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
   const { data: orders, isLoading } = trpc.ledger.afAdminGetOrders.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
@@ -179,6 +183,42 @@ export default function AfOrderManage() {
       </div>
 
       <div className="p-4">
+        {/* 统计容器 */}
+        {stats && (
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            {/* 累计订单 */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-blue-100">
+              <p className="text-xs text-gray-400 mb-2">累计订单</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.orders.totalCount}</p>
+              <div className="mt-2 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">普通订单</span>
+                  <span className="font-medium text-blue-600">{stats.orders.normalCount} 笔</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">赠送订单</span>
+                  <span className="font-medium text-red-500">{stats.orders.giftCount} 笔</span>
+                </div>
+              </div>
+            </div>
+            {/* 管理费 */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-purple-100">
+              <p className="text-xs text-gray-400 mb-2">管理费</p>
+              <p className="text-2xl font-bold text-purple-700">{stats.fees.totalFee.toFixed(2)}</p>
+              <div className="mt-2 space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">进行中</span>
+                  <span className="font-medium text-orange-500">{stats.fees.ongoingFee.toFixed(2)} U</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-400">已结清</span>
+                  <span className="font-medium text-green-600">{stats.fees.settledFee.toFixed(2)} U</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="text-center py-12 text-gray-400">加载中...</div>
         ) : !orders || orders.length === 0 ? (
