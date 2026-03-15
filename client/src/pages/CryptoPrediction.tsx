@@ -367,16 +367,6 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         ) : (
           <>
             <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">{(order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice ? '委托价格' : '成交价格'}</span>/span>
-                <span className="font-semibold" style={{ color: '#D97706' }}>
-                  {(parseFloat(order.amount) / parseFloat((order as any).sourceAmount) * 100).toFixed(2)}%
-                </span>
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">{(order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice ? '委托价格' : '成交价格'}</span>
               <span className="text-[#1E293B]">{parseFloat((order as any).originalLimitPrice || order.limitPrice).toLocaleString()} USDT</span>
             </div>
