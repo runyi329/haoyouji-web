@@ -145,6 +145,11 @@ export default function LedgerDetail() {
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isFunder = (ledgerData as any)?.userRole === 'funder';
+  // 视角切换时，用目标用户的角色来控制 UI 显示
+  const viewAsRole = viewAsUserId ? ((membersData as any[])?.find((m: any) => m.userId === viewAsUserId)?.role || 'member') : null;
+  const effectiveIsOwner = viewAsUserId ? viewAsRole === 'owner' : isOwner;
+  const effectiveIsAdmin = viewAsUserId ? viewAsRole === 'admin' : isAdmin;
+  const effectiveIsManager = effectiveIsOwner || effectiveIsAdmin;
   const isDietCoach = isDiet && (isOwner || isAdmin);
   const isDietStudent = isDiet && !isDietCoach;
   const { data: user } = trpc.auth.me.useQuery();
@@ -414,7 +419,7 @@ export default function LedgerDetail() {
             </div>
             {/* 右侧：设置图标 + 返回按钮 */}
             <div className="flex items-center gap-2">
-              {(isOwner || isAdmin) && (
+              {effectiveIsManager && (
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
                   style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
@@ -521,8 +526,8 @@ export default function LedgerDetail() {
                     <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
                   </div>
                 )}
-                {/* 管理员或创建者：设置按鈕 */}
-                {(isOwner || isAdmin) && (
+                {/* 管理员或创建者：设置按鈕（视角切换时按目标角色显示） */}
+                {effectiveIsManager && (
                   <div 
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
