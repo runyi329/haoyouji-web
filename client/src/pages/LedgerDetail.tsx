@@ -97,14 +97,25 @@ export default function LedgerDetail() {
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   // 视角切换（AF 账本管理员专属）
-  const [viewAsUserId, setViewAsUserId] = useState<number | null>(null);
+  // viewAsUserId 从 URL 参数读取，确保刷新和子页面跳转后保持视角
+  const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
+  const [viewAsUserId, setViewAsUserIdState] = useState<number | null>(viewAsUserIdFromUrl);
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
   const [viewAsSearch, setViewAsSearch] = useState('');
   const trpcUtils = trpc.useUtils();
-  // 视角切换时手动 invalidate 所有 AF 查询
+  // 视角切换时同步写入 URL，确保刷新后保持视角
   const handleSwitchView = (userId: number | null) => {
-    setViewAsUserId(userId);
+    setViewAsUserIdState(userId);
     setShowViewAsPicker(false);
+    // 更新 URL 参数
+    const newParams = new URLSearchParams(window.location.search);
+    if (userId) {
+      newParams.set('viewAs', String(userId));
+    } else {
+      newParams.delete('viewAs');
+    }
+    const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+    window.history.replaceState(null, '', newUrl);
     trpcUtils.ledger.afGetMyTotalAsset.invalidate();
     trpcUtils.ledger.afGetMyRechargeHistory.invalidate();
   };
