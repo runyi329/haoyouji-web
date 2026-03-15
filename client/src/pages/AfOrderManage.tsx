@@ -307,12 +307,9 @@ export default function AfOrderManage() {
 
                   {/* 管理费统计（仅已成交订单显示） */}
                   {order.status === 'completed' && (() => {
-                    // 统一公式：订单金额 ÷ 0.75 ÷ 倍数 × 10 × 0.12 ÷ 365
-                    // 普通订单：倍数 = 5.25，金额 = 实际投入
-                    // 赠送订单：倍数 = giftMultiplier，金额 = 赠送市值
+                    // 统一公式：订单金额 ÷ 0.75 × 0.12 ÷ 365
                     const amount = parseFloat(order.amount);
-                    const multiplier = order.isGift ? parseFloat(order.giftMultiplier || '1.5') : 5.25;
-                    const dailyFee = amount / 0.75 / multiplier * 10 * 0.12 / 365;
+                    const dailyFee = amount / 0.75 * 0.12 / 365;
                     
                     // 持有天数计算：从确认成交日（updatedAt）到今天，两头都算
                     const confirmedDate = order.updatedAt ? new Date(order.updatedAt) : new Date(order.createdAt);
@@ -332,8 +329,8 @@ export default function AfOrderManage() {
                             <span className="font-medium text-gray-800">{amount.toFixed(2)} USDT</span>
                           </div>
                           <div className="flex justify-between">
-                            <span className="text-gray-500">倍数</span>
-                            <span className="font-medium text-gray-800">{multiplier}×</span>
+                            <span className="text-gray-500">年化费率</span>
+                            <span className="font-medium text-gray-800">12%</span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-gray-500">持有天数</span>
@@ -349,7 +346,7 @@ export default function AfOrderManage() {
                           </div>
                         </div>
                         <p className="text-[10px] text-purple-400 mt-2">
-                          {amount.toFixed(2)} ÷ 0.75 ÷ {multiplier} × 10 × 12% ÷ 365 = {dailyFee.toFixed(4)} USDT/天 × {holdDays}天 = {totalFee.toFixed(4)} USDT
+                          {amount.toFixed(2)} ÷ 0.75 × 12% ÷ 365 = {dailyFee.toFixed(4)} USDT/天 × {holdDays}天 = {totalFee.toFixed(4)} USDT
                         </p>
                       </div>
                     );
