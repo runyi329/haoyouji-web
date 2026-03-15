@@ -96,6 +96,10 @@ export default function LedgerDetail() {
 
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
+  // 视角切换（AF 账本管理员专属）
+  const [viewAsUserId, setViewAsUserId] = useState<number | null>(null);
+  const [showViewAsPicker, setShowViewAsPicker] = useState(false);
+  const [viewAsSearch, setViewAsSearch] = useState('');
   // 抽奖子 Tab：正在进行中 / 往期回顾
   const [lotteryTab, setLotteryTab] = useState<'active' | 'past'>('active');
   // 倒计时刻度（每秒更新）
@@ -142,7 +146,7 @@ export default function LedgerDetail() {
   );
   // AF 账本：总资产估值（充值到账 + 手动调账）
   const { data: afTotalAsset } = trpc.ledger.afGetMyTotalAsset.useQuery(
-    { ledgerId: Number(ledgerId) },
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF }
   );
   const dietConfig = (dietStats as any)?.config;
@@ -372,15 +376,33 @@ export default function LedgerDetail() {
           <div className="px-4 pt-3 pb-2 flex items-center justify-between">
             {/* 左侧：头像 + 账本名 */}
             <div className="flex items-center gap-2">
-              {user && (
-                <UserAvatar
-                  username={user.username}
-                  avatar={user.avatar}
-                  nickname={user.nickname}
-                  size="md"
-                />
-              )}
-              <span className="text-base font-semibold">{ledgerData.name}</span>
+              {(() => {
+                const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
+                return (
+                  <div
+                    className={(isOwner || isAdmin) ? 'cursor-pointer relative' : ''}
+                    onClick={() => { if (isOwner || isAdmin) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
+                  >
+                    {viewTarget ? (
+                      <UserAvatar username={viewTarget.username} avatar={viewTarget.avatar} nickname={viewTarget.nickname} size="md" />
+                    ) : user ? (
+                      <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="md" />
+                    ) : null}
+                    {(isOwner || isAdmin) && (
+                      <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/90 flex items-center justify-center">
+                        <Users className="w-2.5 h-2.5 text-blue-600" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="flex flex-col">
+                <span className="text-base font-semibold">{ledgerData.name}</span>
+                {viewAsUserId && (() => {
+                  const viewTarget = (membersData as any[])?.find((m: any) => m.userId === viewAsUserId);
+                  return viewTarget ? <span className="text-xs text-white/70">查看: {viewTarget.nickname || viewTarget.username}</span> : null;
+                })()}
+              </div>
             </div>
             {/* 右侧：设置图标 + 返回按钮 */}
             <div className="flex items-center gap-2">
@@ -1291,6 +1313,98 @@ export default function LedgerDetail() {
           onOpenChange={setShowMembersDialog}
           members={membersData}
         />
+      )}
+
+      {/* AF 视角切换横幅 */}
+      {isCustomAF && viewAsUserId && (isOwner || isAdmin) && (
+        <div className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-between px-4 py-2" style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}>
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Users className="w-4 h-4" />
+            <span>正在以 {(() => {
+              const t = (membersData as any[])?.find((m: any) => m.userId === viewAsUserId);
+              return t ? (t.nickname || t.username) : '未知用户';
+            })()} 的视角查看</span>
+          </div>
+          <button
+            onClick={() => setViewAsUserId(null)}
+            className="px-3 py-1 rounded-full text-xs font-medium bg-white/90 text-gray-800"
+          >
+            切回我的视角
+          </button>
+        </div>
+      )}
+
+      {/* AF 视角切换弹窗：成员列表 + 搜索 */}
+      {showViewAsPicker && isCustomAF && (isOwner || isAdmin) && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center" onClick={() => setShowViewAsPicker(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-md bg-white rounded-t-2xl max-h-[70vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 头部 */}
+            <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-gray-900">切换查看视角</h3>
+                <button onClick={() => setShowViewAsPicker(false)} className="text-gray-400 text-xl">×</button>
+              </div>
+              {/* 搜索框 */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="搜索成员名称..."
+                  value={viewAsSearch}
+                  onChange={e => setViewAsSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+              </div>
+            </div>
+            {/* 成员列表 */}
+            <div className="flex-1 overflow-y-auto px-4 py-2">
+              {/* 切回自己 */}
+              {viewAsUserId && (
+                <button
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 bg-blue-50"
+                  onClick={() => { setViewAsUserId(null); setShowViewAsPicker(false); }}
+                >
+                  {user && <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="sm" />}
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-medium text-blue-700">我自己</div>
+                    <div className="text-xs text-blue-500">{user?.nickname || user?.username}</div>
+                  </div>
+                  <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">当前</span>
+                </button>
+              )}
+              {/* 成员列表 */}
+              {((membersData as any[]) || []).filter((m: any) => {
+                if (m.userId === user?.id) return false; // 排除自己
+                if (!viewAsSearch) return true;
+                const keyword = viewAsSearch.toLowerCase();
+                return (m.nickname || '').toLowerCase().includes(keyword) || (m.username || '').toLowerCase().includes(keyword);
+              }).map((m: any) => (
+                <button
+                  key={m.userId}
+                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 transition-colors ${
+                    viewAsUserId === m.userId ? 'bg-amber-50' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => { setViewAsUserId(m.userId); setShowViewAsPicker(false); }}
+                >
+                  <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-medium text-gray-900">{m.nickname || m.username}</div>
+                    <div className="text-xs text-gray-500">
+                      {m.role === 'owner' ? '创始人' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资金方' : '普通成员'}
+                    </div>
+                  </div>
+                  {viewAsUserId === m.userId && (
+                    <span className="text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">查看中</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
