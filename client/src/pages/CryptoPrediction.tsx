@@ -348,6 +348,10 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <span className="text-[#1E293B]">{(order as any).sourceAmount ? parseFloat((order as any).sourceAmount).toFixed(2) : '--'} USDT</span>
             </div>
             <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">持仓数量</span>
+              <span className="text-[#1E293B]">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
+            </div>
+            <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">赠送市値</span>
               <span className="font-semibold" style={{ color: (order as any).giftMultiplier === '1.0' ? '#D97706' : '#EF4444' }}>
                 {parseFloat(order.amount).toFixed(2)} USDT
@@ -380,6 +384,10 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <span className="text-[#1E293B]">{parseFloat(order.amount).toFixed(2)} USDT</span>
             </div>
             <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">持仓数量</span>
+              <span className="text-[#1E293B]">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
+            </div>
+            <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">成交价値</span>
               <span className="font-semibold text-[#1A56DB]">
                 {(parseFloat(order.amount) * 5.25).toFixed(2)} USDT
@@ -388,12 +396,6 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             </div>
           </>
         )}
-
-        {/* 持仓数量 */}
-        <div className="flex justify-between items-center">
-          <span className="text-[#9CA3AF]">持仓数量</span>
-          <span className="text-[#1E293B]">{parseFloat(order.quantity).toFixed(8)} {order.coin}</span>
-        </div>
 
         {/* 类型 + 状态 */}
         <div className="flex justify-between items-center">
