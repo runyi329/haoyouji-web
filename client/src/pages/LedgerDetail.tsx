@@ -443,6 +443,13 @@ export default function LedgerDetail() {
                 邀请
               </button>
               <button
+                onClick={() => window.location.reload()}
+                className="px-3 py-1 rounded-full text-sm font-medium border border-white/60 text-white"
+                style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+              >
+                刷新
+              </button>
+              <button
                 onClick={() => setLocation('/ledger')}
                 className="px-3 py-1 rounded-full text-sm font-medium border border-white/60 text-white"
                 style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
