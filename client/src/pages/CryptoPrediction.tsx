@@ -27,15 +27,15 @@ const COIN_CONFIG: Record<string, {
 }> = {
   BTC: {
     symbol: "BTCUSDT", name: "BTC", fullName: "比特币", color: "#F7931A",
-    imgUrl: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/bitcoin.webp",
+    imgUrl: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png",
   },
   ETH: {
     symbol: "ETHUSDT", name: "ETH", fullName: "以太坊", color: "#627EEA",
-    imgUrl: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ethereum.webp",
+    imgUrl: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png",
   },
   SOL: {
     symbol: "SOLUSDT", name: "SOL", fullName: "索拉纳", color: "#9945FF",
-    imgUrl: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/solana.webp",
+    imgUrl: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png",
   },
 };
 
