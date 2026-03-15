@@ -600,11 +600,26 @@ export default function LedgerDetail() {
                   </div>
                 )}
               </div>
-              {/* 卡片 3 */}
+              {/* 卡片 3：仓位 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-xs text-white/70 mb-1">仓位</div>
-                <div className="text-lg font-bold text-white">--</div>
-                <div className="text-xs text-white/60 mt-1">待接入数据</div>
+                {(afTotalAsset as any)?.positions ? (
+                  <div className="space-y-1">
+                    {['BTC', 'ETH', 'SOL'].map(coin => {
+                      const qty = (afTotalAsset as any).positions[coin] ?? 0;
+                      return (
+                        <div key={coin} className="flex items-baseline justify-between">
+                          <span className="text-xs text-white/70">{coin}</span>
+                          <span className="text-sm font-bold text-white">
+                            {qty > 0 ? (qty < 0.0001 ? qty.toFixed(8) : qty < 1 ? qty.toFixed(4) : qty.toFixed(2)) : '0'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-lg font-bold text-white">--</div>
+                )}
               </div>
               {/* 卡片 4 */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
