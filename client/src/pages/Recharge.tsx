@@ -16,9 +16,10 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   const searchParams = new URLSearchParams(search);
   const fromLedger = searchParams.get('from') === 'ledger';
   const fromLedgerId = searchParams.get('ledgerId');
+  const viewAsUserId = searchParams.get('viewAs');
   const handleBack = () => {
     if (fromLedger && fromLedgerId) {
-      setLocation(`/ledger/${fromLedgerId}`);
+      setLocation(`/ledger/${fromLedgerId}${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
     } else {
       window.history.back();
     }
@@ -38,7 +39,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   // 如果有 ledgerId，使用 AF 账本总资产（充値到账 + 手动调账）
   const afLedgerId = fromLedgerId ? parseInt(fromLedgerId) : 0;
   const { data: afAssetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
-    { ledgerId: afLedgerId },
+    { ledgerId: afLedgerId, ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}) },
     { enabled: !!afLedgerId, staleTime: 30000 }
   );
   // 实际显示的余额：有 ledgerId 时用 AF 账本总资产，否则用普通余额
@@ -132,7 +133,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
         {/* 顶部导航 */}
         <div className="bg-white border-b sticky top-0 z-10">
           <div className="flex items-center px-4 py-3">
-            <button onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}` : '/recharge/history')} className="mr-3">
+            <button onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history')} className="mr-3">
               <ArrowLeft className="w-6 h-6" />
             </button>
             <h1 className="text-lg font-semibold">提交成功</h1>
@@ -185,7 +186,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
           {/* 操作按钮 */}
           <div className="space-y-2.5">
             <button
-              onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}` : '/recharge/history')}
+              onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history')}
               className="w-full bg-[#D32F2F] text-white py-3.5 rounded-lg font-medium"
             >
               查看充值记录
@@ -338,7 +339,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
             <h1 className="text-lg font-semibold">充值</h1>
           </div>
           <button
-            onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}` : '/recharge/history')}
+            onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history')}
             className="flex items-center text-sm text-gray-600 hover:text-[#D32F2F]"
           >
             <History className="w-4 h-4 mr-1" />

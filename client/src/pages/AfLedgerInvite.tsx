@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import { ChevronLeft, Copy, Check } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import QRCode from "qrcode";
@@ -8,6 +8,9 @@ export default function AfLedgerInvite() {
   const { id } = useParams<{ id: string }>();
   const ledgerId = id;
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const searchParams = new URLSearchParams(search);
+  const viewAsUserId = searchParams.get('viewAs');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState("");
@@ -60,7 +63,7 @@ export default function AfLedgerInvite() {
       <div className="bg-[#D32F2F] w-full">
         <div className="flex items-center px-4 pt-3 pb-4">
           <button
-            onClick={() => setLocation(`/ledger/${ledgerId}`)}
+            onClick={() => setLocation(`/ledger/${ledgerId}${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
             className="p-1 -ml-1 mr-2"
           >
             <ChevronLeft className="w-6 h-6 text-white" />
