@@ -355,20 +355,19 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 <span className="ml-1 text-[11px] font-normal opacity-70">({(order as any).giftMultiplier || '1.5'}倍)</span>
               </span>
             </div>
-            {/* 持仓数量 + 计算过程小灰字 */}
-            <div className="flex justify-between items-start">
+            {/* 持仓数量：计算过程小灰字 + 等号和结果同行显示 */}
+            <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">持仓数量</span>
-              <div className="text-right">
+              <span>
+                <span className="text-[11px] text-[#9CA3AF]">{(parseFloat(order.amount) * 5.25).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = </span>
                 <span className="text-[#1E293B] font-medium">{parseFloat(order.quantity).toFixed(8).replace(/\.?0+$/, '')} {order.coin}</span>
-                <div className="text-[11px] text-[#9CA3AF] mt-0.5">
-                  {parseFloat(order.amount).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = {parseFloat(order.quantity).toFixed(8).replace(/\.?0+$/, '')} {order.coin}
-                </div>
-              </div>
+              </span>
             </div>
-
-            {(order as any).sourceAmount && parseFloat((order as any).sourceAmount) > 0 && (
-              <div className="flex justify-between items-center">
-                <span className="text-[#9CA3AF]">获赠比例<span className="text-[11px] ml-1 opacity-60">(按下单人实际投资金额)</span></span>
+          </>
+        ) : (
+          <>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">{(order as any).originalLimitPrice && (order as any).originalLimitPrice !== order.limitPrice ? '委托价格' : '成交价格'}</span>/span>
                 <span className="font-semibold" style={{ color: '#D97706' }}>
                   {(parseFloat(order.amount) / parseFloat((order as any).sourceAmount) * 100).toFixed(2)}%
                 </span>
@@ -399,15 +398,13 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 <span className="ml-1 text-[11px] font-normal opacity-60">(×5.25)</span>
               </span>
             </div>
-            {/* 持仓数量 + 计算过程小灰字 */}
-            <div className="flex justify-between items-start">
+            {/* 持仓数量：计算过程小灰字 + 等号和结果同行显示 */}
+            <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">持仓数量</span>
-              <div className="text-right">
+              <span>
+                <span className="text-[11px] text-[#9CA3AF]">{(parseFloat(order.amount) * 5.25).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = </span>
                 <span className="text-[#1E293B] font-medium">{parseFloat(order.quantity).toFixed(8).replace(/\.?0+$/, '')} {order.coin}</span>
-                <div className="text-[11px] text-[#9CA3AF] mt-0.5">
-                  {(parseFloat(order.amount) * 5.25).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = {parseFloat(order.quantity).toFixed(8).replace(/\.?0+$/, '')} {order.coin}
-                </div>
-              </div>
+              </span>
             </div>
           </>
         )}
