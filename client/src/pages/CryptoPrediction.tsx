@@ -1147,7 +1147,7 @@ export default function CryptoPrediction() {
                                   }
                                 }}
                                 disabled={cancelOrderMutation.isPending}
-                                className="text-gray-400 text-xs font-medium">
+                                className="text-xs font-medium" style={{ color: '#1A56DB' }}>
                                 撒单
                               </button>
                             )}
