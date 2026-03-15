@@ -173,6 +173,11 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF }
   );
+  // AF 账本：管理员统计（订单数 + 管理费）
+  const { data: afAdminStats } = trpc.ledger.afAdminGetStats.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF && (isOwner || isAdmin) }
+  );
   const dietConfig = (dietStats as any)?.config;
   const dietInitialWeight = dietConfig ? Number(dietConfig.initialWeight) : null;
   const dietTargetWeight = dietConfig ? Number(dietConfig.targetWeight) : null;
@@ -669,6 +674,46 @@ export default function LedgerDetail() {
                 <div className="text-xs text-white/70 mb-1">累计盈亏</div>
                 <div className="text-lg font-bold text-white">--</div>
               </div>
+              {/* 管理员统计：累计订单 */}
+              {(isOwner || isAdmin) && afAdminStats && (
+                <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                  <div className="text-xs text-white/70 mb-1">累计订单</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg font-bold text-white">{afAdminStats.orders.totalCount}</span>
+                    <span className="text-xs text-white/60">笔</span>
+                  </div>
+                  <div className="mt-1.5 space-y-0.5">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs text-white/60">普通</span>
+                      <span className="text-xs font-medium text-white">{afAdminStats.orders.normalCount} 笔</span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs text-white/60">赠送</span>
+                      <span className="text-xs font-medium text-amber-300">{afAdminStats.orders.giftCount} 笔</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* 管理员统计：管理费 */}
+              {(isOwner || isAdmin) && afAdminStats && (
+                <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                  <div className="text-xs text-white/70 mb-1">管理费</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg font-bold text-white">{afAdminStats.fees.totalFee.toFixed(2)}</span>
+                    <span className="text-xs text-white/60">U</span>
+                  </div>
+                  <div className="mt-1.5 space-y-0.5">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs text-white/60">进行中</span>
+                      <span className="text-xs font-medium text-amber-300">{afAdminStats.fees.ongoingFee.toFixed(2)} U</span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs text-white/60">已结清</span>
+                      <span className="text-xs font-medium text-green-300">{afAdminStats.fees.settledFee.toFixed(2)} U</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
