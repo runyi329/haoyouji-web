@@ -9,8 +9,9 @@ export default function RechargeHistory() {
   const fromLedgerId = searchParams.get('ledgerId');
   const ledgerId = fromLedgerId ? parseInt(fromLedgerId) : null;
   const viewAsUserId = searchParams.get('viewAs') ? parseInt(searchParams.get('viewAs')!) : undefined;
+  const viewAsParam = viewAsUserId ? `&viewAs=${viewAsUserId}` : '';
   const backToRecharge = fromLedgerId
-    ? `/recharge?from=ledger&ledgerId=${fromLedgerId}`
+    ? `/recharge?from=ledger&ledgerId=${fromLedgerId}${viewAsParam}`
     : '/recharge';
 
   // 如果是从 AF 账本进来，使用合并接口；否则使用普通接口

@@ -667,7 +667,7 @@ export default function CryptoPrediction() {
       {/* 顶部导航 */}
       <div className="sticky top-0 z-50 px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
         <div className="flex items-center gap-2">
-          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">
+          <button onClick={() => setLocation(`/ledger/${ledgerId}${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} className="p-1 -ml-1">
             <ChevronLeft className="w-5 h-5 text-white" />
           </button>
           <img src={coin.imgUrl} alt={coin.name} className="w-6 h-6 object-contain"
@@ -828,7 +828,7 @@ export default function CryptoPrediction() {
                     <span className="text-xs" style={{ color: '#1A2340' }}>
                       {availableUsdt > 0 ? availableUsdt.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"} USDT
                     </span>
-                    <button onClick={() => setLocation(`/recharge?ledgerId=${ledgerId}`)}
+                    <button onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
                       className="w-5 h-5 rounded-full flex items-center justify-center transition-colors" style={{ backgroundColor: '#E8EEFF', color: '#1A56DB' }} title="充值">
                       <span className="text-xs leading-none">+</span>
                     </button>
