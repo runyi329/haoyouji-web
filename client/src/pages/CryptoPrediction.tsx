@@ -753,14 +753,9 @@ export default function CryptoPrediction() {
         <div className="flex rounded-xl p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
           {[
             { key: "contract", label: isCustomAF ? "谷底增筹" : "无损合约" },
-            { key: "spot", label: "无损现货" },
             { key: "market", label: "行情评估" },
           ].map((t) => (
             <button key={t.key} onClick={() => {
-              if (t.key === "spot") {
-                toast.info("暂未开放");
-                return;
-              }
               setTab(t.key as any);
             }}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
