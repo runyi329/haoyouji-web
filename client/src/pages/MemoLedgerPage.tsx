@@ -216,7 +216,7 @@ function MemoCard({ item, onEdit, onDelete }: {
                   {acctIdx > 0 && <div className="border-t border-gray-100 my-2" />}
                   <div className="text-xs text-gray-400 mb-1.5">账户 {acctIdx + 1}</div>
                   <div className="space-y-1.5">
-                    {acct.filter(f => f.value).map((field, fidx) => {
+                    {acct.filter(f => f.value && f.label !== '__NOTE__').map((field, fidx) => {
                       const globalIdx = item.fields.indexOf(field);
                       return (
                         <div key={fidx} className="flex items-center gap-2">
@@ -241,6 +241,13 @@ function MemoCard({ item, onEdit, onDelete }: {
                         </div>
                       );
                     })}
+                    {/* 备注字段单独展示 */}
+                    {acct.find(f => f.label === '__NOTE__' && f.value) && (
+                      <div className="flex items-start gap-2 pt-0.5">
+                        <span className="text-xs text-gray-400 w-16 flex-shrink-0 pt-0.5">备注</span>
+                        <span className="text-xs text-gray-500 break-all">{acct.find(f => f.label === '__NOTE__')!.value}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -314,6 +321,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     { label: '邮箱', value: '' },
     { label: 'UID', value: '' },
     { label: '密码', value: '', sensitive: true },
+    { label: '__NOTE__', value: '' },
   ];
 
   const addOuyiAccount = () => setOuyiAccounts(prev => [...prev, newOuyiAccount()]);
@@ -566,27 +574,43 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
                       )}
                     </div>
                     <div className="space-y-2">
-                      {acct.map((field, fidx) => (
-                        <div key={fidx} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400 w-14 flex-shrink-0">{field.label}</span>
-                          <Input
-                            value={field.value}
-                            onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
-                            placeholder={field.label === '密码' ? '输入密码' : `输入${field.label}`}
-                            type={field.sensitive ? "password" : "text"}
-                            className="flex-1 text-sm"
-                          />
-                          {field.sensitive && (
-                            <button
-                              onClick={() => updateOuyiField(acctIdx, fidx, "sensitive", !field.sensitive)}
-                              className="p-1.5 rounded-lg flex-shrink-0 text-[#D32F2F] bg-red-50"
-                              title="点击显示密码"
-                            >
-                              <EyeOff className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
+                      {acct.map((field, fidx) => {
+                        if (field.label === '__NOTE__') {
+                          // 备注字段单独渲染
+                          return (
+                            <div key={fidx} className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400 w-14 flex-shrink-0">备注</span>
+                              <Input
+                                value={field.value}
+                                onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
+                                placeholder="此账户的备注（可选）"
+                                className="flex-1 text-sm"
+                              />
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={fidx} className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-14 flex-shrink-0">{field.label}</span>
+                            <Input
+                              value={field.value}
+                              onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
+                              placeholder={field.label === '密码' ? '输入密码' : `输入${field.label}`}
+                              type={field.sensitive ? "password" : "text"}
+                              className="flex-1 text-sm"
+                            />
+                            {field.sensitive && (
+                              <button
+                                onClick={() => updateOuyiField(acctIdx, fidx, "sensitive", !field.sensitive)}
+                                className="p-1.5 rounded-lg flex-shrink-0 text-[#D32F2F] bg-red-50"
+                                title="点击显示密码"
+                              >
+                                <EyeOff className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -638,11 +662,13 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
               </div>
             )}
 
-            {/* 备注 */}
-            <div className="space-y-1">
-              <label className="text-sm text-gray-600">备注（可选）</label>
-              <Input value={note} onChange={e => setNote(e.target.value)} placeholder="附加说明..." />
-            </div>
+            {/* 备注：欧易模式下备注已内置到每个账户里，普通模式才显示整体备注 */}
+            {!isOuyiMode && (
+              <div className="space-y-1">
+                <label className="text-sm text-gray-600">备注（可选）</label>
+                <Input value={note} onChange={e => setNote(e.target.value)} placeholder="附加说明..." />
+              </div>
+            )}
 
             {/* 操作按钮 */}
             <div className="flex gap-2 pt-1">
