@@ -677,9 +677,9 @@ export default function CryptoPrediction() {
 
       </div>
 
-      {/* 视角切换横幅 */}
+      {/* 视角切换横幅（固定底部） */}
       {viewAsUserId && (
-        <div className="px-4 py-2 flex items-center justify-between text-sm" style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}>
+        <div className="fixed bottom-0 left-0 right-0 z-[60] px-4 py-3 flex items-center justify-between text-sm safe-area-bottom" style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}>
           <span className="font-medium">正在查看他人视角的订单</span>
           <button
             onClick={() => {
