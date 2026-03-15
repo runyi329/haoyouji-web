@@ -376,17 +376,39 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
         {/* 选择网络 */}
         <div className="bg-white rounded-lg p-4">
           <div className="text-sm text-gray-600 mb-3">选择网络</div>
-          <select
-            value={network}
-            onChange={(e) => setNetwork(e.target.value as "TRC20" | "ERC20" | "BEP20" | "APTOS" | "SOLANA")}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:border-[#D32F2F] focus:outline-none transition-colors"
-          >
-            <option value="TRC20">TRC20 - 推荐 • 快速到账 • 低手续费</option>
-            <option value="APTOS">Aptos - 新一代公链 • 快速安全</option>
-            <option value="ERC20">ERC20 - 以太坊网络 • 手续费较高</option>
-            <option value="SOLANA">Solana - 高性能公链 • 极速到账</option>
-            <option value="BEP20">BSC(BEP20) - 币安智能链 • 快速低费</option>
-          </select>
+          <div className="space-y-2">
+            {[
+              { value: 'TRC20' as const, label: 'TRC20', desc: '推荐 • 快速到账 • 低手续费', enabled: true },
+              { value: 'APTOS' as const, label: 'Aptos', desc: '新一代公链 • 快速安全', enabled: true },
+              { value: 'ERC20' as const, label: 'ERC20', desc: '以太坊网络 • 暂未开放', enabled: false },
+              { value: 'SOLANA' as const, label: 'Solana', desc: '高性能公链 • 暂未开放', enabled: false },
+              { value: 'BEP20' as const, label: 'BSC(BEP20)', desc: '币安智能链 • 暂未开放', enabled: false },
+            ].map(item => (
+              <button
+                key={item.value}
+                type="button"
+                disabled={!item.enabled}
+                onClick={() => item.enabled && setNetwork(item.value)}
+                className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                  !item.enabled
+                    ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
+                    : network === item.value
+                      ? 'border-[#D32F2F] bg-red-50'
+                      : 'border-gray-200 hover:border-gray-400'
+                }`}
+              >
+                <div className="text-left">
+                  <div className={`font-medium text-sm ${!item.enabled ? 'text-gray-400' : 'text-gray-900'}`}>{item.label}</div>
+                  <div className={`text-xs mt-0.5 ${!item.enabled ? 'text-gray-300' : 'text-gray-500'}`}>{item.desc}</div>
+                </div>
+                {item.enabled && network === item.value && (
+                  <div className="w-5 h-5 rounded-full bg-[#D32F2F] flex items-center justify-center flex-shrink-0">
+                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 提交按钮 */}
