@@ -9455,7 +9455,7 @@ export const appRouter = router({
         if (input.viewAsUserId) {
           // 验证当前用户是该账本的 owner 或 admin
           const memberCheck = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
           ) as any;
           const rawResult = memberCheck;
           console.log('[AF viewAs] memberCheck raw:', JSON.stringify(rawResult));
@@ -9566,7 +9566,7 @@ export const appRouter = router({
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
           const memberCheck = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
           ) as any;
           const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
           if (myRole === 'owner' || myRole === 'admin') {
@@ -9680,7 +9680,7 @@ export const appRouter = router({
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
           const memberCheck = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
           ) as any;
           const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
           if (myRole === 'owner' || myRole === 'admin') {
@@ -9752,7 +9752,7 @@ export const appRouter = router({
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
           const memberCheck = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
           ) as any;
           const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
           if (myRole === 'owner' || myRole === 'admin') {
