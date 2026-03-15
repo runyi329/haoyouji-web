@@ -50,7 +50,6 @@ function formatFileSize(bytes: number | null) {
 
 function MessageBubble({ msg, isAdmin }: { msg: Message; isAdmin: boolean }) {
   const isSelf = isAdmin && msg.sender === "admin";
-  const isFromAdmin = msg.sender === "admin";
 
   return (
     <div className={`flex ${isSelf ? "justify-end" : "justify-start"} mb-3`}>
@@ -81,7 +80,7 @@ function MessageBubble({ msg, isAdmin }: { msg: Message; isAdmin: boolean }) {
             <img
               src={msg.file_url}
               alt={msg.file_name || "图片"}
-              className="max-w-full max-h-64 object-contain bg-gray-50"
+              className="max-w-full max-h-64 object-contain bg-gray-50 cursor-pointer"
               onClick={() => window.open(msg.file_url!, "_blank")}
             />
           </div>
@@ -118,7 +117,7 @@ function MessageBubble({ msg, isAdmin }: { msg: Message; isAdmin: boolean }) {
 
 export default function ManusChat() {
   const [, navigate] = useLocation();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const isAdmin = user?.role === "admin" || user?.role === "super_admin";
 
   const [text, setText] = useState("");
@@ -137,10 +136,14 @@ export default function ManusChat() {
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const utils = trpc.useUtils();
-  const { data: messages, refetch } = trpc.manus.getMessages.useQuery({ limit: 100 }, {
-    refetchInterval: 3000, // 每3秒轮询
-    refetchOnWindowFocus: true,
-  });
+  const { data: messages } = trpc.manus.getMessages.useQuery(
+    { limit: 100 },
+    {
+      refetchInterval: 3000,
+      refetchOnWindowFocus: true,
+      enabled: !loading, // auth 加载完成后才开始查询
+    }
+  );
 
   const sendMutation = trpc.manus.sendMessage.useMutation({
     onSuccess: () => {
@@ -202,6 +205,16 @@ export default function ManusChat() {
     e.target.value = "";
   };
 
+  // auth 加载中时显示骨架屏
+  if (loading) {
+    return (
+      <div className="flex flex-col h-screen bg-[#F5F5F5] max-w-md mx-auto items-center justify-center">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center text-white font-bold text-lg animate-pulse">M</div>
+        <p className="text-sm text-gray-400 mt-3">加载中...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen bg-[#F5F5F5] max-w-md mx-auto">
       {/* 顶部导航 */}
@@ -229,7 +242,7 @@ export default function ManusChat() {
               M
             </div>
             <p className="text-sm font-medium text-gray-500">Manus AI 助理</p>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 mt-1 text-center px-8">
               {isAdmin ? "在这里向用户发送消息、图片或文件" : "暂无消息，管理员将在这里与您沟通"}
             </p>
           </div>
@@ -270,7 +283,6 @@ export default function ManusChat() {
       {isAdmin ? (
         <div className="bg-white border-t border-gray-100 px-3 py-3 flex-shrink-0">
           <div className="flex items-end gap-2">
-            {/* 附件按钮 */}
             <button
               onClick={() => imageInputRef.current?.click()}
               className="p-2 rounded-full hover:bg-gray-100 transition-colors flex-shrink-0"
@@ -285,7 +297,6 @@ export default function ManusChat() {
             >
               <Paperclip className="w-5 h-5 text-gray-500" />
             </button>
-            {/* 文字输入 */}
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -300,7 +311,6 @@ export default function ManusChat() {
               className="flex-1 resize-none rounded-2xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:border-[#D32F2F] bg-gray-50 max-h-24"
               style={{ minHeight: "38px" }}
             />
-            {/* 发送按钮 */}
             <button
               onClick={handleSend}
               disabled={sending || (!text.trim() && !pendingFile)}
@@ -313,7 +323,6 @@ export default function ManusChat() {
               )}
             </button>
           </div>
-          {/* 隐藏的文件输入 */}
           <input
             ref={imageInputRef}
             type="file"
