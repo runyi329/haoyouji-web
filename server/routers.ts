@@ -10126,17 +10126,28 @@ export const appRouter = router({
       }),
     // AF 查询订单的收益权档位触发记录 + 扫描状态
     afGetTierData: protectedProcedure
-      .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
+      .input(z.object({ orderId: z.number(), ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
-        // 验证订单属于该用户
+        // 支持 viewAs 视角切换（管理员可查看其他用户的订单）
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          const roleRows = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+          ) as any;
+          const myRole = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+          if (myRole === 'owner' || myRole === 'admin') {
+            targetUserId = input.viewAsUserId;
+          }
+        }
+        // 验证订单属于目标用户
         const orderRows = await db.execute(
           sql`SELECT id, coin, limit_price, status FROM af_orders
-              WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+              WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
-        if (!order) return { triggers: [], scanStatus: null, latestLowPrice: null };
+        if (!order) return { triggers: [], scanStatus: null, latestLowPrice: null, scanCount: 0, allTimeLowPrice: null, allTimeLowAt: null };
 
         // 查询该订单的所有档位触发记录
         const triggerRows = await db.execute(
