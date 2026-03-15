@@ -429,7 +429,7 @@ function OrderDetail({ order, timeStr, ledgerId }: {
             ) : tierLoading ? (
               <span style={{ color: '#9CA3AF' }}>加载中...</span>
             ) : (
-              <span style={{ color: '#9CA3AF' }}>待启动</span>
+              <span style={{ color: '#9CA3AF' }}>等待首次扫描（每4小时一次）</span>
             )}
           </div>
 
