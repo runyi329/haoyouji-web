@@ -442,60 +442,47 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
           {/* 扫描信息 */}
           {(tierData?.scanStatus?.lastScanAt || (tierData?.scanCount ?? 0) > 0) ? (
-            <div className="rounded-lg px-3 py-2 mb-2 space-y-1.5 text-[12px]" style={{ backgroundColor: '#F5F7FF' }}>
+            <div className="rounded-lg px-3 py-2 mb-2 text-[12px]" style={{ backgroundColor: '#F5F7FF' }}>
 
-              {/* 累计扫描 + 频率：一行 */}
-              <div className="flex justify-between items-center">
-                <span className="text-[#9CA3AF] w-14 shrink-0">累计扫描</span>
-                <span>
-                  <span className="font-semibold text-[#1A56DB]">{tierData?.scanCount ?? 0} 次</span>
-                  <span className="text-[#CBD5E1] mx-1.5">·</span>
-                  <span className="text-[#94A3B8]">每4小时一次</span>
-                </span>
-              </div>
+              {/* 用 grid 布局：标签列 | 价格列 | 时间列 */}
+              <div className="grid gap-y-1.5" style={{ gridTemplateColumns: '3.5rem 1fr auto' }}>
 
-              {/* 上次最低价 + 上次扫描时间：一行 */}
-              {(tierData?.latestLowPrice || tierData?.scanStatus?.lastScanAt) && (
-                <div className="flex justify-between items-center">
-                  <span className="text-[#9CA3AF] w-14 shrink-0">上次扫描</span>
-                  <span>
-                    {tierData?.latestLowPrice && (
-                      <span className="font-semibold" style={{ color: '#EF4444' }}>
-                        {parseFloat(tierData.latestLowPrice).toLocaleString()} USDT
-                      </span>
-                    )}
-                    {tierData?.scanStatus?.lastScanAt && (
-                      <>
-                        <span className="text-[#CBD5E1] mx-1.5">·</span>
-                        <span className="text-[#94A3B8]">
-                          {new Date(tierData.scanStatus.lastScanAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                </div>
-              )}
+                {/* 累计扫描行 */}
+                <span className="text-[#9CA3AF]">累计扫描</span>
+                <span className="font-semibold text-[#1A56DB]">{tierData?.scanCount ?? 0} 次</span>
+                <span className="text-[#94A3B8] text-right">每4小时一次</span>
 
-              {/* 历史最低价 + 发生时间：一行 */}
-              {tierData?.allTimeLowPrice && (
-                <div className="flex justify-between items-center">
-                  <span className="text-[#9CA3AF] w-14 shrink-0">历史最低</span>
-                  <span>
-                    <span className="font-bold" style={{ color: '#DC2626' }}>
+                {/* 上次扫描行 */}
+                {(tierData?.latestLowPrice || tierData?.scanStatus?.lastScanAt) && (
+                  <>
+                    <span className="text-[#9CA3AF]">上次扫描</span>
+                    <span className="font-semibold text-[#EF4444]">
+                      {tierData?.latestLowPrice ? `${parseFloat(tierData.latestLowPrice).toLocaleString()} USDT` : '--'}
+                    </span>
+                    <span className="text-[#94A3B8] text-right">
+                      {tierData?.scanStatus?.lastScanAt
+                        ? new Date(tierData.scanStatus.lastScanAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })
+                        : '--'}
+                    </span>
+                  </>
+                )}
+
+                {/* 历史最低行 */}
+                {tierData?.allTimeLowPrice && (
+                  <>
+                    <span className="text-[#9CA3AF]">历史最低</span>
+                    <span className="font-semibold text-[#EF4444]">
                       {parseFloat(tierData.allTimeLowPrice).toLocaleString()} USDT
                     </span>
-                    {tierData?.allTimeLowAt && (
-                      <>
-                        <span className="text-[#CBD5E1] mx-1.5">·</span>
-                        <span className="text-[#94A3B8]">
-                          {new Date(tierData.allTimeLowAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                </div>
-              )}
+                    <span className="text-[#94A3B8] text-right">
+                      {tierData?.allTimeLowAt
+                        ? new Date(tierData.allTimeLowAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })
+                        : '--'}
+                    </span>
+                  </>
+                )}
 
+              </div>
             </div>
           ) : !tierLoading && (
             <div className="rounded-lg px-3 py-2 mb-2 text-[12px]" style={{ backgroundColor: '#F5F7FF' }}>
