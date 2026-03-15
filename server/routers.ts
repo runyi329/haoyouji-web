@@ -9446,20 +9446,32 @@ export const appRouter = router({
 
     // 查询当前用户在 AF 账本的总资产估值（充值到账 + 手动调账）
     afGetMyTotalAsset: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+        // 视角切换：管理员可以查看任意成员数据
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          // 验证当前用户是该账本的 owner 或 admin
+          const memberCheck = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+          ) as any;
+          const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
+          if (myRole === 'owner' || myRole === 'admin') {
+            targetUserId = input.viewAsUserId;
+          }
+        }
         // 充值到账总额（recharge_orders status=completed）
         const rechargeRows = await db.execute(
-          sql`SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as total FROM recharge_orders WHERE user_id = ${ctx.user.id} AND status = 'completed'`
+          sql`SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as total FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed'`
         ) as any;
         const recharged = parseFloat(rechargeRows[0]?.[0]?.total || rechargeRows[0]?.total || '0');
         // 手动调账总额（af_manual_balances）
         let manual = 0;
         try {
           const manualRows = await db.execute(
-            sql`SELECT COALESCE(SUM(amount), 0) as total FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
+            sql`SELECT COALESCE(SUM(amount), 0) as total FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}`
           ) as any;
           manual = parseFloat(manualRows[0]?.[0]?.total || manualRows[0]?.total || '0');
         } catch (_) {
@@ -9470,7 +9482,7 @@ export const appRouter = router({
         let inviteCount = 0;
         try {
           const inviteRows = await db.execute(
-            sql`SELECT invite_count FROM users WHERE id = ${ctx.user.id} LIMIT 1`
+            sql`SELECT invite_count FROM users WHERE id = ${targetUserId} LIMIT 1`
           );
           inviteCount = Number((inviteRows as any)[0]?.[0]?.invite_count ?? (inviteRows as any)[0]?.invite_count ?? 0);
         } catch (_) {}
@@ -9479,7 +9491,7 @@ export const appRouter = router({
         const YJH_USER_ID = 4957151;
         let directReferralCount = 0;
         let indirectReferralCount = 0;
-        if (ctx.user.id === YJH_USER_ID) {
+        if (targetUserId === YJH_USER_ID) {
           try {
             // 直推人数
             const directRows = await db.execute(
@@ -9518,13 +9530,24 @@ export const appRouter = router({
       }),
     // AF 充值记录 + 手动调账记录合并（供用户查看）
     afGetMyRechargeHistory: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+        // 视角切换
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          const memberCheck = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+          ) as any;
+          const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
+          if (myRole === 'owner' || myRole === 'admin') {
+            targetUserId = input.viewAsUserId;
+          }
+        }
         // 1. 充值订单（recharge_orders，仅 completed 状态）
         const rechargeRows = await db.execute(
-          sql`SELECT id, amount, created_at FROM recharge_orders WHERE user_id = ${ctx.user.id} AND status = 'completed' ORDER BY created_at DESC LIMIT 100`
+          sql`SELECT id, amount, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed' ORDER BY created_at DESC LIMIT 100`
         ) as any;
         const rechargeList = ((rechargeRows[0] || rechargeRows) as any[]).map((r: any) => ({
           id: `r_${r.id}`,
@@ -9537,7 +9560,7 @@ export const appRouter = router({
         let manualList: any[] = [];
         try {
           const manualRows = await db.execute(
-            sql`SELECT id, amount, note, created_at FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} ORDER BY created_at DESC`
+            sql`SELECT id, amount, note, created_at FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`
           ) as any;
           manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => ({
             id: `m_${r.id}`,
