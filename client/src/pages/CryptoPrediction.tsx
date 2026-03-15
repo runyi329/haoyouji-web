@@ -397,6 +397,22 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           </>
         )}
 
+        {/* 管理费（仅已成交订单显示） */}
+        {order.status === 'completed' && (() => {
+          // 成交价值：普通订单 = amount * 5.25，赠送订单 = amount（赠送市值）
+          const dealValue = order.isGift ? parseFloat(order.amount) : parseFloat(order.amount) * 5.25;
+          // 每日管理费 = 成交价值 / 5.25 * 10 / 365
+          const dailyFee = dealValue / 5.25 * 10 / 365;
+          return (
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">管理费</span>
+              <span className="text-[#1E293B] font-medium">
+                {dailyFee.toFixed(4)} <span className="text-[11px] text-[#9CA3AF]">USDT/天</span>
+              </span>
+            </div>
+          );
+        })()}
+
         {/* 类型 + 状态 */}
         <div className="flex justify-between items-center">
           <span className="text-[#9CA3AF]">类型 / 状态</span>

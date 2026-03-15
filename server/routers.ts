@@ -9745,7 +9745,7 @@ export const appRouter = router({
           }
         }
         const rows = await db.execute(
-          sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at,
+          sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
                      o.source_order_id, o.source_user_id,
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
@@ -9789,6 +9789,7 @@ export const appRouter = router({
           status: r.status,
           orderType: r.order_type || '',
           createdAt: r.created_at,
+          updatedAt: r.updated_at,
           isGift: !!r.is_gift,
           giftMultiplier: r.gift_multiplier || '',
           sourceOrderId: r.source_order_id || null,
@@ -9848,7 +9849,7 @@ export const appRouter = router({
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         const rows = await db.execute(
-          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at,
+          sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
                      u.username, COALESCE(u.name,'') as user_name,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
                      o.source_order_id, o.source_user_id,
@@ -9880,6 +9881,7 @@ export const appRouter = router({
           status: r.status,
           orderType: r.order_type || '',
           createdAt: r.created_at,
+          updatedAt: r.updated_at,
           isGift: !!r.is_gift,
           giftMultiplier: r.gift_multiplier || '',
           sourceOrderId: r.source_order_id || null,

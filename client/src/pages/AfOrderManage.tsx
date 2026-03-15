@@ -305,6 +305,50 @@ export default function AfOrderManage() {
                     </div>
                   </div>
 
+                  {/* 管理费统计（仅已成交订单显示） */}
+                  {order.status === 'completed' && (() => {
+                    // 成交价值：普通订单 = amount * 5.25，赠送订单 = amount
+                    const dealValue = order.isGift ? parseFloat(order.amount) : parseFloat(order.amount) * 5.25;
+                    // 每日管理费 = 成交价值 / 5.25 * 10 / 365
+                    const dailyFee = dealValue / 5.25 * 10 / 365;
+                    
+                    // 持有天数计算：从确认成交日（updatedAt）到今天，两头都算
+                    const confirmedDate = order.updatedAt ? new Date(order.updatedAt) : new Date(order.createdAt);
+                    const today = new Date();
+                    const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+                    const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    const holdDays = Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                    
+                    const totalFee = dailyFee * holdDays;
+                    
+                    return (
+                      <div className="mt-2 bg-purple-50 border border-purple-200 rounded-lg p-3">
+                        <p className="text-xs font-medium text-purple-600 mb-2">管理费统计</p>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">成交价值</span>
+                            <span className="font-medium text-gray-800">{dealValue.toFixed(2)} USDT</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">持有天数</span>
+                            <span className="font-medium text-purple-700">{holdDays} 天</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">每日管理费</span>
+                            <span className="font-medium text-gray-800">{dailyFee.toFixed(4)} USDT</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">累计管理费</span>
+                            <span className="font-bold text-purple-700">{totalFee.toFixed(4)} USDT</span>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-purple-400 mt-2">
+                          计算公式：{dealValue.toFixed(2)} ÷ 5.25 × 10 ÷ 365 = {dailyFee.toFixed(4)} USDT/天 × {holdDays}天 = {totalFee.toFixed(4)} USDT
+                        </p>
+                      </div>
+                    );
+                  })()}
+
                   {/* 赠送订单来源信息 */}
                   {order.isGift && order.sourceUsername && (
                     <div className={`mt-2 text-xs rounded-lg px-3 py-1.5 border ${order.giftMultiplier === '1.0' ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-red-400 bg-red-50 border-red-100'}`}>
