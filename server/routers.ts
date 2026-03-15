@@ -9918,13 +9918,20 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 权限控制：只有账本创建者/拥有者才能查看
-        const ledgerRows = await db.execute(
+        const ledgerResult = await db.execute(
           sql`SELECT createdBy, ownerId FROM ledgers WHERE id = ${input.ledgerId} LIMIT 1`
         ) as any;
-        const row = ledgerRows[0]?.[0] ?? ledgerRows[0] ?? {};
-        const createdBy = row.createdBy;
-        const ownerId = row.ownerId;
-        if (ctx.user.id !== createdBy && ctx.user.id !== ownerId) return null;
+        const rows = (ledgerResult as any)[0] || ledgerResult;
+        const row = Array.isArray(rows) ? rows[0] : null;
+        const createdBy = Number(row?.createdBy ?? 0);
+        const ownerId = Number(row?.ownerId ?? 0);
+        const currentUserId = Number(ctx.user.id);
+        console.log('[afAdminGetStats] 权限检查:', { currentUserId, createdBy, ownerId, rawRow: row });
+        if (currentUserId !== createdBy && currentUserId !== ownerId) {
+          console.log('[afAdminGetStats] 无权限，返回null');
+          return null;
+        }
+        console.log('[afAdminGetStats] 权限通过');
 
         // 1. 订单统计：普通订单数 + 赠送订单数（只统计买单）
         const orderStatsRows = await db.execute(
