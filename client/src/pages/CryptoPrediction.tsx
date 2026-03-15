@@ -956,7 +956,7 @@ export default function CryptoPrediction() {
             {/* 确认按鈕 */}
             <button
               style={orderSide === "buy" ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' } : { backgroundColor: '#EF4444' }}
-              onClick={() => {
+              onClick={async () => {
                 const price = parseFloat(orderPrice);
                 if (!price || price <= 0) { toast.error("请输入委托价格"); return; }
                 if (orderSide === "buy") {
