@@ -845,7 +845,7 @@ export default function CryptoPrediction() {
                     return (
                       <>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>可买数量（5.25倍杠杆）</span>
+                          <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>可买数量（5.25倍收益）</span>
                           <span className="text-sm font-bold" style={{ color: qty !== null ? '#1A2340' : '#9CA3AF' }}>
                             {qty !== null ? `${qty.toFixed(6)} ${coin.name}` : `-- ${coin.name}`}
                           </span>
