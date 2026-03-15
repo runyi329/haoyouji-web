@@ -15,9 +15,16 @@ import {
 import { toast } from "sonner";
 
 // ─── 币种配置 ──────────────────────────────────────────────────
-// 每个币种的限价委托固定档位
-const LIMIT_PRICE_OPTIONS: Record<string, number[]> = {
+// 委买价格档位（低于市价，抄底用）
+const BUY_PRICE_OPTIONS: Record<string, number[]> = {
   BTC: [70000, 69000, 68000, 67000, 66000, 65000, 64000, 63000, 62000, 61000, 60000],
+  ETH: [5000, 4900, 4800, 4700, 4600, 4500, 4400, 4300, 4200, 4100, 4000, 3900, 3800, 3700, 3600, 3500, 3400, 3300, 3200, 3100, 3000, 2900, 2800, 2700, 2600, 2500],
+  SOL: [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50],
+};
+
+// 委卖价格档位（高于市价，止盈用）
+const SELL_PRICE_OPTIONS: Record<string, number[]> = {
+  BTC: [100000, 99000, 98000, 97000, 96000, 95000, 94000, 93000, 92000, 91000, 90000, 89000, 88000, 87000, 86000, 85000, 84000, 83000, 82000, 81000, 80000],
   ETH: [5000, 4900, 4800, 4700, 4600, 4500, 4400, 4300, 4200, 4100, 4000, 3900, 3800, 3700, 3600, 3500, 3400, 3300, 3200, 3100, 3000, 2900, 2800, 2700, 2600, 2500],
   SOL: [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50],
 };
@@ -756,7 +763,7 @@ export default function CryptoPrediction() {
                 style={{ color: orderPrice ? '#1A2340' : '#9CA3AF', appearance: 'none', WebkitAppearance: 'none' }}
               >
                 <option value="">选择价格</option>
-                {(LIMIT_PRICE_OPTIONS[coin.name] || []).map((p) => (
+                {((orderSide === 'sell' ? SELL_PRICE_OPTIONS : BUY_PRICE_OPTIONS)[coin.name] || []).map((p) => (
                   <option key={p} value={p.toString()}>{p.toLocaleString()} USDT</option>
                 ))}
               </select>
