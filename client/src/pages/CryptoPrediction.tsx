@@ -312,19 +312,6 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
   return (
     <div className="mt-2 rounded-xl p-3 space-y-2 text-[13px]" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
-      {/* 顶部：订单编号 + 撒单按鈕（委托中才显示） */}
-      <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid #E0E8FF' }}>
-        <span className="font-mono text-[11px] text-[#9CA3AF] tracking-wide">{orderNo}</span>
-        {order.status === 'pending' && (
-          <button
-            onClick={() => { if (window.confirm('确认撒销该委托单？')) { cancelMutation.mutate({ ledgerId, orderId: order.id }); } }}
-            disabled={cancelMutation.isPending}
-            className="text-xs font-medium px-2 py-0.5 rounded border"
-            style={{ color: '#EF4444', borderColor: '#FECACA', backgroundColor: '#FEF2F2' }}>
-            {cancelMutation.isPending ? '撒销中...' : '撒单'}
-          </button>
-        )}
-      </div>
       {/* 基本信息 - 统一风格：左侧标签灰色，右侧数値深色，强调数据用品牌色 */}
       <div className="space-y-2">
 
@@ -455,6 +442,22 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         <div className="flex justify-between items-center">
           <span className="text-[#9CA3AF]">下单时间</span>
           <span className="text-[#64748B]">{timeStr}</span>
+        </div>
+        {/* 订单编号 */}
+        <div className="flex justify-between items-center">
+          <span className="text-[#9CA3AF]">订单编号</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[12px] text-[#64748B] tracking-wide">{orderNo}</span>
+            {order.status === 'pending' && (
+              <button
+                onClick={() => { if (window.confirm('确认撒销该委托单？')) { cancelMutation.mutate({ ledgerId, orderId: order.id }); } }}
+                disabled={cancelMutation.isPending}
+                className="text-xs font-medium px-2 py-0.5 rounded border"
+                style={{ color: '#EF4444', borderColor: '#FECACA', backgroundColor: '#FEF2F2' }}>
+                {cancelMutation.isPending ? '撒销中...' : '撒单'}
+              </button>
+            )}
+          </div>
         </div>
 
       </div>
@@ -1110,7 +1113,14 @@ export default function CryptoPrediction() {
               {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : selectedSellOrderIds.size > 1 ? `批量卖出 ${selectedSellOrderIds.size} 笔` : `卖出 ${coin.name}`}
             </button>
             {/* 当前委托订单列表 - 独立渲染，不依赖 K 线图加载状态 */}
-            <div className="mt-4">
+            {/* 点击详情区域外关闭详情：透明覆盖层 */}
+            {orderDetailId !== null && (
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setOrderDetailId(null)}
+              />
+            )}
+            <div className="mt-4 relative z-20">
               <div className="text-sm font-semibold mb-2" style={{ color: '#1A2340' }}>当前订单</div>
               {ordersLoading ? (
                 <div className="space-y-2 pt-1">
