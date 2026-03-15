@@ -670,7 +670,6 @@ export default function LedgerDetail() {
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-xs text-white/70 mb-1">累计盈亏</div>
                 <div className="text-lg font-bold text-white">--</div>
-                <div className="text-xs text-white/60 mt-1">待接入数据</div>
               </div>
             </div>
           </div>
