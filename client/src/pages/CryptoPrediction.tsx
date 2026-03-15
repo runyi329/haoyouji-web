@@ -420,7 +420,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         <div className="pt-2" style={{ borderTop: '1px solid #E0E8FF' }}>
           {/* 扫描状态栏 */}
           <div className="flex items-center justify-between mb-2">
-            <span className="font-semibold" style={{ color: '#1A56DB' }}>收益权监控</span>
+            <span className="font-semibold" style={{ color: '#1A56DB' }}>收益权扫描</span>
             {tierData?.scanStatus ? (
               <div className="flex items-center gap-1">
                 {tierData.scanStatus.scanning ? (
@@ -428,13 +428,13 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                   <span style={{ color: '#F59E0B' }}>扫描中...</span></>
                 ) : (
                   <><span className="w-1.5 h-1.5 rounded-full inline-block animate-pulse" style={{ backgroundColor: '#0EA56A' }} />
-                  <span style={{ color: '#0EA56A' }}>实时监控中</span></>
+                  <span style={{ color: '#0EA56A' }}>实时扫描中</span></>
                 )}
               </div>
             ) : tierLoading ? (
               <span style={{ color: '#9CA3AF' }}>加载中...</span>
             ) : (
-              <span style={{ color: '#9CA3AF' }}>等待首次扫描（每4小时一次）</span>
+              <span style={{ color: '#9CA3AF' }}>等待扫描</span>
             )}
           </div>
 
@@ -444,7 +444,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
               {/* 累计扫描 + 频率：一行 */}
               <div className="flex justify-between items-center">
-                <span className="text-[#9CA3AF]">累计扫描</span>
+                <span className="text-[#9CA3AF] w-14 shrink-0">累计扫描</span>
                 <span>
                   <span className="font-semibold text-[#1A56DB]">{tierData?.scanCount ?? 0} 次</span>
                   <span className="text-[#CBD5E1] mx-1.5">·</span>
@@ -455,7 +455,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               {/* 上次最低价 + 上次扫描时间：一行 */}
               {(tierData?.latestLowPrice || tierData?.scanStatus?.lastScanAt) && (
                 <div className="flex justify-between items-center">
-                  <span className="text-[#9CA3AF]">上次扫描</span>
+                  <span className="text-[#9CA3AF] w-14 shrink-0">上次扫描</span>
                   <span>
                     {tierData?.latestLowPrice && (
                       <span className="font-semibold" style={{ color: '#EF4444' }}>
@@ -477,7 +477,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               {/* 历史最低价 + 发生时间：一行 */}
               {tierData?.allTimeLowPrice && (
                 <div className="flex justify-between items-center">
-                  <span className="text-[#9CA3AF]">历史最低</span>
+                  <span className="text-[#9CA3AF] w-14 shrink-0">历史最低</span>
                   <span>
                     <span className="font-bold" style={{ color: '#DC2626' }}>
                       {parseFloat(tierData.allTimeLowPrice).toLocaleString()} USDT
@@ -498,7 +498,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           ) : !tierLoading && (
             <div className="rounded-lg px-3 py-2 mb-2 text-[12px]" style={{ backgroundColor: '#F5F7FF' }}>
               <div className="flex justify-between items-center">
-                <span className="text-[#9CA3AF]">累计扫描</span>
+                <span className="text-[#9CA3AF] w-14 shrink-0">累计扫描</span>
                 <span>
                   <span className="text-[#CBD5E1]">0 次</span>
                   <span className="text-[#CBD5E1] mx-1.5">·</span>
