@@ -100,6 +100,20 @@ export default function AfOrderManage() {
     const totalProfit = effectiveQuantity * unitProfit;
     const totalRefund = principal + Math.max(0, totalProfit);
 
+    // 管理费计算：成交价値 ÷ 0.75 × 12% ÷ 365 × 持仓天数
+    // 成交价値：普通订单 = principal×5.25，赠送订单 = principal（赠送市値）
+    const isGiftOrder = order.isGift === true || order.isGift === 1;
+    const tradeValue = isGiftOrder ? principal : principal * 5.25;
+    const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+    // 持仓天数：从买入成交日到今天
+    const confirmedDate = order.sourceUpdatedAt ? new Date(order.sourceUpdatedAt) : new Date(order.sourceCreatedAt || order.createdAt);
+    const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+    const todayDay = new Date();
+    todayDay.setHours(0, 0, 0, 0);
+    const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    const managementFee = dailyFee * holdDays;
+    const actualRefund = Math.max(0, totalRefund - managementFee);
+
     return {
       coinQuantity,
       buyPrice,
@@ -110,6 +124,10 @@ export default function AfOrderManage() {
       principal,
       equityTier,
       effectiveQuantity,
+      managementFee,
+      actualRefund,
+      holdDays,
+      dailyFee,
     };
   };
 
@@ -297,14 +315,12 @@ export default function AfOrderManage() {
                     </div>
                     {/* 价格 */}
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">价格</span>
+                      <span className="text-gray-400 text-xs w-10">委托价</span>
                       {isEditing ? (
-                        <input
-                          type="number"
-                          value={editState!.limitPrice}
-                          onChange={(e) => setEditState({ ...editState!, limitPrice: e.target.value })}
-                          className="border border-gray-300 rounded px-2 py-0.5 text-sm w-28"
-                        />
+                        <span className="text-gray-500 text-sm bg-gray-100 rounded px-2 py-0.5 w-28 inline-block">
+                          {parseFloat(editState!.limitPrice).toLocaleString()}
+                          <span className="text-[10px] text-gray-400 ml-1">（不可改）</span>
+                        </span>
                       ) : (
                         <span>{parseFloat(order.limitPrice).toLocaleString()}</span>
                       )}
@@ -462,13 +478,21 @@ export default function AfOrderManage() {
                                   {calc.totalProfit >= 0 ? '+' : ''}{calc.totalProfit.toFixed(4)} USDT
                                 </span>
                               </div>
-                              <div className="col-span-2 flex justify-between bg-white rounded px-2 py-1.5">
-                                <span className="text-gray-700 font-medium">返还金额</span>
-                                <span className="font-bold text-green-600 text-base">{calc.totalRefund.toFixed(2)} USDT</span>
+                              <div className="col-span-2 flex justify-between">
+                                <span className="text-gray-600">本金+收益小计</span>
+                                <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
+                              </div>
+                              <div className="col-span-2 flex justify-between">
+                                <span className="text-red-500">管理费扮除 ({calc.holdDays}天)</span>
+                                <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
+                              </div>
+                              <div className="col-span-2 flex justify-between bg-green-50 rounded px-2 py-1.5 border border-green-200">
+                                <span className="text-green-700 font-bold">实际到账</span>
+                                <span className="font-bold text-green-600 text-base">{calc.actualRefund.toFixed(4)} USDT</span>
                               </div>
                             </div>
                             <p className="text-[10px] text-blue-500 mt-2">
-                              本金 + 收益 = {calc.principal.toFixed(2)} + {Math.max(0, calc.totalProfit).toFixed(4)} = {calc.totalRefund.toFixed(2)} USDT
+                              本金 + 收益 - 管理费 = {calc.principal.toFixed(2)} + {Math.max(0, calc.totalProfit).toFixed(4)} - {calc.managementFee.toFixed(4)} = {calc.actualRefund.toFixed(4)} USDT
                             </p>
                           </div>
                         );
