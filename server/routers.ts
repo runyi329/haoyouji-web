@@ -81,7 +81,7 @@ const manusRouter = router({
       if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可发送消息' });
       }
-      const dbConn = await getDb();
+      const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       let fileUrl: string | undefined;
       if (input.fileData && input.fileName && input.fileMime) {
@@ -108,7 +108,7 @@ const manusRouter = router({
       beforeId: z.number().optional(),
     }))
     .query(async ({ ctx }) => {
-      const dbConn = await getDb();
+      const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       const [rows] = await dbConn.execute(
         `SELECT id, sender, content, file_url, file_name, file_type, file_size, created_at, is_read FROM manus_messages ORDER BY created_at DESC LIMIT 100`
@@ -123,7 +123,7 @@ const manusRouter = router({
   getUnreadCount: protectedProcedure
     .query(async ({ ctx }) => {
       if (ctx.user.role === 'admin' || ctx.user.role === 'super_admin') return { count: 0 };
-      const dbConn = await getDb();
+      const dbConn = await getDbConnection();
       if (!dbConn) return { count: 0 };
       const [rows] = await dbConn.execute(
         `SELECT COUNT(*) as cnt FROM manus_messages WHERE sender = 'admin' AND is_read = 0`
