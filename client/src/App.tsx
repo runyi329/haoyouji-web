@@ -83,6 +83,7 @@ const SharingSettings = lazy(() => import("./pages/parent/contacts/SharingSettin
 const ThemeSettings = lazy(() => import("./pages/parent/ThemeSettings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const ProfileEdit = lazy(() => import("./pages/ProfileEdit"));
+const ManusChat = lazy(() => import("./pages/ManusChat"));
 const PointsDetail = lazy(() => import("./pages/PointsDetail"));
 const InviteCode = lazy(() => import("./pages/InviteCode"));
 const InvitedFriendsList = lazy(() => import("./pages/InvitedFriendsList"));
@@ -392,6 +393,7 @@ function Router() {
         <Route path="/ledger/:id" component={LedgerDetail} />
         <Route path="/profile" component={Profile} />
         <Route path="/profile/edit" component={ProfileEdit} />
+        <Route path="/manus" component={ManusChat} />
         
         {/* 脉动节点合作平台 */}
         <Route path="/work-groups" component={WorkGroupList} />

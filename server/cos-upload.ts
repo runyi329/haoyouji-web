@@ -144,6 +144,43 @@ export async function deleteImageFromCOS(url: string): Promise<void> {
 }
 
 /**
+ * 上传任意文件到COS（不压缩，原样上传）
+ * 用于 PDF、PPT、Excel 等非图片文件
+ */
+export async function uploadFileToCOS(
+  fileData: string | Buffer,
+  folder: string,
+  filename: string,
+  contentType: string
+): Promise<string> {
+  try {
+    let buffer: Buffer;
+    if (typeof fileData === 'string') {
+      // base64
+      const matches = fileData.match(/^data:[^;]+;base64,(.+)$/);
+      buffer = Buffer.from(matches ? matches[1] : fileData, 'base64');
+    } else {
+      buffer = fileData;
+    }
+    const timestamp = Date.now();
+    const key = `${folder}/${timestamp}-${filename}`;
+    await cos.putObject({
+      Bucket: BUCKET,
+      Region: REGION,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    });
+    const url = `https://${BUCKET}.cos.${REGION}.myqcloud.com/${key}`;
+    console.log('[COS] 文件上传成功:', url);
+    return url;
+  } catch (error) {
+    console.error('[COS] 文件上传失败:', error);
+    throw new Error(`文件上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
+  }
+}
+
+/**
  * 批量上传图片（自动压缩为WebP）
  * @param images 图片数据数组
  * @param folder 存储文件夹

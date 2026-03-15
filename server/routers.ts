@@ -65,6 +65,73 @@ function setCache(key: string, data: any): void {
 }
 // ================================================================
 
+// Manus 聊天功能（管理员发送消息/文件给用户）
+const manusRouter = router({
+  // 管理员发送消息（文字或文件）
+  sendMessage: protectedProcedure
+    .input(z.object({
+      content: z.string().optional(),
+      fileData: z.string().optional(),
+      fileName: z.string().optional(),
+      fileType: z.enum(['image', 'pdf', 'ppt', 'excel', 'other']).optional(),
+      fileSize: z.number().optional(),
+      fileMime: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可发送消息' });
+      }
+      const dbConn = await getDb();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      let fileUrl: string | undefined;
+      if (input.fileData && input.fileName && input.fileMime) {
+        const isImage = input.fileType === 'image';
+        if (isImage) {
+          const { uploadImageToCOS } = await import('./cos-upload');
+          fileUrl = await uploadImageToCOS(input.fileData, 'ledger-photos', `manus-${input.fileName}`);
+        } else {
+          const { uploadFileToCOS } = await import('./cos-upload');
+          fileUrl = await uploadFileToCOS(input.fileData, 'manus-files', input.fileName, input.fileMime);
+        }
+      }
+      await dbConn.execute(
+        `INSERT INTO manus_messages (sender, content, file_url, file_name, file_type, file_size) VALUES (?, ?, ?, ?, ?, ?)`,
+        ['admin', input.content || null, fileUrl || null, input.fileName || null, input.fileType || null, input.fileSize || null]
+      );
+      return { success: true };
+    }),
+
+  // 获取消息列表
+  getMessages: protectedProcedure
+    .input(z.object({
+      limit: z.number().optional().default(50),
+      beforeId: z.number().optional(),
+    }))
+    .query(async ({ ctx }) => {
+      const dbConn = await getDb();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const [rows] = await dbConn.execute(
+        `SELECT id, sender, content, file_url, file_name, file_type, file_size, created_at, is_read FROM manus_messages ORDER BY created_at DESC LIMIT 100`
+      ) as any;
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        await dbConn.execute(`UPDATE manus_messages SET is_read = 1 WHERE sender = 'admin' AND is_read = 0`);
+      }
+      return (rows as any[]).reverse();
+    }),
+
+  // 获取未读消息数
+  getUnreadCount: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role === 'admin' || ctx.user.role === 'super_admin') return { count: 0 };
+      const dbConn = await getDb();
+      if (!dbConn) return { count: 0 };
+      const [rows] = await dbConn.execute(
+        `SELECT COUNT(*) as cnt FROM manus_messages WHERE sender = 'admin' AND is_read = 0`
+      ) as any;
+      return { count: Number((rows as any[])[0]?.cnt ?? 0) };
+    }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   equity: equityRouter,
@@ -10602,6 +10669,8 @@ export const appRouter = router({
 
   // ==================== 管理员功能 ====================
   // adminFeature: adminFeatureRouter, // 已移至文件底部定义，在下方单独导出
+  // ==================== Manus 聊天功能 ====================
+  manus: manusRouter,
 
   // ==================== 账本分组管理 ====================
   ledgerGroup: router({
