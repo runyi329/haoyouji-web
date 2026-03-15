@@ -300,7 +300,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   const isCompleted = order.status === 'completed';
 
   return (
-    <div className="mt-2 rounded-xl p-3 space-y-2 text-sm" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
+    <div className="mt-2 rounded-xl p-3 space-y-2 text-[13px]" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
       {/* 基本信息 */}
       <div className="space-y-1.5">
         {/* 币种 + 方向合并一行 */}
@@ -1081,7 +1081,7 @@ export default function CryptoPrediction() {
               ) : (
                 <div>
                   {/* 表头 */}
-                  <div className="grid text-[10px] pb-1.5 mb-0.5" style={{gridTemplateColumns:'10fr 3fr 2fr 3fr 3fr 2fr', color: '#9CA3AF', borderBottom: '1px solid #E0E8FF'}}>
+                  <div className="grid text-xs pb-1.5 mb-0.5" style={{gridTemplateColumns:'7fr 2.5fr 1.5fr 3fr 3fr 2fr', color: '#9CA3AF', borderBottom: '1px solid #E0E8FF'}}>
                     <span>日期</span>
                     <span className="text-center">币种</span>
                     <span className="text-center">方向</span>
@@ -1102,10 +1102,10 @@ export default function CryptoPrediction() {
                     })() : '--';
                     return (
                       <div key={order.id} className="py-2" style={{ borderBottom: '1px solid #EEF2FF' }}>
-                        <div className="grid text-[10px] items-center" style={{gridTemplateColumns:'10fr 3fr 2fr 3fr 3fr 2fr'}}>
+                        <div className="grid text-xs items-center" style={{gridTemplateColumns:'7fr 2.5fr 1.5fr 3fr 3fr 2fr'}}>
                           <span className="whitespace-nowrap" style={{ color: '#6B7A9A' }}>{timeStr}</span>
                           <span className="font-medium text-center" style={{ color: '#1A2340' }}>{order.coin}</span>
-                          <span className={`text-center ${order.side === 'buy' ? 'text-[#1A56DB]' : 'text-[#EF4444]'}`}>
+                          <span className={`text-center font-medium ${order.side === 'buy' ? 'text-[#1A56DB]' : 'text-[#EF4444]'}`}>
                             {order.side === 'buy' ? '买' : '卖'}
                             {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold animate-pulse">赠</span>}
                           </span>
@@ -1116,26 +1116,26 @@ export default function CryptoPrediction() {
                             'text-[#F59E0B]'
                           }`}>
                             {order.status === 'completed' ? '已成交' :
-                             order.status === 'cancelled' ? '已撤' :
+                             order.status === 'cancelled' ? '已撒' :
                              '委托中'}
                           </span>
                           <div className="flex flex-col items-end gap-0.5">
                             {order.status === 'pending' && (
                               <button
                                 onClick={() => {
-                                  if (window.confirm('确认撤销该委托单？')) {
+                                  if (window.confirm('确认撒销该委托单？')) {
                                     cancelOrderMutation.mutate({ ledgerId, orderId: order.id });
                                   }
                                 }}
                                 disabled={cancelOrderMutation.isPending}
-                                className="text-gray-400 text-[9px] font-medium">
-                                撤单
+                                className="text-gray-400 text-[10px] font-medium">
+                                撒单
                               </button>
                             )}
                             {order.status !== 'pending' && (
                               <button
                                 onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
-                                className="text-[9px] font-medium" style={{ color: '#1A56DB' }}>
+                                className="text-[10px] font-medium" style={{ color: '#1A56DB' }}>
                                 详情
                               </button>
                             )}
