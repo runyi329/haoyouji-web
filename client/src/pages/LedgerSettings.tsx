@@ -513,13 +513,7 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/lottery/list/${ledgerId}`)}
  />
  )}
- {/* 测试占位符：无条件显示，用于验证部署是否生效 */}
- <SettingItem
- label="✅ 测试占位符（看到就是成功）"
- showIcon
- onClick={() => {}}
- />
- {/* AG 型数据源管理入口：只要是54号账本就显示 */}
+ {/* AG 型数据源管理入口：只要是54号账本就显示 */
  {ledgerId === 54 && (
  <SettingItem
  label="数据源管理"

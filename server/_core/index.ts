@@ -174,11 +174,8 @@ async function initAgSyncSources() {
     const conn = await getDbConnection();
     if (!conn) return;
 
-    // 动态查询 custom_ag 类型的账本 ID，找不到则用固定 ID 54
-    const [agRows] = await (conn as any).execute(
-      "SELECT id FROM ledgers WHERE type = 'custom_ag' LIMIT 1"
-    );
-    const AG_LEDGER_ID = (agRows as any[]).length > 0 ? (agRows as any[])[0].id : 54;
+    // 固定使用 54 号账本（AG 图片提示词账本）
+    const AG_LEDGER_ID = 54;
     console.log(`[AG初始化] AG 账本 ID: ${AG_LEDGER_ID}`);
 
     // 预置数据源列表
@@ -199,17 +196,28 @@ async function initAgSyncSources() {
 
     for (const source of presetSources) {
       const [existRows] = await (conn as any).execute(
-        'SELECT id FROM ag_sync_sources WHERE name = ? LIMIT 1',
+        'SELECT id, ledger_id FROM ag_sync_sources WHERE name = ? LIMIT 1',
         [source.name]
       );
       if ((existRows as any[]).length === 0) {
+        // 不存在则插入
         await (conn as any).execute(
           'INSERT INTO ag_sync_sources (ledger_id, name, api_url, model_name, sync_rule, status, last_max_id, total_synced) VALUES (?, ?, ?, ?, ?, \'active\', 0, 0)',
           [AG_LEDGER_ID, source.name, source.api_url, source.model_name, source.sync_rule]
         );
         console.log(`[AG初始化] 数据源「${source.name}」已创建`);
       } else {
-        console.log(`[AG初始化] 数据源「${source.name}」已存在，跳过`);
+        // 已存在：如果 ledger_id 不对则修正
+        const existingLedgerId = (existRows as any[])[0].ledger_id;
+        if (existingLedgerId !== AG_LEDGER_ID) {
+          await (conn as any).execute(
+            'UPDATE ag_sync_sources SET ledger_id = ? WHERE name = ?',
+            [AG_LEDGER_ID, source.name]
+          );
+          console.log(`[AG初始化] 数据源「${source.name}」ledger_id 已从 ${existingLedgerId} 修正为 ${AG_LEDGER_ID}`);
+        } else {
+          console.log(`[AG初始化] 数据源「${source.name}」已存在且 ledger_id 正确，跳过`);
+        }
       }
     }
     console.log('[AG初始化] ✅ 数据源初始化完成');
