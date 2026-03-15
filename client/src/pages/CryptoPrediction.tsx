@@ -517,6 +517,7 @@ export default function CryptoPrediction() {
   const ledgerId = parseInt(params?.id || "0");
 
   const urlParams = new URLSearchParams(window.location.search);
+  const viewAsUserId = urlParams.get("viewAs") ? parseInt(urlParams.get("viewAs")!) : undefined;
   const initialCoin = (urlParams.get("coin") || "BTC").toUpperCase();
   const coinKey = COIN_CONFIG[initialCoin] ? initialCoin : "BTC";
   const coin = COIN_CONFIG[coinKey];
@@ -548,7 +549,7 @@ export default function CryptoPrediction() {
 
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
-    { ledgerId },
+    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: !!ledgerId, staleTime: 30000 }
   );
   const availableUsdt = (assetData as any)?.total ?? 0;
@@ -556,13 +557,13 @@ export default function CryptoPrediction() {
   // 委托订单
   const utils = trpc.useUtils();
   const { data: ordersData, isLoading: ordersLoading } = trpc.ledger.afGetOrders.useQuery(
-    { ledgerId },
+    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: !!ledgerId, staleTime: 0, refetchOnWindowFocus: true, refetchOnMount: true }
   );
   const orders: any[] = (ordersData as any[]) || [];
   // 可卖数量（已成交买入 - 已成交卖出）
   const { data: availableSellData } = trpc.ledger.afGetAvailableSell.useQuery(
-    { ledgerId, coin: coin.name },
+    { ledgerId, coin: coin.name, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: !!ledgerId, staleTime: 0, refetchOnWindowFocus: true, refetchOnMount: true }
   );
   const availableSellQty = (availableSellData as any)?.available ?? 0;
@@ -675,6 +676,24 @@ export default function CryptoPrediction() {
         </div>
 
       </div>
+
+      {/* 视角切换横幅 */}
+      {viewAsUserId && (
+        <div className="px-4 py-2 flex items-center justify-between text-sm" style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}>
+          <span className="font-medium">正在查看他人视角的订单</span>
+          <button
+            onClick={() => {
+              const params = new URLSearchParams(window.location.search);
+              params.delete('viewAs');
+              const qs = params.toString();
+              setLocation(`/ledger/${ledgerId}/crypto-prediction${qs ? '?' + qs : ''}`);
+            }}
+            className="px-3 py-1 rounded-full text-xs font-medium bg-white/90 text-gray-800"
+          >
+            切回我的视角
+          </button>
+        </div>
+      )}
 
       {/* 三 Tab 切换 */}
       <div className="px-4 pt-3">

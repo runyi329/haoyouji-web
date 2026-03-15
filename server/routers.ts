@@ -9644,10 +9644,21 @@ export const appRouter = router({
       }),
     // AF 查询委托订单（该账本所有币种）
     afGetOrders: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+        // 视角切换
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          const memberCheck = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+          ) as any;
+          const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
+          if (myRole === 'owner' || myRole === 'admin') {
+            targetUserId = input.viewAsUserId;
+          }
+        }
         const rows = await db.execute(
           sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
@@ -9657,7 +9668,7 @@ export const appRouter = router({
                      COALESCE(su.username, '') as source_username
               FROM af_orders o
               LEFT JOIN users su ON su.id = o.source_user_id
-              WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${ctx.user.id}
+              WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
               ORDER BY o.created_at DESC
               LIMIT 100`
         ) as any;
@@ -9705,15 +9716,26 @@ export const appRouter = router({
       }),
     // AF 查询可卖数量（已成交买入的币种数量总和）
     afGetAvailableSell: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), coin: z.string() }))
+      .input(z.object({ ledgerId: z.number(), coin: z.string(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
+        // 视角切换
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          const memberCheck = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+          ) as any;
+          const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
+          if (myRole === 'owner' || myRole === 'admin') {
+            targetUserId = input.viewAsUserId;
+          }
+        }
         // 已成交买入的数量总和
         const buyRows = await db.execute(
           sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
               FROM af_orders
-              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
                 AND coin = ${input.coin} AND side = 'buy' AND status = 'completed'`
         ) as any;
         const bought = parseFloat((buyRows[0]?.[0]?.total ?? buyRows[0]?.total ?? '0').toString());
@@ -9721,7 +9743,7 @@ export const appRouter = router({
         const sellRows = await db.execute(
           sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
               FROM af_orders
-              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
                 AND coin = ${input.coin} AND side = 'sell' AND status = 'completed'`
         ) as any;
         const sold = parseFloat((sellRows[0]?.[0]?.total ?? sellRows[0]?.total ?? '0').toString());
