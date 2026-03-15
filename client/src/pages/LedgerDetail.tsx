@@ -674,8 +674,8 @@ export default function LedgerDetail() {
                 <div className="text-xs text-white/70 mb-1">累计盈亏</div>
                 <div className="text-lg font-bold text-white">--</div>
               </div>
-              {/* 管理员统计：累计订单（后端控制权限，无权限返回null不显示） */}
-              {afAdminStats && afAdminStats.orders && (
+              {/* 管理员统计：累计订单（后端控制权限） */}
+              {afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).orders && (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="text-xs text-white/70 mb-1">累计订单</div>
                   <div className="flex items-baseline gap-1">
@@ -694,8 +694,8 @@ export default function LedgerDetail() {
                   </div>
                 </div>
               )}
-              {/* 管理员统计：管理费（后端控制权限，无权限返回null不显示） */}
-              {afAdminStats && afAdminStats.fees && (
+              {/* 管理员统计：管理费（后端控制权限） */}
+              {afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).fees && (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="text-xs text-white/70 mb-1">管理费</div>
                   <div className="flex items-baseline gap-1">

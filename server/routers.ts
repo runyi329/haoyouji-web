@@ -9928,8 +9928,8 @@ export const appRouter = router({
         const currentUserId = Number(ctx.user.id);
         console.log('[afAdminGetStats] 权限检查:', { currentUserId, createdBy, ownerId, rawRow: row });
         if (currentUserId !== createdBy && currentUserId !== ownerId) {
-          console.log('[afAdminGetStats] 无权限，返回null');
-          return null;
+          console.log('[afAdminGetStats] 无权限，返回authorized:false');
+          return { authorized: false, orders: null, fees: null };
         }
         console.log('[afAdminGetStats] 权限通过');
 
@@ -9991,6 +9991,7 @@ export const appRouter = router({
         const totalFee = ongoingFee + settledFee;
 
         return {
+          authorized: true,
           orders: { normalCount, giftCount, totalCount },
           fees: { ongoingFee: +ongoingFee.toFixed(4), settledFee: +settledFee.toFixed(4), totalFee: +totalFee.toFixed(4) },
         };
