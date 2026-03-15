@@ -10006,9 +10006,8 @@ export const appRouter = router({
           // 异步触发，不阻塞当前请求
           setTimeout(async () => {
             try {
-              const { runTierScan } = await import('./af-tier-scanner');
-              console.log(`[AF扫描] 订单#${input.orderId} 已成交，立即触发收益权扫描...`);
-              await runTierScan();
+              const { triggerImmediateScan } = await import('./af-tier-scanner');
+              triggerImmediateScan(input.orderId);
             } catch (e) {
               console.error('[AF扫描] 立即扫描失败:', e);
             }
@@ -10152,12 +10151,19 @@ export const appRouter = router({
             triggeredAt: r.triggered_at
           }));
 
-        // 查询该币种最近一次扫描记录
-        const scanRows = await db.execute(
-          sql`SELECT low_price, scanned_at FROM af_price_scan_logs
-              WHERE coin = ${order.coin}
-              ORDER BY scanned_at DESC LIMIT 1`
-        ) as any;
+        // 并行查询：扫描统计表 + 最近一次扫描日志
+        const [statsRows, scanRows] = await Promise.all([
+          db.execute(
+            sql`SELECT scan_count, last_scan_at, last_low_price, all_time_low_price, all_time_low_at
+                FROM af_order_scan_stats WHERE order_id = ${input.orderId} LIMIT 1`
+          ) as any,
+          db.execute(
+            sql`SELECT low_price, scanned_at FROM af_price_scan_logs
+                WHERE coin = ${order.coin}
+                ORDER BY scanned_at DESC LIMIT 1`
+          ) as any,
+        ]);
+        const scanStats = (statsRows[0]?.[0] ?? statsRows[0]) || null;
         const lastScan = (scanRows[0]?.[0] ?? scanRows[0]) || null;
 
         // 从全局内存状态获取扫描信息
@@ -10169,11 +10175,15 @@ export const appRouter = router({
           buyPrice: order.limit_price,
           coin: order.coin,
           scanStatus: {
-            lastScanAt: coinStatus?.lastScanAt || (lastScan?.scanned_at ? new Date(lastScan.scanned_at).toISOString() : null),
-            lowestPrice: coinStatus?.lowestPrice || lastScan?.low_price || null,
+            lastScanAt: coinStatus?.lastScanAt || (scanStats?.last_scan_at ? new Date(scanStats.last_scan_at).toISOString() : lastScan?.scanned_at ? new Date(lastScan.scanned_at).toISOString() : null),
+            lowestPrice: coinStatus?.lowestPrice || scanStats?.last_low_price || lastScan?.low_price || null,
             scanning: coinStatus?.scanning || false,
           },
-          latestLowPrice: lastScan?.low_price ?? null,
+          latestLowPrice: scanStats?.last_low_price ?? lastScan?.low_price ?? null,
+          // 新增字段
+          scanCount: scanStats?.scan_count ?? 0,
+          allTimeLowPrice: scanStats?.all_time_low_price ?? null,
+          allTimeLowAt: scanStats?.all_time_low_at ? new Date(scanStats.all_time_low_at).toISOString() : null,
         };
       }),
     // OKX 行情代理（国内服务器可访问，替代 Binance）
