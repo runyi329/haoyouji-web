@@ -9917,12 +9917,16 @@ export const appRouter = router({
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 验证权限
-        const roleRows = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-        ) as any;
-        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
-        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+        // 验证权限：仅 owner/admin 和 YJH 用户(4957151)可查看
+        const YJH_USER_ID = 4957151;
+        const isYjh = ctx.user.id === YJH_USER_ID;
+        if (!isYjh) {
+          const roleRows = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+          ) as any;
+          const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+          if (role !== 'owner' && role !== 'admin') return null;
+        }
 
         // 1. 订单统计：普通订单数 + 赠送订单数（只统计买单）
         const orderStatsRows = await db.execute(
