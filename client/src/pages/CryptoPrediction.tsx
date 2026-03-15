@@ -288,7 +288,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: order.status === 'completed' && order.side === 'buy' }
+    { enabled: order.side === 'buy' } // 委托中和已成交的买单都查询
   );
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => { toast.success('委托已撒销'); },
@@ -411,16 +411,23 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         )}
 
         {/* 管理费（仅已成交订单显示） */}
-        {order.status === 'completed' && (() => {
+        {order.side === 'buy' && isContract && (() => {
           // 成交价値：普通订单 = amount×5.25，赠送订单 = amount（赠送市値）
           const amount = parseFloat(order.amount);
           const tradeValue = order.isGift ? amount : amount * 5.25;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+          // 持仓天数：从下单时间到今天（委托中也实时计算）
+          const startDate = new Date(order.createdAt);
+          const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+          const todayDay = new Date(); todayDay.setHours(0,0,0,0);
+          const holdDays = Math.max(1, Math.floor((todayDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+          const totalFee = dailyFee * holdDays;
           return (
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">管理费</span>
               <span className="text-[#1E293B] font-medium">
                 {dailyFee.toFixed(4)} <span className="text-[11px] text-[#9CA3AF]">USDT/天</span>
+                <span className="text-[11px] text-[#9CA3AF] ml-1.5">· 已累计 {totalFee.toFixed(4)} USDT（{holdDays}天）</span>
               </span>
             </div>
           );
@@ -462,8 +469,8 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
       </div>
 
-      {/* 收益权档位表（仅已成交且为无损合约的买入订单显示） */}
-      {isCompleted && isContract && order.side === 'buy' && (
+      {/* 收益权档位表（无损合约买单均显示，包括委托中） */}
+      {isContract && order.side === 'buy' && (
         <div className="pt-2" style={{ borderTop: '1px solid #E0E8FF' }}>
           {/* 扫描状态栏 */}
           <div className="flex items-center justify-between mb-2">
