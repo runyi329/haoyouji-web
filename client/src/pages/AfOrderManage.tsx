@@ -324,26 +324,22 @@ export default function AfOrderManage() {
                     {/* 价格 */}
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400 text-xs w-10">委托价</span>
-                      {isEditing ? (
-                        <span className="text-gray-500 text-sm bg-gray-100 rounded px-2 py-0.5 w-28 inline-block">
-                          {parseFloat(editState!.limitPrice).toLocaleString()}
-                          <span className="text-[10px] text-gray-400 ml-1">（不可改）</span>
-                        </span>
-                      ) : (
-                        <span>{parseFloat(order.limitPrice).toLocaleString()}</span>
-                      )}
+                      <span className="font-medium text-gray-900">
+                        {parseFloat(isEditing ? editState!.limitPrice : order.limitPrice).toLocaleString()} USDT
+                      </span>
                     </div>
                     {/* 数量（自动重算） */}
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400 text-xs w-10">数量</span>
-                      {isEditing ? (
-                        <span className="text-orange-500 font-medium">
-                          {previewQuantity || editState!.quantity}
-                          <span className="text-xs text-gray-400 ml-1">（自动计算）</span>
-                        </span>
-                      ) : (
-                        <span>{parseFloat(order.quantity).toFixed(6)}</span>
-                      )}
+                      <span className="font-medium text-gray-900">
+                        {(() => {
+                          const raw = isEditing ? (previewQuantity || editState!.quantity) : order.quantity;
+                          const num = parseFloat(raw);
+                          // 去掉尾零：转字符串后去掉末尾多余的0
+                          const trimmed = isNaN(num) ? raw : num.toFixed(8).replace(/\.?0+$/, '');
+                          return `${trimmed} ${order.coin}`;
+                        })()}
+                      </span>
                     </div>
                     {/* 实际金额 */}
                     <div className="flex items-center gap-1">
