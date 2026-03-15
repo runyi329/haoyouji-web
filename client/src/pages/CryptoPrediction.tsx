@@ -440,51 +440,70 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
           {/* 扫描信息 */}
           {(tierData?.scanStatus?.lastScanAt || (tierData?.scanCount ?? 0) > 0) ? (
-            <div className="rounded-lg p-2 mb-2 space-y-1" style={{ backgroundColor: '#F0F4FF' }}>
-              <div className="flex justify-between">
-                <span style={{ color: '#9CA3AF' }}>累计扫描</span>
-                <span style={{ color: '#1A56DB', fontWeight: 600 }}>{tierData?.scanCount ?? 0} 次</span>
+            <div className="rounded-lg px-3 py-2 mb-2 space-y-1.5 text-[12px]" style={{ backgroundColor: '#F5F7FF' }}>
+
+              {/* 累计扫描 + 频率：一行 */}
+              <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">累计扫描</span>
+                <span>
+                  <span className="font-semibold text-[#1A56DB]">{tierData?.scanCount ?? 0} 次</span>
+                  <span className="text-[#CBD5E1] mx-1.5">·</span>
+                  <span className="text-[#94A3B8]">每4小时一次</span>
+                </span>
               </div>
-              {tierData?.scanStatus?.lastScanAt && (
-                <div className="flex justify-between">
-                  <span style={{ color: '#9CA3AF' }}>上次扫描</span>
-                  <span style={{ color: '#6B7A9A' }}>{new Date(tierData.scanStatus.lastScanAt).toLocaleString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
+
+              {/* 上次最低价 + 上次扫描时间：一行 */}
+              {(tierData?.latestLowPrice || tierData?.scanStatus?.lastScanAt) && (
+                <div className="flex justify-between items-center">
+                  <span className="text-[#9CA3AF]">上次扫描</span>
+                  <span>
+                    {tierData?.latestLowPrice && (
+                      <span className="font-semibold" style={{ color: '#EF4444' }}>
+                        {parseFloat(tierData.latestLowPrice).toLocaleString()} USDT
+                      </span>
+                    )}
+                    {tierData?.scanStatus?.lastScanAt && (
+                      <>
+                        <span className="text-[#CBD5E1] mx-1.5">·</span>
+                        <span className="text-[#94A3B8]">
+                          {new Date(tierData.scanStatus.lastScanAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                        </span>
+                      </>
+                    )}
+                  </span>
                 </div>
               )}
-              {tierData?.latestLowPrice && (
-                <div className="flex justify-between">
-                  <span style={{ color: '#9CA3AF' }}>上次最低价</span>
-                  <span style={{ color: '#EF4444', fontWeight: 600 }}>{parseFloat(tierData.latestLowPrice).toLocaleString()} USDT</span>
-                </div>
-              )}
+
+              {/* 历史最低价 + 发生时间：一行 */}
               {tierData?.allTimeLowPrice && (
-                <>
-                  <div className="flex justify-between">
-                    <span style={{ color: '#9CA3AF' }}>历史最低价</span>
-                    <span style={{ color: '#DC2626', fontWeight: 700 }}>{parseFloat(tierData.allTimeLowPrice).toLocaleString()} USDT</span>
-                  </div>
-                  {tierData?.allTimeLowAt && (
-                    <div className="flex justify-between">
-                      <span style={{ color: '#9CA3AF' }}>发生时间</span>
-                      <span style={{ color: '#6B7A9A' }}>{new Date(tierData.allTimeLowAt).toLocaleString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
-                    </div>
-                  )}
-                </>
+                <div className="flex justify-between items-center">
+                  <span className="text-[#9CA3AF]">历史最低</span>
+                  <span>
+                    <span className="font-bold" style={{ color: '#DC2626' }}>
+                      {parseFloat(tierData.allTimeLowPrice).toLocaleString()} USDT
+                    </span>
+                    {tierData?.allTimeLowAt && (
+                      <>
+                        <span className="text-[#CBD5E1] mx-1.5">·</span>
+                        <span className="text-[#94A3B8]">
+                          {new Date(tierData.allTimeLowAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}
+                        </span>
+                      </>
+                    )}
+                  </span>
+                </div>
               )}
-              <div className="flex justify-between">
-                <span style={{ color: '#9CA3AF' }}>扫描频率</span>
-                <span style={{ color: '#6B7A9A' }}>每4小时一次</span>
-              </div>
+
             </div>
           ) : !tierLoading && (
-            <div className="rounded-lg p-2 mb-2" style={{ backgroundColor: '#F0F4FF' }}>
-              <div className="flex justify-between">
-                <span style={{ color: '#9CA3AF' }}>累计扫描</span>
-                <span style={{ color: '#9CA3AF' }}>0 次（等待首次扫描）</span>
-              </div>
-              <div className="flex justify-between mt-1">
-                <span style={{ color: '#9CA3AF' }}>扫描频率</span>
-                <span style={{ color: '#6B7A9A' }}>每4小时一次</span>
+            <div className="rounded-lg px-3 py-2 mb-2 text-[12px]" style={{ backgroundColor: '#F5F7FF' }}>
+              <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">累计扫描</span>
+                <span>
+                  <span className="text-[#CBD5E1]">0 次</span>
+                  <span className="text-[#CBD5E1] mx-1.5">·</span>
+                  <span className="text-[#94A3B8]">每4小时一次</span>
+                </span>
               </div>
             </div>
           )}
