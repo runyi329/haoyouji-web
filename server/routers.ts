@@ -10011,12 +10011,21 @@ export const appRouter = router({
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
 
+        // 先获取该订单的 coin 和买入时间
+        const orderInfoRows = await db.execute(
+          sql`SELECT coin, created_at, updated_at, status FROM af_orders WHERE id = ${input.orderId} LIMIT 1`
+        ) as any;
+        const orderInfo = (orderInfoRows[0]?.[0] ?? orderInfoRows[0]);
+        const coin = orderInfo?.coin ?? '';
+        // 买入成交时间（status=completed 时 updated_at，否则 created_at）
+        const buyConfirmedAt = orderInfo?.updated_at || orderInfo?.created_at;
+
         // 查询扣档记录
         const tierRows = await db.execute(
           sql`SELECT t.id, t.tier, t.trigger_price, t.triggered_at, t.buy_price,
                      (
                        SELECT COUNT(*) FROM af_price_scan_logs s
-                       WHERE s.coin = (SELECT coin FROM af_orders WHERE id = ${input.orderId} LIMIT 1)
+                       WHERE s.coin = ${coin}
                        AND s.scanned_at <= t.triggered_at
                      ) as scan_count
               FROM af_order_tier_triggers t
@@ -10030,7 +10039,48 @@ export const appRouter = router({
           buyPrice: r.buy_price,
           scanCount: Number(r.scan_count || 0),
         }));
-        return list;
+
+        // 查询历史最低扫描价（买入成交后的所有扫描中最低的那一次）
+        let lowestScan: { price: string; scannedAt: any; scanCount: number } | null = null;
+        if (coin) {
+          // 根据是否有买入时间选择不同的查询
+          const lowestRows = buyConfirmedAt
+            ? await db.execute(
+                sql`SELECT s.low_price, s.scanned_at,
+                           (
+                             SELECT COUNT(*) FROM af_price_scan_logs s2
+                             WHERE s2.coin = ${coin}
+                             AND s2.scanned_at <= s.scanned_at
+                           ) as scan_count
+                    FROM af_price_scan_logs s
+                    WHERE s.coin = ${coin}
+                    AND s.scanned_at >= ${buyConfirmedAt}
+                    ORDER BY s.low_price ASC
+                    LIMIT 1`
+              ) as any
+            : await db.execute(
+                sql`SELECT s.low_price, s.scanned_at,
+                           (
+                             SELECT COUNT(*) FROM af_price_scan_logs s2
+                             WHERE s2.coin = ${coin}
+                             AND s2.scanned_at <= s.scanned_at
+                           ) as scan_count
+                    FROM af_price_scan_logs s
+                    WHERE s.coin = ${coin}
+                    ORDER BY s.low_price ASC
+                    LIMIT 1`
+              ) as any;
+          const lr = (lowestRows[0]?.[0] ?? lowestRows[0]);
+          if (lr) {
+            lowestScan = {
+              price: lr.low_price,
+              scannedAt: lr.scanned_at,
+              scanCount: Number(lr.scan_count || 0),
+            };
+          }
+        }
+
+        return { list, lowestScan };
       }),
     // 管理员：修改订单参数和状态（含余额联动）
     afAdminUpdateOrder: protectedProcedure
