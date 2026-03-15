@@ -21,6 +21,9 @@ const scanStatus: Record<string, {
   scanning: boolean;
 }> = {};
 
+// 全局扫描锁：防止并发执行
+let globalScanLock = false;
+
 /**
  * 获取指定币种过去4小时的最低价
  * 使用 Gate.io API（腔讯云服务器可访问）
@@ -105,10 +108,18 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number; scanFrom: D
  * @param targetOrderId 可选，指定只扫描某笔订单（新订单即时扫描用）
  */
 export async function runTierScan(targetOrderId?: number) {
+  // 全量扫描防重入：如果已有全量扫描在运行，跳过（即时扫描不受锁影响）
+  if (!targetOrderId && globalScanLock) {
+    console.log('[AF扫描] 已有全量扫描运行中，跳过本次');
+    return;
+  }
+  if (!targetOrderId) globalScanLock = true;
+
   const { getDbConnection } = await import("./db");
   const conn = await getDbConnection();
   if (!conn) {
     console.warn("[AF扫描] 数据库连接失败，跳过本次扫描");
+    if (!targetOrderId) globalScanLock = false;
     return;
   }
 
@@ -243,6 +254,8 @@ export async function runTierScan(targetOrderId?: number) {
   }
 
   console.log("[AF扫描] 本次扫描完成");
+  // 释放全局扫描锁
+  if (!targetOrderId) globalScanLock = false;
 }
 
 /**
@@ -267,18 +280,41 @@ export function triggerImmediateScan(orderId: number) {
 }
 
 /**
- * 启动定时扫描（每4小时一次）
+ * 启动定时扫描（对齐北京时间 0/4/8/12/16/20 点整点触发）
  */
 export function startTierScanner() {
-  console.log("[AF扫描] 收益权档位监控已启动，每4小时扫描一次");
+  // 计算下一个4小时整点（北京时间 0/4/8/12/16/20）
+  function getNextAlignedMs(): number {
+    const now = new Date();
+    // 北京时间 = UTC+8
+    const bjMs = now.getTime() + 8 * 3600 * 1000;
+    const bjDate = new Date(bjMs);
+    const bjHour = bjDate.getUTCHours();
+    // 下一个4小时对齐点（如当前6点，下一个是8点）
+    const nextBjHour = (Math.floor(bjHour / 4) + 1) * 4;
+    const nextBjDate = new Date(bjMs);
+    nextBjDate.setUTCHours(nextBjHour % 24, 0, 30, 0); // 整点后30秒触发，避免正好在K线切换时
+    if (nextBjHour >= 24) {
+      // 跨天
+      nextBjDate.setUTCDate(nextBjDate.getUTCDate() + 1);
+      nextBjDate.setUTCHours(0, 0, 30, 0);
+    }
+    // 转回实际UTC时间
+    const nextUtcMs = nextBjDate.getTime() - 8 * 3600 * 1000;
+    return Math.max(nextUtcMs - now.getTime(), 60 * 1000); // 最少等彔1分钟
+  }
 
-  // 启动后延迟30秒执行第一次（等服务器完全启动）
-  setTimeout(async () => {
-    await runTierScan();
-  }, 30 * 1000);
+  function scheduleNext() {
+    const delay = getNextAlignedMs();
+    const nextTime = new Date(Date.now() + delay);
+    const bjNext = new Date(nextTime.getTime() + 8 * 3600 * 1000);
+    console.log(`[AF扫描] 下次扫描计划在北京时间 ${bjNext.getUTCHours().toString().padStart(2,'0')}:00（${Math.round(delay/60000)}分钟后）`);
+    setTimeout(async () => {
+      await runTierScan();
+      scheduleNext(); // 扫描完成后安排下一次
+    }, delay);
+  }
 
-  // 之后每4小时执行一次
-  setInterval(async () => {
-    await runTierScan();
-  }, 4 * 60 * 60 * 1000);
+  console.log("[AF扫描] 收益权档位监控已启动，对齐北京时间 0/4/8/12/16/20 点整点扫描");
+  scheduleNext();
 }
