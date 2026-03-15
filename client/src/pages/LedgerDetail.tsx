@@ -1116,7 +1116,7 @@ export default function LedgerDetail() {
           <div className="mt-4 space-y-3">
             {/* BTC 入口 */}
             <button
-             onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`))}
+              onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
               className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
               style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
@@ -1132,7 +1132,7 @@ export default function LedgerDetail() {
             </button>
             {/* ETH 入口 */}
             <button
-             onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=ETH${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`))}
+              onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=ETH${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
               className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
               style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
@@ -1148,7 +1148,7 @@ export default function LedgerDetail() {
             </button>
             {/* SOL 入口 */}
             <button
-              onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=SOL${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`))
+              onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=SOL${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
               className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
               style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
             >
