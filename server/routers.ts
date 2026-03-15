@@ -7964,7 +7964,7 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         targetUserId: z.number(),
-        role: z.enum(['admin', 'member']),
+        role: z.enum(['admin', 'member', 'funder']),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.setMemberRole(input.ledgerId, ctx.user.id, input.targetUserId, input.role);

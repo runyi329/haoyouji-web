@@ -4094,7 +4094,7 @@ export async function setMemberRole(
   ledgerId: number,
   operatorUserId: number,
   targetUserId: number,
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'funder'
 ) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
