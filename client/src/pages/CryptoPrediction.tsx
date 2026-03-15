@@ -360,7 +360,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             </div>
             {(order as any).sourceAmount && parseFloat((order as any).sourceAmount) > 0 && (
               <div className="flex justify-between items-center">
-                <span className="text-[#9CA3AF]">获赠比例</span>
+                <span className="text-[#9CA3AF]">获赠比例<span className="text-[11px] ml-1 opacity-60">(按下单人实际投资金额)</span></span>
                 <span className="font-semibold" style={{ color: '#D97706' }}>
                   {(parseFloat(order.amount) / parseFloat((order as any).sourceAmount) * 100).toFixed(2)}%
                 </span>
