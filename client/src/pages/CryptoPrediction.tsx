@@ -535,8 +535,8 @@ export default function CryptoPrediction() {
   const [orderAmount, setOrderAmount] = useState("");
   const [orderPrice, setOrderPrice] = useState("");
   const [sliderPct, setSliderPct] = useState(0);
-  // 委卖时选中的买入订单 id
-  const [selectedSellOrderId, setSelectedSellOrderId] = useState<number | null>(null);
+  // 委卖时选中的买入订单 id（支持多选批量卖出）
+  const [selectedSellOrderIds, setSelectedSellOrderIds] = useState<Set<number>>(new Set());
   // 订单详情展开状态
   const [orderDetailId, setOrderDetailId] = useState<number | null>(null);
 
@@ -737,7 +737,7 @@ export default function CryptoPrediction() {
                 委买
               </button>
               <button
-                onClick={() => { setOrderSide("sell"); setOrderAmount(""); setSliderPct(0); setSelectedSellOrderId(null); setOrderPrice(""); }}
+                onClick={() => { setOrderSide("sell"); setOrderAmount(""); setSliderPct(0); setSelectedSellOrderIds(new Set()); setOrderPrice(""); }}
                 className={`flex-1 py-2.5 text-sm font-semibold transition-all ${
                   orderSide === "sell" ? "text-white" : "text-gray-500"
                 }`}
@@ -878,24 +878,38 @@ export default function CryptoPrediction() {
               // 使用后端返回的 hasPendingSell 字段（已兼容旧数据）
               return (
                 <div className="space-y-2">
-                  <p className="text-xs text-gray-500 px-1">选择要卖出的订单（无损合约必须一次性全部卖出）</p>
+                  <div className="flex items-center justify-between px-1 mb-1">
+                  <p className="text-xs text-gray-500">选择要卖出的订单（可多选批量卖出）</p>
+                  {completedBuyOrders.filter((o: any) => !o.hasPendingSell).length > 1 && (
+                    <button
+                      onClick={() => {
+                        const availableIds = completedBuyOrders.filter((o: any) => !o.hasPendingSell).map((o: any) => o.id);
+                        if (selectedSellOrderIds.size === availableIds.length) {
+                          setSelectedSellOrderIds(new Set());
+                        } else {
+                          setSelectedSellOrderIds(new Set(availableIds));
+                        }
+                      }}
+                      className="text-[10px] text-[#1A56DB] underline"
+                    >
+                      {selectedSellOrderIds.size === completedBuyOrders.filter((o: any) => !o.hasPendingSell).length ? '取消全选' : '全选'}
+                    </button>
+                  )}
+                </div>
                   {completedBuyOrders.length === 0 ? (
                     <p className="text-xs text-gray-600 px-1">暂无已成交的买入订单</p>
                   ) : (
                     completedBuyOrders.map((o: any) => {
-                      const isSelected = selectedSellOrderId === o.id;
-                      const hasPendingSell = !!o.hasPendingSell; // 后端已处理旧数据兼容
+                      const isSelected = selectedSellOrderIds.has(o.id);
+                      const hasPendingSell = !!o.hasPendingSell;
                       return (
                         <div
                           key={o.id}
                           onClick={() => {
-                            if (hasPendingSell) return; // 已委托卖出，不可选择
-                            setSelectedSellOrderId(isSelected ? null : o.id);
-                            if (!isSelected) {
-                              setOrderAmount(parseFloat(o.amount).toFixed(2));
-                            } else {
-                              setOrderAmount("");
-                            }
+                            if (hasPendingSell) return;
+                            const next = new Set(selectedSellOrderIds);
+                            if (isSelected) { next.delete(o.id); } else { next.add(o.id); }
+                            setSelectedSellOrderIds(next);
                           }}
                           className={`rounded-xl px-4 py-3 border transition-colors ${
                             hasPendingSell
@@ -906,9 +920,18 @@ export default function CryptoPrediction() {
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-xs text-white font-medium">{o.coin}</span>
-                              <span className="text-[10px] text-gray-500">委托价 {parseFloat(o.limitPrice).toLocaleString()} USDT</span>
+                            <div className="flex items-center gap-2">
+                              {!hasPendingSell && (
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                                  isSelected ? 'bg-[#ef5350] border-[#ef5350]' : 'border-gray-500'
+                                }`}>
+                                  {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+                                </div>
+                              )}
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs text-white font-medium">{o.coin}</span>
+                                <span className="text-[10px] text-gray-500">买入价 {parseFloat(o.limitPrice).toLocaleString()} USDT</span>
+                              </div>
                             </div>
                             <div className="flex flex-col items-end gap-0.5">
                               {hasPendingSell ? (
@@ -923,8 +946,8 @@ export default function CryptoPrediction() {
                       );
                     })
                   )}
-                  {selectedSellOrderId && (
-                    <p className="text-[10px] text-[#ef5350] px-1">无损合约订单必须一次性全部卖出</p>
+                  {selectedSellOrderIds.size > 0 && (
+                    <p className="text-[10px] text-[#ef5350] px-1">已选 {selectedSellOrderIds.size} 笔，将以相同价格批量委托卖出</p>
                   )}
                 </div>
               );
@@ -951,32 +974,50 @@ export default function CryptoPrediction() {
                     orderType: '无损合约',
                   });
                 } else {
-                  // 委卖：必须选中一个订单
-                  if (!selectedSellOrderId) { toast.error("请选择要卖出的订单"); return; }
-                  const selectedOrder = (ordersData as any[] || []).find((o: any) => o.id === selectedSellOrderId);
-                  if (!selectedOrder) { toast.error("订单不存在"); return; }
-                  const qty = parseFloat(selectedOrder.quantity).toFixed(8);
-                  const amt = parseFloat(selectedOrder.amount).toFixed(2);
-                  submitOrderMutation.mutate({
-                    ledgerId,
-                    coin: coin.name,
-                    side: 'sell',
-                    limitPrice: price.toString(),
-                    amount: amt,
-                    quantity: qty,
-                    orderType: '无损合约',
-                    sourceOrderId: selectedSellOrderId, // 关联原始买入订单ID，用于防重复委托
-                  });
+                  // 委卖：批量提交选中的所有订单
+                  if (selectedSellOrderIds.size === 0) { toast.error("请选择要卖出的订单"); return; }
+                  const selectedOrders = (ordersData as any[] || []).filter((o: any) => selectedSellOrderIds.has(o.id));
+                  if (selectedOrders.length === 0) { toast.error("订单不存在"); return; }
+                  // 逐条提交（复用现有单条接口）
+                  let successCount = 0;
+                  let failCount = 0;
+                  for (const selectedOrder of selectedOrders) {
+                    try {
+                      await submitOrderMutation.mutateAsync({
+                        ledgerId,
+                        coin: coin.name,
+                        side: 'sell',
+                        limitPrice: price.toString(),
+                        amount: parseFloat(selectedOrder.amount).toFixed(2),
+                        quantity: parseFloat(selectedOrder.quantity).toFixed(8),
+                        orderType: '无损合约',
+                        sourceOrderId: selectedOrder.id,
+                      });
+                      successCount++;
+                    } catch (e: any) {
+                      failCount++;
+                      console.error('[批量卖出] 订单', selectedOrder.id, '失败:', e.message);
+                    }
+                  }
+                  if (successCount > 0 && failCount === 0) {
+                    toast.success(`成功委托卖出 ${successCount} 笔订单`);
+                  } else if (successCount > 0 && failCount > 0) {
+                    toast.success(`${successCount} 笔成功，${failCount} 笔失败（可能已有委托）`);
+                  } else {
+                    toast.error(`委托失败，请检查是否已有委托卖出记录`);
+                  }
+                  setSelectedSellOrderIds(new Set());
+                  return;
                 }
               }}
-              disabled={orderSide === "sell" && !selectedSellOrderId}
+              disabled={orderSide === "sell" && selectedSellOrderIds.size === 0}
               className={`w-full py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity ${(
                 orderSide === "buy"
                   ? (!orderAmount || parseFloat(orderAmount) <= 0)
-                  : !selectedSellOrderId
+                  : selectedSellOrderIds.size === 0
               ) ? "opacity-50" : "opacity-100"}`}
             >
-              {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : `卖出 ${coin.name}`}
+              {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : selectedSellOrderIds.size > 1 ? `批量卖出 ${selectedSellOrderIds.size} 笔` : `卖出 ${coin.name}`}
             </button>
             {/* 当前委托订单列表 - 独立渲染，不依赖 K 线图加载状态 */}
             <div className="mt-4">
