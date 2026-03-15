@@ -399,12 +399,12 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
         {/* 管理费（仅已成交订单显示） */}
         {order.status === 'completed' && (() => {
-          // 统一公式：订单金额 ÷ 0.75 ÷ 倍数 × 10 ÷ 365
+          // 统一公式：订单金额 ÷ 0.75 ÷ 倍数 × 10 × 0.12 ÷ 365
           // 普通订单：倍数 = 5.25，金额 = 实际投入
           // 赠送订单：倍数 = giftMultiplier，金额 = 赠送市值
           const amount = parseFloat(order.amount);
           const multiplier = order.isGift ? parseFloat((order as any).giftMultiplier || '1.5') : 5.25;
-          const dailyFee = amount / 0.75 / multiplier * 10 / 365;
+          const dailyFee = amount / 0.75 / multiplier * 10 * 0.12 / 365;
           return (
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">管理费</span>
