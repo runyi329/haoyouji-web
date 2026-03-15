@@ -624,7 +624,15 @@ export default function LedgerDetail() {
                         <div key={coin} className="flex items-baseline justify-between">
                           <span className="text-xs text-white/70">{coin}</span>
                           <span className="text-sm font-bold text-white">
-                            {qty > 0 ? (qty < 0.0001 ? qty.toFixed(8) : qty < 1 ? qty.toFixed(4) : qty.toFixed(2)) : '0'}
+                            {qty > 0 ? (() => {
+                              const maxDecimals = coin === 'BTC' ? 8 : 6;
+                              const raw = qty.toFixed(maxDecimals);
+                              // 智能去除末尾零，但至少保留2位小数
+                              const [intPart, decPart] = raw.split('.');
+                              const trimmed = decPart.replace(/0+$/, '');
+                              const finalDec = trimmed.length < 2 ? trimmed.padEnd(2, '0') : trimmed;
+                              return `${intPart}.${finalDec}`;
+                            })() : '0'}
                           </span>
                         </div>
                       );
