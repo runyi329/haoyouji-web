@@ -67,10 +67,12 @@ export default function AfOrderManage() {
   // 查询当前编辑卖单对应的买单扣档记录
   const editingOrder = orders?.find((o: any) => o.id === editingId);
   const sourceBuyOrderId = editingOrder?.sourceOrderId;
-  const { data: tierHistory } = trpc.ledger.afAdminGetTierHistory.useQuery(
+  const { data: tierHistoryData } = trpc.ledger.afAdminGetTierHistory.useQuery(
     { ledgerId, orderId: sourceBuyOrderId! },
     { enabled: !!ledgerId && !!sourceBuyOrderId && editingOrder?.side === 'sell' }
   );
+  const tierHistory = tierHistoryData?.list;
+  const lowestScan = tierHistoryData?.lowestScan;
 
   const updateMutation = trpc.ledger.afAdminUpdateOrder.useMutation({
     onSuccess: () => {
@@ -518,11 +520,11 @@ export default function AfOrderManage() {
                                   })()}
                                 </span>
                               </div>
-                              {/* 扣档历史记录 */}
-                              {tierHistory && tierHistory.length > 0 && (
-                                <div className="col-span-2 bg-amber-50 border border-amber-200 rounded p-2 mt-1">
-                                  <p className="text-[10px] text-amber-600 font-medium mb-1">扣档触发记录</p>
-                                  {tierHistory.map((t: any) => {
+                              {/* 扣档历史记录 + 历史最低扫描价 */}
+                              <div className="col-span-2 bg-amber-50 border border-amber-200 rounded p-2 mt-1">
+                                <p className="text-[10px] text-amber-600 font-medium mb-1">扣档触发记录</p>
+                                {tierHistory && tierHistory.length > 0 ? (
+                                  tierHistory.map((t: any) => {
                                     const dt = new Date(t.triggeredAt);
                                     const dateStr = `${dt.getMonth()+1}月${dt.getDate()}日 ${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
                                     return (
@@ -531,9 +533,22 @@ export default function AfOrderManage() {
                                         <span className="font-medium">{parseFloat(t.triggerPrice).toLocaleString()} USDT</span>
                                       </div>
                                     );
-                                  })}
-                                </div>
-                              )}
+                                  })
+                                ) : (
+                                  <div className="text-[10px] text-amber-500 py-0.5">未触发任何扣档，当前为D0基准档</div>
+                                )}
+                                {/* 历史最低扫描价（不管有没有扣档都显示） */}
+                                {lowestScan ? (
+                                  <div className="mt-1.5 pt-1.5 border-t border-amber-200">
+                                    <div className="flex justify-between text-[10px] text-gray-500 py-0.5">
+                                      <span>历史最低扫描价 · 第{lowestScan.scanCount}次扫描 · {(() => { const dt = new Date(lowestScan.scannedAt); return `${dt.getMonth()+1}月${dt.getDate()}日 ${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`; })()}</span>
+                                      <span className="font-semibold text-gray-700">{parseFloat(lowestScan.price).toLocaleString()} USDT</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="mt-1.5 pt-1.5 border-t border-amber-200 text-[10px] text-gray-400">暂无扫描记录</div>
+                                )}
+                              </div>
                               <div className="flex justify-between">
                                 <span className="text-gray-600">有效币数</span>
                                 <span className="font-medium text-gray-800">{calc.effectiveQuantity.toFixed(6)} {order.coin}</span>
