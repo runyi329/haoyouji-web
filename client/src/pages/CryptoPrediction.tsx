@@ -565,13 +565,13 @@ export default function CryptoPrediction() {
   const utils = trpc.useUtils();
   const { data: ordersData, isLoading: ordersLoading } = trpc.ledger.afGetOrders.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: !!ledgerId, staleTime: 0, refetchOnWindowFocus: true, refetchOnMount: true }
+    { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: 'always' }
   );
   const orders: any[] = (ordersData as any[]) || [];
   // 可卖数量（已成交买入 - 已成交卖出）
   const { data: availableSellData } = trpc.ledger.afGetAvailableSell.useQuery(
     { ledgerId, coin: coin.name, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: !!ledgerId, staleTime: 0, refetchOnWindowFocus: true, refetchOnMount: true }
+    { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: 'always' }
   );
   const availableSellQty = (availableSellData as any)?.available ?? 0;
   const submitOrderMutation = trpc.ledger.afSubmitOrder.useMutation({
