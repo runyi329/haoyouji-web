@@ -10088,13 +10088,29 @@ export const appRouter = router({
               }
             }
             
-            // 返还金额 = 本金 + 收益（如果收益为负则不计入，仅返本金）
-            balanceAdjust = principal + Math.max(0, profit);
-            const tierInfo = (() => {
-              // 重新查一次档位（用于日志）
-              return '';
-            })();
-            balanceNote = `卖单成交 ${coin} 本金${principal.toFixed(2)}+收益${Math.max(0, profit).toFixed(4)} USDT`;
+            // 计算累计管理费（从买入成交日到今天）
+            let managementFee = 0;
+            if (sourceOrderId) {
+              const srcFeeRows = await db.execute(
+                sql`SELECT updated_at, created_at FROM af_orders WHERE id = ${sourceOrderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+              ) as any;
+              const srcFeeOrder = (srcFeeRows[0]?.[0] ?? srcFeeRows[0]);
+              if (srcFeeOrder) {
+                const confirmedDate = srcFeeOrder.updated_at ? new Date(srcFeeOrder.updated_at) : new Date(srcFeeOrder.created_at);
+                const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+                const todayNow = new Date();
+                const todayDay = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate());
+                const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                const dailyFee = principal / 0.75 * 0.12 / 365;
+                managementFee = dailyFee * holdDays;
+                console.log(`[AF卖单成交] 管理费计算: 本金=${principal}, 持有天数=${holdDays}, 每日费=${dailyFee.toFixed(6)}, 累计管理费=${managementFee.toFixed(4)}`);
+              }
+            }
+
+            // 返还金额 = 本金 + 收益 - 累计管理费（最低返还0）
+            const grossReturn = principal + Math.max(0, profit);
+            balanceAdjust = Math.max(0, grossReturn - managementFee);
+            balanceNote = `卖单成交 ${coin} 本金${principal.toFixed(2)}+收益${Math.max(0, profit).toFixed(4)}-管理费${managementFee.toFixed(4)} USDT`;
           }
           // 委买成交：买入时已扣了余额，无需额外操作
         }
