@@ -1279,11 +1279,6 @@ export default function CryptoPrediction() {
         })()}
       </div>
 
-      <div className="px-4 pt-2 pb-4">
-        <p className="text-xs text-gray-600 leading-relaxed text-center">
-          行情数据来源：Binance · 仅供参考，不构成投资建议
-        </p>
-      </div>
     </div>
   );
 }
