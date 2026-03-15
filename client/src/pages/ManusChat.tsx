@@ -136,8 +136,10 @@ export default function ManusChat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  const utils = trpc.useUtils();
   const { data: messages, refetch } = trpc.manus.getMessages.useQuery({ limit: 100 }, {
-    refetchInterval: 5000, // 每5秒轮询
+    refetchInterval: 3000, // 每3秒轮询
+    refetchOnWindowFocus: true,
   });
 
   const sendMutation = trpc.manus.sendMessage.useMutation({
@@ -145,7 +147,7 @@ export default function ManusChat() {
       setText("");
       setPendingFile(null);
       setSending(false);
-      refetch();
+      utils.manus.getMessages.invalidate();
     },
     onError: (err) => {
       toast.error("发送失败: " + err.message);
