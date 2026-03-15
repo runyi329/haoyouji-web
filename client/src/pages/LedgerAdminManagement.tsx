@@ -59,7 +59,7 @@ export default function LedgerAdminManagement() {
   });
 
   // 处理角色变更
-  const handleRoleChange = (targetUserId: number, newRole: 'admin' | 'member') => {
+  const handleRoleChange = (targetUserId: number, newRole: 'admin' | 'member' | 'funder') => {
     setRoleMutation.mutate({
       ledgerId,
       targetUserId,
@@ -179,7 +179,8 @@ export default function LedgerAdminManagement() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="admin">{isDiet ? '减肥教练' : '管理员'}</SelectItem>
-                      <SelectItem value="member">普通成员</SelectItem>
+                      {!isDiet && <SelectItem value="funder">资金方</SelectItem>}
+                      <SelectItem value="member">普通{isDiet ? '学员' : '成员'}</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -216,8 +217,14 @@ export default function LedgerAdminManagement() {
             <div className="font-medium text-gray-900 mb-1">{isDiet ? '减肥教练' : '管理员'}</div>
             <div className="text-gray-600">{isDiet ? '可以管理学员档案、设置减肥目标等，但不能删除账本或封存账本' : '可以管理报销、审批账目、管理分类等，但不能删除账本或封存账本'}</div>
           </div>
+          {!isDiet && (
+            <div>
+              <div className="font-medium text-gray-900 mb-1">资金方</div>
+              <div className="text-gray-600">可查看账本资产信息，不可进入设置页面，后续将有专属功能页面</div>
+            </div>
+          )}
           <div>
-            <div className="font-medium text-gray-900 mb-1">普通成员</div>
+            <div className="font-medium text-gray-900 mb-1">普通{isDiet ? '学员' : '成员'}</div>
             <div className="text-gray-600">可以添加账目、查看账目、申请报销等基本功能</div>
           </div>
         </div>
