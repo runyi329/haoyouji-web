@@ -645,11 +645,9 @@ export default function LedgerDetail() {
                           <span className="text-xs text-white/70">{coin}</span>
                           <span className="text-sm font-bold text-white">
                             {(() => {
+                              // 零值：只显示 0
+                              if (!qty || qty <= 0) return '0';
                               const maxDecimals = coin === 'BTC' ? 8 : 6;
-                              if (qty <= 0) {
-                                // 零值：显示对齐的小数位（与有值时位数一致）
-                                return `0.${'0'.repeat(maxDecimals)}`;
-                              }
                               const raw = qty.toFixed(maxDecimals);
                               // 智能去除末尾零，但至少保留2位小数
                               const [intPart, decPart] = raw.split('.');
