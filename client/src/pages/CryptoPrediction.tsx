@@ -399,9 +399,10 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
         {/* 管理费（仅已成交订单显示） */}
         {order.status === 'completed' && (() => {
-          // 统一公式：订单金额 ÷ 0.75 × 0.12 ÷ 365
+          // 成交价値：普通订单 = amount×5.25，赠送订单 = amount（赠送市値）
           const amount = parseFloat(order.amount);
-          const dailyFee = amount / 0.75 * 0.12 / 365;
+          const tradeValue = order.isGift ? amount : amount * 5.25;
+          const dailyFee = tradeValue / 0.75 * 0.12 / 365;
           return (
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">管理费</span>

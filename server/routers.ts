@@ -9953,6 +9953,7 @@ export const appRouter = router({
         const buyOrderRows = await db.execute(
           sql`SELECT o.id, o.amount, o.status, o.updated_at, o.created_at,
                      COALESCE(o.is_gift, 0) as is_gift,
+                     COALESCE(o.gift_multiplier, '5.25') as gift_multiplier,
                      (SELECT COUNT(*) FROM af_orders s WHERE s.source_order_id = o.id AND s.side='sell' AND s.status='completed' AND s.ledger_id = ${input.ledgerId}) as sold
               FROM af_orders o
               WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy' AND o.status = 'completed'`
@@ -9967,7 +9968,10 @@ export const appRouter = router({
         for (const bo of buyOrders) {
           const amount = parseFloat(bo.amount || '0');
           if (amount <= 0) continue;
-          const dailyFee = amount / 0.75 * 0.12 / 365;
+          // 成交价値 = 普通订单用 amount×5.25，赠送订单用 amount（已是市値）
+          const isGift = parseInt(bo.is_gift || '0') === 1;
+          const tradeValue = isGift ? amount : amount * 5.25;
+          const dailyFee = tradeValue / 0.75 * 0.12 / 365;
           const confirmedDate = bo.updated_at ? new Date(bo.updated_at) : new Date(bo.created_at);
           const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
 
@@ -10092,7 +10096,7 @@ export const appRouter = router({
             let managementFee = 0;
             if (sourceOrderId) {
               const srcFeeRows = await db.execute(
-                sql`SELECT updated_at, created_at FROM af_orders WHERE id = ${sourceOrderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+                sql`SELECT updated_at, created_at, is_gift FROM af_orders WHERE id = ${sourceOrderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
               ) as any;
               const srcFeeOrder = (srcFeeRows[0]?.[0] ?? srcFeeRows[0]);
               if (srcFeeOrder) {
@@ -10101,9 +10105,12 @@ export const appRouter = router({
                 const todayNow = new Date();
                 const todayDay = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate());
                 const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-                const dailyFee = principal / 0.75 * 0.12 / 365;
+                // 成交价値：普通订单 = principal×5.25，赠送订单 = principal（赠送市値）
+                const isSrcGift = parseInt(srcFeeOrder.is_gift || '0') === 1;
+                const tradeValue = isSrcGift ? principal : principal * 5.25;
+                const dailyFee = tradeValue / 0.75 * 0.12 / 365;
                 managementFee = dailyFee * holdDays;
-                console.log(`[AF卖单成交] 管理费计算: 本金=${principal}, 持有天数=${holdDays}, 每日费=${dailyFee.toFixed(6)}, 累计管理费=${managementFee.toFixed(4)}`);
+                console.log(`[AF卖单成交] 管理费计算: 本金=${principal}, 成交价値=${tradeValue.toFixed(2)}, 持有天数=${holdDays}, 每日费=${dailyFee.toFixed(6)}, 累计管理费=${managementFee.toFixed(4)}`);
               }
             }
 
