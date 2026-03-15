@@ -290,6 +290,10 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: order.status === 'completed' && order.side === 'buy' }
   );
+  const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
+    onSuccess: () => { toast.success('委托已撒销'); },
+    onError: (e) => toast.error('撒单失败', { description: e.message }),
+  });
 
   // 计算当前所在档位
   const triggeredTiers = new Set((tierData?.triggers || []).map((t: any) => t.tier));
@@ -299,9 +303,29 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   const isContract = !order.orderType || order.orderType === '无损合约';
   const isCompleted = order.status === 'completed';
 
+  // 生成订单编号
+  const orderDate = new Date(order.createdAt);
+  const yy = String(orderDate.getFullYear()).slice(2);
+  const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(orderDate.getDate()).padStart(2, '0');
+  const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
+
   return (
     <div className="mt-2 rounded-xl p-3 space-y-2 text-[13px]" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.06)' }}>
-      {/* 基本信息 - 统一风格：左侧标签灰色，右侧数值深色，强调数据用品牌色 */}
+      {/* 顶部：订单编号 + 撒单按鈕（委托中才显示） */}
+      <div className="flex items-center justify-between pb-2" style={{ borderBottom: '1px solid #E0E8FF' }}>
+        <span className="font-mono text-[11px] text-[#9CA3AF] tracking-wide">{orderNo}</span>
+        {order.status === 'pending' && (
+          <button
+            onClick={() => { if (window.confirm('确认撒销该委托单？')) { cancelMutation.mutate({ ledgerId, orderId: order.id }); } }}
+            disabled={cancelMutation.isPending}
+            className="text-xs font-medium px-2 py-0.5 rounded border"
+            style={{ color: '#EF4444', borderColor: '#FECACA', backgroundColor: '#FEF2F2' }}>
+            {cancelMutation.isPending ? '撒销中...' : '撒单'}
+          </button>
+        )}
+      </div>
+      {/* 基本信息 - 统一风格：左侧标签灰色，右侧数値深色，强调数据用品牌色 */}
       <div className="space-y-2">
 
         {/* 币种：带买/卖标签 */}
@@ -1142,25 +1166,12 @@ export default function CryptoPrediction() {
                              '委托中'}
                           </span>
                           <div className="flex flex-col items-end gap-0.5">
-                            {order.status === 'pending' && (
-                              <button
-                                onClick={() => {
-                                  if (window.confirm('确认撒销该委托单？')) {
-                                    cancelOrderMutation.mutate({ ledgerId, orderId: order.id });
-                                  }
-                                }}
-                                disabled={cancelOrderMutation.isPending}
-                                className="text-xs font-medium" style={{ color: '#1A56DB' }}>
-                                撒单
-                              </button>
-                            )}
-                            {order.status !== 'pending' && (
-                              <button
-                                onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
-                                className="text-xs font-medium" style={{ color: '#1A56DB' }}>
-                                详情
-                              </button>
-                            )}
+                            {/* 所有状态都显示详情按鈕，撒单移入详情内 */}
+                            <button
+                              onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
+                              className="text-xs font-medium" style={{ color: '#1A56DB' }}>
+                              详情
+                            </button>
                           </div>
                         </div>
                         {/* 详情展开 */}
