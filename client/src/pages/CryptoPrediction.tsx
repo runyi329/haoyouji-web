@@ -283,11 +283,11 @@ const TIER_LABELS = [
   { tier: 9, drop: '-90%', ratio: '1/10', pct: '13.3%' },
 ];
 
-function OrderDetail({ order, timeStr, ledgerId }: {
-  order: any; timeStr: string; ledgerId: number;
+function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
+  order: any; timeStr: string; ledgerId: number; viewAsUserId?: number;
 }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
-    { orderId: order.id, ledgerId },
+    { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: order.status === 'completed' && order.side === 'buy' }
   );
 
@@ -1139,7 +1139,7 @@ export default function CryptoPrediction() {
                         </div>
                         {/* 详情展开 */}
                         {orderDetailId === order.id && (
-                          <OrderDetail order={order} timeStr={timeStr} ledgerId={ledgerId} />
+                          <OrderDetail order={order} timeStr={timeStr} ledgerId={ledgerId} viewAsUserId={viewAsUserId} />
                         )}
                       </div>
                     );
