@@ -64,6 +64,14 @@ export default function AfOrderManage() {
     { enabled: !!ledgerId }
   );
 
+  // 查询当前编辑卖单对应的买单扣档记录
+  const editingOrder = orders?.find((o: any) => o.id === editingId);
+  const sourceBuyOrderId = editingOrder?.sourceOrderId;
+  const { data: tierHistory } = trpc.ledger.afAdminGetTierHistory.useQuery(
+    { ledgerId, orderId: sourceBuyOrderId! },
+    { enabled: !!ledgerId && !!sourceBuyOrderId && editingOrder?.side === 'sell' }
+  );
+
   const updateMutation = trpc.ledger.afAdminUpdateOrder.useMutation({
     onSuccess: () => {
       toast.success("订单已更新");
@@ -504,15 +512,32 @@ export default function AfOrderManage() {
                                 <span className="text-gray-600">卖出价</span>
                                 <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
                               </div>
-                              <div className="flex justify-between">
+                              <div className="col-span-2 flex justify-between">
                                 <span className="text-gray-600">权益折扣档位</span>
                                 <span className="font-medium text-amber-600">
                                   {(() => {
                                     const rate = EQUITY_DISCOUNT_RATES[calc.equityTier] || 1.0;
-                                    return `${(rate * 100).toFixed(2)}%（第${calc.equityTier}档）`;
+                                    const tierName = calc.equityTier === 0 ? 'D0档（基准档）' : `D${calc.equityTier}档（跌${calc.equityTier * 10}%）`;
+                                    return `${(rate * 100).toFixed(2)}% · ${tierName}`;
                                   })()}
                                 </span>
                               </div>
+                              {/* 扣档历史记录 */}
+                              {tierHistory && tierHistory.length > 0 && (
+                                <div className="col-span-2 bg-amber-50 border border-amber-200 rounded p-2 mt-1">
+                                  <p className="text-[10px] text-amber-600 font-medium mb-1">扣档触发记录</p>
+                                  {tierHistory.map((t: any) => {
+                                    const dt = new Date(t.triggeredAt);
+                                    const dateStr = `${dt.getMonth()+1}月${dt.getDate()}日 ${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
+                                    return (
+                                      <div key={t.tier} className="flex justify-between text-[10px] text-amber-700 py-0.5">
+                                        <span>D{t.tier}档触发 · 第{t.scanCount}次扫描 · {dateStr}</span>
+                                        <span className="font-medium">{parseFloat(t.triggerPrice).toLocaleString()} USDT</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                               <div className="flex justify-between">
                                 <span className="text-gray-600">有效币数</span>
                                 <span className="font-medium text-gray-800">{calc.effectiveQuantity.toFixed(6)} {order.coin}</span>
@@ -534,8 +559,16 @@ export default function AfOrderManage() {
                                 <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
                               </div>
                               <div className="col-span-2 flex justify-between">
-                                <span className="text-red-500">管理费扮除 ({calc.holdDays}天)</span>
+                                <span className="text-red-500">管理费扣除 ({calc.holdDays}天)</span>
                                 <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
+                              </div>
+                              <div className="col-span-2 text-[10px] text-red-400">
+                                {(() => {
+                                  const startDate = new Date(order.sourceUpdatedAt || order.sourceCreatedAt || order.createdAt);
+                                  const endDate = new Date();
+                                  const fmt = (d: Date) => `${d.getMonth()+1}月${d.getDate()}日`;
+                                  return `计费区间：${fmt(startDate)} → ${fmt(endDate)}（共${calc.holdDays}天，${calc.dailyFee.toFixed(4)} USDT/天）`;
+                                })()}
                               </div>
                               <div className="col-span-2 flex justify-between bg-green-50 rounded px-2 py-1.5 border border-green-200">
                                 <span className="text-green-700 font-bold">实际到账</span>

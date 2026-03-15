@@ -10000,6 +10000,38 @@ export const appRouter = router({
           fees: { ongoingFee: +ongoingFee.toFixed(4), settledFee: +settledFee.toFixed(4), totalFee: +totalFee.toFixed(4) },
         };
       }),
+    // 管理员：查询买单的扣档记录（包含触发时间、价格、第几次扫描）
+    afAdminGetTierHistory: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), orderId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+
+        // 查询扣档记录
+        const tierRows = await db.execute(
+          sql`SELECT t.id, t.tier, t.trigger_price, t.triggered_at, t.buy_price,
+                     (
+                       SELECT COUNT(*) FROM af_price_scan_logs s
+                       WHERE s.coin = (SELECT coin FROM af_orders WHERE id = ${input.orderId} LIMIT 1)
+                       AND s.scanned_at <= t.triggered_at
+                     ) as scan_count
+              FROM af_order_tier_triggers t
+              WHERE t.order_id = ${input.orderId}
+              ORDER BY t.tier ASC`
+        ) as any;
+        const list = ((tierRows[0] || tierRows) as any[]).map((r: any) => ({
+          tier: r.tier,
+          triggerPrice: r.trigger_price,
+          triggeredAt: r.triggered_at,
+          buyPrice: r.buy_price,
+          scanCount: Number(r.scan_count || 0),
+        }));
+        return list;
+      }),
     // 管理员：修改订单参数和状态（含余额联动）
     afAdminUpdateOrder: protectedProcedure
       .input(z.object({
