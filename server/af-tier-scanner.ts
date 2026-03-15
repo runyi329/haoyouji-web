@@ -23,7 +23,8 @@ const scanStatus: Record<string, {
 
 /**
  * 获取指定币种过去4小时的最低价
- * 先尝试火币，失败则用OKX
+ * 使用 Gate.io API（腔讯云服务器可访问）
+ * Gate.io K线格式: [timestamp, volume, open, high, low, close, ...]
  */
 async function fetch4hLowPrice(coin: string): Promise<{ low: number; scanFrom: Date; scanTo: Date } | null> {
   const symbol = COIN_SYMBOLS[coin];
@@ -32,8 +33,30 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number; scanFrom: D
   const now = new Date();
   const scanFrom = new Date(now.getTime() - 4 * 60 * 60 * 1000);
 
+  // Gate.io 主用（腔讯云服务器可访问）
   try {
-    // 火币：获取4小时K线（最近2根，取最低价）
+    const pair = symbol.replace(/^(BTC|ETH|SOL)(USDT)$/, "$1_$2");
+    const r = await fetch(
+      `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${pair}&interval=4h&limit=2`,
+      { signal: AbortSignal.timeout(10000) }
+    );
+    if (r.ok) {
+      const data: any[] = await r.json();
+      if (Array.isArray(data) && data.length > 0) {
+        // Gate.io 格式: [timestamp, quote_volume, open, high, low, close, base_volume, is_closed]
+        const low = Math.min(...data.map((k: any[]) => parseFloat(k[4])));
+        if (!isNaN(low) && low > 0) {
+          console.log(`[AF扫描] Gate.io ${coin} 4h最低价: ${low}`);
+          return { low, scanFrom, scanTo: now };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`[AF扫描] Gate.io获取 ${coin} 失败:`, e);
+  }
+
+  // 火币备用
+  try {
     const sym = symbol.toLowerCase();
     const r = await fetch(
       `https://api.huobi.pro/market/history/kline?symbol=${sym}&period=4hour&size=2`,
@@ -53,8 +76,8 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number; scanFrom: D
     console.warn(`[AF扫描] 火币获取 ${coin} 失败:`, e);
   }
 
+  // OKX 备用
   try {
-    // OKX 备用
     const instId = symbol.replace(/^(BTC|ETH|SOL)(USDT)$/, "$1-$2");
     const res = await fetch(
       `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=4H&limit=2`,
