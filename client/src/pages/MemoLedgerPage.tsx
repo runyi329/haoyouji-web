@@ -2,7 +2,7 @@
  * MemoLedgerPage.tsx - AD型定制账本：永忆
  * 两级分类：第1级大类 → 第2级子类（预设+自定义）→ 字段内容
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -231,22 +231,38 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   ledgerId: number;
   onSuccess: () => void;
 }) {
-  // 解析编辑时的初始值
-  const initCategory = editItem?.category || "bank";
-  const initSubLabel = editItem?.title || "";
-
-  const [step, setStep] = useState<"cat" | "sub" | "fields">(editItem ? "fields" : "cat");
-  const [category, setCategory] = useState(initCategory);
-  const [subLabel, setSubLabel] = useState(initSubLabel);
-  const [customSub, setCustomSub] = useState(
-    initSubLabel && SUB_CATEGORIES[initCategory] && !SUB_CATEGORIES[initCategory].slice(0, -1).includes(initSubLabel)
-      ? initSubLabel : ""
-  );
+  const [step, setStep] = useState<"cat" | "sub" | "fields">("cat");
+  const [category, setCategory] = useState("bank");
+  const [subLabel, setSubLabel] = useState("");
+  const [customSub, setCustomSub] = useState("");
   const [isCustom, setIsCustom] = useState(false);
-  const [fields, setFields] = useState<MemoField[]>(
-    editItem?.fields || FIELD_TEMPLATES[initCategory]?.map(f => ({ ...f, value: "" })) || []
-  );
-  const [note, setNote] = useState(editItem?.note || "");
+  const [fields, setFields] = useState<MemoField[]>([]);
+  const [note, setNote] = useState("");
+
+  // 每次弹窗打开时，根据 editItem 重置所有状态（修复分类不持久化问题）
+  useEffect(() => {
+    if (!open) return;
+    if (editItem) {
+      const cat = editItem.category || "bank";
+      const sub = editItem.title || "";
+      const isCustomSub = sub && SUB_CATEGORIES[cat] && !SUB_CATEGORIES[cat].slice(0, -1).includes(sub);
+      setStep("fields");
+      setCategory(cat);
+      setSubLabel(sub);
+      setCustomSub(isCustomSub ? sub : "");
+      setIsCustom(false);
+      setFields(editItem.fields || FIELD_TEMPLATES[cat]?.map(f => ({ ...f, value: "" })) || []);
+      setNote(editItem.note || "");
+    } else {
+      setStep("cat");
+      setCategory("bank");
+      setSubLabel("");
+      setCustomSub("");
+      setIsCustom(false);
+      setFields([]);
+      setNote("");
+    }
+  }, [open, editItem]);
   const utils = trpc.useUtils();
 
   const catObj = CATEGORIES.find(c => c.key === category)!;
