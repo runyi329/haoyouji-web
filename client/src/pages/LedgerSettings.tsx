@@ -51,6 +51,7 @@ export default function LedgerSettings() {
  const [showInviteDialog, setShowInviteDialog] = useState(false);
  const [searchUsername, setSearchUsername] = useState("");
  const [inviteMessage, setInviteMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+ const [inviteRole, setInviteRole] = useState<'member' | 'funder' | 'admin'>('member');
  const [showExportDialog, setShowExportDialog] = useState(false);
  const [showBackupDialog, setShowBackupDialog] = useState(false);
  const [backupFrequency, setBackupFrequency] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
@@ -108,9 +109,32 @@ export default function LedgerSettings() {
  },
  });
 
+ // AF 账本邀请（支持角色）
+ const inviteToAFMutation = trpc.ledger.inviteToCustomAF.useMutation({
+ onSuccess: (data) => {
+ const roleLabel = inviteRole === 'funder' ? '资金方' : inviteRole === 'admin' ? '管理员' : '普通客户';
+ setInviteMessage({ type: 'success', text: `已将 ${data.member.username} 以「${roleLabel}」身份加入` });
+ setTimeout(() => {
+ setShowInviteDialog(false);
+ setSearchUsername("");
+ setInviteMessage(null);
+ setInviteRole('member');
+ }, 1500);
+ utils.ledger.getMembers.invalidate({ ledgerId });
+ },
+ onError: (error) => {
+ setInviteMessage({ type: 'error', text: `邀请失败: ${error.message}` });
+ setTimeout(() => setInviteMessage(null), 3000);
+ },
+ });
+
  // 
  const handleInviteUser = (username: string) => {
+ if (ledgerData?.type === 'custom_af') {
+ inviteToAFMutation.mutate({ ledgerId, username, role: inviteRole });
+ } else {
  inviteMutation.mutate({ ledgerId, username });
+ }
  };
 
  // mutation
@@ -635,13 +659,37 @@ export default function LedgerSettings() {
  {/* */}
  <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
  <DialogContent className="w-[90%] max-w-md rounded-lg" showCloseButton={false}>
- <DialogTitle className="text-lg font-semibold mb-4"></DialogTitle>
+ <DialogTitle className="text-lg font-semibold mb-4">邀请成员</DialogTitle>
  <div className="space-y-4">
+ {/* AF 账本角色选择 */}
+ {ledgerData?.type === 'custom_af' && (
+ <div className="space-y-1.5">
+ <div className="text-sm text-gray-500">选择角色</div>
+ <div className="flex gap-2">
+ {(['member', 'funder', 'admin'] as const).map(r => {
+ const label = r === 'member' ? '普通客户' : r === 'funder' ? '资金方' : '管理员';
+ return (
+ <button
+ key={r}
+ onClick={() => setInviteRole(r)}
+ className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-all ${
+ inviteRole === r
+ ? 'border-[#D32F2F] text-[#D32F2F] bg-red-50'
+ : 'border-gray-200 text-gray-500 bg-white'
+ }`}
+ >
+ {label}
+ </button>
+ );
+ })}
+ </div>
+ </div>
+ )}
  {/* */}
  <div className="relative">
  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
  <Input
- placeholder=""
+ placeholder="搜索用户名"
  value={searchUsername}
  onChange={(e) => setSearchUsername(e.target.value)}
  className="pl-10"
@@ -692,7 +740,7 @@ export default function LedgerSettings() {
  <Button
  size="sm"
  onClick={() => !isMember && handleInviteUser(user.username)}
- disabled={isMember || inviteMutation.isPending}
+ disabled={isMember || inviteMutation.isPending || inviteToAFMutation.isPending}
  className={isMember 
  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
  : "text-white hover:opacity-90"
