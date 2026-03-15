@@ -9917,9 +9917,14 @@ export const appRouter = router({
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 权限控制：只有指定的管理员用户ID才能查看
-        const ADMIN_USER_IDS = [28, 4957151]; // 管理员用户ID白名单
-        if (!ADMIN_USER_IDS.includes(ctx.user.id)) return null;
+        // 权限控制：只有账本创建者/拥有者才能查看
+        const ledgerRows = await db.execute(
+          sql`SELECT createdBy, ownerId FROM ledgers WHERE id = ${input.ledgerId} LIMIT 1`
+        ) as any;
+        const row = ledgerRows[0]?.[0] ?? ledgerRows[0] ?? {};
+        const createdBy = row.createdBy;
+        const ownerId = row.ownerId;
+        if (ctx.user.id !== createdBy && ctx.user.id !== ownerId) return null;
 
         // 1. 订单统计：普通订单数 + 赠送订单数（只统计买单）
         const orderStatsRows = await db.execute(
