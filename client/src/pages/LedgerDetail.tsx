@@ -173,10 +173,13 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF }
   );
-  // AF 账本：管理员统计（订单数 + 管理费）
+  // AF 账本：管理员统计（订单数 + 管理费）——仅管理员/owner 和 YJH 用户可见
+  const YJH_USER_ID = 4957151;
+  const isYjhUser = user?.id === YJH_USER_ID;
+  const canSeeAdminStats = isOwner || isAdmin || isYjhUser;
   const { data: afAdminStats } = trpc.ledger.afAdminGetStats.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && (isOwner || isAdmin) }
+    { enabled: isCustomAF && canSeeAdminStats }
   );
   const dietConfig = (dietStats as any)?.config;
   const dietInitialWeight = dietConfig ? Number(dietConfig.initialWeight) : null;
@@ -674,8 +677,8 @@ export default function LedgerDetail() {
                 <div className="text-xs text-white/70 mb-1">累计盈亏</div>
                 <div className="text-lg font-bold text-white">--</div>
               </div>
-              {/* 管理员统计：累计订单 */}
-              {(isOwner || isAdmin) && afAdminStats && (
+              {/* 管理员统计：累计订单（仅管理员/owner 和 YJH 用户可见） */}
+              {canSeeAdminStats && afAdminStats && (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="text-xs text-white/70 mb-1">累计订单</div>
                   <div className="flex items-baseline gap-1">
@@ -694,8 +697,8 @@ export default function LedgerDetail() {
                   </div>
                 </div>
               )}
-              {/* 管理员统计：管理费 */}
-              {(isOwner || isAdmin) && afAdminStats && (
+              {/* 管理员统计：管理费（仅管理员/owner 和 YJH 用户可见） */}
+              {canSeeAdminStats && afAdminStats && (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="text-xs text-white/70 mb-1">管理费</div>
                   <div className="flex items-baseline gap-1">
