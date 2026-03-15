@@ -393,15 +393,15 @@ export default function LedgerDetail() {
                 const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
                 return (
                   <div
-                    className={(isOwner || isAdmin) ? 'cursor-pointer relative' : ''}
-                    onClick={() => { if (isOwner || isAdmin) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
+                    className={(!viewAsUserId && (isOwner || isAdmin)) ? 'cursor-pointer relative' : 'relative'}
+                    onClick={() => { if (!viewAsUserId && (isOwner || isAdmin)) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
                   >
                     {viewTarget ? (
                       <UserAvatar username={viewTarget.username} avatar={viewTarget.avatar} nickname={viewTarget.nickname} size="md" />
                     ) : user ? (
                       <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="md" />
                     ) : null}
-                    {(isOwner || isAdmin) && (
+                    {!viewAsUserId && (isOwner || isAdmin) && (
                       <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/90 flex items-center justify-center">
                         <Users className="w-2.5 h-2.5 text-blue-600" />
                       </div>
