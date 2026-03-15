@@ -9526,7 +9526,31 @@ export const appRouter = router({
           }
         }
         
-        return { total: recharged + manual, inviteCount, directReferralCount, indirectReferralCount };
+        // 仓位计算：每个币的持仓 = 已成交买入数量（含获赠） - 已成交卖出数量
+        const coins = ['BTC', 'ETH', 'SOL'];
+        const positions: Record<string, number> = {};
+        for (const coin of coins) {
+          try {
+            const buyRows = await db.execute(
+              sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
+                  FROM af_orders
+                  WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
+                    AND coin = ${coin} AND side = 'buy' AND status = 'completed'`
+            ) as any;
+            const bought = parseFloat((buyRows[0]?.[0]?.total ?? buyRows[0]?.total ?? '0').toString());
+            const sellRows = await db.execute(
+              sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
+                  FROM af_orders
+                  WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
+                    AND coin = ${coin} AND side = 'sell' AND status = 'completed'`
+            ) as any;
+            const sold = parseFloat((sellRows[0]?.[0]?.total ?? sellRows[0]?.total ?? '0').toString());
+            positions[coin] = Math.max(0, bought - sold);
+          } catch (_) {
+            positions[coin] = 0;
+          }
+        }
+        return { total: recharged + manual, inviteCount, directReferralCount, indirectReferralCount, positions };
       }),
     // AF 充值记录 + 手动调账记录合并（供用户查看）
     afGetMyRechargeHistory: protectedProcedure
