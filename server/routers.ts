@@ -8664,6 +8664,7 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         username: z.string(),
+        role: z.enum(['member', 'funder', 'admin']).optional().default('member'),
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== 'super_admin') {
@@ -8678,7 +8679,7 @@ export const appRouter = router({
         if (!ledger || ledger.type !== 'custom_af') {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AF定制账本' });
         }
-         return await dbLedger.inviteMemberByUsername(input.ledgerId, ctx.user.id, input.username);
+        return await dbLedger.inviteMemberByUsernameWithRole(input.ledgerId, ctx.user.id, input.username, input.role);
       }),
     // ===== AG 型定制账本（共享图片助记词）=====
     createCustomAG: protectedProcedure

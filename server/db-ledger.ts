@@ -120,6 +120,28 @@ async function cleanDuplicateAIMembers() {
 }
 cleanDuplicateAIMembers().catch(console.error);
 
+// ========== ledger_members role 枚举扩展：加入 funder ==========
+let _funderRoleMigrated = false;
+async function ensureFunderRole() {
+  if (_funderRoleMigrated) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // MySQL 修改 ENUM 需要 MODIFY COLUMN，包含所有已有值
+    await conn.execute(
+      `ALTER TABLE ledger_members MODIFY COLUMN role ENUM('owner','admin','member','funder') NOT NULL DEFAULT 'member'`
+    );
+    console.log('[ensureFunderRole] role 枚举已扩展为包含 funder');
+  } catch (e: any) {
+    // 如果已经包含 funder 则忽略
+    if (!e.message?.includes('funder')) {
+      console.error('[ensureFunderRole] error:', e.message);
+    }
+  }
+  _funderRoleMigrated = true;
+}
+ensureFunderRole().catch(console.error);
+
 // ========== 账本功能字段迁移 ==========
 let _ledgerFeaturesMigrated = false;
 async function ensureLedgerFeaturesColumns() {
@@ -846,6 +868,71 @@ export async function inviteMemberByUsername(ledgerId: number, inviterUserId: nu
     canEdit: true,
     canDelete: false,
     canInvite: false,
+    invitedBy: inviterUserId,
+  });
+
+  return {
+    success: true,
+    member: {
+      userId: inviteeUser.id,
+      username: inviteeUser.username,
+      name: inviteeUser.name,
+      avatar: inviteeUser.avatar,
+    },
+  };
+}
+
+/**
+ * 邀请用户加入账本（通过用户名，支持指定角色）
+ */
+export async function inviteMemberByUsernameWithRole(
+  ledgerId: number,
+  inviterUserId: number,
+  inviteeUsername: string,
+  role: 'member' | 'funder' | 'admin' = 'member'
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 从主数据库查找被邀请用户
+  const { getDb } = await import("./db");
+  const mainDb = await getDb();
+  if (!mainDb) throw new Error("Main database connection failed");
+
+  const inviteeUser = await mainDb
+    .select()
+    .from(users)
+    .where(eq(users.username, inviteeUsername))
+    .then((rows: any[]) => rows[0]);
+
+  if (!inviteeUser) throw new Error("用户不存在");
+  if (inviteeUser.id === inviterUserId) throw new Error("不能邀请自己");
+
+  // 检查是否已是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, inviteeUser.id)))
+    .then((rows: any[]) => rows[0]);
+
+  if (existingMember) throw new Error("该用户已经是账本成员");
+
+  // 根据角色设置权限
+  const isAdmin = role === 'admin';
+  const isFunder = role === 'funder';
+
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId: inviteeUser.id,
+    role: role as any,
+    memberType: "real",
+    permissionView: "all",
+    permissionAdd: isAdmin ? "all" : "own",
+    permissionEdit: isAdmin ? "all" : "own",
+    permissionDelete: isAdmin ? "all" : "own",
+    canEdit: isAdmin,
+    canDelete: isAdmin,
+    canInvite: isAdmin,
     invitedBy: inviterUserId,
   });
 

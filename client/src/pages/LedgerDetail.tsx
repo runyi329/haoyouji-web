@@ -132,6 +132,7 @@ export default function LedgerDetail() {
   const isCustomAF = (ledgerData as any)?.type === 'custom_af';
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
+  const isFunder = (ledgerData as any)?.userRole === 'funder';
   const isDietCoach = isDiet && (isOwner || isAdmin);
   const isDietStudent = isDiet && !isDietCoach;
   const { data: user } = trpc.auth.me.useQuery();
