@@ -57,7 +57,7 @@ const CATEGORIES = [
 // ===== 第2级子类预设 =====
 const SUB_CATEGORIES: Record<string, string[]> = {
   bank: ["工商银行", "建设银行", "招商银行", "农业银行", "中国银行", "交通银行", "邮储银行", "浦发银行", "民生银行", "光大银行", "自定义"],
-  account: ["苹果ID", "华为ID", "微软账号", "谷歌账号", "淘宝/天猫", "京东", "美团", "拼多多", "微信", "支付宝", "抖音", "快手", "自定义"],
+  account: ["苹果ID", "华为ID", "微软账号", "谷歌账号", "淘宝/天猫", "京东", "美团", "拼多多", "微信", "支付宝", "抖音", "快手", "欧易", "自定义"],
   address: ["家庭地址", "公司地址", "常用地址1", "常用地址2", "自定义"],
   website: ["常用网站", "工作系统", "学习平台", "游戏账号", "自定义"],
   other: ["证件信息", "车牌/车险", "会员卡", "WiFi密码", "自定义"],
@@ -77,6 +77,13 @@ const FIELD_TEMPLATES: Record<string, Array<{ label: string; sensitive?: boolean
     { label: "密码", sensitive: true },
     { label: "备用邮箱" },
     { label: "手机号" },
+  ],
+  // 欧易专属模板（单账户4字段）
+  account_ouyi: [
+    { label: "手机号" },
+    { label: "邮箱" },
+    { label: "UID" },
+    { label: "密码", sensitive: true },
   ],
   address: [
     { label: "收件人" },
@@ -145,11 +152,28 @@ function MemoCard({ item, onEdit, onDelete }: {
   };
 
   const copyAll = () => {
-    const text = item.fields.filter(f => f.value).map(f => `${f.label}：${f.value}`).join("\n");
+    const text = item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').map(f => `${f.label}：${f.value}`).join("\n");
     copyText(text, item.title);
   };
 
-  const filledCount = item.fields.filter(f => f.value).length;
+  // 欧易多账户：按分隔符分组
+  const isOuyi = item.title === '欧易';
+  const ouyiAccounts: MemoField[][] = [];
+  if (isOuyi) {
+    let cur: MemoField[] = [];
+    for (const f of item.fields) {
+      if (f.label === '__ACCOUNT_SEPARATOR__') {
+        if (cur.length > 0) { ouyiAccounts.push(cur); cur = []; }
+      } else {
+        cur.push(f);
+      }
+    }
+    if (cur.length > 0) ouyiAccounts.push(cur);
+  }
+
+  const filledCount = isOuyi
+    ? ouyiAccounts.length
+    : item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').length;
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-3">
@@ -164,7 +188,7 @@ function MemoCard({ item, onEdit, onDelete }: {
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs mr-1" style={{ backgroundColor: cat.color + "18", color: cat.color }}>
               {cat.label}
             </span>
-            {filledCount} 个字段
+            {isOuyi ? `${filledCount} 个账户` : `${filledCount} 个字段`}
           </p>
         </div>
         <div className="flex items-center gap-1 ml-2">
@@ -183,31 +207,73 @@ function MemoCard({ item, onEdit, onDelete }: {
 
       {/* 展开内容 */}
       {expanded && (
-        <div className="border-t border-gray-50 px-4 pb-3 pt-2 space-y-2">
-          {item.fields.filter(f => f.value).map((field, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <span className="text-xs text-gray-400 w-20 flex-shrink-0">{field.label}</span>
-              <div className="flex-1 flex items-center gap-1 min-w-0">
-                {field.sensitive && !visibleFields.has(idx) ? (
-                  <span className="text-sm text-gray-600 tracking-widest">••••••••</span>
-                ) : (
-                  <span className="text-sm text-gray-800 break-all">{field.value}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {field.sensitive && (
-                  <button onClick={() => toggleVisible(idx)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
-                    {visibleFields.has(idx) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                )}
-                <button onClick={() => copyText(field.value, field.label)} className="p-1 rounded hover:bg-gray-100 text-gray-400" title={`复制${field.label}`}>
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
+        <div className="border-t border-gray-50 px-4 pb-3 pt-2">
+          {isOuyi ? (
+            // 欧易多账户分组展示
+            <div className="space-y-0">
+              {ouyiAccounts.map((acct, acctIdx) => (
+                <div key={acctIdx}>
+                  {acctIdx > 0 && <div className="border-t border-gray-100 my-2" />}
+                  <div className="text-xs text-gray-400 mb-1.5">账户 {acctIdx + 1}</div>
+                  <div className="space-y-1.5">
+                    {acct.filter(f => f.value).map((field, fidx) => {
+                      const globalIdx = item.fields.indexOf(field);
+                      return (
+                        <div key={fidx} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-16 flex-shrink-0">{field.label}</span>
+                          <div className="flex-1 flex items-center gap-1 min-w-0">
+                            {field.sensitive && !visibleFields.has(globalIdx) ? (
+                              <span className="text-sm text-gray-600 tracking-widest">••••••••</span>
+                            ) : (
+                              <span className="text-sm text-gray-800 break-all">{field.value}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {field.sensitive && (
+                              <button onClick={() => toggleVisible(globalIdx)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+                                {visibleFields.has(globalIdx) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
+                            <button onClick={() => copyText(field.value, field.label)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          ) : (
+            // 普通字段展示
+            <div className="space-y-2">
+              {item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').map((field, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 w-20 flex-shrink-0">{field.label}</span>
+                  <div className="flex-1 flex items-center gap-1 min-w-0">
+                    {field.sensitive && !visibleFields.has(idx) ? (
+                      <span className="text-sm text-gray-600 tracking-widest">••••••••</span>
+                    ) : (
+                      <span className="text-sm text-gray-800 break-all">{field.value}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {field.sensitive && (
+                      <button onClick={() => toggleVisible(idx)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+                        {visibleFields.has(idx) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                    <button onClick={() => copyText(field.value, field.label)} className="p-1 rounded hover:bg-gray-100 text-gray-400" title={`复制${field.label}`}>
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {item.note && (
-            <div className="pt-1 border-t border-gray-50">
+            <div className="pt-2 mt-2 border-t border-gray-50">
               <p className="text-xs text-gray-400">备注：{item.note}</p>
             </div>
           )}
@@ -239,6 +305,49 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   const [fields, setFields] = useState<MemoField[]>([]);
   const [note, setNote] = useState("");
 
+  // 欧易多账户模式：每个账户是一个数组，包含手机号/邮箱/UID/密码
+  const [ouyiAccounts, setOuyiAccounts] = useState<MemoField[][]>([]);
+  const isOuyiMode = subLabel === '欧易';
+
+  const newOuyiAccount = (): MemoField[] => [
+    { label: '手机号', value: '' },
+    { label: '邮箱', value: '' },
+    { label: 'UID', value: '' },
+    { label: '密码', value: '', sensitive: true },
+  ];
+
+  const addOuyiAccount = () => setOuyiAccounts(prev => [...prev, newOuyiAccount()]);
+  const removeOuyiAccount = (idx: number) => setOuyiAccounts(prev => prev.filter((_, i) => i !== idx));
+  const updateOuyiField = (acctIdx: number, fieldIdx: number, key: keyof MemoField, value: any) =>
+    setOuyiAccounts(prev => prev.map((acct, ai) =>
+      ai === acctIdx ? acct.map((f, fi) => fi === fieldIdx ? { ...f, [key]: value } : f) : acct
+    ));
+
+  // 欧易 fields 序列化：账户间插入分隔符
+  const serializeOuyiFields = (accounts: MemoField[][]): MemoField[] => {
+    const result: MemoField[] = [];
+    accounts.forEach((acct, idx) => {
+      if (idx > 0) result.push({ label: '__ACCOUNT_SEPARATOR__', value: '' });
+      result.push(...acct);
+    });
+    return result;
+  };
+
+  // 欧易 fields 反序列化
+  const deserializeOuyiFields = (fs: MemoField[]): MemoField[][] => {
+    const accounts: MemoField[][] = [];
+    let cur: MemoField[] = [];
+    for (const f of fs) {
+      if (f.label === '__ACCOUNT_SEPARATOR__') {
+        if (cur.length > 0) { accounts.push(cur); cur = []; }
+      } else {
+        cur.push(f);
+      }
+    }
+    if (cur.length > 0) accounts.push(cur);
+    return accounts.length > 0 ? accounts : [newOuyiAccount()];
+  };
+
   // 每次弹窗打开时，根据 editItem 重置所有状态（修复分类不持久化问题）
   useEffect(() => {
     if (!open) return;
@@ -251,8 +360,15 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
       setSubLabel(sub);
       setCustomSub(isCustomSub ? sub : "");
       setIsCustom(false);
-      setFields(editItem.fields || FIELD_TEMPLATES[cat]?.map(f => ({ ...f, value: "" })) || []);
       setNote(editItem.note || "");
+      if (sub === '欧易') {
+        // 欧易多账户模式：反序列化
+        setOuyiAccounts(deserializeOuyiFields(editItem.fields || []));
+        setFields([]);
+      } else {
+        setFields(editItem.fields || FIELD_TEMPLATES[cat]?.map(f => ({ ...f, value: "" })) || []);
+        setOuyiAccounts([]);
+      }
     } else {
       setStep("cat");
       setCategory("bank");
@@ -260,6 +376,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
       setCustomSub("");
       setIsCustom(false);
       setFields([]);
+      setOuyiAccounts([]);
       setNote("");
     }
   }, [open, editItem]);
@@ -284,6 +401,14 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     } else {
       setIsCustom(false);
       setSubLabel(sub);
+      if (sub === '欧易') {
+        // 欧易初始化一个空账户
+        setOuyiAccounts([newOuyiAccount()]);
+        setFields([]);
+      } else {
+        setOuyiAccounts([]);
+        setFields(FIELD_TEMPLATES[category]?.map(f => ({ ...f, value: "" })) || []);
+      }
       setStep("fields");
     }
   };
@@ -305,12 +430,20 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
 
   const handleSave = () => {
     if (!subLabel.trim()) { toast.error("请先选择或填写子类名称"); return; }
-    const validFields = fields.filter(f => f.value.trim());
-    if (validFields.length === 0) { toast.error("请至少填写一个字段内容"); return; }
-    if (editItem) {
-      updateMutation.mutate({ id: editItem.id, category, title: subLabel, fields, note: note.trim() || undefined });
+    let finalFields: MemoField[];
+    if (isOuyiMode) {
+      // 欧易：序列化多账户
+      finalFields = serializeOuyiFields(ouyiAccounts);
+      const hasAny = ouyiAccounts.some(acct => acct.some(f => f.value.trim()));
+      if (!hasAny) { toast.error("请至少填写一个账户的内容"); return; }
     } else {
-      createMutation.mutate({ ledgerId, category, title: subLabel, fields, note: note.trim() || undefined });
+      finalFields = fields;
+      if (finalFields.filter(f => f.value.trim()).length === 0) { toast.error("请至少填写一个字段内容"); return; }
+    }
+    if (editItem) {
+      updateMutation.mutate({ id: editItem.id, category, title: subLabel, fields: finalFields, note: note.trim() || undefined });
+    } else {
+      createMutation.mutate({ ledgerId, category, title: subLabel, fields: finalFields, note: note.trim() || undefined });
     }
   };
 
@@ -418,41 +551,92 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
               <span className="text-sm font-medium text-gray-800">{subLabel}</span>
             </div>
 
-            {/* 字段列表 */}
-            <div className="space-y-2">
-              <label className="text-sm text-gray-600">字段内容</label>
-              {fields.map((field, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <Input
-                    value={field.label}
-                    onChange={e => updateField(idx, "label", e.target.value)}
-                    placeholder="字段名"
-                    className="w-24 flex-shrink-0 text-sm"
-                  />
-                  <Input
-                    value={field.value}
-                    onChange={e => updateField(idx, "value", e.target.value)}
-                    placeholder="内容"
-                    type={field.sensitive ? "password" : "text"}
-                    className="flex-1 text-sm"
-                  />
+            {/* 欧易多账户 UI */}
+            {isOuyiMode ? (
+              <div className="space-y-0">
+                {ouyiAccounts.map((acct, acctIdx) => (
+                  <div key={acctIdx}>
+                    {acctIdx > 0 && <div className="border-t border-gray-100 my-3" />}
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-gray-500">账户 {acctIdx + 1}</span>
+                      {ouyiAccounts.length > 1 && (
+                        <button onClick={() => removeOuyiAccount(acctIdx)} className="text-xs text-red-400 hover:text-red-600 px-2 py-0.5 rounded hover:bg-red-50">
+                          删除此账户
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {acct.map((field, fidx) => (
+                        <div key={fidx} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-14 flex-shrink-0">{field.label}</span>
+                          <Input
+                            value={field.value}
+                            onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
+                            placeholder={field.label === '密码' ? '输入密码' : `输入${field.label}`}
+                            type={field.sensitive ? "password" : "text"}
+                            className="flex-1 text-sm"
+                          />
+                          {field.sensitive && (
+                            <button
+                              onClick={() => updateOuyiField(acctIdx, fidx, "sensitive", !field.sensitive)}
+                              className="p-1.5 rounded-lg flex-shrink-0 text-[#D32F2F] bg-red-50"
+                              title="点击显示密码"
+                            >
+                              <EyeOff className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div className="pt-3">
                   <button
-                    onClick={() => updateField(idx, "sensitive", !field.sensitive)}
-                    className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? "text-[#D32F2F] bg-red-50" : "text-gray-400 hover:bg-gray-100"}`}
-                    title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
+                    onClick={addOuyiAccount}
+                    className="flex items-center gap-1.5 text-sm text-[#D32F2F] hover:bg-red-50 px-3 py-2 rounded-lg w-full justify-center border border-dashed border-red-200"
                   >
-                    {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                  <button onClick={() => removeField(idx)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 flex-shrink-0">
-                    <X className="w-4 h-4" />
+                    <Plus className="w-4 h-4" />
+                    添加账户
                   </button>
                 </div>
-              ))}
-              <button onClick={addField} className="flex items-center gap-1 text-sm text-[#D32F2F] hover:bg-red-50 px-2 py-1 rounded-lg">
-                <Plus className="w-4 h-4" />
-                添加字段
-              </button>
-            </div>
+              </div>
+            ) : (
+              /* 普通字段列表 */
+              <div className="space-y-2">
+                <label className="text-sm text-gray-600">字段内容</label>
+                {fields.map((field, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      value={field.label}
+                      onChange={e => updateField(idx, "label", e.target.value)}
+                      placeholder="字段名"
+                      className="w-24 flex-shrink-0 text-sm"
+                    />
+                    <Input
+                      value={field.value}
+                      onChange={e => updateField(idx, "value", e.target.value)}
+                      placeholder="内容"
+                      type={field.sensitive ? "password" : "text"}
+                      className="flex-1 text-sm"
+                    />
+                    <button
+                      onClick={() => updateField(idx, "sensitive", !field.sensitive)}
+                      className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? "text-[#D32F2F] bg-red-50" : "text-gray-400 hover:bg-gray-100"}`}
+                      title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
+                    >
+                      {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                    <button onClick={() => removeField(idx)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 flex-shrink-0">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <button onClick={addField} className="flex items-center gap-1 text-sm text-[#D32F2F] hover:bg-red-50 px-2 py-1 rounded-lg">
+                  <Plus className="w-4 h-4" />
+                  添加字段
+                </button>
+              </div>
+            )}
 
             {/* 备注 */}
             <div className="space-y-1">
