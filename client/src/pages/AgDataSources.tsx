@@ -40,7 +40,23 @@ export default function AgDataSources() {
     },
   });
 
-  const sources = sourcesData?.sources || [];
+  // 确保 aiart.pics 占位符始终显示（即使数据库还没有记录）
+  const AIART_PLACEHOLDER = {
+    id: -1, // 负数表示占位符
+    name: 'aiart.pics',
+    modelName: 'Nano Banana Pro',
+    totalSynced: 0,
+    status: 'active',
+    lastSyncedAt: null,
+    syncRule: '增量同步策略：API使用offset分页，按发布时间降序返回数据。每次同步从第1页开始，遇到已存在的记录即停止。',
+    apiUrl: 'https://aiart.pics/api/prompts',
+    isPlaceholder: true,
+  };
+
+  const rawSources = sourcesData?.sources || [];
+  // 如果数据库中已有 aiart.pics 则使用真实数据，否则补充占位符
+  const hasAiart = rawSources.some((s: any) => s.name === 'aiart.pics');
+  const sources = hasAiart ? rawSources : [...rawSources, AIART_PLACEHOLDER];
   const logs = logsData?.logs || [];
 
   const formatTime = (dateStr: string | null) => {
@@ -158,15 +174,20 @@ export default function AgDataSources() {
                     )}
                   </div>
 
-                  {/* 同步按钮 */}
+                  {/* 同步按鈕 */}
                   <div className="px-4 pb-4">
                     <Button
                       className="w-full"
-                      style={{ backgroundColor: "#D32F2F", color: "white" }}
-                      disabled={syncMutation.isPending}
-                      onClick={() => syncMutation.mutate({ sourceId: source.id })}
+                      style={source.isPlaceholder ? { backgroundColor: "#9E9E9E", color: "white" } : { backgroundColor: "#D32F2F", color: "white" }}
+                      disabled={syncMutation.isPending || source.isPlaceholder}
+                      onClick={() => !source.isPlaceholder && syncMutation.mutate({ sourceId: source.id })}
                     >
-                      {syncMutation.isPending ? (
+                      {source.isPlaceholder ? (
+                        <div className="flex items-center gap-2">
+                          <RefreshCw className="w-4 h-4" />
+                          即将开放
+                        </div>
+                      ) : syncMutation.isPending ? (
                         <div className="flex items-center gap-2">
                           <RefreshCw className="w-4 h-4 animate-spin" />
                           同步中，请稍候...
