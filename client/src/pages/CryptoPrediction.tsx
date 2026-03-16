@@ -439,11 +439,35 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           <span className="text-[#1E293B]">
             {order.orderType === '无损合约' ? '谷底增筹' : (order.orderType || '谷底增筹')}
             <span className="mx-1.5 text-[#CBD5E1]">·</span>
-            <span style={{ color: order.status === 'completed' ? '#0EA56A' : order.status === 'cancelled' ? '#94A3B8' : '#F59E0B' }}>
-              {order.status === 'completed' ? '已成交' : order.status === 'cancelled' ? '已撒单' : '委托中'}
+            <span style={{ color: 
+              order.sellStatus === 'sold' ? '#6B7280' :
+              order.sellStatus === 'selling' ? '#EF4444' :
+              order.status === 'completed' ? '#0EA56A' : 
+              order.status === 'cancelled' ? '#94A3B8' : '#F59E0B' 
+            }}>
+              {order.sellStatus === 'sold' ? '已卖出' :
+               order.sellStatus === 'selling' ? '委卖中' :
+               order.status === 'completed' ? '持仓中' : 
+               order.status === 'cancelled' ? '已撒单' : '委买中'}
             </span>
           </span>
         </div>
+
+        {/* 卖出信息（委卖中或已卖出时显示） */}
+        {(order.sellStatus === 'selling' || order.sellStatus === 'sold') && (
+          <>
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">委卖价格</span>
+              <span className="text-[#EF4444] font-medium">{parseFloat(order.sellPrice).toLocaleString()} USDT</span>
+            </div>
+            {order.sellConfirmedAt && (
+              <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">卖出时间</span>
+                <span className="text-[#64748B]">{new Date(order.sellConfirmedAt).toLocaleString('zh-CN')}</span>
+              </div>
+            )}
+          </>
+        )}
 
         {/* 下单时间 */}
         <div className="flex justify-between items-center">
@@ -455,13 +479,16 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           <span className="text-[#9CA3AF]">订单编号</span>
           <div className="flex items-center gap-2">
             <span className="font-mono text-[12px] text-[#64748B] tracking-wide">{orderNo}</span>
-            {order.status === 'pending' && (
+            {(order.status === 'pending' || order.sellStatus === 'selling') && (
               <button
-                onClick={() => { if (window.confirm('确认撒销该委托单？')) { cancelMutation.mutate({ ledgerId, orderId: order.id }); } }}
+                onClick={() => { 
+                  const msg = order.sellStatus === 'selling' ? '确认撒销委托卖出？' : '确认撒销该委托单？';
+                  if (window.confirm(msg)) { cancelMutation.mutate({ ledgerId, orderId: order.id }); } 
+                }}
                 disabled={cancelMutation.isPending}
                 className="text-xs font-medium px-2 py-0.5 rounded border"
                 style={{ color: '#EF4444', borderColor: '#FECACA', backgroundColor: '#FEF2F2' }}>
-                {cancelMutation.isPending ? '撒销中...' : '撒单'}
+                {cancelMutation.isPending ? '撒销中...' : order.sellStatus === 'selling' ? '撒卖' : '撒单'}
               </button>
             )}
           </div>
@@ -973,17 +1000,17 @@ export default function CryptoPrediction() {
             {/* 委卖模式：已成交买入订单列表选择 */}
             {orderSide === "sell" && (() => {
               const completedBuyOrders = (ordersData as any[] || []).filter(
-                (o: any) => o.side === 'buy' && o.status === 'completed' && o.coin === coin.name
+                (o: any) => o.status === 'completed' && o.coin === coin.name && !o.sellStatus
               );
-              // 使用后端返回的 hasPendingSell 字段（已兼容旧数据）
+              // 只显示未卖出且未委托卖的订单
               return (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1 mb-1">
                   <p className="text-xs text-gray-500">选择要卖出的订单（可多选批量卖出）</p>
-                  {completedBuyOrders.filter((o: any) => !o.hasPendingSell).length > 1 && (
+                  {completedBuyOrders.length > 1 && (
                     <button
                       onClick={() => {
-                        const availableIds = completedBuyOrders.filter((o: any) => !o.hasPendingSell).map((o: any) => o.id);
+                        const availableIds = completedBuyOrders.map((o: any) => o.id);
                         if (selectedSellOrderIds.size === availableIds.length) {
                           setSelectedSellOrderIds(new Set());
                         } else {
@@ -992,7 +1019,7 @@ export default function CryptoPrediction() {
                       }}
                       className="text-[10px] text-[#1A56DB] underline"
                     >
-                      {selectedSellOrderIds.size === completedBuyOrders.filter((o: any) => !o.hasPendingSell).length ? '取消全选' : '全选'}
+                      {selectedSellOrderIds.size === completedBuyOrders.length ? '取消全选' : '全选'}
                     </button>
                   )}
                 </div>
@@ -1001,44 +1028,34 @@ export default function CryptoPrediction() {
                   ) : (
                     completedBuyOrders.map((o: any) => {
                       const isSelected = selectedSellOrderIds.has(o.id);
-                      const hasPendingSell = !!o.hasPendingSell;
                       return (
                         <div
                           key={o.id}
                           onClick={() => {
-                            if (hasPendingSell) return;
                             const next = new Set(selectedSellOrderIds);
                             if (isSelected) { next.delete(o.id); } else { next.add(o.id); }
                             setSelectedSellOrderIds(next);
                           }}
                           className={`rounded-xl px-4 py-3 border transition-colors ${
-                            hasPendingSell
-                              ? 'bg-[#1C2127] border-transparent opacity-50 cursor-not-allowed'
-                              : isSelected
-                                ? 'bg-[#2A1A1A] border-[#ef5350] cursor-pointer'
-                                : 'bg-[#1C2127] border-transparent cursor-pointer'
+                            isSelected
+                              ? 'bg-[#2A1A1A] border-[#ef5350] cursor-pointer'
+                              : 'bg-[#1C2127] border-transparent cursor-pointer'
                           }`}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              {!hasPendingSell && (
-                                <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
-                                  isSelected ? 'bg-[#ef5350] border-[#ef5350]' : 'border-gray-500'
-                                }`}>
-                                  {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
-                                </div>
-                              )}
+                              <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${
+                                isSelected ? 'bg-[#ef5350] border-[#ef5350]' : 'border-gray-500'
+                              }`}>
+                                {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
+                              </div>
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-xs text-white font-medium">{o.coin}</span>
                                 <span className="text-[10px] text-gray-500">买入价 {parseFloat(o.limitPrice).toLocaleString()} USDT</span>
                               </div>
                             </div>
                             <div className="flex flex-col items-end gap-0.5">
-                              {hasPendingSell ? (
-                                <span className="text-[10px] bg-yellow-600 text-white px-1.5 py-0.5 rounded">委托中</span>
-                              ) : (
-                                <span className="text-xs text-white">{parseFloat(o.quantity).toFixed(6)} {o.coin}</span>
-                              )}
+                              <span className="text-xs text-white">{(() => { const q = parseFloat(o.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()} {o.coin}</span>
                               <span className="text-[10px] text-gray-500">金额 {parseFloat(o.amount).toFixed(2)} USDT</span>
                             </div>
                           </div>
@@ -1144,10 +1161,9 @@ export default function CryptoPrediction() {
               ) : (
                 <div>
                   {/* 表头 */}
-                  <div className="grid text-xs pb-1.5 mb-0.5" style={{gridTemplateColumns:'7fr 2.5fr 1.5fr 3fr 3fr 2fr', color: '#9CA3AF', borderBottom: '1px solid #E0E8FF'}}>
+                  <div className="grid text-xs pb-1.5 mb-0.5" style={{gridTemplateColumns:'7fr 2.5fr 3fr 3fr 2fr', color: '#9CA3AF', borderBottom: '1px solid #E0E8FF'}}>
                     <span>日期</span>
                     <span className="text-center">币种</span>
-                    <span className="text-center">方向</span>
                     <span className="text-right">数量</span>
                     <span className="text-right">状态</span>
                     <span></span>
@@ -1165,22 +1181,25 @@ export default function CryptoPrediction() {
                     })() : '--';
                     return (
                       <div key={order.id} className="py-2" style={{ borderBottom: '1px solid #EEF2FF' }}>
-                        <div className="grid text-xs items-center" style={{gridTemplateColumns:'7fr 2.5fr 1.5fr 3fr 3fr 2fr'}}>
+                        <div className="grid text-xs items-center" style={{gridTemplateColumns:'7fr 2.5fr 3fr 3fr 2fr'}}>
                           <span className="whitespace-nowrap" style={{ color: '#6B7A9A' }}>{timeStr}</span>
-                          <span className="font-medium text-center" style={{ color: '#1A2340' }}>{order.coin}</span>
-                          <span className={`text-center font-medium ${order.side === 'buy' ? 'text-[#1A56DB]' : 'text-[#EF4444]'}`}>
-                            {order.side === 'buy' ? '买' : '卖'}
+                          <span className="font-medium text-center" style={{ color: '#1A2340' }}>
+                            {order.coin}
                             {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold animate-pulse">赠</span>}
                           </span>
-                          <span className="text-right" style={{ color: '#1A2340' }}>{parseFloat(order.quantity).toFixed(4)}</span>
+                          <span className="text-right" style={{ color: '#1A2340' }}>{(() => { const q = parseFloat(order.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()}</span>
                           <span className={`text-right ${
+                            (order as any).sellStatus === 'sold' ? 'text-[#6B7280]' :
+                            (order as any).sellStatus === 'selling' ? 'text-[#EF4444]' :
                             order.status === 'completed' ? 'text-[#0EA56A]' :
                             order.status === 'cancelled' ? 'text-gray-400' :
                             'text-[#F59E0B]'
                           }`}>
-                            {order.status === 'completed' ? '已成交' :
+                            {(order as any).sellStatus === 'sold' ? '已卖出' :
+                             (order as any).sellStatus === 'selling' ? '委卖中' :
+                             order.status === 'completed' ? '持仓中' :
                              order.status === 'cancelled' ? '已撒' :
-                             '委托中'}
+                             '委买中'}
                           </span>
                           <div className="flex flex-col items-end gap-0.5">
                             {/* 所有状态都显示详情按鈕，撒单移入详情内 */}
