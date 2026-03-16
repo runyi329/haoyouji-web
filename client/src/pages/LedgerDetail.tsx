@@ -1743,36 +1743,22 @@ export default function LedgerDetail() {
                         </div>
                       </div>
 
-                      {/* 简化预览：报税状态 + 倒计时 + 预留扩展 */}
+                      {/* 单行预览条 */}
                       <div className="px-4 pb-3">
-                        <div className="grid grid-cols-2 gap-2">
-                          {/* 报税预览卡片 */}
-                          <div className="rounded-lg p-2.5" style={{ backgroundColor: daysLeft <= 3 ? '#FEF2F2' : daysLeft <= 7 ? '#FFFBEB' : '#EFF6FF' }}>
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                              <CalendarClock className="w-3.5 h-3.5" style={{ color: '#1A56DB' }} />
-                              <span className="text-xs font-medium text-gray-700">报税</span>
-                              <span className="w-1.5 h-1.5 rounded-full ml-auto" style={{ backgroundColor: statusColor }} />
-                            </div>
-                            <div className="flex items-end justify-between">
-                              <div>
-                                <div className="text-xs text-gray-500">{reportTaxMonth}月税务</div>
-                                <div className="text-xs text-gray-600 mt-0.5">{nextDue.getMonth() + 1}/{nextDue.getDate()}截止</div>
-                              </div>
-                              <div className="flex items-baseline gap-0.5">
-                                <span className="text-xl font-bold" style={{ color: daysLeft <= 3 ? '#EF4444' : daysLeft <= 7 ? '#F59E0B' : '#1A56DB' }}>{daysLeft}</span>
-                                <span className="text-xs text-gray-400">天</span>
-                              </div>
-                            </div>
-                            <div className="mt-1.5">
-                              <span className="text-xs" style={{ color: statusColor }}>{statusText}</span>
-                            </div>
-                          </div>
-
-                          {/* 预留扩展卡片（社保/记账待办等） */}
-                          <div className="rounded-lg p-2.5 flex flex-col items-center justify-center" style={{ backgroundColor: '#F9FAFB', border: '1px dashed #E5E7EB' }}>
-                            <span className="text-xs text-gray-300">更多待办</span>
-                            <span className="text-xs text-gray-200 mt-0.5">敬请期待</span>
-                          </div>
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ backgroundColor: '#F8FAFF' }}>
+                          {/* 报税标签 */}
+                          <span className="text-xs text-gray-400">报税</span>
+                          {/* 分隔符 */}
+                          <span className="text-gray-200 text-xs">|</span>
+                          {/* 申报月份 + 截止日 */}
+                          <span className="text-xs text-gray-700 font-medium">{reportTaxMonth}月税务</span>
+                          <span className="text-xs text-gray-400">{nextDue.getMonth() + 1}月{nextDue.getDate()}日截止</span>
+                          {/* 倒计时 */}
+                          <span className="text-xs font-bold ml-auto" style={{ color: daysLeft <= 3 ? '#EF4444' : daysLeft <= 7 ? '#F59E0B' : '#1A56DB' }}>还有{daysLeft}天</span>
+                          {/* 分隔符 */}
+                          <span className="text-gray-200 text-xs">|</span>
+                          {/* 授权状态圆点 */}
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor }} />
                         </div>
                       </div>
                     </div>
