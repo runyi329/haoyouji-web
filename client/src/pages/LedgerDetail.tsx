@@ -156,32 +156,35 @@ function getTaxDeadline(year: number, month: number): { deadline: Date; original
 }
 
 // 获取下一个报税截止日信息
+// 报税周期逻辑：
+// - 每月截止日用于申报上个月的税务
+// - 例如：3月16日截止日 → 申报的是2月的税务
+// - 3月12日：距离3月16日还有4天，显示"申报2月税务"
+// - 3月17日（过了3月截止日）：显示"申报3月税务"，截止日是4月20日
 function getNextTaxDeadlineInfo(): { deadline: Date; originalDate: Date; postponed: boolean; reason: string; taxMonth: number; taxYear: number; daysLeft: number } {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1-12
 
-  // 当月15号报上个月的税
-  let taxYear = currentYear;
-  let taxMonth = currentMonth; // 报税所属月份就是当月（15号报税）
+  // 当月的截止日（用于申报上个月的税）
+  const currentDeadline = getTaxDeadline(currentYear, currentMonth);
 
-  const currentDeadline = getTaxDeadline(taxYear, taxMonth);
-
-  // 如果当前日期已过当月截止日，则看下个月
-  if (now > currentDeadline.deadline) {
-    if (taxMonth === 12) {
-      taxYear += 1;
-      taxMonth = 1;
-    } else {
-      taxMonth += 1;
-    }
-    const nextDeadline = getTaxDeadline(taxYear, taxMonth);
+  if (now <= currentDeadline.deadline) {
+    // 还没过当月截止日 → 正在申报上个月的税务
+    const daysLeft = Math.ceil((currentDeadline.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    // taxMonth/taxYear = 被申报的月份（上个月）
+    const taxMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const taxYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    return { ...currentDeadline, taxMonth, taxYear, daysLeft };
+  } else {
+    // 已过当月截止日 → 开始申报当月的税务，截止日是下个月
+    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+    const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+    const nextDeadline = getTaxDeadline(nextYear, nextMonth);
     const daysLeft = Math.ceil((nextDeadline.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return { ...nextDeadline, taxMonth: taxMonth - 1 || 12, taxYear: taxMonth === 1 ? taxYear - 1 : taxYear, daysLeft };
+    // taxMonth/taxYear = 被申报的月份（当月）
+    return { ...nextDeadline, taxMonth: currentMonth, taxYear: currentYear, daysLeft };
   }
-
-  const daysLeft = Math.ceil((currentDeadline.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  return { ...currentDeadline, taxMonth: taxMonth - 1 || 12, taxYear: taxMonth === 1 ? taxYear - 1 : taxYear, daysLeft };
 }
 
 export default function LedgerDetail() {
@@ -1858,7 +1861,7 @@ export default function LedgerDetail() {
                             <div className="flex items-center justify-between">
                               <div>
                                 <div className="text-xs text-gray-600">
-                                  {reportTaxYear}年{reportTaxMonth}月税务申报截止日
+                                  申报{reportTaxYear}年{reportTaxMonth}月税务 · 截止日
                                 </div>
                                 <div className="text-xs font-medium mt-0.5" style={{ color: '#374151' }}>
                                   {nextDue.getMonth() + 1}月{nextDue.getDate()}日（{['周日','周一','周二','周三','周四','周五','周六'][nextDue.getDay()]}）
