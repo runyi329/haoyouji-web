@@ -1669,7 +1669,7 @@ export default function LedgerDetail() {
           <div className="mt-4">
             {/* 标题栏 */}
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>公司列表</h3>
+              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>{(isOwner || isAdmin) ? '公司列表' : '我的公司'}</h3>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">{ahRoleName}</span>
                 {(isOwner || isAdmin) && (
@@ -1849,8 +1849,8 @@ export default function LedgerDetail() {
                               <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#EBF0FF' }}>
                                 <Building2 className="w-5 h-5" style={{ color: '#1A56DB' }} />
                               </div>
-                              <div>
-                                <div className="font-medium text-gray-900 text-sm">{company.name}</div>
+                              <div className="flex-1 cursor-pointer" onClick={() => setLocation(`/ledger/${ledgerId}/company/${company.id}`)}>
+                                <div className="font-medium text-gray-900 text-sm">{company.name} <span className="text-xs text-blue-500">进入工作台 →</span></div>
                                 {company.taxId && <div className="text-xs text-gray-400 mt-0.5">税号: {company.taxId}</div>}
                                 {company.contactName && <div className="text-xs text-gray-400">联系人: {company.contactName} {company.contactPhone}</div>}
                                 {company.address && <div className="text-xs text-gray-400">地址: {company.address}</div>}
@@ -1860,7 +1860,7 @@ export default function LedgerDetail() {
                             {(isOwner || isAdmin) && (
                               <button
                                 className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
-                                onClick={() => startEditCompany(company)}
+                                onClick={(e) => { e.stopPropagation(); startEditCompany(company); }}
                               >
                                 <Pencil className="w-4 h-4 text-gray-400" />
                               </button>
