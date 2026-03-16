@@ -664,8 +664,10 @@ export default function LedgerDetail() {
                 {['BTC', 'ETH', 'SOL'].map(coin => {
                   const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
                   const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
-                  const displayPnl = Math.max(0, coinData?.pnl ?? 0);
                   const orderCount = coinData?.orderCount ?? 0;
+                  // 权益为0且无订单的币种不显示
+                  if ((!qty || qty <= 0) && orderCount === 0) return null;
+                  const displayPnl = Math.max(0, coinData?.pnl ?? 0);
                   const avgCost = coinData?.avgCost ?? 0;
                   // 智能去尾零
                   const fmtQty = (() => {
