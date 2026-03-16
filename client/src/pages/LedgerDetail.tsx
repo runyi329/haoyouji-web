@@ -676,7 +676,14 @@ export default function LedgerDetail() {
               </div>
               {/* 卡片 4：累计盈亏（按币种分行 + 总计） */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-xs text-white/70 mb-1">累计盈亏</div>
+                <div className="flex items-baseline justify-between mb-1">
+                  <span className="text-xs text-white/70">累计盈亏</span>
+                  {pnlData?.updatedAt && (
+                    <span className="text-[10px] text-white/40">
+                      {new Date(pnlData.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                    </span>
+                  )}
+                </div>
                 {pnlData && pnlData.coins.length > 0 ? (
                   <div className="space-y-1">
                     {pnlData.coins.map((c: any) => {
@@ -696,11 +703,7 @@ export default function LedgerDetail() {
                         +{Math.max(0, pnlData.total).toFixed(2)} U
                       </span>
                     </div>
-                    {pnlData.updatedAt && (
-                      <div className="text-[10px] text-white/40 text-right pt-0.5">
-                        更新 {new Date(pnlData.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                      </div>
-                    )}
+
                   </div>
                 ) : (
                   <div className="text-lg font-bold text-white">--</div>
