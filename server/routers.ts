@@ -24,7 +24,7 @@ import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations } from "../drizzle/schema";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations, ahCompanyMembers } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray, like, or, gt } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
@@ -10677,16 +10677,19 @@ export const appRouter = router({
         if (!userRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本的成员' });
         
         let companies;
-        if (userRole === 'owner' || userRole === 'admin') {
+        if (userRole === 'owner' || userRole === 'admin' || userRole === 'member') {
+          // 管理员和普通用户看全部公司
           companies = await db.select().from(ahCompanies)
             .where(eq(ahCompanies.ledgerId, input.ledgerId))
             .orderBy(desc(ahCompanies.createdAt));
-        } else if (userRole === 'client') {
-          companies = await db.select().from(ahCompanies)
-            .where(and(eq(ahCompanies.ledgerId, input.ledgerId), eq(ahCompanies.clientUserId, ctx.user.id)))
-            .orderBy(desc(ahCompanies.createdAt));
         } else {
-          companies = [];
+          // 客户和企业员工通过ah_company_members绑定关系查看
+          const conn = await getDbConnection();
+          const [rows] = await conn.execute(
+            'SELECT DISTINCT c.* FROM ah_companies c INNER JOIN ah_company_members cm ON c.id = cm.company_id WHERE c.ledger_id = ? AND cm.user_id = ? ORDER BY c.created_at DESC',
+            [input.ledgerId, ctx.user.id]
+          );
+          companies = rows as any[];
         }
         return companies;
       }),
@@ -10708,11 +10711,14 @@ export const appRouter = router({
         if (input.companyId) {
           conditions.push(eq(ahTaxAuthorizations.companyId, input.companyId));
         }
-        // 客户只能看自己关联公司的
-        if (userRole === 'client') {
-          const myCompanies = await db.select({ id: ahCompanies.id }).from(ahCompanies)
-            .where(and(eq(ahCompanies.ledgerId, input.ledgerId), eq(ahCompanies.clientUserId, ctx.user.id)));
-          const myCompanyIds = myCompanies.map(c => c.id);
+        // 客户和企业员工只能看自己绑定公司的
+        if (userRole === 'client' || userRole === 'employee') {
+          const conn = await getDbConnection();
+          const [companyRows] = await conn.execute(
+            'SELECT DISTINCT company_id FROM ah_company_members WHERE user_id = ?',
+            [ctx.user.id]
+          );
+          const myCompanyIds = (companyRows as any[]).map((r: any) => r.company_id);
           if (myCompanyIds.length === 0) return [];
           conditions.push(inArray(ahTaxAuthorizations.companyId, myCompanyIds));
         }
@@ -10852,6 +10858,142 @@ export const appRouter = router({
         await db.update(ahCompanies).set(updates)
           .where(and(eq(ahCompanies.id, input.companyId), eq(ahCompanies.ledgerId, input.ledgerId)));
         return { success: true };
+      }),
+
+    // ========== AH 公司人员管理 API ==========
+    // 添加用户到公司
+    ahAddCompanyMember: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number(),
+        userId: z.number(),
+        role: z.enum(['client', 'employee']).default('client'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证操作者是管理员
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        );
+        const userRole = (roleRows as any)[0]?.[0]?.role;
+        if (!['owner', 'admin'].includes(userRole)) throw new Error('无权操作');
+        // 检查是否已绑定
+        const existing = await db.select().from(ahCompanyMembers)
+          .where(and(
+            eq(ahCompanyMembers.companyId, input.companyId),
+            eq(ahCompanyMembers.userId, input.userId),
+            eq(ahCompanyMembers.status, 'active')
+          )).limit(1);
+        if (existing.length > 0) throw new Error('该用户已绑定到此公司');
+        await db.insert(ahCompanyMembers).values({
+          ledgerId: input.ledgerId,
+          companyId: input.companyId,
+          userId: input.userId,
+          role: input.role,
+          addedBy: ctx.user.id,
+        });
+        return { success: true };
+      }),
+
+    // 移除公司成员
+    ahRemoveCompanyMember: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        memberId: z.number(), // ah_company_members表的id
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        );
+        const userRole = (roleRows as any)[0]?.[0]?.role;
+        if (!['owner', 'admin'].includes(userRole)) throw new Error('无权操作');
+        await db.update(ahCompanyMembers).set({ status: 'inactive' })
+          .where(and(eq(ahCompanyMembers.id, input.memberId), eq(ahCompanyMembers.ledgerId, input.ledgerId)));
+        return { success: true };
+      }),
+
+    // 获取公司成员列表
+    ahGetCompanyMembers: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const members = await db.select().from(ahCompanyMembers)
+          .where(and(
+            eq(ahCompanyMembers.companyId, input.companyId),
+            eq(ahCompanyMembers.ledgerId, input.ledgerId),
+            eq(ahCompanyMembers.status, 'active')
+          ));
+        // 获取用户名称
+        if (members.length === 0) return [];
+        const userIds = members.map(m => m.userId);
+        const mainDb = await getDb();
+        const userRows = await mainDb.select({ id: users.id, name: users.name, avatar: users.avatar }).from(users)
+          .where(inArray(users.id, userIds));
+        const userMap = new Map(userRows.map(u => [u.id, u]));
+        return members.map(m => ({
+          ...m,
+          userName: userMap.get(m.userId)?.name || '未知用户',
+          userAvatar: userMap.get(m.userId)?.avatar || '',
+        }));
+      }),
+
+    // 获取用户所属的公司列表（客户视角）
+    ahGetMyCompanies: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 查找用户绑定的所有活跃公司
+        const bindings = await db.select().from(ahCompanyMembers)
+          .where(and(
+            eq(ahCompanyMembers.ledgerId, input.ledgerId),
+            eq(ahCompanyMembers.userId, ctx.user.id),
+            eq(ahCompanyMembers.status, 'active')
+          ));
+        if (bindings.length === 0) return [];
+        const companyIds = bindings.map(b => b.companyId);
+        const companies = await db.select().from(ahCompanies)
+          .where(and(
+            inArray(ahCompanies.id, companyIds),
+            eq(ahCompanies.status, 'active')
+          ));
+        return companies.map(c => ({
+          ...c,
+          memberRole: bindings.find(b => b.companyId === c.id)?.role || 'client',
+        }));
+      }),
+
+    // 获取公司详情（管理员和客户都可用）
+    ahGetCompanyDetail: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const company = await db.select().from(ahCompanies)
+          .where(and(eq(ahCompanies.id, input.companyId), eq(ahCompanies.ledgerId, input.ledgerId)))
+          .limit(1);
+        if (company.length === 0) throw new Error('公司不存在');
+        // 获取公司成员数量
+        const memberCount = await db.select().from(ahCompanyMembers)
+          .where(and(
+            eq(ahCompanyMembers.companyId, input.companyId),
+            eq(ahCompanyMembers.status, 'active')
+          ));
+        // 获取最新报税授权状态
+        const latestAuth = await db.select().from(ahTaxAuthorizations)
+          .where(eq(ahTaxAuthorizations.companyId, input.companyId))
+          .orderBy(desc(ahTaxAuthorizations.id))
+          .limit(1);
+        return {
+          ...company[0],
+          memberCount: memberCount.length,
+          latestTaxAuth: latestAuth[0] || null,
+        };
       }),
 
     // ========== 资方资产订单管理 API ==========

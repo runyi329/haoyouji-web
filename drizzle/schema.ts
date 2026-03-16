@@ -1769,3 +1769,23 @@ export const ahTaxAuthorizations = mysqlTable("ah_tax_authorizations", {
   index("ah_tax_auth_period_idx").on(table.taxPeriod),
   index("ah_tax_auth_status_idx").on(table.status),
 ]);
+
+// ========== AH 账本：公司-用户绑定关系表 ==========
+// 一个用户可以绑定到多家公司（一人任职多家公司）
+// 一家公司可以绑定多个用户
+export const ahCompanyMembers = mysqlTable("ah_company_members", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),              // 关联的AH账本ID
+  companyId: int('company_id').notNull(),             // 关联的公司ID
+  userId: int('user_id').notNull(),                   // 绑定的用户ID
+  role: varchar({ length: 20 }).default('client').notNull(), // 在公司中的角色：client=客户, employee=企业员工
+  status: varchar({ length: 20 }).default('active').notNull(), // active=活跃, inactive=停用
+  addedBy: int('added_by').notNull(),                 // 添加人（管理员用户ID）
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("ah_cm_ledger_idx").on(table.ledgerId),
+  index("ah_cm_company_idx").on(table.companyId),
+  index("ah_cm_user_idx").on(table.userId),
+  index("ah_cm_company_user_idx").on(table.companyId, table.userId),
+]);
