@@ -659,7 +659,7 @@ export default function LedgerDetail() {
                   <span className="flex-1 text-right">权益</span>
                   <span className="w-10 text-right">订单</span>
                   <span className="flex-1 text-right">均价</span>
-                  <span className="flex-1 text-right">盈亏</span>
+                  <span className="flex-1 text-right">收益</span>
                 </div>
                 {['BTC', 'ETH', 'SOL'].map(coin => {
                   const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
