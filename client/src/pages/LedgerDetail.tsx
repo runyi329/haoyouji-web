@@ -643,8 +643,8 @@ export default function LedgerDetail() {
                   </div>
                 )}
               </div>
-              {/* 卡片 3：仓位 & 累计盈亏（合并） */}
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+              {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行） */}
+              <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="flex items-baseline justify-between mb-2">
                   <span className="text-xs text-white/70">仓位 & 累计盈亏</span>
                   {pnlData?.updatedAt && (
