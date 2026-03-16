@@ -32,6 +32,7 @@ import {
   Flame,
   Building2,
   CalendarClock,
+  PieChart,
 } from "lucide-react";
 
 
@@ -333,6 +334,7 @@ export default function LedgerDetail() {
   const isCustomAE = (ledgerData as any)?.type === 'custom_ae';
   const isCustomAF = (ledgerData as any)?.type === 'custom_af';
   const isCustomAH = (ledgerData as any)?.type === 'custom_ah';
+  const isCustomAI = (ledgerData as any)?.type === 'custom_ai';
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isFunder = (ledgerData as any)?.userRole === 'funder';
@@ -621,9 +623,9 @@ export default function LedgerDetail() {
   return (
     <div className="min-h-screen bg-[var(--bg-cream)]">
       {/* 顶部区域 */}
-      <div className="pb-4" style={{ backgroundColor: (isCustomAF || isCustomAH) ? undefined : '#D32F2F', background: (isCustomAF || isCustomAH) ? 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' : undefined, color: '#FFFFFF' }}>
+      <div className="pb-4" style={{ backgroundColor: (isCustomAF || isCustomAH || isCustomAI) ? undefined : '#D32F2F', background: (isCustomAF || isCustomAH) ? 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' : isCustomAI ? 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' : undefined, color: '#FFFFFF' }}>
         {/* AF/AH 账本：顶部两行布局 */}
-        {(isCustomAF || isCustomAH) ? (
+        {(isCustomAF || isCustomAH || isCustomAI) ? (
           <div className="px-4 pt-3 pb-2">
             {/* 第一行：头像 + 名字 + 设置齿轮 */}
             <div className="flex items-center justify-between">
@@ -770,7 +772,7 @@ export default function LedgerDetail() {
                   </div>
                 )}
                 {/* 普通账本：查找按鈕 */}
-                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && (
+                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
@@ -780,7 +782,7 @@ export default function LedgerDetail() {
                   </div>
                 )}
                 {/* 普通账本：数据统计按鈕 */}
-                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && (
+                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
@@ -1011,6 +1013,33 @@ export default function LedgerDetail() {
             </div>
           </div>
         )}
+        {/* AI 账本：股权概览卡片 */}
+        {isCustomAI && (
+          <div className="px-4 pt-2 pb-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-xs text-white/70 mb-1">股东人数</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-[10px] text-white/50 mt-1">待录入</div>
+              </div>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-xs text-white/70 mb-1">总股本</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-[10px] text-white/50 mt-1">待录入</div>
+              </div>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-xs text-white/70 mb-1">我的持股</div>
+                <div className="text-lg font-bold text-white">--%</div>
+                <div className="text-[10px] text-white/50 mt-1">待录入</div>
+              </div>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-xs text-white/70 mb-1">分红记录</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-[10px] text-white/50 mt-1">待录入</div>
+              </div>
+            </div>
+          </div>
+        )}
         {/* AH 账本：数据占位符区域 */}
         {isCustomAH && (
           <div className="px-4 pt-2 pb-4">
@@ -1043,7 +1072,7 @@ export default function LedgerDetail() {
           </div>
         )}
         {/* 普通账本：统计面板（总收入/总结余/总支出）*/}
-        {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && (
+        {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
           <div className="px-4 pt-2 pb-1 relative">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="relative">
@@ -1764,8 +1793,29 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah 账本显示 */}
-      {!isCustomAE && !isCustomAF && !isCustomAH && <div className={`flex-1 px-4 pb-20 space-y-3`}>
+      {/* AI 账本：股权管理工作台入口 */}
+      {isCustomAI && (
+        <div className="flex-1 px-4 pb-20">
+          <div className="mt-4">
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ backgroundColor: '#F5F3FF' }}>
+                <PieChart className="w-8 h-8" style={{ color: '#7C3AED' }} />
+              </div>
+              <div className="text-gray-500 text-base mb-1">股权管理工作台</div>
+              <div className="text-gray-400 text-sm mb-4">点击进入工作台查看股权结构、分红记录等</div>
+              <button
+                className="px-6 py-2.5 rounded-full text-white text-sm font-medium"
+                style={{ backgroundColor: '#7C3AED' }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/ai-company/0`)}
+              >
+                进入工作台
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
+      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -1892,8 +1942,8 @@ export default function LedgerDetail() {
         )}
       </div>}
 
-      {/* 底部添加按钮：非定制账本显示 */}
-      {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && (
+      {/* 底部添加按鈕：非定制账本显示 */}
+      {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
