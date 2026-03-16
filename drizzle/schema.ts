@@ -1691,3 +1691,35 @@ export const agSyncLogs = mysqlTable("ag_sync_logs", {
   index("ag_sync_logs_source_idx").on(table.sourceId),
   index("ag_sync_logs_ledger_idx").on(table.ledgerId),
 ]);
+
+
+// 资方资产订单表（管理员为资金方用户手动配置的资产记录）
+export const funderAssetOrders = mysqlTable("funder_asset_orders", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),                    // 所属账本ID
+  userId: int('user_id').notNull(),                        // 资金方用户ID
+  coin: varchar({ length: 10 }).notNull(),                 // 币种：BTC / ETH / USDT 等
+  amount: varchar({ length: 50 }).notNull(),               // 投入金额（USDT计价）
+  quantity: varchar({ length: 50 }),                       // 币种数量（如 0.5 BTC）
+  startAt: datetime('start_at', { mode: 'string' }),       // 开始时间
+  endAt: datetime('end_at', { mode: 'string' }),           // 结束时间（可选）
+  // 利息协议
+  interestType: varchar('interest_type', { length: 20 }),  // 利息类型：fixed=固定利率, floating=浮动利率, none=无利息
+  interestRate: varchar('interest_rate', { length: 20 }),  // 年化利率（如 "12" 表示12%）
+  interestNote: text('interest_note'),                     // 利息协议备注
+  // 分成协议
+  profitShareType: varchar('profit_share_type', { length: 20 }), // 分成类型：fixed_ratio=固定比例, tiered=阶梯, none=无分成
+  profitShareRate: varchar('profit_share_rate', { length: 20 }), // 分成比例（如 "30" 表示30%）
+  profitShareNote: text('profit_share_note'),              // 分成协议备注
+  // 状态
+  status: varchar({ length: 20 }).default('active').notNull(), // active=进行中, settled=已结算, cancelled=已取消
+  adminNote: text('admin_note'),                           // 管理员备注
+  createdBy: int('created_by').notNull(),                  // 创建人（管理员）
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("funder_asset_ledger_idx").on(table.ledgerId),
+  index("funder_asset_user_idx").on(table.userId),
+  index("funder_asset_coin_idx").on(table.coin),
+  index("funder_asset_status_idx").on(table.status),
+]);
