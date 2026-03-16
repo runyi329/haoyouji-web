@@ -649,7 +649,7 @@ export default function LedgerDetail() {
                   <span className="text-xs text-white/70">仓位 & 累计盈亏</span>
                   {pnlData?.updatedAt && (
                     <span className="text-[10px] text-white/40">
-                      {new Date(pnlData.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                      更新时间 {new Date(pnlData.updatedAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                     </span>
                   )}
                 </div>
