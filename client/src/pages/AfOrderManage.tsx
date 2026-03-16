@@ -4,10 +4,13 @@ import { ArrowLeft, Pencil, Check, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  pending:   { label: "委托中", color: "text-yellow-500" },
-  completed: { label: "已成交", color: "text-green-500" },
-  cancelled: { label: "已撤单", color: "text-gray-400" },
+// 综合状态标签（买入状态 + 卖出状态）
+const getStatusDisplay = (order: any) => {
+  if (order.sellStatus === 'sold') return { label: '已卖出', color: 'text-gray-500' };
+  if (order.sellStatus === 'selling') return { label: '委卖中', color: 'text-red-500' };
+  if (order.status === 'completed') return { label: '持仓中', color: 'text-green-500' };
+  if (order.status === 'cancelled') return { label: '已撤单', color: 'text-gray-400' };
+  return { label: '委买中', color: 'text-yellow-500' };
 };
 
 // 权益折扣率映射表（相对于52.5的百分比）
@@ -26,12 +29,12 @@ const EQUITY_DISCOUNT_RATES: Record<number, number> = {
 
 interface EditState {
   orderId: number;
-  limitPrice: string;
-  actualSellPrice: string; // 卖单实际成交价（管理员输入）
+  limitPrice: string;      // 买入委托价
+  actualSellPrice: string; // 管理员输入的实际卖出价
   amount: string;
   quantity: string;
   status: "pending" | "completed" | "cancelled";
-  side: "buy" | "sell"; // 订单方向，用于判断是否显示实际卖出价输入框
+  sellStatus: string | null; // selling / sold / sell_cancelled / null
 }
 
 interface ProfitCalculation {
@@ -44,6 +47,10 @@ interface ProfitCalculation {
   principal: number;
   equityTier: number;
   effectiveQuantity: number;
+  managementFee: number;
+  actualRefund: number;
+  holdDays: number;
+  dailyFee: number;
 }
 
 export default function AfOrderManage() {
@@ -64,12 +71,11 @@ export default function AfOrderManage() {
     { enabled: !!ledgerId }
   );
 
-  // 查询当前编辑卖单对应的买单扣档记录
+  // 查询当前编辑订单的扣档记录（直接用订单ID，不再需要sourceOrderId）
   const editingOrder = orders?.find((o: any) => o.id === editingId);
-  const sourceBuyOrderId = editingOrder?.sourceOrderId;
   const { data: tierHistoryData } = trpc.ledger.afAdminGetTierHistory.useQuery(
-    { ledgerId, orderId: sourceBuyOrderId! },
-    { enabled: !!ledgerId && !!sourceBuyOrderId && editingOrder?.side === 'sell' }
+    { ledgerId, orderId: editingId! },
+    { enabled: !!ledgerId && !!editingId && editingOrder?.status === 'completed' }
   );
   const tierHistory = tierHistoryData?.list;
   const lowestScan = tierHistoryData?.lowestScan;
@@ -84,17 +90,12 @@ export default function AfOrderManage() {
     onError: (e) => toast.error("更新失败：" + e.message),
   });
 
-  // 计算卖单的实时利润
+  // 计算卖出的实时利润（从同一订单取买入信息）
   const calculateProfit = (order: any, actualSellPrice: string): ProfitCalculation | null => {
-    // 只对卖单计算
-    if (order.side !== 'sell' || !order.sourceOrderId) {
-      return null;
-    }
-
     const sellPrice = parseFloat(actualSellPrice);
-    const buyPrice = parseFloat(order.sourceBuyPrice || '0');
-    const coinQuantity = parseFloat(order.sourceQuantity || '0');
-    const principal = parseFloat(order.sourcePrincipal || '0');
+    const buyPrice = parseFloat(order.limitPrice || '0');
+    const coinQuantity = parseFloat(order.quantity || '0');
+    const principal = parseFloat(order.amount || '0');
     const equityTier = order.equityTier || 0;
 
     if (isNaN(sellPrice) || sellPrice <= 0 || isNaN(buyPrice) || buyPrice <= 0 || isNaN(coinQuantity) || coinQuantity <= 0) {
@@ -102,7 +103,6 @@ export default function AfOrderManage() {
     }
 
     // 根据权益折扣档位计算有效币数
-    // 有效币数 = 原始币数 × 折扣率
     const discountRate = EQUITY_DISCOUNT_RATES[equityTier] || 1.0;
     const effectiveQuantity = coinQuantity * discountRate;
 
@@ -110,13 +110,11 @@ export default function AfOrderManage() {
     const totalProfit = effectiveQuantity * unitProfit;
     const totalRefund = principal + Math.max(0, totalProfit);
 
-    // 管理费计算：成交价値 ÷ 0.75 × 12% ÷ 365 × 持仓天数
-    // 成交价値：普通订单 = principal×5.25，赠送订单 = principal（赠送市値）
+    // 管理费计算
     const isGiftOrder = order.isGift === true || order.isGift === 1;
     const tradeValue = isGiftOrder ? principal : principal * 5.25;
     const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-    // 持仓天数：从买入成交日到今天
-    const confirmedDate = order.sourceUpdatedAt ? new Date(order.sourceUpdatedAt) : new Date(order.sourceCreatedAt || order.createdAt);
+    const confirmedDate = order.updatedAt ? new Date(order.updatedAt) : new Date(order.createdAt);
     const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
     const todayDay = new Date();
     todayDay.setHours(0, 0, 0, 0);
@@ -125,19 +123,8 @@ export default function AfOrderManage() {
     const actualRefund = Math.max(0, totalRefund - managementFee);
 
     return {
-      coinQuantity,
-      buyPrice,
-      sellPrice,
-      unitProfit,
-      totalProfit,
-      totalRefund,
-      principal,
-      equityTier,
-      effectiveQuantity,
-      managementFee,
-      actualRefund,
-      holdDays,
-      dailyFee,
+      coinQuantity, buyPrice, sellPrice, unitProfit, totalProfit, totalRefund,
+      principal, equityTier, effectiveQuantity, managementFee, actualRefund, holdDays, dailyFee,
     };
   };
 
@@ -146,11 +133,11 @@ export default function AfOrderManage() {
     setEditState({
       orderId: order.id,
       limitPrice: order.limitPrice?.toString() ?? "",
-      actualSellPrice: "", // 管理员需要输入实际卖出价
+      actualSellPrice: order.sellPrice?.toString() ?? "",
       amount: order.amount?.toString() ?? "",
       quantity: order.quantity?.toString() ?? "",
       status: order.status as "pending" | "completed" | "cancelled",
-      side: order.side as "buy" | "sell",
+      sellStatus: order.sellStatus || null,
     });
   };
 
@@ -162,33 +149,31 @@ export default function AfOrderManage() {
   const saveEdit = () => {
     if (!editState) return;
     
-    // 如果是卖单且要确认成交，必须输入实际卖出价
-    const isConfirmingSell = editState.side === 'sell' && editState.status === 'completed';
-    if (isConfirmingSell && !editState.actualSellPrice) {
+    // 如果要确认卖出成交，必须输入实际卖出价
+    const isConfirmingSellComplete = editState.sellStatus === 'sold';
+    if (isConfirmingSellComplete && !editState.actualSellPrice) {
       toast.error("请输入实际卖出价格");
       return;
     }
     
-    // 卖单成交时，用实际卖出价作为 limitPrice（后端用此计算收益）
-    const finalLimitPrice = isConfirmingSell ? editState.actualSellPrice : editState.limitPrice;
-    
     // 买单：金额(amount)固定不变，数量根据新价格自动重算
-    // 卖单：数量是买入时的实际持仓，不重算，直接使用原始数量
-    const price = parseFloat(finalLimitPrice);
+    const price = parseFloat(editState.limitPrice);
     const amount = parseFloat(editState.amount);
     let finalQuantity = editState.quantity;
-    if (editState.side === 'buy' && !isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
+    if (!isNaN(price) && !isNaN(amount) && price > 0 && amount > 0) {
       finalQuantity = (amount * 5.25 / price).toFixed(8);
     }
-    // 卖单不传 quantity，让后端保持原始持仓量不变
-    const submitQuantity = editState.side === 'sell' ? undefined : finalQuantity;
+
     updateMutation.mutate({
       ledgerId,
       orderId: editState.orderId,
-      limitPrice: finalLimitPrice,
+      limitPrice: editState.limitPrice,
       amount: editState.amount,
-      quantity: submitQuantity, // 卖单不传quantity，保持原始持仓量
+      quantity: finalQuantity,
       status: editState.status,
+      // 卖出相关
+      sellStatus: editState.sellStatus || undefined,
+      sellPrice: isConfirmingSellComplete ? editState.actualSellPrice : undefined,
     });
   };
 
@@ -214,7 +199,6 @@ export default function AfOrderManage() {
         {/* 统计容器 */}
         {stats && (
           <div className="grid grid-cols-2 gap-3 mb-4">
-            {/* 累计订单 */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-blue-100">
               <p className="text-xs text-gray-400 mb-2">累计订单</p>
               <p className="text-2xl font-bold text-gray-800">{stats.orders.totalCount}</p>
@@ -229,7 +213,6 @@ export default function AfOrderManage() {
                 </div>
               </div>
             </div>
-            {/* 管理费 */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-purple-100">
               <p className="text-xs text-gray-400 mb-2">管理费</p>
               <p className="text-2xl font-bold text-purple-700">{stats.fees.totalFee.toFixed(2)}</p>
@@ -255,12 +238,10 @@ export default function AfOrderManage() {
           <div className="space-y-3">
             {(orders as any[]).map((order) => {
               const isEditing = editingId === order.id;
-              const statusInfo = STATUS_LABELS[order.status] || STATUS_LABELS.pending;
+              const statusDisplay = getStatusDisplay(order);
               // 计算编辑时的实时数量
-              // 买单：amount 是用户实际花费，成交价值 = amount × 5.25，quantity = 成交价值 / 新价格
-              // 卖单：数量是买入时的实际持仓，不重算
               let previewQuantity = editState?.quantity ?? "";
-              if (isEditing && editState && editState.side === 'buy') {
+              if (isEditing && editState) {
                 const p = parseFloat(editState.limitPrice);
                 const a = parseFloat(editState.amount);
                 if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
@@ -268,7 +249,7 @@ export default function AfOrderManage() {
                 }
               }
 
-              // 生成订单编号：AF + 创建日期(YYMMDD) + 6位补零ID
+              // 生成订单编号
               const orderDate = new Date(order.createdAt);
               const yy = String(orderDate.getFullYear()).slice(2);
               const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
@@ -327,28 +308,59 @@ export default function AfOrderManage() {
                       <span className="text-gray-400 text-xs w-10">币种</span>
                       <span className="font-medium">{order.coin}</span>
                     </div>
-                    {/* 方向 */}
+                    {/* 状态（综合买入+卖出状态） */}
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">方向</span>
-                      <span className={order.side === "buy" ? "text-green-500 font-medium" : "text-red-500 font-medium"}>
-                        {order.side === "buy" ? "委买" : "委卖"}
-                      </span>
+                      <span className="text-gray-400 text-xs w-10">状态</span>
+                      {isEditing ? (
+                        <div className="flex flex-col gap-1">
+                          <select
+                            value={editState!.status}
+                            onChange={(e) => setEditState({ ...editState!, status: e.target.value as any })}
+                            className="border border-gray-300 rounded px-2 py-0.5 text-xs"
+                          >
+                            <option value="pending">委买中</option>
+                            <option value="completed">买入成交</option>
+                            <option value="cancelled">已撤单</option>
+                          </select>
+                          {editState!.status === 'completed' && (
+                            <select
+                              value={editState!.sellStatus || ''}
+                              onChange={(e) => setEditState({ ...editState!, sellStatus: e.target.value || null })}
+                              className="border border-gray-300 rounded px-2 py-0.5 text-xs"
+                            >
+                              <option value="">持仓中</option>
+                              <option value="selling">委卖中</option>
+                              <option value="sold">已卖出</option>
+                            </select>
+                          )}
+                        </div>
+                      ) : (
+                        <span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>
+                      )}
                     </div>
-                    {/* 价格 */}
+                    {/* 买入委托价 */}
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">委托价</span>
-                      <span className="font-medium text-gray-900">
-                        {parseFloat(isEditing ? editState!.limitPrice : order.limitPrice).toLocaleString()} USDT
-                      </span>
+                      <span className="text-gray-400 text-xs w-10">买入价</span>
+                      {isEditing && editState!.status === 'pending' ? (
+                        <input
+                          type="number"
+                          value={editState!.limitPrice}
+                          onChange={(e) => setEditState({ ...editState!, limitPrice: e.target.value })}
+                          className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24"
+                        />
+                      ) : (
+                        <span className="font-medium text-gray-900">
+                          {parseFloat(isEditing ? editState!.limitPrice : order.limitPrice).toLocaleString()} USDT
+                        </span>
+                      )}
                     </div>
-                    {/* 数量（自动重算） */}
+                    {/* 数量 */}
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400 text-xs w-10">数量</span>
                       <span className="font-medium text-gray-900">
                         {(() => {
                           const raw = isEditing ? (previewQuantity || editState!.quantity) : order.quantity;
                           const num = parseFloat(raw);
-                          // 去掉尾零：转字符串后去掉末尾多余的0
                           const trimmed = isNaN(num) ? raw : num.toFixed(8).replace(/\.?0+$/, '');
                           return `${trimmed} ${order.coin}`;
                         })()}
@@ -359,19 +371,35 @@ export default function AfOrderManage() {
                       <span className="text-gray-400 text-xs w-10">实际金额</span>
                       <span>{parseFloat(order.amount).toFixed(2)} USDT</span>
                     </div>
-                    {/* 订单价値 */}
-                    {order.side === 'buy' && (() => {
+                    {/* 订单价值 */}
+                    {(() => {
                       const amount = parseFloat(order.amount);
                       const tradeValue = order.isGift ? amount : amount * 5.25;
                       return (
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-400 text-xs w-10">订单价値</span>
+                          <span className="text-gray-400 text-xs w-10">订单价值</span>
                           <span className="text-blue-600 font-medium">{tradeValue.toFixed(2)} USDT</span>
                         </div>
                       );
                     })()}
-                    {/* 当前权益（买单显示，已成交卖单锁死） */}
-                    {order.side === 'buy' && order.status === 'completed' && (() => {
+                    {/* 卖出价格（委卖中或已卖出时显示） */}
+                    {(order.sellStatus === 'selling' || order.sellStatus === 'sold') && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-400 text-xs w-10">卖出价</span>
+                        <span className="font-medium text-red-500">
+                          {parseFloat(order.sellPrice).toLocaleString()} USDT
+                        </span>
+                      </div>
+                    )}
+                    {/* 卖出时间（已卖出时显示） */}
+                    {order.sellStatus === 'sold' && order.sellConfirmedAt && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-400 text-xs w-10">卖出时间</span>
+                        <span className="text-xs text-gray-500">{formatDate(order.sellConfirmedAt)}</span>
+                      </div>
+                    )}
+                    {/* 当前权益 */}
+                    {order.status === 'completed' && (() => {
                       const rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
                       const pct = (rate * 100).toFixed(2);
                       const tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
@@ -382,19 +410,8 @@ export default function AfOrderManage() {
                         </div>
                       );
                     })()}
-                    {order.side === 'buy' && order.status === 'pending' && (() => {
-                      const rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
-                      const pct = (rate * 100).toFixed(2);
-                      const tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
-                      return (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 text-xs w-10">当前权益</span>
-                          <span className="text-amber-500 font-medium">{pct}% <span className="text-xs text-gray-400">({tierLabel}·实时)</span></span>
-                        </div>
-                      );
-                    })()}
-                    {/* 累计管理费（买单已成交显示，委托中实时跨，已卖出锁死） */}
-                    {order.side === 'buy' && order.status === 'completed' && (() => {
+                    {/* 累计管理费 */}
+                    {order.status === 'completed' && (() => {
                       const amount = parseFloat(order.amount);
                       const tradeValue = order.isGift ? amount : amount * 5.25;
                       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
@@ -410,71 +427,7 @@ export default function AfOrderManage() {
                         </div>
                       );
                     })()}
-                    {/* 状态 */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">状态</span>
-                      {isEditing ? (
-                        <select
-                          value={editState!.status}
-                          onChange={(e) => setEditState({ ...editState!, status: e.target.value as any })}
-                          className="border border-gray-300 rounded px-2 py-0.5 text-sm"
-                        >
-                          <option value="pending">委托中</option>
-                          <option value="completed">已成交</option>
-                          <option value="cancelled">已撤单</option>
-                        </select>
-                      ) : (
-                        <span className={`font-medium ${statusInfo.color}`}>{statusInfo.label}</span>
-                      )}
-                    </div>
                   </div>
-
-                  {/* 管理费统计（仅已成交订单显示） */}
-                  {order.status === 'completed' && (() => {
-                    // 统一公式：订单金额 ÷ 0.75 × 0.12 ÷ 365
-                    const amount = parseFloat(order.amount);
-                    const dailyFee = amount / 0.75 * 0.12 / 365;
-                    
-                    // 持有天数计算：从确认成交日（updatedAt）到今天，两头都算
-                    const confirmedDate = order.updatedAt ? new Date(order.updatedAt) : new Date(order.createdAt);
-                    const today = new Date();
-                    const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
-                    const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                    const holdDays = Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-                    
-                    const totalFee = dailyFee * holdDays;
-                    
-                    return (
-                      <div className="mt-2 bg-purple-50 border border-purple-200 rounded-lg p-3">
-                        <p className="text-xs font-medium text-purple-600 mb-2">管理费统计</p>
-                        <div className="grid grid-cols-2 gap-2 text-xs">
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">订单金额</span>
-                            <span className="font-medium text-gray-800">{amount.toFixed(2)} USDT</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">年化费率</span>
-                            <span className="font-medium text-gray-800">12%</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">持有天数</span>
-                            <span className="font-medium text-purple-700">{holdDays} 天</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-gray-500">每日管理费</span>
-                            <span className="font-medium text-gray-800">{dailyFee.toFixed(4)} USDT</span>
-                          </div>
-                          <div className="col-span-2 border-t border-purple-200 pt-2 mt-1 flex justify-between">
-                            <span className="text-gray-600 font-medium">累计管理费</span>
-                            <span className="font-bold text-purple-700">{totalFee.toFixed(4)} USDT</span>
-                          </div>
-                        </div>
-                        <p className="text-[10px] text-purple-400 mt-2">
-                          {amount.toFixed(2)} ÷ 0.75 × 12% ÷ 365 = {dailyFee.toFixed(4)} USDT/天 × {holdDays}天 = {totalFee.toFixed(4)} USDT
-                        </p>
-                      </div>
-                    );
-                  })()}
 
                   {/* 赠送订单来源信息 */}
                   {order.isGift && order.sourceUsername && (
@@ -482,13 +435,12 @@ export default function AfOrderManage() {
                       {order.giftMultiplier === '1.0' ? '间接推荐奖励订单 (1.0倍)' : '推荐人奖励订单 (1.5倍)'} · 来自 <span className={`font-medium ${order.giftMultiplier === '1.0' ? 'text-amber-600' : 'text-red-500'}`}>{order.sourceUsername}</span>
                     </div>
                   )}
-                  
-                  {/* 卖单确认成交时：实际卖出价格输入框 + 实时利润计算 */}
-                  {isEditing && editState?.side === 'sell' && editState?.status === 'completed' && (
+
+                  {/* 编辑时：确认卖出成交 → 输入实际卖出价 + 实时利润计算 */}
+                  {isEditing && editState?.sellStatus === 'sold' && (
                     <div className="mt-3 space-y-3">
-                      {/* 实际卖出价输入框 */}
                       <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                        <p className="text-xs text-orange-600 font-medium mb-2">★ 确认卖单成交，请输入实际卖出价格</p>
+                        <p className="text-xs text-orange-600 font-medium mb-2">确认卖出成交，请输入实际卖出价格</p>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-500 whitespace-nowrap">实际卖出价</span>
                           <input
@@ -502,13 +454,13 @@ export default function AfOrderManage() {
                         </div>
                       </div>
 
-                      {/* 实时利润计算显示 */}
+                      {/* 实时利润计算 */}
                       {editState!.actualSellPrice && calculateProfit(order, editState!.actualSellPrice) && (() => {
                         const calc = calculateProfit(order, editState!.actualSellPrice)!;
                         return (
                           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-2">
                             <p className="text-xs font-medium text-blue-600">实时利润计算</p>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="space-y-1.5 text-xs">
                               <div className="flex justify-between">
                                 <span className="text-gray-600">持币数量</span>
                                 <span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span>
@@ -521,7 +473,7 @@ export default function AfOrderManage() {
                                 <span className="text-gray-600">卖出价</span>
                                 <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
                               </div>
-                              <div className="col-span-2 flex justify-between">
+                              <div className="flex justify-between">
                                 <span className="text-gray-600">权益折扣档位</span>
                                 <span className="font-medium text-amber-600">
                                   {(() => {
@@ -532,7 +484,7 @@ export default function AfOrderManage() {
                                 </span>
                               </div>
                               {/* 扣档历史记录 + 历史最低扫描价 */}
-                              <div className="col-span-2 bg-amber-50 border border-amber-200 rounded p-2 mt-1">
+                              <div className="bg-amber-50 border border-amber-200 rounded p-2 mt-1">
                                 <p className="text-[10px] text-amber-600 font-medium mb-1">扣档触发记录</p>
                                 {tierHistory && tierHistory.length > 0 ? (
                                   tierHistory.map((t: any) => {
@@ -548,7 +500,6 @@ export default function AfOrderManage() {
                                 ) : (
                                   <div className="text-[10px] text-amber-500 py-0.5">未触发任何扣档，当前为D0基准档</div>
                                 )}
-                                {/* 历史最低扫描价（不管有没有扣档都显示） */}
                                 {lowestScan ? (
                                   <div className="mt-1.5 pt-1.5 border-t border-amber-200">
                                     <div className="flex justify-between text-[10px] text-gray-500 py-0.5">
@@ -570,29 +521,29 @@ export default function AfOrderManage() {
                                   {calc.unitProfit >= 0 ? '+' : ''}{calc.unitProfit.toFixed(2)} USDT
                                 </span>
                               </div>
-                              <div className="col-span-2 border-t border-blue-200 pt-2 mt-1 flex justify-between">
+                              <div className="border-t border-blue-200 pt-2 mt-1 flex justify-between">
                                 <span className="text-gray-600 font-medium">总收益</span>
                                 <span className={`font-bold text-base ${calc.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                   {calc.totalProfit >= 0 ? '+' : ''}{calc.totalProfit.toFixed(4)} USDT
                                 </span>
                               </div>
-                              <div className="col-span-2 flex justify-between">
+                              <div className="flex justify-between">
                                 <span className="text-gray-600">本金+收益小计</span>
                                 <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
                               </div>
-                              <div className="col-span-2 flex justify-between">
+                              <div className="flex justify-between">
                                 <span className="text-red-500">管理费扣除 ({calc.holdDays}天)</span>
                                 <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
                               </div>
-                              <div className="col-span-2 text-[10px] text-red-400">
+                              <div className="text-[10px] text-red-400">
                                 {(() => {
-                                  const startDate = new Date(order.sourceUpdatedAt || order.sourceCreatedAt || order.createdAt);
+                                  const startDate = new Date(order.updatedAt || order.createdAt);
                                   const endDate = new Date();
                                   const fmt = (d: Date) => `${d.getMonth()+1}月${d.getDate()}日`;
                                   return `计费区间：${fmt(startDate)} → ${fmt(endDate)}（共${calc.holdDays}天，${calc.dailyFee.toFixed(4)} USDT/天）`;
                                 })()}
                               </div>
-                              <div className="col-span-2 flex justify-between bg-green-50 rounded px-2 py-1.5 border border-green-200">
+                              <div className="flex justify-between bg-green-50 rounded px-2 py-1.5 border border-green-200">
                                 <span className="text-green-700 font-bold">实际到账</span>
                                 <span className="font-bold text-green-600 text-base">{calc.actualRefund.toFixed(4)} USDT</span>
                               </div>
@@ -608,20 +559,13 @@ export default function AfOrderManage() {
                     </div>
                   )}
                   
-                  {/* 编辑时的余额说明 */}
+                  {/* 编辑时的操作说明 */}
                   {isEditing && (
                     <div className="mt-3 text-xs text-gray-400 bg-gray-50 rounded-lg p-2">
-                      {order.side === 'sell' ? (
-                        <>
-                          <p>· 卖单确认成交：返还本金 + 实际收益到用户余额</p>
-                          <p>· 卖单撤单：不动余额（提交时未扣除）</p>
-                        </>
-                      ) : (
-                        <>
-                          <p>· 修改状态为「已撤单」：将退回已扣余额</p>
-                          <p>· 数量 = 实际投入 × 5.25 / 价格（自动计算）</p>
-                        </>
-                      )}
+                      <p>· 修改买入状态为「已撤单」：将退回已扣余额</p>
+                      <p>· 数量 = 实际投入 × 5.25 / 价格（自动计算）</p>
+                      {editState?.sellStatus === 'selling' && <p>· 当前为委卖中状态，可改为「已卖出」确认成交</p>}
+                      {editState?.sellStatus === 'sold' && <p>· 确认卖出成交：返还本金 + 实际收益到用户余额</p>}
                     </div>
                   )}
                 </div>

@@ -103,6 +103,33 @@ jobs:
               PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
             " || true
             echo "✅ af_orders赠送字段确认完成"
+            echo "📊 添加af_orders卖出字段（订单合并模型）..."
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='sell_price';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN sell_price VARCHAR(50) DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='sell_quantity';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN sell_quantity VARCHAR(50) DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='sell_at';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN sell_at DATETIME DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='sell_confirmed_at';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN sell_confirmed_at DATETIME DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @col_exists FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_orders' AND COLUMN_NAME='sell_status';
+              SET @sql = IF(@col_exists = 0, 'ALTER TABLE af_orders ADD COLUMN sell_status VARCHAR(20) DEFAULT NULL', 'SELECT 1');
+              PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            echo "✅ af_orders卖出字段确认完成"
             echo "✅ af_orders表确认完成"
             echo "📊 确保af_manual_balances表存在..."
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "CREATE TABLE IF NOT EXISTS af_manual_balances (id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, user_id INT NOT NULL, amount DECIMAL(18,2) NOT NULL DEFAULT 0, note VARCHAR(255) DEFAULT '', created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, INDEX idx_ledger (ledger_id), INDEX idx_user (user_id))" || true

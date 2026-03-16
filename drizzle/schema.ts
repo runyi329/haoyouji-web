@@ -1,4 +1,4 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, varchar, text, mysqlEnum, timestamp, index, json, longtext, date, decimal, tinyint } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, varchar, text, mysqlEnum, timestamp, index, json, longtext, date, decimal, tinyint, datetime } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const addition20Challenges = mysqlTable("addition20_challenges", {
@@ -1588,6 +1588,12 @@ export const afOrders = mysqlTable("af_orders", {
   sourceOrderId: int('source_order_id'),                      // 来源订单ID（触发赠送的原始订单）
   sourceUserId: int('source_user_id'),                        // 下单人用户ID（触发赠送的人）
   sourceAmount: varchar('source_amount', { length: 50 }),     // 委托人实际投入金额（赠送订单用，显示“实际投入”）
+  // 卖出相关字段（订单合并模型：不创建新卖单，在原买单上记录卖出信息）
+  sellPrice: varchar('sell_price', { length: 50 }),              // 委托卖出价格
+  sellQuantity: varchar('sell_quantity', { length: 50 }),        // 卖出数量
+  sellAt: datetime('sell_at', { mode: 'string' }),               // 委托卖出时间
+  sellConfirmedAt: datetime('sell_confirmed_at', { mode: 'string' }), // 卖出成交确认时间
+  sellStatus: varchar('sell_status', { length: 20 }),            // selling=委托卖中, sold=已卖出, sell_cancelled=卖出已撤
   createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [

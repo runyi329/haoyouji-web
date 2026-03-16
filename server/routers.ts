@@ -9679,51 +9679,50 @@ export const appRouter = router({
         
         const db = await getLedgerDb();
 
-        // ★ 防重复委托卖出：同一买入订单已有未撤销的卖单时，拒绝提交
         if (input.side === 'sell' && input.sourceOrderId) {
-          const existingRows = await db.execute(
-            sql`SELECT id, status, source_order_id FROM af_orders
-                WHERE ledger_id = ${input.ledgerId}
+          // ★ 委托卖出：不创建新订单，直接在原买单上更新卖出字段
+          // 防重复：检查原订单是否已在委托卖中
+          const orderRows = await db.execute(
+            sql`SELECT id, status, sell_status, user_id FROM af_orders
+                WHERE id = ${input.sourceOrderId}
+                  AND ledger_id = ${input.ledgerId}
                   AND user_id = ${ctx.user.id}
-                  AND side = 'sell'
-                  AND status = 'pending'
-                  AND source_order_id = ${input.sourceOrderId}
                 LIMIT 1`
+          ) as any;
+          const order = (orderRows[0]?.[0] ?? orderRows[0]);
+          if (!order) throw new Error('订单不存在');
+          if (order.status !== 'completed') throw new Error('只有已成交的买单才能委托卖出');
+          if (order.sell_status === 'selling') throw new Error('该订单已在委托卖出中，请先撤销后再重新委托');
+          if (order.sell_status === 'sold') throw new Error('该订单已卖出，无法重复操作');
+          
+          // 更新原买单的卖出字段
+          await db.execute(
+            sql`UPDATE af_orders SET
+                sell_price = ${input.limitPrice},
+                sell_quantity = ${input.quantity},
+                sell_at = NOW(),
+                sell_status = 'selling',
+                updated_at = NOW()
+                WHERE id = ${input.sourceOrderId} AND ledger_id = ${input.ledgerId}`
           );
-          const existing = ((existingRows as any)[0] || (existingRows as any).rows || []) as any[];
-          console.log('[afSubmitOrder] 防重复检查 sourceOrderId=', input.sourceOrderId, '查询结果count:', existing.length);
-          if (Array.isArray(existing) && existing.length > 0) {
-            throw new Error('该订单已有委托卖出记录，请先撤销后再重新委托');
-          }
+          console.log(`[afSubmitOrder] 委托卖出: 更新订单#${input.sourceOrderId} sell_status=selling, sell_price=${input.limitPrice}`);
+          // 委托卖出不动余额，等管理员确认成交后再计算
+          return { success: true };
         }
 
-        // order_type 字段已通过 deploy.yml 建表时创建，无需每次 ALTER TABLE
-        // 1. 插入委托订单（卖出时记录 source_order_id）
+        // 买入订单：正常创建新订单
         const orderType = input.orderType || '无损合约';
-        if (input.side === 'sell' && input.sourceOrderId) {
-          await db.execute(
-            sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, source_order_id, created_at, updated_at)
-                VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, ${input.sourceOrderId}, NOW(), NOW())`
-          );
-        } else {
-          await db.execute(
-            sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
-                VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, ${input.side}, ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
-          );
-        }
-        // 2. af_manual_balances 表已通过 deploy.yml 创建，无需每次 CREATE TABLE
-        // 3. 根据买卖方向调整余额
+        await db.execute(
+          sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
+              VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
+        );
+        // 委托买入：扣除余额
         const amountNum = parseFloat(input.amount);
         if (!isNaN(amountNum) && amountNum > 0) {
-          if (input.side === 'buy') {
-            // 委托买入：扣除余额（负数）
-            await db.execute(
-              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-                  VALUES (${input.ledgerId}, ${ctx.user.id}, ${-amountNum}, ${`委托买入 ${input.coin} ${input.amount} USDT`}, NOW(), NOW())`
-            );
-          } // end if (input.side === 'buy')
-          // 委托卖出：不动余额！等管理员确认成交后再计算并返还本金+收益
-          // （原来这里会立即返还本金，已修复）
+          await db.execute(
+            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                VALUES (${input.ledgerId}, ${ctx.user.id}, ${-amountNum}, ${`委托买入 ${input.coin} ${input.amount} USDT`}, NOW(), NOW())`
+          );
         }
         return { success: true };
       }),
@@ -9750,38 +9749,21 @@ export const appRouter = router({
                      o.source_order_id, o.source_user_id,
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
                      COALESCE(o.source_amount, '') as source_amount,
-                     COALESCE(su.username, '') as source_username
+                     COALESCE(su.username, '') as source_username,
+                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status
               FROM af_orders o
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
+                AND o.side = 'buy'
               ORDER BY o.created_at DESC
               LIMIT 100`
         ) as any;
         const allOrders = ((rows[0] || rows) as any[]);
         
-        // 构建「已有未撤销卖单的买入订单ID」集合（兼容旧数据）
-        // 方法：对每个 pending/completed 卖单，尝试匹配对应的买入订单
-        // 1. 有 source_order_id 的：直接用 source_order_id
-        // 2. 没有 source_order_id 的旧卖单：按同币种找对应的最近一笔已成交买入订单
-        const activeSellOrders = allOrders.filter((r: any) => r.side === 'sell' && r.status === 'pending');
-        const completedBuyOrders = allOrders.filter((r: any) => r.side === 'buy' && r.status === 'completed');
-        
-        const pendingSellBuyIds = new Set<number>();
-        for (const sell of activeSellOrders) {
-          if (sell.source_order_id) {
-            // 有明确关联：直接添加
-            pendingSellBuyIds.add(sell.source_order_id);
-          } else {
-            // 旧卖单没有 source_order_id：按同币种找最近的已成交买入订单匹配
-            const matchBuy = completedBuyOrders.find((b: any) => b.coin === sell.coin && !pendingSellBuyIds.has(b.id));
-            if (matchBuy) pendingSellBuyIds.add(matchBuy.id);
-          }
-        }
-        
         const list = allOrders.map((r: any) => ({
           id: r.id,
           coin: r.coin,
-          side: r.side,
+          side: 'buy' as const,
           limitPrice: r.limit_price,
           originalLimitPrice: r.original_limit_price || r.limit_price,
           amount: r.amount,
@@ -9795,8 +9777,14 @@ export const appRouter = router({
           sourceOrderId: r.source_order_id || null,
           sourceUsername: r.source_username || '',
           sourceAmount: r.source_amount || '',
-          // 新字段：该买入订单是否已有未撤销的卖单（包含旧数据兼容）
-          hasPendingSell: r.side === 'buy' && r.status === 'completed' ? pendingSellBuyIds.has(r.id) : false,
+          // 卖出字段（订单合并模型）
+          sellPrice: r.sell_price || null,
+          sellQuantity: r.sell_quantity || null,
+          sellAt: r.sell_at || null,
+          sellConfirmedAt: r.sell_confirmed_at || null,
+          sellStatus: r.sell_status || null,
+          // 兼容旧字段：是否已在委托卖中
+          hasPendingSell: r.sell_status === 'selling',
         }));
         return list;
       }),
@@ -9817,23 +9805,15 @@ export const appRouter = router({
             targetUserId = input.viewAsUserId;
           }
         }
-        // 已成交买入的数量总和
+        // 已成交买入的数量总和（未卖出的 + 委托卖中的）
         const buyRows = await db.execute(
           sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
               FROM af_orders
               WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
-                AND coin = ${input.coin} AND side = 'buy' AND status = 'completed'`
+                AND coin = ${input.coin} AND side = 'buy' AND status = 'completed'
+                AND (sell_status IS NULL OR sell_status = '' OR sell_status = 'sell_cancelled')`
         ) as any;
-        const bought = parseFloat((buyRows[0]?.[0]?.total ?? buyRows[0]?.total ?? '0').toString());
-        // 已成交卖出的数量总和
-        const sellRows = await db.execute(
-          sql`SELECT COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
-              FROM af_orders
-              WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
-                AND coin = ${input.coin} AND side = 'sell' AND status = 'completed'`
-        ) as any;
-        const sold = parseFloat((sellRows[0]?.[0]?.total ?? sellRows[0]?.total ?? '0').toString());
-        const available = Math.max(0, bought - sold);
+        const available = parseFloat((buyRows[0]?.[0]?.total ?? buyRows[0]?.total ?? '0').toString());
         return { coin: input.coin, available };
       }),
     // 管理员：查询该账本所有用户的所有订单
@@ -9856,13 +9836,10 @@ export const appRouter = router({
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
                      COALESCE(o.source_amount, '') as source_amount,
                      COALESCE(su.username, '') as source_username,
-                     COALESCE(src.limit_price, '') as source_buy_price,
-                     COALESCE(src.quantity, '') as source_quantity,
-                     COALESCE(src.amount, '') as source_principal
+                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
-              LEFT JOIN af_orders src ON src.id = o.source_order_id AND src.ledger_id = ${input.ledgerId}
               WHERE o.ledger_id = ${input.ledgerId}
               ORDER BY o.created_at DESC
               LIMIT 500`
@@ -9887,21 +9864,18 @@ export const appRouter = router({
           sourceOrderId: r.source_order_id || null,
           sourceUsername: r.source_username || '',
           sourceAmount: r.source_amount || '',
-          sourceBuyPrice: r.source_buy_price || '',
-          sourceQuantity: r.source_quantity || '',
-          sourcePrincipal: r.source_principal || '',
+          // 卖出字段（订单合并模型）
+          sellPrice: r.sell_price || null,
+          sellQuantity: r.sell_quantity || null,
+          sellAt: r.sell_at || null,
+          sellConfirmedAt: r.sell_confirmed_at || null,
+          sellStatus: r.sell_status || null,
           equityTier: 0,
         }));
         
-        // 为每个订单查询权益折扣档位
+        // 为每个买单查询权益折扣档位
         for (const order of list) {
-          if (order.side === 'sell' && order.sourceOrderId) {
-            const tierRows = await db.execute(
-              sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${order.sourceOrderId}`
-            ) as any;
-            const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
-            order.equityTier = maxTier;
-          } else if (order.side === 'buy') {
+          if (order.side === 'buy') {
             const tierRows = await db.execute(
               sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${order.id}`
             ) as any;
@@ -9954,7 +9928,8 @@ export const appRouter = router({
           sql`SELECT o.id, o.amount, o.status, o.updated_at, o.created_at,
                      COALESCE(o.is_gift, 0) as is_gift,
                      COALESCE(o.gift_multiplier, '5.25') as gift_multiplier,
-                     (SELECT COUNT(*) FROM af_orders s WHERE s.source_order_id = o.id AND s.side='sell' AND s.status='completed' AND s.ledger_id = ${input.ledgerId}) as sold
+                     COALESCE(o.sell_status, '') as sell_status_val,
+                     o.sell_confirmed_at
               FROM af_orders o
               WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy' AND o.status = 'completed'`
         ) as any;
@@ -9975,14 +9950,10 @@ export const appRouter = router({
           const confirmedDate = bo.updated_at ? new Date(bo.updated_at) : new Date(bo.created_at);
           const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
 
-          if (parseInt(bo.sold || '0') > 0) {
-            // 已结清：从确认日到今天（简化处理，实际应到卖出日）
-            // 查询卖出日期
-            const sellRows = await db.execute(
-              sql`SELECT updated_at FROM af_orders WHERE source_order_id = ${bo.id} AND side='sell' AND status='completed' AND ledger_id = ${input.ledgerId} ORDER BY updated_at DESC LIMIT 1`
-            ) as any;
-            const sellDate = (sellRows[0]?.[0]?.updated_at ?? sellRows[0]?.updated_at) ? new Date(sellRows[0]?.[0]?.updated_at ?? sellRows[0]?.updated_at) : now;
-            const sellDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
+          if (bo.sell_status_val === 'sold') {
+            // 已结清：从确认日到卖出确认日
+            const sellConfirmedDate = bo.sell_confirmed_at ? new Date(bo.sell_confirmed_at) : now;
+            const sellDay = new Date(sellConfirmedDate.getFullYear(), sellConfirmedDate.getMonth(), sellConfirmedDate.getDate());
             const holdDays = Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
             settledFee += dailyFee * holdDays;
           } else {
@@ -10092,6 +10063,9 @@ export const appRouter = router({
         amount: z.string().optional(),
         quantity: z.string().optional(),
         status: z.enum(['pending', 'completed', 'cancelled']).optional(),
+        // 新增：确认卖出成交
+        sellStatus: z.enum(['sold', 'sell_cancelled']).optional(),
+        sellPrice: z.string().optional(), // 实际卖出成交价
       }))
       .mutation(async ({ ctx, input }) => {
         
@@ -10104,7 +10078,7 @@ export const appRouter = router({
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询原始订单信息
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id, sell_status, sell_price FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -10115,118 +10089,92 @@ export const appRouter = router({
         const userId = order.user_id;
         const coin = order.coin;
         const side = order.side;
-        // af_manual_balances 表已通过 deploy.yml 创建
-        // 余额调整逻辑
+        
         let balanceAdjust = 0;
         let balanceNote = '';
+        
+        // ========== 卖出成交处理（订单合并模型） ==========
+        if (input.sellStatus === 'sold' && order.sell_status === 'selling') {
+          // 确认卖出成交：从同一订单取买入信息
+          const actualSellPrice = input.sellPrice ? parseFloat(input.sellPrice) : parseFloat(order.sell_price || '0');
+          const principal = oldAmount; // 买入本金
+          const buyPrice = parseFloat(order.limit_price || '0');
+          const originalQty = parseFloat(order.quantity || '0');
+          
+          // 查询收益权最高档位
+          const tierRows = await db.execute(
+            sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${input.orderId}`
+          ) as any;
+          const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
+          
+          const equityDiscountRates: Record<number, number> = {
+            0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+            5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+          };
+          const discountRate = equityDiscountRates[maxTier] || 1.0;
+          const effectiveQty = originalQty * discountRate;
+          let profit = 0;
+          if (actualSellPrice > 0 && buyPrice > 0) {
+            profit = effectiveQty * (actualSellPrice - buyPrice);
+          }
+          console.log(`[AF卖出成交] 订单#${input.orderId}: 本金=${principal}, 买入价=${buyPrice}, 卖出价=${actualSellPrice}, 原始币数=${originalQty}, 最高档位=${maxTier}, 有效币数=${effectiveQty.toFixed(8)}, 收益=${profit.toFixed(4)}`);
+          
+          // 计算累计管理费
+          const confirmedDate = order.updated_at ? new Date(order.updated_at) : new Date(order.created_at);
+          const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+          const todayNow = new Date();
+          const todayDay = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate());
+          const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+          const isGift = parseInt(order.is_gift || '0') === 1;
+          const tradeValue = isGift ? principal : principal * 5.25;
+          const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+          const managementFee = dailyFee * holdDays;
+          console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 持有天数=${holdDays}, 累计管理费=${managementFee.toFixed(4)}`);
+          
+          const grossReturn = principal + Math.max(0, profit);
+          balanceAdjust = Math.max(0, grossReturn - managementFee);
+          balanceNote = `卖出成交 ${coin} 本金${principal.toFixed(2)}+收益${Math.max(0, profit).toFixed(4)}-管理费${managementFee.toFixed(4)} USDT`;
+          
+          if (Math.abs(balanceAdjust) > 0.001) {
+            await db.execute(
+              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                  VALUES (${input.ledgerId}, ${userId}, ${balanceAdjust}, ${balanceNote}, NOW(), NOW())`
+            );
+          }
+          // 更新卖出状态
+          const sellPriceUpdate = input.sellPrice ? `, sell_price = '${input.sellPrice.replace(/'/g, '')}'` : '';
+          await db.execute(
+            sql`UPDATE af_orders SET sell_status = 'sold', sell_confirmed_at = NOW()${sql.raw(sellPriceUpdate)}, updated_at = NOW()
+                WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
+          );
+          return { success: true };
+        }
+        
+        // ========== 管理员撤销卖出 ==========
+        if (input.sellStatus === 'sell_cancelled' && order.sell_status === 'selling') {
+          await db.execute(
+            sql`UPDATE af_orders SET sell_price = NULL, sell_quantity = NULL, sell_at = NULL, sell_status = 'sell_cancelled', updated_at = NOW()
+                WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
+          );
+          return { success: true };
+        }
+        
+        // ========== 原有买单状态处理 ==========
         // 1. 状态变化：待定→已成交
         if (oldStatus === 'pending' && newStatus === 'completed') {
-          if (side === 'sell') {
-            // 委卖成交：计算本金 + 实际收益（含收益权折扣）返还给用户
-            // 实际卖出价格 = 管理员输入的 limitPrice（如果有），否则用原始委托价
-            const sellPrice = input.limitPrice ? parseFloat(input.limitPrice) : parseFloat(order.limit_price || '0');
-            
-            // 查找关联的原始买入订单
-            const sourceOrderId = order.source_order_id;
-            let principal = oldAmount; // 本金（买入时花的USDT）
-            let profit = 0;
-            
-            if (sourceOrderId) {
-              const srcRows = await db.execute(
-                sql`SELECT id, limit_price, amount, quantity FROM af_orders WHERE id = ${sourceOrderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
-              ) as any;
-              const srcOrder = (srcRows[0]?.[0] ?? srcRows[0]);
-              if (srcOrder) {
-                principal = parseFloat(srcOrder.amount || '0'); // 原始买入本金
-                const buyPrice = parseFloat(srcOrder.limit_price || '0');
-                const originalQty = parseFloat(srcOrder.quantity || '0');
-                
-                // 查询收益权最高档位
-                const tierRows = await db.execute(
-                  sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${sourceOrderId}`
-                ) as any;
-                const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
-                
-                // 权益折扣率映射表（相对于52.5的百分比）
-                const equityDiscountRates: Record<number, number> = {
-                  0: 1.0,      // 第0档：100%
-                  1: 0.6667,   // 第1档：66.67%
-                  2: 0.4444,   // 第2档：44.44%
-                  3: 0.3333,   // 第3档：33.33%
-                  4: 0.2667,   // 第4档：26.67%
-                  5: 0.2222,   // 第5档：22.22%
-                  6: 0.1905,   // 第6档：19.05%
-                  7: 0.1667,   // 第7档：16.67%
-                  8: 0.1481,   // 第8档：14.81%
-                  9: 0.1333,   // 第9档：13.33%
-                };
-                
-                // 有效币数 = 原始币数 × 折扣率
-                const discountRate = equityDiscountRates[maxTier] || 1.0;
-                const effectiveQty = originalQty * discountRate;
-                
-                // 收益 = 有效币数 × (实际卖出价 - 买入委托价)
-                if (sellPrice > 0 && buyPrice > 0) {
-                  profit = effectiveQty * (sellPrice - buyPrice);
-                }
-                
-                console.log(`[AF卖单成交] 订单#${input.orderId} 关联买入#${sourceOrderId}: 本金=${principal}, 买入价=${buyPrice}, 卖出价=${sellPrice}, 原始币数=${originalQty}, 最高档位=${maxTier}, 有效币数=${effectiveQty.toFixed(8)}, 收益=${profit.toFixed(4)}`);
-              }
-            }
-            
-            // 计算累计管理费（从买入成交日到今天）
-            let managementFee = 0;
-            if (sourceOrderId) {
-              const srcFeeRows = await db.execute(
-                sql`SELECT updated_at, created_at, is_gift FROM af_orders WHERE id = ${sourceOrderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
-              ) as any;
-              const srcFeeOrder = (srcFeeRows[0]?.[0] ?? srcFeeRows[0]);
-              if (srcFeeOrder) {
-                const confirmedDate = srcFeeOrder.updated_at ? new Date(srcFeeOrder.updated_at) : new Date(srcFeeOrder.created_at);
-                const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
-                const todayNow = new Date();
-                const todayDay = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate());
-                const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-                // 成交价値：普通订单 = principal×5.25，赠送订单 = principal（赠送市値）
-                const isSrcGift = parseInt(srcFeeOrder.is_gift || '0') === 1;
-                const tradeValue = isSrcGift ? principal : principal * 5.25;
-                const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                managementFee = dailyFee * holdDays;
-                console.log(`[AF卖单成交] 管理费计算: 本金=${principal}, 成交价値=${tradeValue.toFixed(2)}, 持有天数=${holdDays}, 每日费=${dailyFee.toFixed(6)}, 累计管理费=${managementFee.toFixed(4)}`);
-              }
-            }
-
-            // 返还金额 = 本金 + 收益 - 累计管理费（最低返还0）
-            const grossReturn = principal + Math.max(0, profit);
-            balanceAdjust = Math.max(0, grossReturn - managementFee);
-            balanceNote = `卖单成交 ${coin} 本金${principal.toFixed(2)}+收益${Math.max(0, profit).toFixed(4)}-管理费${managementFee.toFixed(4)} USDT`;
-          }
           // 委买成交：买入时已扣了余额，无需额外操作
         }
         // 2. 状态变化：待定→已撤单
         if (oldStatus === 'pending' && newStatus === 'cancelled') {
-          if (side === 'buy') {
-            // 委买撤单：退回已扣除的金额
-            balanceAdjust = oldAmount;
-            balanceNote = `撤单退回 委买 ${coin} ${oldAmount} USDT`;
-          } else {
-            // 委卖撤单：提交时没有动过余额，撤单也不需要动余额
-            balanceAdjust = 0;
-            balanceNote = '';
-          }
+          // 委买撤单：退回已扣除的金额
+          balanceAdjust = oldAmount;
+          balanceNote = `撤单退回 委买 ${coin} ${oldAmount} USDT`;
         }
         // 3. 金额参数修改（仅当状态为 pending 时）
         if (input.amount && newStatus === 'pending' && Math.abs(newAmount - oldAmount) > 0.001) {
           const diff = newAmount - oldAmount;
-          if (side === 'buy') {
-            // 买入金额增加 -> 多扣；减少 -> 少扣
-            balanceAdjust += -diff;
-            balanceNote = `订单调整 委买 ${coin} 金额 ${oldAmount} -> ${newAmount} USDT`;
-          } else {
-            // 卖出金额增加 -> 多加；减少 -> 少加
-            balanceAdjust += diff;
-            balanceNote = `订单调整 委卖 ${coin} 金额 ${oldAmount} -> ${newAmount} USDT`;
-          }
+          balanceAdjust += -diff;
+          balanceNote = `订单调整 委买 ${coin} 金额 ${oldAmount} -> ${newAmount} USDT`;
         }
         // 执行余额调整
         if (Math.abs(balanceAdjust) > 0.001) {
@@ -10236,23 +10184,17 @@ export const appRouter = router({
           );
         }
         // 构建动态 UPDATE
-        // 重要逻辑：买单金额(amount)固定不变，修改价格时自动重算数量；卖单数量不重算（保持买入时的实际持仓量）
         const updates: string[] = [];
         if (input.limitPrice !== undefined) {
           updates.push(`limit_price = '${input.limitPrice.replace(/'/g, '')}' `);
-          // 只有买单才根据新价格重算数量；卖单的数量是买入时的实际持仓，不应重算
-          if (side === 'buy') {
-            const newPrice = parseFloat(input.limitPrice);
-            if (!isNaN(newPrice) && newPrice > 0) {
-              const recalcQty = (oldAmount * 5.25 / newPrice).toFixed(8);
-              updates.push(`quantity = '${recalcQty}'`);
-            }
+          const newPrice = parseFloat(input.limitPrice);
+          if (!isNaN(newPrice) && newPrice > 0) {
+            const recalcQty = (oldAmount * 5.25 / newPrice).toFixed(8);
+            updates.push(`quantity = '${recalcQty}'`);
           }
         } else if (input.quantity !== undefined) {
-          // 仅在没有改价格时才允许直接修改数量
           updates.push(`quantity = '${input.quantity.replace(/'/g, '')}'`);
         }
-        // amount 不允许修改，始终保持不变
         if (input.status !== undefined) updates.push(`status = '${input.status}'`);
         if (updates.length > 0) {
           await db.execute(
@@ -10350,32 +10292,46 @@ export const appRouter = router({
         }
         return { success: true };
       }),
-    // AF 用户自助撤单（仅限委托中的订单）
+    // AF 用户自助撤单（委托买撤单 或 委托卖撤单）
     afCancelOrder: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), orderId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), orderId: z.number(), cancelType: z.enum(['buy', 'sell']).optional() }))
       .mutation(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
-        // 查询订单，确认属于当前用户且状态为 pending
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, amount, status FROM af_orders
+          sql`SELECT id, user_id, coin, side, amount, status, sell_status FROM af_orders
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
+        
+        const cancelType = input.cancelType || (order.sell_status === 'selling' ? 'sell' : 'buy');
+        
+        if (cancelType === 'sell') {
+          // 撤销委托卖出：清空卖出字段，回到已成交状态
+          if (order.sell_status !== 'selling') throw new Error('该订单未在委托卖出中');
+          await db.execute(
+            sql`UPDATE af_orders SET
+                sell_price = NULL, sell_quantity = NULL, sell_at = NULL,
+                sell_status = 'sell_cancelled',
+                updated_at = NOW()
+                WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
+          );
+          console.log(`[afCancelOrder] 撤销委托卖出: 订单#${input.orderId}`);
+          // 委托卖出时没动余额，撤销也不需要动余额
+          return { success: true };
+        }
+        
+        // 撤销委托买入
         if (order.status !== 'pending') throw new Error('只有委托中的订单才能撤单');
         const amount = parseFloat(order.amount || '0');
-        const side = order.side;
-        // 撤单：买单退回冻结金额，卖单扣回已预加余额
-        const balanceAdjust = side === 'buy' ? amount : -amount;
-        const balanceNote = `用户撤单 ${side === 'buy' ? '委买' : '委卖'} ${order.coin} ${amount} USDT`;
-        if (Math.abs(balanceAdjust) > 0.001) {
+        // 买单撤单：退回冻结金额
+        if (amount > 0.001) {
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-                VALUES (${input.ledgerId}, ${ctx.user.id}, ${balanceAdjust}, ${balanceNote}, NOW(), NOW())`
+                VALUES (${input.ledgerId}, ${ctx.user.id}, ${amount}, ${`用户撤单 委买 ${order.coin} ${amount} USDT`}, NOW(), NOW())`
           );
         }
-        // 更新订单状态为已撤
         await db.execute(
           sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
