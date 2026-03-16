@@ -689,6 +689,15 @@ export default function LedgerDetail() {
                   邀请
                 </button>
               )}
+              {isCustomAH && (isOwner || isAdmin) && (
+                <button
+                  onClick={() => setShowAhCreateCompany(v => !v)}
+                  className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                >
+                  新建
+                </button>
+              )}
               <button
                 onClick={() => window.location.reload()}
                 className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
@@ -1628,22 +1637,7 @@ export default function LedgerDetail() {
       {isCustomAH && (
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4">
-            {/* 标题栏 */}
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>{(isOwner || isAdmin) ? '公司列表' : '我的公司'}</h3>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">{ahRoleName}</span>
-                {(isOwner || isAdmin) && (
-                  <button
-                    className="text-xs px-3 py-1 rounded-full text-white"
-                    style={{ backgroundColor: '#1A56DB' }}
-                    onClick={() => setShowAhCreateCompany(!showAhCreateCompany)}
-                  >
-                    + 新建公司
-                  </button>
-                )}
-              </div>
-            </div>
+
 
             {/* 新建公司表单 */}
             {showAhCreateCompany && (isOwner || isAdmin) && (
