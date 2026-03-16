@@ -109,6 +109,7 @@ const AfOrderManage = lazy(() => import("./pages/AfOrderManage"));
 const AfPayoutManage = lazy(() => import("./pages/AfPayoutManage"));
 const FunderManagement = lazy(() => import("./pages/FunderManagement"));
 const AhCompanyWorkspace = lazy(() => import("./pages/AhCompanyWorkspace"));
+const AiCompanyWorkspace = lazy(() => import("./pages/AiCompanyWorkspace"));
 const MarketEvalSettings = lazy(() => import("./pages/MarketEvalSettings"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
@@ -365,6 +366,7 @@ function Router() {
         <Route path="/ledger/:id/af-payout-manage" component={AfPayoutManage} />
         <Route path="/ledger/:id/funder-management" component={FunderManagement} />
         <Route path="/ledger/:id/company/:companyId" component={AhCompanyWorkspace} />
+        <Route path="/ledger/:id/ai-company/:companyId" component={AiCompanyWorkspace} />
         <Route path="/ledger/:id/market-eval-settings" component={MarketEvalSettings} />
         <Route path="/ledger/:id/aa-initial-balance" component={LedgerAAInitialBalance} />
         <Route path="/ledger/:id/admin-transactions" component={AdminTransactionList} />

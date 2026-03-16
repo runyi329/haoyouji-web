@@ -69,6 +69,7 @@ import CustomAEManager from "./admin/CustomAEManager";
 import CustomAFManager from "./admin/CustomAFManager";
 import CustomAGManager from "./admin/CustomAGManager";
 import CustomAHManager from "./admin/CustomAHManager";
+import CustomAIManager from "./admin/CustomAIManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 
 // 定制账本类型配置表（新增类型只需在此添加）
@@ -128,6 +129,13 @@ const CUSTOM_LEDGER_TYPES = [
     name: "财务记账管理",
     desc: "AH 型定制账本，用于公司财务记账管理，支持5层角色（创建者/管理员/普通用户/客户/企业员工）",
     component: CustomAHManager,
+  },
+  {
+    key: "AI",
+    label: "AI 型",
+    name: "共享公司股权管理",
+    desc: "AI 型定制账本，用于共享公司股权管理，支持4层角色（创建者/管理员/股东/观察者）",
+    component: CustomAIManager,
   },
 ];
 
