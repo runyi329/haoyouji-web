@@ -643,71 +643,54 @@ export default function LedgerDetail() {
                   </div>
                 )}
               </div>
-              {/* 卡片 3：仓位 */}
+              {/* 卡片 3：仓位 & 累计盈亏（合并） */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-xs text-white/70 mb-1">仓位</div>
-                {(afTotalAsset as any)?.positions ? (
-                  <div className="space-y-1">
-                    {['BTC', 'ETH', 'SOL'].map(coin => {
-                      const qty = (afTotalAsset as any).positions[coin] ?? 0;
-                      return (
-                        <div key={coin} className="flex items-baseline justify-between">
-                          <span className="text-xs text-white/70">{coin}</span>
-                          <span className="text-sm font-bold text-white">
-                            {(() => {
-                              // 零值：只显示 0
-                              if (!qty || qty <= 0) return '0';
-                              const maxDecimals = coin === 'BTC' ? 8 : 6;
-                              const raw = qty.toFixed(maxDecimals);
-                              // 智能去除末尾零，但至少保留2位小数
-                              const [intPart, decPart] = raw.split('.');
-                              const trimmed = decPart.replace(/0+$/, '');
-                              const finalDec = trimmed.length < 2 ? trimmed.padEnd(2, '0') : trimmed;
-                              return `${intPart}.${finalDec}`;
-                            })()}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-lg font-bold text-white">--</div>
-                )}
-              </div>
-              {/* 卡片 4：累计盈亏（按币种分行 + 总计） */}
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-xs text-white/70">累计盈亏</span>
+                <div className="flex items-baseline justify-between mb-2">
+                  <span className="text-xs text-white/70">仓位 & 累计盈亏</span>
                   {pnlData?.updatedAt && (
                     <span className="text-[10px] text-white/40">
                       {new Date(pnlData.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
                     </span>
                   )}
                 </div>
-                {pnlData && pnlData.coins.length > 0 ? (
-                  <div className="space-y-1">
-                    {pnlData.coins.map((c: any) => {
-                      const displayPnl = Math.max(0, c.pnl);
-                      return (
-                        <div key={c.coin} className="flex items-baseline justify-between">
-                          <span className="text-xs text-white/60">{c.coin}</span>
-                          <span className="text-xs font-medium text-green-400">
-                            +{displayPnl.toFixed(2)} U
-                          </span>
-                        </div>
-                      );
-                    })}
-                    <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline justify-between">
-                      <span className="text-xs text-white/80 font-medium">总计</span>
-                      <span className="text-sm font-bold text-green-400">
-                        +{Math.max(0, pnlData.total).toFixed(2)} U
-                      </span>
+                {/* 表头 */}
+                <div className="flex items-baseline mb-1 text-[10px] text-white/40">
+                  <span className="w-10">币种</span>
+                  <span className="flex-1 text-right">仓位</span>
+                  <span className="w-12 text-right">订单</span>
+                  <span className="flex-1 text-right">盈亏</span>
+                </div>
+                {['BTC', 'ETH', 'SOL'].map(coin => {
+                  const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
+                  const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
+                  const displayPnl = Math.max(0, coinData?.pnl ?? 0);
+                  const orderCount = coinData?.orderCount ?? 0;
+                  // 智能去尾零
+                  const fmtQty = (() => {
+                    if (!qty || qty <= 0) return '0';
+                    const maxDec = coin === 'BTC' ? 8 : 6;
+                    const raw = qty.toFixed(maxDec);
+                    const [intPart, decPart] = raw.split('.');
+                    const trimmed = decPart.replace(/0+$/, '');
+                    const finalDec = trimmed.length < 2 ? trimmed.padEnd(2, '0') : trimmed;
+                    return `${intPart}.${finalDec}`;
+                  })();
+                  return (
+                    <div key={coin} className="flex items-baseline py-0.5">
+                      <span className="w-10 text-xs text-white/70 font-medium">{coin}</span>
+                      <span className="flex-1 text-right text-xs font-bold text-white">{fmtQty}</span>
+                      <span className="w-12 text-right text-[10px] text-white/50">{orderCount}笔</span>
+                      <span className="flex-1 text-right text-xs font-medium text-green-400">+{displayPnl.toFixed(2)}</span>
                     </div>
-
-                  </div>
-                ) : (
-                  <div className="text-lg font-bold text-white">--</div>
-                )}
+                  );
+                })}
+                {/* 总计 */}
+                <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline">
+                  <span className="w-10 text-xs text-white/80 font-medium">总计</span>
+                  <span className="flex-1"></span>
+                  <span className="w-12"></span>
+                  <span className="flex-1 text-right text-sm font-bold text-green-400">+{Math.max(0, pnlData?.total ?? 0).toFixed(2)} U</span>
+                </div>
               </div>
               {/* 管理员统计：累计订单（后端控制权限，代看模式下隐藏） */}
               {!viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).orders && (

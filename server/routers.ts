@@ -10453,12 +10453,12 @@ export const appRouter = router({
         const db = await getLedgerDb();
         // 代看视角时查目标用户的订单，否则查自己的
         const targetUserId = input.viewAsUserId || ctx.user.id;
-        // 查询目标用户所有买单（已成交 + 委卖中 + 已卖出）
+        // 查询目标用户所有买单（委托中 + 已成交 + 委卖中 + 已卖出，不含已撤销）
         const orderRows = await db.execute(
           sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.status, o.sell_status, o.sell_price, o.is_gift
               FROM af_orders o
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
-                AND o.side = 'buy' AND o.status = 'completed'
+                AND o.side = 'buy' AND o.status IN ('pending', 'completed')
                 AND (o.order_type = '无损合约' OR o.order_type IS NULL OR o.order_type = '')`
         ) as any;
         const orders = ((orderRows[0] || orderRows) as any[]);
@@ -10486,11 +10486,16 @@ export const appRouter = router({
           if (p) prices[coin] = p;
         }
         // 按币种分组计算盈亏
-        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number }> = {};
+        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number; pendingCount: number }> = {};
         for (const order of orders) {
           const coin = order.coin;
-          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0 };
+          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0, pendingCount: 0 };
           coinPnl[coin].orderCount++;
+          if (order.status === 'pending') {
+            // 委托中订单：统计订单数但不参与盈亏计算
+            coinPnl[coin].pendingCount++;
+            continue;
+          }
           const buyPrice = parseFloat(order.limit_price || '0');
           const originalQty = parseFloat(order.quantity || '0');
           const maxTier = tierMap[order.id] || 0;
@@ -10519,6 +10524,7 @@ export const appRouter = router({
           orderCount: data.orderCount,
           holdingCount: data.holdingCount,
           soldCount: data.soldCount,
+          pendingCount: data.pendingCount,
         }));
         // 按 BTC > ETH > SOL 顺序排列
         const coinOrder = ['BTC', 'ETH', 'SOL'];
