@@ -153,9 +153,16 @@ export default function LedgerDetail() {
   const isDiet = (ledgerData as any)?.type === 'diet' || (ledgerData as any)?.type === 'custom_ac';
   const isCustomAE = (ledgerData as any)?.type === 'custom_ae';
   const isCustomAF = (ledgerData as any)?.type === 'custom_af';
+  const isCustomAH = (ledgerData as any)?.type === 'custom_ah';
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isFunder = (ledgerData as any)?.userRole === 'funder';
+  const isClient = (ledgerData as any)?.userRole === 'client';
+  const isEmployee = (ledgerData as any)?.userRole === 'employee';
+  // AH 账本角色名称映射
+  const ahRoleName = isCustomAH ? (
+    isOwner ? '创建者' : isAdmin ? '管理员' : (ledgerData as any)?.userRole === 'member' ? '普通用户' : isClient ? '客户' : isEmployee ? '企业员工' : '普通用户'
+  ) : '';
   // 视角切换时，用目标用户的角色来控制 UI 显示
   const viewAsRole = viewAsUserId ? ((membersData as any[])?.find((m: any) => m.userId === viewAsUserId)?.role || 'member') : null;
   const effectiveIsOwner = viewAsUserId ? viewAsRole === 'owner' : isOwner;
@@ -414,9 +421,9 @@ export default function LedgerDetail() {
   return (
     <div className="min-h-screen bg-[var(--bg-cream)]">
       {/* 顶部区域 */}
-      <div className="pb-4" style={{ backgroundColor: isCustomAF ? undefined : '#D32F2F', background: isCustomAF ? 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' : undefined, color: '#FFFFFF' }}>
-        {/* AF 账本：顶部两行布局 */}
-        {isCustomAF ? (
+      <div className="pb-4" style={{ backgroundColor: (isCustomAF || isCustomAH) ? undefined : '#D32F2F', background: (isCustomAF || isCustomAH) ? 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' : undefined, color: '#FFFFFF' }}>
+        {/* AF/AH 账本：顶部两行布局 */}
+        {(isCustomAF || isCustomAH) ? (
           <div className="px-4 pt-3 pb-2">
             {/* 第一行：头像 + 名字 + 设置齿轮 */}
             <div className="flex items-center justify-between">
@@ -459,9 +466,12 @@ export default function LedgerDetail() {
                 </div>
               )}
             </div>
-            {/* 第二行：操作按钮（资金方只显示刷新+返回） */}
+            {/* 第二行：操作按钮 */}
             <div className="flex items-center gap-2 mt-2">
-              {!isFunder && (
+              {isCustomAH && (
+                <span className="text-xs text-white/70 mr-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{ahRoleName}</span>
+              )}
+              {isCustomAF && !isFunder && (
                 <button
                   onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
@@ -470,7 +480,7 @@ export default function LedgerDetail() {
                   充值
                 </button>
               )}
-              {!isFunder && (
+              {isCustomAF && !isFunder && (
                 <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
@@ -551,7 +561,7 @@ export default function LedgerDetail() {
                   </div>
                 )}
                 {/* 普通账本：查找按鈕 */}
-                {!isCustomAE && !isDiet && !isCustomAF && (
+                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && (
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
@@ -561,7 +571,7 @@ export default function LedgerDetail() {
                   </div>
                 )}
                 {/* 普通账本：数据统计按鈕 */}
-                {!isCustomAE && !isDiet && !isCustomAF && (
+                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && (
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
@@ -621,7 +631,7 @@ export default function LedgerDetail() {
           </div>
         )}
         {/* AF 账本：2×2 数据容器 */}
-        {isCustomAF && (
+        {isCustomAF && !isCustomAH && (
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
               {/* 卡片 1：资金方看“资产”，其他角色看“余额” */}
@@ -792,8 +802,39 @@ export default function LedgerDetail() {
             </div>
           </div>
         )}
+        {/* AH 账本：数据占位符区域 */}
+        {isCustomAH && (
+          <div className="px-4 pt-2 pb-4">
+            <div className="grid grid-cols-2 gap-3">
+              {/* 财务概览卡片 */}
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-xs text-white/70 mb-1">财务概览</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-[10px] text-white/50 mt-1">待配置</div>
+              </div>
+              {/* 当月收支 */}
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-xs text-white/70 mb-1">当月收支</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-[10px] text-white/50 mt-1">待配置</div>
+              </div>
+              {/* 应收应付 */}
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-xs text-white/70 mb-1">应收应付</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-[10px] text-white/50 mt-1">待配置</div>
+              </div>
+              {/* 税务申报 */}
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-xs text-white/70 mb-1">税务申报</div>
+                <div className="text-lg font-bold text-white">--</div>
+                <div className="text-[10px] text-white/50 mt-1">待配置</div>
+              </div>
+            </div>
+          </div>
+        )}
         {/* 普通账本：统计面板（总收入/总结余/总支出）*/}
-        {!isCustomAE && !isDiet && !isCustomAF && (
+        {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && (
           <div className="px-4 pt-2 pb-1 relative">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="relative">
@@ -1383,8 +1424,51 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* 记账记录列表 —— 非 custom_ae / custom_af 账本显示 */}
-      {!isCustomAE && !isCustomAF && <div className={`flex-1 px-4 pb-20 space-y-3`}>
+      {/* AH 账本：白色区域占位符 */}
+      {isCustomAH && (
+        <div className="flex-1 px-4 pb-20">
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>财务记录</h3>
+              <span className="text-xs text-gray-400">当前角色: {ahRoleName}</span>
+            </div>
+            <div className="text-center py-12">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ backgroundColor: '#EBF0FF' }}>
+                <Receipt className="w-8 h-8" style={{ color: '#3B82F6' }} />
+              </div>
+              <div className="text-gray-500 text-base mb-1">财务记账管理</div>
+              <div className="text-gray-400 text-sm mb-4">功能待配置，敬请期待</div>
+              {/* 5层角色说明 */}
+              <div className="mt-6 space-y-2 text-left max-w-xs mx-auto">
+                <div className="text-xs text-gray-500 font-medium mb-2">角色权限说明</div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#1A56DB' }} />
+                  <span className="text-gray-600">创建者 — 代理集团公司老板，最高权限</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#3B82F6' }} />
+                  <span className="text-gray-600">管理员 — 代理记账公司，管理层权限</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#60A5FA' }} />
+                  <span className="text-gray-600">普通用户 — 发工资的员工，操作层权限</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#93C5FD' }} />
+                  <span className="text-gray-600">客户 — 企业客户，查看层权限</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#BFDBFE' }} />
+                  <span className="text-gray-600">企业员工 — 企业员工，申报层权限</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah 账本显示 */}
+      {!isCustomAE && !isCustomAF && !isCustomAH && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -1511,8 +1595,8 @@ export default function LedgerDetail() {
         )}
       </div>}
 
-      {/* 底部添加按钮：非 custom_ae 账本显示 */}
-      {!isCustomAE && !isDiet && !isCustomAF && (
+      {/* 底部添加按钮：非定制账本显示 */}
+      {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && (
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
@@ -1547,8 +1631,8 @@ export default function LedgerDetail() {
         />
       )}
 
-      {/* AF 视角切换横幅 */}
-      {isCustomAF && viewAsUserId && (isOwner || isAdmin) && (
+      {/* AF/AH 视角切换横幅 */}
+      {(isCustomAF || isCustomAH) && viewAsUserId && (isOwner || isAdmin) && (
         <div className="fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-between px-4 py-3 safe-area-bottom" style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}>
           <div className="flex items-center gap-2 text-sm font-medium">
             <Users className="w-4 h-4" />
@@ -1566,8 +1650,8 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* AF 视角切换弹窗：成员列表 + 搜索 */}
-      {showViewAsPicker && isCustomAF && (isOwner || isAdmin) && (
+      {/* AF/AH 视角切换弹窗：成员列表 + 搜索 */}
+      {showViewAsPicker && (isCustomAF || isCustomAH) && (isOwner || isAdmin) && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center" onClick={() => setShowViewAsPicker(false)}>
           <div className="absolute inset-0 bg-black/40" />
           <div
