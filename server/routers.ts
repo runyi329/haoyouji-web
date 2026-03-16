@@ -24,7 +24,7 @@ import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages, agSyncSources, agSyncLogs } from "../drizzle/schema";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray, like, or, gt } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
@@ -10607,6 +10607,251 @@ export const appRouter = router({
           throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AH定制账本' });
         }
         return await dbLedger.inviteMemberByUsernameWithRole(input.ledgerId, ctx.user.id, input.username, input.role);
+      }),
+
+    // ========== AH 公司管理 API ==========
+    // 创建公司（管理员/创建者）
+    ahCreateCompany: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        name: z.string().min(1),
+        contactName: z.string().optional(),
+        contactPhone: z.string().optional(),
+        taxId: z.string().optional(),
+        address: z.string().optional(),
+        note: z.string().optional(),
+        clientUserId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 检查权限：必须是账本的owner或admin
+        const ledgerDb = await getLedgerDb();
+        const roleRows = await ledgerDb.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        );
+        const userRole = (roleRows as any)?.[0]?.[0]?.role;
+        if (userRole !== 'owner' && userRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅创建者或管理员可创建公司' });
+        }
+        const result = await db.insert(ahCompanies).values({
+          ledgerId: input.ledgerId,
+          name: input.name,
+          contactName: input.contactName || null,
+          contactPhone: input.contactPhone || null,
+          taxId: input.taxId || null,
+          address: input.address || null,
+          note: input.note || null,
+          clientUserId: input.clientUserId || null,
+          createdBy: ctx.user.id,
+        });
+        // 自动创建当月的报税授权记录
+        const now = new Date();
+        const taxPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const dueMonth = now.getDate() >= 15 ? now.getMonth() + 2 : now.getMonth() + 1;
+        const dueYear = dueMonth > 12 ? now.getFullYear() + 1 : now.getFullYear();
+        const dueDate = `${dueYear}-${String(dueMonth > 12 ? dueMonth - 12 : dueMonth).padStart(2, '0')}-15`;
+        const companyId = (result as any)[0]?.insertId;
+        if (companyId) {
+          await db.insert(ahTaxAuthorizations).values({
+            ledgerId: input.ledgerId,
+            companyId,
+            taxPeriod,
+            dueDate,
+          });
+        }
+        return { success: true, companyId };
+      }),
+
+    // 获取公司列表（管理员看全部，客户只看自己关联的）
+    ahListCompanies: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const ledgerDb = await getLedgerDb();
+        const roleRows = await ledgerDb.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        );
+        const userRole = (roleRows as any)?.[0]?.[0]?.role;
+        if (!userRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本的成员' });
+        
+        let companies;
+        if (userRole === 'owner' || userRole === 'admin') {
+          companies = await db.select().from(ahCompanies)
+            .where(eq(ahCompanies.ledgerId, input.ledgerId))
+            .orderBy(desc(ahCompanies.createdAt));
+        } else if (userRole === 'client') {
+          companies = await db.select().from(ahCompanies)
+            .where(and(eq(ahCompanies.ledgerId, input.ledgerId), eq(ahCompanies.clientUserId, ctx.user.id)))
+            .orderBy(desc(ahCompanies.createdAt));
+        } else {
+          companies = [];
+        }
+        return companies;
+      }),
+
+    // 获取某公司的报税授权记录
+    ahGetTaxAuthorizations: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), companyId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const ledgerDb = await getLedgerDb();
+        const roleRows = await ledgerDb.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        );
+        const userRole = (roleRows as any)?.[0]?.[0]?.role;
+        if (!userRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本的成员' });
+        
+        let conditions = [eq(ahTaxAuthorizations.ledgerId, input.ledgerId)];
+        if (input.companyId) {
+          conditions.push(eq(ahTaxAuthorizations.companyId, input.companyId));
+        }
+        // 客户只能看自己关联公司的
+        if (userRole === 'client') {
+          const myCompanies = await db.select({ id: ahCompanies.id }).from(ahCompanies)
+            .where(and(eq(ahCompanies.ledgerId, input.ledgerId), eq(ahCompanies.clientUserId, ctx.user.id)));
+          const myCompanyIds = myCompanies.map(c => c.id);
+          if (myCompanyIds.length === 0) return [];
+          conditions.push(inArray(ahTaxAuthorizations.companyId, myCompanyIds));
+        }
+        
+        const auths = await db.select().from(ahTaxAuthorizations)
+          .where(and(...conditions))
+          .orderBy(desc(ahTaxAuthorizations.dueDate));
+        return auths;
+      }),
+
+    // 客户确认授权
+    ahAuthorize: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), authId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 检查授权记录是否存在
+        const [auth] = await db.select().from(ahTaxAuthorizations)
+          .where(and(eq(ahTaxAuthorizations.id, input.authId), eq(ahTaxAuthorizations.ledgerId, input.ledgerId)));
+        if (!auth) throw new TRPCError({ code: 'NOT_FOUND', message: '授权记录不存在' });
+        if (auth.status !== 'pending') throw new TRPCError({ code: 'BAD_REQUEST', message: '该记录已授权或已过期' });
+        // 检查是否是该公司关联的客户
+        const [company] = await db.select().from(ahCompanies)
+          .where(eq(ahCompanies.id, auth.companyId));
+        if (!company || company.clientUserId !== ctx.user.id) {
+          // 也允许管理员代为授权
+          const ledgerDb = await getLedgerDb();
+          const roleRows = await ledgerDb.execute(
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+          );
+          const userRole = (roleRows as any)?.[0]?.[0]?.role;
+          if (userRole !== 'owner' && userRole !== 'admin') {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '您无权授权该公司的报税' });
+          }
+        }
+        await db.update(ahTaxAuthorizations)
+          .set({ status: 'authorized', authorizedBy: ctx.user.id, authorizedAt: sql`NOW()` })
+          .where(eq(ahTaxAuthorizations.id, input.authId));
+        return { success: true, message: '授权成功' };
+      }),
+
+    // 管理员确认已申报
+    ahMarkFiled: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), authId: z.number(), note: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const ledgerDb = await getLedgerDb();
+        const roleRows = await ledgerDb.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        );
+        const userRole = (roleRows as any)?.[0]?.[0]?.role;
+        if (userRole !== 'owner' && userRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可标记已申报' });
+        }
+        const [auth] = await db.select().from(ahTaxAuthorizations)
+          .where(and(eq(ahTaxAuthorizations.id, input.authId), eq(ahTaxAuthorizations.ledgerId, input.ledgerId)));
+        if (!auth) throw new TRPCError({ code: 'NOT_FOUND', message: '授权记录不存在' });
+        if (auth.status !== 'authorized') throw new TRPCError({ code: 'BAD_REQUEST', message: '该记录尚未授权，无法申报' });
+        await db.update(ahTaxAuthorizations)
+          .set({ status: 'filed', filedBy: ctx.user.id, filedAt: sql`NOW()`, filedNote: input.note || null })
+          .where(eq(ahTaxAuthorizations.id, input.authId));
+        return { success: true, message: '已标记为已申报' };
+      }),
+
+    // 管理员手动创建新一期报税授权（或自动创建下一期）
+    ahCreateTaxAuth: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number(),
+        taxPeriod: z.string(), // 格式 "2026-03"
+        dueDate: z.string(),   // 格式 "2026-04-15"
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const ledgerDb = await getLedgerDb();
+        const roleRows = await ledgerDb.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        );
+        const userRole = (roleRows as any)?.[0]?.[0]?.role;
+        if (userRole !== 'owner' && userRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建报税授权' });
+        }
+        // 检查是否已存在同期记录
+        const existing = await db.select().from(ahTaxAuthorizations)
+          .where(and(
+            eq(ahTaxAuthorizations.ledgerId, input.ledgerId),
+            eq(ahTaxAuthorizations.companyId, input.companyId),
+            eq(ahTaxAuthorizations.taxPeriod, input.taxPeriod)
+          ));
+        if (existing.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `${input.taxPeriod} 期的报税授权已存在` });
+        }
+        await db.insert(ahTaxAuthorizations).values({
+          ledgerId: input.ledgerId,
+          companyId: input.companyId,
+          taxPeriod: input.taxPeriod,
+          dueDate: input.dueDate,
+        });
+        return { success: true };
+      }),
+
+    // 更新公司信息
+    ahUpdateCompany: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number(),
+        name: z.string().optional(),
+        contactName: z.string().optional(),
+        contactPhone: z.string().optional(),
+        taxId: z.string().optional(),
+        address: z.string().optional(),
+        note: z.string().optional(),
+        clientUserId: z.number().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const ledgerDb = await getLedgerDb();
+        const roleRows = await ledgerDb.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        );
+        const userRole = (roleRows as any)?.[0]?.[0]?.role;
+        if (userRole !== 'owner' && userRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可修改公司信息' });
+        }
+        const updates: any = {};
+        if (input.name !== undefined) updates.name = input.name;
+        if (input.contactName !== undefined) updates.contactName = input.contactName;
+        if (input.contactPhone !== undefined) updates.contactPhone = input.contactPhone;
+        if (input.taxId !== undefined) updates.taxId = input.taxId;
+        if (input.address !== undefined) updates.address = input.address;
+        if (input.note !== undefined) updates.note = input.note;
+        if (input.clientUserId !== undefined) updates.clientUserId = input.clientUserId;
+        if (Object.keys(updates).length === 0) return { success: true };
+        await db.update(ahCompanies).set(updates)
+          .where(and(eq(ahCompanies.id, input.companyId), eq(ahCompanies.ledgerId, input.ledgerId)));
+        return { success: true };
       }),
 
     // ========== 资方资产订单管理 API ==========

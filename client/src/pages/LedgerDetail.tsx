@@ -6,6 +6,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 // 不再使用动态主题，固定红色配色
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 import MembersDialog from "@/components/MembersDialog";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -29,6 +30,10 @@ import {
   Timer,
   Trophy,
   Flame,
+  Building2,
+  FileCheck,
+  AlertCircle,
+  CalendarClock,
 } from "lucide-react";
 
 
@@ -200,6 +205,34 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF && isFunder }
   );
+  // AH 账本：公司列表和报税授权
+  const { data: ahCompanies, refetch: refetchAhCompanies } = trpc.ledger.ahListCompanies.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAH }
+  );
+  const { data: ahTaxAuths, refetch: refetchAhTaxAuths } = trpc.ledger.ahGetTaxAuthorizations.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAH }
+  );
+  // AH 账本：创建公司
+  const ahCreateCompanyMutation = trpc.ledger.ahCreateCompany.useMutation({
+    onSuccess: () => { refetchAhCompanies(); refetchAhTaxAuths(); },
+  });
+  // AH 账本：客户确认授权
+  const ahAuthorizeMutation = trpc.ledger.ahAuthorize.useMutation({
+    onSuccess: () => { refetchAhTaxAuths(); },
+  });
+  // AH 账本：管理员标记已申报
+  const ahMarkFiledMutation = trpc.ledger.ahMarkFiled.useMutation({
+    onSuccess: () => { refetchAhTaxAuths(); },
+  });
+  // AH 账本：新建公司弹窗状态
+  const [showAhCreateCompany, setShowAhCreateCompany] = useState(false);
+  const [ahNewCompanyName, setAhNewCompanyName] = useState('');
+  const [ahNewCompanyContact, setAhNewCompanyContact] = useState('');
+  const [ahNewCompanyPhone, setAhNewCompanyPhone] = useState('');
+  const [ahNewCompanyTaxId, setAhNewCompanyTaxId] = useState('');
+
   const dietConfig = (dietStats as any)?.config;
   const dietInitialWeight = dietConfig ? Number(dietConfig.initialWeight) : null;
   const dietTargetWeight = dietConfig ? Number(dietConfig.targetWeight) : null;
@@ -1424,45 +1457,219 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* AH 账本：白色区域占位符 */}
+      {/* AH 账本：公司列表 + 报税授权管理 */}
       {isCustomAH && (
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4">
+            {/* 标题栏 */}
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>财务记录</h3>
-              <span className="text-xs text-gray-400">当前角色: {ahRoleName}</span>
-            </div>
-            <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ backgroundColor: '#EBF0FF' }}>
-                <Receipt className="w-8 h-8" style={{ color: '#3B82F6' }} />
-              </div>
-              <div className="text-gray-500 text-base mb-1">财务记账管理</div>
-              <div className="text-gray-400 text-sm mb-4">功能待配置，敬请期待</div>
-              {/* 5层角色说明 */}
-              <div className="mt-6 space-y-2 text-left max-w-xs mx-auto">
-                <div className="text-xs text-gray-500 font-medium mb-2">角色权限说明</div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#1A56DB' }} />
-                  <span className="text-gray-600">创建者 — 代理集团公司老板，最高权限</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#3B82F6' }} />
-                  <span className="text-gray-600">管理员 — 代理记账公司，管理层权限</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#60A5FA' }} />
-                  <span className="text-gray-600">普通用户 — 发工资的员工，操作层权限</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#93C5FD' }} />
-                  <span className="text-gray-600">客户 — 企业客户，查看层权限</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: '#BFDBFE' }} />
-                  <span className="text-gray-600">企业员工 — 企业员工，申报层权限</span>
-                </div>
+              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>公司列表</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">{ahRoleName}</span>
+                {(isOwner || isAdmin) && (
+                  <button
+                    className="text-xs px-3 py-1 rounded-full text-white"
+                    style={{ backgroundColor: '#1A56DB' }}
+                    onClick={() => setShowAhCreateCompany(!showAhCreateCompany)}
+                  >
+                    + 新建公司
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* 新建公司表单 */}
+            {showAhCreateCompany && (isOwner || isAdmin) && (
+              <div className="mb-4 p-4 rounded-xl border border-gray-200" style={{ backgroundColor: '#F8FAFF' }}>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="公司名称 *"
+                    value={ahNewCompanyName}
+                    onChange={(e: any) => setAhNewCompanyName(e.target.value)}
+                    className="text-sm"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="联系人"
+                      value={ahNewCompanyContact}
+                      onChange={(e: any) => setAhNewCompanyContact(e.target.value)}
+                      className="text-sm"
+                    />
+                    <Input
+                      placeholder="联系电话"
+                      value={ahNewCompanyPhone}
+                      onChange={(e: any) => setAhNewCompanyPhone(e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+                  <Input
+                    placeholder="税号"
+                    value={ahNewCompanyTaxId}
+                    onChange={(e: any) => setAhNewCompanyTaxId(e.target.value)}
+                    className="text-sm"
+                  />
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      className="text-white"
+                      style={{ backgroundColor: '#1A56DB' }}
+                      disabled={ahCreateCompanyMutation.isPending || !ahNewCompanyName.trim()}
+                      onClick={() => {
+                        ahCreateCompanyMutation.mutate({
+                          ledgerId: Number(ledgerId),
+                          name: ahNewCompanyName.trim(),
+                          contactName: ahNewCompanyContact.trim() || undefined,
+                          contactPhone: ahNewCompanyPhone.trim() || undefined,
+                          taxId: ahNewCompanyTaxId.trim() || undefined,
+                        });
+                        setAhNewCompanyName('');
+                        setAhNewCompanyContact('');
+                        setAhNewCompanyPhone('');
+                        setAhNewCompanyTaxId('');
+                        setShowAhCreateCompany(false);
+                      }}
+                    >
+                      {ahCreateCompanyMutation.isPending ? '创建中...' : '确认创建'}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setShowAhCreateCompany(false)}>取消</Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 公司卡片列表 */}
+            {!ahCompanies || ahCompanies.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ backgroundColor: '#EBF0FF' }}>
+                  <Building2 className="w-8 h-8" style={{ color: '#3B82F6' }} />
+                </div>
+                <div className="text-gray-500 text-base mb-1">暂无公司</div>
+                <div className="text-gray-400 text-sm">{(isOwner || isAdmin) ? '点击上方「新建公司」添加第一家客户公司' : '管理员尚未添加您的公司'}</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(ahCompanies as any[]).map((company: any) => {
+                  // 找到该公司最新的报税授权记录
+                  const companyAuths = (ahTaxAuths as any[] || []).filter((a: any) => a.companyId === company.id);
+                  const latestAuth = companyAuths.length > 0 ? companyAuths[0] : null;
+                  // 计算倒计时：距离下一个15号还有几天
+                  const now = new Date();
+                  let nextDue: Date;
+                  if (now.getDate() >= 15) {
+                    // 已过15号，下一个截止日是下个月15号
+                    nextDue = new Date(now.getFullYear(), now.getMonth() + 1, 15);
+                  } else {
+                    nextDue = new Date(now.getFullYear(), now.getMonth(), 15);
+                  }
+                  const daysLeft = Math.ceil((nextDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  const statusColor = latestAuth?.status === 'authorized' ? '#10B981' : latestAuth?.status === 'filed' ? '#6B7280' : latestAuth?.status === 'expired' ? '#EF4444' : '#F59E0B';
+                  const statusText = latestAuth?.status === 'authorized' ? '客户已授权，可申报扣税' : latestAuth?.status === 'filed' ? '已申报' : latestAuth?.status === 'expired' ? '已过期' : '待客户授权';
+
+                  return (
+                    <div key={company.id} className="rounded-xl border border-gray-100 overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
+                      {/* 公司头部 */}
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#EBF0FF' }}>
+                              <Building2 className="w-5 h-5" style={{ color: '#1A56DB' }} />
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900 text-sm">{company.name}</div>
+                              {company.taxId && <div className="text-xs text-gray-400 mt-0.5">税号: {company.taxId}</div>}
+                              {company.contactName && <div className="text-xs text-gray-400">联系人: {company.contactName} {company.contactPhone}</div>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 报税授权状态栏 */}
+                      <div className="px-4 pb-3">
+                        <div className="rounded-lg p-3" style={{ backgroundColor: '#F8FAFF' }}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <CalendarClock className="w-4 h-4" style={{ color: '#3B82F6' }} />
+                              <span className="text-xs font-medium text-gray-700">报税授权</span>
+                              {latestAuth && <span className="text-xs text-gray-400">{latestAuth.taxPeriod}期</span>}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
+                              <span className="text-xs" style={{ color: statusColor }}>{statusText}</span>
+                            </div>
+                          </div>
+
+                          {/* 倒计时 */}
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs text-gray-500">
+                              距离下次报税截止日（{nextDue.getMonth() + 1}月15日）
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <span className="text-lg font-bold" style={{ color: daysLeft <= 3 ? '#EF4444' : daysLeft <= 7 ? '#F59E0B' : '#1A56DB' }}>{daysLeft}</span>
+                              <span className="text-xs text-gray-500">天</span>
+                            </div>
+                          </div>
+
+                          {/* 操作按钮 */}
+                          <div className="mt-2 flex gap-2">
+                            {/* 客户角色：确认授权按钮 */}
+                            {isClient && latestAuth?.status === 'pending' && (
+                              <Button
+                                size="sm"
+                                className="flex-1 text-white text-xs"
+                                style={{ backgroundColor: '#10B981' }}
+                                disabled={ahAuthorizeMutation.isPending}
+                                onClick={() => ahAuthorizeMutation.mutate({ ledgerId: Number(ledgerId), authId: latestAuth.id })}
+                              >
+                                <CheckCircle className="w-3.5 h-3.5 mr-1" />
+                                {ahAuthorizeMutation.isPending ? '授权中...' : '确认授权报税'}
+                              </Button>
+                            )}
+                            {isClient && latestAuth?.status === 'authorized' && (
+                              <div className="flex-1 text-center py-1.5 rounded-md text-xs" style={{ backgroundColor: '#ECFDF5', color: '#10B981' }}>
+                                <CheckCircle className="w-3.5 h-3.5 inline mr-1" />已授权，等待申报
+                              </div>
+                            )}
+                            {isClient && latestAuth?.status === 'filed' && (
+                              <div className="flex-1 text-center py-1.5 rounded-md text-xs" style={{ backgroundColor: '#F3F4F6', color: '#6B7280' }}>
+                                <FileCheck className="w-3.5 h-3.5 inline mr-1" />本期已申报完成
+                              </div>
+                            )}
+                            {/* 管理员角色：标记已申报按钮 */}
+                            {(isOwner || isAdmin) && latestAuth?.status === 'authorized' && (
+                              <Button
+                                size="sm"
+                                className="flex-1 text-white text-xs"
+                                style={{ backgroundColor: '#1A56DB' }}
+                                disabled={ahMarkFiledMutation.isPending}
+                                onClick={() => ahMarkFiledMutation.mutate({ ledgerId: Number(ledgerId), authId: latestAuth.id })}
+                              >
+                                <FileCheck className="w-3.5 h-3.5 mr-1" />
+                                {ahMarkFiledMutation.isPending ? '处理中...' : '标记已申报'}
+                              </Button>
+                            )}
+                            {(isOwner || isAdmin) && latestAuth?.status === 'pending' && (
+                              <div className="flex-1 text-center py-1.5 rounded-md text-xs" style={{ backgroundColor: '#FFF7ED', color: '#F59E0B' }}>
+                                <AlertCircle className="w-3.5 h-3.5 inline mr-1" />等待客户授权中
+                              </div>
+                            )}
+                            {(isOwner || isAdmin) && latestAuth?.status === 'filed' && (
+                              <div className="flex-1 text-center py-1.5 rounded-md text-xs" style={{ backgroundColor: '#F3F4F6', color: '#6B7280' }}>
+                                <FileCheck className="w-3.5 h-3.5 inline mr-1" />本期已申报
+                              </div>
+                            )}
+                            {!latestAuth && (isOwner || isAdmin) && (
+                              <div className="flex-1 text-center py-1.5 rounded-md text-xs" style={{ backgroundColor: '#F3F4F6', color: '#9CA3AF' }}>
+                                暂无报税授权记录
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
