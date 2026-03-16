@@ -10549,6 +10549,214 @@ export const appRouter = router({
         }
         return { coins, total, prices, updatedAt: latestUpdatedAt };
       }),
+
+    // ========== 资方资产订单管理 API ==========
+    // 获取资方资产订单列表（资金方看自己的，管理员看全部或指定用户的）
+    funderGetAssetOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), userId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 查询当前用户在账本中的角色
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        const isFunder = role === 'funder';
+        if (!isManager && !isFunder) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 资金方只能看自己的，管理员可以看指定用户或全部
+        let targetUserId: number | null = null;
+        if (isFunder && !isManager) {
+          targetUserId = ctx.user.id;
+        } else if (input.userId) {
+          targetUserId = input.userId;
+        }
+        let rows: any;
+        if (targetUserId) {
+          rows = await db.execute(
+            sql`SELECT fo.*, u.username, u.name as userName, u.avatar
+                FROM funder_asset_orders fo
+                LEFT JOIN users u ON u.id = fo.user_id
+                WHERE fo.ledger_id = ${input.ledgerId} AND fo.user_id = ${targetUserId}
+                ORDER BY fo.created_at DESC`
+          );
+        } else {
+          rows = await db.execute(
+            sql`SELECT fo.*, u.username, u.name as userName, u.avatar
+                FROM funder_asset_orders fo
+                LEFT JOIN users u ON u.id = fo.user_id
+                WHERE fo.ledger_id = ${input.ledgerId}
+                ORDER BY fo.created_at DESC`
+          );
+        }
+        return ((rows[0] || rows) as any[]) || [];
+      }),
+
+    // 获取资方资产汇总（资金方首页用）
+    funderGetAssetSummary: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 查询当前用户在账本中的角色
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'funder' && role !== 'owner' && role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        // 查询该用户的所有活跃资产订单
+        const rows = await db.execute(
+          sql`SELECT coin, amount, quantity, status FROM funder_asset_orders
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND status = 'active'`
+        ) as any;
+        const orders = ((rows[0] || rows) as any[]) || [];
+        // 汇总
+        let totalUsdt = 0;
+        const coinBreakdown: Record<string, { amount: number; quantity: number; count: number }> = {};
+        for (const o of orders) {
+          const amt = parseFloat(o.amount) || 0;
+          totalUsdt += amt;
+          if (!coinBreakdown[o.coin]) coinBreakdown[o.coin] = { amount: 0, quantity: 0, count: 0 };
+          coinBreakdown[o.coin].amount += amt;
+          coinBreakdown[o.coin].quantity += parseFloat(o.quantity) || 0;
+          coinBreakdown[o.coin].count += 1;
+        }
+        return { totalUsdt, coinBreakdown, orderCount: orders.length };
+      }),
+
+    // 管理员创建资方资产订单
+    funderCreateAssetOrder: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        userId: z.number(),
+        coin: z.string(),
+        amount: z.string(),
+        quantity: z.string().optional(),
+        startAt: z.string().optional(),
+        endAt: z.string().optional(),
+        interestType: z.string().optional(),
+        interestRate: z.string().optional(),
+        interestNote: z.string().optional(),
+        profitShareType: z.string().optional(),
+        profitShareRate: z.string().optional(),
+        profitShareNote: z.string().optional(),
+        adminNote: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证管理员权限
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        // 验证目标用户是资金方
+        const targetRoleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${input.userId} LIMIT 1`
+        ) as any;
+        const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
+        if (targetRole !== 'funder') throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是资金方角色' });
+        await db.execute(
+          sql`INSERT INTO funder_asset_orders (ledger_id, user_id, coin, amount, quantity, start_at, end_at, interest_type, interest_rate, interest_note, profit_share_type, profit_share_rate, profit_share_note, admin_note, created_by)
+              VALUES (${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.quantity || null}, ${input.startAt || null}, ${input.endAt || null}, ${input.interestType || null}, ${input.interestRate || null}, ${input.interestNote || null}, ${input.profitShareType || null}, ${input.profitShareRate || null}, ${input.profitShareNote || null}, ${input.adminNote || null}, ${ctx.user.id})`
+        );
+        return { success: true };
+      }),
+
+    // 管理员更新资方资产订单
+    funderUpdateAssetOrder: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        ledgerId: z.number(),
+        coin: z.string().optional(),
+        amount: z.string().optional(),
+        quantity: z.string().optional(),
+        startAt: z.string().optional(),
+        endAt: z.string().optional(),
+        interestType: z.string().optional(),
+        interestRate: z.string().optional(),
+        interestNote: z.string().optional(),
+        profitShareType: z.string().optional(),
+        profitShareRate: z.string().optional(),
+        profitShareNote: z.string().optional(),
+        status: z.string().optional(),
+        adminNote: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证管理员权限
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        // 构建动态更新
+        const sets: string[] = [];
+        const vals: any[] = [];
+        if (input.coin !== undefined) { sets.push('coin = ?'); vals.push(input.coin); }
+        if (input.amount !== undefined) { sets.push('amount = ?'); vals.push(input.amount); }
+        if (input.quantity !== undefined) { sets.push('quantity = ?'); vals.push(input.quantity); }
+        if (input.startAt !== undefined) { sets.push('start_at = ?'); vals.push(input.startAt || null); }
+        if (input.endAt !== undefined) { sets.push('end_at = ?'); vals.push(input.endAt || null); }
+        if (input.interestType !== undefined) { sets.push('interest_type = ?'); vals.push(input.interestType || null); }
+        if (input.interestRate !== undefined) { sets.push('interest_rate = ?'); vals.push(input.interestRate || null); }
+        if (input.interestNote !== undefined) { sets.push('interest_note = ?'); vals.push(input.interestNote || null); }
+        if (input.profitShareType !== undefined) { sets.push('profit_share_type = ?'); vals.push(input.profitShareType || null); }
+        if (input.profitShareRate !== undefined) { sets.push('profit_share_rate = ?'); vals.push(input.profitShareRate || null); }
+        if (input.profitShareNote !== undefined) { sets.push('profit_share_note = ?'); vals.push(input.profitShareNote || null); }
+        if (input.status !== undefined) { sets.push('status = ?'); vals.push(input.status); }
+        if (input.adminNote !== undefined) { sets.push('admin_note = ?'); vals.push(input.adminNote || null); }
+        if (sets.length === 0) return { success: true };
+        const setClause = sets.join(', ');
+        // sql.raw only accepts a string, so we use template literal with sql`` for parameterized query
+        const rawQuery = `UPDATE funder_asset_orders SET ${setClause} WHERE id = ? AND ledger_id = ?`;
+        const allVals = [...vals, input.id, input.ledgerId];
+        // Use the underlying mysql2 connection for parameterized raw queries
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (conn) await conn.execute(rawQuery, allVals);
+        return { success: true };
+      }),
+
+    // 管理员删除资方资产订单
+    funderDeleteAssetOrder: protectedProcedure
+      .input(z.object({ id: z.number(), ledgerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证管理员权限
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await db.execute(
+          sql`DELETE FROM funder_asset_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+        );
+        return { success: true };
+      }),
+
+    // 获取账本中所有资金方用户列表（管理员用）
+    funderGetFunderUsers: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证管理员权限
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        const rows = await db.execute(
+          sql`SELECT lm.userId, lm.nickname, u.username, u.name, u.avatar
+              FROM ledger_members lm
+              LEFT JOIN users u ON u.id = lm.userId
+              WHERE lm.ledgerId = ${input.ledgerId} AND lm.role = 'funder'
+              ORDER BY lm.id ASC`
+        ) as any;
+        return ((rows[0] || rows) as any[]) || [];
+      }),
+
     // ========== AF 拨比管理 API ==========
     // 获取某个下单人的所有拨比配置
     afGetPayoutRatios: protectedProcedure

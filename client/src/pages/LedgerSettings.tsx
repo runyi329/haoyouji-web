@@ -600,6 +600,9 @@ export default function LedgerSettings() {
 
  <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
  <SettingItem label={ledgerData?.type === 'diet' ? '减肥教练管理' : '账本管理员管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
+ {ledgerData?.type === 'custom_af' && (
+   <SettingItem label="资方管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/funder-management`)} />
+ )}
  {/* - */}
  {(() => {
  const currentMember = members?.find(m => m.userId === user?.id);

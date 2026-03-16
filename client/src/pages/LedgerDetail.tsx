@@ -183,6 +183,16 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF, refetchInterval: 60000 }
   );
+  // 资方专属：资产汇总（仅 funder 角色查询）
+  const { data: funderAssetSummary } = trpc.ledger.funderGetAssetSummary.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF && isFunder }
+  );
+  // 资方专属：资产订单列表（仅 funder 角色查询）
+  const { data: funderAssetOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF && isFunder }
+  );
   const dietConfig = (dietStats as any)?.config;
   const dietInitialWeight = dietConfig ? Number(dietConfig.initialWeight) : null;
   const dietTargetWeight = dietConfig ? Number(dietConfig.targetWeight) : null;
@@ -449,22 +459,26 @@ export default function LedgerDetail() {
                 </div>
               )}
             </div>
-            {/* 第二行：四个操作按钮均分 */}
+            {/* 第二行：操作按钮（资金方只显示刷新+返回） */}
             <div className="flex items-center gap-2 mt-2">
-              <button
-                onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-              >
-                充值
-              </button>
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-              >
-                邀请
-              </button>
+              {!isFunder && (
+                <button
+                  onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                  className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                >
+                  充值
+                </button>
+              )}
+              {!isFunder && (
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                  className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                >
+                  邀请
+                </button>
+              )}
               <button
                 onClick={() => window.location.reload()}
                 className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
@@ -610,17 +624,51 @@ export default function LedgerDetail() {
         {isCustomAF && (
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
-              {/* 卡片 1：总资产估值 */}
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-xs text-white/70 mb-1">余额</div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold text-white">
-                    {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
-                  </span>
-                  <span className="text-xs text-white/60">USDT</span>
+              {/* 卡片 1：资金方看“资产”，其他角色看“余额” */}
+              {isFunder ? (
+                <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                  <div className="text-xs text-white/70 mb-1">资产</div>
+                  <div className="flex items-baseline gap-1 mb-2">
+                    <span className="text-xl font-bold text-white">
+                      {funderAssetSummary ? funderAssetSummary.totalUsdt.toFixed(2) : '0.00'}
+                    </span>
+                    <span className="text-xs text-white/60">USDT</span>
+                    {funderAssetSummary && funderAssetSummary.orderCount > 0 && (
+                      <span className="text-[10px] text-white/40 ml-1">{funderAssetSummary.orderCount}笔订单</span>
+                    )}
+                  </div>
+                  {/* 币种分布 */}
+                  {funderAssetSummary && Object.keys(funderAssetSummary.coinBreakdown).length > 0 && (
+                    <div className="flex items-baseline gap-3">
+                      {Object.entries(funderAssetSummary.coinBreakdown).map(([coin, data]: [string, any]) => (
+                        <div key={coin} className="flex items-baseline gap-1">
+                          <span className="text-xs text-white/70 font-medium">{coin}</span>
+                          <span className="text-sm font-bold text-white">{data.amount.toFixed(2)}</span>
+                          <span className="text-[10px] text-white/40">U</span>
+                          {data.quantity > 0 && (
+                            <span className="text-[10px] text-white/40">({data.quantity.toFixed(coin === 'BTC' ? 6 : 4)})</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(!funderAssetSummary || Object.keys(funderAssetSummary.coinBreakdown).length === 0) && (
+                    <div className="text-xs text-white/40">暂无资产订单</div>
+                  )}
                 </div>
-              </div>
-              {/* 卡片 2：推荐人数（YJH 显示直推+间推，其他用户显示总推荐） */}
+              ) : (
+                <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                  <div className="text-xs text-white/70 mb-1">余额</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg font-bold text-white">
+                      {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
+                    </span>
+                    <span className="text-xs text-white/60">USDT</span>
+                  </div>
+                </div>
+              )}
+              {/* 卡片 2：推荐人数（资金方不显示） */}
+              {!isFunder && (
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-xs text-white/70 mb-1">推荐</div>
                 {((afTotalAsset as any)?.directReferralCount > 0 || (afTotalAsset as any)?.indirectReferralCount > 0) ? (
@@ -643,7 +691,9 @@ export default function LedgerDetail() {
                   </div>
                 )}
               </div>
-              {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行） */}
+              )}
+              {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行）——资金方不显示 */}
+              {!isFunder && (
               <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="flex items-baseline justify-between mb-2">
                   <span className="text-xs text-white/70">权益</span>
@@ -698,8 +748,9 @@ export default function LedgerDetail() {
                   <span className="flex-1 text-right text-sm font-bold text-green-400">+{Math.max(0, pnlData?.total ?? 0).toFixed(2)} U</span>
                 </div>
               </div>
-              {/* 管理员统计：累计订单（后端控制权限，代看模式下隐藏） */}
-              {!viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).orders && (
+              )}
+              {/* 管理员统计：累计订单（后端控制权限，代看模式下隐藏，资金方不显示） */}
+              {!isFunder && !viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).orders && (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="text-xs text-white/70 mb-1">累计订单</div>
                   <div className="flex items-baseline gap-1">
@@ -719,7 +770,7 @@ export default function LedgerDetail() {
                 </div>
               )}
               {/* 管理员统计：管理费（后端控制权限，代看模式下隐藏） */}
-              {!viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).fees && (
+              {!isFunder && !viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).fees && (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="text-xs text-white/70 mb-1">管理费</div>
                   <div className="flex items-baseline gap-1">
@@ -1221,8 +1272,8 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* 加密货币竞猜入口 —— 仅 custom_af 账本 */}
-      {isCustomAF && (
+      {/* 加密货币竞猜入口 —— 仅 custom_af 账本非资金方 */}
+      {isCustomAF && !isFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4 space-y-3">
             {/* BTC 入口 */}
@@ -1267,6 +1318,67 @@ export default function LedgerDetail() {
                 <ChevronRight className="w-4 h-4 text-white" />
               </div>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 资金方专属：资产订单列表 */}
+      {isCustomAF && isFunder && (
+        <div className="flex-1 px-4 pb-20">
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
+              <span className="text-xs text-gray-400">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
+            </div>
+            {(!funderAssetOrders || (funderAssetOrders as any[]).length === 0) ? (
+              <div className="text-center py-12">
+                <Receipt className="w-14 h-14 text-gray-200 mx-auto mb-3" />
+                <div className="text-gray-400 text-base mb-1">暂无资产订单</div>
+                <div className="text-gray-400 text-sm">管理员将为您配置资产订单</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(funderAssetOrders as any[]).map((order: any) => {
+                  const statusLabel = order.status === 'active' ? '进行中' : order.status === 'settled' ? '已结算' : '已取消';
+                  const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
+                  return (
+                    <div
+                      key={order.id}
+                      className="rounded-2xl p-4 shadow-sm"
+                      style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}20`, color: statusColor }}>{statusLabel}</span>
+                        </div>
+                        <span className="text-lg font-bold" style={{ color: '#1A2340' }}>{parseFloat(order.amount).toLocaleString()} U</span>
+                      </div>
+                      {order.quantity && (
+                        <div className="text-xs text-gray-500 mb-1">数量: {order.quantity} {order.coin}</div>
+                      )}
+                      <div className="flex items-center gap-4 text-xs text-gray-400">
+                        {order.start_at && (
+                          <span>开始: {new Date(order.start_at).toLocaleDateString('zh-CN')}</span>
+                        )}
+                        {order.interest_rate && (
+                          <span>利率: {order.interest_rate}%</span>
+                        )}
+                        {order.profit_share_rate && (
+                          <span>分成: {order.profit_share_rate}%</span>
+                        )}
+                      </div>
+                      {(order.interest_note || order.profit_share_note) && (
+                        <div className="mt-2 text-xs text-gray-400 border-t border-gray-100 pt-2">
+                          {order.interest_note && <div>利息协议: {order.interest_note}</div>}
+                          {order.profit_share_note && <div>分成协议: {order.profit_share_note}</div>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
