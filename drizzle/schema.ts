@@ -507,7 +507,7 @@ export const ledgerMembers = mysqlTable("ledger_members", {
 	id: int().autoincrement().notNull(),
 	ledgerId: int().notNull(),
 	userId: int().notNull(),
-	role: mysqlEnum(['owner','admin','member','funder']).default('member').notNull(),
+	role: mysqlEnum(['owner','admin','member','funder','client','employee']).default('member').notNull(),
 	nickname: varchar({ length: 50 }),
 	memberType: mysqlEnum("member_type", ['real','ai']).default('real').notNull(),
 	avatarType: varchar("avatar_type", { length: 50 }),

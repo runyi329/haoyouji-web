@@ -10550,6 +10550,65 @@ export const appRouter = router({
         return { coins, total, prices, updatedAt: latestUpdatedAt };
       }),
 
+    // ===== AH 型定制账本（公司财务记账管理）=====
+    createCustomAH: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(50),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建AH定制账本' });
+        }
+        const ledger = await dbLedger.createLedger({
+          name: input.name,
+          description: input.description,
+          type: 'custom_ah',
+          createdBy: ctx.user.id,
+        });
+        return ledger;
+      }),
+    listCustomAH: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看AH定制账本列表' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const rows = await db
+          .select({
+            id: ledgers.id,
+            name: ledgers.name,
+            description: ledgers.description,
+            createdAt: ledgers.createdAt,
+          })
+          .from(ledgers)
+          .where(eq(ledgers.type, 'custom_ah'))
+          .orderBy(desc(ledgers.createdAt));
+        return rows;
+      }),
+    inviteToCustomAH: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        username: z.string(),
+        role: z.enum(['member', 'admin', 'client', 'employee']).optional().default('member'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可邀请成员加入AH账本' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [ledger] = await db
+          .select({ id: ledgers.id, type: ledgers.type })
+          .from(ledgers)
+          .where(eq(ledgers.id, input.ledgerId));
+        if (!ledger || ledger.type !== 'custom_ah') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AH定制账本' });
+        }
+        return await dbLedger.inviteMemberByUsernameWithRole(input.ledgerId, ctx.user.id, input.username, input.role);
+      }),
+
     // ========== 资方资产订单管理 API ==========
     // 获取资方资产订单列表（资金方看自己的，管理员看全部或指定用户的）
     funderGetAssetOrders: protectedProcedure
