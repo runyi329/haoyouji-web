@@ -1,10 +1,149 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Building2, FileText, Shield, Calculator, Users, UserPlus, X, Trash2, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, Building2, FileText, Shield, Calculator, Users, UserPlus, X, Trash2, Pencil, CalendarClock, CalendarDays, CheckCircle, FileCheck, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+
+// ========== 中国法定节假日数据（2025-2026年） ==========
+const CHINA_HOLIDAYS: Record<string, string> = {
+  '2025-01-01': '元旦',
+  '2025-01-28': '春节', '2025-01-29': '春节', '2025-01-30': '春节', '2025-01-31': '春节',
+  '2025-02-01': '春节', '2025-02-02': '春节', '2025-02-03': '春节', '2025-02-04': '春节',
+  '2025-04-04': '清明节', '2025-04-05': '清明节', '2025-04-06': '清明节',
+  '2025-05-01': '劳动节', '2025-05-02': '劳动节', '2025-05-03': '劳动节', '2025-05-04': '劳动节', '2025-05-05': '劳动节',
+  '2025-05-31': '端午节', '2025-06-01': '端午节', '2025-06-02': '端午节',
+  '2025-10-01': '国庆节', '2025-10-02': '国庆节', '2025-10-03': '国庆节', '2025-10-04': '国庆节',
+  '2025-10-05': '国庆节', '2025-10-06': '国庆节', '2025-10-07': '国庆节', '2025-10-08': '国庆节',
+  '2026-01-01': '元旦', '2026-01-02': '元旦', '2026-01-03': '元旦',
+  '2026-02-15': '春节', '2026-02-16': '春节', '2026-02-17': '春节', '2026-02-18': '春节',
+  '2026-02-19': '春节', '2026-02-20': '春节', '2026-02-21': '春节', '2026-02-22': '春节', '2026-02-23': '春节',
+  '2026-04-04': '清明节', '2026-04-05': '清明节', '2026-04-06': '清明节',
+  '2026-05-01': '劳动节', '2026-05-02': '劳动节', '2026-05-03': '劳动节', '2026-05-04': '劳动节', '2026-05-05': '劳动节',
+  '2026-06-19': '端午节', '2026-06-20': '端午节', '2026-06-21': '端午节',
+  '2026-09-25': '中秋节', '2026-09-26': '中秋节', '2026-09-27': '中秋节',
+  '2026-10-01': '国庆节', '2026-10-02': '国庆节', '2026-10-03': '国庆节', '2026-10-04': '国庆节',
+  '2026-10-05': '国庆节', '2026-10-06': '国庆节', '2026-10-07': '国庆节',
+};
+
+const WORKDAY_OVERRIDES: Set<string> = new Set([
+  '2025-01-26', '2025-02-08', '2025-04-27', '2025-09-28', '2025-10-11',
+  '2026-01-04', '2026-02-14', '2026-02-28', '2026-05-09', '2026-09-20', '2026-10-10',
+]);
+
+function getBeijingNow(): { year: number; month: number; day: number; hour: number; date: Date } {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find(p => p.type === type)?.value || '0';
+  const year = parseInt(get('year'));
+  const month = parseInt(get('month'));
+  const day = parseInt(get('day'));
+  const hour = parseInt(get('hour'));
+  const date = new Date(year, month - 1, day);
+  return { year, month, day, hour, date };
+}
+
+function formatDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function isWorkday(d: Date): boolean {
+  const key = formatDateKey(d);
+  if (WORKDAY_OVERRIDES.has(key)) return true;
+  if (CHINA_HOLIDAYS[key]) return false;
+  const dow = d.getDay();
+  if (dow === 0 || dow === 6) return false;
+  return true;
+}
+
+const TAX_DEADLINES_2026: Record<number, number> = {
+  1: 20, 2: 24, 3: 16, 4: 20, 5: 22, 6: 15,
+  7: 15, 8: 17, 9: 15, 10: 26, 11: 16, 12: 15,
+};
+
+function getTaxDeadline(year: number, month: number): { deadline: Date; originalDate: Date; postponed: boolean; reason: string } {
+  const original = new Date(year, month - 1, 15);
+  if (year === 2026 && TAX_DEADLINES_2026[month]) {
+    const actualDay = TAX_DEADLINES_2026[month];
+    const deadline = new Date(year, month - 1, actualDay);
+    const postponed = actualDay !== 15;
+    let reason = '';
+    if (postponed) {
+      const reasons: string[] = [];
+      let d = new Date(original);
+      while (d < deadline) {
+        const key = formatDateKey(d);
+        const holidayName = CHINA_HOLIDAYS[key];
+        const dow = d.getDay();
+        if (holidayName && !reasons.includes(holidayName)) {
+          reasons.push(holidayName);
+        } else if (dow === 0 && !holidayName) {
+          if (!reasons.includes('周日')) reasons.push('周日');
+        } else if (dow === 6 && !holidayName) {
+          if (!reasons.includes('周六')) reasons.push('周六');
+        }
+        d = new Date(d.getTime() + 86400000);
+      }
+      reason = `因${reasons.join('、')}顺延至${month}月${actualDay}日`;
+    }
+    return { deadline, originalDate: original, postponed, reason };
+  }
+  let current = new Date(original);
+  const reasons: string[] = [];
+  for (let i = 0; i < 30; i++) {
+    if (isWorkday(current)) break;
+    const key = formatDateKey(current);
+    const holidayName = CHINA_HOLIDAYS[key];
+    const dow = current.getDay();
+    if (holidayName && !reasons.includes(holidayName)) {
+      reasons.push(holidayName);
+    } else if (dow === 0 && !holidayName) {
+      if (!reasons.includes('周日')) reasons.push('周日');
+    } else if (dow === 6 && !holidayName) {
+      if (!reasons.includes('周六')) reasons.push('周六');
+    }
+    current = new Date(current.getTime() + 86400000);
+  }
+  const postponed = current.getTime() !== original.getTime();
+  const reasonText = postponed
+    ? `因${reasons.join('、')}顺延至${current.getMonth() + 1}月${current.getDate()}日`
+    : '';
+  return { deadline: current, originalDate: original, postponed, reason: reasonText };
+}
+
+function getNextTaxDeadlineInfo(): { deadline: Date; originalDate: Date; postponed: boolean; reason: string; taxMonth: number; taxYear: number; daysLeft: number } {
+  const bj = getBeijingNow();
+  const currentYear = bj.year;
+  const currentMonth = bj.month;
+  const todayDate = bj.date;
+  const currentDeadline = getTaxDeadline(currentYear, currentMonth);
+  const deadlineDate = new Date(currentDeadline.deadline.getFullYear(), currentDeadline.deadline.getMonth(), currentDeadline.deadline.getDate());
+  if (todayDate <= deadlineDate) {
+    const diffMs = deadlineDate.getTime() - todayDate.getTime();
+    const daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
+    const taxMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+    const taxYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+    return { ...currentDeadline, taxMonth, taxYear, daysLeft };
+  } else {
+    const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+    const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+    const nextDeadline = getTaxDeadline(nextYear, nextMonth);
+    const nextDeadlineDate = new Date(nextDeadline.deadline.getFullYear(), nextDeadline.deadline.getMonth(), nextDeadline.deadline.getDate());
+    const diffMs = nextDeadlineDate.getTime() - todayDate.getTime();
+    const daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
+    return { ...nextDeadline, taxMonth: currentMonth, taxYear: currentYear, daysLeft };
+  }
+}
 
 export default function AhCompanyWorkspace() {
   const [, params] = useRoute("/ledger/:id/company/:companyId");
@@ -23,6 +162,10 @@ export default function AhCompanyWorkspace() {
   const [editTaxId, setEditTaxId] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editNote, setEditNote] = useState('');
+
+  // 报税日历弹出框状态
+  const [showTaxCalendar, setShowTaxCalendar] = useState(false);
+  const [taxCalendarYear, setTaxCalendarYear] = useState(() => new Date().getFullYear());
 
   // 获取公司详情
   const { data: company, isLoading: companyLoading, refetch: refetchCompany } = trpc.ledger.ahGetCompanyDetail.useQuery(
@@ -70,6 +213,40 @@ export default function AhCompanyWorkspace() {
   );
   const userRole = (ledgerDetail as any)?.userRole;
   const isAdmin = ['owner', 'admin'].includes(userRole);
+  const isClient = userRole === 'client';
+  const isEmployee = userRole === 'employee';
+
+  // 获取报税授权记录（仅该公司）
+  const { data: taxAuthsData, refetch: refetchTaxAuths } = trpc.ledger.ahGetTaxAuthorizations.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
+  const companyTaxAuths = (taxAuthsData as any[] || []).filter((a: any) => a.companyId === companyId);
+  const latestAuth = companyTaxAuths.length > 0 ? companyTaxAuths[0] : null;
+
+  // 报税截止日信息
+  const taxInfo = getNextTaxDeadlineInfo();
+  const { deadline: nextDue, daysLeft, postponed: isPostponed, reason: postponeReason, taxMonth: reportTaxMonth, taxYear: reportTaxYear } = taxInfo;
+  const statusColor = latestAuth?.status === 'authorized' ? '#10B981' : latestAuth?.status === 'filed' ? '#6B7280' : latestAuth?.status === 'expired' ? '#EF4444' : '#F59E0B';
+  const statusText = latestAuth?.status === 'authorized' ? '客户已授权，可申报扣税' : latestAuth?.status === 'filed' ? '已申报' : latestAuth?.status === 'expired' ? '已过期' : '待客户授权';
+
+  // 客户确认授权
+  const authorizeMutation = trpc.ledger.ahAuthorize.useMutation({
+    onSuccess: () => {
+      toast.success('授权成功');
+      refetchTaxAuths();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  // 管理员标记已申报
+  const markFiledMutation = trpc.ledger.ahMarkFiled.useMutation({
+    onSuccess: () => {
+      toast.success('已标记为申报完成');
+      refetchTaxAuths();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
 
   // 添加成员
   const addMemberMutation = trpc.ledger.ahAddCompanyMember.useMutation({
@@ -111,6 +288,8 @@ export default function AhCompanyWorkspace() {
     { key: 'social' as const, label: '社保', icon: Shield, color: '#059669' },
     { key: 'accounting' as const, label: '记账', icon: Calculator, color: '#D97706' },
   ];
+
+  const bjNow = getBeijingNow();
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F7FA' }}>
@@ -246,10 +425,9 @@ export default function AhCompanyWorkspace() {
 
       {/* Tab 内容区域 */}
       <div className="px-4 py-4">
-        {/* 人员管理 - 实际功能 */}
+        {/* 人员管理 */}
         {activeTab === 'members' && (
           <div>
-            {/* 添加成员按钮 */}
             {isAdmin && (
               <button
                 onClick={() => setShowAddMember(true)}
@@ -261,11 +439,13 @@ export default function AhCompanyWorkspace() {
               </button>
             )}
 
-            {/* 添加成员弹窗 */}
-            {showAddMember && (
-              <div className="rounded-xl border border-purple-100 mb-4 overflow-hidden" style={{ backgroundColor: '#FAF5FF' }}>
-                <div className="flex items-center justify-between px-4 py-3 border-b border-purple-100">
-                  <span className="text-sm font-medium" style={{ color: '#7C3AED' }}>选择要添加的成员</span>
+            {showAddMember && isAdmin && (
+              <div className="mb-4 rounded-xl border border-purple-100 overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-purple-50" style={{ backgroundColor: '#F5F3FF' }}>
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="w-4 h-4" style={{ color: '#7C3AED' }} />
+                    <span className="text-sm font-medium" style={{ color: '#7C3AED' }}>添加成员</span>
+                  </div>
                   <button onClick={() => { setShowAddMember(false); setSelectedUserId(null); }}>
                     <X className="w-4 h-4 text-gray-400" />
                   </button>
@@ -275,60 +455,56 @@ export default function AhCompanyWorkspace() {
                   <div className="flex gap-2 mb-3">
                     <button
                       onClick={() => setSelectedRole('client')}
-                      className="flex-1 py-2 rounded-lg text-xs font-medium transition-colors"
+                      className="flex-1 py-2 rounded-lg text-sm font-medium border transition-colors"
                       style={{
-                        backgroundColor: selectedRole === 'client' ? '#7C3AED' : '#F3F4F6',
-                        color: selectedRole === 'client' ? '#FFFFFF' : '#6B7280',
+                        backgroundColor: selectedRole === 'client' ? '#EDE9FE' : 'transparent',
+                        borderColor: selectedRole === 'client' ? '#7C3AED' : '#E5E7EB',
+                        color: selectedRole === 'client' ? '#7C3AED' : '#6B7280',
                       }}
                     >
                       客户
                     </button>
                     <button
                       onClick={() => setSelectedRole('employee')}
-                      className="flex-1 py-2 rounded-lg text-xs font-medium transition-colors"
+                      className="flex-1 py-2 rounded-lg text-sm font-medium border transition-colors"
                       style={{
-                        backgroundColor: selectedRole === 'employee' ? '#7C3AED' : '#F3F4F6',
-                        color: selectedRole === 'employee' ? '#FFFFFF' : '#6B7280',
+                        backgroundColor: selectedRole === 'employee' ? '#D1FAE5' : 'transparent',
+                        borderColor: selectedRole === 'employee' ? '#059669' : '#E5E7EB',
+                        color: selectedRole === 'employee' ? '#059669' : '#6B7280',
                       }}
                     >
                       企业员工
                     </button>
                   </div>
 
-                  {/* 可选成员列表 */}
-                  <div className="max-h-60 overflow-y-auto space-y-2">
+                  {/* 成员选择列表 */}
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
                     {availableMembers.length === 0 ? (
-                      <div className="text-center text-gray-400 text-sm py-4">暂无可添加的成员</div>
+                      <div className="text-center py-4 text-gray-400 text-sm">暂无可添加的成员</div>
                     ) : (
-                      availableMembers.map((member: any) => (
-                        <div
-                          key={member.userId}
-                          onClick={() => setSelectedUserId(member.userId)}
-                          className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors"
+                      availableMembers.map((m: any) => (
+                        <button
+                          key={m.userId}
+                          onClick={() => setSelectedUserId(m.userId)}
+                          className="w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left"
                           style={{
-                            backgroundColor: selectedUserId === member.userId ? '#EDE9FE' : '#FFFFFF',
-                            border: selectedUserId === member.userId ? '1px solid #7C3AED' : '1px solid #E5E7EB',
+                            backgroundColor: selectedUserId === m.userId ? '#EDE9FE' : '#F9FAFB',
+                            borderColor: selectedUserId === m.userId ? '#7C3AED' : '#E5E7EB',
                           }}
                         >
                           <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium"
                             style={{ backgroundColor: '#7C3AED' }}>
-                            {(member.nickname || member.userName || '?').charAt(0)}
+                            {(m.userName || '?').charAt(0)}
                           </div>
-                          <div className="flex-1">
-                            <div className="text-sm font-medium text-gray-900">{member.nickname || member.userName}</div>
-                            <div className="text-xs text-gray-400">角色: {member.role === 'owner' ? '创建者' : member.role === 'admin' ? '管理员' : member.role === 'client' ? '客户' : member.role === 'employee' ? '企业员工' : '普通用户'}</div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">{m.userName}</div>
+                            <div className="text-xs text-gray-400">{m.role}</div>
                           </div>
-                          {selectedUserId === member.userId && (
-                            <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: '#7C3AED' }}>
-                              <span className="text-white text-xs">✓</span>
-                            </div>
-                          )}
-                        </div>
+                        </button>
                       ))
                     )}
                   </div>
 
-                  {/* 确认添加 */}
                   {selectedUserId && (
                     <button
                       onClick={() => {
@@ -399,18 +575,240 @@ export default function AhCompanyWorkspace() {
           </div>
         )}
 
-        {/* 报税 - 占位符 */}
+        {/* 报税 - 完整功能 */}
         {activeTab === 'tax' && (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style={{ backgroundColor: '#DBEAFE' }}>
-              <FileText className="w-8 h-8" style={{ color: '#1A56DB' }} />
+          <div className="space-y-4">
+            {/* 当前报税周期信息卡 */}
+            <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4" style={{ color: '#1A56DB' }} />
+                  <span className="text-sm font-medium text-gray-800">报税授权</span>
+                  {latestAuth && <span className="text-xs text-gray-400">{latestAuth.taxPeriod}期</span>}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor }} />
+                  <span className="text-xs font-medium" style={{ color: statusColor }}>{statusText}</span>
+                </div>
+              </div>
+
+              {/* 截止日倒计时 */}
+              <div className="p-4">
+                <div className="rounded-xl p-3" style={{ backgroundColor: daysLeft <= 3 ? '#FEF2F2' : daysLeft <= 7 ? '#FFFBEB' : '#EFF6FF' }}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="text-xs text-gray-600 mb-1">
+                        申报{reportTaxYear}年{reportTaxMonth}月税务 · 截止日
+                      </div>
+                      <div className="text-sm font-semibold" style={{ color: '#1E3A8A' }}>
+                        {nextDue.getMonth() + 1}月{nextDue.getDate()}日（{['周日','周一','周二','周三','周四','周五','周六'][nextDue.getDay()]}）
+                      </div>
+                      {isPostponed && (
+                        <div className="text-xs mt-1" style={{ color: '#F59E0B' }}>
+                          ⚠️ 原截止日{nextDue.getMonth() + 1}月15日，{postponeReason}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {/* 日历按钮 */}
+                      <button
+                        onClick={() => {
+                          setShowTaxCalendar(!showTaxCalendar);
+                          setTaxCalendarYear(nextDue.getFullYear());
+                        }}
+                        className="p-2 rounded-lg"
+                        style={{ backgroundColor: showTaxCalendar ? '#DBEAFE' : '#F3F4F6' }}
+                      >
+                        <CalendarDays className="w-5 h-5" style={{ color: '#1A56DB' }} />
+                      </button>
+                      <div className="flex flex-col items-center min-w-[44px]">
+                        <span className="text-3xl font-bold leading-none" style={{ color: daysLeft <= 3 ? '#EF4444' : daysLeft <= 7 ? '#F59E0B' : '#1A56DB' }}>{daysLeft}</span>
+                        <span className="text-xs text-gray-500 mt-0.5">天</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 操作按钮区 */}
+                <div className="mt-3 flex gap-2">
+                  {/* 客户角色：确认授权按钮 */}
+                  {isClient && latestAuth?.status === 'pending' && (
+                    <Button
+                      size="sm"
+                      className="flex-1 text-white"
+                      style={{ backgroundColor: '#10B981' }}
+                      disabled={authorizeMutation.isPending}
+                      onClick={() => authorizeMutation.mutate({ ledgerId, authId: latestAuth.id })}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-1.5" />
+                      {authorizeMutation.isPending ? '授权中...' : '确认授权报税'}
+                    </Button>
+                  )}
+                  {isClient && latestAuth?.status === 'authorized' && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm" style={{ backgroundColor: '#ECFDF5', color: '#10B981' }}>
+                      <CheckCircle className="w-4 h-4" />已授权，等待申报
+                    </div>
+                  )}
+                  {isClient && latestAuth?.status === 'filed' && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm" style={{ backgroundColor: '#F3F4F6', color: '#6B7280' }}>
+                      <FileCheck className="w-4 h-4" />本期已申报完成
+                    </div>
+                  )}
+                  {/* 管理员角色：标记已申报按钮 */}
+                  {isAdmin && latestAuth?.status === 'authorized' && (
+                    <Button
+                      size="sm"
+                      className="flex-1 text-white"
+                      style={{ backgroundColor: '#1A56DB' }}
+                      disabled={markFiledMutation.isPending}
+                      onClick={() => markFiledMutation.mutate({ ledgerId, authId: latestAuth.id })}
+                    >
+                      <FileCheck className="w-4 h-4 mr-1.5" />
+                      {markFiledMutation.isPending ? '处理中...' : '标记已申报'}
+                    </Button>
+                  )}
+                  {isAdmin && latestAuth?.status === 'pending' && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm" style={{ backgroundColor: '#FFF7ED', color: '#F59E0B' }}>
+                      <AlertCircle className="w-4 h-4" />等待客户授权中
+                    </div>
+                  )}
+                  {isAdmin && latestAuth?.status === 'filed' && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm" style={{ backgroundColor: '#F3F4F6', color: '#6B7280' }}>
+                      <FileCheck className="w-4 h-4" />本期已申报
+                    </div>
+                  )}
+                  {!latestAuth && isAdmin && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm" style={{ backgroundColor: '#F3F4F6', color: '#9CA3AF' }}>
+                      暂无报税授权记录
+                    </div>
+                  )}
+                  {!latestAuth && !isAdmin && (
+                    <div className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm" style={{ backgroundColor: '#F3F4F6', color: '#9CA3AF' }}>
+                      暂无授权记录
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="text-gray-900 font-medium text-lg mb-2">报税管理</div>
-            <div className="text-gray-400 text-sm mb-6">管理公司的税务申报、报税授权和税务日历</div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs" style={{ backgroundColor: '#EBF5FF', color: '#1A56DB' }}>
-              <FileText className="w-3.5 h-3.5" />
-              功能开发中，敬请期待
-            </div>
+
+            {/* 全年报税截止日日历 */}
+            {showTaxCalendar && (
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                {/* 头部：年份切换 */}
+                <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: '#F0F5FF' }}>
+                  <button
+                    onClick={() => setTaxCalendarYear(y => y - 1)}
+                    className="p-1.5 rounded-lg hover:bg-blue-100"
+                  >
+                    <ChevronLeft className="w-4 h-4" style={{ color: '#1A56DB' }} />
+                  </button>
+                  <span className="text-sm font-semibold" style={{ color: '#1A56DB' }}>{taxCalendarYear}年 报税截止日一览</span>
+                  <button
+                    onClick={() => setTaxCalendarYear(y => y + 1)}
+                    className="p-1.5 rounded-lg hover:bg-blue-100"
+                  >
+                    <ChevronRight className="w-4 h-4" style={{ color: '#1A56DB' }} />
+                  </button>
+                </div>
+
+                {/* 12个月截止日标签 */}
+                <div className="grid grid-cols-3 gap-2 p-4">
+                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => {
+                    const monthTaxInfo = getTaxDeadline(taxCalendarYear, m);
+                    const deadlineDay = monthTaxInfo.deadline.getDate();
+                    const isPostponedMonth = monthTaxInfo.postponed;
+                    const now = new Date();
+                    const isPast = taxCalendarYear < bjNow.year || (taxCalendarYear === bjNow.year && m < bjNow.month);
+                    const isCurrent = taxCalendarYear === bjNow.year && m === bjNow.month;
+                    const isDeadlinePast = now > monthTaxInfo.deadline;
+
+                    let bgColor = '#F9FAFB';
+                    let borderColor = '#E5E7EB';
+                    let textColor = '#374151';
+                    let dateColor = '#1A56DB';
+
+                    if (isCurrent && !isDeadlinePast) {
+                      bgColor = '#EFF6FF';
+                      borderColor = '#1A56DB';
+                      dateColor = '#1A56DB';
+                    } else if (isPast || isDeadlinePast) {
+                      textColor = '#9CA3AF';
+                      dateColor = '#9CA3AF';
+                    }
+
+                    return (
+                      <div
+                        key={m}
+                        className="rounded-lg px-3 py-2.5 border"
+                        style={{ backgroundColor: bgColor, borderColor }}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs" style={{ color: textColor }}>{m}月</span>
+                          <span className="text-sm font-bold" style={{ color: dateColor }}>{deadlineDay}日</span>
+                        </div>
+                        {isPostponedMonth ? (
+                          <div className="text-xs mt-0.5" style={{ color: '#F59E0B' }}>原15日顺延</div>
+                        ) : (
+                          <div className="text-xs mt-0.5" style={{ color: isPast || isDeadlinePast ? '#D1D5DB' : '#10B981' }}>未顺延</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 图例 */}
+                <div className="flex items-center gap-4 px-4 py-2.5 border-t border-gray-100" style={{ backgroundColor: '#FAFAFA' }}>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded" style={{ backgroundColor: '#EFF6FF', border: '1px solid #1A56DB' }} />
+                    <span className="text-xs text-gray-500">当月</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs" style={{ color: '#F59E0B' }}>原15日顺延</span>
+                    <span className="text-xs text-gray-400">= 有顺延</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs" style={{ color: '#10B981' }}>未顺延</span>
+                    <span className="text-xs text-gray-400">= 即15日</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 历史授权记录 */}
+            {companyTaxAuths.length > 0 && (
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+                <div className="px-4 py-3 border-b border-gray-50">
+                  <span className="text-sm font-medium text-gray-800">历史授权记录</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  {companyTaxAuths.map((auth: any) => {
+                    const authStatusColor = auth.status === 'authorized' ? '#10B981' : auth.status === 'filed' ? '#6B7280' : auth.status === 'expired' ? '#EF4444' : '#F59E0B';
+                    const authStatusText = auth.status === 'authorized' ? '已授权' : auth.status === 'filed' ? '已申报' : auth.status === 'expired' ? '已过期' : '待授权';
+                    return (
+                      <div key={auth.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <div className="text-sm text-gray-800">{auth.taxPeriod}期</div>
+                          {auth.authorizedAt && (
+                            <div className="text-xs text-gray-400 mt-0.5">
+                              授权时间: {new Date(auth.authorizedAt).toLocaleDateString('zh-CN')}
+                            </div>
+                          )}
+                          {auth.filedAt && (
+                            <div className="text-xs text-gray-400">
+                              申报时间: {new Date(auth.filedAt).toLocaleDateString('zh-CN')}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: authStatusColor }} />
+                          <span className="text-xs font-medium" style={{ color: authStatusColor }}>{authStatusText}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
