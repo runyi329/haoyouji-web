@@ -92,18 +92,50 @@ function isWorkday(d: Date): boolean {
   return true;
 }
 
+// 2026年确定的报税截止日（用户提供）
+const TAX_DEADLINES_2026: Record<number, number> = {
+  1: 20, 2: 24, 3: 16, 4: 20, 5: 22, 6: 15,
+  7: 15, 8: 17, 9: 15, 10: 26, 11: 16, 12: 15,
+};
+
 // 计算报税截止日（每月15号，遇节假日/周末顺延）
-// 返回 { deadline: Date, originalDate: Date, postponed: boolean, reason: string }
+// 2026年使用确定日期，其他年份自动计算
 function getTaxDeadline(year: number, month: number): { deadline: Date; originalDate: Date; postponed: boolean; reason: string } {
   const original = new Date(year, month - 1, 15); // month是1-12
+
+  // 2026年使用确定的截止日期
+  if (year === 2026 && TAX_DEADLINES_2026[month]) {
+    const actualDay = TAX_DEADLINES_2026[month];
+    const deadline = new Date(year, month - 1, actualDay);
+    const postponed = actualDay !== 15;
+    let reason = '';
+    if (postponed) {
+      // 生成顺延原因
+      const reasons: string[] = [];
+      let d = new Date(original);
+      while (d < deadline) {
+        const key = formatDateKey(d);
+        const holidayName = CHINA_HOLIDAYS[key];
+        const dow = d.getDay();
+        if (holidayName && !reasons.includes(holidayName)) {
+          reasons.push(holidayName);
+        } else if (dow === 0 && !holidayName) {
+          if (!reasons.includes('周日')) reasons.push('周日');
+        } else if (dow === 6 && !holidayName) {
+          if (!reasons.includes('周六')) reasons.push('周六');
+        }
+        d = new Date(d.getTime() + 86400000);
+      }
+      reason = `因${reasons.join('、')}顺延至${month}月${actualDay}日`;
+    }
+    return { deadline, originalDate: original, postponed, reason };
+  }
+
+  // 其他年份自动计算
   let current = new Date(original);
   const reasons: string[] = [];
-
-  // 最多顺延30天（安全上限）
   for (let i = 0; i < 30; i++) {
-    if (isWorkday(current)) {
-      break;
-    }
+    if (isWorkday(current)) break;
     const key = formatDateKey(current);
     const holidayName = CHINA_HOLIDAYS[key];
     const dow = current.getDay();
@@ -114,14 +146,12 @@ function getTaxDeadline(year: number, month: number): { deadline: Date; original
     } else if (dow === 6 && !holidayName) {
       if (!reasons.includes('周六')) reasons.push('周六');
     }
-    current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+    current = new Date(current.getTime() + 86400000);
   }
-
   const postponed = current.getTime() !== original.getTime();
   const reasonText = postponed
     ? `因${reasons.join('、')}顺延至${current.getMonth() + 1}月${current.getDate()}日`
     : '';
-
   return { deadline: current, originalDate: original, postponed, reason: reasonText };
 }
 
@@ -1863,174 +1893,94 @@ export default function LedgerDetail() {
                             </div>
                           </div>
 
-                          {/* 报税日历弹出框 */}
+                          {/* 报税截止日标签列表弹出框 */}
                           {ahCalendarCompanyId === company.id && (() => {
                             const calYear = ahCalendarMonth.year;
-                            const calMonth = ahCalendarMonth.month;
-                            // 计算当前显示月份的报税截止日
-                            const calTaxInfo = getTaxDeadline(calYear, calMonth);
-                            const calOriginalDate = calTaxInfo.originalDate; // 15号
-                            const calDeadline = calTaxInfo.deadline; // 实际截止日
-                            const calPostponed = calTaxInfo.postponed;
-
-                            // 生成顺延经过的日期列表（15号到实际截止日之间的日期）
-                            const postponedDates = new Set<string>();
-                            if (calPostponed) {
-                              let d = new Date(calOriginalDate);
-                              while (d < calDeadline) {
-                                postponedDates.add(formatDateKey(d));
-                                d = new Date(d.getTime() + 86400000);
-                              }
-                            }
-
-                            // 生成月历数据
-                            const firstDay = new Date(calYear, calMonth - 1, 1);
-                            const lastDay = new Date(calYear, calMonth, 0);
-                            const totalDays = lastDay.getDate();
-                            const startDow = firstDay.getDay(); // 0=周日
-
-                            // 生成周一开始的日历格子
-                            const adjustedStart = startDow === 0 ? 6 : startDow - 1; // 转换为周一开始
-                            const cells: (number | null)[] = [];
-                            for (let i = 0; i < adjustedStart; i++) cells.push(null);
-                            for (let i = 1; i <= totalDays; i++) cells.push(i);
-                            while (cells.length % 7 !== 0) cells.push(null);
-
-                            const today = new Date();
-                            const todayKey = formatDateKey(today);
+                            const now = new Date();
+                            const currentMonth = now.getMonth() + 1;
+                            const currentYear = now.getFullYear();
 
                             return (
                               <div className="rounded-lg border border-gray-200 mt-2 overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
-                                {/* 日历头部：月份切换 */}
+                                {/* 头部：年份切换 */}
                                 <div className="flex items-center justify-between px-3 py-2" style={{ backgroundColor: '#F0F5FF' }}>
                                   <button
-                                    onClick={() => {
-                                      let newMonth = calMonth - 1;
-                                      let newYear = calYear;
-                                      if (newMonth < 1) { newMonth = 12; newYear -= 1; }
-                                      setAhCalendarMonth({ year: newYear, month: newMonth });
-                                    }}
+                                    onClick={() => setAhCalendarMonth(prev => ({ ...prev, year: prev.year - 1 }))}
                                     className="p-1 rounded hover:bg-blue-100"
                                   >
                                     <ChevronLeft className="w-4 h-4" style={{ color: '#1A56DB' }} />
                                   </button>
-                                  <span className="text-sm font-medium" style={{ color: '#1A56DB' }}>{calYear}年{calMonth}月</span>
+                                  <span className="text-sm font-medium" style={{ color: '#1A56DB' }}>{calYear}年 报税截止日</span>
                                   <button
-                                    onClick={() => {
-                                      let newMonth = calMonth + 1;
-                                      let newYear = calYear;
-                                      if (newMonth > 12) { newMonth = 1; newYear += 1; }
-                                      setAhCalendarMonth({ year: newYear, month: newMonth });
-                                    }}
+                                    onClick={() => setAhCalendarMonth(prev => ({ ...prev, year: prev.year + 1 }))}
                                     className="p-1 rounded hover:bg-blue-100"
                                   >
                                     <ChevronRight className="w-4 h-4" style={{ color: '#1A56DB' }} />
                                   </button>
                                 </div>
 
-                                {/* 星期头 */}
-                                <div className="grid grid-cols-7 text-center px-2 pt-1">
-                                  {['一','二','三','四','五','六','日'].map(d => (
-                                    <div key={d} className="text-xs py-1" style={{ color: d === '六' || d === '日' ? '#9CA3AF' : '#6B7280' }}>{d}</div>
-                                  ))}
-                                </div>
+                                {/* 12个月的截止日标签 */}
+                                <div className="grid grid-cols-3 gap-2 p-3">
+                                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => {
+                                    const taxInfo = getTaxDeadline(calYear, m);
+                                    const deadlineDay = taxInfo.deadline.getDate();
+                                    const isPostponedMonth = taxInfo.postponed;
+                                    const isPast = calYear < currentYear || (calYear === currentYear && m < currentMonth);
+                                    const isCurrent = calYear === currentYear && m === currentMonth;
+                                    // 判断当月截止日是否已过
+                                    const isDeadlinePast = now > taxInfo.deadline;
 
-                                {/* 日历格子 */}
-                                <div className="grid grid-cols-7 text-center px-2 pb-2">
-                                  {cells.map((day, idx) => {
-                                    if (day === null) return <div key={idx} className="py-1" />;
-                                    const dateObj = new Date(calYear, calMonth - 1, day);
-                                    const dateKey = formatDateKey(dateObj);
-                                    const isToday = dateKey === todayKey;
-                                    const isOriginal15 = day === 15 && calPostponed; // 原截止日15号（仅顺延时标记）
-                                    const isActualDeadline = dateKey === formatDateKey(calDeadline); // 实际截止日
-                                    const isPostponedDate = postponedDates.has(dateKey) && !isActualDeadline; // 顺延经过的日期
-                                    const isNonPostponed15 = day === 15 && !calPostponed; // 未顺延的15号（就是截止日）
-                                    const isHoliday = !!CHINA_HOLIDAYS[dateKey];
-                                    const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
-                                    const isWorkdayOverride = WORKDAY_OVERRIDES.has(dateKey);
-
-                                    let bgColor = 'transparent';
+                                    let bgColor = '#F9FAFB';
+                                    let borderColor = '#E5E7EB';
                                     let textColor = '#374151';
-                                    let borderStyle = 'none';
-                                    let fontWeight = 'normal';
+                                    let dateColor = '#1A56DB';
 
-                                    if (isActualDeadline) {
-                                      // 实际截止日：红色背景
-                                      bgColor = '#EF4444';
-                                      textColor = '#FFFFFF';
-                                      fontWeight = 'bold';
-                                    } else if (isNonPostponed15) {
-                                      // 未顺延的15号（就是截止日）：红色背景
-                                      bgColor = '#EF4444';
-                                      textColor = '#FFFFFF';
-                                      fontWeight = 'bold';
-                                    } else if (isOriginal15) {
-                                      // 原截止日15号（已顺延）：灰色划线效果
-                                      bgColor = '#F3F4F6';
+                                    if (isCurrent && !isDeadlinePast) {
+                                      // 当月且截止日未过：高亮
+                                      bgColor = '#EFF6FF';
+                                      borderColor = '#1A56DB';
+                                      dateColor = '#1A56DB';
+                                    } else if (isPast || isDeadlinePast) {
+                                      // 已过月份：灰色
                                       textColor = '#9CA3AF';
-                                      borderStyle = '2px dashed #D1D5DB';
-                                    } else if (isPostponedDate) {
-                                      // 顺延经过的日期：橙色背景
-                                      bgColor = '#FEF3C7';
-                                      textColor = '#D97706';
-                                    } else if (isToday) {
-                                      bgColor = '#DBEAFE';
-                                      textColor = '#1A56DB';
-                                      fontWeight = 'bold';
-                                    } else if (isHoliday) {
-                                      textColor = '#EF4444';
-                                    } else if (isWeekend && !isWorkdayOverride) {
-                                      textColor = '#9CA3AF';
+                                      dateColor = '#9CA3AF';
                                     }
 
                                     return (
-                                      <div key={idx} className="py-0.5">
-                                        <div
-                                          className="mx-auto w-7 h-7 flex items-center justify-center rounded-full text-xs"
-                                          style={{
-                                            backgroundColor: bgColor,
-                                            color: textColor,
-                                            fontWeight,
-                                            border: borderStyle,
-                                            position: 'relative' as const,
-                                          }}
-                                        >
-                                          {isOriginal15 ? (
-                                            <span style={{ textDecoration: 'line-through' }}>{day}</span>
-                                          ) : day}
+                                      <div
+                                        key={m}
+                                        className="rounded-lg px-2.5 py-2 border"
+                                        style={{ backgroundColor: bgColor, borderColor }}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs" style={{ color: textColor }}>{m}月</span>
+                                          <span className="text-sm font-bold" style={{ color: dateColor }}>{deadlineDay}日</span>
                                         </div>
+                                        {isPostponedMonth ? (
+                                          <div className="text-xs mt-0.5" style={{ color: '#F59E0B' }}>
+                                            原15日顺延
+                                          </div>
+                                        ) : (
+                                          <div className="text-xs mt-0.5" style={{ color: isPast || isDeadlinePast ? '#D1D5DB' : '#10B981' }}>
+                                            未顺延
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })}
                                 </div>
 
                                 {/* 图例 */}
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 border-t border-gray-100" style={{ backgroundColor: '#FAFAFA' }}>
+                                <div className="flex items-center gap-4 px-3 py-2 border-t border-gray-100" style={{ backgroundColor: '#FAFAFA' }}>
                                   <div className="flex items-center gap-1">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#EF4444' }} />
-                                    <span className="text-xs text-gray-500">截止日</span>
+                                    <div className="w-2.5 h-2.5 rounded" style={{ backgroundColor: '#EFF6FF', border: '1px solid #1A56DB' }} />
+                                    <span className="text-xs text-gray-500">当月</span>
                                   </div>
                                   <div className="flex items-center gap-1">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#FEF3C7', border: '1px solid #D97706' }} />
-                                    <span className="text-xs text-gray-500">顺延日</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#F3F4F6', border: '1px dashed #D1D5DB' }} />
-                                    <span className="text-xs text-gray-500">原15号</span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#DBEAFE' }} />
-                                    <span className="text-xs text-gray-500">今天</span>
+                                    <span className="text-xs" style={{ color: '#F59E0B' }}>原15日顺延</span>
+                                    <span className="text-xs text-gray-400">= 有顺延</span>
                                   </div>
                                 </div>
-
-                                {/* 当月报税信息 */}
-                                {calTaxInfo.postponed && (
-                                  <div className="px-3 py-2 border-t border-gray-100 text-xs" style={{ backgroundColor: '#FFFBEB', color: '#D97706' }}>
-                                    {calMonth}月15日原截止日，{calTaxInfo.reason}
-                                  </div>
-                                )}
                               </div>
                             );
                           })()}
