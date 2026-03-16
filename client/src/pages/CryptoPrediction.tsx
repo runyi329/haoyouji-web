@@ -416,18 +416,21 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const amount = parseFloat(order.amount);
           const tradeValue = order.isGift ? amount : amount * 5.25;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-          // 持仓天数：从下单时间到今天（委托中也实时计算）
+          // 持仓天数：已卖出锁定到卖出成交日，否则实时到今天
           const startDate = new Date(order.createdAt);
           const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-          const todayDay = new Date(); todayDay.setHours(0,0,0,0);
-          const holdDays = Math.max(1, Math.floor((todayDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+          const endDate = order.sellStatus === 'sold' && order.sellConfirmedAt ? new Date(order.sellConfirmedAt) : new Date();
+          const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+          endDay.setHours(0,0,0,0);
+          const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
           const totalFee = dailyFee * holdDays;
+          const isSold = order.sellStatus === 'sold';
           return (
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">管理费</span>
               <span className="text-[#1E293B] font-medium">
                 {dailyFee.toFixed(4)} <span className="text-[11px] text-[#9CA3AF]">USDT/天</span>
-                <span className="text-[11px] text-[#9CA3AF] ml-1.5">· 已累计 {totalFee.toFixed(4)} USDT（{holdDays}天）</span>
+                <span className="text-[11px] text-[#9CA3AF] ml-1.5">· {isSold ? '已结清' : '已累计'} {totalFee.toFixed(4)} USDT（{holdDays}天）</span>
               </span>
             </div>
           );
@@ -455,25 +458,24 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 
         {/* 卖出信息（委卖中或已卖出时显示） */}
         {(order.sellStatus === 'selling' || order.sellStatus === 'sold') && (
-          <>
-            <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">委卖价格</span>
-              <span className="text-[#EF4444] font-medium">{parseFloat(order.sellPrice).toLocaleString()} USDT</span>
-            </div>
-            {order.sellConfirmedAt && (
-              <div className="flex justify-between items-center">
-                <span className="text-[#9CA3AF]">卖出时间</span>
-                <span className="text-[#64748B]">{new Date(order.sellConfirmedAt).toLocaleString('zh-CN')}</span>
-              </div>
-            )}
-          </>
+          <div className="flex justify-between items-center">
+            <span className="text-[#9CA3AF]">委卖价格</span>
+            <span className="text-[#EF4444] font-medium">{parseFloat(order.sellPrice).toLocaleString()} USDT</span>
+          </div>
         )}
 
-        {/* 下单时间 */}
+        {/* 买入时间 */}
         <div className="flex justify-between items-center">
-          <span className="text-[#9CA3AF]">下单时间</span>
+          <span className="text-[#9CA3AF]">买入时间</span>
           <span className="text-[#64748B]">{timeStr}</span>
         </div>
+        {/* 卖出时间（已卖出时显示） */}
+        {order.sellStatus === 'sold' && order.sellConfirmedAt && (
+          <div className="flex justify-between items-center">
+            <span className="text-[#9CA3AF]">卖出时间</span>
+            <span className="text-[#64748B]">{new Date(order.sellConfirmedAt).toLocaleString('zh-CN')}</span>
+          </div>
+        )}
         {/* 订单编号 */}
         <div className="flex justify-between items-center">
           <span className="text-[#9CA3AF]">订单编号</span>
@@ -502,7 +504,12 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           {/* 扫描状态栏 */}
           <div className="flex items-center justify-between mb-2">
             <span className="font-semibold" style={{ color: '#1A56DB' }}>收益权扫描</span>
-            {tierData?.scanStatus ? (
+            {order.sellStatus === 'sold' ? (
+              <div className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ backgroundColor: '#6B7280' }} />
+                <span style={{ color: '#6B7280' }}>已结束</span>
+              </div>
+            ) : tierData?.scanStatus ? (
               <div className="flex items-center gap-1">
                 {tierData.scanStatus.scanning ? (
                   <><Loader2 className="w-2.5 h-2.5 animate-spin" style={{ color: '#F59E0B' }} />

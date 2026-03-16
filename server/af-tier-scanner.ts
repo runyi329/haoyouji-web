@@ -160,7 +160,8 @@ export async function runTierScan(targetOrderId?: number) {
       // 3. 查询该币种所有已成交买入订单（无损合约）
       let ordersQuery = `SELECT id, ledger_id, user_id, coin, limit_price FROM af_orders
          WHERE coin = ? AND side = 'buy' AND status = 'completed'
-           AND (order_type = '无损合约' OR order_type IS NULL OR order_type = '')`;
+           AND (order_type = '无损合约' OR order_type IS NULL OR order_type = '')
+           AND (sell_status IS NULL OR sell_status = '' OR sell_status = 'selling' OR sell_status = 'sell_cancelled')`;
       const queryParams: any[] = [coin];
 
       if (targetOrderId) {
