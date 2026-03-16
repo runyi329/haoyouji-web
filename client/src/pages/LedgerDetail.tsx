@@ -1735,7 +1735,7 @@ export default function LedgerDetail() {
                               <Building2 className="w-5 h-5" style={{ color: '#1A56DB' }} />
                             </div>
                             <div className="flex-1">
-                              <div className="font-medium text-gray-900 text-sm">{company.name} <span className="text-xs text-blue-500">进入工作台 →</span></div>
+                              <div className="font-medium text-gray-900 text-sm">{company.name}</div>
                               {company.taxId && <div className="text-xs text-gray-400 mt-0.5">税号: {company.taxId}</div>}
                               {company.contactName && <div className="text-xs text-gray-400">联系人: {company.contactName} {company.contactPhone}</div>}
                             </div>
