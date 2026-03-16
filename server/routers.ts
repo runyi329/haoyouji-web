@@ -10447,15 +10447,17 @@ export const appRouter = router({
       }),
     // ========== 实时盈亏计算 API ==========
     afGetPnlSummary: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const { getLatestPrice } = await import('./price-scanner');
         const db = await getLedgerDb();
-        // 查询当前用户所有买单（已成交 + 委卖中 + 已卖出）
+        // 代看视角时查目标用户的订单，否则查自己的
+        const targetUserId = input.viewAsUserId || ctx.user.id;
+        // 查询目标用户所有买单（已成交 + 委卖中 + 已卖出）
         const orderRows = await db.execute(
           sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.status, o.sell_status, o.sell_price, o.is_gift
               FROM af_orders o
-              WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${ctx.user.id}
+              WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
                 AND o.side = 'buy' AND o.status = 'completed'
                 AND (o.order_type = '无损合约' OR o.order_type IS NULL OR o.order_type = '')`
         ) as any;
