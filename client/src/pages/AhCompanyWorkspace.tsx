@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Building2, FileText, Shield, Calculator, Users, UserPlus, X, Trash2 } from "lucide-react";
+import { ChevronLeft, Building2, FileText, Shield, Calculator, Users, UserPlus, X, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export default function AhCompanyWorkspace() {
   const [, params] = useRoute("/ledger/:id/company/:companyId");
@@ -14,12 +16,40 @@ export default function AhCompanyWorkspace() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedRole, setSelectedRole] = useState<'client' | 'employee'>('client');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editContact, setEditContact] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editTaxId, setEditTaxId] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editNote, setEditNote] = useState('');
 
   // 获取公司详情
-  const { data: company, isLoading: companyLoading } = trpc.ledger.ahGetCompanyDetail.useQuery(
+  const { data: company, isLoading: companyLoading, refetch: refetchCompany } = trpc.ledger.ahGetCompanyDetail.useQuery(
     { ledgerId, companyId },
     { enabled: !!ledgerId && !!companyId }
   );
+
+  // 更新公司信息
+  const updateCompanyMutation = trpc.ledger.ahUpdateCompany.useMutation({
+    onSuccess: () => {
+      toast.success('公司信息已更新');
+      refetchCompany();
+      setIsEditing(false);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const startEditing = () => {
+    const c = company as any;
+    setEditName(c?.name || '');
+    setEditContact(c?.contactName || '');
+    setEditPhone(c?.contactPhone || '');
+    setEditTaxId(c?.taxId || '');
+    setEditAddress(c?.address || '');
+    setEditNote(c?.note || '');
+    setIsEditing(true);
+  };
 
   // 获取公司成员列表
   const { data: companyMembers, refetch: refetchMembers } = trpc.ledger.ahGetCompanyMembers.useQuery(
@@ -97,7 +127,12 @@ export default function AhCompanyWorkspace() {
             <span className="text-sm">返回</span>
           </button>
           <div className="text-white font-medium text-base">{(company as any)?.name || '公司工作台'}</div>
-          <div className="w-12" />
+          {isAdmin && (
+            <button onClick={startEditing} className="p-2 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
+              <Pencil className="w-4 h-4 text-white" />
+            </button>
+          )}
+          {!isAdmin && <div className="w-12" />}
         </div>
 
         {/* 公司信息卡片 */}
@@ -118,6 +153,76 @@ export default function AhCompanyWorkspace() {
           </div>
         </div>
       </div>
+
+      {/* 编辑公司信息弹窗 */}
+      {isEditing && (
+        <div className="mx-4 mt-3 rounded-xl border border-blue-100 overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-blue-50" style={{ backgroundColor: '#F0F5FF' }}>
+            <div className="flex items-center gap-2">
+              <Pencil className="w-4 h-4" style={{ color: '#1A56DB' }} />
+              <span className="text-sm font-medium" style={{ color: '#1A56DB' }}>编辑公司信息</span>
+            </div>
+            <button onClick={() => setIsEditing(false)}>
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+          <div className="p-4 space-y-3">
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">公司名称 *</label>
+              <Input value={editName} onChange={(e: any) => setEditName(e.target.value)} className="text-sm" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">联系人</label>
+                <Input value={editContact} onChange={(e: any) => setEditContact(e.target.value)} className="text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">联系电话</label>
+                <Input value={editPhone} onChange={(e: any) => setEditPhone(e.target.value)} className="text-sm" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">税号</label>
+              <Input value={editTaxId} onChange={(e: any) => setEditTaxId(e.target.value)} className="text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">公司地址</label>
+              <Input value={editAddress} onChange={(e: any) => setEditAddress(e.target.value)} className="text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">备注</label>
+              <textarea
+                value={editNote}
+                onChange={(e: any) => setEditNote(e.target.value)}
+                className="w-full text-sm border rounded-md px-3 py-2 min-h-[60px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                size="sm"
+                className="text-white"
+                style={{ backgroundColor: '#1A56DB' }}
+                disabled={updateCompanyMutation.isPending || !editName.trim()}
+                onClick={() => {
+                  updateCompanyMutation.mutate({
+                    ledgerId,
+                    companyId,
+                    name: editName.trim(),
+                    contactName: editContact.trim() || undefined,
+                    contactPhone: editPhone.trim() || undefined,
+                    taxId: editTaxId.trim() || undefined,
+                    address: editAddress.trim() || undefined,
+                    note: editNote.trim() || undefined,
+                  });
+                }}
+              >
+                {updateCompanyMutation.isPending ? '保存中...' : '保存修改'}
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>取消</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab 切换栏 */}
       <div className="mx-4 -mt-3 rounded-xl overflow-hidden" style={{ backgroundColor: '#FFFFFF', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>

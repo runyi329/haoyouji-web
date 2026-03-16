@@ -34,7 +34,6 @@ import {
   FileCheck,
   AlertCircle,
   CalendarClock,
-  Pencil,
   CalendarDays,
 } from "lucide-react";
 
@@ -410,34 +409,13 @@ export default function LedgerDetail() {
   const [ahNewCompanyContact, setAhNewCompanyContact] = useState('');
   const [ahNewCompanyPhone, setAhNewCompanyPhone] = useState('');
   const [ahNewCompanyTaxId, setAhNewCompanyTaxId] = useState('');
-  // AH 账本：编辑公司状态
-  const [ahEditingCompanyId, setAhEditingCompanyId] = useState<number | null>(null);
   // AH 账本：报税日历弹出框
   const [ahCalendarCompanyId, setAhCalendarCompanyId] = useState<number | null>(null);
   const [ahCalendarMonth, setAhCalendarMonth] = useState(() => {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
   });
-  const [ahEditName, setAhEditName] = useState('');
-  const [ahEditContact, setAhEditContact] = useState('');
-  const [ahEditPhone, setAhEditPhone] = useState('');
-  const [ahEditTaxId, setAhEditTaxId] = useState('');
-  const [ahEditAddress, setAhEditAddress] = useState('');
-  const [ahEditNote, setAhEditNote] = useState('');
-  // AH 账本：更新公司
-  const ahUpdateCompanyMutation = trpc.ledger.ahUpdateCompany.useMutation({
-    onSuccess: () => { refetchAhCompanies(); setAhEditingCompanyId(null); },
-  });
-  // 开始编辑公司
-  const startEditCompany = (company: any) => {
-    setAhEditingCompanyId(company.id);
-    setAhEditName(company.name || '');
-    setAhEditContact(company.contactName || '');
-    setAhEditPhone(company.contactPhone || '');
-    setAhEditTaxId(company.taxId || '');
-    setAhEditAddress(company.address || '');
-    setAhEditNote(company.note || '');
-  };
+
 
   const dietConfig = (dietStats as any)?.config;
   const dietInitialWeight = dietConfig ? Number(dietConfig.initialWeight) : null;
@@ -1767,107 +1745,20 @@ export default function LedgerDetail() {
                   return (
                     <div key={company.id} className="rounded-xl border border-gray-100 overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
                       {/* 公司头部 */}
-                      {ahEditingCompanyId === company.id ? (
-                        /* 编辑模式 */
-                        <div className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
+                      <div className="p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => setLocation(`/ledger/${ledgerId}/company/${company.id}`)}>
+                            <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#EBF0FF' }}>
                               <Building2 className="w-5 h-5" style={{ color: '#1A56DB' }} />
-                              <span className="text-sm font-medium text-gray-700">编辑公司信息</span>
                             </div>
-                            <button className="text-xs text-gray-400" onClick={() => setAhEditingCompanyId(null)}>取消</button>
-                          </div>
-                          <div className="space-y-2">
-                            <Input
-                              placeholder="公司名称 *"
-                              value={ahEditName}
-                              onChange={(e: any) => setAhEditName(e.target.value)}
-                              className="text-sm"
-                            />
-                            <div className="grid grid-cols-2 gap-2">
-                              <Input
-                                placeholder="联系人"
-                                value={ahEditContact}
-                                onChange={(e: any) => setAhEditContact(e.target.value)}
-                                className="text-sm"
-                              />
-                              <Input
-                                placeholder="联系电话"
-                                value={ahEditPhone}
-                                onChange={(e: any) => setAhEditPhone(e.target.value)}
-                                className="text-sm"
-                              />
-                            </div>
-                            <Input
-                              placeholder="税号"
-                              value={ahEditTaxId}
-                              onChange={(e: any) => setAhEditTaxId(e.target.value)}
-                              className="text-sm"
-                            />
-                            <Input
-                              placeholder="公司地址"
-                              value={ahEditAddress}
-                              onChange={(e: any) => setAhEditAddress(e.target.value)}
-                              className="text-sm"
-                            />
-                            <textarea
-                              placeholder="备注信息"
-                              value={ahEditNote}
-                              onChange={(e: any) => setAhEditNote(e.target.value)}
-                              className="w-full text-sm border rounded-md px-3 py-2 min-h-[60px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            />
-                            <div className="flex gap-2 pt-1">
-                              <Button
-                                size="sm"
-                                className="text-white"
-                                style={{ backgroundColor: '#1A56DB' }}
-                                disabled={ahUpdateCompanyMutation.isPending || !ahEditName.trim()}
-                                onClick={() => {
-                                  ahUpdateCompanyMutation.mutate({
-                                    ledgerId: Number(ledgerId),
-                                    companyId: company.id,
-                                    name: ahEditName.trim(),
-                                    contactName: ahEditContact.trim() || undefined,
-                                    contactPhone: ahEditPhone.trim() || undefined,
-                                    taxId: ahEditTaxId.trim() || undefined,
-                                    address: ahEditAddress.trim() || undefined,
-                                    note: ahEditNote.trim() || undefined,
-                                  });
-                                }}
-                              >
-                                {ahUpdateCompanyMutation.isPending ? '保存中...' : '保存修改'}
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => setAhEditingCompanyId(null)}>取消</Button>
+                            <div className="flex-1">
+                              <div className="font-medium text-gray-900 text-sm">{company.name} <span className="text-xs text-blue-500">进入工作台 →</span></div>
+                              {company.taxId && <div className="text-xs text-gray-400 mt-0.5">税号: {company.taxId}</div>}
+                              {company.contactName && <div className="text-xs text-gray-400">联系人: {company.contactName} {company.contactPhone}</div>}
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        /* 显示模式 */
-                        <div className="p-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#EBF0FF' }}>
-                                <Building2 className="w-5 h-5" style={{ color: '#1A56DB' }} />
-                              </div>
-                              <div className="flex-1 cursor-pointer" onClick={() => setLocation(`/ledger/${ledgerId}/company/${company.id}`)}>
-                                <div className="font-medium text-gray-900 text-sm">{company.name} <span className="text-xs text-blue-500">进入工作台 →</span></div>
-                                {company.taxId && <div className="text-xs text-gray-400 mt-0.5">税号: {company.taxId}</div>}
-                                {company.contactName && <div className="text-xs text-gray-400">联系人: {company.contactName} {company.contactPhone}</div>}
-                                {company.address && <div className="text-xs text-gray-400">地址: {company.address}</div>}
-                                {company.note && <div className="text-xs text-gray-400">备注: {company.note}</div>}
-                              </div>
-                            </div>
-                            {(isOwner || isAdmin) && (
-                              <button
-                                className="p-1.5 rounded-md hover:bg-gray-100 transition-colors"
-                                onClick={(e) => { e.stopPropagation(); startEditCompany(company); }}
-                              >
-                                <Pencil className="w-4 h-4 text-gray-400" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                      </div>
 
                       {/* 报税授权状态栏 */}
                       <div className="px-4 pb-3">
