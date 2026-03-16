@@ -1723,3 +1723,49 @@ export const funderAssetOrders = mysqlTable("funder_asset_orders", {
   index("funder_asset_coin_idx").on(table.coin),
   index("funder_asset_status_idx").on(table.status),
 ]);
+
+
+// ========== AH 账本：公司（企业客户）表 ==========
+export const ahCompanies = mysqlTable("ah_companies", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),           // 关联的AH账本ID
+  name: varchar({ length: 200 }).notNull(),        // 公司名称
+  contactName: varchar('contact_name', { length: 100 }), // 联系人姓名
+  contactPhone: varchar('contact_phone', { length: 50 }), // 联系人电话
+  taxId: varchar('tax_id', { length: 100 }),       // 税号
+  address: text(),                                  // 公司地址
+  note: text(),                                     // 备注
+  clientUserId: int('client_user_id'),             // 关联的客户用户ID（ledger_members中role=client的用户）
+  status: varchar({ length: 20 }).default('active').notNull(), // active=活跃, inactive=停用
+  createdBy: int('created_by').notNull(),           // 创建人（管理员）
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("ah_company_ledger_idx").on(table.ledgerId),
+  index("ah_company_client_idx").on(table.clientUserId),
+]);
+
+// ========== AH 账本：报税授权记录表 ==========
+export const ahTaxAuthorizations = mysqlTable("ah_tax_authorizations", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),            // 关联的AH账本ID
+  companyId: int('company_id').notNull(),           // 关联的公司ID
+  // 报税周期：每月15号报上个月的税
+  taxPeriod: varchar('tax_period', { length: 20 }).notNull(), // 报税期间，格式 "2026-03" 表示报2026年3月的税
+  dueDate: varchar('due_date', { length: 20 }).notNull(),     // 截止日期，格式 "2026-04-15"
+  // 授权状态
+  status: varchar({ length: 20 }).default('pending').notNull(), // pending=待授权, authorized=已授权, filed=已申报, expired=已过期
+  authorizedBy: int('authorized_by'),              // 授权人（客户用户ID）
+  authorizedAt: timestamp('authorized_at', { mode: 'string' }), // 授权时间
+  // 申报信息
+  filedBy: int('filed_by'),                        // 申报人（管理员用户ID）
+  filedAt: timestamp('filed_at', { mode: 'string' }), // 申报时间
+  filedNote: text('filed_note'),                   // 申报备注
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("ah_tax_auth_ledger_idx").on(table.ledgerId),
+  index("ah_tax_auth_company_idx").on(table.companyId),
+  index("ah_tax_auth_period_idx").on(table.taxPeriod),
+  index("ah_tax_auth_status_idx").on(table.status),
+]);
