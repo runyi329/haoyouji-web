@@ -679,20 +679,28 @@ export default function LedgerDetail() {
                 <div className="text-xs text-white/70 mb-1">累计盈亏</div>
                 {pnlData && pnlData.coins.length > 0 ? (
                   <div className="space-y-1">
-                    {pnlData.coins.map((c: any) => (
-                      <div key={c.coin} className="flex items-baseline justify-between">
-                        <span className="text-xs text-white/60">{c.coin}</span>
-                        <span className={`text-xs font-medium ${c.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {c.pnl >= 0 ? '+' : ''}{c.pnl.toFixed(2)} U
-                        </span>
-                      </div>
-                    ))}
+                    {pnlData.coins.map((c: any) => {
+                      const displayPnl = Math.max(0, c.pnl);
+                      return (
+                        <div key={c.coin} className="flex items-baseline justify-between">
+                          <span className="text-xs text-white/60">{c.coin}</span>
+                          <span className="text-xs font-medium text-green-400">
+                            +{displayPnl.toFixed(2)} U
+                          </span>
+                        </div>
+                      );
+                    })}
                     <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline justify-between">
                       <span className="text-xs text-white/80 font-medium">总计</span>
-                      <span className={`text-sm font-bold ${pnlData.total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {pnlData.total >= 0 ? '+' : ''}{pnlData.total.toFixed(2)} U
+                      <span className="text-sm font-bold text-green-400">
+                        +{Math.max(0, pnlData.total).toFixed(2)} U
                       </span>
                     </div>
+                    {pnlData.updatedAt && (
+                      <div className="text-[10px] text-white/40 text-right pt-0.5">
+                        更新 {new Date(pnlData.updatedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-lg font-bold text-white">--</div>
