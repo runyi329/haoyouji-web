@@ -10512,10 +10512,10 @@ export const appRouter = router({
             coinPnl[coin].holdingCount++;
           }
         }
-        // 汇总
+        // 汇总（负盈亏显示为0，只记正收益）
         const coins = Object.entries(coinPnl).map(([coin, data]) => ({
           coin,
-          pnl: parseFloat(data.pnl.toFixed(4)),
+          pnl: parseFloat(Math.max(0, data.pnl).toFixed(4)),
           orderCount: data.orderCount,
           holdingCount: data.holdingCount,
           soldCount: data.soldCount,
@@ -10524,7 +10524,14 @@ export const appRouter = router({
         const coinOrder = ['BTC', 'ETH', 'SOL'];
         coins.sort((a, b) => coinOrder.indexOf(a.coin) - coinOrder.indexOf(b.coin));
         const total = parseFloat(coins.reduce((sum, c) => sum + c.pnl, 0).toFixed(4));
-        return { coins, total, prices };
+        // 取最新价格扫描时间作为更新时间
+        const { getAllLatestPrices } = await import('./price-scanner');
+        const allPrices = getAllLatestPrices();
+        let latestUpdatedAt: string | null = null;
+        for (const v of Object.values(allPrices)) {
+          if (!latestUpdatedAt || v.updatedAt > latestUpdatedAt) latestUpdatedAt = v.updatedAt;
+        }
+        return { coins, total, prices, updatedAt: latestUpdatedAt };
       }),
     // ========== AF 拨比管理 API ==========
     // 获取某个下单人的所有拨比配置
