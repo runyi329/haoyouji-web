@@ -646,7 +646,7 @@ export default function LedgerDetail() {
               {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行） */}
               <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="flex items-baseline justify-between mb-2">
-                  <span className="text-xs text-white/70">仓位 & 累计盈亏</span>
+                  <span className="text-xs text-white/70">权益</span>
                   {pnlData?.updatedAt && (
                     <span className="text-[10px] text-white/40">
                       更新时间 {new Date(pnlData.updatedAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
@@ -656,7 +656,7 @@ export default function LedgerDetail() {
                 {/* 表头 */}
                 <div className="flex items-baseline mb-1 text-[10px] text-white/40">
                   <span className="w-9">币种</span>
-                  <span className="flex-1 text-right">仓位</span>
+                  <span className="flex-1 text-right">权益</span>
                   <span className="w-10 text-right">订单</span>
                   <span className="flex-1 text-right">均价</span>
                   <span className="flex-1 text-right">盈亏</span>
