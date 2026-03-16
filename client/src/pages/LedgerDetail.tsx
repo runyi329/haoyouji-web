@@ -180,7 +180,7 @@ export default function LedgerDetail() {
   );
   // AF 账本：实时盈亏汇总（每60秒自动刷新）
   const { data: pnlData } = trpc.ledger.afGetPnlSummary.useQuery(
-    { ledgerId: Number(ledgerId) },
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF, refetchInterval: 60000 }
   );
   const dietConfig = (dietStats as any)?.config;
