@@ -11396,6 +11396,67 @@ export const appRouter = router({
         const kr2 = (json.data as any[]).reverse().map((k: any[]) => ({ openTime: parseInt(k[0]), open: parseFloat(k[1]), high: parseFloat(k[2]), low: parseFloat(k[3]), close: parseFloat(k[4]), volume: parseFloat(k[5]) }));
         setCache(cacheKey, kr2); return kr2;
       }),
+
+    // ========== AI 型定制账本（共享公司股权管理） ==========
+    createCustomAI: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1).max(50),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建AI定制账本' });
+        }
+        const ledger = await dbLedger.createLedger({
+          name: input.name,
+          description: input.description,
+          type: 'custom_ai',
+          createdBy: ctx.user.id,
+        });
+        return ledger;
+      }),
+
+    listCustomAI: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看AI定制账本列表' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const rows = await db
+          .select({
+            id: ledgers.id,
+            name: ledgers.name,
+            description: ledgers.description,
+            createdAt: ledgers.createdAt,
+          })
+          .from(ledgers)
+          .where(eq(ledgers.type, 'custom_ai'))
+          .orderBy(desc(ledgers.createdAt));
+        return rows;
+      }),
+
+    inviteToCustomAI: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        username: z.string(),
+        role: z.enum(['member', 'admin', 'shareholder', 'observer']).optional().default('shareholder'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可邀请成员加入AI账本' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [ledger] = await db
+          .select({ id: ledgers.id, type: ledgers.type })
+          .from(ledgers)
+          .where(eq(ledgers.id, input.ledgerId));
+        if (!ledger || ledger.type !== 'custom_ai') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AI定制账本' });
+        }
+        return await dbLedger.inviteMemberByUsernameWithRole(input.ledgerId, ctx.user.id, input.username, input.role);
+      }),
   }),
   
   // 銀行列表管理
@@ -12495,65 +12556,5 @@ export const adminFeatureRouter = router({
       }
     }),
 
-    // ========== AI 型定制账本（共享公司股权管理） ==========
-    createCustomAI: protectedProcedure
-      .input(z.object({
-        name: z.string().min(1).max(50),
-        description: z.string().optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可创建AI定制账本' });
-        }
-        const ledger = await dbLedger.createLedger({
-          name: input.name,
-          description: input.description,
-          type: 'custom_ai',
-          createdBy: ctx.user.id,
-        });
-        return ledger;
-      }),
-
-    listCustomAI: protectedProcedure
-      .query(async ({ ctx }) => {
-        if (ctx.user.role !== 'super_admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看AI定制账本列表' });
-        }
-        const db = await getDb();
-        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        const rows = await db
-          .select({
-            id: ledgers.id,
-            name: ledgers.name,
-            description: ledgers.description,
-            createdAt: ledgers.createdAt,
-          })
-          .from(ledgers)
-          .where(eq(ledgers.type, 'custom_ai'))
-          .orderBy(desc(ledgers.createdAt));
-        return rows;
-      }),
-
-    inviteToCustomAI: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        username: z.string(),
-        role: z.enum(['member', 'admin', 'shareholder', 'observer']).optional().default('shareholder'),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin') {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可邀请成员加入AI账本' });
-        }
-        const db = await getDb();
-        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        const [ledger] = await db
-          .select({ id: ledgers.id, type: ledgers.type })
-          .from(ledgers)
-          .where(eq(ledgers.id, input.ledgerId));
-        if (!ledger || ledger.type !== 'custom_ai') {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: '该账本不是AI定制账本' });
-        }
-        return await dbLedger.inviteMemberByUsernameWithRole(input.ledgerId, ctx.user.id, input.username, input.role);
-      }),
 });
 export type AppRouter = typeof appRouter;
