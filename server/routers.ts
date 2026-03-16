@@ -10486,21 +10486,30 @@ export const appRouter = router({
           if (p) prices[coin] = p;
         }
         // 按币种分组计算盈亏
-        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number; pendingCount: number }> = {};
+        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number; pendingCount: number; totalCost: number; totalQty: number }> = {};
         for (const order of orders) {
           const coin = order.coin;
-          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0, pendingCount: 0 };
+          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0, pendingCount: 0, totalCost: 0, totalQty: 0 };
           coinPnl[coin].orderCount++;
-          if (order.status === 'pending') {
-            // 委托中订单：统计订单数但不参与盈亏计算
-            coinPnl[coin].pendingCount++;
-            continue;
-          }
           const buyPrice = parseFloat(order.limit_price || '0');
           const originalQty = parseFloat(order.quantity || '0');
+          if (order.status === 'pending') {
+            // 委托中订单：统计订单数和成本，但不参与盈亏计算
+            coinPnl[coin].pendingCount++;
+            if (buyPrice > 0 && originalQty > 0) {
+              coinPnl[coin].totalCost += buyPrice * originalQty;
+              coinPnl[coin].totalQty += originalQty;
+            }
+            continue;
+          }
           const maxTier = tierMap[order.id] || 0;
           const discountRate = equityDiscountRates[maxTier] || 1.0;
           const effectiveQty = originalQty * discountRate;
+          // 平均持仓成本：用原始数量和买入价，不含收益折扣（只统计未卖出的）
+          if (order.sell_status !== 'sold' && buyPrice > 0 && originalQty > 0) {
+            coinPnl[coin].totalCost += buyPrice * originalQty;
+            coinPnl[coin].totalQty += originalQty;
+          }
           if (order.sell_status === 'sold') {
             // 已卖出：用实际卖出价计算已实现盈亏
             const sellPrice = parseFloat(order.sell_price || '0');
@@ -10525,6 +10534,7 @@ export const appRouter = router({
           holdingCount: data.holdingCount,
           soldCount: data.soldCount,
           pendingCount: data.pendingCount,
+          avgCost: data.totalQty > 0 ? parseFloat((data.totalCost / data.totalQty).toFixed(2)) : 0,
         }));
         // 按 BTC > ETH > SOL 顺序排列
         const coinOrder = ['BTC', 'ETH', 'SOL'];
