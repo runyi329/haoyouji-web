@@ -71,6 +71,27 @@ const WORKDAY_OVERRIDES: Set<string> = new Set([
   '2026-01-04', '2026-02-14', '2026-02-28', '2026-05-09', '2026-09-20', '2026-10-10',
 ]);
 
+// 获取北京时间（UTC+8）的当前日期信息
+function getBeijingNow(): { year: number; month: number; day: number; hour: number; date: Date } {
+  const now = new Date();
+  // 使用 Intl 获取北京时间的各个部分
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(now);
+  const get = (type: string) => parts.find(p => p.type === type)?.value || '0';
+  const year = parseInt(get('year'));
+  const month = parseInt(get('month'));
+  const day = parseInt(get('day'));
+  const hour = parseInt(get('hour'));
+  // 返回一个代表北京时间当天开始的Date对象（用于比较）
+  const date = new Date(year, month - 1, day);
+  return { year, month, day, hour, date };
+}
+
 // 格式化日期为 YYYY-MM-DD
 function formatDateKey(d: Date): string {
   const y = d.getFullYear();
@@ -155,34 +176,41 @@ function getTaxDeadline(year: number, month: number): { deadline: Date; original
   return { deadline: current, originalDate: original, postponed, reason: reasonText };
 }
 
-// 获取下一个报税截止日信息
+// 获取下一个报税截止日信息（基于北京时间 UTC+8）
 // 报税周期逻辑：
 // - 每月截止日用于申报上个月的税务
 // - 例如：3月16日截止日 → 申报的是2月的税务
 // - 3月12日：距离3月16日还有4天，显示"申报2月税务"
 // - 3月17日（过了3月截止日）：显示"申报3月税务"，截止日是4月20日
 function getNextTaxDeadlineInfo(): { deadline: Date; originalDate: Date; postponed: boolean; reason: string; taxMonth: number; taxYear: number; daysLeft: number } {
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 1-12
+  // 使用北京时间判断“今天”
+  const bj = getBeijingNow();
+  const currentYear = bj.year;
+  const currentMonth = bj.month;
+  const todayDate = bj.date; // 北京时间今天 00:00:00 的 Date 对象
 
   // 当月的截止日（用于申报上个月的税）
   const currentDeadline = getTaxDeadline(currentYear, currentMonth);
+  // 截止日也转换为当天 00:00:00 进行比较（只比较日期，不比较时间）
+  const deadlineDate = new Date(currentDeadline.deadline.getFullYear(), currentDeadline.deadline.getMonth(), currentDeadline.deadline.getDate());
 
-  if (now <= currentDeadline.deadline) {
-    // 还没过当月截止日 → 正在申报上个月的税务
-    const daysLeft = Math.ceil((currentDeadline.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    // taxMonth/taxYear = 被申报的月份（上个月）
+  if (todayDate <= deadlineDate) {
+    // 北京时间今天还没过截止日 → 正在申报上个月的税务
+    // 计算剩余天数：截止日日期 - 今天日期 + 1（包含今天）
+    // 例如：今天4月16日，截止日4月16日 → 剩余1天（今天是最后一天）
+    const diffMs = deadlineDate.getTime() - todayDate.getTime();
+    const daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1; // +1因为截止日当天也算
     const taxMonth = currentMonth === 1 ? 12 : currentMonth - 1;
     const taxYear = currentMonth === 1 ? currentYear - 1 : currentYear;
     return { ...currentDeadline, taxMonth, taxYear, daysLeft };
   } else {
-    // 已过当月截止日 → 开始申报当月的税务，截止日是下个月
+    // 北京时间今天已过截止日 → 开始申报当月的税务，截止日是下个月
     const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
     const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
     const nextDeadline = getTaxDeadline(nextYear, nextMonth);
-    const daysLeft = Math.ceil((nextDeadline.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    // taxMonth/taxYear = 被申报的月份（当月）
+    const nextDeadlineDate = new Date(nextDeadline.deadline.getFullYear(), nextDeadline.deadline.getMonth(), nextDeadline.deadline.getDate());
+    const diffMs = nextDeadlineDate.getTime() - todayDate.getTime();
+    const daysLeft = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
     return { ...nextDeadline, taxMonth: currentMonth, taxYear: currentYear, daysLeft };
   }
 }
@@ -1899,9 +1927,9 @@ export default function LedgerDetail() {
                           {/* 报税截止日标签列表弹出框 */}
                           {ahCalendarCompanyId === company.id && (() => {
                             const calYear = ahCalendarMonth.year;
-                            const now = new Date();
-                            const currentMonth = now.getMonth() + 1;
-                            const currentYear = now.getFullYear();
+                            const bjNow = getBeijingNow();
+                            const currentMonth = bjNow.month;
+                            const currentYear = bjNow.year;
 
                             return (
                               <div className="rounded-lg border border-gray-200 mt-2 overflow-hidden" style={{ backgroundColor: '#FFFFFF' }}>
