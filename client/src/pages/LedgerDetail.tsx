@@ -655,9 +655,10 @@ export default function LedgerDetail() {
                 </div>
                 {/* 表头 */}
                 <div className="flex items-baseline mb-1 text-[10px] text-white/40">
-                  <span className="w-10">币种</span>
+                  <span className="w-9">币种</span>
                   <span className="flex-1 text-right">仓位</span>
-                  <span className="w-12 text-right">订单</span>
+                  <span className="w-10 text-right">订单</span>
+                  <span className="flex-1 text-right">均价</span>
                   <span className="flex-1 text-right">盈亏</span>
                 </div>
                 {['BTC', 'ETH', 'SOL'].map(coin => {
@@ -665,6 +666,7 @@ export default function LedgerDetail() {
                   const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
                   const displayPnl = Math.max(0, coinData?.pnl ?? 0);
                   const orderCount = coinData?.orderCount ?? 0;
+                  const avgCost = coinData?.avgCost ?? 0;
                   // 智能去尾零
                   const fmtQty = (() => {
                     if (!qty || qty <= 0) return '0';
@@ -677,18 +679,20 @@ export default function LedgerDetail() {
                   })();
                   return (
                     <div key={coin} className="flex items-baseline py-0.5">
-                      <span className="w-10 text-xs text-white/70 font-medium">{coin}</span>
+                      <span className="w-9 text-xs text-white/70 font-medium">{coin}</span>
                       <span className="flex-1 text-right text-xs font-bold text-white">{fmtQty}</span>
-                      <span className="w-12 text-right text-[10px] text-white/50">{orderCount}笔</span>
+                      <span className="w-10 text-right text-[10px] text-white/50">{orderCount}笔</span>
+                      <span className="flex-1 text-right text-[11px] text-white/60">{avgCost > 0 ? avgCost.toLocaleString() : '-'}</span>
                       <span className="flex-1 text-right text-xs font-medium text-green-400">+{displayPnl.toFixed(2)}</span>
                     </div>
                   );
                 })}
                 {/* 总计 */}
                 <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline">
-                  <span className="w-10 text-xs text-white/80 font-medium">总计</span>
+                  <span className="w-9 text-xs text-white/80 font-medium">总计</span>
                   <span className="flex-1"></span>
-                  <span className="w-12"></span>
+                  <span className="w-10"></span>
+                  <span className="flex-1"></span>
                   <span className="flex-1 text-right text-sm font-bold text-green-400">+{Math.max(0, pnlData?.total ?? 0).toFixed(2)} U</span>
                 </div>
               </div>
