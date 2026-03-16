@@ -178,6 +178,11 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF }
   );
+  // AF 账本：实时盈亏汇总（每60秒自动刷新）
+  const { data: pnlData } = trpc.ledger.afGetPnlSummary.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF, refetchInterval: 60000 }
+  );
   const dietConfig = (dietStats as any)?.config;
   const dietInitialWeight = dietConfig ? Number(dietConfig.initialWeight) : null;
   const dietTargetWeight = dietConfig ? Number(dietConfig.targetWeight) : null;
@@ -669,10 +674,29 @@ export default function LedgerDetail() {
                   <div className="text-lg font-bold text-white">--</div>
                 )}
               </div>
-              {/* 卡片 4 */}
+              {/* 卡片 4：累计盈亏（按币种分行 + 总计） */}
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-xs text-white/70 mb-1">累计盈亏</div>
-                <div className="text-lg font-bold text-white">--</div>
+                {pnlData && pnlData.coins.length > 0 ? (
+                  <div className="space-y-1">
+                    {pnlData.coins.map((c: any) => (
+                      <div key={c.coin} className="flex items-baseline justify-between">
+                        <span className="text-xs text-white/60">{c.coin}</span>
+                        <span className={`text-xs font-medium ${c.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {c.pnl >= 0 ? '+' : ''}{c.pnl.toFixed(2)} U
+                        </span>
+                      </div>
+                    ))}
+                    <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline justify-between">
+                      <span className="text-xs text-white/80 font-medium">总计</span>
+                      <span className={`text-sm font-bold ${pnlData.total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {pnlData.total >= 0 ? '+' : ''}{pnlData.total.toFixed(2)} U
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-lg font-bold text-white">--</div>
+                )}
               </div>
               {/* 管理员统计：累计订单（后端控制权限，代看模式下隐藏） */}
               {!viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).orders && (

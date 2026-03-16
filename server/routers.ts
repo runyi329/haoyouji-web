@@ -10445,6 +10445,85 @@ export const appRouter = router({
         const r2 = { symbol: input.symbol, lastPrice: d.last, priceChangePercent: d.open24h && d.last ? (((parseFloat(d.last) - parseFloat(d.open24h)) / parseFloat(d.open24h)) * 100).toFixed(4) : '0', highPrice: d.high24h, lowPrice: d.low24h, volume: d.vol24h, weightedAvgPrice: d.last, openPrice: d.open24h };
         setCache(cacheKey, r2); return r2;
       }),
+    // ========== 实时盈亏计算 API ==========
+    afGetPnlSummary: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const { getLatestPrice } = await import('./price-scanner');
+        const db = await getLedgerDb();
+        // 查询当前用户所有买单（已成交 + 委卖中 + 已卖出）
+        const orderRows = await db.execute(
+          sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.status, o.sell_status, o.sell_price, o.is_gift
+              FROM af_orders o
+              WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${ctx.user.id}
+                AND o.side = 'buy' AND o.status = 'completed'
+                AND (o.order_type = '无损合约' OR o.order_type IS NULL OR o.order_type = '')`
+        ) as any;
+        const orders = ((orderRows[0] || orderRows) as any[]);
+        if (!orders || orders.length === 0) {
+          return { coins: [], total: 0, prices: {} as Record<string, number> };
+        }
+        // 查询每个订单的最高档位
+        const orderIds = orders.map((o: any) => o.id);
+        const tierRows = await db.execute(
+          sql`SELECT order_id, COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id IN (${sql.join(orderIds.map((id: number) => sql`${id}`), sql`,`)}) GROUP BY order_id`
+        ) as any;
+        const tierMap: Record<number, number> = {};
+        for (const r of ((tierRows[0] || tierRows) as any[])) {
+          tierMap[r.order_id] = parseInt(r.maxTier?.toString() || '0') || 0;
+        }
+        // 收益权折扣率
+        const equityDiscountRates: Record<number, number> = {
+          0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+          5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+        };
+        // 获取实时价格
+        const prices: Record<string, number> = {};
+        for (const coin of ['BTC', 'ETH', 'SOL']) {
+          const p = getLatestPrice(coin);
+          if (p) prices[coin] = p;
+        }
+        // 按币种分组计算盈亏
+        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number }> = {};
+        for (const order of orders) {
+          const coin = order.coin;
+          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0 };
+          coinPnl[coin].orderCount++;
+          const buyPrice = parseFloat(order.limit_price || '0');
+          const originalQty = parseFloat(order.quantity || '0');
+          const maxTier = tierMap[order.id] || 0;
+          const discountRate = equityDiscountRates[maxTier] || 1.0;
+          const effectiveQty = originalQty * discountRate;
+          if (order.sell_status === 'sold') {
+            // 已卖出：用实际卖出价计算已实现盈亏
+            const sellPrice = parseFloat(order.sell_price || '0');
+            if (sellPrice > 0 && buyPrice > 0) {
+              coinPnl[coin].pnl += effectiveQty * (sellPrice - buyPrice);
+            }
+            coinPnl[coin].soldCount++;
+          } else {
+            // 持仓中/委卖中：用实时价格计算浮动盈亏
+            const currentPrice = prices[coin];
+            if (currentPrice && buyPrice > 0) {
+              coinPnl[coin].pnl += effectiveQty * (currentPrice - buyPrice);
+            }
+            coinPnl[coin].holdingCount++;
+          }
+        }
+        // 汇总
+        const coins = Object.entries(coinPnl).map(([coin, data]) => ({
+          coin,
+          pnl: parseFloat(data.pnl.toFixed(4)),
+          orderCount: data.orderCount,
+          holdingCount: data.holdingCount,
+          soldCount: data.soldCount,
+        }));
+        // 按 BTC > ETH > SOL 顺序排列
+        const coinOrder = ['BTC', 'ETH', 'SOL'];
+        coins.sort((a, b) => coinOrder.indexOf(a.coin) - coinOrder.indexOf(b.coin));
+        const total = parseFloat(coins.reduce((sum, c) => sum + c.pnl, 0).toFixed(4));
+        return { coins, total, prices };
+      }),
     // ========== AF 拨比管理 API ==========
     // 获取某个下单人的所有拨比配置
     afGetPayoutRatios: protectedProcedure
