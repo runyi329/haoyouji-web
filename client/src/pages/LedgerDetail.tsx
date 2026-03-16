@@ -38,6 +38,121 @@ import {
 } from "lucide-react";
 
 
+// ========== 中国法定节假日数据（2025-2026年） ==========
+// 法定节假日放假日期（这些日期是非工作日）
+const CHINA_HOLIDAYS: Record<string, string> = {
+  // 2025年
+  '2025-01-01': '元旦',
+  '2025-01-28': '春节', '2025-01-29': '春节', '2025-01-30': '春节', '2025-01-31': '春节',
+  '2025-02-01': '春节', '2025-02-02': '春节', '2025-02-03': '春节', '2025-02-04': '春节',
+  '2025-04-04': '清明节', '2025-04-05': '清明节', '2025-04-06': '清明节',
+  '2025-05-01': '劳动节', '2025-05-02': '劳动节', '2025-05-03': '劳动节', '2025-05-04': '劳动节', '2025-05-05': '劳动节',
+  '2025-05-31': '端午节', '2025-06-01': '端午节', '2025-06-02': '端午节',
+  '2025-10-01': '国庆节', '2025-10-02': '国庆节', '2025-10-03': '国庆节', '2025-10-04': '国庆节',
+  '2025-10-05': '国庆节', '2025-10-06': '国庆节', '2025-10-07': '国庆节', '2025-10-08': '国庆节',
+  // 2026年
+  '2026-01-01': '元旦', '2026-01-02': '元旦', '2026-01-03': '元旦',
+  '2026-02-15': '春节', '2026-02-16': '春节', '2026-02-17': '春节', '2026-02-18': '春节',
+  '2026-02-19': '春节', '2026-02-20': '春节', '2026-02-21': '春节', '2026-02-22': '春节', '2026-02-23': '春节',
+  '2026-04-04': '清明节', '2026-04-05': '清明节', '2026-04-06': '清明节',
+  '2026-05-01': '劳动节', '2026-05-02': '劳动节', '2026-05-03': '劳动节', '2026-05-04': '劳动节', '2026-05-05': '劳动节',
+  '2026-06-19': '端午节', '2026-06-20': '端午节', '2026-06-21': '端午节',
+  '2026-09-25': '中秋节', '2026-09-26': '中秋节', '2026-09-27': '中秋节',
+  '2026-10-01': '国庆节', '2026-10-02': '国庆节', '2026-10-03': '国庆节', '2026-10-04': '国庆节',
+  '2026-10-05': '国庆节', '2026-10-06': '国庆节', '2026-10-07': '国庆节',
+};
+
+// 调休上班日（这些周末日期是工作日）
+const WORKDAY_OVERRIDES: Set<string> = new Set([
+  // 2025年
+  '2025-01-26', '2025-02-08', '2025-04-27', '2025-09-28', '2025-10-11',
+  // 2026年
+  '2026-01-04', '2026-02-14', '2026-02-28', '2026-05-09', '2026-09-20', '2026-10-10',
+]);
+
+// 格式化日期为 YYYY-MM-DD
+function formatDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// 判断某天是否为工作日
+function isWorkday(d: Date): boolean {
+  const key = formatDateKey(d);
+  // 如果是调休上班日（周末但要上班），则是工作日
+  if (WORKDAY_OVERRIDES.has(key)) return true;
+  // 如果是法定节假日，则不是工作日
+  if (CHINA_HOLIDAYS[key]) return false;
+  // 周六日不是工作日
+  const dow = d.getDay();
+  if (dow === 0 || dow === 6) return false;
+  return true;
+}
+
+// 计算报税截止日（每月15号，遇节假日/周末顺延）
+// 返回 { deadline: Date, originalDate: Date, postponed: boolean, reason: string }
+function getTaxDeadline(year: number, month: number): { deadline: Date; originalDate: Date; postponed: boolean; reason: string } {
+  const original = new Date(year, month - 1, 15); // month是1-12
+  let current = new Date(original);
+  const reasons: string[] = [];
+
+  // 最多顺延30天（安全上限）
+  for (let i = 0; i < 30; i++) {
+    if (isWorkday(current)) {
+      break;
+    }
+    const key = formatDateKey(current);
+    const holidayName = CHINA_HOLIDAYS[key];
+    const dow = current.getDay();
+    if (holidayName && !reasons.includes(holidayName)) {
+      reasons.push(holidayName);
+    } else if (dow === 0 && !holidayName) {
+      if (!reasons.includes('周日')) reasons.push('周日');
+    } else if (dow === 6 && !holidayName) {
+      if (!reasons.includes('周六')) reasons.push('周六');
+    }
+    current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  const postponed = current.getTime() !== original.getTime();
+  const reasonText = postponed
+    ? `因${reasons.join('、')}顺延至${current.getMonth() + 1}月${current.getDate()}日`
+    : '';
+
+  return { deadline: current, originalDate: original, postponed, reason: reasonText };
+}
+
+// 获取下一个报税截止日信息
+function getNextTaxDeadlineInfo(): { deadline: Date; originalDate: Date; postponed: boolean; reason: string; taxMonth: number; taxYear: number; daysLeft: number } {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
+
+  // 当月15号报上个月的税
+  let taxYear = currentYear;
+  let taxMonth = currentMonth; // 报税所属月份就是当月（15号报税）
+
+  const currentDeadline = getTaxDeadline(taxYear, taxMonth);
+
+  // 如果当前日期已过当月截止日，则看下个月
+  if (now > currentDeadline.deadline) {
+    if (taxMonth === 12) {
+      taxYear += 1;
+      taxMonth = 1;
+    } else {
+      taxMonth += 1;
+    }
+    const nextDeadline = getTaxDeadline(taxYear, taxMonth);
+    const daysLeft = Math.ceil((nextDeadline.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return { ...nextDeadline, taxMonth: taxMonth - 1 || 12, taxYear: taxMonth === 1 ? taxYear - 1 : taxYear, daysLeft };
+  }
+
+  const daysLeft = Math.ceil((currentDeadline.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  return { ...currentDeadline, taxMonth: taxMonth - 1 || 12, taxYear: taxMonth === 1 ? taxYear - 1 : taxYear, daysLeft };
+}
+
 export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
   const [, setLocation] = useLocation();
@@ -1575,16 +1690,9 @@ export default function LedgerDetail() {
                   // 找到该公司最新的报税授权记录
                   const companyAuths = (ahTaxAuths as any[] || []).filter((a: any) => a.companyId === company.id);
                   const latestAuth = companyAuths.length > 0 ? companyAuths[0] : null;
-                  // 计算倒计时：距离下一个15号还有几天
-                  const now = new Date();
-                  let nextDue: Date;
-                  if (now.getDate() >= 15) {
-                    // 已过15号，下一个截止日是下个月15号
-                    nextDue = new Date(now.getFullYear(), now.getMonth() + 1, 15);
-                  } else {
-                    nextDue = new Date(now.getFullYear(), now.getMonth(), 15);
-                  }
-                  const daysLeft = Math.ceil((nextDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  // 计算报税截止日（含节假日/周末顺延）
+                  const taxInfo = getNextTaxDeadlineInfo();
+                  const { deadline: nextDue, daysLeft, postponed: isPostponed, reason: postponeReason, taxMonth: reportTaxMonth, taxYear: reportTaxYear } = taxInfo;
                   const statusColor = latestAuth?.status === 'authorized' ? '#10B981' : latestAuth?.status === 'filed' ? '#6B7280' : latestAuth?.status === 'expired' ? '#EF4444' : '#F59E0B';
                   const statusText = latestAuth?.status === 'authorized' ? '客户已授权，可申报扣税' : latestAuth?.status === 'filed' ? '已申报' : latestAuth?.status === 'expired' ? '已过期' : '待客户授权';
 
@@ -1708,14 +1816,26 @@ export default function LedgerDetail() {
                             </div>
                           </div>
 
-                          {/* 倒计时 */}
-                          <div className="flex items-center justify-between">
-                            <div className="text-xs text-gray-500">
-                              距离下次报税截止日（{nextDue.getMonth() + 1}月15日）
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-lg font-bold" style={{ color: daysLeft <= 3 ? '#EF4444' : daysLeft <= 7 ? '#F59E0B' : '#1A56DB' }}>{daysLeft}</span>
-                              <span className="text-xs text-gray-500">天</span>
+                          {/* 报税截止日倒计时 */}
+                          <div className="rounded-lg p-2.5 mt-1" style={{ backgroundColor: daysLeft <= 3 ? '#FEF2F2' : daysLeft <= 7 ? '#FFFBEB' : '#EFF6FF' }}>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-xs text-gray-600">
+                                  {reportTaxYear}年{reportTaxMonth}月税务申报截止日
+                                </div>
+                                <div className="text-xs font-medium mt-0.5" style={{ color: '#374151' }}>
+                                  {nextDue.getMonth() + 1}月{nextDue.getDate()}日（{['周日','周一','周二','周三','周四','周五','周六'][nextDue.getDay()]}）
+                                </div>
+                                {isPostponed && (
+                                  <div className="text-xs mt-0.5" style={{ color: '#F59E0B' }}>
+                                    ⚠️ 原截止日{nextDue.getMonth() + 1}月15日，{postponeReason}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-col items-center">
+                                <span className="text-2xl font-bold" style={{ color: daysLeft <= 3 ? '#EF4444' : daysLeft <= 7 ? '#F59E0B' : '#1A56DB' }}>{daysLeft}</span>
+                                <span className="text-xs text-gray-500">天</span>
+                              </div>
                             </div>
                           </div>
 
