@@ -538,9 +538,8 @@ export default function LedgerDetailAA({
               </div>
             )}
             </div>
-            </div>
 
-            {/* 右侧：操作按钮 + 返回按钮 + 标签下拉 */}
+            {/* 右侧：操作按鈕 + 返回按鈕 + 标签下拉 */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {canEdit && (
                 <button
