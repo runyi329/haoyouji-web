@@ -23,15 +23,9 @@ export default function RechargeHistory() {
     { limit: 50 },
     { enabled: !ledgerId }
   );
+  // 统一余额（后端已合计 users.balance + recharge_orders + af_manual_balances）
   const balanceQuery = trpc.recharge.getBalance.useQuery();
-  // 如果有 ledgerId，使用 AF 账本总资产（充值到账 + 手动调账）
-  const { data: afAssetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
-    { ledgerId: ledgerId!, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: !!ledgerId, staleTime: 30000 }
-  );
-  const displayBalance = ledgerId && afAssetData != null
-    ? (afAssetData as any).total
-    : balanceQuery.data;
+  const displayBalance = balanceQuery.data;
 
   // 格式化时间
   const formatDate = (dateStr: string | Date) => {

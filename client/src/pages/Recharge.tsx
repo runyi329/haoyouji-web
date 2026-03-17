@@ -35,17 +35,9 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
 
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
+  // 统一余额（后端已合计 users.balance + recharge_orders + af_manual_balances）
   const balanceQuery = trpc.recharge.getBalance.useQuery();
-  // 如果有 ledgerId，使用 AF 账本总资产（充値到账 + 手动调账）
-  const afLedgerId = fromLedgerId ? parseInt(fromLedgerId) : 0;
-  const { data: afAssetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
-    { ledgerId: afLedgerId, ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}) },
-    { enabled: !!afLedgerId, staleTime: 30000 }
-  );
-  // 实际显示的余额：有 ledgerId 时用 AF 账本总资产，否则用普通余额
-  const displayBalance = afLedgerId && afAssetData != null
-    ? (afAssetData as any).total
-    : balanceQuery.data;
+  const displayBalance = balanceQuery.data;
 
 
 
