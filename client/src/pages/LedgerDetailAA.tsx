@@ -1237,6 +1237,29 @@ export default function LedgerDetailAA({
         </div>
       )}
 
+      {/* ── 视角切换黄色横幅提示条（切换后底部显示） ── */}
+      {viewAsUserId && canEdit && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-between px-4 py-3"
+          style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}
+        >
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Users className="w-4 h-4" />
+            <span>正在以 {(() => {
+              const t = (membersData || []).find((m: any) => m.userId === viewAsUserId);
+              return t ? (t.nickname || t.username) : '未知用户';
+            })()} 的视角查看</span>
+          </div>
+          <button
+            onClick={() => handleSwitchView(null)}
+            className="px-3 py-1 rounded-full text-xs font-medium"
+            style={{ backgroundColor: 'rgba(255,255,255,0.9)', color: '#333' }}
+          >
+            切回我的视角
+          </button>
+        </div>
+      )}
+
       {/* ── 悬浮加号按鈕（仅管理员/创建者可见，且「2026 AA」账本除外） ── */}
       {canEdit && !hideFloatingAddButton && (
         <button
