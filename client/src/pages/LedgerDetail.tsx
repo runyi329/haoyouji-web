@@ -1799,37 +1799,55 @@ export default function LedgerDetail() {
       )}
 
       {/* AI 账本：日历 + 工作台入口 */}
-      {isCustomAI && (
+      {isCustomAI && (() => {
+        // 自动播放生日快乐音乐
+        const birthdayAudioRef = React.useRef<HTMLAudioElement | null>(null);
+        React.useEffect(() => {
+          const audio = new Audio('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/ai-ledger/happy_birthday.mp3');
+          audio.loop = true;
+          audio.volume = 0.5;
+          birthdayAudioRef.current = audio;
+          // 尝试自动播放
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(() => {
+              // 自动播放被浏览器阻止，添加一次性点击事件来播放
+              const handleClick = () => {
+                audio.play().catch(() => {});
+                document.removeEventListener('click', handleClick);
+              };
+              document.addEventListener('click', handleClick);
+            });
+          }
+          return () => {
+            audio.pause();
+            audio.src = '';
+          };
+        }, []);
+        return (
         <div className="flex-1 px-4 pb-20">
-          {/* 海报展示卡片 */}
-          <a href="https://www.sohu.com" target="_blank" rel="noopener noreferrer" className="block mt-4 rounded-2xl overflow-hidden shadow-sm" style={{ border: '1px solid #EDE9FE' }}>
+          {/* 生日海报 */}
+          <div className="mt-4 rounded-2xl overflow-hidden shadow-lg" style={{ border: '2px solid #D4AF37' }}>
             <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/shebei_poster_2026.jpg"
-              alt="奢贝网3月2日抽奖奖品"
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/ai-ledger/birthday_poster.jpg"
+              alt="李欣冉十岁生日宴"
               className="w-full"
               style={{ display: 'block' }}
             />
-          </a>
-          {/* 南瓜购买按钮 */}
-          <div className="mt-4 bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid #EDE9FE' }}>
-            <div className="px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#FFF7ED' }}>
-                  <span className="text-lg">🎃</span>
-                </div>
-                <div>
-                  <div className="text-sm font-semibold" style={{ color: '#92400E' }}>奢贝网 限量南瓜</div>
-                  <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>3月2日抽奖活动商品</div>
-                </div>
+          </div>
+
+          {/* 红包按钮 - 520生日红包 */}
+          <div className="mt-4 rounded-2xl overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 50%, #991B1B 100%)', border: '2px solid #D4AF37' }}>
+            <div className="px-5 py-4 text-center">
+              <div className="text-2xl font-bold text-yellow-300 mb-1" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>🧧 生日红包</div>
+              <div className="text-sm text-red-100 mb-3">祝欣冉十岁生日快乐！</div>
+              <div className="flex items-baseline justify-center gap-1 mb-4">
+                <span className="text-sm text-yellow-200">¥</span>
+                <span className="text-5xl font-black text-yellow-300" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)', fontFamily: 'Georgia, serif' }}>520</span>
               </div>
-              <div className="text-right">
-                <div className="text-lg font-bold" style={{ color: '#DC2626' }}>¥19.9</div>
-              </div>
-            </div>
-            <div className="px-4 pb-3">
               <button
-                className="w-full py-2.5 rounded-xl text-white text-sm font-semibold"
-                style={{ background: 'linear-gradient(135deg, #1677FF 0%, #0958D9 100%)' }}
+                className="w-full py-3.5 rounded-xl text-lg font-bold"
+                style={{ background: 'linear-gradient(135deg, #FBBF24 0%, #D97706 100%)', color: '#7C2D12', boxShadow: '0 4px 12px rgba(217,119,6,0.4)' }}
                 onClick={async () => {
                   try {
                     const res = await fetch('/api/alipay/create-order', {
@@ -1837,9 +1855,9 @@ export default function LedgerDetail() {
                       headers: { 'Content-Type': 'application/json' },
                       credentials: 'include',
                       body: JSON.stringify({
-                        productId: 'pumpkin-shebei-001',
-                        productName: '奢贝网限量南瓜',
-                        amount: 19.9,
+                        productId: 'birthday-red-packet-520',
+                        productName: '李欣冉十岁生日红包',
+                        amount: 520,
                       }),
                     });
                     const data = await res.json();
@@ -1853,10 +1871,12 @@ export default function LedgerDetail() {
                   }
                 }}
               >
-                支付宝购买
+                发送生日红包
               </button>
+              <div className="text-xs text-red-200 mt-2 opacity-80">点击通过支付宝发送红包</div>
             </div>
           </div>
+
           {/* 工作台入口 */}
           <div className="mt-4 bg-white rounded-2xl shadow-sm px-4 py-4 flex items-center gap-3" style={{ border: '1px solid #EDE9FE' }}
             onClick={() => setLocation(`/ledger/${ledgerId}/ai-company/0`)}
@@ -1865,13 +1885,14 @@ export default function LedgerDetail() {
               <PieChart className="w-5 h-5" style={{ color: '#7C3AED' }} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold" style={{ color: '#4C1D95' }}>股权管理工作台</div>
-              <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>查看股权结构、分红记录等</div>
+              <div className="text-sm font-semibold" style={{ color: '#4C1D95' }}>品牌工作台</div>
+              <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>查看品牌介绍、产品等</div>
             </div>
             <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#A78BFA' }} />
           </div>
         </div>
-      )}
+        );
+      })()}
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
       {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
