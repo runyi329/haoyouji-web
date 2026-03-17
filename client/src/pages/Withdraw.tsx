@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { trpc } from "../lib/trpc";
 import { toast } from "sonner";
-import { Loader2, AlertCircle, Wallet, ArrowLeft, CheckCircle2, Clock, XCircle, ArrowUpCircle } from "lucide-react";
+import { Loader2, AlertCircle, Wallet, ArrowLeft, CheckCircle2, Clock, XCircle, ArrowUpCircle, ChevronRight } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 
 interface WithdrawProps {
@@ -21,12 +21,12 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
 
   // 提现表单
   const [amount, setAmount] = useState("");
-  const [bscAddress, setBscAddress] = useState("");
-  const [showBindWallet, setShowBindWallet] = useState(false);
+  const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
 
   // 查询
   const balanceQuery = trpc.recharge.getBalance.useQuery();
-  const bscWalletQuery = trpc.recharge.getBscWallet.useQuery();
+  // 读取用户在个人中心已绑定的数字钱包（digital_wallets 表）
+  const walletsQuery = trpc.paymentAccounts.getDigitalWallets.useQuery();
   const withdrawalsQuery = trpc.recharge.getMySntWithdrawals.useQuery({ limit: 50 });
 
   // 如果有 ledgerId，使用 AF 账本总资产
@@ -41,17 +41,20 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
 
   const balance = useMemo(() => parseFloat(String(displayBalance || 0)), [displayBalance]);
 
-  // 绑定钱包
-  const upsertWalletMutation = trpc.recharge.upsertBscWallet.useMutation({
-    onSuccess: () => {
-      toast.success("钱包地址已保存");
-      bscWalletQuery.refetch();
-      setShowBindWallet(false);
-    },
-    onError: (error) => {
-      toast.error(error.message || "保存失败");
-    },
-  });
+  // 筛选出区块链钱包（wallet_type === 'blockchain'）
+  const blockchainWallets = useMemo(() => {
+    if (!walletsQuery.data) return [];
+    return (walletsQuery.data as any[]).filter((w: any) => w.walletType === 'blockchain' && w.walletAddress);
+  }, [walletsQuery.data]);
+
+  // 获取选中的钱包
+  const selectedWallet = useMemo(() => {
+    if (!selectedWalletId) {
+      // 默认选第一个
+      return blockchainWallets.length > 0 ? blockchainWallets[0] : null;
+    }
+    return blockchainWallets.find((w: any) => w.id === selectedWalletId) || null;
+  }, [selectedWalletId, blockchainWallets]);
 
   // 提现申请
   const withdrawMutation = trpc.recharge.requestSntWithdraw.useMutation({
@@ -82,25 +85,15 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
       return;
     }
 
-    const walletAddr = bscWalletQuery.data?.bscAddress;
-    if (!walletAddr) {
-      toast.error("请先绑定 BSC 钱包地址");
-      setShowBindWallet(true);
+    if (!selectedWallet) {
+      toast.error("请先在个人中心绑定区块链钱包地址");
       return;
     }
 
     withdrawMutation.mutate({
       sntAmount: amountNum,
-      bscAddress: walletAddr,
+      bscAddress: selectedWallet.walletAddress,
     });
-  };
-
-  const handleBindWallet = () => {
-    if (!bscAddress.trim()) {
-      toast.error("请输入钱包地址");
-      return;
-    }
-    upsertWalletMutation.mutate({ bscAddress: bscAddress.trim() });
   };
 
   // 格式化时间
@@ -185,76 +178,72 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
             </div>
           </div>
 
-          {/* 收款钱包 */}
+          {/* 收款钱包选择 */}
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm font-medium text-gray-700">收款钱包 (BSC/BEP20)</label>
+              <label className="text-sm font-medium text-gray-700">收款钱包</label>
               <button
-                onClick={() => {
-                  setBscAddress(bscWalletQuery.data?.bscAddress || "");
-                  setShowBindWallet(true);
-                }}
-                className="text-xs text-[#D32F2F] font-medium"
+                onClick={() => setLocation('/payment-accounts')}
+                className="text-xs text-[#D32F2F] font-medium flex items-center"
               >
-                {bscWalletQuery.data ? "修改" : "绑定"}
+                管理钱包
+                <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
               </button>
             </div>
 
-            {bscWalletQuery.data ? (
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="font-mono text-sm text-gray-800 break-all">
-                  {bscWalletQuery.data.bscAddress}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">BNB Smart Chain (BEP20)</div>
+            {walletsQuery.isLoading ? (
+              <div className="py-4 text-center text-gray-400">
+                <Loader2 className="w-5 h-5 mx-auto mb-1 animate-spin" />
+                <p className="text-xs">加载钱包中...</p>
               </div>
-            ) : (
+            ) : blockchainWallets.length === 0 ? (
               <div className="text-center py-6 text-gray-400">
                 <AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">尚未绑定收款钱包</p>
+                <p className="text-sm">尚未绑定区块链钱包</p>
+                <p className="text-xs text-gray-400 mt-1">请在个人中心 → 收款账户中添加区块链钱包</p>
                 <button
-                  onClick={() => setShowBindWallet(true)}
-                  className="mt-2 px-4 py-1.5 bg-[#D32F2F] text-white text-xs rounded-lg"
+                  onClick={() => setLocation('/payment-accounts')}
+                  className="mt-3 px-4 py-1.5 bg-[#D32F2F] text-white text-xs rounded-lg"
                 >
-                  立即绑定
+                  去绑定钱包
                 </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {blockchainWallets.map((wallet: any) => {
+                  const isSelected = selectedWallet?.id === wallet.id;
+                  return (
+                    <button
+                      key={wallet.id}
+                      onClick={() => setSelectedWalletId(wallet.id)}
+                      className={`w-full text-left rounded-lg p-3 border-2 transition-colors ${
+                        isSelected
+                          ? "border-[#D32F2F] bg-red-50"
+                          : "border-gray-200 bg-gray-50 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          isSelected ? "bg-[#D32F2F] text-white" : "bg-gray-200 text-gray-600"
+                        }`}>
+                          {wallet.network || '区块链'}
+                        </span>
+                        {wallet.currency && (
+                          <span className="text-xs text-gray-500">{wallet.currency}</span>
+                        )}
+                      </div>
+                      <div className="font-mono text-sm text-gray-800 break-all mt-1">
+                        {wallet.walletAddress}
+                      </div>
+                      {wallet.notes && (
+                        <div className="text-xs text-gray-400 mt-1">{wallet.notes}</div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
-
-          {/* 绑定钱包弹窗 */}
-          {showBindWallet && (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" onClick={() => setShowBindWallet(false)}>
-              <div className="bg-white w-full sm:w-[420px] rounded-t-2xl sm:rounded-2xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-lg font-semibold text-gray-900">绑定 BSC 钱包</h3>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1.5">BEP20 钱包地址</label>
-                  <input
-                    type="text"
-                    value={bscAddress}
-                    onChange={(e) => setBscAddress(e.target.value)}
-                    placeholder="0x..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#D32F2F] focus:border-transparent font-mono text-sm"
-                  />
-                  <p className="text-xs text-gray-400 mt-1.5">请输入 BNB Smart Chain (BEP20) 网络的钱包地址</p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowBindWallet(false)}
-                    className="flex-1 py-3 border border-gray-300 rounded-lg text-gray-700 font-medium"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleBindWallet}
-                    disabled={upsertWalletMutation.isPending}
-                    className="flex-1 py-3 bg-[#D32F2F] text-white rounded-lg font-medium disabled:opacity-50"
-                  >
-                    {upsertWalletMutation.isPending ? "保存中..." : "确认保存"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* 提现金额 */}
           <div className="bg-white rounded-lg p-4 shadow-sm">
@@ -289,7 +278,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
           {/* 提交按钮 */}
           <button
             onClick={handleSubmit}
-            disabled={withdrawMutation.isPending || !amount || !bscWalletQuery.data}
+            disabled={withdrawMutation.isPending || !amount || !selectedWallet}
             className="w-full bg-[#D32F2F] text-white py-4 rounded-lg font-medium text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#B71C1C] transition-colors flex items-center justify-center"
           >
             {withdrawMutation.isPending ? (
@@ -313,10 +302,11 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
                 <p className="font-medium mb-1">提现说明：</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
                   <li>最低提现金额为 10 USDT</li>
-                  <li>提现将通过 BSC (BEP20) 网络发送到您绑定的钱包地址</li>
+                  <li>提现将发送到您选择的区块链钱包地址</li>
                   <li>提现申请提交后需要管理员审核</li>
                   <li>审核通过后将在 1-3 个工作日内到账</li>
                   <li>请确保收款钱包地址准确无误，转错地址无法找回</li>
+                  <li>如需修改钱包地址，请前往个人中心 → 收款账户</li>
                 </ul>
               </div>
             </div>
