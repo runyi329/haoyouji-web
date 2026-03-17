@@ -335,6 +335,29 @@ export default function LedgerDetail() {
   const isCustomAF = (ledgerData as any)?.type === 'custom_af';
   const isCustomAH = (ledgerData as any)?.type === 'custom_ah';
   const isCustomAI = (ledgerData as any)?.type === 'custom_ai';
+
+  // AI 账本：自动播放生日快乐音乐
+  useEffect(() => {
+    if (!isCustomAI) return;
+    const audio = new Audio('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/ai-ledger/happy_birthday.mp3');
+    audio.loop = true;
+    audio.volume = 0.5;
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        const handleClick = () => {
+          audio.play().catch(() => {});
+          document.removeEventListener('click', handleClick);
+        };
+        document.addEventListener('click', handleClick);
+      });
+    }
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, [isCustomAI]);
+
   // AI 账本日历 state
   const [aiCalMonth, setAiCalMonth] = useState(() => {
     const now = new Date();
@@ -1799,32 +1822,7 @@ export default function LedgerDetail() {
       )}
 
       {/* AI 账本：日历 + 工作台入口 */}
-      {isCustomAI && (() => {
-        // 自动播放生日快乐音乐
-        const birthdayAudioRef = React.useRef<HTMLAudioElement | null>(null);
-        React.useEffect(() => {
-          const audio = new Audio('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/ai-ledger/happy_birthday.mp3');
-          audio.loop = true;
-          audio.volume = 0.5;
-          birthdayAudioRef.current = audio;
-          // 尝试自动播放
-          const playPromise = audio.play();
-          if (playPromise !== undefined) {
-            playPromise.catch(() => {
-              // 自动播放被浏览器阻止，添加一次性点击事件来播放
-              const handleClick = () => {
-                audio.play().catch(() => {});
-                document.removeEventListener('click', handleClick);
-              };
-              document.addEventListener('click', handleClick);
-            });
-          }
-          return () => {
-            audio.pause();
-            audio.src = '';
-          };
-        }, []);
-        return (
+      {isCustomAI && (
         <div className="flex-1 px-4 pb-20">
           {/* 生日海报 */}
           <div className="mt-4 rounded-2xl overflow-hidden shadow-lg" style={{ border: '2px solid #D4AF37' }}>
@@ -1891,8 +1889,7 @@ export default function LedgerDetail() {
             <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#A78BFA' }} />
           </div>
         </div>
-        );
-      })()}
+      )}
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
       {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
