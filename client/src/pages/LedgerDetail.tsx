@@ -1802,14 +1802,14 @@ export default function LedgerDetail() {
       {isCustomAI && (
         <div className="flex-1 px-4 pb-20">
           {/* 海报展示卡片 */}
-          <div className="mt-4 rounded-2xl overflow-hidden shadow-sm" style={{ border: '1px solid #EDE9FE' }}>
+          <a href="https://www.sohu.com" target="_blank" rel="noopener noreferrer" className="block mt-4 rounded-2xl overflow-hidden shadow-sm" style={{ border: '1px solid #EDE9FE' }}>
             <img
               src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/shebei_poster_2026.jpg"
               alt="奢贝网3月2日抽奖奖品"
               className="w-full"
               style={{ display: 'block' }}
             />
-          </div>
+          </a>
           {/* 工作台入口 */}
           <div className="mt-4 bg-white rounded-2xl shadow-sm px-4 py-4 flex items-center gap-3" style={{ border: '1px solid #EDE9FE' }}
             onClick={() => setLocation(`/ledger/${ledgerId}/ai-company/0`)}
