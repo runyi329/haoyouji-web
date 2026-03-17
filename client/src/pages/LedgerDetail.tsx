@@ -1810,6 +1810,53 @@ export default function LedgerDetail() {
               style={{ display: 'block' }}
             />
           </a>
+          {/* 南瓜购买按钮 */}
+          <div className="mt-4 bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid #EDE9FE' }}>
+            <div className="px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#FFF7ED' }}>
+                  <span className="text-lg">🎃</span>
+                </div>
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: '#92400E' }}>奢贝网 限量南瓜</div>
+                  <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>3月2日抽奖活动商品</div>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-bold" style={{ color: '#DC2626' }}>¥19.9</div>
+              </div>
+            </div>
+            <div className="px-4 pb-3">
+              <button
+                className="w-full py-2.5 rounded-xl text-white text-sm font-semibold"
+                style={{ background: 'linear-gradient(135deg, #1677FF 0%, #0958D9 100%)' }}
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/alipay/create-order', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify({
+                        productId: 'pumpkin-shebei-001',
+                        productName: '奢贝网限量南瓜',
+                        amount: 19.9,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (data.success && data.payUrl) {
+                      window.location.href = data.payUrl;
+                    } else {
+                      alert(data.error || '创建订单失败，请重试');
+                    }
+                  } catch (err) {
+                    alert('网络错误，请重试');
+                  }
+                }}
+              >
+                支付宝购买
+              </button>
+            </div>
+          </div>
           {/* 工作台入口 */}
           <div className="mt-4 bg-white rounded-2xl shadow-sm px-4 py-4 flex items-center gap-3" style={{ border: '1px solid #EDE9FE' }}
             onClick={() => setLocation(`/ledger/${ledgerId}/ai-company/0`)}
