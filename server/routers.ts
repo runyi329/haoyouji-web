@@ -9500,9 +9500,19 @@ export const appRouter = router({
     getMyInitialBalances: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
+        viewAsUserId: z.number().optional(), // 管理员可查指定成员的初始金额
       }))
       .query(async ({ ctx, input }) => {
-        const balances = await dbLedger.getMyInitialBalances(input.ledgerId, ctx.user.id);
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          // 验证当前用户是否是owner/admin
+          const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
+          const myMembership = (members as any[]).find((m: any) => m.userId === ctx.user.id);
+          if (myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin')) {
+            targetUserId = input.viewAsUserId;
+          }
+        }
+        const balances = await dbLedger.getMyInitialBalances(input.ledgerId, targetUserId);
         return { balances: balances ?? {} };
       }),
     // 更新当前用户的初始金额配置（定制账本AA）
