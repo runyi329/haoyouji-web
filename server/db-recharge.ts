@@ -516,17 +516,23 @@ export async function addUserBalance(
   return newBalance;
 }
 
-// 获取用户余额
+// 获取用户统一余额（三个来源合计：users.balance + recharge_orders已完成充值 + af_manual_balances手动调账）
 export async function getUserBalance(userId: number): Promise<number> {
   const db = await getDb();
   
-  const result = await db
-    .select({ balance: users.balance })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  const result = await db.execute(
+    sql`SELECT
+      (SELECT COALESCE(balance, 0) FROM users WHERE id = ${userId}) as userBalance,
+      (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${userId} AND status = 'completed') as recharged,
+      (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId}) as manual`
+  ) as any;
   
-  return parseFloat(result[0]?.balance?.toString() || '0');
+  const row = result[0]?.[0] ?? result[0];
+  const userBalance = parseFloat(row?.userBalance?.toString() || '0');
+  const recharged = parseFloat(row?.recharged?.toString() || '0');
+  const manual = parseFloat(row?.manual?.toString() || '0');
+  
+  return userBalance + recharged + manual;
 }
 
 // 获取用户余额变动记录

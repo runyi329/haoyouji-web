@@ -24,22 +24,13 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
 
   // 查询
+  // 统一余额（后端已合计 users.balance + recharge_orders + af_manual_balances）
   const balanceQuery = trpc.recharge.getBalance.useQuery();
   // 读取用户在个人中心已绑定的数字钱包（digital_wallets 表）
   const walletsQuery = trpc.paymentAccounts.getDigitalWallets.useQuery();
   const withdrawalsQuery = trpc.recharge.getMySntWithdrawals.useQuery({ limit: 50 });
 
-  // 如果有 ledgerId，使用 AF 账本总资产
-  const afLedgerId = fromLedgerId ? parseInt(fromLedgerId) : 0;
-  const { data: afAssetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
-    { ledgerId: afLedgerId, ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}) },
-    { enabled: !!afLedgerId, staleTime: 30000 }
-  );
-  const displayBalance = afLedgerId && afAssetData != null
-    ? (afAssetData as any).total
-    : balanceQuery.data;
-
-  const balance = useMemo(() => parseFloat(String(displayBalance || 0)), [displayBalance]);
+  const balance = useMemo(() => parseFloat(String(balanceQuery.data || 0)), [balanceQuery.data]);
 
   // 筛选出区块链钱包（wallet_type === 'blockchain'）
   const blockchainWallets = useMemo(() => {
