@@ -1799,144 +1799,32 @@ export default function LedgerDetail() {
       )}
 
       {/* AI 账本：日历 + 工作台入口 */}
-      {isCustomAI && (() => {
-        // ========== 中国法定节假日数据（2025-2026）==========
-        // 格式：'YYYY-M-D'（月日不补零）
-        const HOLIDAYS = new Set([
-          // 2025 元旦
-          '2025-1-1',
-          // 2025 春节 (1/28-2/4)
-          '2025-1-28','2025-1-29','2025-1-30','2025-1-31',
-          '2025-2-1','2025-2-2','2025-2-3','2025-2-4',
-          // 2025 清明 (4/4-4/6)
-          '2025-4-4','2025-4-5','2025-4-6',
-          // 2025 劳动节 (5/1-5/5)
-          '2025-5-1','2025-5-2','2025-5-3','2025-5-4','2025-5-5',
-          // 2025 端午 (5/31-6/2)
-          '2025-5-31','2025-6-1','2025-6-2',
-          // 2025 国庆+中秋 (10/1-10/8)
-          '2025-10-1','2025-10-2','2025-10-3','2025-10-4',
-          '2025-10-5','2025-10-6','2025-10-7','2025-10-8',
-          // 2026 元旦
-          '2026-1-1',
-          // 2026 春节 (2/17-2/23)
-          '2026-2-17','2026-2-18','2026-2-19','2026-2-20',
-          '2026-2-21','2026-2-22','2026-2-23',
-          // 2026 清明 (4/4-4/6)
-          '2026-4-4','2026-4-5','2026-4-6',
-          // 2026 劳动节 (5/1-5/5)
-          '2026-5-1','2026-5-2','2026-5-3','2026-5-4','2026-5-5',
-          // 2026 端午 (6/19-6/21)
-          '2026-6-19','2026-6-20','2026-6-21',
-          // 2026 中秋 (9/25-9/27)
-          '2026-9-25','2026-9-26','2026-9-27',
-          // 2026 国庆 (10/1-10/7)
-          '2026-10-1','2026-10-2','2026-10-3','2026-10-4',
-          '2026-10-5','2026-10-6','2026-10-7',
-        ]);
-
-        const today = new Date();
-        const { year, month } = aiCalMonth;
-        const firstDay = new Date(year, month, 1).getDay(); // 0=周日
-        const daysInMonth = new Date(year, month + 1, 0).getDate();
-        const WEEK_LABELS = ['日','一','二','三','四','五','六'];
-        const monthLabel = `${year}年${month + 1}月`;
-
-        const prevMonth = () => setAiCalMonth(prev => {
-          const d = new Date(prev.year, prev.month - 1, 1);
-          return { year: d.getFullYear(), month: d.getMonth() };
-        });
-        const nextMonth = () => setAiCalMonth(prev => {
-          const d = new Date(prev.year, prev.month + 1, 1);
-          return { year: d.getFullYear(), month: d.getMonth() };
-        });
-
-        const cells: (number | null)[] = [
-          ...Array(firstDay).fill(null),
-          ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-        ];
-        // 补齐末尾使行数完整
-        while (cells.length % 7 !== 0) cells.push(null);
-
-        return (
-          <div className="flex-1 px-4 pb-20">
-            {/* 日历卡片 */}
-            <div className="mt-4 bg-white rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid #EDE9FE' }}>
-              {/* 日历头部 */}
-              <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #F3F0FF' }}>
-                <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-purple-50 transition-colors">
-                  <ChevronLeft className="w-4 h-4" style={{ color: '#7C3AED' }} />
-                </button>
-                <span className="text-sm font-semibold" style={{ color: '#4C1D95' }}>{monthLabel}</span>
-                <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-purple-50 transition-colors">
-                  <ChevronRight className="w-4 h-4" style={{ color: '#7C3AED' }} />
-                </button>
-              </div>
-              {/* 星期标题行 */}
-              <div className="grid grid-cols-7 px-2 pt-2 pb-1">
-                {WEEK_LABELS.map(w => (
-                  <div key={w} className="text-center text-[11px] font-medium" style={{ color: '#9CA3AF' }}>{w}</div>
-                ))}
-              </div>
-              {/* 日期格子 */}
-              <div className="grid grid-cols-7 px-2 pb-3 gap-y-1">
-                {cells.map((day, idx) => {
-                  if (!day) return <div key={idx} />;
-                  const key = `${year}-${month + 1}-${day}`;
-                  const isHoliday = HOLIDAYS.has(key);
-                  const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
-                  const isWeekend = (() => { const d = new Date(year, month, day).getDay(); return d === 0 || d === 6; })();
-                  return (
-                    <div key={idx} className="flex flex-col items-center py-0.5">
-                      <div
-                        className="w-7 h-7 flex items-center justify-center rounded-full text-xs font-medium"
-                        style={{
-                          backgroundColor: isToday ? '#7C3AED' : 'transparent',
-                          color: isToday ? '#FFFFFF' : isHoliday ? '#7C3AED' : isWeekend ? '#A78BFA' : '#6B7280',
-                          fontWeight: isToday || isHoliday ? '600' : '400',
-                        }}
-                      >
-                        {day}
-                      </div>
-                      {isHoliday && !isToday && (
-                        <div className="w-1 h-1 rounded-full mt-0.5" style={{ backgroundColor: '#7C3AED' }} />
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              {/* 图例 */}
-              <div className="flex items-center gap-4 px-4 pb-3">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#7C3AED' }} />
-                  <span className="text-[11px]" style={{ color: '#9CA3AF' }}>法定节假日</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#A78BFA' }} />
-                  <span className="text-[11px]" style={{ color: '#9CA3AF' }}>周末</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#7C3AED' }} />
-                  <span className="text-[11px]" style={{ color: '#9CA3AF' }}>今日</span>
-                </div>
-              </div>
-            </div>
-            {/* 工作台入口 */}
-            <div className="mt-4 bg-white rounded-2xl shadow-sm px-4 py-4 flex items-center gap-3" style={{ border: '1px solid #EDE9FE' }}
-              onClick={() => setLocation(`/ledger/${ledgerId}/ai-company/0`)}
-            >
-              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#F5F3FF' }}>
-                <PieChart className="w-5 h-5" style={{ color: '#7C3AED' }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold" style={{ color: '#4C1D95' }}>股权管理工作台</div>
-                <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>查看股权结构、分红记录等</div>
-              </div>
-              <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#A78BFA' }} />
-            </div>
+      {isCustomAI && (
+        <div className="flex-1 px-4 pb-20">
+          {/* 海报展示卡片 */}
+          <div className="mt-4 rounded-2xl overflow-hidden shadow-sm" style={{ border: '1px solid #EDE9FE' }}>
+            <img
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/shebei_poster_2026.jpg"
+              alt="奢贝网3月2日抽奖奖品"
+              className="w-full"
+              style={{ display: 'block' }}
+            />
           </div>
-        );
-      })()}
+          {/* 工作台入口 */}
+          <div className="mt-4 bg-white rounded-2xl shadow-sm px-4 py-4 flex items-center gap-3" style={{ border: '1px solid #EDE9FE' }}
+            onClick={() => setLocation(`/ledger/${ledgerId}/ai-company/0`)}
+          >
+            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#F5F3FF' }}>
+              <PieChart className="w-5 h-5" style={{ color: '#7C3AED' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold" style={{ color: '#4C1D95' }}>股权管理工作台</div>
+              <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>查看股权结构、分红记录等</div>
+            </div>
+            <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#A78BFA' }} />
+          </div>
+        </div>
+      )}
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
       {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
