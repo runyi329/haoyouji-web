@@ -1,6 +1,6 @@
 /**
  * AiCompanyWorkspace.tsx - AI 型定制账本（共享公司股权管理）工作台
- * 集成 Molynk 品牌中文介绍页面
+ * 集成 Molynk 品牌中文介绍页面（含COS图片）
  */
 import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
@@ -36,6 +36,29 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "records", label: "变更", icon: <FileText className="w-4 h-4" /> },
 ];
 
+/* ========== COS 图片 URL ========== */
+const COS_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/molynk";
+const IMG = {
+  logo: `${COS_BASE}/logo.jpg`,
+  bannerDino: `${COS_BASE}/banner_dino.jpg`,
+  brandBg: `${COS_BASE}/brand_bg.jpg`,
+  brandVideoBg: `${COS_BASE}/brand_video_bg.jpg`,
+  videoPoster: `${COS_BASE}/video_poster.jpg`,
+  feature1Auth: `${COS_BASE}/feature1_auth.jpg`,
+  feature2Emotion: `${COS_BASE}/feature2_emotion.jpg`,
+  feature3Small: `${COS_BASE}/feature3_small.jpg`,
+  feature4Global: `${COS_BASE}/feature4_global.jpg`,
+  productGirl: `${COS_BASE}/product_molynk_girl.jpg`,
+  starryDreamBears: `${COS_BASE}/starry_dream_bears.jpg`,
+  bearSqueeze: `${COS_BASE}/bear_squeeze.jpg`,
+  serviceCocreation: `${COS_BASE}/popup_store1.jpg`,
+  serviceOmnichannel: `${COS_BASE}/popup_store2.jpg`,
+  serviceCustomized: `${COS_BASE}/popup_store_bear.jpg`,
+  certifications: `${COS_BASE}/certifications.jpg`,
+  footerLogo: `${COS_BASE}/footer_logo.jpg`,
+  qrcode: `${COS_BASE}/qrcode.jpg`,
+};
+
 /* ========== Molynk 品牌中文内容 ========== */
 
 const BRAND_FEATURES = [
@@ -45,6 +68,7 @@ const BRAND_FEATURES = [
     desc: "官方品牌正版授权产品",
     color: "#7C3AED",
     bg: "#F5F3FF",
+    img: IMG.feature1Auth,
   },
   {
     icon: <Heart className="w-5 h-5" />,
@@ -52,6 +76,7 @@ const BRAND_FEATURES = [
     desc: "全新竞争优势",
     color: "#EC4899",
     bg: "#FDF2F8",
+    img: IMG.feature2Emotion,
   },
   {
     icon: <Leaf className="w-5 h-5" />,
@@ -59,6 +84,7 @@ const BRAND_FEATURES = [
     desc: "共建绿色未来",
     color: "#10B981",
     bg: "#ECFDF5",
+    img: IMG.feature3Small,
   },
   {
     icon: <Globe className="w-5 h-5" />,
@@ -66,6 +92,7 @@ const BRAND_FEATURES = [
     desc: "全球通行证",
     color: "#3B82F6",
     bg: "#EFF6FF",
+    img: IMG.feature4Global,
   },
 ];
 
@@ -78,10 +105,10 @@ const BRAND_MILESTONES = [
 ];
 
 const POPULAR_PRODUCTS = [
-  { name: "恐龙面包 2", series: "侏罗纪解压系列" },
-  { name: "星梦序曲：十二星座系列", series: "星梦系列" },
-  { name: "星梦系列", series: "经典系列" },
-  { name: "如意咬咬蛋糕", series: "甜品系列" },
+  { name: "恐龙面包 2", series: "侏罗纪解压系列", img: IMG.bannerDino },
+  { name: "星梦序曲：十二星座系列", series: "星梦系列", img: IMG.starryDreamBears },
+  { name: "星梦系列", series: "经典系列", img: IMG.bearSqueeze },
+  { name: "如意咬咬蛋糕", series: "甜品系列", img: IMG.productGirl },
 ];
 
 const SERVICES = [
@@ -90,18 +117,21 @@ const SERVICES = [
     title: "品牌共创",
     desc: "欢迎所有IP、各大品牌前来咨询与共创合作",
     icon: <Handshake className="w-5 h-5" />,
+    img: IMG.serviceCocreation,
   },
   {
     num: "02",
     title: "全渠道合作",
     desc: "欢迎国内外渠道商、服务商、分销商及媒体合作",
     icon: <Store className="w-5 h-5" />,
+    img: IMG.serviceOmnichannel,
   },
   {
     num: "03",
     title: "定制服务",
     desc: "适用于礼品、企业福利等场景，提供OEM定制服务",
     icon: <Wrench className="w-5 h-5" />,
+    img: IMG.serviceCustomized,
   },
 ];
 
@@ -118,28 +148,28 @@ const OFFICES = [
     company: "上海莫尼莫尼文化创意有限公司",
     companyEn: "MOLYNK (SHANGHAI) CULTURE CREATIVE CO., LTD.",
     address: "上海市闵行区吴中路1366号401",
-    flag: "🇨🇳",
+    flag: "CN",
   },
   {
     city: "日本 · 神户",
     company: "",
     companyEn: "HEATH COURT",
     address: "ROOM 201, 9-21 HANAKUMA-CHO, CHUO-KU, KOBE, HYOGO 650-0013",
-    flag: "🇯🇵",
+    flag: "JP",
   },
   {
     city: "美国 · 洛杉矶",
     company: "",
     companyEn: "XAVVI HOLDING INC.",
     address: "801S FIGUEROA ST FLOOR 5, LOS ANGELES, CA 90017",
-    flag: "🇺🇸",
+    flag: "US",
   },
   {
     city: "西班牙 · 马德里",
     company: "",
     companyEn: "M STAR TECH MEDIA SL.",
     address: "CALLE DE CALERUEGA 431C, 28033 MADRID",
-    flag: "🇪🇸",
+    flag: "ES",
   },
 ];
 
@@ -182,9 +212,17 @@ export default function AiCompanyWorkspace() {
           >
             <ArrowLeft className="w-4 h-4 text-white" />
           </button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-base font-bold text-white truncate">{companyName}</h1>
-            <p className="text-xs text-white/70 mt-0.5">用温柔拥抱世界 · Love the world with tenderness</p>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <img
+              src={IMG.logo}
+              alt="Molynk"
+              className="w-8 h-8 rounded-lg object-contain"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+            />
+            <div>
+              <h1 className="text-base font-bold text-white truncate">{companyName}</h1>
+              <p className="text-xs text-white/70 mt-0.5">用温柔拥抱世界 · Love the world with tenderness</p>
+            </div>
           </div>
         </div>
 
@@ -212,39 +250,65 @@ export default function AiCompanyWorkspace() {
         {/* ==================== 品牌介绍 Tab ==================== */}
         {activeTab === "brand" && (
           <div className="space-y-3 pt-4">
-            {/* Banner 标语 */}
-            <div
-              className="rounded-2xl p-5 shadow-sm text-center"
-              style={{
-                background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-                color: "#FFFFFF",
-              }}
-            >
-              <p className="text-lg font-bold tracking-wide" style={{ color: "#A78BFA" }}>
-                STRESSED? GO PREHISTORIC!
-              </p>
-              <p className="text-sm mt-1 text-white/80">压力大？回到侏罗纪！</p>
-              <p className="text-xs mt-2 text-white/50">口袋大小的侏罗纪解压神器</p>
+            {/* Banner 大图 */}
+            <div className="rounded-2xl overflow-hidden shadow-sm">
+              <img
+                src={IMG.videoPoster}
+                alt="Molynk Banner"
+                className="w-full object-cover"
+                style={{ maxHeight: 200 }}
+              />
+              <div
+                className="p-4 text-center"
+                style={{
+                  background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+                  color: "#FFFFFF",
+                }}
+              >
+                <p className="text-lg font-bold tracking-wide" style={{ color: "#A78BFA" }}>
+                  STRESSED? GO PREHISTORIC!
+                </p>
+                <p className="text-sm mt-1 text-white/80">压力大？回到侏罗纪！</p>
+                <p className="text-xs mt-2 text-white/50">口袋大小的侏罗纪解压神器</p>
+              </div>
             </div>
 
-            {/* 四大特色 */}
+            {/* 四大特色（含图片） */}
             <div className="grid grid-cols-2 gap-2">
               {BRAND_FEATURES.map((f, i) => (
                 <div
                   key={i}
-                  className="rounded-xl p-3 shadow-sm"
+                  className="rounded-xl overflow-hidden shadow-sm"
                   style={{ backgroundColor: f.bg }}
                 >
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center mb-2"
-                    style={{ backgroundColor: f.color + "20", color: f.color }}
-                  >
-                    {f.icon}
+                  <img
+                    src={f.img}
+                    alt={f.title}
+                    className="w-full object-cover"
+                    style={{ height: 80 }}
+                  />
+                  <div className="p-3">
+                    <div
+                      className="w-7 h-7 rounded-lg flex items-center justify-center mb-1.5"
+                      style={{ backgroundColor: f.color + "20", color: f.color }}
+                    >
+                      {f.icon}
+                    </div>
+                    <p className="text-sm font-semibold text-gray-800">{f.title}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{f.desc}</p>
                   </div>
-                  <p className="text-sm font-semibold text-gray-800">{f.title}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{f.desc}</p>
                 </div>
               ))}
+            </div>
+
+            {/* 品牌宣传图 */}
+            <div className="rounded-2xl overflow-hidden shadow-sm">
+              <img
+                src={IMG.productGirl}
+                alt="Molynk Products"
+                className="w-full object-cover"
+                style={{ maxHeight: 220 }}
+              />
             </div>
 
             {/* 关于 Molynk */}
@@ -299,7 +363,7 @@ export default function AiCompanyWorkspace() {
               </div>
             </div>
 
-            {/* 热门产品 */}
+            {/* 热门产品（含图片） */}
             <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
               <div className="flex items-center gap-2 mb-3">
                 <div
@@ -312,15 +376,20 @@ export default function AiCompanyWorkspace() {
                 {POPULAR_PRODUCTS.map((p, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between p-2.5 rounded-xl"
+                    className="flex items-center gap-3 p-2 rounded-xl"
                     style={{ backgroundColor: "#FDF2F8" }}
                   >
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{p.name}</p>
+                    <img
+                      src={p.img}
+                      alt={p.name}
+                      className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
                       <p className="text-xs text-gray-500">{p.series}</p>
                     </div>
                     <span
-                      className="text-xs px-2 py-0.5 rounded-full"
+                      className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
                       style={{ backgroundColor: "#EC489920", color: "#EC4899" }}
                     >
                       热销
@@ -330,7 +399,17 @@ export default function AiCompanyWorkspace() {
               </div>
             </div>
 
-            {/* 我们的服务 */}
+            {/* 星梦系列大图 */}
+            <div className="rounded-2xl overflow-hidden shadow-sm">
+              <img
+                src={IMG.starryDreamBears}
+                alt="星梦系列"
+                className="w-full object-cover"
+                style={{ maxHeight: 180 }}
+              />
+            </div>
+
+            {/* 我们的服务（含图片） */}
             <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
               <div className="flex items-center gap-2 mb-3">
                 <div
@@ -346,12 +425,11 @@ export default function AiCompanyWorkspace() {
                     className="flex items-start gap-3 p-3 rounded-xl"
                     style={{ backgroundColor: "#EFF6FF" }}
                   >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: "#3B82F620", color: "#3B82F6" }}
-                    >
-                      {s.icon}
-                    </div>
+                    <img
+                      src={s.img}
+                      alt={s.title}
+                      className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span
@@ -366,6 +444,19 @@ export default function AiCompanyWorkspace() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* 品牌门店大图 */}
+            <div className="rounded-2xl overflow-hidden shadow-sm">
+              <img
+                src={IMG.brandVideoBg}
+                alt="Molynk 门店"
+                className="w-full object-cover"
+                style={{ maxHeight: 180 }}
+              />
+              <div className="p-3 text-center" style={{ backgroundColor: "#1a1a2e" }}>
+                <p className="text-xs text-white/70">Molynk Haus · 上海南京东路479号4楼</p>
               </div>
             </div>
 
@@ -398,6 +489,24 @@ export default function AiCompanyWorkspace() {
               </div>
             </div>
 
+            {/* 认证标志 */}
+            <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div
+                  className="w-1 h-5 rounded-full"
+                  style={{ backgroundColor: "#10B981" }}
+                />
+                <span className="text-sm font-semibold text-gray-800">全球认证</span>
+                <ShieldCheck className="w-4 h-4 text-gray-400 ml-auto" />
+              </div>
+              <img
+                src={IMG.certifications}
+                alt="认证标志"
+                className="w-full object-contain rounded-lg"
+                style={{ maxHeight: 60 }}
+              />
+            </div>
+
             {/* 全球办公室 */}
             <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
               <div className="flex items-center gap-2 mb-3">
@@ -421,7 +530,7 @@ export default function AiCompanyWorkspace() {
                       style={{ backgroundColor: "#ECFDF5" }}
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-base">{o.flag}</span>
+                        <span className="text-xs font-bold text-gray-500">{o.flag}</span>
                         <span className="text-sm font-medium text-gray-800">{o.city}</span>
                       </div>
                       {expandedOffice === i ? (
@@ -442,8 +551,13 @@ export default function AiCompanyWorkspace() {
               </div>
             </div>
 
-            {/* 底部备案 */}
+            {/* 二维码 + 底部 */}
             <div className="text-center py-4">
+              <img
+                src={IMG.qrcode}
+                alt="Molynk 二维码"
+                className="w-20 h-20 mx-auto rounded-lg object-contain mb-2"
+              />
               <p className="text-xs text-gray-400">沪ICP备2025131266号-2</p>
               <p className="text-xs mt-1" style={{ color: "#A78BFA" }}>
                 Love the world with tenderness
