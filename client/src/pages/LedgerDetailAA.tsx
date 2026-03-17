@@ -24,7 +24,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   AreaChart,
@@ -84,6 +84,19 @@ export default function LedgerDetailAA({
   });
   const [showTagDropdown, setShowTagDropdown] = useState(false);
 
+  // ── 视角切换（管理员/创建者可切换到其他成员视角）──
+  const [viewAsUserId, setViewAsUserId] = useState<number | null>(null);
+  const [showViewAsPicker, setShowViewAsPicker] = useState(false);
+  const [viewAsSearch, setViewAsSearch] = useState('');
+  const trpcUtils = trpc.useUtils();
+
+  const handleSwitchView = (userId: number | null) => {
+    setViewAsUserId(userId);
+    setShowViewAsPicker(false);
+    setViewAsSearch('');
+    trpcUtils.ledger.getMyInitialBalances.invalidate();
+  };
+
   // selectedTagId 变化时同步到 sessionStorage
   useEffect(() => {
     if (selectedTagId !== null) {
@@ -97,9 +110,9 @@ export default function LedgerDetailAA({
     { ledgerId, parentId: null },
     { enabled: !!ledgerId }
   );
-  // 获取当前登录用户自己的初始金额
+  // 获取初始金额（支持视角切换：管理员可查他人数据）
   const { data: initialBalancesData } = trpc.ledger.getMyInitialBalances.useQuery(
-    { ledgerId },
+    { ledgerId, viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId }
   );
   // 过滤掉全局默认分类（如「购物」），只保留手动创建的标签
@@ -482,29 +495,49 @@ export default function LedgerDetailAA({
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         {/* 用户信息行 + 标签下拉（直接顶部，无返回栏） */}
         <div className="px-4 pt-3 pb-2 flex items-center gap-3">
-          {/* 头像（当前登录用户，纯展示） */}
-          <div className="flex-shrink-0">
-            {user ? (
-              <UserAvatar
-                username={user.username}
-                avatar={user.avatar}
-                nickname={user.nickname}
-                size="lg"
-              />
-            ) : (
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold"
-                style={{ backgroundColor: "rgba(255,255,255,0.3)" }}
-              >
-                ?
+          {/* 头像（管理员可点击切换视角） */}
+          <div
+            className="flex-shrink-0 relative"
+            onClick={() => { if (canEdit) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
+            style={{ cursor: canEdit ? 'pointer' : 'default' }}
+          >
+            {(() => {
+              const viewTarget = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
+              return viewTarget ? (
+                <UserAvatar username={viewTarget.username} avatar={viewTarget.avatar} nickname={viewTarget.nickname} size="lg" />
+              ) : user ? (
+                <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="lg" />
+              ) : (
+                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold" style={{ backgroundColor: "rgba(255,255,255,0.3)" }}>?</div>
+              );
+            })()}
+            {canEdit && !viewAsUserId && (
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/90 flex items-center justify-center">
+                <Users className="w-2.5 h-2.5" style={{ color: '#D32F2F' }} />
               </div>
             )}
           </div>
 
-          {/* 用户名 + 操作按钮 + 标签下拉（同行） */}
+          {/* 用户名 + 操作按鈕 + 标签下拉（同行） */}
           <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+            <div className="flex flex-col min-w-0">
             <div className="text-base font-semibold truncate">
-              {user?.nickname || user?.username || "用户"}
+              {(() => {
+                const viewTarget = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
+                return viewTarget ? (viewTarget.nickname || viewTarget.username) : (user?.nickname || user?.username || "用户");
+              })()}
+            </div>
+            {viewAsUserId && (
+              <div className="text-xs opacity-70 flex items-center gap-1">
+                <span>查看视角</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleSwitchView(null); }}
+                  className="ml-1 px-1.5 py-0.5 rounded-full text-xs"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff' }}
+                >返回自己</button>
+              </div>
+            )}
+            </div>
             </div>
 
             {/* 右侧：操作按钮 + 返回按钮 + 标签下拉 */}
@@ -1136,6 +1169,73 @@ export default function LedgerDetailAA({
       </div>
 
       </div>{/* end 可滚动内容区域 */}
+
+      {/* ── 视角切换弹窗（管理员/创建者点击头像弹出） ── */}
+      {showViewAsPicker && canEdit && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setShowViewAsPicker(false)}>
+          <div
+            className="w-full rounded-t-2xl overflow-hidden"
+            style={{ backgroundColor: '#FFFFFF', maxHeight: '70vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 弹窗标题 */}
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <span className="text-base font-semibold" style={{ color: '#222' }}>切换视角</span>
+              <button onClick={() => setShowViewAsPicker(false)}><X className="w-5 h-5" style={{ color: '#757575' }} /></button>
+            </div>
+            {/* 搜索框 */}
+            <div className="px-4 py-2">
+              <input
+                type="text"
+                placeholder="搜索成员..."
+                value={viewAsSearch}
+                onChange={e => setViewAsSearch(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                style={{ backgroundColor: '#F5F5F5', color: '#222', border: '1px solid #E0E0E0' }}
+              />
+            </div>
+            {/* 成员列表 */}
+            <div className="overflow-y-auto px-4 pb-6" style={{ maxHeight: '50vh' }}>
+              {/* 返回自己视角 */}
+              <button
+                onClick={() => handleSwitchView(null)}
+                className="w-full flex items-center gap-3 py-3 border-b"
+                style={{ borderColor: '#F5F5F5' }}
+              >
+                <UserAvatar username={user?.username} avatar={user?.avatar} nickname={user?.nickname} size="md" />
+                <div className="flex-1 text-left">
+                  <div className="text-sm font-medium" style={{ color: '#222' }}>{user?.nickname || user?.username || '我自己'}</div>
+                  <div className="text-xs" style={{ color: '#757575' }}>自己的视角</div>
+                </div>
+                {!viewAsUserId && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#D32F2F' }} />}
+              </button>
+              {/* 其他成员 */}
+              {(membersData || [])
+                .filter((m: any) => m.userId !== user?.id)
+                .filter((m: any) => {
+                  if (!viewAsSearch) return true;
+                  const name = (m.nickname || m.username || '').toLowerCase();
+                  return name.includes(viewAsSearch.toLowerCase());
+                })
+                .map((m: any) => (
+                  <button
+                    key={m.userId}
+                    onClick={() => handleSwitchView(m.userId)}
+                    className="w-full flex items-center gap-3 py-3 border-b"
+                    style={{ borderColor: '#F5F5F5' }}
+                  >
+                    <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="md" />
+                    <div className="flex-1 text-left">
+                      <div className="text-sm font-medium" style={{ color: '#222' }}>{m.nickname || m.username}</div>
+                      <div className="text-xs" style={{ color: '#757575' }}>{m.role === 'owner' ? '创建者' : m.role === 'admin' ? '管理员' : '成员'}</div>
+                    </div>
+                    {viewAsUserId === m.userId && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: '#D32F2F' }} />}
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 悬浮加号按鈕（仅管理员/创建者可见，且「2026 AA」账本除外） ── */}
       {canEdit && !hideFloatingAddButton && (
