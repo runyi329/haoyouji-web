@@ -286,10 +286,12 @@ export const appRouter = router({
         return await dbRecharge.getUserRechargeOrders(ctx.user.id, input.limit);
       }),
 
-    // 获取用户余额
+    // 获取用户余额（支持viewAsUserId，管理员可查询指定用户余额）
     getBalance: protectedProcedure
-      .query(async ({ ctx }) => {
-        return await dbRecharge.getUserBalance(ctx.user.id);
+      .input(z.object({ viewAsUserId: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        const targetUserId = input?.viewAsUserId || ctx.user.id;
+        return await dbRecharge.getUserBalance(targetUserId);
       }),
 
     // 获取余额变动记录

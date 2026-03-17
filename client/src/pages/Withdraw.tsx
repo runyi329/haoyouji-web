@@ -25,7 +25,10 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
 
   // 查询
   // 统一余额（后端已合计 users.balance + recharge_orders + af_manual_balances）
-  const balanceQuery = trpc.recharge.getBalance.useQuery();
+  // 如果是管理员 viewAs 模式，传入目标用户ID查询其余额
+  const balanceQuery = trpc.recharge.getBalance.useQuery(
+    viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : undefined
+  );
   // 读取用户在个人中心已绑定的数字钱包（digital_wallets 表）
   const walletsQuery = trpc.paymentAccounts.getDigitalWallets.useQuery();
   const withdrawalsQuery = trpc.recharge.getMySntWithdrawals.useQuery({ limit: 50 });
