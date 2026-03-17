@@ -225,7 +225,7 @@ export default function LedgerDetail() {
   const urlParams = new URLSearchParams(window.location.search);
   const filters: any = {
     ledgerId: Number(ledgerId),
-    limit: 100,
+    limit: 2000, // 加大limit确保加载全部历史记录（原100会截断早期数据）
   };
   
   // 从 URL 参数中读取筛选条件
