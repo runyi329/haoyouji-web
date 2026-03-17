@@ -307,6 +307,7 @@ function Router() {
         <Route path="/payment-accounts" component={lazy(() => import("./pages/PaymentAccounts"))} />
         <Route path="/recharge" component={lazy(() => import("./pages/Recharge"))} />
         <Route path="/recharge/history" component={lazy(() => import("./pages/RechargeHistory"))} />
+        <Route path="/withdraw" component={lazy(() => import("./pages/Withdraw"))} />
 
         {/* 好友记相关页面 */}
         <Route path="/parent/contacts/list" component={ContactsList} />

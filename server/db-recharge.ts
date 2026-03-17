@@ -868,3 +868,287 @@ export async function getUserSntTransfers(userId: number, limit: number = 20) {
   );
   return rows;
 }
+
+
+// ========== SNT 提现功能（基于 snt_withdrawals 表） ==========
+
+// 确保 snt_withdrawals 和 user_bsc_wallets 表存在
+async function ensureWithdrawalTables() {
+  const conn = await getDbConnection();
+  if (!conn) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS \`user_bsc_wallets\` (
+      \`id\` int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+      \`user_id\` int NOT NULL,
+      \`bsc_address\` varchar(100) NOT NULL,
+      \`created_at\` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      \`updated_at\` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+      UNIQUE KEY \`user_bsc_wallets_user_id_unique\` (\`user_id\`),
+      INDEX \`user_bsc_wallets_user_id_idx\` (\`user_id\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS \`snt_withdrawals\` (
+      \`id\` int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+      \`user_id\` int NOT NULL,
+      \`snt_amount\` decimal(20, 4) NOT NULL,
+      \`bsc_address\` varchar(100) NOT NULL,
+      \`status\` enum('pending','processing','completed','rejected') DEFAULT 'pending' NOT NULL,
+      \`admin_note\` text,
+      \`txn_hash\` varchar(100),
+      \`created_at\` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      \`updated_at\` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+      INDEX \`snt_withdrawals_user_id_idx\` (\`user_id\`),
+      INDEX \`snt_withdrawals_status_idx\` (\`status\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+}
+
+// 获取用户绑定的 BSC 钱包地址
+export async function getUserBscWallet(userId: number): Promise<{ id: number; bscAddress: string } | null> {
+  await ensureWithdrawalTables();
+  const conn = await getDbConnection();
+  if (!conn) return null;
+  const [rows] = await conn.execute(
+    `SELECT id, bsc_address as bscAddress FROM user_bsc_wallets WHERE user_id = ? LIMIT 1`,
+    [userId]
+  );
+  const arr = rows as any[];
+  return arr.length > 0 ? arr[0] : null;
+}
+
+// 绑定/更新用户 BSC 钱包地址
+export async function upsertUserBscWallet(userId: number, bscAddress: string): Promise<{ success: boolean }> {
+  await ensureWithdrawalTables();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  // 验证地址格式（BSC/ETH地址格式：0x开头，42位）
+  if (!/^0x[0-9a-fA-F]{40}$/.test(bscAddress)) {
+    throw new Error('无效的 BSC 地址格式，请输入 0x 开头的 42 位地址');
+  }
+  await conn.execute(
+    `INSERT INTO user_bsc_wallets (user_id, bsc_address) VALUES (?, ?)
+     ON DUPLICATE KEY UPDATE bsc_address = VALUES(bsc_address)`,
+    [userId, bscAddress]
+  );
+  return { success: true };
+}
+
+// 用户申请 SNT 提现
+export async function requestSntWithdraw(
+  userId: number,
+  sntAmount: number,
+  bscAddress: string,
+): Promise<{ success: boolean; message: string; withdrawalId: number }> {
+  await ensureWithdrawalTables();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+
+  if (sntAmount < 10) {
+    throw new Error('最低提现金额为 10 USDT');
+  }
+
+  // 检查用户余额
+  const [userRows] = await conn.execute(
+    `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+    [userId]
+  );
+  const userArr = userRows as any[];
+  if (!userArr.length) throw new Error('用户不存在');
+  const balance = parseFloat(userArr[0].balance || '0');
+  if (balance < sntAmount) {
+    throw new Error(`余额不足，当前余额 ${balance.toFixed(2)} USDT`);
+  }
+
+  // 检查是否有未处理的提现申请
+  const [pendingRows] = await conn.execute(
+    `SELECT COUNT(*) as cnt FROM snt_withdrawals WHERE user_id = ? AND status IN ('pending','processing')`,
+    [userId]
+  );
+  const pendingCount = (pendingRows as any[])[0]?.cnt || 0;
+  if (pendingCount > 0) {
+    throw new Error('您有未处理的提现申请，请等待处理完成后再提交新申请');
+  }
+
+  // 冻结余额（扣除）
+  await conn.execute(
+    `UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?`,
+    [sntAmount, userId, sntAmount]
+  );
+
+  // 创建提现申请
+  const [result] = await conn.execute(
+    `INSERT INTO snt_withdrawals (user_id, snt_amount, bsc_address, status) VALUES (?, ?, ?, 'pending')`,
+    [userId, sntAmount, bscAddress]
+  );
+  const insertId = (result as any).insertId;
+
+  // 记录余额变动
+  await conn.execute(
+    `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description)
+     VALUES (?, ?, 'withdraw', ?, ?, ?)`,
+    [userId, -sntAmount, insertId, balance - sntAmount, `提现申请 ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
+  );
+
+  return {
+    success: true,
+    message: '提现申请已提交，等待管理员审核',
+    withdrawalId: insertId,
+  };
+}
+
+// 获取用户 SNT 提现记录
+export async function getUserSntWithdrawals(userId: number, limit: number = 50) {
+  await ensureWithdrawalTables();
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await conn.execute(
+    `SELECT id, snt_amount as sntAmount, bsc_address as bscAddress, status, admin_note as adminNote, txn_hash as txnHash, created_at as createdAt, updated_at as updatedAt
+     FROM snt_withdrawals WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`,
+    [userId, limit]
+  );
+  return rows as any[];
+}
+
+// 管理员获取所有 SNT 提现申请
+export async function adminGetAllSntWithdrawals(status?: string, limit: number = 100) {
+  await ensureWithdrawalTables();
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  let query = `
+    SELECT w.id, w.user_id as userId, u.username, u.name as userName, w.snt_amount as sntAmount, 
+           w.bsc_address as bscAddress, w.status, w.admin_note as adminNote, 
+           w.txn_hash as txnHash, w.created_at as createdAt, w.updated_at as updatedAt
+    FROM snt_withdrawals w
+    LEFT JOIN users u ON w.user_id = u.id
+  `;
+  const params: any[] = [];
+  if (status) {
+    query += ` WHERE w.status = ?`;
+    params.push(status);
+  }
+  query += ` ORDER BY w.created_at DESC LIMIT ?`;
+  params.push(limit);
+  const [rows] = await conn.execute(query, params);
+  return rows as any[];
+}
+
+// 管理员审核通过提现（确认已转账）
+export async function adminApproveSntWithdrawal(
+  withdrawalId: number,
+  txnHash?: string,
+  adminNote?: string
+): Promise<{ success: boolean; message: string }> {
+  await ensureWithdrawalTables();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+
+  // 检查提现申请状态
+  const [rows] = await conn.execute(
+    `SELECT id, user_id, snt_amount, status FROM snt_withdrawals WHERE id = ? LIMIT 1`,
+    [withdrawalId]
+  );
+  const arr = rows as any[];
+  if (!arr.length) throw new Error('提现申请不存在');
+  const withdrawal = arr[0];
+  if (withdrawal.status !== 'pending' && withdrawal.status !== 'processing') {
+    throw new Error(`提现申请状态为 ${withdrawal.status}，无法审核`);
+  }
+
+  // 更新提现状态为 completed
+  await conn.execute(
+    `UPDATE snt_withdrawals SET status = 'completed', txn_hash = ?, admin_note = ? WHERE id = ?`,
+    [txnHash || null, adminNote || '管理员已确认转账', withdrawalId]
+  );
+
+  return {
+    success: true,
+    message: `提现申请 #${withdrawalId} 已审核通过`,
+  };
+}
+
+// 管理员拒绝提现（退回余额）
+export async function adminRejectSntWithdrawal(
+  withdrawalId: number,
+  adminNote: string
+): Promise<{ success: boolean; message: string }> {
+  await ensureWithdrawalTables();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+
+  // 检查提现申请状态
+  const [rows] = await conn.execute(
+    `SELECT id, user_id, snt_amount, status FROM snt_withdrawals WHERE id = ? LIMIT 1`,
+    [withdrawalId]
+  );
+  const arr = rows as any[];
+  if (!arr.length) throw new Error('提现申请不存在');
+  const withdrawal = arr[0];
+  if (withdrawal.status !== 'pending' && withdrawal.status !== 'processing') {
+    throw new Error(`提现申请状态为 ${withdrawal.status}，无法拒绝`);
+  }
+
+  const sntAmount = parseFloat(withdrawal.snt_amount);
+  const userId = withdrawal.user_id;
+
+  // 退回余额
+  await conn.execute(
+    `UPDATE users SET balance = balance + ? WHERE id = ?`,
+    [sntAmount, userId]
+  );
+
+  // 更新提现状态为 rejected
+  await conn.execute(
+    `UPDATE snt_withdrawals SET status = 'rejected', admin_note = ? WHERE id = ?`,
+    [adminNote || '管理员拒绝', withdrawalId]
+  );
+
+  // 获取退回后的余额
+  const [userRows] = await conn.execute(
+    `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+    [userId]
+  );
+  const newBalance = parseFloat((userRows as any[])[0]?.balance || '0');
+
+  // 记录余额变动（退回）
+  await conn.execute(
+    `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description)
+     VALUES (?, ?, 'refund', ?, ?, ?)`,
+    [userId, sntAmount, withdrawalId, newBalance, `提现退回 ${sntAmount} USDT（${adminNote || '管理员拒绝'}）`]
+  );
+
+  return {
+    success: true,
+    message: `提现申请 #${withdrawalId} 已拒绝，${sntAmount} USDT 已退回用户余额`,
+  };
+}
+
+// 管理员将提现状态改为处理中
+export async function adminProcessingSntWithdrawal(
+  withdrawalId: number,
+  adminNote?: string
+): Promise<{ success: boolean; message: string }> {
+  await ensureWithdrawalTables();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+
+  const [rows] = await conn.execute(
+    `SELECT id, status FROM snt_withdrawals WHERE id = ? LIMIT 1`,
+    [withdrawalId]
+  );
+  const arr = rows as any[];
+  if (!arr.length) throw new Error('提现申请不存在');
+  if (arr[0].status !== 'pending') {
+    throw new Error(`提现申请状态为 ${arr[0].status}，无法标记为处理中`);
+  }
+
+  await conn.execute(
+    `UPDATE snt_withdrawals SET status = 'processing', admin_note = ? WHERE id = ?`,
+    [adminNote || '管理员处理中', withdrawalId]
+  );
+
+  return {
+    success: true,
+    message: `提现申请 #${withdrawalId} 已标记为处理中`,
+  };
+}
