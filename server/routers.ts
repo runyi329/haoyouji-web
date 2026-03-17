@@ -788,6 +788,101 @@ export const appRouter = router({
           };
         }
       }),
+
+    // ========== SNT 提现功能 ==========
+    // 获取用户绑定的 BSC 钱包
+    getBscWallet: protectedProcedure
+      .query(async ({ ctx }) => {
+        return await dbRecharge.getUserBscWallet(ctx.user.id);
+      }),
+
+    // 绑定/更新 BSC 钱包地址
+    upsertBscWallet: protectedProcedure
+      .input(z.object({ bscAddress: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.upsertUserBscWallet(ctx.user.id, input.bscAddress);
+      }),
+
+    // 用户申请 SNT 提现
+    requestSntWithdraw: protectedProcedure
+      .input(z.object({
+        sntAmount: z.number().min(10),
+        bscAddress: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbRecharge.requestSntWithdraw(
+          ctx.user.id,
+          input.sntAmount,
+          input.bscAddress,
+        );
+      }),
+
+    // 获取用户 SNT 提现记录
+    getMySntWithdrawals: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.getUserSntWithdrawals(ctx.user.id, input.limit);
+      }),
+
+    // 管理员获取所有 SNT 提现申请
+    adminGetAllSntWithdrawals: protectedProcedure
+      .input(z.object({ status: z.string().optional(), limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.adminGetAllSntWithdrawals(input.status, input.limit);
+      }),
+
+    // 管理员审核通过提现
+    adminApproveSntWithdrawal: protectedProcedure
+      .input(z.object({
+        withdrawalId: z.number(),
+        txnHash: z.string().optional(),
+        adminNote: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.adminApproveSntWithdrawal(
+          input.withdrawalId,
+          input.txnHash,
+          input.adminNote,
+        );
+      }),
+
+    // 管理员拒绝提现
+    adminRejectSntWithdrawal: protectedProcedure
+      .input(z.object({
+        withdrawalId: z.number(),
+        adminNote: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.adminRejectSntWithdrawal(
+          input.withdrawalId,
+          input.adminNote,
+        );
+      }),
+
+    // 管理员标记提现为处理中
+    adminProcessingSntWithdrawal: protectedProcedure
+      .input(z.object({
+        withdrawalId: z.number(),
+        adminNote: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        return await dbRecharge.adminProcessingSntWithdrawal(
+          input.withdrawalId,
+          input.adminNote,
+        );
+      }),
   }),
 
   // 卡券系统
