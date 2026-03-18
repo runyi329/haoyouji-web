@@ -1805,6 +1805,28 @@ export default function LedgerDetail() {
       {isCustomAI && (
         <div className="flex-1 px-4 pb-20 space-y-4 pt-4">
           {/* 56号账本白色内容区 - 按需添加功能 */}
+          <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+            <img 
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-activize-99.webp" 
+              alt="FitLine Activize Oxyplus 限时特惠 ¥99" 
+              className="w-full h-auto"
+              loading="lazy"
+            />
+            <div className="p-4 text-center">
+              <div className="text-lg font-bold text-gray-800">FitLine Activize Oxyplus</div>
+              <div className="text-sm text-gray-500 mt-1">德国原装进口 · 运动营养食品 · 耐力类</div>
+              <div className="mt-3 flex items-center justify-center gap-3">
+                <span className="text-red-500 text-2xl font-bold">¥99</span>
+                <span className="text-gray-400 line-through text-sm">¥199</span>
+              </div>
+              <button 
+                className="mt-3 w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-3 rounded-xl text-base font-semibold shadow-lg"
+                onClick={() => window.open('https://jiangyuchen.cn/api/alipay/quick-pay?amount=99&subject=FitLine%20Activize%20Oxyplus%20%E8%BF%90%E5%8A%A8%E8%90%A5%E5%85%BB%E9%A3%9F%E5%93%81', '_blank')}
+              >
+                立即购买
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
