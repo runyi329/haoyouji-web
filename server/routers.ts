@@ -256,14 +256,15 @@ export const appRouter = router({
 
   // 充值系统
   recharge: router({
-    // 创建充值订单
+    // 创建充値订单
     createOrder: protectedProcedure
       .input(z.object({
         amount: z.number().min(1).max(100000),
-        network: z.enum(['TRC20', 'ERC20', 'BEP20', 'APTOS', 'SOLANA']).default('TRC20')
+        network: z.enum(['TRC20', 'ERC20', 'BEP20', 'APTOS', 'SOLANA']).default('TRC20'),
+        ledgerId: z.number().optional()  // 关联账本 ID，传入则充値记录关联到该账本
       }))
       .mutation(async ({ ctx, input }) => {
-        return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network);
+        return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network, input.ledgerId);
       }),
 
     // 用户提交转账确认
@@ -286,12 +287,16 @@ export const appRouter = router({
         return await dbRecharge.getUserRechargeOrders(ctx.user.id, input.limit);
       }),
 
-    // 获取用户余额（支持viewAsUserId，管理员可查询指定用户余额）
+    // 获取用户余额（支持viewAsUserId和ledgerId）
+    // 如果传入 ledgerId，则按账本隔离计算余额（推荐）
     getBalance: protectedProcedure
-      .input(z.object({ viewAsUserId: z.number().optional() }).optional())
+      .input(z.object({ 
+        viewAsUserId: z.number().optional(),
+        ledgerId: z.number().optional()  // 按账本隔离计算余额
+      }).optional())
       .query(async ({ ctx, input }) => {
         const targetUserId = input?.viewAsUserId || ctx.user.id;
-        return await dbRecharge.getUserBalance(targetUserId);
+        return await dbRecharge.getUserBalance(targetUserId, input?.ledgerId);
       }),
 
     // 获取余额变动记录
@@ -810,12 +815,14 @@ export const appRouter = router({
       .input(z.object({
         sntAmount: z.number().min(10),
         bscAddress: z.string().min(1),
+        ledgerId: z.number().optional(),  // 账本 ID，默认 52
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbRecharge.requestSntWithdraw(
           ctx.user.id,
           input.sntAmount,
           input.bscAddress,
+          input.ledgerId ?? 52,
         );
       }),
 
@@ -9643,10 +9650,11 @@ export const appRouter = router({
 
         // ★ 并行执行所有查询，从 9 个串行压缩为 3 个并行
         const [balanceResult, positionResult, userResult] = await Promise.all([
-          // 查询1：充值总额 + 手动调账（UNION 合并）
+          // 查询1：充値总额 + 手动调账（按账本隔离）
+          // 充値记录按 ledger_id 过滤：只计算该账本的充値（有 ledger_id 的），小包含无 ledger_id 的通用充値
           db.execute(
             sql`SELECT
-              (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed') as recharged,
+              (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} AND status = 'completed') as recharged,
               (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual`
           ).catch(() => [[{ recharged: '0', manual: '0' }]]),
 
@@ -9737,15 +9745,15 @@ export const appRouter = router({
             targetUserId = input.viewAsUserId;
           }
         }
-        // 1. 充值订单（recharge_orders，仅 completed 状态）
+        // 1. 充値订单（recharge_orders，仅 completed 状态，按 ledger_id 隔离）
         const rechargeRows = await db.execute(
-          sql`SELECT id, amount, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed' ORDER BY created_at DESC LIMIT 100`
+          sql`SELECT id, amount, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} AND status = 'completed' ORDER BY created_at DESC LIMIT 100`
         ) as any;
         const rechargeList = ((rechargeRows[0] || rechargeRows) as any[]).map((r: any) => ({
           id: `r_${r.id}`,
           amount: parseFloat(r.amount),
           sourceType: 'recharge' as const,
-          note: '充值到账',
+          note: '充値到账',
           createdAt: r.created_at,
         }));
         // 2. 手动调账记录（af_manual_balances）

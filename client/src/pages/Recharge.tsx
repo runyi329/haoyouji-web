@@ -35,8 +35,10 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
 
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
-  // 统一余额（后端已合计 users.balance + recharge_orders + af_manual_balances）
-  const balanceQuery = trpc.recharge.getBalance.useQuery();
+  // 按账本隔离余额：如果有 ledgerId 则只计算该账本的充値和手动调账
+  const balanceQuery = trpc.recharge.getBalance.useQuery(
+    fromLedgerId ? { ledgerId: Number(fromLedgerId) } : undefined
+  );
   const displayBalance = balanceQuery.data;
 
 
@@ -52,7 +54,8 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
     try {
       const result = await createOrderMutation.mutateAsync({
         amount: numAmount,
-        network
+        network,
+        ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
       });
 
       setOrder(result);
