@@ -1823,72 +1823,7 @@ export default function LedgerDetail() {
 
       {/* AI 账本：日历 + 工作台入口 */}
       {isCustomAI && (
-        <div className="flex-1 px-4 pb-20">
-          {/* 生日海报 */}
-          <div className="mt-4 rounded-2xl overflow-hidden shadow-lg" style={{ border: '2px solid #D4AF37' }}>
-            <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/ai-ledger/birthday_poster.jpg"
-              alt="李欣冉十岁生日宴"
-              className="w-full"
-              style={{ display: 'block' }}
-            />
-          </div>
-
-          {/* 红包按钮 - 520生日红包 */}
-          <div className="mt-4 rounded-2xl overflow-hidden shadow-lg" style={{ background: 'linear-gradient(135deg, #DC2626 0%, #B91C1C 50%, #991B1B 100%)', border: '2px solid #D4AF37' }}>
-            <div className="px-5 py-4 text-center">
-              <div className="text-2xl font-bold text-yellow-300 mb-1" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>🧧 生日红包</div>
-              <div className="text-sm text-red-100 mb-3">祝欣冉十岁生日快乐！</div>
-              <div className="flex items-baseline justify-center gap-1 mb-4">
-                <span className="text-sm text-yellow-200">¥</span>
-                <span className="text-5xl font-black text-yellow-300" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)', fontFamily: 'Georgia, serif' }}>520</span>
-              </div>
-              <button
-                className="w-full py-3.5 rounded-xl text-lg font-bold"
-                style={{ background: 'linear-gradient(135deg, #FBBF24 0%, #D97706 100%)', color: '#7C2D12', boxShadow: '0 4px 12px rgba(217,119,6,0.4)' }}
-                onClick={async () => {
-                  try {
-                    const res = await fetch('/api/alipay/create-order', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      credentials: 'include',
-                      body: JSON.stringify({
-                        productId: 'birthday-red-packet-520',
-                        productName: '李欣冉十岁生日红包',
-                        amount: 520,
-                      }),
-                    });
-                    const data = await res.json();
-                    if (data.success && data.payUrl) {
-                      window.location.href = data.payUrl;
-                    } else {
-                      alert(data.error || '创建订单失败，请重试');
-                    }
-                  } catch (err) {
-                    alert('网络错误，请重试');
-                  }
-                }}
-              >
-                发送生日红包
-              </button>
-              <div className="text-xs text-red-200 mt-2 opacity-80">点击通过支付宝发送红包</div>
-            </div>
-          </div>
-
-          {/* 工作台入口 */}
-          <div className="mt-4 bg-white rounded-2xl shadow-sm px-4 py-4 flex items-center gap-3" style={{ border: '1px solid #EDE9FE' }}
-            onClick={() => setLocation(`/ledger/${ledgerId}/ai-company/0`)}
-          >
-            <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#F5F3FF' }}>
-              <PieChart className="w-5 h-5" style={{ color: '#7C3AED' }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold" style={{ color: '#4C1D95' }}>品牌工作台</div>
-              <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>查看品牌介绍、产品等</div>
-            </div>
-            <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#A78BFA' }} />
-          </div>
-        </div>
+        <DemoContentArea ledgerId={Number(ledgerId)} pageKey="main" onNavigate={setLocation} />
       )}
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
       {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && <div className={`flex-1 px-4 pb-20 space-y-3`}>
@@ -2145,6 +2080,184 @@ export default function LedgerDetail() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ===== 演示内容动态渲染组件（账本56专用）=====
+// 从数据库读取内容块，支持 image / button / link / text / nav 类型
+// 演示时只需更新数据库，无需改代码或重新部署
+function DemoContentArea({ ledgerId, pageKey, onNavigate }: {
+  ledgerId: number;
+  pageKey: string;
+  onNavigate?: (path: string) => void;
+}) {
+  const { data: blocks, isLoading } = trpc.demoContent.getBlocks.useQuery(
+    { ledgerId, page: pageKey },
+    { refetchInterval: 10000 } // 每10秒自动刷新，演示时更新数据库后客户刷新即可看到
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 px-4 pb-20 pt-6 flex items-center justify-center">
+        <div className="text-gray-400 text-sm">加载中...</div>
+      </div>
+    );
+  }
+
+  if (!blocks || blocks.length === 0) {
+    return (
+      <div className="flex-1 px-4 pb-20 pt-6">
+        <div className="text-center py-12 text-gray-400 text-sm">暂无内容</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 px-4 pb-20 space-y-4 pt-4">
+      {blocks.map((block) => {
+        const d = block.data;
+
+        // 图片块
+        if (block.type === 'image') {
+          return (
+            <div key={block.id} className="rounded-2xl overflow-hidden shadow-lg"
+              style={{ border: d.borderColor ? `2px solid ${d.borderColor}` : '1px solid #E5E7EB' }}
+              onClick={() => d.linkUrl && onNavigate && onNavigate(d.linkUrl)}
+            >
+              <img src={d.url} alt={d.alt || ''} className="w-full" style={{ display: 'block' }} />
+              {d.caption && (
+                <div className="px-4 py-2 text-sm text-gray-600 bg-white">{d.caption}</div>
+              )}
+            </div>
+          );
+        }
+
+        // 支付按钮块
+        if (block.type === 'button') {
+          return (
+            <div key={block.id} className="rounded-2xl overflow-hidden shadow-lg"
+              style={{ background: d.bgGradient || 'linear-gradient(135deg, #DC2626 0%, #991B1B 100%)', border: d.borderColor ? `2px solid ${d.borderColor}` : 'none' }}
+            >
+              <div className="px-5 py-4 text-center">
+                {d.title && <div className="text-xl font-bold text-white mb-1">{d.title}</div>}
+                {d.subtitle && <div className="text-sm mb-3" style={{ color: d.subtitleColor || 'rgba(255,255,255,0.8)' }}>{d.subtitle}</div>}
+                {d.amount && (
+                  <div className="flex items-baseline justify-center gap-1 mb-4">
+                    <span className="text-sm" style={{ color: d.amountColor || '#FDE68A' }}>{d.currency || '¥'}</span>
+                    <span className="text-5xl font-black" style={{ color: d.amountColor || '#FDE68A' }}>{d.amount}</span>
+                  </div>
+                )}
+                <button
+                  className="w-full py-3.5 rounded-xl text-base font-bold"
+                  style={{ background: d.btnBg || 'linear-gradient(135deg, #FBBF24 0%, #D97706 100%)', color: d.btnColor || '#7C2D12' }}
+                  onClick={async () => {
+                    if (d.payUrl) {
+                      window.location.href = d.payUrl;
+                      return;
+                    }
+                    if (d.alipayProduct) {
+                      try {
+                        const res = await fetch('/api/alipay/create-order', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify(d.alipayProduct),
+                        });
+                        const result = await res.json();
+                        if (result.success && result.payUrl) {
+                          window.location.href = result.payUrl;
+                        } else {
+                          alert(result.error || '创建订单失败，请重试');
+                        }
+                      } catch {
+                        alert('网络错误，请重试');
+                      }
+                    }
+                  }}
+                >
+                  {d.btnText || '立即支付'}
+                </button>
+                {d.note && <div className="text-xs mt-2 opacity-70" style={{ color: d.noteColor || 'white' }}>{d.note}</div>}
+              </div>
+            </div>
+          );
+        }
+
+        // 链接/导航入口块
+        if (block.type === 'link' || block.type === 'nav') {
+          return (
+            <div key={block.id}
+              className="bg-white rounded-2xl shadow-sm px-4 py-4 flex items-center gap-3"
+              style={{ border: '1px solid #E5E7EB' }}
+              onClick={() => {
+                if (d.url) {
+                  if (d.url.startsWith('http')) {
+                    window.open(d.url, '_blank');
+                  } else if (onNavigate) {
+                    onNavigate(d.url);
+                  }
+                }
+              }}
+            >
+              {d.icon && (
+                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-xl"
+                  style={{ backgroundColor: d.iconBg || '#F3F4F6' }}>
+                  {d.icon}
+                </div>
+              )}
+              {d.iconUrl && (
+                <img src={d.iconUrl} className="w-10 h-10 rounded-full object-cover flex-shrink-0" alt="" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-semibold text-gray-800">{d.title}</div>
+                {d.subtitle && <div className="text-xs mt-0.5 text-gray-400">{d.subtitle}</div>}
+              </div>
+              <ChevronRight className="w-4 h-4 flex-shrink-0 text-gray-300" />
+            </div>
+          );
+        }
+
+        // 文字公告块
+        if (block.type === 'text') {
+          return (
+            <div key={block.id} className="rounded-2xl px-4 py-4"
+              style={{ background: d.bg || '#F9FAFB', border: `1px solid ${d.borderColor || '#E5E7EB'}` }}
+            >
+              {d.title && <div className="text-base font-bold mb-2" style={{ color: d.titleColor || '#111827' }}>{d.title}</div>}
+              <div className="text-sm leading-relaxed" style={{ color: d.color || '#374151' }}>{d.content}</div>
+            </div>
+          );
+        }
+
+        // 问卷/表单块
+        if (block.type === 'form') {
+          return (
+            <div key={block.id} className="rounded-2xl bg-white shadow-sm px-4 py-4"
+              style={{ border: '1px solid #E5E7EB' }}
+            >
+              {d.title && <div className="text-base font-bold mb-3 text-gray-800">{d.title}</div>}
+              {d.questions && (d.questions as any[]).map((q: any, qi: number) => (
+                <div key={qi} className="mb-3">
+                  <div className="text-sm text-gray-700 mb-1">{q.label}</div>
+                  {q.type === 'textarea' ? (
+                    <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" rows={3} placeholder={q.placeholder || ''} />
+                  ) : (
+                    <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" placeholder={q.placeholder || ''} />
+                  )}
+                </div>
+              ))}
+              <button className="w-full py-2.5 rounded-xl text-sm font-bold text-white mt-2"
+                style={{ background: d.btnBg || '#DC2626' }}
+              >
+                {d.btnText || '提交'}
+              </button>
+            </div>
+          );
+        }
+
+        return null;
+      })}
     </div>
   );
 }
