@@ -828,9 +828,9 @@ export const appRouter = router({
 
     // 获取用户 SNT 提现记录
     getMySntWithdrawals: protectedProcedure
-      .input(z.object({ limit: z.number().optional() }))
+      .input(z.object({ limit: z.number().optional(), ledgerId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        return await dbRecharge.getUserSntWithdrawals(ctx.user.id, input.limit);
+        return await dbRecharge.getUserSntWithdrawals(ctx.user.id, input.limit, input.ledgerId);
       }),
 
     // 管理员获取所有 SNT 提现申请

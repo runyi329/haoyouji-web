@@ -931,11 +931,23 @@ async function ensureWithdrawalTables() {
       INDEX \`snt_withdrawals_ledger_id_idx\` (\`ledger_id\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
-  // 安全添加 ledger_id 字段（如果表已存在但字段不存在）
+  // 安全添加 ledger_id 字段（如果表已存在但字段不存在，兼容 MySQL 5.x）
   try {
-    await conn.execute(`ALTER TABLE snt_withdrawals ADD COLUMN IF NOT EXISTS ledger_id INT DEFAULT NULL COMMENT '关联账本ID'`);
-    await conn.execute(`ALTER TABLE snt_withdrawals ADD INDEX IF NOT EXISTS snt_withdrawals_ledger_id_idx (ledger_id)`);
-  } catch (_e) { /* 字段已存在则忽略 */ }
+    const [cols] = await conn.execute(
+      `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='snt_withdrawals' AND COLUMN_NAME='ledger_id'`
+    );
+    if ((cols as any[])[0]?.cnt === 0) {
+      await conn.execute(`ALTER TABLE snt_withdrawals ADD COLUMN ledger_id INT DEFAULT NULL COMMENT '关联账本ID'`);
+    }
+  } catch (_e) { /* 忽略 */ }
+  try {
+    const [idxs] = await conn.execute(
+      `SELECT COUNT(*) as cnt FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='snt_withdrawals' AND INDEX_NAME='snt_withdrawals_ledger_id_idx'`
+    );
+    if ((idxs as any[])[0]?.cnt === 0) {
+      await conn.execute(`ALTER TABLE snt_withdrawals ADD INDEX snt_withdrawals_ledger_id_idx (ledger_id)`);
+    }
+  } catch (_e) { /* 忽略 */ }
 }
 
 // 获取用户绑定的 BSC 钱包地址
@@ -1036,15 +1048,21 @@ export async function requestSntWithdraw(
 }
 
 // 获取用户 SNT 提现记录
-export async function getUserSntWithdrawals(userId: number, limit: number = 50) {
+export async function getUserSntWithdrawals(userId: number, limit: number = 50, ledgerId?: number) {
   await ensureWithdrawalTables();
   const conn = await getDbConnection();
   if (!conn) return [];
-  const [rows] = await conn.execute(
-    `SELECT id, snt_amount as sntAmount, bsc_address as bscAddress, status, admin_note as adminNote, txn_hash as txnHash, created_at as createdAt, updated_at as updatedAt
-     FROM snt_withdrawals WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`,
-    [userId, limit]
-  );
+  let query = `SELECT id, ledger_id as ledgerId, snt_amount as sntAmount, bsc_address as bscAddress, status, admin_note as adminNote, txn_hash as txnHash, created_at as createdAt, updated_at as updatedAt
+     FROM snt_withdrawals WHERE user_id = ?`;
+  const params: any[] = [userId];
+  if (ledgerId !== undefined) {
+    // 按账本过滤：包含该账本的记录，以及旧数据（ledger_id IS NULL）
+    query += ` AND (ledger_id = ? OR ledger_id IS NULL)`;
+    params.push(ledgerId);
+  }
+  query += ` ORDER BY created_at DESC LIMIT ?`;
+  params.push(limit);
+  const [rows] = await conn.execute(query, params);
   return rows as any[];
 }
 
