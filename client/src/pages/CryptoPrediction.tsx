@@ -473,7 +473,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         {order.sellStatus === 'sold' && order.sellConfirmedAt && (
           <div className="flex justify-between items-center">
             <span className="text-[#9CA3AF]">卖出时间</span>
-            <span className="text-[#64748B]">{new Date(order.sellConfirmedAt).toLocaleString('zh-CN')}</span>
+            <span className="text-[#64748B]">{(() => { const dt = new Date(order.sellConfirmedAt); const y = dt.getFullYear(); const mo = String(dt.getMonth()+1).padStart(2,'0'); const d = String(dt.getDate()).padStart(2,'0'); const h = String(dt.getHours()).padStart(2,'0'); const mi = String(dt.getMinutes()).padStart(2,'0'); const s = String(dt.getSeconds()).padStart(2,'0'); return `${y}-${mo}-${d} ${h}:${mi}:${s}`; })()}</span>
           </div>
         )}
         {/* 订单编号 */}
