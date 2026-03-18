@@ -835,12 +835,24 @@ export const appRouter = router({
 
     // 管理员获取所有 SNT 提现申请
     adminGetAllSntWithdrawals: protectedProcedure
-      .input(z.object({ status: z.string().optional(), limit: z.number().optional() }))
+      .input(z.object({ status: z.string().optional(), limit: z.number().optional(), ledgerId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        const isSystemAdmin = ctx.user.role === 'super_admin' || ctx.user.role === 'admin';
+        // 如果传了 ledgerId，允许账本 owner 查看该账本的提现记录
+        if (!isSystemAdmin && input.ledgerId) {
+          const conn = await db.getDbConnection();
+          if (!conn) throw new Error('数据库连接失败');
+          const [memberRows] = await conn.execute(
+            `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ? AND role IN ('owner','admin') LIMIT 1`,
+            [input.ledgerId, ctx.user.id]
+          );
+          if (!(memberRows as any[]).length) {
+            throw new Error('无权限');
+          }
+        } else if (!isSystemAdmin) {
           throw new Error('无权限');
         }
-        return await dbRecharge.adminGetAllSntWithdrawals(input.status, input.limit);
+        return await dbRecharge.adminGetAllSntWithdrawals(input.status, input.limit, input.ledgerId);
       }),
 
     // 管理员审核通过提现
