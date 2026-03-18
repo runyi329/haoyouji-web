@@ -336,27 +336,7 @@ export default function LedgerDetail() {
   const isCustomAH = (ledgerData as any)?.type === 'custom_ah';
   const isCustomAI = (ledgerData as any)?.type === 'custom_ai';
 
-  // AI 账本：自动播放生日快乐音乐
-  useEffect(() => {
-    if (!isCustomAI) return;
-    const audio = new Audio('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/ai-ledger/happy_birthday.mp3');
-    audio.loop = true;
-    audio.volume = 0.5;
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        const handleClick = () => {
-          audio.play().catch(() => {});
-          document.removeEventListener('click', handleClick);
-        };
-        document.addEventListener('click', handleClick);
-      });
-    }
-    return () => {
-      audio.pause();
-      audio.src = '';
-    };
-  }, [isCustomAI]);
+
 
   // AI 账本日历 state
   const [aiCalMonth, setAiCalMonth] = useState(() => {
