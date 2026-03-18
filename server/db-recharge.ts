@@ -954,16 +954,18 @@ export async function requestSntWithdraw(
     throw new Error('最低提现金额为 10 USDT');
   }
 
-  // 检查用户余额
+  // 检查用户是否存在
   const [userRows] = await conn.execute(
-    `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+    `SELECT id FROM users WHERE id = ? LIMIT 1`,
     [userId]
   );
   const userArr = userRows as any[];
   if (!userArr.length) throw new Error('用户不存在');
-  const balance = parseFloat(userArr[0].balance || '0');
+
+  // 使用三合一统一余额（users.balance + recharge_orders已完成充値 + af_manual_balances手动调账）
+  const balance = await getUserBalance(userId);
   if (balance < sntAmount) {
-    throw new Error(`余额不足，当前余额 ${balance.toFixed(2)} USDT`);
+    throw new Error(`余额不足，当前可提现余额 ${balance.toFixed(2)} USDT`);
   }
 
   // 检查是否有未处理的提现申请
@@ -976,12 +978,6 @@ export async function requestSntWithdraw(
     throw new Error('您有未处理的提现申请，请等待处理完成后再提交新申请');
   }
 
-  // 冻结余额（扣除）
-  await conn.execute(
-    `UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?`,
-    [sntAmount, userId, sntAmount]
-  );
-
   // 创建提现申请
   const [result] = await conn.execute(
     `INSERT INTO snt_withdrawals (user_id, snt_amount, bsc_address, status) VALUES (?, ?, ?, 'pending')`,
@@ -989,7 +985,15 @@ export async function requestSntWithdraw(
   );
   const insertId = (result as any).insertId;
 
-  // 记录余额变动
+  // 冻结余额：在 af_manual_balances 记录一笔负数（提现冻结）
+  // 这样下次 getUserBalance 调用时会自动扣除该金额
+  await conn.execute(
+    `INSERT INTO af_manual_balances (user_id, amount, note, created_at, updated_at)
+     VALUES (?, ?, ?, NOW(), NOW())`,
+    [userId, -sntAmount, `提现申请冻结 #${insertId} ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
+  );
+
+  // 同时记录到 balance_history 方便历史查询
   await conn.execute(
     `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description)
      VALUES (?, ?, 'withdraw', ?, ?, ?)`,
@@ -1097,24 +1101,21 @@ export async function adminRejectSntWithdrawal(
   const sntAmount = parseFloat(withdrawal.snt_amount);
   const userId = withdrawal.user_id;
 
-  // 退回余额
-  await conn.execute(
-    `UPDATE users SET balance = balance + ? WHERE id = ?`,
-    [sntAmount, userId]
-  );
-
   // 更新提现状态为 rejected
   await conn.execute(
     `UPDATE snt_withdrawals SET status = 'rejected', admin_note = ? WHERE id = ?`,
     [adminNote || '管理员拒绝', withdrawalId]
   );
 
-  // 获取退回后的余额
-  const [userRows] = await conn.execute(
-    `SELECT balance FROM users WHERE id = ? LIMIT 1`,
-    [userId]
+  // 退回冻结余额：在 af_manual_balances 记录一笔正数（退回）
+  await conn.execute(
+    `INSERT INTO af_manual_balances (user_id, amount, note, created_at, updated_at)
+     VALUES (?, ?, ?, NOW(), NOW())`,
+    [userId, sntAmount, `提现退回 #${withdrawalId} ${sntAmount} USDT（${adminNote || '管理员拒绝'}）`]
   );
-  const newBalance = parseFloat((userRows as any[])[0]?.balance || '0');
+
+  // 获取退回后的统一余额
+  const newBalance = await getUserBalance(userId);
 
   // 记录余额变动（退回）
   await conn.execute(
