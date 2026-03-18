@@ -12689,5 +12689,128 @@ export const adminFeatureRouter = router({
       }
     }),
 
+  // ===== 演示内容动态配置（账本56专用，数据库驱动，不走GitHub部署）=====
+  demoContent: router({
+    // 获取指定账本的演示内容块（公开接口，无需登录）
+    getBlocks: publicProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        page: z.string().default('main'), // main=首页, detail=详情页, sub=子页面
+      }))
+      .query(async ({ input }) => {
+        const db = await getDbConnection();
+        const [rows] = await db.execute(
+          `SELECT id, block_type, block_data, sort_order, page_key
+           FROM demo_content_blocks
+           WHERE ledger_id = ? AND page_key = ? AND is_active = 1
+           ORDER BY sort_order ASC`,
+          [input.ledgerId, input.page]
+        ) as any[];
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          type: r.block_type,
+          data: JSON.parse(r.block_data || '{}'),
+          sortOrder: r.sort_order,
+          pageKey: r.page_key,
+        }));
+      }),
+
+    // 更新演示内容（仅账本owner可操作）
+    setBlocks: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        page: z.string().default('main'),
+        blocks: z.array(z.object({
+          type: z.string(), // image | button | link | text | form | nav
+          data: z.record(z.any()),
+          sortOrder: z.number().optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDbConnection();
+        // 验证是账本owner
+        const [ledgerRows] = await db.execute(
+          'SELECT id FROM ledgers WHERE id = ? AND ownerId = ?',
+          [input.ledgerId, ctx.user.id]
+        ) as any[];
+        if (!(ledgerRows as any[]).length) {
+          throw new Error('无权操作此账本');
+        }
+        // 清空当前页面的所有块
+        await db.execute(
+          'DELETE FROM demo_content_blocks WHERE ledger_id = ? AND page_key = ?',
+          [input.ledgerId, input.page]
+        );
+        // 插入新块
+        for (let i = 0; i < input.blocks.length; i++) {
+          const block = input.blocks[i];
+          await db.execute(
+            `INSERT INTO demo_content_blocks (ledger_id, page_key, block_type, block_data, sort_order, is_active, created_at)
+             VALUES (?, ?, ?, ?, ?, 1, NOW())`,
+            [input.ledgerId, input.page, block.type, JSON.stringify(block.data), block.sortOrder ?? i]
+          );
+        }
+        return { success: true, count: input.blocks.length };
+      }),
+
+    // 快速更新单个块（演示时最常用）
+    upsertBlock: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        page: z.string().default('main'),
+        type: z.string(),
+        data: z.record(z.any()),
+        sortOrder: z.number().optional(),
+        clearPage: z.boolean().optional(), // 是否先清空当前页面
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDbConnection();
+        // 验证是账本owner
+        const [ledgerRows] = await db.execute(
+          'SELECT id FROM ledgers WHERE id = ? AND ownerId = ?',
+          [input.ledgerId, ctx.user.id]
+        ) as any[];
+        if (!(ledgerRows as any[]).length) {
+          throw new Error('无权操作此账本');
+        }
+        if (input.clearPage) {
+          await db.execute(
+            'DELETE FROM demo_content_blocks WHERE ledger_id = ? AND page_key = ?',
+            [input.ledgerId, input.page]
+          );
+        }
+        const [result] = await db.execute(
+          `INSERT INTO demo_content_blocks (ledger_id, page_key, block_type, block_data, sort_order, is_active, created_at)
+           VALUES (?, ?, ?, ?, ?, 1, NOW())`,
+          [input.ledgerId, input.page, input.type, JSON.stringify(input.data), input.sortOrder ?? 0]
+        ) as any[];
+        return { success: true, id: (result as any).insertId };
+      }),
+
+    // 清空演示内容
+    clearBlocks: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        page: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDbConnection();
+        const [ledgerRows] = await db.execute(
+          'SELECT id FROM ledgers WHERE id = ? AND ownerId = ?',
+          [input.ledgerId, ctx.user.id]
+        ) as any[];
+        if (!(ledgerRows as any[]).length) throw new Error('无权操作此账本');
+        if (input.page) {
+          await db.execute(
+            'DELETE FROM demo_content_blocks WHERE ledger_id = ? AND page_key = ?',
+            [input.ledgerId, input.page]
+          );
+        } else {
+          await db.execute('DELETE FROM demo_content_blocks WHERE ledger_id = ?', [input.ledgerId]);
+        }
+        return { success: true };
+      }),
+  }),
+
 });
 export type AppRouter = typeof appRouter;
