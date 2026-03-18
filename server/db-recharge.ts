@@ -120,14 +120,15 @@ export async function deleteWalletAddress(id: number) {
 export async function createRechargeOrder(
   userId: number,
   baseAmount: number,
-  network: string = 'TRC20'
+  network: string = 'TRC20',
+  ledgerId?: number  // 关联账本 ID，为空表示通用充値
 ) {
   const db = await getDb();
   
   // 从数据库获取随机收款地址
   const wallet = await getRandomWalletAddress(network);
   if (!wallet) {
-    throw new Error('充值功能暂未开放，请联系管理员配置收款地址');
+    throw new Error('充値功能暂未开放，请联系管理员配置收款地址');
   }
   
   const uniqueAmount = generateUniqueAmount(baseAmount);
@@ -144,6 +145,7 @@ export async function createRechargeOrder(
     network,
     walletAddress: wallet.address,
     status: 'pending',
+    ledgerId: ledgerId ?? null,  // 关联账本 ID
     expiresAt: expiresAt.toISOString().slice(0, 19).replace('T', ' ')
   });
   
@@ -517,9 +519,28 @@ export async function addUserBalance(
 }
 
 // 获取用户统一余额（三个来源合计：users.balance + recharge_orders已完成充值 + af_manual_balances手动调账）
-export async function getUserBalance(userId: number): Promise<number> {
+// 获取用户余额
+// 如果传入 ledgerId，则按账本隔离计算：充値(recharge_orders WHERE ledger_id=X) + 手动调账(af_manual_balances WHERE ledger_id=X)
+// 如果不传 ledgerId，则使用旧的三合一逻辑（兼容旧代码）
+export async function getUserBalance(userId: number, ledgerId?: number): Promise<number> {
   const db = await getDb();
   
+  if (ledgerId !== undefined) {
+    // 账本隔离模式：只计算该账本的充値和手动调账
+    const result = await db.execute(
+      sql`SELECT
+        (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${userId} AND ledger_id = ${ledgerId} AND status = 'completed') as recharged,
+        (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId} AND ledger_id = ${ledgerId}) as manual`
+    ) as any;
+    
+    const row = result[0]?.[0] ?? result[0];
+    const recharged = parseFloat(row?.recharged?.toString() || '0');
+    const manual = parseFloat(row?.manual?.toString() || '0');
+    
+    return recharged + manual;
+  }
+  
+  // 兼容旧模式：三合一
   const result = await db.execute(
     sql`SELECT
       (SELECT COALESCE(balance, 0) FROM users WHERE id = ${userId}) as userBalance,
@@ -945,6 +966,7 @@ export async function requestSntWithdraw(
   userId: number,
   sntAmount: number,
   bscAddress: string,
+  ledgerId: number = 52,  // 默认账本52（谷底增筹），支持未来扩展
 ): Promise<{ success: boolean; message: string; withdrawalId: number }> {
   await ensureWithdrawalTables();
   const conn = await getDbConnection();
@@ -962,10 +984,10 @@ export async function requestSntWithdraw(
   const userArr = userRows as any[];
   if (!userArr.length) throw new Error('用户不存在');
 
-  // 使用三合一统一余额（users.balance + recharge_orders已完成充値 + af_manual_balances手动调账）
-  const balance = await getUserBalance(userId);
+  // 按账本隔离计算余额：只计算该账本的充值和手动调账
+  const balance = await getUserBalance(userId, ledgerId);
   if (balance < sntAmount) {
-    throw new Error(`余额不足，当前可提现余额 ${balance.toFixed(2)} USDT`);
+    throw new Error(`余额不足，当前账本可提现余额 ${balance.toFixed(2)} USDT`);
   }
 
   // 检查是否有未处理的提现申请
@@ -985,12 +1007,11 @@ export async function requestSntWithdraw(
   );
   const insertId = (result as any).insertId;
 
-  // 冻结余额：在 af_manual_balances 记录一笔负数（提现冻结）
-  // 这样下次 getUserBalance 调用时会自动扣除该金额
+  // 冻结余额：在 af_manual_balances 记录一笔负数（提现冻结），使用对应账本ID
   await conn.execute(
-    `INSERT INTO af_manual_balances (user_id, amount, note, created_at, updated_at)
-     VALUES (?, ?, ?, NOW(), NOW())`,
-    [userId, -sntAmount, `提现申请冻结 #${insertId} ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
+    `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+     VALUES (?, ?, ?, ?, NOW(), NOW())`,
+    [ledgerId, userId, -sntAmount, `提现申请冻结 #${insertId} ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
   );
 
   // 同时记录到 balance_history 方便历史查询
@@ -1107,15 +1128,23 @@ export async function adminRejectSntWithdrawal(
     [adminNote || '管理员拒绝', withdrawalId]
   );
 
-  // 退回冻结余额：在 af_manual_balances 记录一笔正数（退回）
+  // 退回冻结余额：查找原提现冻结记录以确定账本ID
+  // 先尝试查找对应的冻结记录获取 ledger_id
+  const [freezeRows] = await conn.execute(
+    `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? AND amount = ? AND note LIKE ? ORDER BY created_at DESC LIMIT 1`,
+    [userId, -sntAmount, `%提现申请冻结 #${withdrawalId}%`]
+  );
+  const freezeArr = freezeRows as any[];
+  const refundLedgerId = freezeArr.length > 0 ? freezeArr[0].ledger_id : 52;  // 默认账本52
+
   await conn.execute(
-    `INSERT INTO af_manual_balances (user_id, amount, note, created_at, updated_at)
-     VALUES (?, ?, ?, NOW(), NOW())`,
-    [userId, sntAmount, `提现退回 #${withdrawalId} ${sntAmount} USDT（${adminNote || '管理员拒绝'}）`]
+    `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+     VALUES (?, ?, ?, ?, NOW(), NOW())`,
+    [refundLedgerId, userId, sntAmount, `提现退回 #${withdrawalId} ${sntAmount} USDT（${adminNote || '管理员拒绝'}）`]
   );
 
-  // 获取退回后的统一余额
-  const newBalance = await getUserBalance(userId);
+  // 获取退回后的账本余额
+  const newBalance = await getUserBalance(userId, refundLedgerId);
 
   // 记录余额变动（退回）
   await conn.execute(

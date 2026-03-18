@@ -24,10 +24,13 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
   const [selectedWalletId, setSelectedWalletId] = useState<string | null>(null);
 
   // 查询
-  // 统一余额（后端已合计 users.balance + recharge_orders + af_manual_balances）
+  // 按账本隔离余额：如果有 ledgerId 则只计算该账本的充値和手动调账
   // 如果是管理员 viewAs 模式，传入目标用户ID查询其余额
   const balanceQuery = trpc.recharge.getBalance.useQuery(
-    viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : undefined
+    {
+      ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}),
+      ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
+    }
   );
   // 读取用户在个人中心已绑定的数字钱包（digital_wallets 表）
   const walletsQuery = trpc.paymentAccounts.getDigitalWallets.useQuery();
@@ -87,6 +90,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
     withdrawMutation.mutate({
       sntAmount: amountNum,
       bscAddress: selectedWallet.walletAddress,
+      ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
     });
   };
 

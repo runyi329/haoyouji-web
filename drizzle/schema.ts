@@ -1385,6 +1385,7 @@ export const rechargeOrders = mysqlTable("recharge_orders", {
 	walletAddress: varchar("wallet_address", { length: 255 }), // 收款钱包地址
 	status: mysqlEnum(['pending', 'submitted', 'completed', 'expired', 'cancelled']).default('pending').notNull(),
 	txnHash: varchar("txn_hash", { length: 100 }), // 交易哈希
+	ledgerId: int("ledger_id"), // 关联账本 ID，为空表示通用充値
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	completedAt: timestamp("completed_at", { mode: 'string' }),
 	expiresAt: timestamp("expires_at", { mode: 'string' }).notNull(),
@@ -1394,6 +1395,7 @@ export const rechargeOrders = mysqlTable("recharge_orders", {
 	index("recharge_orders_order_no_idx").on(table.orderNo),
 	index("recharge_orders_amount_status_idx").on(table.amount, table.status),
 	index("recharge_orders_status_idx").on(table.status),
+	index("recharge_orders_ledger_id_idx").on(table.ledgerId),
 ]);
 
 // 余额变动记录表
