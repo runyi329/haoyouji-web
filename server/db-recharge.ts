@@ -918,6 +918,7 @@ async function ensureWithdrawalTables() {
     CREATE TABLE IF NOT EXISTS \`snt_withdrawals\` (
       \`id\` int AUTO_INCREMENT NOT NULL PRIMARY KEY,
       \`user_id\` int NOT NULL,
+      \`ledger_id\` int DEFAULT NULL COMMENT '关联账本ID',
       \`snt_amount\` decimal(20, 4) NOT NULL,
       \`bsc_address\` varchar(100) NOT NULL,
       \`status\` enum('pending','processing','completed','rejected') DEFAULT 'pending' NOT NULL,
@@ -926,9 +927,15 @@ async function ensureWithdrawalTables() {
       \`created_at\` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
       \`updated_at\` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
       INDEX \`snt_withdrawals_user_id_idx\` (\`user_id\`),
-      INDEX \`snt_withdrawals_status_idx\` (\`status\`)
+      INDEX \`snt_withdrawals_status_idx\` (\`status\`),
+      INDEX \`snt_withdrawals_ledger_id_idx\` (\`ledger_id\`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  // 安全添加 ledger_id 字段（如果表已存在但字段不存在）
+  try {
+    await conn.execute(`ALTER TABLE snt_withdrawals ADD COLUMN IF NOT EXISTS ledger_id INT DEFAULT NULL COMMENT '关联账本ID'`);
+    await conn.execute(`ALTER TABLE snt_withdrawals ADD INDEX IF NOT EXISTS snt_withdrawals_ledger_id_idx (ledger_id)`);
+  } catch (_e) { /* 字段已存在则忽略 */ }
 }
 
 // 获取用户绑定的 BSC 钱包地址
@@ -990,20 +997,20 @@ export async function requestSntWithdraw(
     throw new Error(`余额不足，当前账本可提现余额 ${balance.toFixed(2)} USDT`);
   }
 
-  // 检查是否有未处理的提现申请
+  // 检查是否有未处理的提现申请（按账本隔离：只检查同一账本的pending/processing）
   const [pendingRows] = await conn.execute(
-    `SELECT COUNT(*) as cnt FROM snt_withdrawals WHERE user_id = ? AND status IN ('pending','processing')`,
-    [userId]
+    `SELECT COUNT(*) as cnt FROM snt_withdrawals WHERE user_id = ? AND ledger_id = ? AND status IN ('pending','processing')`,
+    [userId, ledgerId]
   );
   const pendingCount = (pendingRows as any[])[0]?.cnt || 0;
   if (pendingCount > 0) {
     throw new Error('您有未处理的提现申请，请等待处理完成后再提交新申请');
   }
 
-  // 创建提现申请
+  // 创建提现申请（存入 ledger_id）
   const [result] = await conn.execute(
-    `INSERT INTO snt_withdrawals (user_id, snt_amount, bsc_address, status) VALUES (?, ?, ?, 'pending')`,
-    [userId, sntAmount, bscAddress]
+    `INSERT INTO snt_withdrawals (user_id, ledger_id, snt_amount, bsc_address, status) VALUES (?, ?, ?, ?, 'pending')`,
+    [userId, ledgerId, sntAmount, bscAddress]
   );
   const insertId = (result as any).insertId;
 
@@ -1042,21 +1049,29 @@ export async function getUserSntWithdrawals(userId: number, limit: number = 50) 
 }
 
 // 管理员获取所有 SNT 提现申请
-export async function adminGetAllSntWithdrawals(status?: string, limit: number = 100) {
+export async function adminGetAllSntWithdrawals(status?: string, limit: number = 100, ledgerId?: number) {
   await ensureWithdrawalTables();
   const conn = await getDbConnection();
   if (!conn) return [];
   let query = `
     SELECT w.id, w.user_id as userId, u.username, u.name as userName, w.snt_amount as sntAmount, 
            w.bsc_address as bscAddress, w.status, w.admin_note as adminNote, 
-           w.txn_hash as txnHash, w.created_at as createdAt, w.updated_at as updatedAt
+           w.txn_hash as txnHash, w.ledger_id as ledgerId, w.created_at as createdAt, w.updated_at as updatedAt
     FROM snt_withdrawals w
     LEFT JOIN users u ON w.user_id = u.id
   `;
   const params: any[] = [];
+  const conditions: string[] = [];
   if (status) {
-    query += ` WHERE w.status = ?`;
+    conditions.push(`w.status = ?`);
     params.push(status);
+  }
+  if (ledgerId !== undefined) {
+    conditions.push(`w.ledger_id = ?`);
+    params.push(ledgerId);
+  }
+  if (conditions.length > 0) {
+    query += ` WHERE ` + conditions.join(' AND ');
   }
   query += ` ORDER BY w.created_at DESC LIMIT ?`;
   params.push(limit);

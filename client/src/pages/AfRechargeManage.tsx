@@ -426,6 +426,7 @@ export default function AfRechargeManage() {
 
       {/* 提现管理 Tab */}
       {tab === "withdraw" && <WithdrawManageTab
+        ledgerId={ledgerId}
         withdrawFilter={withdrawFilter}
         setWithdrawFilter={setWithdrawFilter}
         approveDialogId={approveDialogId}
@@ -445,6 +446,7 @@ export default function AfRechargeManage() {
 
 // 提现管理子组件
 function WithdrawManageTab({
+  ledgerId,
   withdrawFilter, setWithdrawFilter,
   approveDialogId, setApproveDialogId,
   rejectDialogId, setRejectDialogId,
@@ -452,9 +454,9 @@ function WithdrawManageTab({
   approveNote, setApproveNote,
   rejectNote, setRejectNote,
 }: any) {
-  // 查询提现申请列表
+  // 查询提现申请列表（按账本隔离）
   const { data: withdrawals, refetch: refetchWithdrawals, isLoading } = trpc.recharge.adminGetAllSntWithdrawals.useQuery(
-    { status: withdrawFilter || undefined, limit: 100 }
+    { status: withdrawFilter || undefined, limit: 100, ledgerId: ledgerId || undefined }
   );
 
   // 审核通过
