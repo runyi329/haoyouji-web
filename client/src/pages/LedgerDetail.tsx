@@ -975,7 +975,7 @@ export default function LedgerDetail() {
                   <span className="flex-1"></span>
                   <span className="w-10"></span>
                   <span className="flex-1"></span>
-                  <span className="flex-1 text-right text-sm font-bold text-green-400">+{Math.max(0, pnlData?.total ?? 0).toFixed(2)} <span className="text-xs font-normal">U</span></span>
+                  <span className="flex-1 text-right text-sm font-bold text-green-400 whitespace-nowrap">+{Math.max(0, pnlData?.total ?? 0).toFixed(2)}&nbsp;U</span>
                 </div>
               </div>
               )}
