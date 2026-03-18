@@ -464,6 +464,28 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           </div>
         )}
 
+        {/* 净利润和回报率（已卖出时显示） */}
+        {order.sellStatus === 'sold' && order.sellPrice && order.limitPrice && (() => {
+          const buyPrice = parseFloat(order.limitPrice);
+          const sellPrice = parseFloat(order.sellPrice);
+          const quantity = parseFloat(order.quantity);
+          const profit = (sellPrice - buyPrice) * quantity;
+          const returnRate = ((sellPrice - buyPrice) / buyPrice) * 100;
+          const isPositive = profit >= 0;
+          return (
+            <>
+              <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">净利润</span>
+                <span className={`font-bold ${isPositive ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{isPositive ? '+' : ''}{profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">回报率</span>
+                <span className={`font-bold ${isPositive ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{isPositive ? '+' : ''}{returnRate.toFixed(2)}%</span>
+              </div>
+            </>
+          );
+        })()}
+
         {/* 买入时间 */}
         <div className="flex justify-between items-center">
           <span className="text-[#9CA3AF]">买入时间</span>
