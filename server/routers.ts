@@ -842,11 +842,17 @@ export const appRouter = router({
         if (!isSystemAdmin && input.ledgerId) {
           const conn = await db.getDbConnection();
           if (!conn) throw new Error('数据库连接失败');
-          const [memberRows] = await conn.execute(
-            `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ? AND role IN ('owner','admin') LIMIT 1`,
+          // 先检查 ledgers.ownerId（账本创建者直接有权限）
+          const [ledgerRows] = await conn.execute(
+            `SELECT id FROM ledgers WHERE id = ? AND ownerId = ? LIMIT 1`,
             [input.ledgerId, ctx.user.id]
           );
-          if (!(memberRows as any[]).length) {
+          // 再检查 ledger_members 表（注意字段名是驼峰 ledgerId/userId）
+          const [memberRows] = await conn.execute(
+            `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? AND role IN ('owner','admin') LIMIT 1`,
+            [input.ledgerId, ctx.user.id]
+          );
+          if (!(ledgerRows as any[]).length && !(memberRows as any[]).length) {
             throw new Error('无权限');
           }
         } else if (!isSystemAdmin) {
