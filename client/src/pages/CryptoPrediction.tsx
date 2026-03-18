@@ -471,7 +471,8 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const quantity = parseFloat(order.quantity);
           const actualInvestment = parseFloat(order.amount);
           const profit = (sellPrice - buyPrice) * quantity;
-          const growthRate = actualInvestment > 0 ? (profit / actualInvestment) * 100 : 0;
+          const profitRatio = actualInvestment > 0 ? (profit / actualInvestment) * 100 : 0;
+          const priceGrowth = buyPrice > 0 ? ((sellPrice - buyPrice) / buyPrice) * 100 : 0;
           const isPositive = profit >= 0;
           return (
             <>
@@ -480,8 +481,12 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 <span className={`font-bold ${isPositive ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{isPositive ? '+' : ''}{profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
               </div>
               <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">利润比</span>
+                <span className={`font-bold ${isPositive ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{isPositive ? '+' : ''}{profitRatio.toFixed(2)}%</span>
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="text-[#9CA3AF]">涨幅</span>
-                <span className={`font-bold ${isPositive ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{isPositive ? '+' : ''}{growthRate.toFixed(2)}%</span>
+                <span className={`font-bold ${priceGrowth >= 0 ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{priceGrowth >= 0 ? '+' : ''}{priceGrowth.toFixed(2)}%</span>
               </div>
             </>
           );

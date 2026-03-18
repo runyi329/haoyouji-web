@@ -9676,12 +9676,13 @@ export const appRouter = router({
               (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual`
           ).catch(() => [[{ recharged: '0', manual: '0' }]]),
 
-          // 查询2：仓位（所有币种 GROUP BY coin+side，1 个查询搞定）
+          // 查询2：仓位（所有币种 GROUP BY coin+side，排除已卖出订单）
           db.execute(
             sql`SELECT coin, side, COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
                 FROM af_orders
                 WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
                   AND status = 'completed' AND coin IN ('BTC','ETH','SOL')
+                  AND (sell_status IS NULL OR sell_status != 'sold')
                 GROUP BY coin, side`
           ).catch(() => [[]]),
 

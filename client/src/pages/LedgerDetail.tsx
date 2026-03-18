@@ -944,9 +944,9 @@ export default function LedgerDetail() {
                 {['BTC', 'ETH', 'SOL'].map(coin => {
                   const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
                   const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
-                  const orderCount = coinData?.orderCount ?? 0;
-                  // 权益为0且无订单的币种不显示
-                  if ((!qty || qty <= 0) && orderCount === 0) return null;
+                  const activeCount = (coinData?.holdingCount ?? 0) + (coinData?.pendingCount ?? 0);
+                  // 权益为0且无持仓订单的币种不显示
+                  if ((!qty || qty <= 0) && activeCount === 0) return null;
                   const displayPnl = Math.max(0, coinData?.pnl ?? 0);
                   const avgCost = coinData?.avgCost ?? 0;
                   // 智能去尾零
@@ -963,7 +963,7 @@ export default function LedgerDetail() {
                     <div key={coin} className="flex items-baseline py-0.5">
                       <span className="w-9 text-xs text-white/70 font-medium">{coin}</span>
                       <span className="flex-1 text-right text-xs font-bold text-white">{fmtQty}</span>
-                      <span className="w-10 text-right text-[10px] text-white/50">{orderCount}笔</span>
+                      <span className="w-10 text-right text-[10px] text-white/50">{activeCount}笔</span>
                       <span className="flex-1 text-right text-[11px] text-white/60">{avgCost > 0 ? avgCost.toLocaleString() : '-'}</span>
                       <span className="flex-1 text-right text-xs font-medium text-green-400">+{displayPnl.toFixed(2)}</span>
                     </div>
@@ -975,7 +975,7 @@ export default function LedgerDetail() {
                   <span className="flex-1"></span>
                   <span className="w-10"></span>
                   <span className="flex-1"></span>
-                  <span className="flex-1 text-right text-sm font-bold text-green-400">+{Math.max(0, pnlData?.total ?? 0).toFixed(2)} U</span>
+                  <span className="flex-1 text-right text-sm font-bold text-green-400">+{Math.max(0, pnlData?.total ?? 0).toFixed(2)} <span className="text-xs font-normal">U</span></span>
                 </div>
               </div>
               )}
