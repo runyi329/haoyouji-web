@@ -167,6 +167,23 @@ jobs:
               PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
             " || true
             echo "✅ users表邀请字段确认完成"
+            echo "💳 确保 recharge_orders 表 ledger_id 字段存在..."
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='recharge_orders' AND COLUMN_NAME='ledger_id';
+              SET @s = IF(@c=0, 'ALTER TABLE recharge_orders ADD COLUMN ledger_id INT DEFAULT NULL COMMENT \"\\u5173\\u8054\\u8d26\\u672cID\\uff0c\\u4e3a\\u7a7a\\u8868\\u793a\\u901a\\u7528\\u5145\\u5024\"', 'SELECT 1');
+              PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT COUNT(*) INTO @idx FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='recharge_orders' AND INDEX_NAME='recharge_orders_ledger_id_idx';
+              SET @s = IF(@idx=0, 'ALTER TABLE recharge_orders ADD INDEX recharge_orders_ledger_id_idx (ledger_id)', 'SELECT 1');
+              PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            " || true
+            echo "✅ recharge_orders.ledger_id 字段确认完成"
+            echo "💳 将现有已完成充値记录关联到账本52(谷底增笹)..."
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              UPDATE recharge_orders SET ledger_id = 52 WHERE status = 'completed' AND ledger_id IS NULL;
+            " || true
+            echo "✅ 历史充値记录关联完成"
             echo "💳 注入支付宝环境变量..."
             node /root/haoyouji-web/scripts/inject-alipay-env.cjs
             echo "🔄 重启服务（使用 ecosystem.config.cjs 确保 COS 环境变量持久化）..."
