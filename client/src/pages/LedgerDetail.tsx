@@ -1804,10 +1804,7 @@ export default function LedgerDetail() {
       {/* AI 账本：白色内容区 */}
       {isCustomAI && (
         <div className="flex-1 px-4 pb-20 space-y-4 pt-4">
-          {/* 人物展示 */}
-          <div className="rounded-2xl overflow-hidden shadow-lg" style={{ border: '1px solid #E5E7EB' }}>
-            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/demo/person-portrait-56.webp" alt="" className="w-full" style={{ display: 'block' }} />
-          </div>
+          {/* 56号账本白色内容区 - 按需添加功能 */}
         </div>
       )}
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
