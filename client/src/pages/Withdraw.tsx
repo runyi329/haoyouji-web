@@ -34,7 +34,10 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
   );
   // 读取用户在个人中心已绑定的数字钱包（digital_wallets 表）
   const walletsQuery = trpc.paymentAccounts.getDigitalWallets.useQuery();
-  const withdrawalsQuery = trpc.recharge.getMySntWithdrawals.useQuery({ limit: 50 });
+  // 提现记录按账本隔离：如果有 ledgerId 则只查该账本的提现记录
+  const withdrawalsQuery = trpc.recharge.getMySntWithdrawals.useQuery(
+    { limit: 50, ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}) }
+  );
 
   const balance = useMemo(() => parseFloat(String(balanceQuery.data || 0)), [balanceQuery.data]);
 
