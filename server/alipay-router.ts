@@ -233,4 +233,50 @@ router.post("/api/alipay/feedback-pay", async (req: Request, res: Response) => {
   }
 });
 
+// ─────────────────────────────────────────────
+// GET /api/alipay/quick-pay
+// 快速支付（公开接口，无需登录）
+// 通过URL参数传递金额和商品名，自动生成支付链接并302跳转
+// 用法: /api/alipay/quick-pay?amount=10000&subject=天气预报VIP服务
+// ─────────────────────────────────────────────
+router.get("/api/alipay/quick-pay", async (req: Request, res: Response) => {
+  try {
+    const amount = parseFloat(req.query.amount as string);
+    const subject = (req.query.subject as string) || "脉动-商品购买";
+    const returnPath = (req.query.returnPath as string) || "/";
+
+    if (!amount || amount <= 0) {
+      return res.status(400).send("参数错误：请提供有效的金额");
+    }
+
+    // 生成唯一订单号
+    const orderId = `QP${Date.now()}${nanoid(6)}`;
+
+    // 构建回调地址
+    const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
+    const hostHeader = (req.headers['x-forwarded-host'] as string) || req.headers.host || 'jiangyuchen.cn';
+    const host = `${protocol}://${hostHeader}`;
+    const notifyUrl = `${host}/api/alipay/notify`;
+    const returnUrl = `${host}${returnPath}`;
+
+    // 生成支付宝 WAP 支付链接
+    const payUrl = createWapPayUrl({
+      orderId,
+      subject,
+      totalAmount: amount,
+      returnUrl,
+      notifyUrl,
+      body: subject,
+    });
+
+    console.log(`[Alipay] quick-pay 订单创建: ${orderId}, 金额: ${amount}, 商品: ${subject}`);
+
+    // 直接302跳转到支付宝支付页面
+    return res.redirect(payUrl);
+  } catch (err: any) {
+    console.error("[Alipay] quick-pay error:", err);
+    return res.status(500).send("创建支付订单失败: " + (err?.message || "未知错误"));
+  }
+});
+
 export default router;
