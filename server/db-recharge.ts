@@ -1009,9 +1009,9 @@ export async function requestSntWithdraw(
     throw new Error(`余额不足，当前账本可提现余额 ${balance.toFixed(2)} USDT`);
   }
 
-  // 检查是否有未处理的提现申请（按账本隔离：只检查同一账本的pending/processing）
+  // 检查是否有未处理的提现申请（按账本隔离：检查同一账本的pending/processing，包含旧数据 ledger_id IS NULL）
   const [pendingRows] = await conn.execute(
-    `SELECT COUNT(*) as cnt FROM snt_withdrawals WHERE user_id = ? AND ledger_id = ? AND status IN ('pending','processing')`,
+    `SELECT COUNT(*) as cnt FROM snt_withdrawals WHERE user_id = ? AND (ledger_id = ? OR ledger_id IS NULL) AND status IN ('pending','processing')`,
     [userId, ledgerId]
   );
   const pendingCount = (pendingRows as any[])[0]?.cnt || 0;
