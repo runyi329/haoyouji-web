@@ -483,8 +483,11 @@ export default function LedgerDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#FFEBEE' }}>
-        <div style={{ color: '#222222' }} className="text-lg">加载中...</div>
+      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#D32F2F' }}>
+        <div className="h-32 flex-shrink-0"></div>
+        <div className="flex-1 rounded-t-2xl flex items-center justify-center" style={{ backgroundColor: '#FAF3ED' }}>
+          <div style={{ color: '#888' }} className="text-base">加载中...</div>
+        </div>
       </div>
     );
   }
