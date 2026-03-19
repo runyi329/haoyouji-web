@@ -722,6 +722,7 @@ export default function Ledger() {
                       <div className="flex items-center gap-2 flex-1 min-w-0">
                         {(['custom_aa', 'custom_ab', 'custom_ac', 'custom_ad', 'custom_ae', 'custom_af', 'custom_ag', 'custom_ah', 'custom_ai', 'diet', 'opinion_book', 'opinion_book_demo'].includes((ledger as any).type)) ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                         <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
+                        {(ledger as any).userRole === 'owner' && <span className="text-[10px] text-gray-400 flex-shrink-0 font-normal">#{ledger.id}</span>}
                         {ledger.isVip === true && (
                           <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">
                             VIP
@@ -952,6 +953,7 @@ export default function Ledger() {
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
                                     {(['custom_aa', 'custom_ab', 'custom_ac', 'custom_ad', 'custom_ae', 'custom_af', 'custom_ag', 'custom_ah', 'custom_ai', 'diet', 'opinion_book', 'opinion_book_demo'].includes((ledger as any).type)) ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                                     <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
+                                    {(ledger as any).userRole === 'owner' && <span className="text-[10px] text-gray-400 flex-shrink-0 font-normal">#{ledger.id}</span>}
                                     {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                   </div>
                                   {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && ((ledger as any).userRole === 'member' || (ledger as any).userRole === 'funder')) && (
@@ -1013,6 +1015,7 @@ export default function Ledger() {
                                 <div className="flex items-center gap-2 flex-1 min-w-0">
                                   {(['custom_aa', 'custom_ab', 'custom_ac', 'custom_ad', 'custom_ae', 'custom_af', 'custom_ag', 'custom_ah', 'custom_ai', 'diet', 'opinion_book', 'opinion_book_demo'].includes((ledger as any).type)) ? <Gem className="w-5 h-5 flex-shrink-0 text-[#CBA471]" strokeWidth={2} /> : <Notebook className="w-5 h-5 flex-shrink-0 text-[#D32F2F]" strokeWidth={2.5} />}
                                   <h3 className="font-bold text-lg text-[#222222] truncate">{ledger.name}</h3>
+                                  {(ledger as any).userRole === 'owner' && <span className="text-[10px] text-gray-400 flex-shrink-0 font-normal">#{ledger.id}</span>}
                                   {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                 </div>
                                 {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && ((ledger as any).userRole === 'member' || (ledger as any).userRole === 'funder')) && (
