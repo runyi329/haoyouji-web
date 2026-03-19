@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Check, ChevronDown } from 'lucide-react';
 
 // PPT人格类型定义
 const PPT_TYPES = [
   {
     id: 'skin',
-    name: '优化型',
+    name: '我有PPT，想让它更好看',
     tag: 'Skin',
-    desc: '有PPT，内容满意，求美化。',
-    detail: '你已经有完整的PPT，内容和逻辑都OK，只是觉得视觉上不够专业、不够好看，希望提升颜值和设计感。',
+    desc: '内容和逻辑都OK，就是颜值不够，想提升设计感和专业度。',
     aiRole: '[角色：设计师]',
     aiCore: '强调明暗、色调、对齐、视觉层次与留白美学。',
     color: '#3B82F6',
@@ -17,10 +16,9 @@ const PPT_TYPES = [
   },
   {
     id: 'skeleton',
-    name: '重构型',
+    name: '我有一堆文字，想变成PPT',
     tag: 'Skeleton',
-    desc: '有文字素材，求逻辑摆盘。',
-    detail: '你有大量文字内容（Word文档、笔记、报告），但不知道怎么拆解成PPT的逻辑结构，需要帮你重新组织框架。',
+    desc: '有Word/笔记/报告，但不知道怎么拆成PPT的结构，需要帮我整理框架。',
     aiRole: '[角色：架构师]',
     aiCore: '强调PLC/SCQA逻辑框架、信息分层与结构化表达。',
     color: '#10B981',
@@ -28,10 +26,9 @@ const PPT_TYPES = [
   },
   {
     id: 'soul',
-    name: '孵化型',
+    name: '我只有想法，想从零做PPT',
     tag: 'Soul',
-    desc: '只有想法，求战略定位。',
-    detail: '你只有一个模糊的想法或方向，还没有任何素材，需要从零开始帮你梳理核心主题、受众定位和内容骨架。',
+    desc: '脑子里有个方向，但还没有任何素材，需要从零帮我搭出整个PPT框架。',
     aiRole: '[角色：战略顾问]',
     aiCore: '强调受众分析、痛点挖掘与核心价值主张提炼。',
     color: '#8B5CF6',
@@ -39,10 +36,9 @@ const PPT_TYPES = [
   },
   {
     id: 'shield',
-    name: '辩论型',
+    name: '我的PPT数据很多，想让逻辑更严密',
     tag: 'Shield',
-    desc: '数据复杂，求严密逻辑。',
-    detail: '你的PPT包含大量数据、研究结论或专业论证，需要确保每个论点都有充分依据，逻辑无懈可击。',
+    desc: '有大量数据和研究结论，需要确保每个论点都有依据，经得起质疑。',
     aiRole: '[角色：审计官]',
     aiCore: '强调压力测试、防御性逻辑与数据可视化叙事。',
     color: '#EF4444',
@@ -50,10 +46,9 @@ const PPT_TYPES = [
   },
   {
     id: 'story',
-    name: '动员型',
+    name: '我想做一个能打动人的PPT',
     tag: 'Story',
-    desc: '零散感性素材，求共鸣。',
-    detail: '你有一些感性的故事、案例或情感素材，想做一个能打动人心、引发共鸣的演讲型PPT。',
+    desc: '有一些故事和案例，想做成能引发共鸣、让人记住的演讲型PPT。',
     aiRole: '[角色：编剧]',
     aiCore: '强调叙事曲线、情感渲染与观众心理节奏设计。',
     color: '#F59E0B',
@@ -61,10 +56,9 @@ const PPT_TYPES = [
   },
   {
     id: 'essence',
-    name: '极客型',
+    name: '我的PPT太多太乱，想做减法',
     tag: 'Essence',
-    desc: '信息冗余，求极致精简。',
-    detail: '你的PPT内容太多太杂，每页都塞满了文字，需要帮你做减法，提炼核心信息，做到一页一个核心观点。',
+    desc: '内容太多，每页都塞满了字，需要帮我提炼核心，做到一页一个重点。',
     aiRole: '[角色：产品经理]',
     aiCore: '强调暴力降噪、极简主义与"一页一观点"原则。',
     color: '#6B7280',
@@ -190,6 +184,7 @@ export default function PptGuide() {
   const [layer3Answers, setLayer3Answers] = useState<string[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [showMore, setShowMore] = useState(false);
 
   const selectedTypeData = PPT_TYPES.find(t => t.id === selectedType);
   const layer2Questions = selectedType ? LAYER2_QUESTIONS[selectedType] || [] : [];
@@ -210,7 +205,7 @@ export default function PptGuide() {
     return `你是一位专业的PPT制作顾问，请根据以下需求为我生成一份完整的PPT内容方案。
 
 【客户类型】
-${selectedTypeData.aiRole} — ${selectedTypeData.name}型（${selectedTypeData.tag}）
+${selectedTypeData.aiRole} — ${selectedTypeData.name}
 核心诉求：${selectedTypeData.desc}
 AI策略：${selectedTypeData.aiCore}
 
@@ -237,8 +232,19 @@ ${l3Lines}
     });
   };
 
+  const handleSelectType = (typeId: string) => {
+    setSelectedType(typeId);
+    setLayer2Answers([]);
+    setLayer3Answers([]);
+    setCurrentQ(0);
+    setStep('layer2');
+  };
+
   // 第一层：选择类型
   if (step === 'layer1') {
+    const mainTypes = PPT_TYPES.slice(0, 3);
+    const moreTypes = PPT_TYPES.slice(3);
+
     return (
       <div className="min-h-screen bg-gray-50">
         {/* 顶部导航 */}
@@ -253,42 +259,61 @@ ${l3Lines}
         </div>
 
         <div className="px-4 pt-5 pb-8">
-          {/* 标题区 */}
-          <div className="mb-5">
-            <p className="text-sm text-gray-500">选择最符合你现状的类型，我们将为你定制专属提示词</p>
-          </div>
+          {/* 说明文字 */}
+          <p className="text-sm text-gray-500 mb-4">选择最符合你现状的类型，我们将为你定制专属提示词</p>
 
-          {/* 类型卡片 */}
+          {/* 前3个主要类型卡片 */}
           <div className="space-y-3">
-            {PPT_TYPES.map((type) => (
+            {mainTypes.map((type) => (
               <button
                 key={type.id}
-                onClick={() => {
-                  setSelectedType(type.id);
-                  setLayer2Answers([]);
-                  setLayer3Answers([]);
-                  setCurrentQ(0);
-                  setStep('layer2');
-                }}
-                className="w-full text-left rounded-2xl border-2 border-transparent p-4 transition-all active:scale-98"
+                onClick={() => handleSelectType(type.id)}
+                className="w-full text-left rounded-2xl border-2 p-4 transition-all active:scale-[0.98]"
                 style={{ backgroundColor: type.bgColor, borderColor: type.color + '30' }}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-bold" style={{ color: type.color }}>{type.name}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: type.color + '20', color: type.color }}>
-                        {type.tag}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-700 font-medium">{type.desc}</p>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">{type.detail}</p>
+                    <p className="text-sm font-bold text-gray-900 mb-1">{type.name}</p>
+                    <p className="text-xs text-gray-500 leading-relaxed">{type.desc}</p>
                   </div>
-                  <ChevronRight className="w-4 h-4 mt-1 shrink-0 ml-2" style={{ color: type.color }} />
+                  <ChevronRight className="w-4 h-4 mt-0.5 shrink-0 ml-2" style={{ color: type.color }} />
                 </div>
               </button>
             ))}
           </div>
+
+          {/* 展开更多按钮 */}
+          {!showMore && (
+            <button
+              onClick={() => setShowMore(true)}
+              className="w-full mt-3 py-3 flex items-center justify-center gap-1.5 rounded-xl text-sm text-gray-500 border border-gray-200 bg-white"
+            >
+              <ChevronDown className="w-4 h-4" />
+              <span>展开更多特殊场景（辩论 / 动员 / 极客）</span>
+            </button>
+          )}
+
+          {/* 后3个折叠类型卡片 */}
+          {showMore && (
+            <div className="space-y-3 mt-3">
+              {moreTypes.map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => handleSelectType(type.id)}
+                  className="w-full text-left rounded-2xl border-2 p-4 transition-all active:scale-[0.98]"
+                  style={{ backgroundColor: type.bgColor, borderColor: type.color + '30' }}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-gray-900 mb-1">{type.name}</p>
+                      <p className="text-xs text-gray-500 leading-relaxed">{type.desc}</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 mt-0.5 shrink-0 ml-2" style={{ color: type.color }} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -328,18 +353,18 @@ ${l3Lines}
           {selectedTypeData && (
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium mb-4"
               style={{ backgroundColor: selectedTypeData.bgColor, color: selectedTypeData.color }}>
-              <span>{selectedTypeData.name}型</span>
-              <span className="opacity-60">·</span>
-              <span>{selectedTypeData.tag}</span>
+              {selectedTypeData.name}
             </div>
           )}
 
-          <h2 className="text-lg font-bold text-gray-900 mb-5 leading-snug">{q.question}</h2>
+          {/* 问题 */}
+          <h2 className="text-lg font-bold text-gray-900 mb-5">{q.question}</h2>
 
+          {/* 选项 */}
           <div className="space-y-3">
-            {q.options.map((opt, i) => (
+            {q.options.map((opt) => (
               <button
-                key={i}
+                key={opt}
                 onClick={() => {
                   const newAnswers = [...layer2Answers];
                   newAnswers[currentQ] = opt;
@@ -351,7 +376,7 @@ ${l3Lines}
                     setStep('layer3');
                   }
                 }}
-                className="w-full text-left px-4 py-3.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 font-medium active:scale-98 transition-all hover:border-gray-300"
+                className="w-full text-left px-4 py-3.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 font-medium active:scale-[0.98] transition-all"
               >
                 {opt}
               </button>
@@ -362,7 +387,7 @@ ${l3Lines}
     );
   }
 
-  // 第三层：通用深化问题
+  // 第三层：通用规格问题
   if (step === 'layer3') {
     const q = LAYER3_QUESTIONS[currentQ];
     if (!q) return null;
@@ -370,34 +395,31 @@ ${l3Lines}
       <div className="min-h-screen bg-gray-50">
         <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
           <button onClick={() => {
-            if (currentQ === 0) { setCurrentQ(layer2Questions.length - 1); setStep('layer2'); }
+            if (currentQ === 0) { setStep('layer2'); setCurrentQ(layer2Questions.length - 1); }
             else setCurrentQ(q => q - 1);
           }} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
           <div className="flex-1">
-            <h1 className="text-base font-semibold text-gray-900">制作规格确认</h1>
+            <h1 className="text-base font-semibold text-gray-900">最后几个问题</h1>
             <p className="text-xs text-gray-500">第 3 步 · 问题 {currentQ + 1} / {LAYER3_QUESTIONS.length}</p>
           </div>
+          {/* 进度条 */}
           <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full transition-all bg-gray-800"
-              style={{ width: `${((currentQ + 1) / LAYER3_QUESTIONS.length) * 100}%` }}
+              className="h-full rounded-full transition-all"
+              style={{ width: `${((currentQ + 1) / LAYER3_QUESTIONS.length) * 100}%`, backgroundColor: '#6B7280' }}
             />
           </div>
         </div>
 
         <div className="px-4 pt-6 pb-8">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium mb-4 bg-gray-100 text-gray-600">
-            最后几步，马上生成你的专属提示词
-          </div>
-
-          <h2 className="text-lg font-bold text-gray-900 mb-5 leading-snug">{q.question}</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-5">{q.question}</h2>
 
           <div className="space-y-3">
-            {q.options.map((opt, i) => (
+            {q.options.map((opt) => (
               <button
-                key={i}
+                key={opt}
                 onClick={() => {
                   const newAnswers = [...layer3Answers];
                   newAnswers[currentQ] = opt;
@@ -408,7 +430,7 @@ ${l3Lines}
                     setStep('result');
                   }
                 }}
-                className="w-full text-left px-4 py-3.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-700 font-medium active:scale-98 transition-all hover:border-gray-300"
+                className="w-full text-left px-4 py-3.5 rounded-xl border border-gray-200 bg-white text-sm text-gray-800 font-medium active:scale-[0.98] transition-all"
               >
                 {opt}
               </button>
@@ -419,7 +441,7 @@ ${l3Lines}
     );
   }
 
-  // 结果页：生成提示词
+  // 结果页
   if (step === 'result') {
     const prompt = generatePrompt();
     return (
@@ -429,69 +451,64 @@ ${l3Lines}
             className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div className="flex-1">
-            <h1 className="text-base font-semibold text-gray-900">你的专属 AI 提示词</h1>
-            <p className="text-xs text-gray-500">复制后粘贴到任意 AI 工具即可</p>
-          </div>
+          <h1 className="text-base font-semibold text-gray-900">你的专属提示词已生成</h1>
         </div>
 
         <div className="px-4 pt-5 pb-8">
-          {/* 人格标签 */}
+          {/* 类型总结 */}
           {selectedTypeData && (
-            <div className="flex items-center gap-3 p-4 rounded-2xl mb-4"
-              style={{ backgroundColor: selectedTypeData.bgColor }}>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-sm font-bold" style={{ color: selectedTypeData.color }}>
-                    {selectedTypeData.name}型 · {selectedTypeData.tag}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-600">{selectedTypeData.aiRole} — {selectedTypeData.aiCore}</p>
+            <div className="rounded-2xl p-4 mb-4" style={{ backgroundColor: selectedTypeData.bgColor }}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-bold" style={{ color: selectedTypeData.color }}>{selectedTypeData.name}</span>
               </div>
+              <p className="text-xs text-gray-600">{selectedTypeData.aiRole} · {selectedTypeData.aiCore}</p>
             </div>
           )}
 
-          {/* 提示词内容 */}
+          {/* 提示词 */}
           <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
-            <pre className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap font-sans">{prompt}</pre>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-gray-900">完整提示词</span>
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                style={{ backgroundColor: copied ? '#ECFDF5' : '#EFF6FF', color: copied ? '#10B981' : '#3B82F6' }}
+              >
+                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copied ? '已复制' : '一键复制'}
+              </button>
+            </div>
+            <pre className="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed font-sans">{prompt}</pre>
           </div>
 
-          {/* 复制按钮 */}
-          <button
-            onClick={handleCopy}
-            className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-98"
-            style={{ backgroundColor: copied ? '#10B981' : '#1A56DB' }}
-          >
-            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            {copied ? '已复制！去粘贴到 AI 工具' : '一键复制提示词'}
-          </button>
-
-          {/* 重新开始 */}
-          <button
-            onClick={() => {
-              setStep('layer1');
-              setSelectedType('');
-              setLayer2Answers([]);
-              setLayer3Answers([]);
-              setCurrentQ(0);
-            }}
-            className="w-full mt-3 py-3 rounded-2xl text-gray-600 font-medium text-sm border border-gray-200 bg-white"
-          >
-            重新测试
-          </button>
-
-          {/* 推荐AI工具 */}
-          <div className="mt-5 p-4 bg-amber-50 rounded-2xl border border-amber-100">
-            <p className="text-xs font-semibold text-amber-800 mb-2">推荐使用以下 AI 工具</p>
-            <div className="space-y-1.5">
-              {['ChatGPT / Claude（内容生成）', 'Kimi / 豆包（中文优化）', 'Gamma / Beautiful.ai（自动生成PPT）', 'Canva AI / MindShow（一键成片）'].map(tool => (
-                <div key={tool} className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                  <span className="text-xs text-amber-700">{tool}</span>
+          {/* 推荐工具 */}
+          <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4">
+            <p className="text-sm font-semibold text-gray-900 mb-3">推荐AI工具</p>
+            <div className="space-y-2">
+              {[
+                { name: 'ChatGPT / Claude', desc: '生成PPT文字内容和结构框架' },
+                { name: 'Gamma', desc: '一键生成可编辑的精美PPT' },
+                { name: 'Beautiful.ai', desc: '智能排版，自动美化设计' },
+                { name: 'Canva AI', desc: '丰富模板+AI辅助设计' },
+              ].map(tool => (
+                <div key={tool.name} className="flex items-center gap-3">
+                  <div className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                  <div>
+                    <span className="text-xs font-medium text-gray-800">{tool.name}</span>
+                    <span className="text-xs text-gray-500 ml-1.5">{tool.desc}</span>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+
+          {/* 重新开始 */}
+          <button
+            onClick={() => { setStep('layer1'); setSelectedType(''); setLayer2Answers([]); setLayer3Answers([]); setCurrentQ(0); setShowMore(false); }}
+            className="w-full py-3 rounded-xl border border-gray-200 bg-white text-sm text-gray-600 font-medium"
+          >
+            重新选择类型
+          </button>
         </div>
       </div>
     );
