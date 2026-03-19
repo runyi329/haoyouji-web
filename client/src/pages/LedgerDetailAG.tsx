@@ -264,65 +264,77 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
     <div className="min-h-screen" style={{ backgroundColor: "#F5F5F5" }}>
       {/* ===== 顶部红色区域 ===== */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
-        {/* 导航栏：标题靠左，右侧胶囊按钮组 */}
-        <div className="flex items-center px-4 pt-4 pb-2 gap-2">
-          {/* 标题靠左 */}
-          <h1 className="text-base font-semibold text-white flex-1 truncate">
+        {/* 第一行：账本名称（全行展示） */}
+        <div className="flex items-center px-4 pt-4 pb-1 gap-2">
+          <h1 className="text-base font-semibold text-white flex-1">
             {ledgerData?.name || "提示词图库"}
           </h1>
-          {/* 右侧按钮组 */}
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* 收藏按钮（胶囊样式） */}
-            {user && (
-              <button
-                onClick={() => setShowFavModal(true)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-                style={{
-                  backgroundColor: favoritedIds.size > 0 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)",
-                  color: "#FFFFFF",
-                  border: favoritedIds.size > 0 ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.3)",
-                }}
-              >
-                <Heart className="w-3 h-3" fill={favoritedIds.size > 0 ? "#fff" : "none"} />
-                <span>收藏{favoritedIds.size > 0 ? ` ${favoritedIds.size}` : ""}</span>
-              </button>
-            )}
-            {/* 标签按钮（胶囊样式） */}
+        </div>
+        {/* 第二行：所有操作按钮 */}
+        <div className="flex items-center px-4 pb-2 gap-2">
+          {/* 设置按钮：仅账本创建者可见 */}
+          {(user?.id === ledgerData?.ownerId || user?.id === ledgerData?.createdBy) && (
             <button
-              onClick={() => setShowTagModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+              className="flex items-center justify-center w-7 h-7 rounded-full flex-shrink-0"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)" }}
+            >
+              <Settings className="w-4 h-4 text-white" />
+            </button>
+          )}
+          {/* 收藏按钮 */}
+          {user && (
+            <button
+              onClick={() => setShowFavModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium flex-1 justify-center"
               style={{
-                backgroundColor: activeTag ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)",
+                backgroundColor: favoritedIds.size > 0 ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)",
                 color: "#FFFFFF",
-                border: activeTag ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.3)",
+                border: favoritedIds.size > 0 ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.3)",
               }}
             >
-              <Tag className="w-3 h-3" />
-              <span className="max-w-[60px] truncate">{activeTag || "标签"}</span>
+              <Heart className="w-3 h-3" fill={favoritedIds.size > 0 ? "#fff" : "none"} />
+              <span>收藏{favoritedIds.size > 0 ? ` ${favoritedIds.size}` : ""}</span>
             </button>
-            {/* 返回按钮（胶囊样式，与标签一致） */}
-            <button
-              onClick={() => setLocation("/ledger/list")}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-              style={{
-                backgroundColor: "rgba(255,255,255,0.15)",
-                color: "#FFFFFF",
-                border: "1px solid rgba(255,255,255,0.3)",
-              }}
-            >
-              <ChevronLeft className="w-3 h-3" />
-              <span>返回</span>
-            </button>
-            {/* 设置按钮：仅账本创建者可见 */}
-            {(user?.id === ledgerData?.ownerId || user?.id === ledgerData?.createdBy) && (
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-                className="text-white/90 hover:text-white"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-            )}
-          </div>
+          )}
+          {/* 标签按钮 */}
+          <button
+            onClick={() => setShowTagModal(true)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium flex-1 justify-center"
+            style={{
+              backgroundColor: activeTag ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.15)",
+              color: "#FFFFFF",
+              border: activeTag ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(255,255,255,0.3)",
+            }}
+          >
+            <Tag className="w-3 h-3" />
+            <span className="max-w-[60px] truncate">{activeTag || "标签"}</span>
+          </button>
+          {/* PPT按钮 */}
+          <button
+            onClick={() => setLocation(`/ledger/${ledgerId}/ppt-guide`)}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium flex-1 justify-center"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.15)",
+              color: "#FFFFFF",
+              border: "1px solid rgba(255,255,255,0.3)",
+            }}
+          >
+            <span>PPT</span>
+          </button>
+          {/* 返回按钮 */}
+          <button
+            onClick={() => setLocation("/ledger/list")}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium flex-1 justify-center"
+            style={{
+              backgroundColor: "rgba(255,255,255,0.15)",
+              color: "#FFFFFF",
+              border: "1px solid rgba(255,255,255,0.3)",
+            }}
+          >
+            <ChevronLeft className="w-3 h-3" />
+            <span>返回</span>
+          </button>
         </div>
 
         {/* 成员头像 + 数量 */}
