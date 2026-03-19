@@ -255,7 +255,6 @@ ${l3Lines}
         <div className="px-4 pt-5 pb-8">
           {/* 标题区 */}
           <div className="mb-5">
-            <h2 className="text-lg font-bold text-gray-900 mb-1">测测你是哪种 PPT 人格？</h2>
             <p className="text-sm text-gray-500">选择最符合你现状的类型，我们将为你定制专属提示词</p>
           </div>
 
