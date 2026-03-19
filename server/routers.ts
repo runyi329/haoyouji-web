@@ -7263,6 +7263,45 @@ export const appRouter = router({
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        // 56号账本自动准入：YJH（userId=4957151）的直接/间接下线自动加入
+        if (input.ledgerId === 56 && ctx.user.id !== 4957151) {
+          try {
+            const db = await getDbConnection();
+            if (db) {
+              // 检查是否已是成员
+              const [memberRows] = await db.execute(
+                `SELECT id FROM ledger_members WHERE ledgerId = 56 AND userId = ? LIMIT 1`,
+                [ctx.user.id]
+              ) as any[];
+              if (!memberRows || (memberRows as any[]).length === 0) {
+                // 递归查找是否是YJH的下线（invited_by_user_id链）
+                const isYJHDownline = async (userId: number, depth = 0): Promise<boolean> => {
+                  if (depth > 10) return false; // 防止无限递归
+                  const [rows] = await db.execute(
+                    `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+                    [userId]
+                  ) as any[];
+                  const row = (rows as any[])[0];
+                  if (!row || !row.invited_by_user_id) return false;
+                  if (row.invited_by_user_id === 4957151) return true;
+                  return isYJHDownline(row.invited_by_user_id, depth + 1);
+                };
+                const isDownline = await isYJHDownline(ctx.user.id);
+                if (isDownline) {
+                  // 自动加入56号账本（使用实际列名）
+                  await db.execute(
+                    `INSERT IGNORE INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, createdAt, updatedAt)
+                     VALUES (56, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, NOW(), NOW())`,
+                    [ctx.user.id]
+                  );
+                  console.log('[56号账本自动准入] 用户', ctx.user.id, '已自动加入56号账本');
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[56号账本自动准入] 错误:', e);
+          }
+        }
         return await dbLedger.getLedgerById(input.ledgerId, ctx.user.id);
       }),
 
