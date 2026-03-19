@@ -7246,6 +7246,42 @@ export const appRouter = router({
         isArchived: z.boolean().optional().default(false),
       }))
       .query(async ({ ctx, input }) => {
+        // 52号账本自动准入：YJH（userId=4957151）的直接/间接下线自动加入
+        if (ctx.user.id !== 4957151) {
+          try {
+            const db52 = await getDbConnection();
+            if (db52) {
+              const [memberRows52] = await db52.execute(
+                `SELECT id FROM ledger_members WHERE ledgerId = 52 AND userId = ? LIMIT 1`,
+                [ctx.user.id]
+              ) as any[];
+              if (!memberRows52 || (memberRows52 as any[]).length === 0) {
+                const isYJHDownline52 = async (userId: number, depth = 0): Promise<boolean> => {
+                  if (depth > 10) return false;
+                  const [rows] = await db52.execute(
+                    `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+                    [userId]
+                  ) as any[];
+                  const row = (rows as any[])[0];
+                  if (!row || !row.invited_by_user_id) return false;
+                  if (row.invited_by_user_id === 4957151) return true;
+                  return isYJHDownline52(row.invited_by_user_id, depth + 1);
+                };
+                const isDownline52 = await isYJHDownline52(ctx.user.id);
+                if (isDownline52) {
+                  await db52.execute(
+                    `INSERT IGNORE INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, createdAt, updatedAt)
+                     VALUES (52, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, NOW(), NOW())`,
+                    [ctx.user.id]
+                  );
+                  console.log('[52号账本自动准入] 用户', ctx.user.id, '已自动加入52号账本');
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[52号账本自动准入] 错误:', e);
+          }
+        }
         // opinion_book类型账本已在ledgers表中，getUserLedgers会自然包含，无需手动合并
         return await dbLedger.getUserLedgers(ctx.user.id, input.isArchived);
       }),
@@ -7263,6 +7299,42 @@ export const appRouter = router({
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
+        // 52号账本自动准入：YJH（userId=4957151）的直接/间接下线自动加入
+        if (input.ledgerId === 52 && ctx.user.id !== 4957151) {
+          try {
+            const db52b = await getDbConnection();
+            if (db52b) {
+              const [memberRows52b] = await db52b.execute(
+                `SELECT id FROM ledger_members WHERE ledgerId = 52 AND userId = ? LIMIT 1`,
+                [ctx.user.id]
+              ) as any[];
+              if (!memberRows52b || (memberRows52b as any[]).length === 0) {
+                const isYJHDownline52b = async (userId: number, depth = 0): Promise<boolean> => {
+                  if (depth > 10) return false;
+                  const [rows] = await db52b.execute(
+                    `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+                    [userId]
+                  ) as any[];
+                  const row = (rows as any[])[0];
+                  if (!row || !row.invited_by_user_id) return false;
+                  if (row.invited_by_user_id === 4957151) return true;
+                  return isYJHDownline52b(row.invited_by_user_id, depth + 1);
+                };
+                const isDownline52b = await isYJHDownline52b(ctx.user.id);
+                if (isDownline52b) {
+                  await db52b.execute(
+                    `INSERT IGNORE INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, createdAt, updatedAt)
+                     VALUES (52, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, NOW(), NOW())`,
+                    [ctx.user.id]
+                  );
+                  console.log('[52号账本自动准入-getById] 用户', ctx.user.id, '已自动加入52号账本');
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[52号账本自动准入-getById] 错误:', e);
+          }
+        }
         // 56号账本自动准入：YJH（userId=4957151）的直接/间接下线自动加入
         if (input.ledgerId === 56 && ctx.user.id !== 4957151) {
           try {
