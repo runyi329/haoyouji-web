@@ -639,49 +639,51 @@ export default function LedgerDetail() {
         {/* AF/AH 账本：顶部两行布局 */}
         {(isCustomAF || isCustomAH || isCustomAI) ? (
           <div className="px-4 pt-3 pb-2">
-            {/* 第一行：头像 + 名字（全行展示） */}
-            <div className="flex items-center gap-2">
-              {(() => {
-                const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
-                return (
-                  <div
-                    className={(!viewAsUserId && (isOwner || isAdmin)) ? 'cursor-pointer relative' : 'relative'}
-                    onClick={() => { if (!viewAsUserId && (isOwner || isAdmin)) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
-                  >
-                    {viewTarget ? (
-                      <UserAvatar username={viewTarget.username} avatar={viewTarget.avatar} nickname={viewTarget.nickname} size="md" />
-                    ) : user ? (
-                      <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="md" />
-                    ) : null}
-                    {!viewAsUserId && (isOwner || isAdmin) && (
-                      <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/90 flex items-center justify-center">
-                        <Users className="w-2.5 h-2.5 text-blue-600" />
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-              <div className="flex flex-col flex-1 min-w-0">
-                <span className="text-base font-semibold truncate">{ledgerData.name}</span>
-                {viewAsUserId && (() => {
-                  const viewTarget = (membersData as any[])?.find((m: any) => m.userId === viewAsUserId);
-                  return viewTarget ? <span className="text-xs text-white/70">查看: {viewTarget.nickname || viewTarget.username}</span> : null;
+            {/* 第一行：头像 + 名字 + 设置齿轮 */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
+                  return (
+                    <div
+                      className={(!viewAsUserId && (isOwner || isAdmin)) ? 'cursor-pointer relative' : 'relative'}
+                      onClick={() => { if (!viewAsUserId && (isOwner || isAdmin)) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
+                    >
+                      {viewTarget ? (
+                        <UserAvatar username={viewTarget.username} avatar={viewTarget.avatar} nickname={viewTarget.nickname} size="md" />
+                      ) : user ? (
+                        <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="md" />
+                      ) : null}
+                      {!viewAsUserId && (isOwner || isAdmin) && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/90 flex items-center justify-center">
+                          <Users className="w-2.5 h-2.5 text-blue-600" />
+                        </div>
+                      )}
+                    </div>
+                  );
                 })()}
+                <div className="flex flex-col">
+                  <span className="text-base font-semibold">{ledgerData.name}</span>
+                  {viewAsUserId && (() => {
+                    const viewTarget = (membersData as any[])?.find((m: any) => m.userId === viewAsUserId);
+                    return viewTarget ? <span className="text-xs text-white/70">查看: {viewTarget.nickname || viewTarget.username}</span> : null;
+                  })()}
+                </div>
               </div>
-            </div>
-            {/* 第二行：角色标签 + 设置 + 所有操作按钮 */}
-            <div className="flex items-center gap-2 mt-2">
-              {isCustomAH && (
-                <span className="text-xs text-white/70 px-2 py-0.5 rounded-full shrink-0" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{ahRoleName}</span>
-              )}
               {effectiveIsManager && (
-                <button
-                  className="py-1.5 px-2 rounded-full flex items-center justify-center border border-white/60 shrink-0"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
                   onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
                 >
                   <Settings className="w-4 h-4 text-white" />
-                </button>
+                </div>
+              )}
+            </div>
+            {/* 第二行：操作按钮 */}
+            <div className="flex items-center gap-2 mt-2">
+              {isCustomAH && (
+                <span className="text-xs text-white/70 mr-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{ahRoleName}</span>
               )}
               {isCustomAF && !isFunder && (
                 <button
@@ -708,15 +710,6 @@ export default function LedgerDetail() {
                   style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
                 >
                   新建
-                </button>
-              )}
-              {isCustomAH && (
-                <button
-                  onClick={() => setLocation(`/ledger/${ledgerId}/ppt-guide`)}
-                  className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                >
-                  PPT
                 </button>
               )}
               <button
