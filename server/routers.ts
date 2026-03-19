@@ -9832,23 +9832,31 @@ export const appRouter = router({
         let indirectReferralCount = 0;
         if (targetUserId === YJH_USER_ID) {
           try {
-            const [directRows, directIdRows] = await Promise.all([
-              db.execute(sql`SELECT COUNT(*) as cnt FROM users WHERE invited_by_user_id = ${YJH_USER_ID}`),
-              db.execute(sql`SELECT id FROM users WHERE invited_by_user_id = ${YJH_USER_ID}`),
-            ]) as any[];
-            directReferralCount = Number((directRows as any)[0]?.[0]?.cnt ?? (directRows as any)[0]?.cnt ?? 0);
-            const directIds = ((directIdRows as any)[0] || directIdRows).map((r: any) => r.id || r[0]);
-            let queue = [...directIds];
-            while (queue.length > 0) {
-              const batch = queue.splice(0, 100);
-              const placeholders = batch.map(() => '?').join(',');
-              const childRows = await db.execute(
-                sql.raw(`SELECT id FROM users WHERE invited_by_user_id IN (${placeholders})`, batch)
-              ) as any;
-              const children = ((childRows as any)[0] || childRows);
-              for (const child of children) {
-                indirectReferralCount++;
-                queue.push(child.id || child[0]);
+            const rawDb = await getDbConnection();
+            if (rawDb) {
+              // 直推
+              const [directRows] = await rawDb.execute(
+                `SELECT id FROM users WHERE invited_by_user_id = ?`, [YJH_USER_ID]
+              ) as any[];
+              const directIds = (directRows as any[]).map((r: any) => r.id);
+              directReferralCount = directIds.length;
+              // 间推：递归查询所有层级下线
+              let queue = [...directIds];
+              const visited = new Set(directIds);
+              while (queue.length > 0) {
+                const batch = queue.splice(0, 100);
+                const placeholders = batch.map(() => '?').join(',');
+                const [childRows] = await rawDb.execute(
+                  `SELECT id FROM users WHERE invited_by_user_id IN (${placeholders})`, batch
+                ) as any[];
+                for (const child of (childRows as any[])) {
+                  const childId = child.id;
+                  if (!visited.has(childId)) {
+                    visited.add(childId);
+                    indirectReferralCount++;
+                    queue.push(childId);
+                  }
+                }
               }
             }
           } catch (e) {
