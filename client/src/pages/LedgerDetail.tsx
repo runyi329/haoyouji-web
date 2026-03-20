@@ -277,6 +277,8 @@ export default function LedgerDetail() {
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   const [showInviteTree, setShowInviteTree] = useState(false);
+  const [editingNoteUserId, setEditingNoteUserId] = useState<number | null>(null);
+  const [noteInputValue, setNoteInputValue] = useState('');
   // 视角切换（AF 账本管理员专属）
   // viewAsUserId 从 URL 参数读取，确保刷新和子页面跳转后保持视角
   const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
@@ -395,6 +397,12 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF && showInviteTree }
   );
+  const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
+    onSuccess: () => {
+      setEditingNoteUserId(null);
+      trpc.useUtils().ledger.afGetInviteTree.invalidate();
+    }
+  });
   // AH 账本：公司列表和报税授权
   const { data: ahCompanies, refetch: refetchAhCompanies } = trpc.ledger.ahListCompanies.useQuery(
     { ledgerId: Number(ledgerId) },
@@ -2081,24 +2089,62 @@ export default function LedgerDetail() {
               ) : (
                 <div className="space-y-2">
                   {inviteTreeData.users.map((u: any) => (
-                    <div key={u.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl" style={{ backgroundColor: '#F9F9F9' }}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: u.layer === 1 ? '#D32F2F' : u.layer === 2 ? '#E57373' : '#EF9A9A' }}>
-                          {u.name.charAt(0)}
+                    <div key={u.id} className="rounded-xl overflow-hidden" style={{ backgroundColor: '#F9F9F9' }}>
+                      {/* 主行 */}
+                      <div className="flex items-center justify-between py-2.5 px-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: u.layer === 1 ? '#D32F2F' : u.layer === 2 ? '#E57373' : '#EF9A9A' }}>
+                            {u.name.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-800">{u.name}</div>
+                            {u.note ? (
+                              <div className="text-xs text-amber-700 truncate">{u.note}</div>
+                            ) : (
+                              u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt} 加入</div>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-800">{u.name}</div>
-                          {u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt} 加入</div>}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.payoutRatio > 0 ? '#FFF8E1' : '#F5F5F5', color: u.payoutRatio > 0 ? '#B8860B' : '#9E9E9E' }}>
+                            {u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}
+                          </span>
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>
+                            第{u.layer}层
+                          </span>
+                          <button
+                            onClick={() => { setEditingNoteUserId(u.id); setNoteInputValue(u.note || ''); }}
+                            className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400"
+                            style={{ backgroundColor: '#EEEEEE', fontSize: 13 }}
+                              title="添加备注"
+                          >注</button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.payoutRatio > 0 ? '#FFF8E1' : '#F5F5F5', color: u.payoutRatio > 0 ? '#B8860B' : '#9E9E9E' }}>
-                          {u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>
-                          第{u.layer}层
-                        </span>
-                      </div>
+                      {/* 备注编辑区 */}
+                      {editingNoteUserId === u.id && (
+                        <div className="px-3 pb-3 flex gap-2">
+                          <input
+                            autoFocus
+                            value={noteInputValue}
+                            onChange={e => setNoteInputValue(e.target.value)}
+                            placeholder="输入备注（最多100字）"
+                            maxLength={100}
+                            className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-gray-200 outline-none"
+                            style={{ backgroundColor: '#fff' }}
+                          />
+                          <button
+                            onClick={() => saveInviteNoteMutation.mutate({ ledgerId: Number(ledgerId), targetUserId: u.id, note: noteInputValue })}
+                            disabled={saveInviteNoteMutation.isPending}
+                            className="text-xs px-3 py-1.5 rounded-lg text-white font-medium"
+                            style={{ backgroundColor: '#D32F2F' }}
+                          >保存</button>
+                          <button
+                            onClick={() => setEditingNoteUserId(null)}
+                            className="text-xs px-2 py-1.5 rounded-lg text-gray-500"
+                            style={{ backgroundColor: '#EEEEEE' }}
+                          >取消</button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
