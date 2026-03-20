@@ -9920,7 +9920,37 @@ export const appRouter = router({
           }
           // 按层数排序
           result.sort((a, b) => a.layer - b.layer || a.name.localeCompare(b.name));
-          return { users: result };
+          // 查询每个用户作为受益人的拨比总和（beneficiary_user_id=该用户，汇总所有下线给他的拨比之和）
+          let payoutMap = new Map<number, number>();
+          if (result.length > 0) {
+            try {
+              await rawDb.execute(`
+                CREATE TABLE IF NOT EXISTS af_payout_ratios (
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  ledger_id INT NOT NULL,
+                  beneficiary_user_id INT NOT NULL,
+                  source_user_id INT NOT NULL,
+                  ratio DECIMAL(5,2) NOT NULL,
+                  created_at DATETIME DEFAULT NOW(),
+                  updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+                  UNIQUE KEY uq_payout (ledger_id, beneficiary_user_id, source_user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+              `);
+              const userIds = result.map(u => u.id);
+              const placeholders2 = userIds.map(() => '?').join(',');
+              // 查询每个用户作为受益人的拨比总和
+              const [payoutRows] = await rawDb.execute(
+                `SELECT beneficiary_user_id, SUM(ratio) as total_ratio FROM af_payout_ratios WHERE ledger_id = ? AND beneficiary_user_id IN (${placeholders2}) GROUP BY beneficiary_user_id`,
+                [input.ledgerId, ...userIds]
+              ) as any[];
+              for (const row of (payoutRows as any[])) {
+                payoutMap.set(row.beneficiary_user_id, parseFloat(row.total_ratio));
+              }
+            } catch (e) {
+              console.error('[AF] 拨比查询失败:', e);
+            }
+          }
+          return { users: result.map(u => ({ ...u, payoutRatio: payoutMap.get(u.id) ?? 0 })) };
         } catch (e) {
           console.error('[AF] 邀请树查询失败:', e);
           return { users: [] };

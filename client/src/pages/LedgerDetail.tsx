@@ -2091,7 +2091,10 @@ export default function LedgerDetail() {
                           {u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt} 加入</div>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.payoutRatio > 0 ? '#FFF8E1' : '#F5F5F5', color: u.payoutRatio > 0 ? '#B8860B' : '#9E9E9E' }}>
+                          {u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}
+                        </span>
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>
                           第{u.layer}层
                         </span>
