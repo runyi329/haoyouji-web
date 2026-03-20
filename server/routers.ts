@@ -9866,6 +9866,66 @@ export const appRouter = router({
 
         return { total: recharged + manual, inviteCount, directReferralCount, indirectReferralCount, positions };
       }),
+    // AF 邀请树：递归查询所有被邀请用户并标注层数（仅YJH本人可调用）
+    afGetInviteTree: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 视角切换（仅owner/admin可viewAs）
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          const memberCheck = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+          ) as any;
+          const myRole = (memberCheck[0]?.[0] ?? memberCheck[0])?.role;
+          if (myRole === 'owner' || myRole === 'admin') {
+            targetUserId = input.viewAsUserId;
+          }
+        }
+        const YJH_USER_ID = 4957151;
+        if (targetUserId !== YJH_USER_ID) {
+          return { users: [] };
+        }
+        try {
+          const rawDb = await getDbConnection();
+          if (!rawDb) return { users: [] };
+          // BFS 递归查询所有层级下线，记录层数
+          type InviteUser = { id: number; name: string; layer: number; invitedAt: string | null };
+          const result: InviteUser[] = [];
+          let queue: Array<{ id: number; layer: number }> = [{ id: YJH_USER_ID, layer: 0 }];
+          const visited = new Set<number>([YJH_USER_ID]);
+          while (queue.length > 0) {
+            const batch = queue.splice(0, 100);
+            const placeholders = batch.map(() => '?').join(',');
+            const parentIds = batch.map(b => b.id);
+            const layerMap = new Map(batch.map(b => [b.id, b.layer]));
+            const [childRows] = await rawDb.execute(
+              `SELECT id, name, invited_by_user_id, invited_at FROM users WHERE invited_by_user_id IN (${placeholders})`,
+              parentIds
+            ) as any[];
+            for (const child of (childRows as any[])) {
+              if (!visited.has(child.id)) {
+                visited.add(child.id);
+                const parentLayer = layerMap.get(child.invited_by_user_id) ?? 0;
+                const layer = parentLayer + 1;
+                result.push({
+                  id: child.id,
+                  name: child.name || '未知用户',
+                  layer,
+                  invitedAt: child.invited_at ? new Date(child.invited_at).toLocaleDateString('zh-CN') : null
+                });
+                queue.push({ id: child.id, layer });
+              }
+            }
+          }
+          // 按层数排序
+          result.sort((a, b) => a.layer - b.layer || a.name.localeCompare(b.name));
+          return { users: result };
+        } catch (e) {
+          console.error('[AF] 邀请树查询失败:', e);
+          return { users: [] };
+        }
+      }),
     // AF 充值记录 + 手动调账记录合并（供用户查看）
     afGetMyRechargeHistory: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
