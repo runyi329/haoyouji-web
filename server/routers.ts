@@ -9944,7 +9944,7 @@ export const appRouter = router({
           ) as any;
           const order = (orderRows[0]?.[0] ?? orderRows[0]);
           if (!order) throw new Error('订单不存在');
-          if (order.status !== 'completed') throw new Error('只有已成交的买单才能委托卖出');
+          if (order.status !== 'completed' && order.status !== 'pending') throw new Error('只有委托中或已成交的买单才能委托卖出');
           if (order.sell_status === 'selling') throw new Error('该订单已在委托卖出中，请先撤销后再重新委托');
           if (order.sell_status === 'sold') throw new Error('该订单已卖出，无法重复操作');
           
