@@ -9920,7 +9920,7 @@ export const appRouter = router({
           }
           // 按层数排序
           result.sort((a, b) => a.layer - b.layer || a.name.localeCompare(b.name));
-          // 查询每个用户作为受益人的拨比总和（beneficiary_user_id=该用户，汇总所有下线给他的拨比之和）
+          // 查询每个用户作为下单人、自己作为受益人的拨比（source_user_id=beneficiary_user_id=该用户）
           let payoutMap = new Map<number, number>();
           if (result.length > 0) {
             try {
@@ -9938,13 +9938,13 @@ export const appRouter = router({
               `);
               const userIds = result.map(u => u.id);
               const placeholders2 = userIds.map(() => '?').join(',');
-              // 查询每个用户作为受益人的拨比总和
+              // 查询每个用户自己下单、自己受益的拨比（source_user_id = beneficiary_user_id = 该用户）
               const [payoutRows] = await rawDb.execute(
-                `SELECT beneficiary_user_id, SUM(ratio) as total_ratio FROM af_payout_ratios WHERE ledger_id = ? AND beneficiary_user_id IN (${placeholders2}) GROUP BY beneficiary_user_id`,
+                `SELECT source_user_id, ratio FROM af_payout_ratios WHERE ledger_id = ? AND source_user_id IN (${placeholders2}) AND source_user_id = beneficiary_user_id`,
                 [input.ledgerId, ...userIds]
               ) as any[];
               for (const row of (payoutRows as any[])) {
-                payoutMap.set(row.beneficiary_user_id, parseFloat(row.total_ratio));
+                payoutMap.set(row.source_user_id, parseFloat(row.ratio));
               }
             } catch (e) {
               console.error('[AF] 拨比查询失败:', e);
