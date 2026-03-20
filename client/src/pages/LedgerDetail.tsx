@@ -2105,7 +2105,10 @@ export default function LedgerDetail() {
                               return (
                                 <div className="flex flex-col gap-0">
                                   {displayNote && <div className="text-xs text-amber-700 truncate">{displayNote}</div>}
-                                  {u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt}</div>}
+                                  <div className="flex items-center gap-2">
+                                    {u.invitedAt && <span className="text-xs text-gray-400">{u.invitedAt}</span>}
+                                    {u.inviterName && <span className="text-xs text-gray-400">推荐人：{u.inviterName}</span>}
+                                  </div>
                                 </div>
                               );
                             })()}
