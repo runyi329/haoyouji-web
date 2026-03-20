@@ -276,6 +276,7 @@ export default function LedgerDetail() {
 
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
+  const [showInviteTree, setShowInviteTree] = useState(false);
   // 视角切换（AF 账本管理员专属）
   // viewAsUserId 从 URL 参数读取，确保刷新和子页面跳转后保持视角
   const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
@@ -388,6 +389,11 @@ export default function LedgerDetail() {
   const { data: funderAssetOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF && isFunder }
+  );
+  // AF 账本：YJH邀请树（仅当弹窗打开时才加载）
+  const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { enabled: isCustomAF && showInviteTree }
   );
   // AH 账本：公司列表和报税授权
   const { data: ahCompanies, refetch: refetchAhCompanies } = trpc.ledger.ahListCompanies.useQuery(
@@ -902,7 +908,7 @@ export default function LedgerDetail() {
               )}
               {/* 卡片 2：推荐人数（资金方不显示） */}
               {!isFunder && (
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+              <div className="rounded-2xl px-4 py-3 cursor-pointer active:opacity-70" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }} onClick={() => setShowInviteTree(true)}>
                 <div className="text-xs text-white/70 mb-1">推荐</div>
                 {((afTotalAsset as any)?.directReferralCount > 0 || (afTotalAsset as any)?.indirectReferralCount > 0) ? (
                   <div className="space-y-0.5">
@@ -2052,6 +2058,51 @@ export default function LedgerDetail() {
           onOpenChange={setShowMembersDialog}
           members={membersData}
         />
+      )}
+
+      {/* AF 账本：YJH邀请树弹窗 */}
+      {showInviteTree && (
+        <div className="fixed inset-0 z-[100] flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={() => setShowInviteTree(false)}>
+          <div className="mt-auto mx-0 rounded-t-3xl overflow-hidden flex flex-col" style={{ backgroundColor: '#fff', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+            {/* 弹窗标题栏 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <div className="text-base font-bold text-gray-900">邀请名单</div>
+                <div className="text-xs text-gray-400 mt-0.5">共 {inviteTreeData?.users?.length ?? 0} 人</div>
+              </div>
+              <button onClick={() => setShowInviteTree(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
+            </div>
+            {/* 内容区 */}
+            <div className="overflow-y-auto flex-1 px-4 py-3">
+              {inviteTreeLoading ? (
+                <div className="text-center py-10 text-gray-400 text-sm">加载中...</div>
+              ) : !inviteTreeData?.users?.length ? (
+                <div className="text-center py-10 text-gray-400 text-sm">暂无邀请记录</div>
+              ) : (
+                <div className="space-y-2">
+                  {inviteTreeData.users.map((u: any) => (
+                    <div key={u.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl" style={{ backgroundColor: '#F9F9F9' }}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: u.layer === 1 ? '#D32F2F' : u.layer === 2 ? '#E57373' : '#EF9A9A' }}>
+                          {u.name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-800">{u.name}</div>
+                          {u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt} 加入</div>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>
+                          第{u.layer}层
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* AF/AH 视角切换横幅 */}
