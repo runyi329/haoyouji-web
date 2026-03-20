@@ -9950,13 +9950,85 @@ export const appRouter = router({
               console.error('[AF] 拨比查询失败:', e);
             }
           }
-          return { users: result.map(u => ({ ...u, payoutRatio: payoutMap.get(u.id) ?? 0 })) };
+          // 查询每个用户的备注
+          let noteMap = new Map<number, string>();
+          if (result.length > 0) {
+            try {
+              await rawDb.execute(`
+                CREATE TABLE IF NOT EXISTS af_invite_notes (
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  ledger_id INT NOT NULL,
+                  author_user_id INT NOT NULL,
+                  target_user_id INT NOT NULL,
+                  note TEXT NOT NULL,
+                  created_at DATETIME DEFAULT NOW(),
+                  updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+                  UNIQUE KEY uq_note (ledger_id, author_user_id, target_user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+              `);
+              const userIds2 = result.map(u => u.id);
+              const placeholders3 = userIds2.map(() => '?').join(',');
+              const [noteRows] = await rawDb.execute(
+                `SELECT target_user_id, note FROM af_invite_notes WHERE ledger_id = ? AND author_user_id = ? AND target_user_id IN (${placeholders3})`,
+                [input.ledgerId, YJH_USER_ID, ...userIds2]
+              ) as any[];
+              for (const row of (noteRows as any[])) {
+                noteMap.set(row.target_user_id, row.note);
+              }
+            } catch (e) {
+              console.error('[AF] 备注查询失败:', e);
+            }
+          }
+          return { users: result.map(u => ({ ...u, payoutRatio: payoutMap.get(u.id) ?? 0, note: noteMap.get(u.id) ?? '' })) };
         } catch (e) {
           console.error('[AF] 邀请树查询失败:', e);
           return { users: [] };
         }
       }),
-    // AF 充值记录 + 手动调账记录合并（供用户查看）
+    // AF 邀请名单备注：保存备注
+    afSaveInviteNote: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), targetUserId: z.number(), note: z.string().max(100) }))
+      .mutation(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        // 只有YJH本人或owner/admin可以操作
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const myRole = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (ctx.user.id !== YJH_USER_ID && myRole !== 'owner' && myRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const rawDb = await getDbConnection();
+        if (!rawDb) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        await rawDb.execute(`
+          CREATE TABLE IF NOT EXISTS af_invite_notes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            author_user_id INT NOT NULL COMMENT '备注人（YJH）',
+            target_user_id INT NOT NULL COMMENT '被备注的用户',
+            note TEXT NOT NULL,
+            created_at DATETIME DEFAULT NOW(),
+            updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+            UNIQUE KEY uq_note (ledger_id, author_user_id, target_user_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        if (input.note.trim() === '') {
+          await rawDb.execute(
+            `DELETE FROM af_invite_notes WHERE ledger_id = ? AND author_user_id = ? AND target_user_id = ?`,
+            [input.ledgerId, YJH_USER_ID, input.targetUserId]
+          );
+        } else {
+          await rawDb.execute(
+            `INSERT INTO af_invite_notes (ledger_id, author_user_id, target_user_id, note)
+             VALUES (?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE note = ?, updated_at = NOW()`,
+            [input.ledgerId, YJH_USER_ID, input.targetUserId, input.note.trim(), input.note.trim()]
+          );
+        }
+        return { success: true };
+      }),
+    // AF 充値记录 + 手动调账记录合并（供用户查看）
     afGetMyRechargeHistory: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
