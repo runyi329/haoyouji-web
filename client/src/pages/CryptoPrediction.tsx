@@ -1035,9 +1035,9 @@ export default function CryptoPrediction() {
             {/* 委卖模式：已成交买入订单列表选择 */}
             {orderSide === "sell" && (() => {
               const completedBuyOrders = (ordersData as any[] || []).filter(
-                (o: any) => o.status === 'completed' && o.coin === coin.name && !o.sellStatus
+                (o: any) => (o.status === 'completed' || o.status === 'pending') && o.coin === coin.name && !o.sellStatus
               );
-              // 只显示未卖出且未委托卖的订单
+              // 显示未卖出且未委托卖的订单（包括委托中和已成交的买单）
               return (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1 mb-1">
@@ -1085,7 +1085,10 @@ export default function CryptoPrediction() {
                                 {isSelected && <span className="text-white text-[10px] font-bold">✓</span>}
                               </div>
                               <div className="flex flex-col gap-0.5">
-                                <span className="text-xs text-white font-medium">{o.coin}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-white font-medium">{o.coin}</span>
+                                  {o.status === 'pending' && <span className="text-[9px] px-1 py-0.5 rounded" style={{backgroundColor:'rgba(245,158,11,0.2)',color:'#F59E0B'}}>委托中</span>}
+                                </div>
                                 <span className="text-[10px] text-gray-500">买入价 {parseFloat(o.limitPrice).toLocaleString()} USDT</span>
                               </div>
                             </div>
