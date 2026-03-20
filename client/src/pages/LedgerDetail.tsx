@@ -279,6 +279,7 @@ export default function LedgerDetail() {
   const [showInviteTree, setShowInviteTree] = useState(false);
   const [editingNoteUserId, setEditingNoteUserId] = useState<number | null>(null);
   const [noteInputValue, setNoteInputValue] = useState('');
+  const [localNotes, setLocalNotes] = useState<Record<number, string>>({});
   // 视角切换（AF 账本管理员专属）
   // viewAsUserId 从 URL 参数读取，确保刷新和子页面跳转后保持视角
   const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
@@ -398,9 +399,10 @@ export default function LedgerDetail() {
     { enabled: isCustomAF && showInviteTree }
   );
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      // 立即更新本地显示
+      setLocalNotes(prev => ({ ...prev, [variables.targetUserId]: variables.note.trim() }));
       setEditingNoteUserId(null);
-      trpc.useUtils().ledger.afGetInviteTree.invalidate();
     }
   });
   // AH 账本：公司列表和报税授权
@@ -2098,11 +2100,14 @@ export default function LedgerDetail() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium text-gray-800">{u.name}</div>
-                            {u.note ? (
-                              <div className="text-xs text-amber-700 truncate">{u.note}</div>
-                            ) : (
-                              u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt} 加入</div>
-                            )}
+                            {(() => {
+                              const displayNote = localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '');
+                              return displayNote ? (
+                                <div className="text-xs text-amber-700 truncate">{displayNote}</div>
+                              ) : (
+                                u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt} 加入</div>
+                              );
+                            })()}
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
