@@ -2102,10 +2102,11 @@ export default function LedgerDetail() {
                             <div className="text-sm font-medium text-gray-800">{u.name}</div>
                             {(() => {
                               const displayNote = localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '');
-                              return displayNote ? (
-                                <div className="text-xs text-amber-700 truncate">{displayNote}</div>
-                              ) : (
-                                u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt} 加入</div>
+                              return (
+                                <div className="flex flex-col gap-0">
+                                  {displayNote && <div className="text-xs text-amber-700 truncate">{displayNote}</div>}
+                                  {u.invitedAt && <div className="text-xs text-gray-400">{u.invitedAt}</div>}
+                                </div>
                               );
                             })()}
                           </div>
