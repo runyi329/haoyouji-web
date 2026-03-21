@@ -76,7 +76,7 @@ async function getCroppedImg(
     outH
   );
 
-  return canvas.toDataURL("image/jpeg", 0.85);
+  return canvas.toDataURL("image/jpeg", 0.72);
 }
 
 // ===== 比例选项 =====
@@ -441,6 +441,8 @@ function PhotoGroupManager() {
                     src={photo.imageUrl}
                     alt=""
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <button
                     onClick={() => {
@@ -525,6 +527,8 @@ function AutoAspectPhoto({ src, fixedHeight = 240 }: { src: string; fixedHeight?
         src={src}
         alt=""
         className="w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
         onLoad={onLoad}
       />
     </div>
@@ -814,7 +818,7 @@ function PptCompareManager() {
                   <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
                     {pages.map((page: any) => (
                       <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: '80px', height: '60px' }}>
-                        <img src={page.imageUrl} alt={`第${page.pageNum}张`} className="w-full h-full object-cover" />
+                        <img src={page.imageUrl} alt={`第${page.pageNum}张`} className="w-full h-full object-cover" loading="lazy" decoding="async" />
                       </div>
                     ))}
                   </div>
@@ -948,14 +952,13 @@ function PptCompareGroupView({ group }: { group: any }) {
           >
             {group.pagesA.map((page: any) => (
               <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 shadow-sm" style={{ width: `${SLIDE_W}px`, height: `${SLIDE_H}px` }}>
-                <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" />
-              </div>
-            ))}
+                <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" loading="lazy" decoding="async" />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* PPT-B */}
+          {/* B侧 */
       {group.pagesB && group.pagesB.length > 0 && (
         <div>
           <div className="px-4 mb-1">
@@ -971,16 +974,18 @@ function PptCompareGroupView({ group }: { group: any }) {
           >
             {group.pagesB.map((page: any) => (
               <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 shadow-sm" style={{ width: `${SLIDE_W}px`, height: `${SLIDE_H}px` }}>
-                <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" />
-              </div>
-            ))}
+                 <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" loading="lazy" decoding="async" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      )}
+      ))}
+    </div>
+  );
+}
 
-      {/* 滑动提示 */}
-      <div className="px-4 mt-1.5">
-        <p className="text-xs text-gray-400">
+// ===== 主页面组件      <p className="text-xs text-gray-400">
           左右同步滑动对比 (共{maxPages}页)
         </p>
       </div>
