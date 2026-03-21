@@ -450,7 +450,7 @@ export default function LedgerDetail() {
   const [aiCarouselIdx, setAiCarouselIdx] = useState(0);
   const aiCarouselRef = useRef<HTMLDivElement>(null);
   // AI 账本：当前选中的商品（null=列表页, 'icecream'=冰淇淋详情, 'chocolate'=巧克力详情）
-  const [aiSelectedProduct, setAiSelectedProduct] = useState<'icecream' | 'chocolate' | null>(null);
+  const [aiSelectedProduct, setAiSelectedProduct] = useState<'icecream' | 'chocolate' | 'charger' | null>(null);
 
   // AI 账本：商品数据（硬编码，宜家系列）
   const aiProducts = isCustomAI ? {
@@ -498,6 +498,29 @@ export default function LedgerDetail() {
         'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_5.jpg',
         'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_6.jpg',
         'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_7.jpg',
+      ],
+    },
+    charger: {
+      id: 'charger',
+      name: '隔空无线充电塔',
+      subtitle: '真无线隔空充电 -- 3米范围 -- 同时4台设备',
+      basePrice: 666,
+      originalPrice: 999,
+      cover: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/carousel_w1.jpg',
+      tag: '黑科技 -- 隔空充电',
+      carouselImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/carousel_w1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/carousel_w2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/carousel_w3.jpg',
+      ],
+      detailImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/detail_w1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/detail_w2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/detail_w3.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/detail_w4.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/detail_w5.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/detail_w6.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/detail_w7.jpg',
       ],
     },
   } : null;
@@ -2259,9 +2282,9 @@ export default function LedgerDetail() {
         <div className="pb-20 pt-2" style={{ backgroundColor: '#FFF0F5' }}>
           {/* 系列标题 */}
           <div className="px-4 pt-3 pb-2">
-            <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-2" style={{ background: '#E8F5E9', color: '#2E7D32' }}>日本原装进口 -- 宜家精选系列</div>
+            <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-2" style={{ background: '#E8F5E9', color: '#2E7D32' }}>AI精选 -- 品质生活系列</div>
             <h2 className="text-lg font-bold text-gray-900">精选商品</h2>
-            <p className="text-xs text-gray-500 mt-0.5">日本原装进口，品质保证，限时特惠中</p>
+            <p className="text-xs text-gray-500 mt-0.5">从美食到科技，品质保证，限时特惠中</p>
           </div>
           {/* 商品卡片列表 */}
           <div className="px-4 space-y-3">
@@ -2353,7 +2376,7 @@ export default function LedgerDetail() {
               <span className="text-sm text-gray-400 line-through">¥{Number(aiProduct.originalPrice).toFixed(2)}</span>
               <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#E91E63', color: '#fff' }}>限时特惠</span>
             </div>
-            <p className="text-xs text-gray-400 mt-1">SKU: {aiProduct.id === 'icecream' ? 'RC-DailyChiko-001' : 'RC-Royce-001'}</p>
+            <p className="text-xs text-gray-400 mt-1">SKU: {aiProduct.id === 'icecream' ? 'RC-DailyChiko-001' : aiProduct.id === 'chocolate' ? 'RC-Royce-001' : 'WC-AirCharge-001'}</p>
           </div>
 
           {/* 4. 数量选择器 */}
