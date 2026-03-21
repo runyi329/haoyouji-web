@@ -687,18 +687,20 @@ function PptCompareManager() {
     setIsCropMode(true);
   };
 
-  // 裁剪队列：当前张确认裁剪
-  const handleCropQueueConfirm = (croppedBase64: string) => {
-    const newResults = [...croppedResults, croppedBase64];
+  // 裁剪队列：完成当前张，继续下一张
+  const handleCropQueueConfirm = async (croppedDataUrl: string) => {
+    const newResults = [...croppedResults, croppedDataUrl];
     setCroppedResults(newResults);
 
     if (cropQueueIndex + 1 < cropQueue.length) {
-      // 还有下一张，继续裁剪
       setCropQueueIndex(cropQueueIndex + 1);
     } else {
-      // 全部裁剪完，开始上传
       setIsCropMode(false);
-      handleUploadCroppedImages(newResults);
+      // 传入当前已有图片数量，用于追加pageNum
+      const existingCount = uploadingSide
+        ? (pptGroups?.find((g: any) => g.id === uploadingSide.groupId)?.[uploadingSide.side === 'A' ? 'pagesA' : 'pagesB']?.length || 0)
+        : 0;
+      handleUploadCroppedImages(newResults, existingCount);
     }
   };
 
@@ -719,21 +721,19 @@ function PptCompareManager() {
     }
   };
 
-  // 上传已裁剪的图片列表
-  const handleUploadCroppedImages = async (images: string[]) => {
+  // 上传已裁剪的图片列表（追加模式，不清空旧图片）
+  const handleUploadCroppedImages = async (images: string[], existingCount: number = 0) => {
     if (!uploadingSide || images.length === 0) return;
     const { groupId, side } = uploadingSide;
     setUploadProgress({ current: 0, total: images.length });
 
     try {
-      await clearSideMutation.mutateAsync({ groupId, side });
-
       for (let i = 0; i < images.length; i++) {
         await uploadPageMutation.mutateAsync({
           groupId,
           side,
           imageData: images[i],
-          pageNum: i + 1,
+          pageNum: existingCount + i + 1,
         });
         setUploadProgress({ current: i + 1, total: images.length });
       }
@@ -914,30 +914,46 @@ function PptCompareManager() {
                 )}
 
                 {/* 上传按鈕 */}
-                <button
-                  onClick={() => handleSelectImages(group.id, side)}
-                  disabled={isUploading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium border-2 border-dashed transition-all"
-                  style={{
-                    borderColor: isUploading ? '#E91E63' : '#E0E0E0',
-                    color: isUploading ? '#E91E63' : '#999',
-                    background: isUploading ? '#FFF5F7' : '#FAFAFA',
-                  }}
-                >
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      {uploadProgress ? `上传中 ${uploadProgress.current}/${uploadProgress.total}...` : '上传中...'}
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      {pages && pages.length > 0 ? '重新上传图片' : '批量上传图片'}
-                    </>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSelectImages(group.id, side)}
+                    disabled={isUploading || (pages && pages.length >= 50)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium border-2 border-dashed transition-all"
+                    style={{
+                      borderColor: isUploading ? '#E91E63' : (pages && pages.length >= 50) ? '#E0E0E0' : '#E91E63',
+                      color: isUploading ? '#E91E63' : (pages && pages.length >= 50) ? '#ccc' : '#E91E63',
+                      background: isUploading ? '#FFF5F7' : (pages && pages.length >= 50) ? '#FAFAFA' : '#FFF5F7',
+                    }}
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        {uploadProgress ? `上传中 ${uploadProgress.current}/${uploadProgress.total}...` : '上传中...'}
+                      </>
+                    ) : (pages && pages.length >= 50) ? (
+                      <span>已达上限50张</span>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        {pages && pages.length > 0 ? `继续添加图片（${pages.length}/50）` : '上传图片（最多50张）'}
+                      </>
+                    )}
+                  </button>
+                  {pages && pages.length > 0 && !isUploading && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('确定清空所有图片重新上传？')) return;
+                        await clearSideMutation.mutateAsync({ groupId: group.id, side });
+                        await utils.beauty.pptCompare.listGroups.invalidate();
+                      }}
+                      className="px-3 py-2.5 rounded-xl text-xs border border-gray-200 text-gray-400 bg-gray-50"
+                    >
+                      清空
+                    </button>
                   )}
-                </button>
-                {!isUploading && (
-                  <p className="text-center text-xs text-gray-400">支持同时选择多张，按顺序排列展示</p>
+                </div>
+                {!isUploading && !(pages && pages.length >= 50) && (
+                  <p className="text-center text-xs text-gray-400">支持同时选择多张，按顺序追加</p>
                 )}
               </div>
             );
