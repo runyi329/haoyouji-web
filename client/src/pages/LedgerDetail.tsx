@@ -449,28 +449,62 @@ export default function LedgerDetail() {
   const [aiProductQty, setAiProductQty] = useState(1);
   const [aiCarouselIdx, setAiCarouselIdx] = useState(0);
   const aiCarouselRef = useRef<HTMLDivElement>(null);
+  // AI 账本：当前选中的商品（null=列表页, 'icecream'=冰淇淋详情, 'chocolate'=巧克力详情）
+  const [aiSelectedProduct, setAiSelectedProduct] = useState<'icecream' | 'chocolate' | null>(null);
 
-  // AI 账本：彩虹冰淇淋商品数据（硬编码）
-  const aiProduct = isCustomAI ? {
-    name: '日本进口 Daily Chiko 彩虹冰淇淋',
-    subtitle: '七彩缤纷 -- 梦幻口感 -- 日本原装进口',
-    basePrice: 19.9,
-    originalPrice: 29.9,
+  // AI 账本：商品数据（硬编码，宜家系列）
+  const aiProducts = isCustomAI ? {
+    icecream: {
+      id: 'icecream',
+      name: '日本进口 Daily Chiko 彩虹冰淇淋',
+      subtitle: '七彩缤纷 -- 梦幻口感 -- 日本原装进口',
+      basePrice: 19.9,
+      originalPrice: 29.9,
+      cover: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_1.jpg',
+      tag: 'Daily Chiko -- 日本原装进口',
+      carouselImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_3.jpg',
+      ],
+      detailImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_3.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_4.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_5.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_6.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_7.jpg',
+      ],
+    },
+    chocolate: {
+      id: 'chocolate',
+      name: '日本进口 Royce 生巧克力',
+      subtitle: '北海道直送 -- 丝滑入口即化 -- 顶级可可原料',
+      basePrice: 55,
+      originalPrice: 79.9,
+      cover: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_carousel_1.jpg',
+      tag: 'Royce -- 北海道直送',
+      carouselImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_carousel_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_carousel_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_carousel_3.jpg',
+      ],
+      detailImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_3.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_4.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_5.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_6.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/haoyouji-ledger/products/chocolate_detail_7.jpg',
+      ],
+    },
   } : null;
-  const aiProductImages = isCustomAI ? [
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_1.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_2.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_3.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_4.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_5.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_6.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_7.jpg',
-  ] : [];
-  const aiCarouselImages = [
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_1.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_2.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_3.jpg',
-  ];
+  // 当前选中商品的快捷引用
+  const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
+  const aiProductImages = aiProduct ? aiProduct.detailImages : [];
+  const aiCarouselImages = aiProduct ? aiProduct.carouselImages : [];
   // 食物热量扫描相关 state
   const [foodScanImage, setFoodScanImage] = useState<string | null>(null); // base64 图片
   const [foodScanResult, setFoodScanResult] = useState<any>(null); // AI 分析结果
@@ -2220,9 +2254,63 @@ export default function LedgerDetail() {
           )}
         </div>
       )}
-      {/* AI 账本：商品详情页（按 S1 第十三章规范） */}
+      {/* AI 账本：商品列表页（未选中商品时显示） */}
+      {isCustomAI && !aiSelectedProduct && aiProducts && (
+        <div className="pb-20 pt-2" style={{ backgroundColor: '#FFF0F5' }}>
+          {/* 系列标题 */}
+          <div className="px-4 pt-3 pb-2">
+            <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-2" style={{ background: '#E8F5E9', color: '#2E7D32' }}>日本原装进口 -- 宜家精选系列</div>
+            <h2 className="text-lg font-bold text-gray-900">精选商品</h2>
+            <p className="text-xs text-gray-500 mt-0.5">日本原装进口，品质保证，限时特惠中</p>
+          </div>
+          {/* 商品卡片列表 */}
+          <div className="px-4 space-y-3">
+            {Object.values(aiProducts).map((product: any) => (
+              <div
+                key={product.id}
+                className="rounded-2xl overflow-hidden cursor-pointer"
+                style={{ background: '#fff', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}
+                onClick={() => { setAiSelectedProduct(product.id); setAiCarouselIdx(0); setAiProductQty(1); }}
+              >
+                <div className="relative">
+                  <img src={product.cover} alt={product.name} className="w-full" style={{ display: 'block', height: '200px', objectFit: 'cover' }} />
+                  <div className="absolute top-2 left-2 text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(233,30,99,0.9)', color: '#fff' }}>限时特惠</div>
+                </div>
+                <div className="p-3">
+                  <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-1" style={{ background: '#E8F5E9', color: '#2E7D32' }}>{product.tag}</div>
+                  <h3 className="text-base font-bold text-gray-900 leading-tight">{product.name}</h3>
+                  <p className="text-xs text-gray-500 mt-1">{product.subtitle}</p>
+                  <div className="flex items-baseline gap-2 mt-2">
+                    <span className="text-xl font-bold" style={{ color: '#E91E63' }}>¥{Number(product.basePrice).toFixed(2)}</span>
+                    <span className="text-xs text-gray-400 line-through">¥{Number(product.originalPrice).toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-3 text-xs text-gray-400">
+                      <span className="flex items-center gap-0.5"><Truck className="w-3 h-3" />包邮</span>
+                      <span className="flex items-center gap-0.5"><ShieldCheck className="w-3 h-3" />正品</span>
+                    </div>
+                    <span className="text-xs px-3 py-1 rounded-full font-medium" style={{ background: 'linear-gradient(90deg, #FF6B9D 0%, #E91E63 100%)', color: '#fff' }}>查看详情</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* AI 账本：商品详情页（选中商品后显示） */}
       {isCustomAI && aiProduct && (
         <div className="pb-24" style={{ backgroundColor: '#FFF0F5' }}>
+          {/* 返回列表按钮 */}
+          <div className="px-4 pt-2 pb-1">
+            <button
+              onClick={() => { setAiSelectedProduct(null); setAiCarouselIdx(0); setAiProductQty(1); }}
+              className="flex items-center gap-1 text-sm py-1"
+              style={{ color: '#E91E63' }}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>返回商品列表</span>
+            </button>
+          </div>
           {/* 1. 轮播图 */}
           <div className="relative w-full overflow-hidden" style={{ background: '#FFF0F5' }}>
             <div
@@ -2236,11 +2324,9 @@ export default function LedgerDetail() {
                 </div>
               ))}
             </div>
-            {/* 轮播进度 */}
             <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-full text-xs text-white" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
               {aiCarouselIdx + 1}/{aiCarouselImages.length}
             </div>
-            {/* 左右箭头 */}
             {aiCarouselIdx > 0 && (
               <button onClick={() => setAiCarouselIdx(aiCarouselIdx - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
                 <ChevronLeft className="w-5 h-5 text-white" />
@@ -2255,19 +2341,19 @@ export default function LedgerDetail() {
 
           {/* 2. 商品名称 + 卖点副标题 */}
           <div className="px-4 pt-4 pb-2" style={{ background: '#fff' }}>
-            <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-1" style={{ background: '#E8F5E9', color: '#2E7D32' }}>Daily Chiko -- 日本原装进口</div>
-            <h1 className="text-xl font-bold text-gray-900 leading-tight">{aiProduct?.name}</h1>
-            <p className="text-sm text-gray-500 mt-1">{aiProduct?.subtitle}</p>
+            <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-1" style={{ background: '#E8F5E9', color: '#2E7D32' }}>{aiProduct.tag}</div>
+            <h1 className="text-xl font-bold text-gray-900 leading-tight">{aiProduct.name}</h1>
+            <p className="text-sm text-gray-500 mt-1">{aiProduct.subtitle}</p>
           </div>
 
           {/* 3. 价格区域 */}
           <div className="px-4 py-3" style={{ background: 'linear-gradient(135deg, #FFF0F5 0%, #F3E5F5 100%)' }}>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold" style={{ color: '#E91E63' }}>¥{Number(aiProduct?.basePrice || 19.9).toFixed(2)}</span>
-              <span className="text-sm text-gray-400 line-through">¥{Number(aiProduct?.originalPrice || 29.9).toFixed(2)}</span>
+              <span className="text-3xl font-bold" style={{ color: '#E91E63' }}>¥{Number(aiProduct.basePrice).toFixed(2)}</span>
+              <span className="text-sm text-gray-400 line-through">¥{Number(aiProduct.originalPrice).toFixed(2)}</span>
               <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#E91E63', color: '#fff' }}>限时特惠</span>
             </div>
-            <p className="text-xs text-gray-400 mt-1">SKU: RC-DailyChiko-001</p>
+            <p className="text-xs text-gray-400 mt-1">SKU: {aiProduct.id === 'icecream' ? 'RC-DailyChiko-001' : 'RC-Royce-001'}</p>
           </div>
 
           {/* 4. 数量选择器 */}
@@ -2305,7 +2391,7 @@ export default function LedgerDetail() {
             ))}
           </div>
 
-          {/* 6. 详情长图区（AI 海报图纵向拼接，核心！） */}
+          {/* 6. 详情长图区 */}
           <div style={{ margin: 0, padding: 0 }}>
             {aiProductImages.map((src: string, i: number) => (
               <img
@@ -2321,20 +2407,20 @@ export default function LedgerDetail() {
           <div className="fixed bottom-0 left-0 right-0 px-4 py-3 z-50 flex gap-3" style={{ background: '#fff', boxShadow: '0 -2px 12px rgba(0,0,0,0.08)' }}>
             <button
               onClick={() => {
-                const amount = (Number(aiProduct?.basePrice || 19.9) * aiProductQty).toFixed(2);
-                const subject = aiProduct?.name || '日本进口 Daily Chiko 彩虹冰淇淋';
+                const amount = (Number(aiProduct.basePrice) * aiProductQty).toFixed(2);
+                const subject = aiProduct.name;
                 window.location.href = `https://jiangyuchen.cn/api/alipay/quick-pay?amount=${amount}&subject=${encodeURIComponent(subject)}`;
               }}
               className="flex-1 py-3.5 rounded-full text-white font-bold text-base"
               style={{ background: 'linear-gradient(90deg, #FF6B9D 0%, #E91E63 100%)' }}
             >
-              立即购买 ¥{(Number(aiProduct?.basePrice || 19.9) * aiProductQty).toFixed(2)}
+              立即购买 ¥{(Number(aiProduct.basePrice) * aiProductQty).toFixed(2)}
             </button>
           </div>
         </div>
       )}
-      {/* AI 账本：无商品时显示占位 */}
-      {isCustomAI && !aiProduct && (
+      {/* AI 账本：无商品数据时显示占位 */}
+      {isCustomAI && !aiProducts && (
         <div className="flex-1 px-4 pb-20 pt-4">
           <div className="text-center text-gray-300 text-sm mt-16">AI 账本内容待配置</div>
         </div>
