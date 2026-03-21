@@ -33,6 +33,10 @@ import {
   Building2,
   CalendarClock,
   PieChart,
+  ShieldCheck,
+  Truck,
+  RefreshCw,
+  Minus,
 } from "lucide-react";
 
 
@@ -442,6 +446,26 @@ export default function LedgerDetail() {
   });
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [aiProductDetail, setAiProductDetail] = useState<string | null>(null);
+  const [aiProductQty, setAiProductQty] = useState(1);
+  const [aiCarouselIdx, setAiCarouselIdx] = useState(0);
+  const aiCarouselRef = useRef<HTMLDivElement>(null);
+
+  // AI 账本：获取商品数据（merchantCode=jiang 对应 merchantId=3）
+  const { data: aiShopProducts } = trpc.merchant.getShopProducts.useQuery(
+    { merchantCode: 'jiang' },
+    { enabled: isCustomAI }
+  );
+  const aiProduct = aiShopProducts?.[0] as any;
+  const aiProductImages = aiProduct ? (
+    typeof aiProduct.extendedFields === 'string'
+      ? JSON.parse(aiProduct.extendedFields)
+      : aiProduct.extendedFields
+  )?.detailImages ?? [] : [];
+  const aiCarouselImages = [
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_1.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_2.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_3.jpg',
+  ];
   // 食物热量扫描相关 state
   const [foodScanImage, setFoodScanImage] = useState<string | null>(null); // base64 图片
   const [foodScanResult, setFoodScanResult] = useState<any>(null); // AI 分析结果
@@ -2191,10 +2215,123 @@ export default function LedgerDetail() {
           )}
         </div>
       )}
-      {/* AI 账本：内容区（待下一次商品配置） */}
-      {isCustomAI && (
+      {/* AI 账本：商品详情页（按 S1 第十三章规范） */}
+      {isCustomAI && aiProduct && (
+        <div className="pb-24" style={{ backgroundColor: '#FFF0F5' }}>
+          {/* 1. 轮播图 */}
+          <div className="relative w-full overflow-hidden" style={{ background: '#FFF0F5' }}>
+            <div
+              ref={aiCarouselRef}
+              className="flex transition-transform duration-300 ease-in-out"
+              style={{ transform: `translateX(-${aiCarouselIdx * 100}%)` }}
+            >
+              {aiCarouselImages.map((src, i) => (
+                <div key={i} className="flex-shrink-0 w-full">
+                  <img src={src} alt={`主图${i + 1}`} className="w-full" style={{ display: 'block' }} />
+                </div>
+              ))}
+            </div>
+            {/* 轮播进度 */}
+            <div className="absolute bottom-3 right-3 px-2 py-0.5 rounded-full text-xs text-white" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}>
+              {aiCarouselIdx + 1}/{aiCarouselImages.length}
+            </div>
+            {/* 左右箭头 */}
+            {aiCarouselIdx > 0 && (
+              <button onClick={() => setAiCarouselIdx(aiCarouselIdx - 1)} className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+            )}
+            {aiCarouselIdx < aiCarouselImages.length - 1 && (
+              <button onClick={() => setAiCarouselIdx(aiCarouselIdx + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            )}
+          </div>
+
+          {/* 2. 商品名称 + 卖点副标题 */}
+          <div className="px-4 pt-4 pb-2" style={{ background: '#fff' }}>
+            <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-1" style={{ background: '#E8F5E9', color: '#2E7D32' }}>Daily Chiko -- 日本原装进口</div>
+            <h1 className="text-xl font-bold text-gray-900 leading-tight">{aiProduct.name}</h1>
+            <p className="text-sm text-gray-500 mt-1">{aiProduct.subtitle || '七彩缤纷 -- 梦幻口感 -- 日本原装进口'}</p>
+          </div>
+
+          {/* 3. 价格区域 */}
+          <div className="px-4 py-3" style={{ background: 'linear-gradient(135deg, #FFF0F5 0%, #F3E5F5 100%)' }}>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold" style={{ color: '#E91E63' }}>¥{Number(aiProduct.basePrice || aiProduct.displayPrice || 19.9).toFixed(2)}</span>
+              <span className="text-sm text-gray-400 line-through">¥{Number(aiProduct.originalPrice || 29.9).toFixed(2)}</span>
+              <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#E91E63', color: '#fff' }}>限时特惠</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">SKU: RC-DailyChiko-001</p>
+          </div>
+
+          {/* 4. 数量选择器 */}
+          <div className="px-4 py-3 flex items-center justify-between" style={{ background: '#fff', borderBottom: '1px solid #f3f3f3' }}>
+            <span className="text-sm text-gray-600">购买数量</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setAiProductQty(Math.max(1, aiProductQty - 1))}
+                className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-200"
+                disabled={aiProductQty <= 1}
+              >
+                <Minus className="w-4 h-4 text-gray-500" />
+              </button>
+              <span className="text-base font-semibold w-8 text-center">{aiProductQty}</span>
+              <button
+                onClick={() => setAiProductQty(aiProductQty + 1)}
+                className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-200"
+              >
+                <Plus className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+          </div>
+
+          {/* 5. 服务保障横条 */}
+          <div className="px-4 py-3 flex items-center justify-around" style={{ background: '#fff', borderBottom: '1px solid #f3f3f3' }}>
+            {[
+              { icon: <Truck className="w-4 h-4" style={{ color: '#E91E63' }} />, label: '包邮到家' },
+              { icon: <RefreshCw className="w-4 h-4" style={{ color: '#E91E63' }} />, label: '7天退换' },
+              { icon: <ShieldCheck className="w-4 h-4" style={{ color: '#E91E63' }} />, label: '正品保证' },
+            ].map(({ icon, label }) => (
+              <div key={label} className="flex items-center gap-1">
+                {icon}
+                <span className="text-xs text-gray-600">{label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 6. 详情长图区（AI 海报图纵向拼接，核心！） */}
+          <div style={{ margin: 0, padding: 0 }}>
+            {aiProductImages.map((src: string, i: number) => (
+              <img
+                key={i}
+                src={src}
+                alt={`详情海报${i + 1}`}
+                style={{ width: '100%', display: 'block', margin: 0, padding: 0 }}
+              />
+            ))}
+          </div>
+
+          {/* 7. 底部购买按钮（吸底固定） */}
+          <div className="fixed bottom-0 left-0 right-0 px-4 py-3 z-50 flex gap-3" style={{ background: '#fff', boxShadow: '0 -2px 12px rgba(0,0,0,0.08)' }}>
+            <button
+              onClick={() => {
+                const amount = (Number(aiProduct.basePrice || aiProduct.displayPrice || 19.9) * aiProductQty).toFixed(2);
+                const subject = aiProduct.name || '日本进口 Daily Chiko 彩虹冰淇淋';
+                window.location.href = `https://jiangyuchen.cn/api/alipay/quick-pay?amount=${amount}&subject=${encodeURIComponent(subject)}`;
+              }}
+              className="flex-1 py-3.5 rounded-full text-white font-bold text-base"
+              style={{ background: 'linear-gradient(90deg, #FF6B9D 0%, #E91E63 100%)' }}
+            >
+              立即购买 ¥{(Number(aiProduct.basePrice || aiProduct.displayPrice || 19.9) * aiProductQty).toFixed(2)}
+            </button>
+          </div>
+        </div>
+      )}
+      {/* AI 账本：无商品时显示占位 */}
+      {isCustomAI && !aiProduct && (
         <div className="flex-1 px-4 pb-20 pt-4">
-          <div className="text-center text-gray-300 text-sm mt-16">AI 账本内容待配置</div>
+          <div className="text-center text-gray-300 text-sm mt-16">商品加载中...</div>
         </div>
       )}
 
