@@ -442,6 +442,13 @@ export default function LedgerDetail() {
   });
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [aiProductDetail, setAiProductDetail] = useState<string | null>(null);
+  // 食物热量扫描相关 state
+  const [foodScanImage, setFoodScanImage] = useState<string | null>(null); // base64 图片
+  const [foodScanResult, setFoodScanResult] = useState<any>(null); // AI 分析结果
+  const [foodScanLoading, setFoodScanLoading] = useState(false); // 加载中
+  const [foodScanError, setFoodScanError] = useState<string | null>(null); // 错误信息
+  const foodFileInputRef = useRef<HTMLInputElement>(null); // 文件选择器
+  const foodCameraInputRef = useRef<HTMLInputElement>(null); // 摄像头输入
   
   // 保存统计周期选择到 localStorage
   useEffect(() => {
@@ -1821,86 +1828,203 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* AI 账本：白色内容区 */}
+      {/* AI 账本：食物热量扫描界面 */}
       {isCustomAI && (
-        <div className="flex-1 px-4 pb-20 space-y-4 pt-4">
-          {/* 56号账本白色内容区 - FitLine套餐商品 */}
-          {!aiProductDetail ? (
-          <>
-          {/* 活动横幅 */}
-          <div className="bg-gradient-to-r from-red-600 to-orange-500 rounded-xl p-3 text-center">
-            <div className="text-white text-sm font-bold">FitLine Activize Oxyplus · 限时套餐促销</div>
-            <div className="text-yellow-200 text-xs mt-1">购任意套餐均赠12瓶小象巴马矿泉水（350mL×12）</div>
+        <div className="flex-1 px-4 pb-20 pt-4">
+          {/* 隐藏文件输入：相册上传 */}
+          <input
+            ref={foodFileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const base64 = (ev.target?.result as string).split(',')[1];
+                setFoodScanImage(ev.target?.result as string);
+                setFoodScanResult(null);
+                setFoodScanError(null);
+                // 自动分析
+                setFoodScanLoading(true);
+                fetch('/api/food/analyze', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+                })
+                  .then(r => r.json())
+                  .then(data => {
+                    if (data.success) setFoodScanResult(data);
+                    else setFoodScanError(data.error || 'AI 分析失败');
+                  })
+                  .catch(() => setFoodScanError('网络错误，请重试'))
+                  .finally(() => setFoodScanLoading(false));
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+          {/* 隐藏文件输入：摄像头拍照 */}
+          <input
+            ref={foodCameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const base64 = (ev.target?.result as string).split(',')[1];
+                setFoodScanImage(ev.target?.result as string);
+                setFoodScanResult(null);
+                setFoodScanError(null);
+                setFoodScanLoading(true);
+                fetch('/api/food/analyze', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+                })
+                  .then(r => r.json())
+                  .then(data => {
+                    if (data.success) setFoodScanResult(data);
+                    else setFoodScanError(data.error || 'AI 分析失败');
+                  })
+                  .catch(() => setFoodScanError('网络错误，请重试'))
+                  .finally(() => setFoodScanLoading(false));
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+
+          {/* 标题区 */}
+          <div className="text-center mb-4">
+            <div className="text-xl font-bold text-gray-800">AI 食物热量扫描</div>
+            <div className="text-xs text-gray-400 mt-1">拍照或上传食物图片，AI 智能识别食材并估算热量</div>
           </div>
-          {/* 2x2 套餐卡片 */}
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { id: '2pack', name: '2罐装', price: 158, origPrice: 198, discount: '8折', img: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-2pack.webp', payAmount: 158 },
-              { id: '3pack', name: '3罐装', price: 223, origPrice: 297, discount: '75折', img: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-3pack.webp', payAmount: 223 },
-            ].map(pkg => (
-              <div key={pkg.id} className="bg-white rounded-xl overflow-hidden shadow-sm" onClick={() => setAiProductDetail(pkg.id)}>
-                <img src={pkg.img} alt={pkg.name} className="w-full aspect-square object-cover" loading="lazy" />
-                <div className="p-2">
-                  <div className="text-sm font-bold text-gray-800 truncate">FitLine {pkg.name}</div>
-                  <div className="text-xs text-green-600 mt-0.5">赠12瓶矿泉水</div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-red-500 text-lg font-bold">¥{pkg.price}</span>
-                    <span className="text-gray-400 line-through text-xs">¥{pkg.origPrice}</span>
-                    <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">{pkg.discount}</span>
+
+          {/* 拍照区域 */}
+          {!foodScanImage ? (
+            <div
+              className="relative bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center"
+              style={{ minHeight: '220px' }}
+            >
+              <div className="text-5xl mb-3">🍽️</div>
+              <div className="text-gray-500 text-sm mb-4">点击下方按鈕开始扫描</div>
+              <div className="flex gap-3">
+                <button
+                  className="flex items-center gap-2 bg-red-500 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md"
+                  onClick={() => foodCameraInputRef.current?.click()}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  拍照
+                </button>
+                <button
+                  className="flex items-center gap-2 bg-white border border-gray-200 text-gray-600 px-5 py-2.5 rounded-xl text-sm font-semibold shadow-sm"
+                  onClick={() => foodFileInputRef.current?.click()}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  上传图片
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* 已选图片预览 */}
+              <div className="relative rounded-2xl overflow-hidden">
+                <img src={foodScanImage} alt="食物图片" className="w-full max-h-56 object-cover" />
+                {foodScanLoading && (
+                  <div className="absolute inset-0 bg-black bg-opacity-50 flex flex-col items-center justify-center">
+                    <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mb-2"></div>
+                    <div className="text-white text-sm font-medium">AI 正在分析食物...</div>
+                    <div className="text-white text-xs mt-1 opacity-70">调用 DeepSeek 智能识别</div>
+                  </div>
+                )}
+              </div>
+
+              {/* 重新扫描按鈕 */}
+              <div className="flex gap-2">
+                <button
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-500 text-white py-2.5 rounded-xl text-sm font-semibold"
+                  onClick={() => foodCameraInputRef.current?.click()}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  重新拍照
+                </button>
+                <button
+                  className="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm"
+                  onClick={() => { setFoodScanImage(null); setFoodScanResult(null); setFoodScanError(null); }}
+                >
+                  清除
+                </button>
+              </div>
+
+              {/* 错误提示 */}
+              {foodScanError && (
+                <div className="bg-red-50 border border-red-100 rounded-xl p-3 text-red-600 text-sm text-center">
+                  {foodScanError}
+                </div>
+              )}
+
+              {/* AI 分析结果 */}
+              {foodScanResult && !foodScanLoading && (
+                <div className="space-y-3">
+                  {/* 总热量卡片 */}
+                  <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl p-4 text-center text-white">
+                    <div className="text-xs opacity-80 mb-1">AI 估算总热量</div>
+                    <div className="text-4xl font-bold">{foodScanResult.totalCalories}</div>
+                    <div className="text-sm opacity-90 mt-0.5">千卡 (kcal)</div>
+                    {foodScanResult.confidence === 'low' && (
+                      <div className="text-xs opacity-70 mt-1">(参考估算，实际热量因食材而异)</div>
+                    )}
+                  </div>
+
+                  {/* 食物明细列表 */}
+                  <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+                    <div className="px-4 py-3 border-b border-gray-50">
+                      <div className="text-sm font-bold text-gray-700">AI 识别食物明细</div>
+                    </div>
+                    {foodScanResult.foods.map((food: any, idx: number) => (
+                      <div key={idx} className="px-4 py-3 flex items-start justify-between border-b border-gray-50 last:border-0">
+                        <div className="flex-1 pr-3">
+                          <div className="text-sm font-semibold text-gray-800">{food.name}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">{food.quantity}</div>
+                          {food.description && (
+                            <div className="text-xs text-gray-400 mt-0.5">{food.description}</div>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-base font-bold text-orange-500">{food.calories}</div>
+                          <div className="text-xs text-gray-400">千卡</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 健康建议 */}
+                  {foodScanResult.healthTip && (
+                    <div className="bg-green-50 rounded-xl px-4 py-3 flex items-start gap-2">
+                      <span className="text-green-500 text-base mt-0.5">&#x1F4AA;</span>
+                      <div className="text-xs text-green-700 leading-relaxed">{foodScanResult.healthTip}</div>
+                    </div>
+                  )}
+
+                  {/* AI 标识 */}
+                  <div className="text-center">
+                    <span className="text-xs text-gray-300">Powered by DeepSeek AI</span>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-          </>
-          ) : (
-          /* 套餐详情页 */
-          <div className="bg-white rounded-xl overflow-hidden">
-            {/* 返回按钮 */}
-            <div className="flex items-center p-3 border-b border-gray-100">
-              <button onClick={() => setAiProductDetail(null)} className="flex items-center text-gray-600 text-sm">
-                <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                返回套餐列表
-              </button>
+              )}
             </div>
-            {/* 套餐封面图 */}
-            {aiProductDetail === '2pack' && <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-2pack.webp" className="w-full" loading="lazy" />}
-            {aiProductDetail === '3pack' && <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-3pack.webp" className="w-full" loading="lazy" />}
-
-
-            {/* 产品信息 */}
-            <div className="p-4">
-              <div className="text-lg font-bold text-gray-800">FitLine Activize Oxyplus {aiProductDetail === '2pack' ? '2罐装' : '3罐装'}</div>
-              <div className="text-sm text-gray-500 mt-1">德国原装进口 · 运动营养食品 · 耐力类</div>
-              <div className="flex items-center gap-3 mt-3">
-                <span className="text-red-500 text-2xl font-bold">¥{aiProductDetail === '2pack' ? '158' : '223'}</span>
-                <span className="text-gray-400 line-through text-sm">¥{aiProductDetail === '2pack' ? '198' : '297'}</span>
-                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded">{aiProductDetail === '2pack' ? '8折' : '75折'}</span>
-              </div>
-              <div className="mt-2 bg-green-50 text-green-700 text-sm px-3 py-2 rounded-lg">
-                🎁 赠品：小象巴马弱碱性天然矿泉水 350mL × 12瓶
-              </div>
-            </div>
-            {/* 产品成分解析 */}
-            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-detail-ingredients.webp" className="w-full" loading="lazy" />
-            {/* 德国原装进口 */}
-            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-detail-origin.webp" className="w-full" loading="lazy" />
-            {/* 赠品介绍 - 矿泉水 */}
-            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-detail-water.webp" className="w-full" loading="lazy" />
-            {/* 底部购买按钮 */}
-            <div className="p-4">
-              <button 
-                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-3.5 rounded-xl text-base font-semibold shadow-lg"
-                onClick={() => {
-                  const amt = aiProductDetail === '2pack' ? 158 : 223;
-                  const name = aiProductDetail === '2pack' ? '2罐装' : '3罐装';
-                  window.open(`https://jiangyuchen.cn/api/alipay/quick-pay?amount=${amt}&subject=FitLine+Activize+${encodeURIComponent(name)}+%E8%B5%A012%E7%93%B6%E7%9F%BF%E6%B3%89%E6%B0%B4`, '_blank');
-                }}
-              >
-                立即购买
-              </button>
-            </div>
-          </div>
           )}
         </div>
       )}
