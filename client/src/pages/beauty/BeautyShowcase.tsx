@@ -83,6 +83,7 @@ async function getCroppedImg(
 const ASPECT_OPTIONS = [
   { label: "横 16:9", value: 16 / 9, icon: "\u2B1C" },
   { label: "横 4:3", value: 4 / 3, icon: "\u2B1C" },
+  { label: "1:1", value: 1, icon: "\u2B1B" },
   { label: "竖 9:16", value: 9 / 16, icon: "\u25AE" },
   { label: "竖 3:4", value: 3 / 4, icon: "\u25AE" },
 ] as const;
