@@ -450,17 +450,22 @@ export default function LedgerDetail() {
   const [aiCarouselIdx, setAiCarouselIdx] = useState(0);
   const aiCarouselRef = useRef<HTMLDivElement>(null);
 
-  // AI 账本：获取商品数据（merchantCode=jiang 对应 merchantId=3）
-  const { data: aiShopProducts } = trpc.merchant.getShopProducts.useQuery(
-    { merchantCode: 'jiang' },
-    { enabled: isCustomAI }
-  );
-  const aiProduct = aiShopProducts?.[0] as any;
-  const aiProductImages = aiProduct ? (
-    typeof aiProduct.extendedFields === 'string'
-      ? JSON.parse(aiProduct.extendedFields)
-      : aiProduct.extendedFields
-  )?.detailImages ?? [] : [];
+  // AI 账本：彩虹冰淇淋商品数据（硬编码）
+  const aiProduct = isCustomAI ? {
+    name: '日本进口 Daily Chiko 彩虹冰淇淋',
+    subtitle: '七彩缤纷 -- 梦幻口感 -- 日本原装进口',
+    basePrice: 19.9,
+    originalPrice: 29.9,
+  } : null;
+  const aiProductImages = isCustomAI ? [
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_1_pain.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_2_product.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_3_advantages.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_4_scene.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_5_specs.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_6_qa.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_7_brand.jpg',
+  ] : [];
   const aiCarouselImages = [
     'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_1.jpg',
     'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_2.jpg',
@@ -2251,15 +2256,15 @@ export default function LedgerDetail() {
           {/* 2. 商品名称 + 卖点副标题 */}
           <div className="px-4 pt-4 pb-2" style={{ background: '#fff' }}>
             <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-1" style={{ background: '#E8F5E9', color: '#2E7D32' }}>Daily Chiko -- 日本原装进口</div>
-            <h1 className="text-xl font-bold text-gray-900 leading-tight">{aiProduct.name}</h1>
-            <p className="text-sm text-gray-500 mt-1">{aiProduct.subtitle || '七彩缤纷 -- 梦幻口感 -- 日本原装进口'}</p>
+            <h1 className="text-xl font-bold text-gray-900 leading-tight">{aiProduct?.name}</h1>
+            <p className="text-sm text-gray-500 mt-1">{aiProduct?.subtitle}</p>
           </div>
 
           {/* 3. 价格区域 */}
           <div className="px-4 py-3" style={{ background: 'linear-gradient(135deg, #FFF0F5 0%, #F3E5F5 100%)' }}>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold" style={{ color: '#E91E63' }}>¥{Number(aiProduct.basePrice || aiProduct.displayPrice || 19.9).toFixed(2)}</span>
-              <span className="text-sm text-gray-400 line-through">¥{Number(aiProduct.originalPrice || 29.9).toFixed(2)}</span>
+              <span className="text-3xl font-bold" style={{ color: '#E91E63' }}>¥{Number(aiProduct?.basePrice || 19.9).toFixed(2)}</span>
+              <span className="text-sm text-gray-400 line-through">¥{Number(aiProduct?.originalPrice || 29.9).toFixed(2)}</span>
               <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#E91E63', color: '#fff' }}>限时特惠</span>
             </div>
             <p className="text-xs text-gray-400 mt-1">SKU: RC-DailyChiko-001</p>
@@ -2316,14 +2321,14 @@ export default function LedgerDetail() {
           <div className="fixed bottom-0 left-0 right-0 px-4 py-3 z-50 flex gap-3" style={{ background: '#fff', boxShadow: '0 -2px 12px rgba(0,0,0,0.08)' }}>
             <button
               onClick={() => {
-                const amount = (Number(aiProduct.basePrice || aiProduct.displayPrice || 19.9) * aiProductQty).toFixed(2);
-                const subject = aiProduct.name || '日本进口 Daily Chiko 彩虹冰淇淋';
+                const amount = (Number(aiProduct?.basePrice || 19.9) * aiProductQty).toFixed(2);
+                const subject = aiProduct?.name || '日本进口 Daily Chiko 彩虹冰淇淋';
                 window.location.href = `https://jiangyuchen.cn/api/alipay/quick-pay?amount=${amount}&subject=${encodeURIComponent(subject)}`;
               }}
               className="flex-1 py-3.5 rounded-full text-white font-bold text-base"
               style={{ background: 'linear-gradient(90deg, #FF6B9D 0%, #E91E63 100%)' }}
             >
-              立即购买 ¥{(Number(aiProduct.basePrice || aiProduct.displayPrice || 19.9) * aiProductQty).toFixed(2)}
+              立即购买 ¥{(Number(aiProduct?.basePrice || 19.9) * aiProductQty).toFixed(2)}
             </button>
           </div>
         </div>
@@ -2331,7 +2336,7 @@ export default function LedgerDetail() {
       {/* AI 账本：无商品时显示占位 */}
       {isCustomAI && !aiProduct && (
         <div className="flex-1 px-4 pb-20 pt-4">
-          <div className="text-center text-gray-300 text-sm mt-16">商品加载中...</div>
+          <div className="text-center text-gray-300 text-sm mt-16">AI 账本内容待配置</div>
         </div>
       )}
 
