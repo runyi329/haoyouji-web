@@ -52,12 +52,13 @@ async function getCroppedImg(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas context not available");
 
-  // 限制输出尺寸，保持3:4比例
+  // 限制输出尺寸，限制最长边不超过maxWidth（横竖图都适用）
   let outW = pixelCrop.width;
   let outH = pixelCrop.height;
-  if (outW > maxWidth) {
-    const scale = maxWidth / outW;
-    outW = maxWidth;
+  const maxSide = Math.max(outW, outH);
+  if (maxSide > maxWidth) {
+    const scale = maxWidth / maxSide;
+    outW = Math.round(outW * scale);
     outH = Math.round(outH * scale);
   }
 
@@ -639,6 +640,12 @@ function PptCompareManager() {
   const [editTitleValue, setEditTitleValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 裁剪队列状态
+  const [cropQueue, setCropQueue] = useState<string[]>([]); // 待裁剪的base64图片队列
+  const [cropQueueIndex, setCropQueueIndex] = useState(0); // 当前裁剪到第几张
+  const [croppedResults, setCroppedResults] = useState<string[]>([]); // 已裁剪完的结果
+  const [isCropMode, setIsCropMode] = useState(false); // 是否在裁剪模式
+
   const groups = groupsQuery.data || [];
 
   const handleCreateGroup = async () => {
@@ -660,28 +667,75 @@ function PptCompareManager() {
     });
   };
 
+  // 文件选择后，读取所有图片为base64，进入裁剪队列
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (!files.length || !uploadingSide) return;
     e.target.value = "";
 
+    // 读取所有文件为base64
+    const base64List: string[] = [];
+    for (const file of files) {
+      const b64 = await readFileAsBase64(file);
+      base64List.push(b64);
+    }
+
+    // 进入裁剪队列模式
+    setCropQueue(base64List);
+    setCropQueueIndex(0);
+    setCroppedResults([]);
+    setIsCropMode(true);
+  };
+
+  // 裁剪队列：当前张确认裁剪
+  const handleCropQueueConfirm = (croppedBase64: string) => {
+    const newResults = [...croppedResults, croppedBase64];
+    setCroppedResults(newResults);
+
+    if (cropQueueIndex + 1 < cropQueue.length) {
+      // 还有下一张，继续裁剪
+      setCropQueueIndex(cropQueueIndex + 1);
+    } else {
+      // 全部裁剪完，开始上传
+      setIsCropMode(false);
+      handleUploadCroppedImages(newResults);
+    }
+  };
+
+  // 裁剪队列：取消（跳过当前张，继续下一张）
+  const handleCropQueueCancel = () => {
+    if (cropQueueIndex + 1 < cropQueue.length) {
+      setCropQueueIndex(cropQueueIndex + 1);
+    } else {
+      // 全部跳过或取消，如果有已裁剪的就上传，否则取消
+      setIsCropMode(false);
+      if (croppedResults.length > 0) {
+        handleUploadCroppedImages(croppedResults);
+      } else {
+        setUploadingSide(null);
+        setCropQueue([]);
+        setCroppedResults([]);
+      }
+    }
+  };
+
+  // 上传已裁剪的图片列表
+  const handleUploadCroppedImages = async (images: string[]) => {
+    if (!uploadingSide || images.length === 0) return;
     const { groupId, side } = uploadingSide;
-    setUploadProgress({ current: 0, total: files.length });
+    setUploadProgress({ current: 0, total: images.length });
 
     try {
-      // 先清空该侧旧页面
       await clearSideMutation.mutateAsync({ groupId, side });
 
-      // 逐张上传
-      for (let i = 0; i < files.length; i++) {
-        const base64 = await readFileAsBase64(files[i]);
+      for (let i = 0; i < images.length; i++) {
         await uploadPageMutation.mutateAsync({
           groupId,
           side,
-          imageData: base64,
+          imageData: images[i],
           pageNum: i + 1,
         });
-        setUploadProgress({ current: i + 1, total: files.length });
+        setUploadProgress({ current: i + 1, total: images.length });
       }
 
       await utils.beauty.pptCompare.listGroups.invalidate();
@@ -691,6 +745,8 @@ function PptCompareManager() {
     } finally {
       setUploadingSide(null);
       setUploadProgress(null);
+      setCropQueue([]);
+      setCroppedResults([]);
     }
   };
 
@@ -718,6 +774,39 @@ function PptCompareManager() {
 
   return (
     <div className="px-4 space-y-4">
+      {/* 裁剪弹窗：逐张裁剪队列 */}
+      {isCropMode && cropQueue.length > 0 && (
+        <div className="fixed inset-0 z-[200] flex flex-col">
+          {/* 顶部进度提示 */}
+          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-safe" style={{ paddingTop: 'env(safe-area-inset-top, 12px)' }}>
+            <div className="mt-2 px-3 py-1 rounded-full text-xs text-white" style={{ background: 'rgba(0,0,0,0.6)' }}>
+              第 {cropQueueIndex + 1} / {cropQueue.length} 张
+            </div>
+            <button
+              onClick={() => {
+                setIsCropMode(false);
+                if (croppedResults.length > 0) {
+                  handleUploadCroppedImages(croppedResults);
+                } else {
+                  setUploadingSide(null);
+                  setCropQueue([]);
+                  setCroppedResults([]);
+                }
+              }}
+              className="mt-2 px-3 py-1 rounded-full text-xs text-white"
+              style={{ background: 'rgba(0,0,0,0.6)' }}
+            >
+              完成({croppedResults.length}张)
+            </button>
+          </div>
+          <CropDialog
+            imageSrc={cropQueue[cropQueueIndex]}
+            onConfirm={handleCropQueueConfirm}
+            onCancel={handleCropQueueCancel}
+          />
+        </div>
+      )}
+
       {/* 隐藏的图片多选输入 */}
       <input
         ref={fileInputRef}
