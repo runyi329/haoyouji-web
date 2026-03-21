@@ -65,7 +65,7 @@ async function compressImageToWebP(
  */
 export async function uploadImageToCOS(
   imageData: string | Buffer,
-  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' | 'lottery-images' | 'ag-prompts' = 'avatars',
+  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' | 'lottery-images' | 'ag-prompts' | 'beauty-showcase' = 'avatars',
   filename?: string
 ): Promise<string> {
   try {
@@ -188,7 +188,7 @@ export async function uploadFileToCOS(
  */
 export async function batchUploadImagesToCOS(
   images: Array<{ data: string | Buffer; filename?: string }>,
-  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' = 'avatars'
+  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' | 'beauty-showcase' = 'avatars'
 ): Promise<string[]> {
   const results = await Promise.all(
     images.map(img => uploadImageToCOS(img.data, folder, img.filename))
