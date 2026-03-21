@@ -79,6 +79,14 @@ async function getCroppedImg(
   return canvas.toDataURL("image/jpeg", 0.85);
 }
 
+// ===== 比例选项 =====
+const ASPECT_OPTIONS = [
+  { label: "横 16:9", value: 16 / 9, icon: "\u2B1C" },
+  { label: "横 4:3", value: 4 / 3, icon: "\u2B1C" },
+  { label: "竖 9:16", value: 9 / 16, icon: "\u25AE" },
+  { label: "竖 3:4", value: 3 / 4, icon: "\u25AE" },
+] as const;
+
 // ===== 裁剪弹窗组件 =====
 function CropDialog({
   imageSrc,
@@ -93,10 +101,17 @@ function CropDialog({
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [selectedAspect, setSelectedAspect] = useState(3 / 4);
 
   const onCropComplete = useCallback((_: Area, croppedPixels: Area) => {
     setCroppedAreaPixels(croppedPixels);
   }, []);
+
+  const handleAspectChange = (aspect: number) => {
+    setSelectedAspect(aspect);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+  };
 
   const handleConfirm = async () => {
     if (!croppedAreaPixels) return;
@@ -138,13 +153,41 @@ function CropDialog({
         </button>
       </div>
 
+      {/* 比例选择栏 */}
+      <div className="flex items-center justify-center gap-2 px-4 py-2 bg-black/80">
+        {ASPECT_OPTIONS.map((opt) => {
+          const isActive = selectedAspect === opt.value;
+          return (
+            <button
+              key={opt.label}
+              onClick={() => handleAspectChange(opt.value)}
+              className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+              style={{
+                background: isActive
+                  ? "linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)"
+                  : "rgba(255,255,255,0.12)",
+                color: isActive ? "#fff" : "rgba(255,255,255,0.6)",
+                border: isActive ? "none" : "1px solid rgba(255,255,255,0.2)",
+              }}
+            >
+              {opt.value > 1 ? (
+                <span style={{ display: "inline-block", width: 14, height: 9, border: "1.5px solid currentColor", borderRadius: 2, marginRight: 4, verticalAlign: "middle" }} />
+              ) : (
+                <span style={{ display: "inline-block", width: 9, height: 14, border: "1.5px solid currentColor", borderRadius: 2, marginRight: 4, verticalAlign: "middle" }} />
+              )}
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* 裁剪区域 */}
       <div className="flex-1 relative">
         <Cropper
           image={imageSrc}
           crop={crop}
           zoom={zoom}
-          aspect={3 / 4}
+          aspect={selectedAspect}
           onCropChange={setCrop}
           onZoomChange={setZoom}
           onCropComplete={onCropComplete}
