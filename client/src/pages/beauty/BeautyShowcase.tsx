@@ -1,12 +1,10 @@
 /**
- * 奢贝美容院 - 数据展示
+ * 奢贝美容院 - 素材展示
  * 路径: /beauty/showcase
  * 功能:
- * 1. 照片对比Tab: 进入管理页面，用户可添加多组照片（每组2-5张）
- *    - 上传时弹出裁剪框（固定3:4比例），用户自行调整显示区域
- *    - 裁剪后压缩上传到COS
- * 2. PPT对比Tab: 展示PPT前后对比（待实现）
- * 3. 展示页: 每组照片显示为独立横向滑动轮播列表
+ * 1. 照片对比Tab: 管理多组照片，裁剪上传，横向滑动展示
+ * 2. PPT对比Tab: 上传2个PPT，自动转成逐页图片，上下排列同步横向滑动对比
+ * 3. 展示页: 每组照片/PPT显示为独立横向滑动轮播列表
  */
 import { Link } from "wouter";
 import {
@@ -19,8 +17,10 @@ import {
   Check,
   Loader2,
   Edit2,
+  Upload,
+  FileUp,
 } from "lucide-react";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Carousel,
   CarouselContent,
@@ -455,8 +455,8 @@ function PhotoGroupManager() {
                 </div>
               ))}
 
-              {/* 添加照片按钮（每组最多5张） */}
-              {(!group.photos || group.photos.length < 5) && (
+              {/* 添加照片按钮（每组最多50张） */}
+              {(!group.photos || group.photos.length < 50) && (
                 <button
                   onClick={() => handleSelectImage(group.id)}
                   disabled={uploadPhotoMutation.isPending && uploadingGroupId === group.id}
@@ -611,6 +611,360 @@ function PhotoShowcase() {
   );
 }
 
+// ===== PPT对比管理页面 =====
+function PptCompareManager() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+
+  const groupsQuery = trpc.beauty.pptCompare.listGroups.useQuery();
+  const createGroupMutation = trpc.beauty.pptCompare.createGroup.useMutation({
+    onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
+  });
+  const uploadPptMutation = trpc.beauty.pptCompare.uploadPpt.useMutation({
+    onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
+  });
+  const deleteGroupMutation = trpc.beauty.pptCompare.deleteGroup.useMutation({
+    onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
+  });
+  const updateGroupMutation = trpc.beauty.pptCompare.updateGroup.useMutation({
+    onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
+  });
+
+  const [uploadingSide, setUploadingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
+  const [editTitleValue, setEditTitleValue] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const groups = groupsQuery.data || [];
+
+  const handleCreateGroup = async () => {
+    await createGroupMutation.mutateAsync({ title: "新PPT对比" });
+  };
+
+  const handleSelectPpt = (groupId: number, side: 'A' | 'B') => {
+    setUploadingSide({ groupId, side });
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingSide) return;
+    e.target.value = "";
+
+    // 读取文件为base64
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        await uploadPptMutation.mutateAsync({
+          groupId: uploadingSide.groupId,
+          side: uploadingSide.side,
+          fileData: reader.result as string,
+          fileName: file.name,
+        });
+      } catch (err) {
+        console.error("上传PPT失败:", err);
+        alert("上传失败，请重试");
+      }
+      setUploadingSide(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleStartEditTitle = (groupId: number, currentTitle: string) => {
+    setEditingTitleId(groupId);
+    setEditTitleValue(currentTitle || "");
+  };
+
+  const handleSaveTitle = async () => {
+    if (editingTitleId === null) return;
+    await updateGroupMutation.mutateAsync({
+      groupId: editingTitleId,
+      title: editTitleValue,
+    });
+    setEditingTitleId(null);
+  };
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <p className="text-sm text-gray-500">请先登录后管理PPT对比</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 space-y-4">
+      {/* 隐藏的文件输入 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
+      {/* 新建PPT对比组 */}
+      <button
+        onClick={handleCreateGroup}
+        disabled={createGroupMutation.isPending}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium text-white"
+        style={{
+          background: "linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)",
+          boxShadow: "0 4px 12px rgba(233,30,99,0.3)",
+        }}
+      >
+        <Plus className="w-4 h-4" />
+        新建PPT对比组
+      </button>
+
+      {/* 对比组列表 */}
+      {groups.map((group) => (
+        <div
+          key={group.id}
+          className="rounded-2xl bg-white p-4 space-y-3"
+          style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
+        >
+          {/* 组标题 */}
+          <div className="flex items-center gap-2">
+            {editingTitleId === group.id ? (
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  value={editTitleValue}
+                  onChange={(e) => setEditTitleValue(e.target.value)}
+                  className="flex-1 text-sm border rounded-lg px-2 py-1"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveTitle}
+                  className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)" }}
+                >
+                  <Check className="w-4 h-4 text-white" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <Presentation className="w-4 h-4" style={{ color: "#E91E63" }} />
+                <span className="text-sm font-bold text-gray-800 flex-1">
+                  {group.title || "未命名对比"}
+                </span>
+                <button
+                  onClick={() => handleStartEditTitle(group.id, group.title || "")}
+                  className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm("确定删除该PPT对比组？")) {
+                      deleteGroupMutation.mutate({ groupId: group.id });
+                    }
+                  }}
+                  className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* PPT-A 和 PPT-B 上传区域 */}
+          {(['A', 'B'] as const).map((side) => {
+            const pages = side === 'A' ? group.pagesA : group.pagesB;
+            const sideTitle = side === 'A' ? (group.titleA || 'PPT-A') : (group.titleB || 'PPT-B');
+            const isUploading = uploadPptMutation.isPending && uploadingSide?.groupId === group.id && uploadingSide?.side === side;
+
+            return (
+              <div key={side} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{
+                    background: side === 'A' ? '#E3F2FD' : '#FFF3E0',
+                    color: side === 'A' ? '#1565C0' : '#E65100',
+                  }}>
+                    {sideTitle}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {pages && pages.length > 0 ? `${pages.length}页` : '未上传'}
+                  </span>
+                </div>
+
+                {pages && pages.length > 0 ? (
+                  /* 已上传：显示缩略图横向滑动 */
+                  <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
+                    {pages.map((page) => (
+                      <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: '100px', height: '56px' }}>
+                        <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* 上传按钮 */}
+                <button
+                  onClick={() => handleSelectPpt(group.id, side)}
+                  disabled={isUploading}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium border-2 border-dashed transition-all"
+                  style={{
+                    borderColor: isUploading ? '#E91E63' : '#E0E0E0',
+                    color: isUploading ? '#E91E63' : '#999',
+                    background: isUploading ? '#FFF5F7' : '#FAFAFA',
+                  }}
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      转换中，请稍候...
+                    </>
+                  ) : (
+                    <>
+                      <FileUp className="w-4 h-4" />
+                      {pages && pages.length > 0 ? '重新上传' : '上传PPT文件'}
+                    </>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+
+      {groups.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Presentation className="w-10 h-10 mb-3" style={{ color: '#E91E63', opacity: 0.4 }} />
+          <p className="text-sm text-gray-400">点击上方按钮创建PPT对比组</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== PPT对比展示页面（上下排列同步滑动） =====
+function PptCompareShowcase() {
+  const groupsQuery = trpc.beauty.pptCompare.listGroups.useQuery();
+  const groups = (groupsQuery.data || []).filter(
+    (g) => (g.pagesA && g.pagesA.length > 0) || (g.pagesB && g.pagesB.length > 0)
+  );
+
+  if (groupsQuery.isLoading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin" style={{ color: "#E91E63" }} />
+      </div>
+    );
+  }
+
+  if (groups.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <div
+          className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+          style={{ background: "linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 100%)" }}
+        >
+          <Presentation className="w-7 h-7" style={{ color: "#E91E63" }} />
+        </div>
+        <p className="text-sm font-medium text-gray-700">暂无PPT对比数据</p>
+        <p className="text-xs text-gray-400 mt-1">请在"管理"模式中上传PPT</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {groups.map((group) => (
+        <PptCompareGroupView key={group.id} group={group} />
+      ))}
+    </div>
+  );
+}
+
+// 单个PPT对比组的展示（上下同步滑动）
+function PptCompareGroupView({ group }: { group: any }) {
+  const scrollRefA = useRef<HTMLDivElement>(null);
+  const scrollRefB = useRef<HTMLDivElement>(null);
+  const isSyncing = useRef(false);
+
+  // 同步滑动
+  const handleScroll = useCallback((source: 'A' | 'B') => {
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+    const srcRef = source === 'A' ? scrollRefA : scrollRefB;
+    const tgtRef = source === 'A' ? scrollRefB : scrollRefA;
+    if (srcRef.current && tgtRef.current) {
+      tgtRef.current.scrollLeft = srcRef.current.scrollLeft;
+    }
+    requestAnimationFrame(() => { isSyncing.current = false; });
+  }, []);
+
+  const maxPages = Math.max(group.pagesA?.length || 0, group.pagesB?.length || 0);
+  const SLIDE_W = 280;
+  const SLIDE_H = 158; // 16:9比例
+
+  return (
+    <div>
+      {/* 组标题 */}
+      {group.title && (
+        <div className="px-4 mb-2">
+          <h3 className="text-sm font-bold text-gray-800">{group.title}</h3>
+        </div>
+      )}
+
+      {/* PPT-A */}
+      {group.pagesA && group.pagesA.length > 0 && (
+        <div className="mb-1">
+          <div className="px-4 mb-1">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#E3F2FD', color: '#1565C0' }}>
+              {group.titleA || 'PPT-A'}
+            </span>
+          </div>
+          <div
+            ref={scrollRefA}
+            onScroll={() => handleScroll('A')}
+            className="flex gap-2 overflow-x-auto px-4 pb-2"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {group.pagesA.map((page: any) => (
+              <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 shadow-sm" style={{ width: `${SLIDE_W}px`, height: `${SLIDE_H}px` }}>
+                <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* PPT-B */}
+      {group.pagesB && group.pagesB.length > 0 && (
+        <div>
+          <div className="px-4 mb-1">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#FFF3E0', color: '#E65100' }}>
+              {group.titleB || 'PPT-B'}
+            </span>
+          </div>
+          <div
+            ref={scrollRefB}
+            onScroll={() => handleScroll('B')}
+            className="flex gap-2 overflow-x-auto px-4 pb-2"
+            style={{ scrollbarWidth: 'none' }}
+          >
+            {group.pagesB.map((page: any) => (
+              <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 shadow-sm" style={{ width: `${SLIDE_W}px`, height: `${SLIDE_H}px` }}>
+                <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 滑动提示 */}
+      <div className="px-4 mt-1.5">
+        <p className="text-xs text-gray-400">
+          左右同步滑动对比 (共{maxPages}页)
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ===== 主页面 =====
 export default function BeautyShowcase() {
   const [activeTab, setActiveTab] = useState<"photo" | "ppt">("photo");
@@ -632,19 +986,17 @@ export default function BeautyShowcase() {
             </button>
           </Link>
           <h1 className="text-lg font-bold text-white tracking-wide flex-1">
-            数据展示
+            素材展示
           </h1>
           {/* 切换展示/管理模式 */}
-          {activeTab === "photo" && (
-            <button
-              onClick={() =>
-                setViewMode(viewMode === "showcase" ? "manage" : "showcase")
-              }
-              className="px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white"
-            >
-              {viewMode === "showcase" ? "管理" : "展示"}
-            </button>
-          )}
+          <button
+            onClick={() =>
+              setViewMode(viewMode === "showcase" ? "manage" : "showcase")
+            }
+            className="px-3 py-1 rounded-full text-xs font-medium bg-white/20 text-white"
+          >
+            {viewMode === "showcase" ? "管理" : "展示"}
+          </button>
         </div>
       </div>
 
@@ -703,28 +1055,13 @@ export default function BeautyShowcase() {
         )}
 
         {activeTab === "ppt" && (
-          <div className="px-4">
-            <div className="flex flex-col items-center justify-center py-16">
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 100%)",
-                }}
-              >
-                <Presentation
-                  className="w-7 h-7"
-                  style={{ color: "#E91E63" }}
-                />
-              </div>
-              <p className="text-sm font-medium text-gray-700">
-                PPT对比数据准备中
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                即将上线，敬请期待
-              </p>
-            </div>
-          </div>
+          <>
+            {viewMode === "manage" ? (
+              <PptCompareManager />
+            ) : (
+              <PptCompareShowcase />
+            )}
+          </>
         )}
       </div>
     </div>

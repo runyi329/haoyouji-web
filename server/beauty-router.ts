@@ -24,12 +24,18 @@ import {
   beautyVisitLogs,
   beautyShowcaseGroups,
   beautyShowcasePhotos,
+  beautyPptCompareGroups,
+  beautyPptPages,
   users,
 } from "../drizzle/schema";
 import { merchantProducts } from "../drizzle/merchant-schema";
 import { eq, and, desc, asc, sql, ne } from "drizzle-orm";
 import { hasFeaturePermission } from "./db-permissions";
 import { nanoid } from "nanoid";
+import { execSync } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 
 // 超管权限检查（复用脉动网的 super_admin 角色）
 const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
@@ -1076,6 +1082,195 @@ export const beautyRouter = router({
           .update(beautyShowcaseGroups)
           .set({ title: input.title })
           .where(eq(beautyShowcaseGroups.id, input.groupId));
+        return { success: true };
+      }),
+  }),
+
+  // ===== PPT对比展示 =====
+  pptCompare: router({
+    // 查询所有PPT对比组（含页面图片）
+    listGroups: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      const groups = await db
+        .select()
+        .from(beautyPptCompareGroups)
+        .orderBy(desc(beautyPptCompareGroups.createdAt));
+      const result = await Promise.all(
+        groups.map(async (group) => {
+          const pages = await db
+            .select()
+            .from(beautyPptPages)
+            .where(eq(beautyPptPages.groupId, group.id))
+            .orderBy(asc(beautyPptPages.pageNum));
+          const pagesA = pages.filter((p) => p.side === 'A');
+          const pagesB = pages.filter((p) => p.side === 'B');
+          return { ...group, pagesA, pagesB };
+        })
+      );
+      return result;
+    }),
+
+    // 创建PPT对比组
+    createGroup: protectedProcedure
+      .input(z.object({
+        title: z.string().optional(),
+        titleA: z.string().optional(),
+        titleB: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await db.insert(beautyPptCompareGroups).values({
+          userId: ctx.user.id,
+          title: input.title || null,
+          titleA: input.titleA || 'PPT-A',
+          titleB: input.titleB || 'PPT-B',
+        });
+        return { id: result.insertId, success: true };
+      }),
+
+    // 上传PPT文件 → 转成逐页图片 → 存COS
+    uploadPpt: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        side: z.enum(['A', 'B']),
+        fileData: z.string(), // base64编码的PPT文件
+        fileName: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+
+        // 验证组存在
+        const [group] = await db
+          .select()
+          .from(beautyPptCompareGroups)
+          .where(eq(beautyPptCompareGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '对比组不存在' });
+
+        // 先删除该side的旧页面
+        const oldPages = await db
+          .select()
+          .from(beautyPptPages)
+          .where(and(
+            eq(beautyPptPages.groupId, input.groupId),
+            eq(beautyPptPages.side, input.side)
+          ));
+        if (oldPages.length > 0) {
+          const { deleteImageFromCOS } = await import('./cos-upload');
+          for (const p of oldPages) {
+            try { await deleteImageFromCOS(p.imageUrl); } catch (e) { /* ignore */ }
+          }
+          await db.delete(beautyPptPages).where(and(
+            eq(beautyPptPages.groupId, input.groupId),
+            eq(beautyPptPages.side, input.side)
+          ));
+        }
+
+        // 解码base64为文件
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ppt-'));
+        const ext = input.fileName.toLowerCase().endsWith('.pptx') ? '.pptx' : '.ppt';
+        const pptPath = path.join(tmpDir, `input${ext}`);
+        const matches = input.fileData.match(/^data:[^;]+;base64,(.+)$/);
+        const base64Data = matches ? matches[1] : input.fileData;
+        fs.writeFileSync(pptPath, Buffer.from(base64Data, 'base64'));
+
+        try {
+          // LibreOffice 转 PDF
+          console.log('[PPT] 开始转换:', input.fileName);
+          execSync(
+            `libreoffice --headless --convert-to pdf --outdir "${tmpDir}" "${pptPath}"`,
+            { timeout: 120000, stdio: 'pipe' }
+          );
+          const pdfPath = path.join(tmpDir, 'input.pdf');
+          if (!fs.existsSync(pdfPath)) {
+            throw new Error('LibreOffice转换PDF失败');
+          }
+
+          // PDF 转图片（每页一张PNG）
+          execSync(
+            `pdftoppm -png -r 200 "${pdfPath}" "${tmpDir}/page"`,
+            { timeout: 60000, stdio: 'pipe' }
+          );
+
+          // 读取生成的图片文件
+          const imageFiles = fs.readdirSync(tmpDir)
+            .filter((f) => f.startsWith('page-') && f.endsWith('.png'))
+            .sort();
+
+          if (imageFiles.length === 0) {
+            throw new Error('PDF转图片失败，未生成任何页面');
+          }
+
+          console.log(`[PPT] 共转换 ${imageFiles.length} 页`);
+
+          // 逐页上传到COS
+          const { uploadImageToCOS } = await import('./cos-upload');
+          const pageUrls: string[] = [];
+          for (let i = 0; i < imageFiles.length; i++) {
+            const imgBuffer = fs.readFileSync(path.join(tmpDir, imageFiles[i]));
+            const url = await uploadImageToCOS(imgBuffer, 'beauty-showcase');
+            pageUrls.push(url);
+
+            // 保存到数据库
+            await db.insert(beautyPptPages).values({
+              groupId: input.groupId,
+              side: input.side,
+              pageNum: i + 1,
+              imageUrl: url,
+            });
+          }
+
+          return { success: true, pageCount: imageFiles.length, urls: pageUrls };
+        } finally {
+          // 清理临时文件
+          try {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+          } catch (e) { /* ignore */ }
+        }
+      }),
+
+    // 更新对比组标题
+    updateGroup: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        title: z.string().optional(),
+        titleA: z.string().optional(),
+        titleB: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const updateData: Record<string, string> = {};
+        if (input.title !== undefined) updateData.title = input.title;
+        if (input.titleA !== undefined) updateData.titleA = input.titleA;
+        if (input.titleB !== undefined) updateData.titleB = input.titleB;
+        if (Object.keys(updateData).length > 0) {
+          await db
+            .update(beautyPptCompareGroups)
+            .set(updateData)
+            .where(eq(beautyPptCompareGroups.id, input.groupId));
+        }
+        return { success: true };
+      }),
+
+    // 删除对比组（级联删除所有页面图片）
+    deleteGroup: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const pages = await db
+          .select()
+          .from(beautyPptPages)
+          .where(eq(beautyPptPages.groupId, input.groupId));
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        for (const page of pages) {
+          try { await deleteImageFromCOS(page.imageUrl); } catch (e) { /* ignore */ }
+        }
+        await db.delete(beautyPptPages).where(eq(beautyPptPages.groupId, input.groupId));
+        await db.delete(beautyPptCompareGroups).where(eq(beautyPptCompareGroups.id, input.groupId));
         return { success: true };
       }),
   }),
