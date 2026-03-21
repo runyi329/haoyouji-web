@@ -635,6 +635,7 @@ function PptCompareManager() {
   });
 
   const [uploadingSide, setUploadingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null);
+  const [pendingSide, setPendingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null); // 等待文件选择确认
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editTitleValue, setEditTitleValue] = useState("");
@@ -653,7 +654,8 @@ function PptCompareManager() {
   };
 
   const handleSelectImages = (groupId: number, side: 'A' | 'B') => {
-    setUploadingSide({ groupId, side });
+    // 先记录pendingSide，等用户真正选了文件后才设置uploadingSide
+    setPendingSide({ groupId, side });
     fileInputRef.current?.click();
   };
 
@@ -670,8 +672,16 @@ function PptCompareManager() {
   // 文件选择后，读取所有图片为base64，进入裁剪队列
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (!files.length || !uploadingSide) return;
     e.target.value = "";
+    // 用户取消选择或没有文件，清空pendingSide
+    if (!files.length || !pendingSide) {
+      setPendingSide(null);
+      return;
+    }
+
+    // 确认有文件，才正式设置uploadingSide
+    setUploadingSide(pendingSide);
+    setPendingSide(null);
 
     // 读取所有文件为base64
     const base64List: string[] = [];
@@ -887,7 +897,9 @@ function PptCompareManager() {
           {(['A', 'B'] as const).map((side) => {
             const pages = side === 'A' ? group.pagesA : group.pagesB;
             const sideTitle = side === 'A' ? (group.titleA || '方案A') : (group.titleB || '方案B');
-            const isUploading = uploadingSide?.groupId === group.id && uploadingSide?.side === side;
+            // isUploading：只有在裁剪模式或实际上传进度中才显示上传中，避免取消选择后卡住
+            const isUploading = (uploadingSide?.groupId === group.id && uploadingSide?.side === side) &&
+              (isCropMode || uploadProgress !== null);
 
             return (
               <div key={side} className="space-y-2">
