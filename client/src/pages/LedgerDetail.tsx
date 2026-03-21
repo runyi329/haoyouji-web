@@ -1828,10 +1828,10 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* AI 账本：脉动桃子口味运动饮料商品详情页 */}
-      {isCustomAI && (
+      {/* AI 账本：商品详情页（按 S1 第十三章规范，由 AI 海报图动态生成） */}
+      {false && isCustomAI && (
         <div className="pb-24">
-          {/* 1. 主图轮播 */}
+          {/* 商品详情页已清除，下次配置商品时按 S1 规范重新生成 */}
           <div className="w-full overflow-x-auto" style={{ scrollSnapType: 'x mandatory' }}>
             <div className="flex" style={{ width: '300%' }}>
               {[
