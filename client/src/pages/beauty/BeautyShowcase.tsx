@@ -953,14 +953,15 @@ function PptCompareGroupView({ group }: { group: any }) {
             {group.pagesA.map((page: any) => (
               <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 shadow-sm" style={{ width: `${SLIDE_W}px`, height: `${SLIDE_H}px` }}>
                 <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" loading="lazy" decoding="async" />
-                </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
+        </div>
+      )}
 
-          {/* B侧 */}
-          {group.pagesB && group.pagesB.length > 0 && (
-        <div>
+      {/* PPT-B */}
+      {group.pagesB && group.pagesB.length > 0 && (
+        <div className="mb-1">
           <div className="px-4 mb-1">
             <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#FFF3E0', color: '#E65100' }}>
               {group.titleB || 'PPT-B'}
@@ -974,13 +975,12 @@ function PptCompareGroupView({ group }: { group: any }) {
           >
             {group.pagesB.map((page: any) => (
               <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 shadow-sm" style={{ width: `${SLIDE_W}px`, height: `${SLIDE_H}px` }}>
-                 <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" loading="lazy" decoding="async" />
-                </div>
-              ))}
-            </div>
+                <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-contain bg-white" loading="lazy" decoding="async" />
+              </div>
+            ))}
           </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }
