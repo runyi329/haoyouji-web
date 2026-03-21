@@ -244,6 +244,17 @@ jobs:
             " || true
             echo "✅ PPT对比表确认完成"
 
+            echo "📊 确保 AI提示词表存在..."
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              CREATE TABLE IF NOT EXISTS beauty_ai_prompts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                content TEXT NOT NULL,
+                sortOrder INT NOT NULL DEFAULT 0,
+                createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+              );
+            " || true
+            echo "✅ AI提示词表确认完成"
+
             echo "💳 注入支付宝环境变量..."
             node /root/haoyouji-web/scripts/inject-alipay-env.cjs
             echo "🔄 重启服务（使用 ecosystem.config.cjs 确保 COS 环境变量持久化）..."
