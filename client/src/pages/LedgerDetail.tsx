@@ -458,13 +458,13 @@ export default function LedgerDetail() {
     originalPrice: 29.9,
   } : null;
   const aiProductImages = isCustomAI ? [
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_1_pain.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_2_product.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_3_advantages.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_4_scene.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_5_specs.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_6_qa.jpg',
-    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_7_brand.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_1.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_2.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_3.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_4.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_5.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_6.jpg',
+    'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/detail_7.jpg',
   ] : [];
   const aiCarouselImages = [
     'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/rainbow-icecream/carousel_1.jpg',
