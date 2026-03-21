@@ -958,8 +958,8 @@ function PptCompareGroupView({ group }: { group: any }) {
             </div>
           </div>
 
-          {/* B侧 */
-      {group.pagesB && group.pagesB.length > 0 && (
+          {/* B侧 */}
+          {group.pagesB && group.pagesB.length > 0 && (
         <div>
           <div className="px-4 mb-1">
             <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#FFF3E0', color: '#E65100' }}>
@@ -981,14 +981,6 @@ function PptCompareGroupView({ group }: { group: any }) {
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-// ===== 主页面组件      <p className="text-xs text-gray-400">
-          左右同步滑动对比 (共{maxPages}页)
-        </p>
-      </div>
     </div>
   );
 }
