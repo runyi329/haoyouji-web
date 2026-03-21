@@ -634,7 +634,8 @@ function PptCompareManager() {
     onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
   });
 
-  const [uploadingSide, setUploadingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null);
+  const uploadingSideRef = useRef<{ groupId: number; side: 'A' | 'B' } | null>(null); // 用ref同步记录uploadingSide，避免异步state导致上传函数读不到最新值
+  const [uploadingSide, setUploadingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null); // 仅用于UI显示
   const pendingSideRef = useRef<{ groupId: number; side: 'A' | 'B' } | null>(null); // 用ref同步记录，避免React异步state更新导致handleFileChange读不到最新值
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
@@ -679,7 +680,8 @@ function PptCompareManager() {
       return;
     }
 
-    // 确认有文件，才正式设置uploadingSide
+    // 确认有文件，才正式设置uploadingSide（ref同步 + state用于UI）
+    uploadingSideRef.current = pendingSideRef.current;
     setUploadingSide(pendingSideRef.current);
     pendingSideRef.current = null;
 
@@ -706,9 +708,10 @@ function PptCompareManager() {
       setCropQueueIndex(cropQueueIndex + 1);
     } else {
       setIsCropMode(false);
-      // 传入当前已有图片数量，用于追加pageNum
-      const existingCount = uploadingSide
-        ? (pptGroups?.find((g: any) => g.id === uploadingSide.groupId)?.[uploadingSide.side === 'A' ? 'pagesA' : 'pagesB']?.length || 0)
+      // 传入当前已有图片数量，用于追加pageNum（用ref读取，避免stale state）
+      const currentSide = uploadingSideRef.current;
+      const existingCount = currentSide
+        ? (groups?.find((g: any) => g.id === currentSide.groupId)?.[currentSide.side === 'A' ? 'pagesA' : 'pagesB']?.length || 0)
         : 0;
       handleUploadCroppedImages(newResults, existingCount);
     }
@@ -733,8 +736,9 @@ function PptCompareManager() {
 
   // 上传已裁剪的图片列表（追加模式，不清空旧图片）
   const handleUploadCroppedImages = async (images: string[], existingCount: number = 0) => {
-    if (!uploadingSide || images.length === 0) return;
-    const { groupId, side } = uploadingSide;
+    const currentSide = uploadingSideRef.current;
+    if (!currentSide || images.length === 0) return;
+    const { groupId, side } = currentSide;
     setUploadProgress({ current: 0, total: images.length });
 
     try {
@@ -753,6 +757,7 @@ function PptCompareManager() {
       console.error("上传失败:", err);
       alert("上传失败，请重试");
     } finally {
+      uploadingSideRef.current = null;
       setUploadingSide(null);
       setUploadProgress(null);
       setCropQueue([]);
