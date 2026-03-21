@@ -620,9 +620,8 @@ function PptCompareManager() {
   const createGroupMutation = trpc.beauty.pptCompare.createGroup.useMutation({
     onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
   });
-  const uploadPptMutation = trpc.beauty.pptCompare.uploadPpt.useMutation({
-    onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
-  });
+  const uploadPageMutation = trpc.beauty.pptCompare.uploadPage.useMutation();
+  const clearSideMutation = trpc.beauty.pptCompare.clearSide.useMutation();
   const deleteGroupMutation = trpc.beauty.pptCompare.deleteGroup.useMutation({
     onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
   });
@@ -631,6 +630,7 @@ function PptCompareManager() {
   });
 
   const [uploadingSide, setUploadingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editTitleValue, setEditTitleValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -638,36 +638,56 @@ function PptCompareManager() {
   const groups = groupsQuery.data || [];
 
   const handleCreateGroup = async () => {
-    await createGroupMutation.mutateAsync({ title: "新PPT对比" });
+    await createGroupMutation.mutateAsync({ title: "新对比组" });
   };
 
-  const handleSelectPpt = (groupId: number, side: 'A' | 'B') => {
+  const handleSelectImages = (groupId: number, side: 'A' | 'B') => {
     setUploadingSide({ groupId, side });
     fileInputRef.current?.click();
   };
 
+  // 将图片文件读取为base64
+  const readFileAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !uploadingSide) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !uploadingSide) return;
     e.target.value = "";
 
-    // 读取文件为base64
-    const reader = new FileReader();
-    reader.onload = async () => {
-      try {
-        await uploadPptMutation.mutateAsync({
-          groupId: uploadingSide.groupId,
-          side: uploadingSide.side,
-          fileData: reader.result as string,
-          fileName: file.name,
+    const { groupId, side } = uploadingSide;
+    setUploadProgress({ current: 0, total: files.length });
+
+    try {
+      // 先清空该侧旧页面
+      await clearSideMutation.mutateAsync({ groupId, side });
+
+      // 逐张上传
+      for (let i = 0; i < files.length; i++) {
+        const base64 = await readFileAsBase64(files[i]);
+        await uploadPageMutation.mutateAsync({
+          groupId,
+          side,
+          imageData: base64,
+          pageNum: i + 1,
         });
-      } catch (err) {
-        console.error("上传PPT失败:", err);
-        alert("上传失败，请重试");
+        setUploadProgress({ current: i + 1, total: files.length });
       }
+
+      await utils.beauty.pptCompare.listGroups.invalidate();
+    } catch (err) {
+      console.error("上传失败:", err);
+      alert("上传失败，请重试");
+    } finally {
       setUploadingSide(null);
-    };
-    reader.readAsDataURL(file);
+      setUploadProgress(null);
+    }
   };
 
   const handleStartEditTitle = (groupId: number, currentTitle: string) => {
@@ -687,23 +707,24 @@ function PptCompareManager() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
-        <p className="text-sm text-gray-500">请先登录后管理PPT对比</p>
+        <p className="text-sm text-gray-500">请先登录后管理对比组</p>
       </div>
     );
   }
 
   return (
     <div className="px-4 space-y-4">
-      {/* 隐藏的文件输入 */}
+      {/* 隐藏的图片多选输入 */}
       <input
         ref={fileInputRef}
         type="file"
-        accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        accept="image/*"
+        multiple
         className="hidden"
         onChange={handleFileChange}
       />
 
-      {/* 新建PPT对比组 */}
+      {/* 新建对比组 */}
       <button
         onClick={handleCreateGroup}
         disabled={createGroupMutation.isPending}
@@ -714,7 +735,7 @@ function PptCompareManager() {
         }}
       >
         <Plus className="w-4 h-4" />
-        新建PPT对比组
+        新建对比组
       </button>
 
       {/* 对比组列表 */}
@@ -757,7 +778,7 @@ function PptCompareManager() {
                 </button>
                 <button
                   onClick={() => {
-                    if (confirm("确定删除该PPT对比组？")) {
+                    if (confirm("确定删除该对比组？")) {
                       deleteGroupMutation.mutate({ groupId: group.id });
                     }
                   }}
@@ -769,11 +790,11 @@ function PptCompareManager() {
             )}
           </div>
 
-          {/* PPT-A 和 PPT-B 上传区域 */}
+          {/* A侧 和 B侧 上传区域 */}
           {(['A', 'B'] as const).map((side) => {
             const pages = side === 'A' ? group.pagesA : group.pagesB;
-            const sideTitle = side === 'A' ? (group.titleA || 'PPT-A') : (group.titleB || 'PPT-B');
-            const isUploading = uploadPptMutation.isPending && uploadingSide?.groupId === group.id && uploadingSide?.side === side;
+            const sideTitle = side === 'A' ? (group.titleA || '方案A') : (group.titleB || '方案B');
+            const isUploading = uploadingSide?.groupId === group.id && uploadingSide?.side === side;
 
             return (
               <div key={side} className="space-y-2">
@@ -785,24 +806,23 @@ function PptCompareManager() {
                     {sideTitle}
                   </span>
                   <span className="text-xs text-gray-400">
-                    {pages && pages.length > 0 ? `${pages.length}页` : '未上传'}
+                    {pages && pages.length > 0 ? `${pages.length}张图片` : '未上传'}
                   </span>
                 </div>
 
-                {pages && pages.length > 0 ? (
-                  /* 已上传：显示缩略图横向滑动 */
+                {pages && pages.length > 0 && (
                   <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-                    {pages.map((page) => (
-                      <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: '100px', height: '56px' }}>
-                        <img src={page.imageUrl} alt={`第${page.pageNum}页`} className="w-full h-full object-cover" />
+                    {pages.map((page: any) => (
+                      <div key={page.id} className="flex-shrink-0 rounded-lg overflow-hidden bg-gray-100" style={{ width: '80px', height: '60px' }}>
+                        <img src={page.imageUrl} alt={`第${page.pageNum}张`} className="w-full h-full object-cover" />
                       </div>
                     ))}
                   </div>
-                ) : null}
+                )}
 
-                {/* 上传按钮 */}
+                {/* 上传按鈕 */}
                 <button
-                  onClick={() => handleSelectPpt(group.id, side)}
+                  onClick={() => handleSelectImages(group.id, side)}
                   disabled={isUploading}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium border-2 border-dashed transition-all"
                   style={{
@@ -814,15 +834,18 @@ function PptCompareManager() {
                   {isUploading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      转换中，请稍候...
+                      {uploadProgress ? `上传中 ${uploadProgress.current}/${uploadProgress.total}...` : '上传中...'}
                     </>
                   ) : (
                     <>
-                      <FileUp className="w-4 h-4" />
-                      {pages && pages.length > 0 ? '重新上传' : '上传PPT文件'}
+                      <Upload className="w-4 h-4" />
+                      {pages && pages.length > 0 ? '重新上传图片' : '批量上传图片'}
                     </>
                   )}
                 </button>
+                {!isUploading && (
+                  <p className="text-center text-xs text-gray-400">支持同时选择多张，按顺序排列展示</p>
+                )}
               </div>
             );
           })}
@@ -832,7 +855,7 @@ function PptCompareManager() {
       {groups.length === 0 && (
         <div className="flex flex-col items-center justify-center py-12">
           <Presentation className="w-10 h-10 mb-3" style={{ color: '#E91E63', opacity: 0.4 }} />
-          <p className="text-sm text-gray-400">点击上方按钮创建PPT对比组</p>
+          <p className="text-sm text-gray-400">点击上方按鈕创建对比组</p>
         </div>
       )}
     </div>

@@ -32,10 +32,7 @@ import { merchantProducts } from "../drizzle/merchant-schema";
 import { eq, and, desc, asc, sql, ne } from "drizzle-orm";
 import { hasFeaturePermission } from "./db-permissions";
 import { nanoid } from "nanoid";
-import { execSync } from "child_process";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+
 
 // 超管权限检查（复用脉动网的 super_admin 角色）
 const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
@@ -1130,13 +1127,13 @@ export const beautyRouter = router({
         return { id: result.insertId, success: true };
       }),
 
-    // 上传PPT文件 → 转成逐页图片 → 存COS
-    uploadPpt: protectedProcedure
+    // 上传单张图片页面（直接接收图片base64，不需要LibreOffice）
+    uploadPage: protectedProcedure
       .input(z.object({
         groupId: z.number(),
         side: z.enum(['A', 'B']),
-        fileData: z.string(), // base64编码的PPT文件
-        fileName: z.string(),
+        imageData: z.string(), // base64图片
+        pageNum: z.number(),   // 页码（从1开始）
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
@@ -1149,7 +1146,29 @@ export const beautyRouter = router({
           .where(eq(beautyPptCompareGroups.id, input.groupId));
         if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '对比组不存在' });
 
-        // 先删除该side的旧页面
+        // 上传图片到COS
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const imageUrl = await uploadImageToCOS(input.imageData, 'beauty-showcase');
+
+        // 保存到数据库
+        const [result] = await db.insert(beautyPptPages).values({
+          groupId: input.groupId,
+          side: input.side,
+          pageNum: input.pageNum,
+          imageUrl,
+        });
+        return { id: result.insertId, imageUrl, success: true };
+      }),
+
+    // 清空某一侧的所有页面（重新上传前先清空）
+    clearSide: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        side: z.enum(['A', 'B']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const oldPages = await db
           .select()
           .from(beautyPptPages)
@@ -1157,78 +1176,15 @@ export const beautyRouter = router({
             eq(beautyPptPages.groupId, input.groupId),
             eq(beautyPptPages.side, input.side)
           ));
-        if (oldPages.length > 0) {
-          const { deleteImageFromCOS } = await import('./cos-upload');
-          for (const p of oldPages) {
-            try { await deleteImageFromCOS(p.imageUrl); } catch (e) { /* ignore */ }
-          }
-          await db.delete(beautyPptPages).where(and(
-            eq(beautyPptPages.groupId, input.groupId),
-            eq(beautyPptPages.side, input.side)
-          ));
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        for (const p of oldPages) {
+          try { await deleteImageFromCOS(p.imageUrl); } catch (e) { /* ignore */ }
         }
-
-        // 解码base64为文件
-        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ppt-'));
-        const ext = input.fileName.toLowerCase().endsWith('.pptx') ? '.pptx' : '.ppt';
-        const pptPath = path.join(tmpDir, `input${ext}`);
-        const matches = input.fileData.match(/^data:[^;]+;base64,(.+)$/);
-        const base64Data = matches ? matches[1] : input.fileData;
-        fs.writeFileSync(pptPath, Buffer.from(base64Data, 'base64'));
-
-        try {
-          // LibreOffice 转 PDF
-          console.log('[PPT] 开始转换:', input.fileName);
-          execSync(
-            `libreoffice --headless --convert-to pdf --outdir "${tmpDir}" "${pptPath}"`,
-            { timeout: 120000, stdio: 'pipe' }
-          );
-          const pdfPath = path.join(tmpDir, 'input.pdf');
-          if (!fs.existsSync(pdfPath)) {
-            throw new Error('LibreOffice转换PDF失败');
-          }
-
-          // PDF 转图片（每页一张PNG）
-          execSync(
-            `pdftoppm -png -r 200 "${pdfPath}" "${tmpDir}/page"`,
-            { timeout: 60000, stdio: 'pipe' }
-          );
-
-          // 读取生成的图片文件
-          const imageFiles = fs.readdirSync(tmpDir)
-            .filter((f) => f.startsWith('page-') && f.endsWith('.png'))
-            .sort();
-
-          if (imageFiles.length === 0) {
-            throw new Error('PDF转图片失败，未生成任何页面');
-          }
-
-          console.log(`[PPT] 共转换 ${imageFiles.length} 页`);
-
-          // 逐页上传到COS
-          const { uploadImageToCOS } = await import('./cos-upload');
-          const pageUrls: string[] = [];
-          for (let i = 0; i < imageFiles.length; i++) {
-            const imgBuffer = fs.readFileSync(path.join(tmpDir, imageFiles[i]));
-            const url = await uploadImageToCOS(imgBuffer, 'beauty-showcase');
-            pageUrls.push(url);
-
-            // 保存到数据库
-            await db.insert(beautyPptPages).values({
-              groupId: input.groupId,
-              side: input.side,
-              pageNum: i + 1,
-              imageUrl: url,
-            });
-          }
-
-          return { success: true, pageCount: imageFiles.length, urls: pageUrls };
-        } finally {
-          // 清理临时文件
-          try {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
-          } catch (e) { /* ignore */ }
-        }
+        await db.delete(beautyPptPages).where(and(
+          eq(beautyPptPages.groupId, input.groupId),
+          eq(beautyPptPages.side, input.side)
+        ));
+        return { success: true };
       }),
 
     // 更新对比组标题
