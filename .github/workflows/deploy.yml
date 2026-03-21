@@ -242,7 +242,11 @@ jobs:
             " || true
             echo "✅ PPT对比表确认完成"
             echo "📦 确保 LibreOffice 和 poppler-utils 已安装..."
-            which libreoffice > /dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq libreoffice-impress poppler-utils > /dev/null 2>&1)
+            which libreoffice > /dev/null 2>&1 && which pdftoppm > /dev/null 2>&1 || (
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq < /dev/null
+              apt-get install -y --no-install-recommends -qq libreoffice-impress poppler-utils < /dev/null
+            )
             echo "✅ LibreOffice 环境确认完成"
             echo "💳 注入支付宝环境变量..."
             node /root/haoyouji-web/scripts/inject-alipay-env.cjs
