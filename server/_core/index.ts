@@ -285,6 +285,9 @@ async function startServer() {
   // 支付宝 WAP 支付路由
   const alipayRouterModule = await import('../alipay-router.js');
   app.use(alipayRouterModule.default);
+  // 食物热量扫描路由
+  const foodCalorieModule = await import('../food-calorie-router.js');
+  app.use(foodCalorieModule.default);
 
   // tRPC API
   app.use(
