@@ -1828,6 +1828,169 @@ export default function LedgerDetail() {
         </div>
       )}
 
+      {/* AI 账本：脉动桃子口味运动饮料商品详情页 */}
+      {isCustomAI && (
+        <div className="pb-24">
+          {/* 1. 主图轮播 */}
+          <div className="w-full overflow-x-auto" style={{ scrollSnapType: 'x mandatory' }}>
+            <div className="flex" style={{ width: '300%' }}>
+              {[
+                'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/mizone/hero_banner.jpg',
+                'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/mizone/scene_outdoor.jpg',
+                'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/mizone/scene_office.jpg',
+              ].map((src, i) => (
+                <div key={i} className="flex-shrink-0" style={{ width: '33.333%', scrollSnapAlign: 'start' }}>
+                  <img src={src} alt={`脉动主图${i+1}`} className="w-full object-cover" style={{ maxHeight: '420px', objectFit: 'cover' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. 商品名称 + 卖点副标题 */}
+          <div className="px-4 pt-4 pb-2" style={{ background: '#fff' }}>
+            <div className="text-xs px-2 py-0.5 rounded-full inline-block mb-1" style={{ background: '#FFF3E0', color: '#E65100' }}>达能集团 · 正品保障</div>
+            <h1 className="text-xl font-bold text-gray-900 leading-tight">脉动（Mizone）桃子口味维生素饮料</h1>
+            <p className="text-sm text-gray-500 mt-1">3D源动力 · 富含维C+烟酸+B6 · 清爽补水不甜腻</p>
+          </div>
+
+          {/* 3. 价格区域 */}
+          <div className="px-4 py-3" style={{ background: '#FFF8F0' }}>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold" style={{ color: '#E53935' }}>¥4.00</span>
+              <span className="text-sm text-gray-400 line-through">¥6.00</span>
+              <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: '#E53935', color: '#fff' }}>限时特惠</span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">已有 2,847 人购买</p>
+          </div>
+
+          {/* 4. 服务保障横条 */}
+          <div className="px-4 py-3 flex items-center justify-around border-b border-gray-100" style={{ background: '#fff' }}>
+            {[['包邮到家','🚚'],['7天退换','🔄'],['正品保证','✅'],['假一赔三','🛡️']].map(([label, icon]) => (
+              <div key={label} className="flex flex-col items-center gap-0.5">
+                <span className="text-base">{icon}</span>
+                <span className="text-xs text-gray-500">{label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 5. 品牌溯源 */}
+          <div className="px-4 pt-4 pb-2" style={{ background: '#fff' }}>
+            <div className="text-sm font-bold text-gray-800 mb-2">品牌溯源</div>
+            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/mizone/brand_story.jpg" alt="品牌溯源" className="w-full rounded-lg" />
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed">脉动（Mizone）源自新西兰，由法国达能集团旗下品牌，2003年正式进入中国市场。凭借独特的维生素配方和清爽口感，迅速成为中国维生素饮料品类第一品牌，深受年轻人和运动爱好者喜爱。</p>
+          </div>
+
+          {/* 6. 核心卖点 */}
+          <div className="px-4 pt-4 pb-2 mt-2" style={{ background: '#F0F7FF' }}>
+            <div className="text-sm font-bold text-gray-800 mb-3">核心卖点</div>
+            {[
+              { icon: '💧', title: '清爽补水', desc: '低糖配方，喝完不黏腻，运动后最佳选择' },
+              { icon: '⚡', title: '3D源动力', desc: '维C+烟酸+B6三重维生素，快速恢复活力' },
+              { icon: '🍑', title: '天然桃子香', desc: '真实桃子风味，不含人工色素，口感清新' },
+              { icon: '🏃', title: '运动专属', desc: '适合跑步、健身、户外等各类运动场景' },
+            ].map(({ icon, title, desc }) => (
+              <div key={title} className="flex items-start gap-3 mb-3">
+                <span className="text-2xl flex-shrink-0">{icon}</span>
+                <div>
+                  <div className="text-sm font-semibold text-gray-800">{title}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 7. 模特场景图 */}
+          <div className="px-4 pt-4 pb-2" style={{ background: '#fff' }}>
+            <div className="text-sm font-bold text-gray-800 mb-2">使用场景</div>
+            <div className="grid grid-cols-2 gap-2">
+              <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/mizone/scene_outdoor.jpg" alt="户外运动" className="w-full rounded-lg object-cover" style={{ height: '180px' }} />
+              <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/mizone/scene_office.jpg" alt="办公室" className="w-full rounded-lg object-cover" style={{ height: '180px' }} />
+            </div>
+            <p className="text-xs text-gray-400 mt-1 text-center">跑步 · 健身 · 办公 · 日常补水</p>
+          </div>
+
+          {/* 8. 维生素成分细节图 */}
+          <div className="px-4 pt-4 pb-2 mt-2" style={{ background: '#fff' }}>
+            <div className="text-sm font-bold text-gray-800 mb-2">成分详解</div>
+            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/mizone/detail_vitamins.jpg" alt="维生素成分" className="w-full rounded-lg" />
+          </div>
+
+          {/* 9. 规格参数表 */}
+          <div className="px-4 pt-4 pb-2 mt-2" style={{ background: '#fff' }}>
+            <div className="text-sm font-bold text-gray-800 mb-2">规格参数</div>
+            <table className="w-full text-xs">
+              <tbody>
+                {[
+                  ['品牌','脉动（Mizone）'],
+                  ['规格','400ml / 瓶'],
+                  ['口味','桃子口味'],
+                  ['产地','中国大陆'],
+                  ['生产商','达能（中国）食品饮料有限公司'],
+                  ['主要成分','水、白砂糖、桃汁、维生素C、烟酸、维生素B6'],
+                  ['能量','83kJ/100ml'],
+                  ['保质期','12个月'],
+                ].map(([k, v]) => (
+                  <tr key={k} className="border-b border-gray-100">
+                    <td className="py-2 text-gray-400 w-1/3">{k}</td>
+                    <td className="py-2 text-gray-700 font-medium">{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* 10. FAQ */}
+          <div className="px-4 pt-4 pb-2 mt-2" style={{ background: '#F9F9F9' }}>
+            <div className="text-sm font-bold text-gray-800 mb-3">常见问题</div>
+            {[
+              { q: '这款饮料含糖量高吗？', a: '低糖配方，每100ml仅含4.9g碳水化合物，适合日常饮用。' },
+              { q: '运动后喝有效果吗？', a: '有效！维生素B6和烟酸帮助能量代谢，运动后补充效果更佳。' },
+              { q: '可以冷藏后饮用吗？', a: '当然可以，冷藏后口感更清爽，建议4-8°C冷藏。' },
+              { q: '儿童可以喝吗？', a: '适合12岁以上青少年及成人饮用，儿童建议适量。' },
+            ].map(({ q, a }) => (
+              <div key={q} className="mb-3">
+                <div className="text-xs font-semibold text-gray-700">Q：{q}</div>
+                <div className="text-xs text-gray-500 mt-0.5 pl-3">A：{a}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 11. 物流发货说明 */}
+          <div className="px-4 pt-4 pb-2 mt-2" style={{ background: '#fff' }}>
+            <div className="text-sm font-bold text-gray-800 mb-2">发货说明</div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="text-base">📦</span>
+                <span>发货地：广东省广州市 · 顺丰/京东快递</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="text-base">⏱️</span>
+                <span>付款后24小时内发货，节假日顺延</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="text-base">🚚</span>
+                <span>全国包邮（偏远地区除外）</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="text-base">🔄</span>
+                <span>7天无理由退换，收到商品请当面验货</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 12. 底部购买按钮（吸底固定） */}
+          <div className="fixed bottom-0 left-0 right-0 px-4 py-3 z-50" style={{ background: '#fff', boxShadow: '0 -2px 12px rgba(0,0,0,0.08)' }}>
+            <button
+              onClick={() => { window.location.href = 'https://jiangyuchen.cn/api/alipay/quick-pay?amount=4&subject=脉动桃子口味运动饮料400ml'; }}
+              className="w-full py-3.5 rounded-full text-white font-bold text-base"
+              style={{ background: 'linear-gradient(90deg, #FF6B35 0%, #FF4500 100%)' }}
+            >
+              立即购买 ¥4.00
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* AI 账本：食物热量扫描界面（待视觉模型接入后启用） */}
       {false && isCustomAI && (
         <div className="flex-1 px-4 pb-20 pt-4">
