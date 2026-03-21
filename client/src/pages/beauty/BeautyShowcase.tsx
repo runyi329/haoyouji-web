@@ -635,7 +635,7 @@ function PptCompareManager() {
   });
 
   const [uploadingSide, setUploadingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null);
-  const [pendingSide, setPendingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null); // 等待文件选择确认
+  const pendingSideRef = useRef<{ groupId: number; side: 'A' | 'B' } | null>(null); // 用ref同步记录，避免React异步state更新导致handleFileChange读不到最新值
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editTitleValue, setEditTitleValue] = useState("");
@@ -654,8 +654,8 @@ function PptCompareManager() {
   };
 
   const handleSelectImages = (groupId: number, side: 'A' | 'B') => {
-    // 先记录pendingSide，等用户真正选了文件后才设置uploadingSide
-    setPendingSide({ groupId, side });
+    // 用ref同步记录，避免React异步state更新导致handleFileChange读不到最新值
+    pendingSideRef.current = { groupId, side };
     fileInputRef.current?.click();
   };
 
@@ -673,15 +673,15 @@ function PptCompareManager() {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     e.target.value = "";
-    // 用户取消选择或没有文件，清空pendingSide
-    if (!files.length || !pendingSide) {
-      setPendingSide(null);
+    // 用户取消选择或没有文件，清空pendingSideRef
+    if (!files.length || !pendingSideRef.current) {
+      pendingSideRef.current = null;
       return;
     }
 
     // 确认有文件，才正式设置uploadingSide
-    setUploadingSide(pendingSide);
-    setPendingSide(null);
+    setUploadingSide(pendingSideRef.current);
+    pendingSideRef.current = null;
 
     // 读取所有文件为base64
     const base64List: string[] = [];
