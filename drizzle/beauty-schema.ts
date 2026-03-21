@@ -224,3 +224,30 @@ export const beautyShowcasePhotos = mysqlTable("beauty_showcase_photos", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type BeautyShowcasePhoto = typeof beautyShowcasePhotos.$inferSelect;
+
+
+// ===== PPT对比展示 =====
+
+// PPT对比组（一组包含两个PPT：A和B）
+export const beautyPptCompareGroups = mysqlTable("beauty_ppt_compare_groups", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),           // 创建者
+  title: varchar("title", { length: 100 }),  // 对比组标题（可选）
+  titleA: varchar("titleA", { length: 100 }), // PPT-A标题（如"改版前"）
+  titleB: varchar("titleB", { length: 100 }), // PPT-B标题（如"改版后"）
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BeautyPptCompareGroup = typeof beautyPptCompareGroups.$inferSelect;
+
+// PPT页面图片（每页转成的图片，属于某个对比组的A或B）
+export const beautyPptPages = mysqlTable("beauty_ppt_pages", {
+  id: int("id").autoincrement().primaryKey(),
+  groupId: int("groupId").notNull(),         // 所属对比组
+  side: varchar("side", { length: 1 }).notNull(), // 'A' 或 'B'
+  pageNum: int("pageNum").notNull(),         // 页码（从1开始）
+  imageUrl: text("imageUrl").notNull(),       // COS图片URL
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BeautyPptPage = typeof beautyPptPages.$inferSelect;

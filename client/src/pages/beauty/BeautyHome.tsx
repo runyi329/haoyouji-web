@@ -157,7 +157,7 @@ export default function BeautyHome() {
               <p className="text-white/70 text-xs mt-1 tracking-widest">{STORE_INFO.subtitle}</p>
             </div>
             <div className="flex items-center gap-2">
-              {/* 数据按钮 */}
+              {/* 素材按钮 */}
               <Link href="/beauty/showcase">
                 <button
                   className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
