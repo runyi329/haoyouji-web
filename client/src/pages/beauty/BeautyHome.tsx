@@ -9,7 +9,7 @@ import { useState, useRef, useEffect } from "react";
 import SplashScreen from "@/components/SplashScreen";
 import { useMerchantOG } from "@/hooks/useMerchantOG";
 import {
-  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut, Share2
+  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut, Share2, BarChart3
 } from "lucide-react";
 import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
 
@@ -157,6 +157,14 @@ export default function BeautyHome() {
               <p className="text-white/70 text-xs mt-1 tracking-widest">{STORE_INFO.subtitle}</p>
             </div>
             <div className="flex items-center gap-2">
+              {/* 数据按钮 */}
+              <Link href="/beauty/showcase">
+                <button
+                  className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
+                >
+                  <BarChart3 className="w-4 h-4 text-white/80" />
+                </button>
+              </Link>
               {/* 分享按钮 */}
               <button
                 onClick={handleShare}
