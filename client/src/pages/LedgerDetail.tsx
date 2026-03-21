@@ -1837,7 +1837,6 @@ export default function LedgerDetail() {
             {[
               { id: '2pack', name: '2罐装', price: 158, origPrice: 198, discount: '8折', img: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-2pack.webp', payAmount: 158 },
               { id: '3pack', name: '3罐装', price: 223, origPrice: 297, discount: '75折', img: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-3pack.webp', payAmount: 223 },
-              { id: '4pack', name: '4罐装', price: 277, origPrice: 396, discount: '7折', img: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-4pack.webp', payAmount: 277 },
             ].map(pkg => (
               <div key={pkg.id} className="bg-white rounded-xl overflow-hidden shadow-sm" onClick={() => setAiProductDetail(pkg.id)}>
                 <img src={pkg.img} alt={pkg.name} className="w-full aspect-square object-cover" loading="lazy" />
@@ -1867,16 +1866,16 @@ export default function LedgerDetail() {
             {/* 套餐封面图 */}
             {aiProductDetail === '2pack' && <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-2pack.webp" className="w-full" loading="lazy" />}
             {aiProductDetail === '3pack' && <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-3pack.webp" className="w-full" loading="lazy" />}
-            {aiProductDetail === '4pack' && <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-4pack.webp" className="w-full" loading="lazy" />}
+
 
             {/* 产品信息 */}
             <div className="p-4">
-              <div className="text-lg font-bold text-gray-800">FitLine Activize Oxyplus {aiProductDetail === '2pack' ? '2罐装' : aiProductDetail === '3pack' ? '3罐装' : '4罐装'}</div>
+              <div className="text-lg font-bold text-gray-800">FitLine Activize Oxyplus {aiProductDetail === '2pack' ? '2罐装' : '3罐装'}</div>
               <div className="text-sm text-gray-500 mt-1">德国原装进口 · 运动营养食品 · 耐力类</div>
               <div className="flex items-center gap-3 mt-3">
-                <span className="text-red-500 text-2xl font-bold">¥{aiProductDetail === '2pack' ? '158' : aiProductDetail === '3pack' ? '223' : '277'}</span>
-                <span className="text-gray-400 line-through text-sm">¥{aiProductDetail === '2pack' ? '198' : aiProductDetail === '3pack' ? '297' : '396'}</span>
-                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded">{aiProductDetail === '2pack' ? '8折' : aiProductDetail === '3pack' ? '75折' : '7折'}</span>
+                <span className="text-red-500 text-2xl font-bold">¥{aiProductDetail === '2pack' ? '158' : '223'}</span>
+                <span className="text-gray-400 line-through text-sm">¥{aiProductDetail === '2pack' ? '198' : '297'}</span>
+                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded">{aiProductDetail === '2pack' ? '8折' : '75折'}</span>
               </div>
               <div className="mt-2 bg-green-50 text-green-700 text-sm px-3 py-2 rounded-lg">
                 🎁 赠品：小象巴马弱碱性天然矿泉水 350mL × 12瓶
@@ -1893,8 +1892,8 @@ export default function LedgerDetail() {
               <button 
                 className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-3.5 rounded-xl text-base font-semibold shadow-lg"
                 onClick={() => {
-                  const amt = aiProductDetail === '2pack' ? 158 : aiProductDetail === '3pack' ? 223 : 277;
-                  const name = aiProductDetail === '2pack' ? '2罐装' : aiProductDetail === '3pack' ? '3罐装' : '4罐装';
+                  const amt = aiProductDetail === '2pack' ? 158 : 223;
+                  const name = aiProductDetail === '2pack' ? '2罐装' : '3罐装';
                   window.open(`https://jiangyuchen.cn/api/alipay/quick-pay?amount=${amt}&subject=FitLine+Activize+${encodeURIComponent(name)}+%E8%B5%A012%E7%93%B6%E7%9F%BF%E6%B3%89%E6%B0%B4`, '_blank');
                 }}
               >
