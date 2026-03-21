@@ -502,6 +502,35 @@ function PhotoGroupManager() {
   );
 }
 
+// ===== 自适应比例的照片卡片 =====
+function AutoAspectPhoto({ src, fixedHeight = 240 }: { src: string; fixedHeight?: number }) {
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+
+  const onLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    setDims({ w: img.naturalWidth, h: img.naturalHeight });
+  }, []);
+
+  // 根据图片原始比例计算宽度
+  const computedWidth = dims
+    ? Math.round((dims.w / dims.h) * fixedHeight)
+    : fixedHeight * 0.75; // 默认3:4占位
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden bg-gray-100 flex-shrink-0"
+      style={{ width: `${computedWidth}px`, height: `${fixedHeight}px` }}
+    >
+      <img
+        src={src}
+        alt=""
+        className="w-full h-full object-cover"
+        onLoad={onLoad}
+      />
+    </div>
+  );
+}
+
 // ===== 照片展示页面（多组横向轮播） =====
 function PhotoShowcase() {
   const groupsQuery = trpc.beauty.showcase.listGroups.useQuery();
@@ -564,16 +593,7 @@ function PhotoShowcase() {
                   key={photo.id}
                   className="pl-2 basis-auto"
                 >
-                  <div
-                    className="rounded-xl overflow-hidden bg-gray-100"
-                    style={{ width: "180px", height: "240px" }}
-                  >
-                    <img
-                      src={photo.imageUrl}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+                  <AutoAspectPhoto src={photo.imageUrl} fixedHeight={240} />
                 </CarouselItem>
               ))}
             </CarouselContent>
