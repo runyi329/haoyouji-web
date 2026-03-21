@@ -203,3 +203,24 @@ export const beautyVisitLogs = mysqlTable("beauty_visit_logs", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 export type BeautyVisitLog = typeof beautyVisitLogs.$inferSelect;
+
+// 数据展示 - 照片组（每组2-5张照片，横向滑动展示）
+export const beautyShowcaseGroups = mysqlTable("beauty_showcase_groups", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),           // 创建者
+  title: varchar("title", { length: 100 }),  // 组标题（可选）
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BeautyShowcaseGroup = typeof beautyShowcaseGroups.$inferSelect;
+
+// 数据展示 - 照片（属于某个照片组）
+export const beautyShowcasePhotos = mysqlTable("beauty_showcase_photos", {
+  id: int("id").autoincrement().primaryKey(),
+  groupId: int("groupId").notNull(),         // 所属照片组
+  imageUrl: text("imageUrl").notNull(),       // COS图片URL
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BeautyShowcasePhoto = typeof beautyShowcasePhotos.$inferSelect;

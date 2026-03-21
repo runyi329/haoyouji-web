@@ -22,6 +22,8 @@ import {
   beautyPointsLog,
   beautyMemberCards,
   beautyVisitLogs,
+  beautyShowcaseGroups,
+  beautyShowcasePhotos,
   users,
 } from "../drizzle/schema";
 import { merchantProducts } from "../drizzle/merchant-schema";
@@ -951,6 +953,129 @@ export const beautyRouter = router({
         await db
           .delete(beautyVisitLogs)
           .where(eq(beautyVisitLogs.id, input.visitId));
+        return { success: true };
+      }),
+  }),
+
+  // ===== 数据展示 - 照片组 =====
+  showcase: router({
+    // 查询所有照片组（含照片）
+    listGroups: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      const groups = await db
+        .select()
+        .from(beautyShowcaseGroups)
+        .orderBy(desc(beautyShowcaseGroups.createdAt));
+      // 查询每组的照片
+      const result = await Promise.all(
+        groups.map(async (group) => {
+          const photos = await db
+            .select()
+            .from(beautyShowcasePhotos)
+            .where(eq(beautyShowcasePhotos.groupId, group.id))
+            .orderBy(asc(beautyShowcasePhotos.sortOrder));
+          return { ...group, photos };
+        })
+      );
+      return result;
+    }),
+
+    // 创建照片组
+    createGroup: protectedProcedure
+      .input(z.object({
+        title: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await db.insert(beautyShowcaseGroups).values({
+          userId: ctx.user.id,
+          title: input.title || null,
+        });
+        return { id: result.insertId, success: true };
+      }),
+
+    // 上传照片到组（base64 → 压缩 → COS）
+    uploadPhoto: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        imageData: z.string(), // base64
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证组存在
+        const [group] = await db
+          .select()
+          .from(beautyShowcaseGroups)
+          .where(eq(beautyShowcaseGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '照片组不存在' });
+        // 上传到COS（自动压缩为WebP）
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const imageUrl = await uploadImageToCOS(input.imageData, 'beauty-showcase');
+        // 保存到数据库
+        const [result] = await db.insert(beautyShowcasePhotos).values({
+          groupId: input.groupId,
+          imageUrl,
+          sortOrder: input.sortOrder ?? 0,
+        });
+        return { id: result.insertId, imageUrl, success: true };
+      }),
+
+    // 删除照片组（级联删除组内照片）
+    deleteGroup: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 先删除组内照片
+        const photos = await db
+          .select()
+          .from(beautyShowcasePhotos)
+          .where(eq(beautyShowcasePhotos.groupId, input.groupId));
+        // 删除COS上的图片
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        for (const photo of photos) {
+          try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
+        }
+        await db.delete(beautyShowcasePhotos).where(eq(beautyShowcasePhotos.groupId, input.groupId));
+        await db.delete(beautyShowcaseGroups).where(eq(beautyShowcaseGroups.id, input.groupId));
+        return { success: true };
+      }),
+
+    // 删除单张照片
+    deletePhoto: protectedProcedure
+      .input(z.object({ photoId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [photo] = await db
+          .select()
+          .from(beautyShowcasePhotos)
+          .where(eq(beautyShowcasePhotos.id, input.photoId));
+        if (!photo) throw new TRPCError({ code: 'NOT_FOUND', message: '照片不存在' });
+        // 删除COS文件
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
+        await db.delete(beautyShowcasePhotos).where(eq(beautyShowcasePhotos.id, input.photoId));
+        return { success: true };
+      }),
+
+    // 更新组标题
+    updateGroupTitle: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        title: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db
+          .update(beautyShowcaseGroups)
+          .set({ title: input.title })
+          .where(eq(beautyShowcaseGroups.id, input.groupId));
         return { success: true };
       }),
   }),
