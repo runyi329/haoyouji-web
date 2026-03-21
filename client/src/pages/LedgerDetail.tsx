@@ -1828,8 +1828,8 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* AI 账本：食物热量扫描界面 */}
-      {isCustomAI && (
+      {/* AI 账本：食物热量扫描界面（待视觉模型接入后启用） */}
+      {false && isCustomAI && (
         <div className="flex-1 px-4 pb-20 pt-4">
           {/* 隐藏文件输入：相册上传 */}
           <input
@@ -2028,6 +2028,80 @@ export default function LedgerDetail() {
           )}
         </div>
       )}
+      {/* AI 账本：白色内容区 - FitLine套餐商品 */}
+      {isCustomAI && (
+        <div className="flex-1 px-4 pb-20 space-y-4 pt-4">
+          {!aiProductDetail ? (
+          <>
+          {/* 活动横幅 */}
+          <div className="bg-gradient-to-r from-red-600 to-orange-500 rounded-xl p-3 text-center">
+            <div className="text-white text-sm font-bold">FitLine Activize Oxyplus · 限时套餐促销</div>
+            <div className="text-yellow-200 text-xs mt-1">购任意套餐均贾12瓶小象巴马矿泉水（350mL×12）</div>
+          </div>
+          {/* 2x2 套餐卡片 */}
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { id: '2pack', name: '2罐装', price: 158, origPrice: 198, discount: '8折', img: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-2pack.webp', payAmount: 158 },
+              { id: '3pack', name: '3罐装', price: 223, origPrice: 297, discount: '75折', img: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-3pack.webp', payAmount: 223 },
+            ].map(pkg => (
+              <div key={pkg.id} className="bg-white rounded-xl overflow-hidden shadow-sm" onClick={() => setAiProductDetail(pkg.id)}>
+                <img src={pkg.img} alt={pkg.name} className="w-full aspect-square object-cover" loading="lazy" />
+                <div className="p-2">
+                  <div className="text-sm font-bold text-gray-800 truncate">FitLine {pkg.name}</div>
+                  <div className="text-xs text-green-600 mt-0.5">贾12瓶矿泉水</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-red-500 text-lg font-bold">¥{pkg.price}</span>
+                    <span className="text-gray-400 line-through text-xs">¥{pkg.origPrice}</span>
+                    <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded">{pkg.discount}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          </>
+          ) : (
+          /* 套餐详情页 */
+          <div className="bg-white rounded-xl overflow-hidden">
+            <div className="flex items-center p-3 border-b border-gray-100">
+              <button onClick={() => setAiProductDetail(null)} className="flex items-center text-gray-600 text-sm">
+                <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                返回套餐列表
+              </button>
+            </div>
+            {aiProductDetail === '2pack' && <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-2pack.webp" className="w-full" loading="lazy" />}
+            {aiProductDetail === '3pack' && <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-3pack.webp" className="w-full" loading="lazy" />}
+            <div className="p-4">
+              <div className="text-lg font-bold text-gray-800">FitLine Activize Oxyplus {aiProductDetail === '2pack' ? '2罐装' : '3罐装'}</div>
+              <div className="text-sm text-gray-500 mt-1">德国原装进口 · 运动营养食品 · 耐力类</div>
+              <div className="flex items-center gap-3 mt-3">
+                <span className="text-red-500 text-2xl font-bold">¥{aiProductDetail === '2pack' ? '158' : '223'}</span>
+                <span className="text-gray-400 line-through text-sm">¥{aiProductDetail === '2pack' ? '198' : '297'}</span>
+                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded">{aiProductDetail === '2pack' ? '8折' : '75折'}</span>
+              </div>
+              <div className="mt-2 bg-green-50 text-green-700 text-sm px-3 py-2 rounded-lg">
+                赠品：小象巴马弱碱性天然矿泉水 350mL x 12瓶
+              </div>
+            </div>
+            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-detail-ingredients.webp" className="w-full" loading="lazy" />
+            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-detail-origin.webp" className="w-full" loading="lazy" />
+            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/posters/fitline-detail-water.webp" className="w-full" loading="lazy" />
+            <div className="p-4">
+              <button
+                className="w-full bg-gradient-to-r from-red-500 to-orange-500 text-white py-3.5 rounded-xl text-base font-semibold shadow-lg"
+                onClick={() => {
+                  const amt = aiProductDetail === '2pack' ? 158 : 223;
+                  const name = aiProductDetail === '2pack' ? '2罐装' : '3罐装';
+                  window.location.href = `https://jiangyuchen.cn/api/alipay/quick-pay?amount=${amt}&subject=FitLine+Activize+${encodeURIComponent(name)}+%E8%B5%A012%E7%93%B6%E7%9F%BF%E6%B3%89%E6%B0%B4`;
+                }}
+              >
+                立即购买
+              </button>
+            </div>
+          </div>
+          )}
+        </div>
+      )}
+
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
       {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
