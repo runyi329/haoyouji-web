@@ -28,7 +28,7 @@ jobs:
             echo "📂 进入项目目录..."
             cd /root/haoyouji-web
             echo "📥 拉取最新代码..."
-            git fetch origin && git reset --hard origin/main
+            git fetch origin && git reset --hard origin/main && git clean -fd
             echo "📦 安装依赖..."
             pnpm install
             echo "🔨 构建项目..."
