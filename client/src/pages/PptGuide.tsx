@@ -1,6 +1,162 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useLocation } from 'wouter';
-import { ChevronLeft, ChevronRight, Copy, Check, ChevronDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Copy, Check, ChevronDown, BookMarked, Plus, Trash2, ClipboardCopy } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
+import { useAuth } from '@/_core/hooks/useAuth';
+
+// ===== 提示词管理弹窗 =====
+function PromptLibraryModal({ onClose }: { onClose: () => void }) {
+  const { isAuthenticated } = useAuth();
+  const utils = trpc.useUtils();
+  const promptsQuery = trpc.beauty.aiPrompts.list.useQuery();
+  const addMutation = trpc.beauty.aiPrompts.add.useMutation({
+    onSuccess: () => utils.beauty.aiPrompts.list.invalidate(),
+  });
+  const deleteMutation = trpc.beauty.aiPrompts.delete.useMutation({
+    onSuccess: () => utils.beauty.aiPrompts.list.invalidate(),
+  });
+
+  const [newContent, setNewContent] = useState('');
+  const [selected, setSelected] = useState<number[]>([]);
+  const [mergedCopied, setMergedCopied] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const prompts = promptsQuery.data || [];
+
+  const handleAdd = async () => {
+    const content = newContent.trim();
+    if (!content) return;
+    await addMutation.mutateAsync({ content });
+    setNewContent('');
+  };
+
+  const handleToggle = (id: number) => {
+    setSelected(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const mergedText = prompts
+    .filter(p => selected.includes(p.id))
+    .map(p => p.content)
+    .join('\n\n');
+
+  const handleCopyMerged = () => {
+    if (!mergedText) return;
+    navigator.clipboard.writeText(mergedText).then(() => {
+      setMergedCopied(true);
+      setTimeout(() => setMergedCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-lg bg-white rounded-t-2xl" style={{ maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+        {/* 弹窗头部 */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">提示词库</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
+            <span className="text-gray-500 text-lg leading-none">×</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          {/* 新增提示词（登录后才显示） */}
+          {isAuthenticated && (
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 mb-2">添加新提示词</p>
+              <textarea
+                ref={textareaRef}
+                value={newContent}
+                onChange={e => setNewContent(e.target.value)}
+                placeholder="输入提示词内容（纯文字）..."
+                className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:border-blue-400"
+                rows={3}
+              />
+              <button
+                onClick={handleAdd}
+                disabled={!newContent.trim() || addMutation.isPending}
+                className="mt-2 flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)' }}
+              >
+                <Plus className="w-4 h-4" />
+                {addMutation.isPending ? '添加中...' : '添加'}
+              </button>
+            </div>
+          )}
+
+          {/* 提示词列表 */}
+          {promptsQuery.isLoading ? (
+            <p className="text-sm text-gray-400 text-center py-4">加载中...</p>
+          ) : prompts.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">暂无提示词，点击上方添加</p>
+          ) : (
+            <div className="space-y-2">
+              {prompts.map(p => (
+                <div
+                  key={p.id}
+                  onClick={() => handleToggle(p.id)}
+                  className="flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all"
+                  style={{
+                    borderColor: selected.includes(p.id) ? '#E91E63' : '#E5E7EB',
+                    backgroundColor: selected.includes(p.id) ? '#FFF0F5' : '#FAFAFA',
+                  }}
+                >
+                  {/* 复选框 */}
+                  <div
+                    className="w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5"
+                    style={{
+                      background: selected.includes(p.id) ? 'linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)' : '#fff',
+                      border: selected.includes(p.id) ? 'none' : '2px solid #D1D5DB',
+                    }}
+                  >
+                    {selected.includes(p.id) && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <p className="flex-1 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{p.content}</p>
+                  {isAuthenticated && (
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteMutation.mutate({ id: p.id }); }}
+                      className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 底部：合并框 + 一键复制 */}
+        {selected.length > 0 && (
+          <div className="px-4 py-3 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-500">已选 {selected.length} 条提示词</span>
+              <button
+                onClick={handleCopyMerged}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                style={{ backgroundColor: mergedCopied ? '#ECFDF5' : '#FFF0F5', color: mergedCopied ? '#10B981' : '#E91E63' }}
+              >
+                {mergedCopied ? <Check className="w-3.5 h-3.5" /> : <ClipboardCopy className="w-3.5 h-3.5" />}
+                {mergedCopied ? '已复制' : '一键复制合并内容'}
+              </button>
+            </div>
+            <div
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-600 leading-relaxed"
+              style={{ background: '#F9FAFB', maxHeight: '120px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}
+            >
+              {mergedText}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // PPT人格类型定义
 const PPT_TYPES = [
@@ -185,6 +341,7 @@ export default function PptGuide() {
   const [currentQ, setCurrentQ] = useState(0);
   const [copied, setCopied] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [showPromptLibrary, setShowPromptLibrary] = useState(false);
 
   const selectedTypeData = PPT_TYPES.find(t => t.id === selectedType);
   const layer2Questions = selectedType ? LAYER2_QUESTIONS[selectedType] || [] : [];
@@ -247,15 +404,26 @@ ${l3Lines}
 
     return (
       <div className="min-h-screen bg-gray-50">
+        {/* 提示词库弹窗 */}
+        {showPromptLibrary && <PromptLibraryModal onClose={() => setShowPromptLibrary(false)} />}
         {/* 顶部导航 */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
           <button onClick={() => setLocation(-1 as any)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="text-base font-semibold text-gray-900">AI PPT 引导助手</h1>
             <p className="text-xs text-gray-500">第 1 步 / 共 3 步</p>
           </div>
+          {/* 提示词库按鈕 */}
+          <button
+            onClick={() => setShowPromptLibrary(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+            style={{ background: 'linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 100%)', color: '#E91E63' }}
+          >
+            <BookMarked className="w-3.5 h-3.5" />
+            提示词
+          </button>
         </div>
 
         <div className="px-4 pt-5 pb-8">

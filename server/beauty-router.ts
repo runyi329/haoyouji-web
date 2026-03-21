@@ -26,6 +26,7 @@ import {
   beautyShowcasePhotos,
   beautyPptCompareGroups,
   beautyPptPages,
+  beautyAiPrompts,
   users,
 } from "../drizzle/schema";
 import { merchantProducts } from "../drizzle/merchant-schema";
@@ -1227,6 +1228,42 @@ export const beautyRouter = router({
         }
         await db.delete(beautyPptPages).where(eq(beautyPptPages.groupId, input.groupId));
         await db.delete(beautyPptCompareGroups).where(eq(beautyPptCompareGroups.id, input.groupId));
+        return { success: true };
+      }),
+  }),
+
+  // ===== AI提示词库 =====
+  aiPrompts: router({
+    // 查询所有提示词
+    list: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return await db
+        .select()
+        .from(beautyAiPrompts)
+        .orderBy(asc(beautyAiPrompts.sortOrder), asc(beautyAiPrompts.createdAt));
+    }),
+
+    // 新增提示词
+    add: protectedProcedure
+      .input(z.object({ content: z.string().min(1).max(2000) }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await db.insert(beautyAiPrompts).values({
+          content: input.content.trim(),
+          sortOrder: 0,
+        });
+        return { id: result.insertId, success: true };
+      }),
+
+    // 删除提示词
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db.delete(beautyAiPrompts).where(eq(beautyAiPrompts.id, input.id));
         return { success: true };
       }),
   }),
