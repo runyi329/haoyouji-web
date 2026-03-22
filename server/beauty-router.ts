@@ -27,6 +27,7 @@ import {
   beautyPptCompareGroups,
   beautyPptPages,
   beautyAiPrompts,
+  beautyAiPromptCategories,
   users,
 } from "../drizzle/schema";
 import { merchantProducts } from "../drizzle/merchant-schema";
@@ -1246,12 +1247,13 @@ export const beautyRouter = router({
 
     // 新增提示词
     add: protectedProcedure
-      .input(z.object({ content: z.string().min(1).max(2000) }))
+      .input(z.object({ content: z.string().min(1).max(2000), categoryId: z.number().default(0) }))
       .mutation(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [result] = await db.insert(beautyAiPrompts).values({
           content: input.content.trim(),
+          categoryId: input.categoryId,
           sortOrder: 0,
         });
         return { id: result.insertId, success: true };
@@ -1266,5 +1268,57 @@ export const beautyRouter = router({
         await db.delete(beautyAiPrompts).where(eq(beautyAiPrompts.id, input.id));
         return { success: true };
       }),
+
+    // 分类管理
+    categories: router({
+      // 查询所有分类
+      list: publicProcedure.query(async () => {
+        const db = await getDb();
+        if (!db) return [];
+        return await db
+          .select()
+          .from(beautyAiPromptCategories)
+          .orderBy(asc(beautyAiPromptCategories.sortOrder), asc(beautyAiPromptCategories.createdAt));
+      }),
+
+      // 新增分类
+      add: protectedProcedure
+        .input(z.object({ name: z.string().min(1).max(50) }))
+        .mutation(async ({ input }) => {
+          const db = await getDb();
+          if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+          const [result] = await db.insert(beautyAiPromptCategories).values({
+            name: input.name.trim(),
+            sortOrder: 0,
+          });
+          return { id: result.insertId, success: true };
+        }),
+
+      // 修改分类名称
+      rename: protectedProcedure
+        .input(z.object({ id: z.number(), name: z.string().min(1).max(50) }))
+        .mutation(async ({ input }) => {
+          const db = await getDb();
+          if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+          await db.update(beautyAiPromptCategories)
+            .set({ name: input.name.trim() })
+            .where(eq(beautyAiPromptCategories.id, input.id));
+          return { success: true };
+        }),
+
+      // 删除分类（同时将该分类下的提示词移到未分类）
+      delete: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ input }) => {
+          const db = await getDb();
+          if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+          // 将该分类下的提示词移到未分类(0)
+          await db.update(beautyAiPrompts)
+            .set({ categoryId: 0 })
+            .where(eq(beautyAiPrompts.categoryId, input.id));
+          await db.delete(beautyAiPromptCategories).where(eq(beautyAiPromptCategories.id, input.id));
+          return { success: true };
+        }),
+    }),
   }),
 });
