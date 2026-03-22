@@ -438,7 +438,7 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
           <SpotTab ledgerId={ledgerId} coin={coin} ticker={ticker} />
         )}
         {tab === "market" && (
-          <MarketTab ledgerId={ledgerId} coin={coin} klines={klines} ticker={ticker} />
+          <MarketTab ledgerId={ledgerId} coin={coin} klines={klines} ticker={ticker} user={user} />
         )}
       </div>
     </div>
@@ -560,11 +560,13 @@ function MarketTab({
   coin,
   klines,
   ticker,
+  user,
 }: {
   ledgerId: number;
   coin: (typeof COINS)[0];
   klines: KlineBar[];
   ticker: TickerData | null;
+  user?: any;
 }) {
   const [, setLocation] = useLocation();
   // 简单技术指标计算
@@ -701,6 +703,21 @@ function MarketTab({
           以上分析仅供参考，基于 Binance 实时数据计算，不构成投资建议。加密货币市场波动较大，请谨慎决策。
         </p>
       </div>
+
+      {/* QQ 容器：仅 jiang(870413) 和 yjh(4957151) 可见 */}
+      {(user?.id === 870413 || user?.id === 4957151) && (
+        <div
+          className="rounded-2xl p-4 flex items-center justify-between cursor-pointer"
+          style={{ backgroundColor: '#1565C0' }}
+          onClick={() => setLocation(`/ledger/${ledgerId}/qq`)}
+        >
+          <div className="text-left">
+            <div className="text-white font-semibold text-sm">QQ</div>
+            <div className="text-white/70 text-xs mt-0.5">进入 QQ 专区</div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-white/70" />
+        </div>
+      )}
     </div>
   );
 }
