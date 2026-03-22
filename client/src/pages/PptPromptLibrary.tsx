@@ -72,11 +72,13 @@ export default function PptPromptLibrary() {
     ? allPrompts
     : allPrompts.filter(p => p.categoryId === effectiveCategoryId);
 
-  // 购物车：按分类智能归组
+  // 购物车：按固定顺序归组（角色→全局→逻辑→禁忌→任务）
+  const CART_ORDER = ['角色', '全局', '逻辑', '禁忌', '任务'];
   const cartGroups = useMemo(() => {
     const selectedPrompts = allPrompts.filter(p => selected.includes(p.id));
     if (selectedPrompts.length === 0) return [];
 
+    // 先按categoryId分组
     const groupMap = new Map<number, { name: string; items: typeof selectedPrompts }>();
     for (const p of selectedPrompts) {
       const catId = p.categoryId || 0;
@@ -87,13 +89,22 @@ export default function PptPromptLibrary() {
       groupMap.get(catId)!.items.push(p);
     }
 
+    // 按固定顺序排列
     const result: { catId: number; name: string; items: typeof selectedPrompts }[] = [];
-    for (const cat of categories) {
-      const group = groupMap.get(cat.id);
-      if (group) result.push({ catId: cat.id, name: group.name, items: group.items });
+    for (const orderName of CART_ORDER) {
+      const cat = categories.find(c => c.name === orderName);
+      if (cat) {
+        const group = groupMap.get(cat.id);
+        if (group) {
+          result.push({ catId: cat.id, name: group.name, items: group.items });
+          groupMap.delete(cat.id);
+        }
+      }
     }
-    const uncategorized = groupMap.get(0);
-    if (uncategorized) result.push({ catId: 0, name: '未分类', items: uncategorized.items });
+    // 剩余不在固定顺序中的分类追加到末尾
+    for (const [catId, group] of groupMap) {
+      result.push({ catId, name: group.name, items: group.items });
+    }
 
     return result;
   }, [selected, allPrompts, categories]);
@@ -103,12 +114,9 @@ export default function PptPromptLibrary() {
     return prompt.remark?.trim() ? prompt.remark.trim() : prompt.content;
   };
 
-  // 购物车合并文本（按分类归组，使用显示文本）
+  // 购物车合并文本（始终按分类归组并显示标题）
   const mergedText = useMemo(() => {
     if (cartGroups.length === 0) return '';
-    if (cartGroups.length === 1) {
-      return cartGroups[0].items.map(p => getDisplayText(p)).join('\n');
-    }
     return cartGroups
       .map(g => `【${g.name}】\n${g.items.map(p => getDisplayText(p)).join('\n')}`)
       .join('\n\n');
@@ -446,18 +454,16 @@ export default function PptPromptLibrary() {
           <div className="flex-1 overflow-y-auto px-3 pb-3">
             {cartGroups.map(group => (
               <div key={group.catId} className="mb-2.5 last:mb-0">
-                {/* 分类标题（多个分类时显示） */}
-                {cartGroups.length > 1 && (
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span
-                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-white"
-                      style={{ background: 'linear-gradient(135deg, #E91E63 0%, #F06292 100%)' }}
-                    >
-                      {group.name}
-                    </span>
-                    <span className="text-[10px] text-gray-300">{group.items.length} 条</span>
-                  </div>
-                )}
+                {/* 分类标题（始终显示） */}
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span
+                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-white"
+                    style={{ background: 'linear-gradient(135deg, #E91E63 0%, #F06292 100%)' }}
+                  >
+                    {group.name}
+                  </span>
+                  <span className="text-[10px] text-gray-300">{group.items.length} 条</span>
+                </div>
                 {/* 纯文本显示 */}
                 <div className="space-y-1">
                   {group.items.map(item => (
