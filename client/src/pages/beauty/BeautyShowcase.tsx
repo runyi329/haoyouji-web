@@ -20,6 +20,7 @@ import {
   Upload,
   FileUp,
   Share2,
+  Copy,
 } from "lucide-react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
@@ -313,15 +314,39 @@ function PhotoGroupManager() {
     setEditingTitleId(null);
   };
 
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+
   const handleShareGroup = async (groupId: number) => {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
-      const shareUrl = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
-      await navigator.clipboard.writeText(shareUrl);
-      alert('分享链接已复制到剪贴板！');
+      const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
+      setShareUrl(url);
     } catch (err) {
       console.error('生成分享链接失败:', err);
       alert('生成分享链接失败，请重试');
+    }
+  };
+
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert('链接已复制到剪贴板');
+    } catch {
+      // clipboard API 不可用时使用 fallback
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = shareUrl;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('链接已复制到剪贴板');
+      } catch {
+        // 都失败了，弹窗里已经有链接可以手动复制
+      }
     }
   };
 
@@ -335,6 +360,40 @@ function PhotoGroupManager() {
 
   return (
     <div className="px-4 space-y-4">
+      {/* 分享链接弹窗 */}
+      {shareUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShareUrl(null)}>
+          <div className="bg-white rounded-2xl mx-6 p-5 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-gray-800">分享链接</h3>
+              <button onClick={() => setShareUrl(null)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+              <p className="text-xs text-blue-600 break-all select-all">{shareUrl}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCopyShareUrl}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, #1976D2 0%, #42A5F5 100%)' }}
+              >
+                <Copy className="w-4 h-4" />
+                复制链接
+              </button>
+              <button
+                onClick={() => window.open(shareUrl, '_blank')}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)' }}
+              >
+                打开预览
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 隐藏的文件输入 */}
       <input
         ref={fileInputRef}
@@ -573,14 +632,37 @@ function PhotoShowcase() {
     (g) => g.photos && g.photos.length > 0
   );
 
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+
   const handleShare = async (groupId: number) => {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
-      const shareUrl = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
-      await navigator.clipboard.writeText(shareUrl);
-      alert('分享链接已复制到剪贴板！');
+      const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
+      setShareUrl(url);
     } catch {
       alert('生成分享链接失败，请重试');
+    }
+  };
+
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert('链接已复制到剪贴板');
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = shareUrl;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('链接已复制到剪贴板');
+      } catch {
+        // 弹窗里已经有链接可以手动复制
+      }
     }
   };
 
@@ -613,6 +695,40 @@ function PhotoShowcase() {
 
   return (
     <div className="space-y-5">
+      {/* 分享链接弹窗 */}
+      {shareUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShareUrl(null)}>
+          <div className="bg-white rounded-2xl mx-6 p-5 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-gray-800">分享链接</h3>
+              <button onClick={() => setShareUrl(null)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+              <p className="text-xs text-blue-600 break-all select-all">{shareUrl}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCopyShareUrl}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, #1976D2 0%, #42A5F5 100%)' }}
+              >
+                <Copy className="w-4 h-4" />
+                复制链接
+              </button>
+              <button
+                onClick={() => window.open(shareUrl, '_blank')}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)' }}
+              >
+                打开预览
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {groups.map((group) => (
         <div key={group.id}>
           {/* 组标题 + 分享按钮 */}
@@ -832,15 +948,38 @@ function PptCompareManager() {
     setEditingTitleId(null);
   };
 
+  const [pptShareUrl, setPptShareUrl] = useState<string | null>(null);
+
   const handleShareGroup = async (groupId: number) => {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
-      const shareUrl = `${window.location.origin}/beauty/showcase/share?token=${token}&type=ppt`;
-      await navigator.clipboard.writeText(shareUrl);
-      alert('分享链接已复制到剪贴板！');
+      const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=ppt`;
+      setPptShareUrl(url);
     } catch (err) {
       console.error('生成分享链接失败:', err);
       alert('生成分享链接失败，请重试');
+    }
+  };
+
+  const handleCopyPptShareUrl = async () => {
+    if (!pptShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(pptShareUrl);
+      alert('链接已复制到剪贴板');
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = pptShareUrl;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('链接已复制到剪贴板');
+      } catch {
+        // 弹窗里已经有链接可以手动复制
+      }
     }
   };
 
@@ -854,6 +993,40 @@ function PptCompareManager() {
 
   return (
     <div className="px-4 space-y-4">
+      {/* PPT分享链接弹窗 */}
+      {pptShareUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setPptShareUrl(null)}>
+          <div className="bg-white rounded-2xl mx-6 p-5 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-gray-800">分享链接</h3>
+              <button onClick={() => setPptShareUrl(null)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+              <p className="text-xs text-blue-600 break-all select-all">{pptShareUrl}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCopyPptShareUrl}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, #1976D2 0%, #42A5F5 100%)' }}
+              >
+                <Copy className="w-4 h-4" />
+                复制链接
+              </button>
+              <button
+                onClick={() => window.open(pptShareUrl, '_blank')}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)' }}
+              >
+                打开预览
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 裁剪弹窗：逐张裁剪队列 */}
       {isCropMode && cropQueue.length > 0 && (
         <div className="fixed inset-0 z-[200] flex flex-col">
@@ -1074,14 +1247,37 @@ function PptCompareShowcase() {
     (g) => (g.pagesA && g.pagesA.length > 0) || (g.pagesB && g.pagesB.length > 0)
   );
 
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+
   const handleShare = async (groupId: number) => {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
-      const shareUrl = `${window.location.origin}/beauty/showcase/share?token=${token}&type=ppt`;
-      await navigator.clipboard.writeText(shareUrl);
-      alert('分享链接已复制到剪贴板！');
+      const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=ppt`;
+      setShareUrl(url);
     } catch {
       alert('生成分享链接失败，请重试');
+    }
+  };
+
+  const handleCopyShareUrl = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert('链接已复制到剪贴板');
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = shareUrl;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('链接已复制到剪贴板');
+      } catch {
+        // 弹窗里已经有链接可以手动复制
+      }
     }
   };
 
@@ -1110,6 +1306,40 @@ function PptCompareShowcase() {
 
   return (
     <div className="space-y-6">
+      {/* PPT分享链接弹窗 */}
+      {shareUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShareUrl(null)}>
+          <div className="bg-white rounded-2xl mx-6 p-5 max-w-sm w-full shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-gray-800">分享链接</h3>
+              <button onClick={() => setShareUrl(null)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+              <p className="text-xs text-blue-600 break-all select-all">{shareUrl}</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleCopyShareUrl}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, #1976D2 0%, #42A5F5 100%)' }}
+              >
+                <Copy className="w-4 h-4" />
+                复制链接
+              </button>
+              <button
+                onClick={() => window.open(shareUrl, '_blank')}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium text-white"
+                style={{ background: 'linear-gradient(135deg, #E91E63 0%, #F48FB1 100%)' }}
+              >
+                打开预览
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {groups.map((group) => (
         <PptCompareGroupView key={group.id} group={group} onShare={() => handleShare(group.id)} shareLoading={generateShareTokenMutation.isPending} />
       ))}
