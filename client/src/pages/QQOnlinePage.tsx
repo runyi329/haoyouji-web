@@ -107,15 +107,7 @@ export default function QQOnlinePage() {
               >
                 <History className="w-4 h-4 text-white/80" />
               </button>
-              {currentUserId === 870413 && (
-                <button
-                  onClick={() => setLocation(`/ledger/${id}/qq/trade`)}
-                  className="rounded-xl flex items-center justify-center active:opacity-70"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.25)', width: '40px', height: '40px' }}
-                >
-                  <Plus className="w-5 h-5 text-white" />
-                </button>
-              )}
+
             </div>
           </div>
         </div>
@@ -162,6 +154,17 @@ export default function QQOnlinePage() {
       </div>
 
       <div className="h-20" />
+
+      {/* 底部悬浮添加按钮（仅jiang可见） */}
+      {currentUserId === 870413 && (
+        <button
+          onClick={() => setLocation(`/ledger/${id}/qq/trade`)}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center rounded-full shadow-lg active:opacity-80"
+          style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
+        >
+          <Plus className="w-7 h-7 text-white" />
+        </button>
+      )}
     </div>
   );
 }
