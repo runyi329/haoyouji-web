@@ -714,6 +714,11 @@ export default function CryptoPrediction() {
   );
   const isCustomAF = (ledgerInfo as any)?.type === 'custom_af';
 
+  // 当前登录用户（用于权限判断）
+  const { data: meData } = trpc.auth.me.useQuery();
+  const currentUserId = (meData as any)?.id;
+  const canSeeQQ = currentUserId === 870413 || currentUserId === 4957151;
+
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -1360,6 +1365,26 @@ export default function CryptoPrediction() {
               filteredEvents.map((event) => (
                 <EventCard key={event.id} event={event} ledgerId={ledgerId} onPredicted={() => refetchPred()} />
               ))
+            )}
+            {/* QQ 容器入口 - 仅 jiang(870413) 和 yjh(4957151) 可见 */}
+            {canSeeQQ && (
+              <div
+                className="mt-4 bg-[#1C2127] rounded-2xl p-4 flex items-center justify-between cursor-pointer active:opacity-70"
+                onClick={() => setLocation(`/ledger/${ledgerId}/qq`)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#12B7F5] flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">QQ</span>
+                  </div>
+                  <div>
+                    <div className="text-white font-medium text-sm">QQ</div>
+                    <div className="text-gray-400 text-xs mt-0.5">点击进入</div>
+                  </div>
+                </div>
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
             )}
           </div>
           );
