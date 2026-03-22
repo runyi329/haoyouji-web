@@ -568,9 +568,21 @@ function AutoAspectPhoto({ src, fixedHeight = 240 }: { src: string; fixedHeight?
 // ===== 照片展示页面（多组横向轮播） =====
 function PhotoShowcase() {
   const groupsQuery = trpc.beauty.showcase.listGroups.useQuery();
+  const generateShareTokenMutation = trpc.beauty.showcase.generateShareToken.useMutation();
   const groups = (groupsQuery.data || []).filter(
     (g) => g.photos && g.photos.length > 0
   );
+
+  const handleShare = async (groupId: number) => {
+    try {
+      const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
+      const shareUrl = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
+      await navigator.clipboard.writeText(shareUrl);
+      alert('分享链接已复制到剪贴板！');
+    } catch {
+      alert('生成分享链接失败，请重试');
+    }
+  };
 
   if (groupsQuery.isLoading) {
     return (
@@ -603,14 +615,25 @@ function PhotoShowcase() {
     <div className="space-y-5">
       {groups.map((group) => (
         <div key={group.id}>
-          {/* 组标题 */}
-          {group.title && (
-            <div className="px-4 mb-2">
-              <h3 className="text-sm font-bold text-gray-800">
-                {group.title}
-              </h3>
-            </div>
-          )}
+          {/* 组标题 + 分享按钮 */}
+          <div className="px-4 mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-gray-800">
+              {group.title || '未命名'}
+            </h3>
+            <button
+              onClick={() => handleShare(group.id)}
+              disabled={generateShareTokenMutation.isPending}
+              className="w-7 h-7 rounded-full flex items-center justify-center"
+              style={{ background: '#E3F2FD' }}
+              title="分享这组照片"
+            >
+              {generateShareTokenMutation.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: '#1976D2' }} />
+              ) : (
+                <Share2 className="w-3.5 h-3.5" style={{ color: '#1976D2' }} />
+              )}
+            </button>
+          </div>
 
           {/* 横向滑动轮播 */}
           <Carousel
@@ -1046,9 +1069,21 @@ function PptCompareManager() {
 // ===== PPT对比展示页面（上下排列同步滑动） =====
 function PptCompareShowcase() {
   const groupsQuery = trpc.beauty.pptCompare.listGroups.useQuery();
+  const generateShareTokenMutation = trpc.beauty.pptCompare.generateShareToken.useMutation();
   const groups = (groupsQuery.data || []).filter(
     (g) => (g.pagesA && g.pagesA.length > 0) || (g.pagesB && g.pagesB.length > 0)
   );
+
+  const handleShare = async (groupId: number) => {
+    try {
+      const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
+      const shareUrl = `${window.location.origin}/beauty/showcase/share?token=${token}&type=ppt`;
+      await navigator.clipboard.writeText(shareUrl);
+      alert('分享链接已复制到剪贴板！');
+    } catch {
+      alert('生成分享链接失败，请重试');
+    }
+  };
 
   if (groupsQuery.isLoading) {
     return (
@@ -1076,14 +1111,14 @@ function PptCompareShowcase() {
   return (
     <div className="space-y-6">
       {groups.map((group) => (
-        <PptCompareGroupView key={group.id} group={group} />
+        <PptCompareGroupView key={group.id} group={group} onShare={() => handleShare(group.id)} shareLoading={generateShareTokenMutation.isPending} />
       ))}
     </div>
   );
 }
 
 // 单个PPT对比组的展示（上下同步滑动）
-function PptCompareGroupView({ group }: { group: any }) {
+function PptCompareGroupView({ group, onShare, shareLoading }: { group: any; onShare?: () => void; shareLoading?: boolean }) {
   const scrollRefA = useRef<HTMLDivElement>(null);
   const scrollRefB = useRef<HTMLDivElement>(null);
   const isSyncing = useRef(false);
@@ -1106,12 +1141,25 @@ function PptCompareGroupView({ group }: { group: any }) {
 
   return (
     <div>
-      {/* 组标题 */}
-      {group.title && (
-        <div className="px-4 mb-2">
-          <h3 className="text-sm font-bold text-gray-800">{group.title}</h3>
-        </div>
-      )}
+      {/* 组标题 + 分享按钮 */}
+      <div className="px-4 mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-bold text-gray-800">{group.title || '未命名'}</h3>
+        {onShare && (
+          <button
+            onClick={onShare}
+            disabled={shareLoading}
+            className="w-7 h-7 rounded-full flex items-center justify-center"
+            style={{ background: '#E3F2FD' }}
+            title="分享这组PPT对比"
+          >
+            {shareLoading ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: '#1976D2' }} />
+            ) : (
+              <Share2 className="w-3.5 h-3.5" style={{ color: '#1976D2' }} />
+            )}
+          </button>
+        )}
+      </div>
 
       {/* PPT-A */}
       {group.pagesA && group.pagesA.length > 0 && (
