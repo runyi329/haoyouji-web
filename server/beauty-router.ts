@@ -1247,16 +1247,32 @@ export const beautyRouter = router({
 
     // 新增提示词
     add: protectedProcedure
-      .input(z.object({ content: z.string().min(1).max(2000), categoryId: z.number().default(0) }))
+      .input(z.object({ content: z.string().min(1).max(2000), categoryId: z.number().default(0), remark: z.string().max(5000).optional() }))
       .mutation(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [result] = await db.insert(beautyAiPrompts).values({
           content: input.content.trim(),
           categoryId: input.categoryId,
+          remark: input.remark?.trim() || null,
           sortOrder: 0,
         });
         return { id: result.insertId, success: true };
+      }),
+
+    // 更新提示词内容和备注
+    update: protectedProcedure
+      .input(z.object({ id: z.number(), content: z.string().min(1).max(2000).optional(), remark: z.string().max(5000).nullable().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const updates: Record<string, any> = {};
+        if (input.content !== undefined) updates.content = input.content.trim();
+        if (input.remark !== undefined) updates.remark = input.remark?.trim() || null;
+        if (Object.keys(updates).length > 0) {
+          await db.update(beautyAiPrompts).set(updates).where(eq(beautyAiPrompts.id, input.id));
+        }
+        return { success: true };
       }),
 
     // 删除提示词
