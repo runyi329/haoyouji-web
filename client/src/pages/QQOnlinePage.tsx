@@ -104,7 +104,11 @@ export default function QQOnlinePage() {
             <div className="text-[11px] text-white/55 mb-1">开始时间</div>
             <div className="text-sm font-bold text-white leading-snug">2026年3月23日</div>
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">运行时长</div>
-            <div className="text-sm font-bold text-white">{runHours} 小时</div>
+            <div className="text-sm font-bold text-white">
+              {runHours >= 24
+                ? `${Math.floor(runHours / 24)}天${runHours % 24}小时`
+                : `${runHours}小时`}
+            </div>
           </div>
           {/* 第2个：开始金额 + 保证金 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
