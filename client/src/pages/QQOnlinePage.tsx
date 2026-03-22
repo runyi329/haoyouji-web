@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, History } from "lucide-react";
+import { History } from "lucide-react";
 
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
@@ -39,26 +39,9 @@ export default function QQOnlinePage() {
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
-      {/* 导航栏 */}
-      <div className="px-4 pt-3 pb-2 flex items-center justify-between">
-        <button
-          onClick={() => {
-            if (window.history.length > 1) {
-              window.history.back();
-            } else {
-              setLocation(id ? `/ledger/${id}` : '/');
-            }
-          }}
-          className="p-1 -ml-1"
-        >
-          <ChevronLeft className="w-5 h-5 text-white" />
-        </button>
-        <span className="text-base font-semibold text-white">QQ 在线人数</span>
-        <div className="w-5" />
-      </div>
 
-      {/* 主数据卡片 */}
-      <div className="px-4 pt-2">
+      {/* 主数据卡片 - 直接置顶 */}
+      <div className="px-4 pt-4">
         <div className="rounded-2xl px-5 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
           <div className="flex items-center justify-between gap-3">
             {/* 左侧：标签+时间 + 大数字 */}
@@ -72,24 +55,22 @@ export default function QQOnlinePage() {
               </div>
             </div>
 
-            {/* 右侧：倒计时 + 历史 两个等大方形容器 */}
+            {/* 右侧：倒计时 + 历史 两个小方形按钮 */}
             <div className="flex items-center gap-2 shrink-0">
               {/* 倒计时 */}
               <div
-                className="rounded-xl flex flex-col items-center justify-center"
-                style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '52px', height: '52px' }}
+                className="rounded-xl flex items-center justify-center"
+                style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '40px', height: '40px' }}
               >
-                <div className="text-xl font-bold font-mono text-white leading-none">{countdown}</div>
-                <div className="text-[9px] text-white/45 mt-0.5">倒计时</div>
+                <span className="text-base font-bold font-mono text-white">{countdown}</span>
               </div>
               {/* 历史记录 */}
               <button
                 onClick={() => setLocation(`/ledger/${id}/qq/history`)}
-                className="rounded-xl flex flex-col items-center justify-center active:opacity-70"
-                style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '52px', height: '52px' }}
+                className="rounded-xl flex items-center justify-center active:opacity-70"
+                style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '40px', height: '40px' }}
               >
-                <History className="w-5 h-5 text-white" />
-                <div className="text-[9px] text-white/45 mt-0.5">历史</div>
+                <History className="w-4 h-4 text-white/80" />
               </button>
             </div>
           </div>
