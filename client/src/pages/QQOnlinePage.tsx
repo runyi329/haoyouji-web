@@ -3,13 +3,24 @@ import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { History } from "lucide-react";
 
-// 每秒收益：20万/月 ÷ 30天 ÷ 24小时 ÷ 3600秒
-const PER_SECOND = 200000 / 30 / 24 / 3600;
+// 管理员（jiang）每月20万，yjh为1/5即4万
+// 每秒收益 = 月收益 ÷ 30 ÷ 24 ÷ 3600
+const PER_SECOND_FULL = 200000 / 30 / 24 / 3600;  // jiang
+const PER_SECOND_YJH  =  40000 / 30 / 24 / 3600;  // yjh (1/5)
+const YJH_ID = 4957151;
 const START_TIME = new Date('2026-03-23T00:00:00+08:00').getTime();
 
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
+
+  // 获取当前用户ID，判断利息份额
+  const { data: meData } = trpc.auth.me.useQuery();
+  const currentUserId = (meData as any)?.id;
+  const perSecond = currentUserId === YJH_ID ? PER_SECOND_YJH : PER_SECOND_FULL;
+  // 开始金额和保证金也按比例
+  const startAmount = currentUserId === YJH_ID ? '40万元整' : '200万元整';
+  const deposit = currentUserId === YJH_ID ? '4万元' : '20万元';
 
   const { data, refetch } = trpc.getQQOnlineRecords.useQuery(
     { page: 1, pageSize: 1 },
@@ -47,17 +58,17 @@ export default function QQOnlinePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // 累计利息（按秒实时增长）
+  // 累计利息（按秒实时增长，根据用户份额计算）
   const [interest, setInterest] = useState(0);
   useEffect(() => {
     function calcInterest() {
       const elapsed = Math.max(0, Date.now() - START_TIME) / 1000; // 已过秒数
-      setInterest(elapsed * PER_SECOND);
+      setInterest(elapsed * perSecond);
     }
     calcInterest();
     const timer = setInterval(calcInterest, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [perSecond]);
 
   function formatNum(n: number): string {
     return n.toLocaleString("zh-CN");
@@ -118,9 +129,9 @@ export default function QQOnlinePage() {
           {/* 第2个：开始金额 + 保证金 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">开始金额</div>
-            <div className="text-sm font-bold text-white">200万元整</div>
+            <div className="text-sm font-bold text-white">{startAmount}</div>
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">保证金</div>
-            <div className="text-sm font-bold text-white">20万元</div>
+            <div className="text-sm font-bold text-white">{deposit}</div>
           </div>
           {/* 第3个：累计利息 + 待结利息（按秒实时增长） */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
