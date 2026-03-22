@@ -28,7 +28,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
-import BeautyTabBar from "./BeautyTabBar";
+
 
 // ===== 裁剪工具函数 =====
 function createImage(url: string): Promise<HTMLImageElement> {
@@ -261,26 +261,26 @@ function MaterialGroupManager() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
 
-  const groupsQuery = trpc.beauty.showcase.listGroups.useQuery();
-  const createGroupMutation = trpc.beauty.showcase.createGroup.useMutation({
-    onSuccess: () => utils.beauty.showcase.listGroups.invalidate(),
+  const groupsQuery = trpc.beauty.material.listGroups.useQuery();
+  const createGroupMutation = trpc.beauty.material.createGroup.useMutation({
+    onSuccess: () => utils.beauty.material.listGroups.invalidate(),
   });
-  const uploadPhotoMutation = trpc.beauty.showcase.uploadPhoto.useMutation({
-    onSuccess: () => utils.beauty.showcase.listGroups.invalidate(),
+  const uploadPhotoMutation = trpc.beauty.material.uploadPhoto.useMutation({
+    onSuccess: () => utils.beauty.material.listGroups.invalidate(),
   });
-  const deleteGroupMutation = trpc.beauty.showcase.deleteGroup.useMutation({
-    onSuccess: () => utils.beauty.showcase.listGroups.invalidate(),
+  const deleteGroupMutation = trpc.beauty.material.deleteGroup.useMutation({
+    onSuccess: () => utils.beauty.material.listGroups.invalidate(),
   });
-  const deletePhotoMutation = trpc.beauty.showcase.deletePhoto.useMutation({
-    onSuccess: () => utils.beauty.showcase.listGroups.invalidate(),
+  const deletePhotoMutation = trpc.beauty.material.deletePhoto.useMutation({
+    onSuccess: () => utils.beauty.material.listGroups.invalidate(),
   });
-  const updateTitleMutation = trpc.beauty.showcase.updateGroupTitle.useMutation({
-    onSuccess: () => utils.beauty.showcase.listGroups.invalidate(),
+  const updateTitleMutation = trpc.beauty.material.updateGroupTitle.useMutation({
+    onSuccess: () => utils.beauty.material.listGroups.invalidate(),
   });
-  const updateCaptionMutation = trpc.beauty.showcase.updatePhotoCaption.useMutation({
-    onSuccess: () => utils.beauty.showcase.listGroups.invalidate(),
+  const updateCaptionMutation = trpc.beauty.material.updatePhotoCaption.useMutation({
+    onSuccess: () => utils.beauty.material.listGroups.invalidate(),
   });
-  const generateShareTokenMutation = trpc.beauty.showcase.generateShareToken.useMutation();
+  const generateShareTokenMutation = trpc.beauty.material.generateShareToken.useMutation();
 
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [uploadingGroupId, setUploadingGroupId] = useState<number | null>(null);
@@ -361,7 +361,7 @@ function MaterialGroupManager() {
   const handleShareGroup = async (groupId: number) => {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
-      const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
+      const url = `${window.location.origin}/beauty/material/share?token=${token}`;
       const group = groups.find((g) => g.id === groupId);
       const title = group?.title || "照片对比";
       if (navigator.share) {
@@ -712,8 +712,8 @@ function MaterialGroupManager() {
 
 // ===== 照片展示页面（多组横向轮播，带文字说明） =====
 function MaterialShowcase() {
-  const groupsQuery = trpc.beauty.showcase.listGroups.useQuery();
-  const generateShareTokenMutation = trpc.beauty.showcase.generateShareToken.useMutation();
+  const groupsQuery = trpc.beauty.material.listGroups.useQuery();
+  const generateShareTokenMutation = trpc.beauty.material.generateShareToken.useMutation();
   const groups = (groupsQuery.data || []).filter(
     (g) => g.photos && g.photos.length > 0
   );
@@ -723,7 +723,7 @@ function MaterialShowcase() {
   const handleShare = async (groupId: number) => {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
-      const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
+      const url = `${window.location.origin}/beauty/material/share?token=${token}`;
       const group = groups.find((g) => g.id === groupId);
       const title = group?.title || "照片对比";
       if (navigator.share) {
@@ -915,9 +915,6 @@ export default function BeautyMaterial() {
           <div className="w-14" />
         )}
       </div>
-
-      {/* Tab栏 */}
-      <BeautyTabBar />
 
       {/* 内容区域 */}
       <div className="flex-1 pt-4 pb-8">

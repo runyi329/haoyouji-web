@@ -206,6 +206,7 @@ const BeautySettings = lazy(() => import("./pages/beauty/BeautySettings"));
 const BeautyShowcase = lazy(() => import("./pages/beauty/BeautyShowcase"));
 const BeautyShowcaseShare = lazy(() => import("./pages/beauty/BeautyShowcaseShare"));
 const BeautyMaterial = lazy(() => import("./pages/beauty/BeautyMaterial"));
+const BeautyMaterialShare = lazy(() => import("./pages/beauty/BeautyMaterialShare"));
 // 红酒文化商会（cx8618）
 const WineHome = lazy(() => import("./pages/wine/WineHome"));
 const WineNews = lazy(() => import("./pages/wine/WineNews"));
@@ -441,6 +442,7 @@ function Router() {
         <Route path="/beauty/showcase" component={BeautyShowcase} />
         <Route path="/beauty/showcase/share" component={BeautyShowcaseShare} />
         <Route path="/beauty/material" component={BeautyMaterial} />
+        <Route path="/beauty/material/share" component={BeautyMaterialShare} />
 
         {/* 润仪算力研发中心（jiang） */}
         <Route path="/jiang" component={JiangHome} />

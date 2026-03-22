@@ -24,6 +24,8 @@ import {
   beautyVisitLogs,
   beautyShowcaseGroups,
   beautyShowcasePhotos,
+  beautyMaterialGroups,
+  beautyMaterialPhotos,
   beautyPptCompareGroups,
   beautyPptPages,
   beautyAiPrompts,
@@ -1437,5 +1439,180 @@ export const beautyRouter = router({
           return { success: true };
         }),
     }),
+  }),
+
+  // ===== 素材展示（刘立凡主页素材Tab，独立数据）=====
+  material: router({
+    // 查询所有素材组（含照片）
+    listGroups: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      const groups = await db
+        .select()
+        .from(beautyMaterialGroups)
+        .orderBy(desc(beautyMaterialGroups.createdAt));
+      const result = await Promise.all(
+        groups.map(async (group) => {
+          const photos = await db
+            .select()
+            .from(beautyMaterialPhotos)
+            .where(eq(beautyMaterialPhotos.groupId, group.id))
+            .orderBy(asc(beautyMaterialPhotos.sortOrder));
+          return { ...group, photos };
+        })
+      );
+      return result;
+    }),
+
+    // 创建素材组
+    createGroup: protectedProcedure
+      .input(z.object({
+        title: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await db.insert(beautyMaterialGroups).values({
+          userId: ctx.user.id,
+          title: input.title || null,
+        });
+        return { id: result.insertId, success: true };
+      }),
+
+    // 上传素材照片（base64 → 压缩 → COS）
+    uploadPhoto: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        imageData: z.string(), // base64
+        caption: z.string().optional(), // 照片文字说明
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyMaterialGroups)
+          .where(eq(beautyMaterialGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '素材组不存在' });
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const imageUrl = await uploadImageToCOS(input.imageData, 'beauty-material');
+        const [result] = await db.insert(beautyMaterialPhotos).values({
+          groupId: input.groupId,
+          imageUrl,
+          caption: input.caption || null,
+          sortOrder: input.sortOrder ?? 0,
+        });
+        return { id: result.insertId, imageUrl, success: true };
+      }),
+
+    // 更新素材照片文字说明
+    updatePhotoCaption: protectedProcedure
+      .input(z.object({
+        photoId: z.number(),
+        caption: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db
+          .update(beautyMaterialPhotos)
+          .set({ caption: input.caption || null })
+          .where(eq(beautyMaterialPhotos.id, input.photoId));
+        return { success: true };
+      }),
+
+    // 删除素材组（级联删除组内照片）
+    deleteGroup: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const photos = await db
+          .select()
+          .from(beautyMaterialPhotos)
+          .where(eq(beautyMaterialPhotos.groupId, input.groupId));
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        for (const photo of photos) {
+          try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
+        }
+        await db.delete(beautyMaterialPhotos).where(eq(beautyMaterialPhotos.groupId, input.groupId));
+        await db.delete(beautyMaterialGroups).where(eq(beautyMaterialGroups.id, input.groupId));
+        return { success: true };
+      }),
+
+    // 删除单张素材照片
+    deletePhoto: protectedProcedure
+      .input(z.object({ photoId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [photo] = await db
+          .select()
+          .from(beautyMaterialPhotos)
+          .where(eq(beautyMaterialPhotos.id, input.photoId));
+        if (!photo) throw new TRPCError({ code: 'NOT_FOUND', message: '照片不存在' });
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
+        await db.delete(beautyMaterialPhotos).where(eq(beautyMaterialPhotos.id, input.photoId));
+        return { success: true };
+      }),
+
+    // 生成分享Token（公开接口）
+    generateShareToken: publicProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyMaterialGroups)
+          .where(eq(beautyMaterialGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '素材组不存在' });
+        let token = group.shareToken;
+        if (!token) {
+          token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          await db
+            .update(beautyMaterialGroups)
+            .set({ shareToken: token })
+            .where(eq(beautyMaterialGroups.id, input.groupId));
+        }
+        return { token, success: true };
+      }),
+
+    // 通过分享Token获取素材组（公开，无需登录）
+    getByShareToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyMaterialGroups)
+          .where(eq(beautyMaterialGroups.shareToken, input.token));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '分享链接无效或已过期' });
+        const photos = await db
+          .select()
+          .from(beautyMaterialPhotos)
+          .where(eq(beautyMaterialPhotos.groupId, group.id))
+          .orderBy(asc(beautyMaterialPhotos.sortOrder));
+        return { ...group, photos };
+      }),
+
+    // 更新素材组标题
+    updateGroupTitle: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        title: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db
+          .update(beautyMaterialGroups)
+          .set({ title: input.title })
+          .where(eq(beautyMaterialGroups.id, input.groupId));
+        return { success: true };
+      }),
   }),
 });
