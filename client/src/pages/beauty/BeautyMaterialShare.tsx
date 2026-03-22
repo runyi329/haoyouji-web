@@ -101,8 +101,8 @@ function MaterialSharePage({ token }: { token: string }) {
         </div>
       </div>
 
-      {/* 照片展示 */}
-      <div className="pt-4 pb-20">
+      {/* 照片展示 - 上下排列满屏大图 */}
+      <div className="pt-0 pb-16">
         {photos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="w-16 h-16 rounded-full bg-pink-100 flex items-center justify-center mb-4">
@@ -111,25 +111,21 @@ function MaterialSharePage({ token }: { token: string }) {
             <p className="text-sm text-gray-400">暂无照片</p>
           </div>
         ) : (
-          <div className="px-4">
-            <Carousel opts={{ align: "start", dragFree: true }}>
-              <CarouselContent className="-ml-3">
-                {photos.map((photo) => (
-                  <CarouselItem key={photo.id} className="pl-3 basis-auto">
-                    <AutoAspectPhotoWithCaption
-                      src={photo.imageUrl}
-                      caption={photo.caption}
-                      fixedHeight={260}
-                    />
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-            </Carousel>
-            {photos.length > 1 && (
-              <p className="text-xs text-gray-400 text-center mt-3">
-                左右滑动查看全部照片（共{photos.length}张）
-              </p>
-            )}
+          <div>
+            {photos.map((photo, index) => (
+              <div key={photo.id} className="w-full">
+                <img
+                  src={photo.imageUrl}
+                  alt={photo.caption || ''}
+                  className="w-full block"
+                  style={{ display: 'block', maxWidth: '100%' }}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                />
+                {photo.caption && (
+                  <p className="text-xs text-gray-500 px-4 py-2 leading-snug">{photo.caption}</p>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
