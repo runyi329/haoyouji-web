@@ -40,8 +40,11 @@ export default function PptPromptLibrary() {
   const categories = categoriesQuery.data || [];
   const allPrompts = promptsQuery.data || [];
 
-  // 当前选中的分类tab（null = 全部，0 = 未分类）
+  // 当前选中的分类tab（默认选中第一个分类）
+  const firstCatId = categories.length > 0 ? categories[0].id : null;
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+  // 如果还没选过分类且分类已加载，默认选第一个
+  const effectiveCategoryId = activeCategoryId !== null ? activeCategoryId : firstCatId;
   // 编辑模式
   const [editMode, setEditMode] = useState(false);
   // 全局多选（购物车）- 跨分类保留
@@ -65,11 +68,9 @@ export default function PptPromptLibrary() {
   const [editRemark, setEditRemark] = useState('');
 
   // 当前分类下的提示词
-  const filteredPrompts = activeCategoryId === null
+  const filteredPrompts = effectiveCategoryId === null
     ? allPrompts
-    : activeCategoryId === 0
-      ? allPrompts.filter(p => !p.categoryId || p.categoryId === 0)
-      : allPrompts.filter(p => p.categoryId === activeCategoryId);
+    : allPrompts.filter(p => p.categoryId === effectiveCategoryId);
 
   // 购物车：按分类智能归组
   const cartGroups = useMemo(() => {
@@ -162,7 +163,7 @@ export default function PptPromptLibrary() {
   const handleAddPrompt = async () => {
     const content = newPromptContent.trim();
     if (!content) return;
-    const categoryId = activeCategoryId === null || activeCategoryId === 0 ? 0 : activeCategoryId;
+    const categoryId = effectiveCategoryId || 0;
     const remark = newPromptRemark.trim() || undefined;
     await addPromptMutation.mutateAsync({ content, categoryId, remark });
     setNewPromptContent('');
@@ -198,18 +199,12 @@ export default function PptPromptLibrary() {
     }
   };
 
-  // 分类标签列表
-  const tabList = [
-    { id: null, name: '全部' },
-    ...categories.map(c => ({ id: c.id, name: c.name })),
-    { id: 0, name: '未分类' },
-  ];
+  // 分类标签列表（只显示用户自建的分类）
+  const tabList = categories.map(c => ({ id: c.id, name: c.name }));
 
   const getTabSelectedCount = (tabId: number | null) => {
     if (tabId === null) return selected.length;
-    const prompts = tabId === 0
-      ? allPrompts.filter(p => !p.categoryId || p.categoryId === 0)
-      : allPrompts.filter(p => p.categoryId === tabId);
+    const prompts = allPrompts.filter(p => p.categoryId === tabId);
     return prompts.filter(p => selected.includes(p.id)).length;
   };
 
@@ -264,11 +259,11 @@ export default function PptPromptLibrary() {
                 key={String(tab.id)}
                 onClick={() => !editMode && setActiveCategoryId(tab.id)}
                 className={`shrink-0 relative flex items-center gap-1 px-3 py-1 mr-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                  activeCategoryId === tab.id
+                  effectiveCategoryId === tab.id
                     ? 'text-white'
                     : 'bg-gray-100 text-gray-500'
                 }`}
-                style={activeCategoryId === tab.id ? { background: 'linear-gradient(135deg, #E91E63 0%, #F06292 100%)' } : {}}
+                style={effectiveCategoryId === tab.id ? { background: 'linear-gradient(135deg, #E91E63 0%, #F06292 100%)' } : {}}
               >
                 {editMode && renamingId === tab.id ? (
                   <input
@@ -291,7 +286,7 @@ export default function PptPromptLibrary() {
                     {count}
                   </span>
                 )}
-                {editMode && tab.id !== null && tab.id !== 0 && renamingId !== tab.id && (
+                {editMode && tab.id !== null && renamingId !== tab.id && (
                   <>
                     <span
                       onClick={e => {
@@ -328,14 +323,14 @@ export default function PptPromptLibrary() {
                 className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-pink-50 text-pink-400 border border-dashed border-pink-200"
               >
                 <Plus className="w-3 h-3" />
-                添加提示词{activeCategoryId !== null && activeCategoryId !== 0 ? '（到当前分类）' : ''}
+                添加提示词{effectiveCategoryId ? '（到当前分类）' : ''}
               </button>
             ) : (
               <div className="bg-white rounded-xl border border-pink-100 p-3 mb-2">
                 <p className="text-xs text-gray-400 mb-1.5">
                   添加到：
                   <span className="text-pink-500 font-medium ml-1">
-                    {activeCategoryId === null ? '未分类' : activeCategoryId === 0 ? '未分类' : categories.find(c => c.id === activeCategoryId)?.name || '未知分类'}
+                    {effectiveCategoryId ? (categories.find(c => c.id === effectiveCategoryId)?.name || '未知分类') : '未分类'}
                   </span>
                 </p>
                 <input
