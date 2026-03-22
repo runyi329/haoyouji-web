@@ -44,8 +44,9 @@ export default function QQOnlinePage() {
   useEffect(() => {
     function calcRunHours() {
       const now = Date.now();
-      const hours = Math.floor((now - startTime) / (1000 * 60 * 60));
-      setRunHours(hours > 0 ? hours : 0);
+      // 先收后计：进入第几小时就按几小时算，向上取整
+      const hours = Math.ceil((now - startTime) / (1000 * 60 * 60));
+      setRunHours(hours > 0 ? hours : 1);
     }
     calcRunHours();
     const timer = setInterval(calcRunHours, 60 * 1000);
