@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, RefreshCw } from "lucide-react";
 
@@ -17,6 +17,7 @@ interface QQRecord {
 
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
+  const { id } = useParams<{ id: string }>();
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
@@ -49,7 +50,13 @@ export default function QQOnlinePage() {
       {/* 顶部导航 */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800">
         <button
-          onClick={() => setLocation(-1 as any)}
+          onClick={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              setLocation(id ? `/ledger/${id}` : '/');
+            }
+          }}
           className="flex items-center gap-1 text-gray-400 active:text-white"
         >
           <ChevronLeft size={20} />
