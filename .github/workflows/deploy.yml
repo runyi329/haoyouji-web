@@ -263,11 +263,19 @@ jobs:
             echo "✅ 部署完成！"
           ENDSSH
       
-      - name: 📢 部署结果通知
+      - name: 企业微信部署通知
         if: always()
         run: |
-          if [ ${{ job.status }} == 'success' ]; then
-            echo "✅ 部署成功！"
+          COMMIT_MSG=$(git log -1 --pretty=format:"%s")
+          COMMIT_HASH=$(git log -1 --pretty=format:"%h")
+          if [ "${{ job.status }}" == "success" ]; then
+            STATUS_TEXT="部署成功"
+            STATUS_ICON="[成功]"
           else
-            echo "❌ 部署失败，请检查日志"
+            STATUS_TEXT="部署失败"
+            STATUS_ICON="[失败]"
           fi
+          curl -s -X POST "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g" \
+            -H "Content-Type: application/json" \
+            -d "{\"msgtype\":\"markdown\",\"markdown\":{\"content\":\"## ${STATUS_ICON} 脉动网部署通知\\n> **状态**：${STATUS_TEXT}\\n> **提交**：${COMMIT_HASH}\\n> **内容**：${COMMIT_MSG}\\n> **时间**：$(date '+%Y-%m-%d %H:%M:%S')\"}}"
+          echo "企业微信通知已发送"
