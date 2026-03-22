@@ -12935,17 +12935,17 @@ insights 数组每项包含：
         const conn = await getDbConnection();
         if (!conn) return { list: [], total: 0 };
         const offset = (input.page - 1) * input.pageSize;
+        const limit = input.pageSize;
         const [rows] = await (conn as any).execute(
           `SELECT id, issue_no, online_time, online_num, online_change, last1, last2, last3, created_at
            FROM qq_online_records
            ORDER BY issue_no DESC
-           LIMIT ? OFFSET ?`,
-          [input.pageSize, offset]
+           LIMIT ${Number(limit)} OFFSET ${Number(offset)}`
         );
         const [countRows] = await (conn as any).execute(
           `SELECT COUNT(*) as total FROM qq_online_records`
         );
-        const total = (countRows as any[])[0]?.total || 0;
+        const total = Number((countRows as any[])[0]?.total) || 0;
         return { list: rows as any[], total };
       } catch (err) {
         console.error('[QQ在线] 查询失败:', err);
