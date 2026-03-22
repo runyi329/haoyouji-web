@@ -228,6 +228,32 @@ export const beautyShowcasePhotos = mysqlTable("beauty_showcase_photos", {
 export type BeautyShowcasePhoto = typeof beautyShowcasePhotos.$inferSelect;
 
 
+// ===== 素材展示（刘立凡主页素材Tab，独立数据）=====
+
+// 素材照片组（每组2-5张照片，横向滑动展示）
+export const beautyMaterialGroups = mysqlTable("beauty_material_groups", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),           // 创建者
+  title: varchar("title", { length: 100 }),  // 组标题（可选）
+  sortOrder: int("sortOrder").default(0).notNull(),
+  shareToken: varchar("shareToken", { length: 64 }),  // 分享token
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type BeautyMaterialGroup = typeof beautyMaterialGroups.$inferSelect;
+
+// 素材照片（属于某个素材组）
+export const beautyMaterialPhotos = mysqlTable("beauty_material_photos", {
+  id: int("id").autoincrement().primaryKey(),
+  groupId: int("groupId").notNull(),         // 所属素材组
+  imageUrl: text("imageUrl").notNull(),       // COS图片URL
+  caption: varchar("caption", { length: 200 }),  // 照片文字说明（可选）
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BeautyMaterialPhoto = typeof beautyMaterialPhotos.$inferSelect;
+
+
 // ===== PPT对比展示 =====
 
 // PPT对比组（一组包含两个PPT：A和B）

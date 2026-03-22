@@ -7,8 +7,8 @@ import { Home as HomeIcon, Calendar, Gift, User, Images } from "lucide-react";
 
 const TABS = [
   { label: "首页", href: "/beauty", icon: <HomeIcon className="w-4 h-4" /> },
-  { label: "素材", href: "/beauty/material", icon: <Images className="w-4 h-4" /> },
   { label: "预约", href: "/beauty/booking", icon: <Calendar className="w-4 h-4" /> },
+  { label: "素材", href: "/beauty/material", icon: <Images className="w-4 h-4" /> },
   { label: "商城", href: "/beauty/shop", icon: <Gift className="w-4 h-4" /> },
   { label: "我的", href: "/beauty/appointments", icon: <User className="w-4 h-4" /> },
 ];
