@@ -36,8 +36,11 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
   // 按账本隔离余额：如果有 ledgerId 则只计算该账本的充値和手动调账
+  // 管理员视角查看时，传递 viewAsUserId 以显示被查看用户的余额
   const balanceQuery = trpc.recharge.getBalance.useQuery(
-    fromLedgerId ? { ledgerId: Number(fromLedgerId) } : undefined
+    fromLedgerId
+      ? { ledgerId: Number(fromLedgerId), ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}) }
+      : (viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : undefined)
   );
   const displayBalance = balanceQuery.data;
 
@@ -56,6 +59,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
         amount: numAmount,
         network,
         ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
+        ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}),
       });
 
       setOrder(result);
@@ -353,6 +357,12 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
       </div>)}
 
       <div className="p-4 space-y-4">
+        {/* 管理员视角提示 */}
+        {viewAsUserId && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-2.5 flex items-center gap-2">
+            <span className="text-amber-700 text-sm font-medium">正在为用户 ID:{viewAsUserId} 操作充值</span>
+          </div>
+        )}
         {/* 当前余额 */}
         {!hideBalance && (<div className="bg-gradient-to-r from-[#D32F2F] to-[#E57373] rounded-lg p-6 text-white">
           <div className="flex items-center mb-2">
