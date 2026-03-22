@@ -84,29 +84,25 @@ export default function QQOnlinePage() {
       {/* 2x2 数据卡片 */}
       <div className="px-4 pt-3">
         <div className="grid grid-cols-2 gap-3">
+          {/* 第1个：开始时间 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-            <div className="text-[11px] text-white/55 mb-1">末1位</div>
-            <div className="text-2xl font-bold font-mono text-white">
-              {latest ? latest.last1 : '-'}
+            <div className="text-[11px] text-white/55 mb-1">开始时间</div>
+            <div className="text-sm font-bold text-white leading-snug">
+              2026年3月23日
             </div>
           </div>
+          {/* 第2个：开始金额 + 保证金 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-            <div className="text-[11px] text-white/55 mb-1">末2位</div>
-            <div className="text-2xl font-bold font-mono text-white">
-              {latest ? String(latest.last2).padStart(2, '0') : '--'}
-            </div>
+            <div className="text-[11px] text-white/55 mb-1">开始金额</div>
+            <div className="text-sm font-bold text-white">200万元整</div>
+            <div className="text-[11px] text-white/55 mt-2 mb-0.5">保证金</div>
+            <div className="text-sm font-bold text-white">20万元</div>
           </div>
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-            <div className="text-[11px] text-white/55 mb-1">末3位</div>
-            <div className="text-2xl font-bold font-mono text-white">
-              {latest ? String(latest.last3).padStart(3, '0') : '---'}
-            </div>
+          {/* 第3个：空 */}
+          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
           </div>
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-            <div className="text-[11px] text-white/55 mb-1">期号</div>
-            <div className="text-sm font-bold font-mono text-white">
-              {latest ? latest.issue_no : '-'}
-            </div>
+          {/* 第4个：空 */}
+          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
           </div>
         </div>
       </div>
