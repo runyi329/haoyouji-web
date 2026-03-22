@@ -19,6 +19,7 @@ import {
   Edit2,
   Upload,
   FileUp,
+  Share2,
 } from "lucide-react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
@@ -245,6 +246,7 @@ function PhotoGroupManager() {
   const updateTitleMutation = trpc.beauty.showcase.updateGroupTitle.useMutation({
     onSuccess: () => utils.beauty.showcase.listGroups.invalidate(),
   });
+  const generateShareTokenMutation = trpc.beauty.showcase.generateShareToken.useMutation();
 
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [uploadingGroupId, setUploadingGroupId] = useState<number | null>(null);
@@ -309,6 +311,18 @@ function PhotoGroupManager() {
       title: editTitleValue,
     });
     setEditingTitleId(null);
+  };
+
+  const handleShareGroup = async (groupId: number) => {
+    try {
+      const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
+      const shareUrl = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
+      await navigator.clipboard.writeText(shareUrl);
+      alert('分享链接已复制到剪贴板！');
+    } catch (err) {
+      console.error('生成分享链接失败:', err);
+      alert('生成分享链接失败，请重试');
+    }
   };
 
   if (!user) {
@@ -416,16 +430,31 @@ function PhotoGroupManager() {
                     <Edit2 className="w-3 h-3 text-gray-400" />
                   </button>
                 </div>
-                <button
-                  onClick={() => {
-                    if (window.confirm("确定删除这个照片组及其所有照片?")) {
-                      deleteGroupMutation.mutate({ groupId: group.id });
-                    }
-                  }}
-                  className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleShareGroup(group.id)}
+                    disabled={generateShareTokenMutation.isPending}
+                    className="w-7 h-7 rounded-full flex items-center justify-center"
+                    style={{ background: "#E3F2FD" }}
+                    title="分享这组照片"
+                  >
+                    {generateShareTokenMutation.isPending ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "#1976D2" }} />
+                    ) : (
+                      <Share2 className="w-3.5 h-3.5" style={{ color: "#1976D2" }} />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm("确定删除这个照片组及其所有照片?")) {
+                        deleteGroupMutation.mutate({ groupId: group.id });
+                      }
+                    }}
+                    className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -633,6 +662,7 @@ function PptCompareManager() {
   const updateGroupMutation = trpc.beauty.pptCompare.updateGroup.useMutation({
     onSuccess: () => utils.beauty.pptCompare.listGroups.invalidate(),
   });
+  const generateShareTokenMutation = trpc.beauty.pptCompare.generateShareToken.useMutation();
 
   const uploadingSideRef = useRef<{ groupId: number; side: 'A' | 'B' } | null>(null); // 用ref同步记录uploadingSide，避免异步state导致上传函数读不到最新值
   const [uploadingSide, setUploadingSide] = useState<{ groupId: number; side: 'A' | 'B' } | null>(null); // 仅用于UI显示
@@ -779,6 +809,18 @@ function PptCompareManager() {
     setEditingTitleId(null);
   };
 
+  const handleShareGroup = async (groupId: number) => {
+    try {
+      const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
+      const shareUrl = `${window.location.origin}/beauty/showcase/share?token=${token}&type=ppt`;
+      await navigator.clipboard.writeText(shareUrl);
+      alert('分享链接已复制到剪贴板！');
+    } catch (err) {
+      console.error('生成分享链接失败:', err);
+      alert('生成分享链接失败，请重试');
+    }
+  };
+
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
@@ -883,6 +925,19 @@ function PptCompareManager() {
                   className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center"
                 >
                   <Edit2 className="w-3.5 h-3.5 text-gray-500" />
+                </button>
+                <button
+                  onClick={() => handleShareGroup(group.id)}
+                  disabled={generateShareTokenMutation.isPending}
+                  className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ background: "#E3F2FD" }}
+                  title="分享这组PPT对比"
+                >
+                  {generateShareTokenMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "#1976D2" }} />
+                  ) : (
+                    <Share2 className="w-3.5 h-3.5" style={{ color: "#1976D2" }} />
+                  )}
                 </button>
                 <button
                   onClick={() => {

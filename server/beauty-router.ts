@@ -1066,9 +1066,49 @@ export const beautyRouter = router({
         try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
         await db.delete(beautyShowcasePhotos).where(eq(beautyShowcasePhotos.id, input.photoId));
         return { success: true };
+      }),    // 生成分享Token
+    generateShareToken: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyShowcaseGroups)
+          .where(eq(beautyShowcaseGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '照片组不存在' });
+        // 如果已有token则复用，否则生成新的
+        let token = group.shareToken;
+        if (!token) {
+          token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          await db
+            .update(beautyShowcaseGroups)
+            .set({ shareToken: token })
+            .where(eq(beautyShowcaseGroups.id, input.groupId));
+        }
+        return { token, success: true };
       }),
 
-    // 更新组标题
+    // 通过分享Token获取照片组（公开，无需登录）
+    getByShareToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyShowcaseGroups)
+          .where(eq(beautyShowcaseGroups.shareToken, input.token));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '分享链接无效或已过期' });
+        const photos = await db
+          .select()
+          .from(beautyShowcasePhotos)
+          .where(eq(beautyShowcasePhotos.groupId, group.id))
+          .orderBy(asc(beautyShowcasePhotos.sortOrder));
+        return { ...group, photos };
+      }),
+
+    // 更新照片组标题
     updateGroupTitle: protectedProcedure
       .input(z.object({
         groupId: z.number(),
@@ -1230,6 +1270,49 @@ export const beautyRouter = router({
         await db.delete(beautyPptPages).where(eq(beautyPptPages.groupId, input.groupId));
         await db.delete(beautyPptCompareGroups).where(eq(beautyPptCompareGroups.id, input.groupId));
         return { success: true };
+      }),
+
+    // 生成PPT对比组分享Token
+    generateShareToken: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyPptCompareGroups)
+          .where(eq(beautyPptCompareGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '对比组不存在' });
+        let token = group.shareToken;
+        if (!token) {
+          token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          await db
+            .update(beautyPptCompareGroups)
+            .set({ shareToken: token })
+            .where(eq(beautyPptCompareGroups.id, input.groupId));
+        }
+        return { token, success: true };
+      }),
+
+    // 通过分享Token获取PPT对比组（公开，无需登录）
+    getByShareToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyPptCompareGroups)
+          .where(eq(beautyPptCompareGroups.shareToken, input.token));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '分享链接无效或已过期' });
+        const pages = await db
+          .select()
+          .from(beautyPptPages)
+          .where(eq(beautyPptPages.groupId, group.id))
+          .orderBy(asc(beautyPptPages.pageNum));
+        const pagesA = pages.filter((p) => p.side === 'A');
+        const pagesB = pages.filter((p) => p.side === 'B');
+        return { ...group, pagesA, pagesB };
       }),
   }),
 
