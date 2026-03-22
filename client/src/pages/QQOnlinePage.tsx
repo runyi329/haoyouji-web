@@ -41,60 +41,101 @@ export default function QQOnlinePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      {/* 顶部导航 */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800">
-        <button
-          onClick={() => {
-            if (window.history.length > 1) {
-              window.history.back();
-            } else {
-              setLocation(id ? `/ledger/${id}` : '/');
-            }
-          }}
-          className="flex items-center gap-1 text-gray-400 active:text-white"
-        >
-          <ChevronLeft size={20} />
-          <span className="text-sm">返回</span>
-        </button>
-        <h1 className="text-base font-bold text-white">QQ 在线人数</h1>
-        {/* 历史记录按钮 */}
-        <button
-          onClick={() => setLocation(`/ledger/${id}/qq/history`)}
-          className="flex items-center gap-1 text-gray-400 active:text-white"
-        >
-          <History size={20} />
-        </button>
-      </div>
+    <div className="min-h-screen" style={{ background: '#F0F4FF' }}>
+      {/* 蓝色渐变顶部区域 */}
+      <div className="pb-6" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' }}>
+        {/* 导航栏 */}
+        <div className="px-4 pt-3 pb-2 flex items-center justify-between">
+          <button
+            onClick={() => {
+              if (window.history.length > 1) {
+                window.history.back();
+              } else {
+                setLocation(id ? `/ledger/${id}` : '/');
+              }
+            }}
+            className="p-1 -ml-1"
+          >
+            <ChevronLeft className="w-5 h-5 text-white" />
+          </button>
+          <span className="text-base font-semibold text-white">QQ 在线人数</span>
+          <button
+            onClick={() => setLocation(`/ledger/${id}/qq/history`)}
+            className="p-1 -mr-1"
+          >
+            <History className="w-5 h-5 text-white" />
+          </button>
+        </div>
 
-      {/* 主体：最新数据 */}
-      <div className="flex flex-col items-center justify-center pt-20 pb-10 px-4">
-        {latest ? (
-          <>
-            {/* 在线人数 - 大字 */}
-            <div className="text-4xl font-bold font-mono text-white tracking-wide">
-              {formatNum(latest.online_num)}
+        {/* 数据展示区 */}
+        <div className="px-4 pt-2">
+          <div className="rounded-2xl px-5 py-4" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+            <div className="flex items-center justify-between">
+              {/* 左侧：人数 + 时间 */}
+              <div>
+                <div className="text-xs text-white/70 mb-1">当前在线人数</div>
+                {latest ? (
+                  <>
+                    <div className="text-2xl font-bold text-white font-mono tracking-wide">
+                      {formatNum(latest.online_num)}
+                    </div>
+                    <div className="text-xs text-white/50 mt-1">
+                      {latest.online_time}
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-lg text-white/60">加载中...</div>
+                )}
+              </div>
+              {/* 右侧：倒计时 */}
+              <div className="flex flex-col items-center">
+                <div className="text-[10px] text-white/50 mb-0.5">下次更新</div>
+                <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>
+                  <span className="text-xl font-bold font-mono text-white">{countdown}</span>
+                </div>
+                <div className="text-[10px] text-white/50 mt-0.5">秒</div>
+              </div>
             </div>
-            {/* 统计时间 - 小字 */}
-            <div className="mt-3 text-sm text-gray-500">
-              {latest.online_time}
-            </div>
-          </>
-        ) : (
-          <div className="text-gray-500 text-sm">加载中...</div>
-        )}
-
-        {/* 倒计时 */}
-        <div className="mt-8 flex flex-col items-center">
-          <div className="text-xs text-gray-600 mb-1">下次更新</div>
-          <div className="text-2xl font-mono text-blue-400 font-bold">
-            {countdown}<span className="text-sm text-gray-500 ml-1">秒</span>
           </div>
         </div>
       </div>
 
-      {/* 底部安全区 */}
-      <div className="h-8" />
+      {/* 2x2 容器区域 */}
+      <div className="px-4 -mt-2">
+        <div className="grid grid-cols-2 gap-3">
+          {/* 容器1 */}
+          <div className="rounded-2xl px-4 py-4 bg-white shadow-sm" style={{ minHeight: '100px' }}>
+            <div className="text-xs text-gray-400 mb-1">末1位</div>
+            <div className="text-2xl font-bold font-mono" style={{ color: '#1A56DB' }}>
+              {latest ? latest.last1 : '-'}
+            </div>
+          </div>
+          {/* 容器2 */}
+          <div className="rounded-2xl px-4 py-4 bg-white shadow-sm" style={{ minHeight: '100px' }}>
+            <div className="text-xs text-gray-400 mb-1">末2位</div>
+            <div className="text-2xl font-bold font-mono" style={{ color: '#1A56DB' }}>
+              {latest ? String(latest.last2).padStart(2, '0') : '--'}
+            </div>
+          </div>
+          {/* 容器3 */}
+          <div className="rounded-2xl px-4 py-4 bg-white shadow-sm" style={{ minHeight: '100px' }}>
+            <div className="text-xs text-gray-400 mb-1">末3位</div>
+            <div className="text-2xl font-bold font-mono" style={{ color: '#1A56DB' }}>
+              {latest ? String(latest.last3).padStart(3, '0') : '---'}
+            </div>
+          </div>
+          {/* 容器4 */}
+          <div className="rounded-2xl px-4 py-4 bg-white shadow-sm" style={{ minHeight: '100px' }}>
+            <div className="text-xs text-gray-400 mb-1">期号</div>
+            <div className="text-sm font-bold font-mono" style={{ color: '#1A56DB' }}>
+              {latest ? latest.issue_no : '-'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 底部留白 */}
+      <div className="h-20" />
     </div>
   );
 }
