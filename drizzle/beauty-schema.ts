@@ -210,6 +210,7 @@ export const beautyShowcaseGroups = mysqlTable("beauty_showcase_groups", {
   userId: int("userId").notNull(),           // 创建者
   title: varchar("title", { length: 100 }),  // 组标题（可选）
   sortOrder: int("sortOrder").default(0).notNull(),
+  shareToken: varchar("shareToken", { length: 64 }),  // 分享token（生成后可通过公开链接访问）
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -236,6 +237,7 @@ export const beautyPptCompareGroups = mysqlTable("beauty_ppt_compare_groups", {
   titleA: varchar("titleA", { length: 100 }), // PPT-A标题（如"改版前"）
   titleB: varchar("titleB", { length: 100 }), // PPT-B标题（如"改版后"）
   sortOrder: int("sortOrder").default(0).notNull(),
+  shareToken: varchar("shareToken", { length: 64 }),  // 分享token（生成后可通过公开链接访问）
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
