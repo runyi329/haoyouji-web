@@ -114,11 +114,36 @@ export default function PptPromptLibrary() {
     return prompt.remark?.trim() ? prompt.remark.trim() : prompt.content;
   };
 
-  // 购物车合并文本（始终按分类归组并显示标题）
+  // 按分类智能拼接文本
+  const joinByCategory = (name: string, texts: string[]) => {
+    if (texts.length === 0) return '';
+    if (texts.length === 1) return `【${name}】\n${texts[0]}`;
+    switch (name) {
+      case '角色':
+        // 角色类：用“同时也是”融合多重身份
+        return `【${name}】\n${texts[0]}，同时也是${texts.slice(1).join('，并且是')}。`;
+      case '全局':
+        // 全局类：逐条序号，保持独立约束
+        return `【${name}】\n${texts.map((t, i) => `${i + 1}. ${t}`).join('\n')}`;
+      case '逻辑':
+        // 逻辑类：用分号连接
+        return `【${name}】\n在逻辑上需要注意：${texts.join('；')}。`;
+      case '禁忌':
+        // 禁忌类：用否定词串联
+        return `【${name}】\n严禁${texts.join('；不得')}。`;
+      case '任务':
+        // 任务类：逐条换行，保持任务独立性
+        return `【${name}】\n${texts.map((t, i) => `${i + 1}. ${t}`).join('\n')}`;
+      default:
+        return `【${name}】\n${texts.join('\n')}`;
+    }
+  };
+
+  // 购物车合并文本（按分类智能拼接）
   const mergedText = useMemo(() => {
     if (cartGroups.length === 0) return '';
     return cartGroups
-      .map(g => `【${g.name}】\n${g.items.map(p => getDisplayText(p)).join('\n')}`)
+      .map(g => joinByCategory(g.name, g.items.map(p => getDisplayText(p))))
       .join('\n\n');
   }, [cartGroups]);
 
