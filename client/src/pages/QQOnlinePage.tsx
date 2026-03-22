@@ -37,6 +37,21 @@ export default function QQOnlinePage() {
     }
   }, [countdown, refetch]);
 
+  // 运行时长：从2026-03-23 00:00:00起按小时计算
+  const startTime = new Date('2026-03-23T00:00:00+08:00').getTime();
+  const [runHours, setRunHours] = useState(0);
+
+  useEffect(() => {
+    function calcRunHours() {
+      const now = Date.now();
+      const hours = Math.floor((now - startTime) / (1000 * 60 * 60));
+      setRunHours(hours > 0 ? hours : 0);
+    }
+    calcRunHours();
+    const timer = setInterval(calcRunHours, 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   function formatNum(n: number): string {
     return n.toLocaleString("zh-CN");
   }
@@ -84,12 +99,12 @@ export default function QQOnlinePage() {
       {/* 2x2 数据卡片 */}
       <div className="px-4 pt-3">
         <div className="grid grid-cols-2 gap-3">
-          {/* 第1个：开始时间 */}
+          {/* 第1个：开始时间 + 运行时长 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">开始时间</div>
-            <div className="text-sm font-bold text-white leading-snug">
-              2026年3月23日
-            </div>
+            <div className="text-sm font-bold text-white leading-snug">2026年3月23日</div>
+            <div className="text-[11px] text-white/55 mt-2 mb-0.5">运行时长</div>
+            <div className="text-sm font-bold text-white">{runHours} 小时</div>
           </div>
           {/* 第2个：开始金额 + 保证金 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
