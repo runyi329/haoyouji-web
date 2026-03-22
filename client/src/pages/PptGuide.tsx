@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, useParams } from 'wouter';
 import { ChevronLeft, ChevronRight, Copy, Check, ChevronDown, BookMarked, Plus, Trash2, ClipboardCopy } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
@@ -334,6 +334,8 @@ type Step = 'layer1' | 'layer2' | 'layer3' | 'result';
 
 export default function PptGuide() {
   const [, setLocation] = useLocation();
+  const params = useParams() as { id?: string };
+  const ledgerId = params.id;
   const [step, setStep] = useState<Step>('layer1');
   const [selectedType, setSelectedType] = useState<string>('');
   const [layer2Answers, setLayer2Answers] = useState<string[]>([]);
@@ -404,8 +406,6 @@ ${l3Lines}
 
     return (
       <div className="min-h-screen bg-gray-50">
-        {/* 提示词库弹窗 */}
-        {showPromptLibrary && <PromptLibraryModal onClose={() => setShowPromptLibrary(false)} />}
         {/* 顶部导航 */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
           <button onClick={() => setLocation(-1 as any)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">
@@ -417,7 +417,7 @@ ${l3Lines}
           </div>
           {/* 提示词库按鈕 */}
           <button
-            onClick={() => setShowPromptLibrary(true)}
+            onClick={() => setLocation(ledgerId ? `/ledger/${ledgerId}/ppt-prompt-library` : '/ppt-prompt-library')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
             style={{ background: 'linear-gradient(135deg, #FCE4EC 0%, #F8BBD0 100%)', color: '#E91E63' }}
           >
