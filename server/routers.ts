@@ -12922,6 +12922,37 @@ insights 数组每项包含：
         return { tables };
       }),
   }),
+
+  // QQ 在线人数历史记录查询
+  getQQOnlineRecords: protectedProcedure
+    .input(z.object({
+      page: z.number().min(1).default(1),
+      pageSize: z.number().min(1).max(100).default(50),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { list: [], total: 0 };
+        const offset = (input.page - 1) * input.pageSize;
+        const [rows] = await (conn as any).execute(
+          `SELECT id, issue_no, online_time, online_num, online_change, last1, last2, last3, created_at
+           FROM qq_online_records
+           ORDER BY issue_no DESC
+           LIMIT ? OFFSET ?`,
+          [input.pageSize, offset]
+        );
+        const [countRows] = await (conn as any).execute(
+          `SELECT COUNT(*) as total FROM qq_online_records`
+        );
+        const total = (countRows as any[])[0]?.total || 0;
+        return { list: rows as any[], total };
+      } catch (err) {
+        console.error('[QQ在线] 查询失败:', err);
+        return { list: [], total: 0 };
+      }
+    }),
+
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
@@ -13004,35 +13035,6 @@ export const adminFeatureRouter = router({
       }
     }),
 
-  // QQ 在线人数历史记录查询
-  getQQOnlineRecords: protectedProcedure
-    .input(z.object({
-      page: z.number().min(1).default(1),
-      pageSize: z.number().min(1).max(100).default(50),
-    }))
-    .query(async ({ input }) => {
-      try {
-        const { getDbConnection } = await import('./db');
-        const conn = await getDbConnection();
-        if (!conn) return { list: [], total: 0 };
-        const offset = (input.page - 1) * input.pageSize;
-        const [rows] = await (conn as any).execute(
-          `SELECT id, issue_no, online_time, online_num, online_change, last1, last2, last3, created_at
-           FROM qq_online_records
-           ORDER BY issue_no DESC
-           LIMIT ? OFFSET ?`,
-          [input.pageSize, offset]
-        );
-        const [countRows] = await (conn as any).execute(
-          `SELECT COUNT(*) as total FROM qq_online_records`
-        );
-        const total = (countRows as any[])[0]?.total || 0;
-        return { list: rows as any[], total };
-      } catch (err) {
-        console.error('[QQ在线] 查询失败:', err);
-        return { list: [], total: 0 };
-      }
-    }),
 
 });
 export type AppRouter = typeof appRouter;
