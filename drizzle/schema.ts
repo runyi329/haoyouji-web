@@ -1,4 +1,4 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, varchar, text, mysqlEnum, timestamp, index, json, longtext, date, decimal, tinyint, datetime } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, varchar, text, mysqlEnum, timestamp, index, json, longtext, date, decimal, tinyint, datetime, bigint, smallint } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const addition20Challenges = mysqlTable("addition20_challenges", {
@@ -1790,4 +1790,19 @@ export const ahCompanyMembers = mysqlTable("ah_company_members", {
   index("ah_cm_company_idx").on(table.companyId),
   index("ah_cm_user_idx").on(table.userId),
   index("ah_cm_company_user_idx").on(table.companyId, table.userId),
+]);
+
+// ========== QQ 在线人数记录表 ==========
+export const qqOnlineRecords = mysqlTable("qq_online_records", {
+  id: int().autoincrement().notNull(),
+  issueNo: bigint('issue_no', { mode: 'number' }).notNull(),           // 期号，格式 YYYYMMDDHHII
+  onlineTime: varchar('online_time', { length: 20 }).notNull(),        // 统计时间，如 2026-03-23 01:23:01
+  onlineNum: bigint('online_num', { mode: 'number' }).notNull(),       // 在线人数
+  onlineChange: int('online_change').default(0).notNull(),             // 与上期波动值
+  last1: tinyint('last1').notNull(),                                   // 末1位
+  last2: tinyint('last2').notNull(),                                   // 末2位
+  last3: smallint('last3').notNull(),                                  // 末3位
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  index("qq_online_created_idx").on(table.createdAt),
 ]);

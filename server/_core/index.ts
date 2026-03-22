@@ -406,6 +406,41 @@ async function startServer() {
     }, 60 * 1000); // 每分钟检查一次
     console.log('[自动开奖] 已注册，每天北京时间 15:01-15:03 自动触发股票类抽奖开奖');
     // ──────────────────────────────────────────────────────
+
+    // ─── QQ 在线人数定时抓取（每分钟一次）───
+    let lastQQFetchTime = '';
+    setInterval(async () => {
+      try {
+        const res = await fetch('https://www.qq09.com/api/external/list-tecent-online/tecentOnline');
+        if (!res.ok) return;
+        const json = await res.json() as any;
+        const list: Array<{ onlineTime: string; onlineNum: number; onlineChange: number }> = json?.data?.list;
+        if (!Array.isArray(list) || list.length === 0) return;
+        const latest = list[0];
+        if (!latest || latest.onlineTime === lastQQFetchTime) return;
+        lastQQFetchTime = latest.onlineTime;
+        // 生成期号：YYYYMMDDHHII（取统计时间）
+        const t = latest.onlineTime; // '2026-03-23 01:23:01'
+        const issueNo = Number(t.replace(/[-: ]/g, '').slice(0, 12));
+        const numStr = String(latest.onlineNum);
+        const last1 = Number(numStr.slice(-1));
+        const last2 = Number(numStr.slice(-2));
+        const last3 = Number(numStr.slice(-3));
+        const { getDbConnection } = await import('../db');
+        const conn = await getDbConnection();
+        if (!conn) return;
+        await (conn as any).execute(
+          `INSERT IGNORE INTO qq_online_records (issue_no, online_time, online_num, online_change, last1, last2, last3)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [issueNo, latest.onlineTime, latest.onlineNum, latest.onlineChange, last1, last2, last3]
+        );
+        console.log(`[QQ在线] 已记录 ${latest.onlineTime} 在线人数 ${latest.onlineNum.toLocaleString()}`);
+      } catch (err) {
+        console.error('[QQ在线] 抓取失败:', err);
+      }
+    }, 60 * 1000); // 每分钟抓取一次
+    console.log('[QQ在线] 定时抓取任务已启动，每分钟记录一次腾讯在线人数');
+    // ──────────────────────────────────────────────────────
   });
 }
 
