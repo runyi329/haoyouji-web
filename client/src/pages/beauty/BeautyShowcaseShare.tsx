@@ -56,39 +56,25 @@ function PhotoSharePage({ token }: { token: string }) {
         </div>
       </div>
 
-      {/* 照片展示 */}
-      <div className="pt-4 pb-12">
+      {/* 照片展示 - 上下排列满屏大图 */}
+      <div className="pt-0 pb-4">
         {photos.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <p className="text-sm text-gray-400">暂无照片</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <Carousel
-              className="w-full"
-              opts={{ loop: false, align: "start", dragFree: true }}
-            >
-              <CarouselContent className="-ml-2 pl-4">
-                {photos.map((photo) => (
-                  <CarouselItem key={photo.id} className="pl-2 basis-auto">
-                    <div
-                      className="rounded-xl overflow-hidden bg-gray-100 flex-shrink-0"
-                      style={{ width: "260px", height: "346px" }}
-                    >
-                      <img
-                        src={photo.imageUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-            </Carousel>
-            <div className="px-4">
-              <p className="text-xs text-gray-400">左右滑动查看全部照片</p>
-            </div>
+          <div>
+            {photos.map((photo, index) => (
+              <div key={photo.id} className="w-full">
+                <img
+                  src={photo.imageUrl}
+                  alt=""
+                  className="w-full block"
+                  style={{ display: 'block', maxWidth: '100%' }}
+                  loading={index === 0 ? 'eager' : 'lazy'}
+                />
+              </div>
+            ))}
           </div>
         )}
       </div>
