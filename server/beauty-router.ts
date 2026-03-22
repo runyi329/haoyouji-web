@@ -1006,6 +1006,7 @@ export const beautyRouter = router({
       .input(z.object({
         groupId: z.number(),
         imageData: z.string(), // base64
+        caption: z.string().optional(), // 照片文字说明
         sortOrder: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1024,9 +1025,26 @@ export const beautyRouter = router({
         const [result] = await db.insert(beautyShowcasePhotos).values({
           groupId: input.groupId,
           imageUrl,
+          caption: input.caption || null,
           sortOrder: input.sortOrder ?? 0,
         });
         return { id: result.insertId, imageUrl, success: true };
+      }),
+
+    // 更新照片文字说明
+    updatePhotoCaption: protectedProcedure
+      .input(z.object({
+        photoId: z.number(),
+        caption: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db
+          .update(beautyShowcasePhotos)
+          .set({ caption: input.caption || null })
+          .where(eq(beautyShowcasePhotos.id, input.photoId));
+        return { success: true };
       }),
 
     // 删除照片组（级联删除组内照片）
