@@ -60,42 +60,42 @@ export default function QQOnlinePage() {
       {/* 主数据区 */}
       <div className="px-4 pt-2">
         <div className="rounded-2xl px-5 py-4" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-          {/* 第一行：人数 + 倒计时 + 历史按钮 */}
-          <div className="flex items-center justify-between">
-            {/* 左侧：人数 + 时间 */}
-            <div className="flex-1">
-              <div className="text-xs text-white/60 mb-1">当前在线</div>
-              {latest ? (
-                <>
-                  <div className="text-3xl font-bold text-white font-mono tracking-wide leading-tight">
-                    {formatNum(latest.online_num)}
-                  </div>
-                  <div className="text-[11px] text-white/45 mt-1.5">
-                    {latest.online_time}
-                  </div>
-                </>
-              ) : (
-                <div className="text-xl text-white/50">加载中...</div>
-              )}
-            </div>
-            {/* 右侧：倒计时 + 历史按钮 */}
-            <div className="flex items-center gap-3">
-              {/* 倒计时圆 */}
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-              >
-                <span className="text-lg font-bold font-mono text-white">{countdown}</span>
+          {/* 第一行：当前在线 + 时间 */}
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="text-xs text-white/60">当前在线</span>
+            <span className="text-[11px] text-white/40">
+              {latest ? latest.online_time : ''}
+            </span>
+          </div>
+          {/* 第二行：大数字 */}
+          <div className="mb-4">
+            {latest ? (
+              <div className="text-3xl font-bold text-white font-mono tracking-wide leading-tight">
+                {formatNum(latest.online_num)}
               </div>
-              {/* 历史按钮 */}
-              <button
-                onClick={() => setLocation(`/ledger/${id}/qq/history`)}
-                className="w-10 h-10 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-              >
-                <History className="w-4.5 h-4.5 text-white/80" />
-              </button>
+            ) : (
+              <div className="text-xl text-white/50">加载中...</div>
+            )}
+          </div>
+          {/* 第三行：倒计时 + 历史 两个等大方形容器 */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* 倒计时容器 */}
+            <div
+              className="rounded-xl flex flex-col items-center justify-center py-3"
+              style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
+            >
+              <div className="text-2xl font-bold font-mono text-white">{countdown}</div>
+              <div className="text-[10px] text-white/45 mt-0.5">倒计时</div>
             </div>
+            {/* 历史记录容器 */}
+            <button
+              onClick={() => setLocation(`/ledger/${id}/qq/history`)}
+              className="rounded-xl flex flex-col items-center justify-center py-3 active:opacity-70"
+              style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
+            >
+              <History className="w-6 h-6 text-white" />
+              <div className="text-[10px] text-white/45 mt-0.5">历史记录</div>
+            </button>
           </div>
         </div>
       </div>
@@ -103,28 +103,24 @@ export default function QQOnlinePage() {
       {/* 2x2 数据卡片 */}
       <div className="px-4 pt-3">
         <div className="grid grid-cols-2 gap-3">
-          {/* 末1位 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">末1位</div>
             <div className="text-2xl font-bold font-mono text-white">
               {latest ? latest.last1 : '-'}
             </div>
           </div>
-          {/* 末2位 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">末2位</div>
             <div className="text-2xl font-bold font-mono text-white">
               {latest ? String(latest.last2).padStart(2, '0') : '--'}
             </div>
           </div>
-          {/* 末3位 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">末3位</div>
             <div className="text-2xl font-bold font-mono text-white">
               {latest ? String(latest.last3).padStart(3, '0') : '---'}
             </div>
           </div>
-          {/* 期号 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">期号</div>
             <div className="text-sm font-bold font-mono text-white">
@@ -134,7 +130,6 @@ export default function QQOnlinePage() {
         </div>
       </div>
 
-      {/* 底部留白 */}
       <div className="h-20" />
     </div>
   );
