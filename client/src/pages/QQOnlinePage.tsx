@@ -3,6 +3,10 @@ import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { History } from "lucide-react";
 
+// 每秒收益：20万/月 ÷ 30天 ÷ 24小时 ÷ 3600秒
+const PER_SECOND = 200000 / 30 / 24 / 3600;
+const START_TIME = new Date('2026-03-23T00:00:00+08:00').getTime();
+
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
@@ -14,14 +18,11 @@ export default function QQOnlinePage() {
 
   const latest = data?.list?.[0];
 
+  // 倒计时（对齐QQ数据每分钟第1秒更新）
   const [countdown, setCountdown] = useState(0);
-
   useEffect(() => {
     function calcCountdown() {
-      const now = new Date();
-      // QQ数据在每分钟第1秒更新，所以倒计时基于距离下一个「第1秒」的秒数
-      const sec = now.getSeconds();
-      // 距离下一分钟第1秒的秒数
+      const sec = new Date().getSeconds();
       const remaining = sec === 0 ? 1 : 61 - sec;
       setCountdown(remaining > 60 ? 0 : remaining);
     }
@@ -31,31 +32,39 @@ export default function QQOnlinePage() {
   }, []);
 
   useEffect(() => {
-    // 倒计时到0时（即刚过整分钟第1秒），立即拉取最新数据
-    if (countdown === 0) {
-      refetch();
-    }
+    if (countdown === 0) refetch();
   }, [countdown, refetch]);
 
-  // 运行时长：从2026-03-23 00:00:00起按小时计算
-  const startTime = new Date('2026-03-23T00:00:00+08:00').getTime();
-  const [runHours, setRunHours] = useState(0);
-
+  // 运行时长（按小时，先收后计）
+  const [runHours, setRunHours] = useState(1);
   useEffect(() => {
-    function calcRunHours() {
-      const now = Date.now();
-      // 先收后计：进入第几小时就按几小时算，向上取整
-      const hours = Math.ceil((now - startTime) / (1000 * 60 * 60));
+    function calc() {
+      const hours = Math.ceil((Date.now() - START_TIME) / (1000 * 60 * 60));
       setRunHours(hours > 0 ? hours : 1);
     }
-    calcRunHours();
-    const timer = setInterval(calcRunHours, 60 * 1000);
+    calc();
+    const timer = setInterval(calc, 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 累计利息（按秒实时增长）
+  const [interest, setInterest] = useState(0);
+  useEffect(() => {
+    function calcInterest() {
+      const elapsed = Math.max(0, Date.now() - START_TIME) / 1000; // 已过秒数
+      setInterest(elapsed * PER_SECOND);
+    }
+    calcInterest();
+    const timer = setInterval(calcInterest, 1000);
     return () => clearInterval(timer);
   }, []);
 
   function formatNum(n: number): string {
     return n.toLocaleString("zh-CN");
   }
+
+  const interestCNY = interest.toFixed(2);
+  const interestUSDT = (interest / 7).toFixed(2);
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
@@ -64,7 +73,6 @@ export default function QQOnlinePage() {
       <div className="px-4 pt-4">
         <div className="rounded-2xl px-5 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
           <div className="flex items-center justify-between gap-3">
-            {/* 左侧：标签+时间 + 大数字 */}
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-xs text-white/60">当前在线</span>
@@ -74,17 +82,13 @@ export default function QQOnlinePage() {
                 {latest ? formatNum(latest.online_num) : '加载中...'}
               </div>
             </div>
-
-            {/* 右侧：倒计时 + 历史 两个小方形按钮 */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* 倒计时 */}
               <div
                 className="rounded-xl flex items-center justify-center"
                 style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '40px', height: '40px' }}
               >
                 <span className="text-base font-bold font-mono text-white">{countdown}</span>
               </div>
-              {/* 历史记录 */}
               <button
                 onClick={() => setLocation(`/ledger/${id}/qq/history`)}
                 className="rounded-xl flex items-center justify-center active:opacity-70"
@@ -118,17 +122,17 @@ export default function QQOnlinePage() {
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">保证金</div>
             <div className="text-sm font-bold text-white">20万元</div>
           </div>
-          {/* 第3个：累计利息 + 待结利息 */}
+          {/* 第3个：累计利息 + 待结利息（按秒实时增长） */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">累计利息</div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-white">¥{(runHours * 277.78).toFixed(2)}</span>
-              <span className="text-[10px] text-white/50">≈ {(runHours * 277.78 / 7).toFixed(2)} USDT</span>
+              <span className="text-sm font-bold text-white font-mono">¥{interestCNY}</span>
+              <span className="text-[10px] text-white/50">≈{interestUSDT} U</span>
             </div>
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">待结利息</div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-white">¥{(runHours * 277.78).toFixed(2)}</span>
-              <span className="text-[10px] text-white/50">≈ {(runHours * 277.78 / 7).toFixed(2)} USDT</span>
+              <span className="text-sm font-bold text-white font-mono">¥{interestCNY}</span>
+              <span className="text-[10px] text-white/50">≈{interestUSDT} U</span>
             </div>
           </div>
           {/* 第4个：空 */}
