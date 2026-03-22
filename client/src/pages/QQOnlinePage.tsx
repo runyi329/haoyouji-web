@@ -57,45 +57,41 @@ export default function QQOnlinePage() {
         <div className="w-5" />
       </div>
 
-      {/* 主数据区 */}
+      {/* 主数据卡片 */}
       <div className="px-4 pt-2">
-        <div className="rounded-2xl px-5 py-4" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-          {/* 第一行：当前在线 + 时间 */}
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-xs text-white/60">当前在线</span>
-            <span className="text-[11px] text-white/40">
-              {latest ? latest.online_time : ''}
-            </span>
-          </div>
-          {/* 第二行：大数字 */}
-          <div className="mb-4">
-            {latest ? (
-              <div className="text-3xl font-bold text-white font-mono tracking-wide leading-tight">
-                {formatNum(latest.online_num)}
+        <div className="rounded-2xl px-5 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+          <div className="flex items-center justify-between gap-3">
+            {/* 左侧：标签+时间 + 大数字 */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-xs text-white/60">当前在线</span>
+                <span className="text-[11px] text-white/40">{latest ? latest.online_time : ''}</span>
               </div>
-            ) : (
-              <div className="text-xl text-white/50">加载中...</div>
-            )}
-          </div>
-          {/* 第三行：倒计时 + 历史 两个等大方形容器 */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* 倒计时容器 */}
-            <div
-              className="rounded-xl flex flex-col items-center justify-center py-3"
-              style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
-            >
-              <div className="text-2xl font-bold font-mono text-white">{countdown}</div>
-              <div className="text-[10px] text-white/45 mt-0.5">倒计时</div>
+              <div className="text-3xl font-bold text-white font-mono tracking-wide leading-tight">
+                {latest ? formatNum(latest.online_num) : '加载中...'}
+              </div>
             </div>
-            {/* 历史记录容器 */}
-            <button
-              onClick={() => setLocation(`/ledger/${id}/qq/history`)}
-              className="rounded-xl flex flex-col items-center justify-center py-3 active:opacity-70"
-              style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
-            >
-              <History className="w-6 h-6 text-white" />
-              <div className="text-[10px] text-white/45 mt-0.5">历史记录</div>
-            </button>
+
+            {/* 右侧：倒计时 + 历史 两个等大方形容器 */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* 倒计时 */}
+              <div
+                className="rounded-xl flex flex-col items-center justify-center"
+                style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '52px', height: '52px' }}
+              >
+                <div className="text-xl font-bold font-mono text-white leading-none">{countdown}</div>
+                <div className="text-[9px] text-white/45 mt-0.5">倒计时</div>
+              </div>
+              {/* 历史记录 */}
+              <button
+                onClick={() => setLocation(`/ledger/${id}/qq/history`)}
+                className="rounded-xl flex flex-col items-center justify-center active:opacity-70"
+                style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '52px', height: '52px' }}
+              >
+                <History className="w-5 h-5 text-white" />
+                <div className="text-[9px] text-white/45 mt-0.5">历史</div>
+              </button>
+            </div>
           </div>
         </div>
       </div>
