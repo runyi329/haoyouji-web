@@ -1066,10 +1066,10 @@ export const beautyRouter = router({
         try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
         await db.delete(beautyShowcasePhotos).where(eq(beautyShowcasePhotos.id, input.photoId));
         return { success: true };
-      }),    // 生成分享Token
-    generateShareToken: protectedProcedure
+      }),    // 生成分享Token（公开接口，展示模式下无需登录即可分享）
+    generateShareToken: publicProcedure
       .input(z.object({ groupId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [group] = await db
@@ -1272,10 +1272,10 @@ export const beautyRouter = router({
         return { success: true };
       }),
 
-    // 生成PPT对比组分享Token
-    generateShareToken: protectedProcedure
+    // 生成PPT对比组分享Token（公开接口，展示模式下无需登录即可分享）
+    generateShareToken: publicProcedure
       .input(z.object({ groupId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
+      .mutation(async ({ input }) => {
         const db = await getDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [group] = await db
