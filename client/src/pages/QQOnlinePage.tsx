@@ -19,8 +19,11 @@ export default function QQOnlinePage() {
   useEffect(() => {
     function calcCountdown() {
       const now = new Date();
-      const secs = 60 - now.getSeconds();
-      setCountdown(secs >= 60 ? 0 : secs);
+      // QQ数据在每分钟第1秒更新，所以倒计时基于距离下一个「第1秒」的秒数
+      const sec = now.getSeconds();
+      // 距离下一分钟第1秒的秒数
+      const remaining = sec === 0 ? 1 : 61 - sec;
+      setCountdown(remaining > 60 ? 0 : remaining);
     }
     calcCountdown();
     const timer = setInterval(calcCountdown, 1000);
@@ -28,6 +31,7 @@ export default function QQOnlinePage() {
   }, []);
 
   useEffect(() => {
+    // 倒计时到0时（即刚过整分钟第1秒），立即拉取最新数据
     if (countdown === 0) {
       refetch();
     }
