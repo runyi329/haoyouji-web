@@ -469,6 +469,8 @@ function Router() {
         <Route path="/ledger/:id/crypto-prediction" component={CryptoPrediction} />
         {/* AD 提示词库 */}
         <Route path="/ledger/:id/prompt-library" component={lazy(() => import("./pages/PromptLibraryPage"))} />
+        {/* 提示词库快捷入口（不需要ledgerId） */}
+        <Route path="/ppt-prompt-library" component={PptPromptLibrary} />
         <Route path="/lottery/edit/:activityId" component={LotteryEdit} />
         <Route path="/lottery/list/:ledgerId" component={LotteryList} />
         <Route path="/lottery/:activityId/draw" component={LotteryDrawScreen} />
