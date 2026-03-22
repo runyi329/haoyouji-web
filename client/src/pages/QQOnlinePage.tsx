@@ -1,48 +1,43 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, RefreshCw } from "lucide-react";
-
-interface QQRecord {
-  id: number;
-  issue_no: number;
-  online_time: string;
-  online_num: number;
-  online_change: number;
-  last1: number;
-  last2: number;
-  last3: number;
-  created_at: string;
-}
+import { ChevronLeft, History } from "lucide-react";
 
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
-  const [page, setPage] = useState(1);
-  const pageSize = 50;
 
-  const { data, isLoading, refetch, isFetching } = trpc.getQQOnlineRecords.useQuery(
-    { page, pageSize },
+  // 只取最新1条
+  const { data, refetch } = trpc.getQQOnlineRecords.useQuery(
+    { page: 1, pageSize: 1 },
     { refetchInterval: 60 * 1000 }
   );
 
-  const list: QQRecord[] = data?.list || [];
-  const total: number = data?.total || 0;
-  const totalPages = Math.ceil(total / pageSize);
+  const latest = data?.list?.[0];
+
+  // 倒计时：距离下一分钟的秒数
+  const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    function calcCountdown() {
+      const now = new Date();
+      const secs = 60 - now.getSeconds();
+      setCountdown(secs >= 60 ? 0 : secs);
+    }
+    calcCountdown();
+    const timer = setInterval(calcCountdown, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 倒计时到0时自动刷新
+  useEffect(() => {
+    if (countdown === 0) {
+      refetch();
+    }
+  }, [countdown, refetch]);
 
   function formatNum(n: number): string {
     return n.toLocaleString("zh-CN");
-  }
-
-  function formatChange(n: number): string {
-    if (n > 0) return `+${n.toLocaleString("zh-CN")}`;
-    return n.toLocaleString("zh-CN");
-  }
-
-  function changeColor(n: number): string {
-    if (n > 0) return "text-red-500";
-    if (n < 0) return "text-green-500";
-    return "text-gray-400";
   }
 
   return (
@@ -62,85 +57,41 @@ export default function QQOnlinePage() {
           <ChevronLeft size={20} />
           <span className="text-sm">返回</span>
         </button>
-        <h1 className="text-base font-bold text-white">QQ 在线人数记录</h1>
+        <h1 className="text-base font-bold text-white">QQ 在线人数</h1>
+        {/* 历史记录按钮 */}
         <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="text-gray-400 active:text-white disabled:opacity-40"
+          onClick={() => setLocation(`/ledger/${id}/qq/history`)}
+          className="flex items-center gap-1 text-gray-400 active:text-white"
         >
-          <RefreshCw size={18} className={isFetching ? "animate-spin" : ""} />
+          <History size={20} />
         </button>
       </div>
 
-      {/* 说明栏 */}
-      <div className="px-4 py-2 bg-gray-900 border-b border-gray-800 text-xs text-gray-500">
-        每分钟自动抓取腾讯 QQ 同时在线人数，共 {total} 条记录
+      {/* 主体：最新数据 */}
+      <div className="flex flex-col items-center justify-center pt-20 pb-10 px-4">
+        {latest ? (
+          <>
+            {/* 在线人数 - 大字 */}
+            <div className="text-4xl font-bold font-mono text-white tracking-wide">
+              {formatNum(latest.online_num)}
+            </div>
+            {/* 统计时间 - 小字 */}
+            <div className="mt-3 text-sm text-gray-500">
+              {latest.online_time}
+            </div>
+          </>
+        ) : (
+          <div className="text-gray-500 text-sm">加载中...</div>
+        )}
+
+        {/* 倒计时 */}
+        <div className="mt-8 flex flex-col items-center">
+          <div className="text-xs text-gray-600 mb-1">下次更新</div>
+          <div className="text-2xl font-mono text-blue-400 font-bold">
+            {countdown}<span className="text-sm text-gray-500 ml-1">秒</span>
+          </div>
+        </div>
       </div>
-
-      {/* 表头 */}
-      <div className="grid grid-cols-12 gap-0 px-3 py-2 text-xs text-gray-500 border-b border-gray-800 bg-gray-900 sticky top-0 z-10">
-        <div className="col-span-1 text-center">序号</div>
-        <div className="col-span-6 text-center">统计时间</div>
-        <div className="col-span-5 text-right">在线人数</div>
-      </div>
-
-      {/* 列表 */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20 text-gray-500 text-sm">
-          加载中...
-        </div>
-      ) : list.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-500 text-sm gap-2">
-          <span>暂无数据</span>
-          <span className="text-xs text-gray-600">服务器每分钟自动抓取，稍后刷新查看</span>
-        </div>
-      ) : (
-        <div className="divide-y divide-gray-800">
-          {list.map((item, idx) => {
-            const globalIdx = (page - 1) * pageSize + idx + 1;
-            return (
-              <div
-                key={item.id}
-                className="grid grid-cols-12 gap-0 px-3 py-2.5 text-sm items-center"
-              >
-                {/* 序号（从新到旧） */}
-                <div className="col-span-1 text-center text-xs text-gray-600">
-                  {globalIdx}
-                </div>
-                {/* 统计时间 */}
-                <div className="col-span-6 text-center text-xs text-gray-300">
-                  {item.online_time}
-                </div>
-                {/* 在线人数 */}
-                <div className="col-span-5 text-right font-mono text-white text-xs">
-                  {formatNum(item.online_num)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* 分页 */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4 py-4 border-t border-gray-800">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page <= 1}
-            className="px-3 py-1 text-sm bg-gray-800 rounded disabled:opacity-40 active:bg-gray-700"
-          >
-            上一页
-          </button>
-          <span className="text-sm text-gray-400">{page} / {totalPages}</span>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages}
-            className="px-3 py-1 text-sm bg-gray-800 rounded disabled:opacity-40 active:bg-gray-700"
-          >
-            下一页
-          </button>
-        </div>
-      )}
 
       {/* 底部安全区 */}
       <div className="h-8" />

@@ -114,6 +114,7 @@ const AhCompanyWorkspace = lazy(() => import("./pages/AhCompanyWorkspace"));
 const AiCompanyWorkspace = lazy(() => import("./pages/AiCompanyWorkspace"));
 const MarketEvalSettings = lazy(() => import("./pages/MarketEvalSettings"));
 const QQOnlinePage = lazy(() => import("./pages/QQOnlinePage"));
+const QQOnlineHistory = lazy(() => import("./pages/QQOnlineHistory"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
@@ -476,6 +477,7 @@ function Router() {
         <Route path="/ledger/:id/crypto-prediction" component={CryptoPrediction} />
         {/* QQ 在线人数记录 */}
         <Route path="/ledger/:id/qq" component={QQOnlinePage} />
+        <Route path="/ledger/:id/qq/history" component={QQOnlineHistory} />
         {/* AD 提示词库 */}
         <Route path="/ledger/:id/prompt-library" component={lazy(() => import("./pages/PromptLibraryPage"))} />
         {/* 提示词库快捷入口（不需要ledgerId） */}
