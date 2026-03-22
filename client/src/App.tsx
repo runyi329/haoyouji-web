@@ -113,6 +113,7 @@ const FunderManagement = lazy(() => import("./pages/FunderManagement"));
 const AhCompanyWorkspace = lazy(() => import("./pages/AhCompanyWorkspace"));
 const AiCompanyWorkspace = lazy(() => import("./pages/AiCompanyWorkspace"));
 const MarketEvalSettings = lazy(() => import("./pages/MarketEvalSettings"));
+const QQOnlinePage = lazy(() => import("./pages/QQOnlinePage"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
@@ -473,6 +474,8 @@ function Router() {
         <Route path="/lottery/create" component={LotteryCreate} />
         {/* AF 加密货币竞猜 */}
         <Route path="/ledger/:id/crypto-prediction" component={CryptoPrediction} />
+        {/* QQ 在线人数记录 */}
+        <Route path="/ledger/:id/qq" component={QQOnlinePage} />
         {/* AD 提示词库 */}
         <Route path="/ledger/:id/prompt-library" component={lazy(() => import("./pages/PromptLibraryPage"))} />
         {/* 提示词库快捷入口（不需要ledgerId） */}
