@@ -104,6 +104,7 @@ const CreateLedgerType = lazy(() => import("./pages/CreateLedgerType"));
 const CreateLedger = lazy(() => import("./pages/CreateLedger"));
 const LedgerSettings = lazy(() => import("./pages/LedgerSettings"));
 const PptGuide = lazy(() => import("./pages/PptGuide"));
+const PptPromptLibrary = lazy(() => import("./pages/PptPromptLibrary"));
 const AgDataSources = lazy(() => import("./pages/AgDataSources"));
 const AfRechargeManage = lazy(() => import("./pages/AfRechargeManage"));
 const AfOrderManage = lazy(() => import("./pages/AfOrderManage"));
@@ -400,6 +401,7 @@ function Router() {
         <Route path="/ledger/:id/diet-members" component={DietMembers} />
         <Route path="/ledger/:id/diet-checkin" component={DietCheckIn} />
         <Route path="/ledger/:id/ppt-guide" component={PptGuide} />
+        <Route path="/ledger/:id/ppt-prompt-library" component={PptPromptLibrary} />
         <Route path="/ledger/:id" component={LedgerDetail} />
         <Route path="/profile" component={Profile} />
         <Route path="/profile/edit" component={ProfileEdit} />
