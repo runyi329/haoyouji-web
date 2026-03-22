@@ -13,7 +13,8 @@ import {
   User,
   LogOut,
   UserCircle,
-  Bell
+  Bell,
+  FlaskConical
 } from "lucide-react";
 import Autoplay from "embla-carousel-autoplay";
 import {
@@ -376,7 +377,7 @@ export default function Home() {
 
       {/* Feature Icons */}
       <div className="px-4 mt-2">
-        <div className="bg-white rounded-2xl p-2 shadow-sm grid grid-cols-5 gap-1">
+        <div className="bg-white rounded-2xl p-2 shadow-sm grid grid-cols-6 gap-1">
           {/* Avatar Button with Dropdown Menu */}
           <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
             <DropdownMenuTrigger asChild>
@@ -440,6 +441,17 @@ export default function Home() {
               <RefreshCw className="w-5 h-5" />
             </div>
             <span className="text-xs font-medium text-[#757575]">刷新</span>
+          </div>
+
+          {/* 第6个按钮：测试快捷入口 - 跳转提示词库 */}
+          <div
+            onClick={() => navigate('/ppt-prompt-library')}
+            className="flex flex-col items-center space-y-2 cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-full bg-[#D32F2F]-light text-[#D32F2F] flex items-center justify-center shadow-sm">
+              <FlaskConical className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-medium text-[#757575]">测试</span>
           </div>
         </div>
       </div>
