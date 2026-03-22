@@ -2,7 +2,6 @@
  * 素材展示分享页面（公开，无需登录）
  * 路径: /beauty/showcase/share?token=xxx&type=photo|ppt
  */
-import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ImageIcon, Presentation, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -253,8 +252,9 @@ function PptSharePage({ token }: { token: string }) {
 
 // ===== 主入口 =====
 export default function BeautyShowcaseSharePage() {
-  const [location] = useLocation();
-  const params = new URLSearchParams(location.split("?")[1] || "");
+  // wouter的useLocation只返回pathname，不包含query string
+  // 必须用window.location.search获取参数
+  const params = new URLSearchParams(window.location.search);
   const token = params.get("token") || "";
   const type = params.get("type") || "photo";
 
