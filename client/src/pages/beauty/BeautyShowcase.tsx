@@ -320,6 +320,19 @@ function PhotoGroupManager() {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
       const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
+      const group = groups.find(g => g.id === groupId);
+      const title = group?.title || '照片对比';
+      // 优先使用系统原生分享
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text: `${title} - 奢贝美容院素材展示`, url });
+          return;
+        } catch (e: any) {
+          // 用户取消分享不算错误
+          if (e?.name === 'AbortError') return;
+        }
+      }
+      // 降级：弹窗显示链接
       setShareUrl(url);
     } catch (err) {
       console.error('生成分享链接失败:', err);
@@ -333,7 +346,6 @@ function PhotoGroupManager() {
       await navigator.clipboard.writeText(shareUrl);
       alert('链接已复制到剪贴板');
     } catch {
-      // clipboard API 不可用时使用 fallback
       try {
         const ta = document.createElement('textarea');
         ta.value = shareUrl;
@@ -345,7 +357,7 @@ function PhotoGroupManager() {
         document.body.removeChild(ta);
         alert('链接已复制到剪贴板');
       } catch {
-        // 都失败了，弹窗里已经有链接可以手动复制
+        // 弹窗里已经有链接可以手动复制
       }
     }
   };
@@ -638,6 +650,18 @@ function PhotoShowcase() {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
       const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=photo`;
+      const group = groups.find(g => g.id === groupId);
+      const title = group?.title || '照片对比';
+      // 优先使用系统原生分享
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text: `${title} - 奢贝美容院素材展示`, url });
+          return;
+        } catch (e: any) {
+          if (e?.name === 'AbortError') return;
+        }
+      }
+      // 降级：弹窗显示链接
       setShareUrl(url);
     } catch {
       alert('生成分享链接失败，请重试');
@@ -954,6 +978,18 @@ function PptCompareManager() {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
       const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=ppt`;
+      const group = groups.find(g => g.id === groupId);
+      const title = group?.title || 'PPT对比';
+      // 优先使用系统原生分享
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text: `${title} - 奢贝美容院素材展示`, url });
+          return;
+        } catch (e: any) {
+          if (e?.name === 'AbortError') return;
+        }
+      }
+      // 降级：弹窗显示链接
       setPptShareUrl(url);
     } catch (err) {
       console.error('生成分享链接失败:', err);
@@ -1253,6 +1289,18 @@ function PptCompareShowcase() {
     try {
       const { token } = await generateShareTokenMutation.mutateAsync({ groupId });
       const url = `${window.location.origin}/beauty/showcase/share?token=${token}&type=ppt`;
+      const group = groups.find(g => g.id === groupId);
+      const title = group?.title || 'PPT对比';
+      // 优先使用系统原生分享
+      if (navigator.share) {
+        try {
+          await navigator.share({ title, text: `${title} - 奢贝美容院素材展示`, url });
+          return;
+        } catch (e: any) {
+          if (e?.name === 'AbortError') return;
+        }
+      }
+      // 降级：弹窗显示链接
       setShareUrl(url);
     } catch {
       alert('生成分享链接失败，请重试');
