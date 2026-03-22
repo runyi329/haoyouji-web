@@ -252,9 +252,19 @@ export const beautyPptPages = mysqlTable("beauty_ppt_pages", {
 });
 export type BeautyPptPage = typeof beautyPptPages.$inferSelect;
 
+// AI提示词分类（一级分类，可自定义名称）
+export const beautyAiPromptCategories = mysqlTable("beauty_ai_prompt_categories", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 50 }).notNull(),   // 分类名称（如：字体类、背景类、色调类）
+  sortOrder: int("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type BeautyAiPromptCategory = typeof beautyAiPromptCategories.$inferSelect;
+
 // AI提示词库（全局共享，不绑定对比组）
 export const beautyAiPrompts = mysqlTable("beauty_ai_prompts", {
   id: int("id").autoincrement().primaryKey(),
+  categoryId: int("categoryId").notNull().default(0), // 所属分类ID，0表示未分类
   content: text("content").notNull(),           // 提示词内容（纯文字）
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

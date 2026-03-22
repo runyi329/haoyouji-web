@@ -253,6 +253,19 @@ jobs:
                 createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
               );
             " || true
+            # 新增分类表
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              CREATE TABLE IF NOT EXISTS beauty_ai_prompt_categories (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(50) NOT NULL,
+                sortOrder INT NOT NULL DEFAULT 0,
+                createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+              );
+            " || true
+            # 给现有提示词表加 categoryId 列（如果不存在）
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              ALTER TABLE beauty_ai_prompts ADD COLUMN IF NOT EXISTS categoryId INT NOT NULL DEFAULT 0;
+            " || true
             echo "✅ AI提示词表确认完成"
 
             echo "💳 注入支付宝环境变量..."

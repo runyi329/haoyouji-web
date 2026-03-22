@@ -3,6 +3,7 @@ import { useLocation, useParams } from 'wouter';
 import { ChevronLeft, Plus, X, Check, ClipboardCopy, Pencil, FolderPlus } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
+import { toast } from 'sonner';
 
 export default function PptPromptLibrary() {
   const [, setLocation] = useLocation();
@@ -89,8 +90,10 @@ export default function PptPromptLibrary() {
       await addCategoryMutation.mutateAsync({ name });
       setNewCategoryName('');
       setShowAddCategoryModal(false);
-    } catch (e) {
+      toast.success('分类已添加');
+    } catch (e: any) {
       console.error('添加分类失败', e);
+      toast.error(e?.message || '添加分类失败，请重试');
     }
   };
 
