@@ -117,8 +117,18 @@ export default function QQOnlinePage() {
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">保证金</div>
             <div className="text-sm font-bold text-white">20万元</div>
           </div>
-          {/* 第3个：空 */}
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
+          {/* 第3个：累计利息 + 待结利息 */}
+          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+            <div className="text-[11px] text-white/55 mb-1">累计利息</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm font-bold text-white">¥{(runHours * 277.78).toFixed(2)}</span>
+              <span className="text-[10px] text-white/50">≈ {(runHours * 277.78 / 7).toFixed(2)} USDT</span>
+            </div>
+            <div className="text-[11px] text-white/55 mt-2 mb-0.5">待结利息</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm font-bold text-white">¥{(runHours * 277.78).toFixed(2)}</span>
+              <span className="text-[10px] text-white/50">≈ {(runHours * 277.78 / 7).toFixed(2)} USDT</span>
+            </div>
           </div>
           {/* 第4个：空 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
