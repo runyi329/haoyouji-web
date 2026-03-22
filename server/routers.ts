@@ -9985,7 +9985,34 @@ export const appRouter = router({
               console.error('[AF] 备注查询失败:', e);
             }
           }
-          return { users: result.map(u => ({ ...u, payoutRatio: payoutMap.get(u.id) ?? 0, note: noteMap.get(u.id) ?? '', inviterName: u.inviterName })) };
+          // 查询每个用户在该账本下的余额
+          let balanceMap = new Map<number, number>();
+          if (result.length > 0) {
+            try {
+              const userIds3 = result.map(u => u.id);
+              const placeholders4 = userIds3.map(() => '?').join(',');
+              // 充值订单余额
+              const [rechargeRows] = await rawDb.execute(
+                `SELECT user_id, COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as recharged FROM recharge_orders WHERE user_id IN (${placeholders4}) AND ledger_id = ? AND status = 'completed' GROUP BY user_id`,
+                [...userIds3, input.ledgerId]
+              ) as any[];
+              for (const row of (rechargeRows as any[])) {
+                balanceMap.set(row.user_id, parseFloat(row.recharged?.toString() || '0'));
+              }
+              // 手动调账余额
+              const [manualRows] = await rawDb.execute(
+                `SELECT user_id, COALESCE(SUM(amount), 0) as manual FROM af_manual_balances WHERE user_id IN (${placeholders4}) AND ledger_id = ? GROUP BY user_id`,
+                [...userIds3, input.ledgerId]
+              ) as any[];
+              for (const row of (manualRows as any[])) {
+                const prev = balanceMap.get(row.user_id) ?? 0;
+                balanceMap.set(row.user_id, prev + parseFloat(row.manual?.toString() || '0'));
+              }
+            } catch (e) {
+              console.error('[AF] 余额查询失败:', e);
+            }
+          }
+          return { users: result.map(u => ({ ...u, payoutRatio: payoutMap.get(u.id) ?? 0, note: noteMap.get(u.id) ?? '', inviterName: u.inviterName, balance: balanceMap.get(u.id) ?? 0 })) };
         } catch (e) {
           console.error('[AF] 邀请树查询失败:', e);
           return { users: [] };

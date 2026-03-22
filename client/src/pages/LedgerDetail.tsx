@@ -2663,8 +2663,11 @@ export default function LedgerDetail() {
                               >注</button>
                             </div>
                           </div>
-                          {/* 第二行：备注 + 日期 + 推荐人 */}
+                          {/* 第二行：余额 + 备注 + 日期 + 推荐人 */}
                           <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: (u.balance ?? 0) > 0 ? '#E8F5E9' : '#F5F5F5', color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>
+                              {Number(u.balance ?? 0).toFixed(2)} U
+                            </span>
                             {(() => {
                               const displayNote = localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '');
                               return (
