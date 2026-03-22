@@ -265,7 +265,8 @@ export type BeautyAiPromptCategory = typeof beautyAiPromptCategories.$inferSelec
 export const beautyAiPrompts = mysqlTable("beauty_ai_prompts", {
   id: int("id").autoincrement().primaryKey(),
   categoryId: int("categoryId").notNull().default(0), // 所属分类ID，0表示未分类
-  content: text("content").notNull(),           // 提示词内容（纯文字）
+  content: text("content").notNull(),           // 提示词内容（简短标签）
+  remark: text("remark"),                        // 备注（详细文本，有备注时购物车显示备注内容）
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
