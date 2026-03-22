@@ -221,6 +221,7 @@ export const beautyShowcasePhotos = mysqlTable("beauty_showcase_photos", {
   id: int("id").autoincrement().primaryKey(),
   groupId: int("groupId").notNull(),         // 所属照片组
   imageUrl: text("imageUrl").notNull(),       // COS图片URL
+  caption: varchar("caption", { length: 200 }),  // 照片文字说明（可选）
   sortOrder: int("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
