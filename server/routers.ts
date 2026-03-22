@@ -261,10 +261,12 @@ export const appRouter = router({
       .input(z.object({
         amount: z.number().min(1).max(100000),
         network: z.enum(['TRC20', 'ERC20', 'BEP20', 'APTOS', 'SOLANA']).default('TRC20'),
-        ledgerId: z.number().optional()  // 关联账本 ID，传入则充値记录关联到该账本
+        ledgerId: z.number().optional(),  // 关联账本 ID，传入则充値记录关联到该账本
+        viewAsUserId: z.number().optional()  // 管理员视角代替用户创建订单
       }))
       .mutation(async ({ ctx, input }) => {
-        return await dbRecharge.createRechargeOrder(ctx.user.id, input.amount, input.network, input.ledgerId);
+        const targetUserId = input.viewAsUserId || ctx.user.id;
+        return await dbRecharge.createRechargeOrder(targetUserId, input.amount, input.network, input.ledgerId);
       }),
 
     // 用户提交转账确认
