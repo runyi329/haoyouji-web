@@ -72,10 +72,9 @@ export default function QQOnlinePage() {
 
       {/* 表头 */}
       <div className="grid grid-cols-12 gap-0 px-3 py-2 text-xs text-gray-500 border-b border-gray-800 bg-gray-900 sticky top-0 z-10">
-        <div className="col-span-1 text-center">期号</div>
-        <div className="col-span-5 text-center">统计时间</div>
-        <div className="col-span-4 text-right">在线人数</div>
-        <div className="col-span-2 text-right">波动</div>
+        <div className="col-span-1 text-center">序号</div>
+        <div className="col-span-6 text-center">统计时间</div>
+        <div className="col-span-5 text-right">在线人数</div>
       </div>
 
       {/* 列表 */}
@@ -102,16 +101,12 @@ export default function QQOnlinePage() {
                   {globalIdx}
                 </div>
                 {/* 统计时间 */}
-                <div className="col-span-5 text-center text-xs text-gray-300">
+                <div className="col-span-6 text-center text-xs text-gray-300">
                   {item.online_time}
                 </div>
                 {/* 在线人数 */}
-                <div className="col-span-4 text-right font-mono text-white text-xs">
+                <div className="col-span-5 text-right font-mono text-white text-xs">
                   {formatNum(item.online_num)}
-                </div>
-                {/* 波动 */}
-                <div className={`col-span-2 text-right font-mono text-xs ${changeColor(item.online_change)}`}>
-                  {formatChange(item.online_change)}
                 </div>
               </div>
             );
