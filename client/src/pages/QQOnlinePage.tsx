@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { History } from "lucide-react";
+import { History, Plus } from "lucide-react";
 
 // 管理员（jiang）每月20万，yjh为1/5即4万
 // 每秒收益 = 月收益 ÷ 30 ÷ 24 ÷ 3600
@@ -107,6 +107,15 @@ export default function QQOnlinePage() {
               >
                 <History className="w-4 h-4 text-white/80" />
               </button>
+              {currentUserId === 870413 && (
+                <button
+                  onClick={() => setLocation(`/ledger/${id}/qq/trade`)}
+                  className="rounded-xl flex items-center justify-center active:opacity-70"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.25)', width: '40px', height: '40px' }}
+                >
+                  <Plus className="w-5 h-5 text-white" />
+                </button>
+              )}
             </div>
           </div>
         </div>

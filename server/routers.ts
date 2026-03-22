@@ -12953,6 +12953,167 @@ insights 数组每项包含：
       }
     }),
 
+  // 交易记录：查询列表（仅 jiang 可用）
+  getQQTradeRecords: protectedProcedure
+    .input(z.object({
+      page: z.number().min(1).default(1),
+      pageSize: z.number().min(1).max(200).default(50),
+    }))
+    .query(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { list: [], total: 0 };
+        const offset = (input.page - 1) * input.pageSize;
+        const limit = input.pageSize;
+        const [rows] = await (conn as any).execute(
+          `SELECT id, username, order_no, lottery_type, play_method, issue_no, trade_time,
+                  multiplier, amount, content, win_status, odds, balance, created_at, batch_id
+           FROM qq_trade_records
+           ORDER BY id DESC
+           LIMIT ${Number(limit)} OFFSET ${Number(offset)}`
+        );
+        const [countRows] = await (conn as any).execute(
+          `SELECT COUNT(*) as total FROM qq_trade_records`
+        );
+        const total = Number((countRows as any[])[0]?.total) || 0;
+        return { list: rows as any[], total };
+      } catch (err) {
+        console.error('[QQ交易] 查询失败:', err);
+        return { list: [], total: 0 };
+      }
+    }),
+
+  // 交易记录：手动输入或批量导入
+  addQQTradeRecords: protectedProcedure
+    .input(z.object({
+      records: z.array(z.object({
+        username: z.string().optional(),
+        order_no: z.string().optional(),
+        lottery_type: z.string().optional(),
+        play_method: z.string().optional(),
+        issue_no: z.string().optional(),
+        trade_time: z.string().optional(),
+        multiplier: z.string().optional(),
+        amount: z.string().optional(),
+        content: z.string().optional(),
+        win_status: z.string().optional(),
+        odds: z.string().optional(),
+        balance: z.string().optional(),
+      })),
+      batchId: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        const batchId = input.batchId || `batch_${Date.now()}`;
+        let inserted = 0;
+        for (const r of input.records) {
+          const amt = r.amount ? parseFloat(r.amount) || null : null;
+          const bal = r.balance ? parseFloat(r.balance) || null : null;
+          await (conn as any).execute(
+            `INSERT INTO qq_trade_records
+             (username, order_no, lottery_type, play_method, issue_no, trade_time, multiplier, amount, content, win_status, odds, balance, created_by, batch_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [r.username||null, r.order_no||null, r.lottery_type||null, r.play_method||null,
+             r.issue_no||null, r.trade_time||null, r.multiplier||null, amt,
+             r.content||null, r.win_status||null, r.odds||null, bal,
+             (ctx.user as any).id, batchId]
+          );
+          inserted++;
+        }
+        return { success: true, inserted };
+      } catch (err) {
+        console.error('[QQ交易] 导入失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '导入失败' });
+      }
+    }),
+
+  // 交易记录：AI拍照识别（上传图片，返回识别结果）
+  recognizeQQTradeImage: protectedProcedure
+    .input(z.object({
+      imageBase64: z.string(), // base64图片
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { invokeLLM } = await import('./_core/llm');
+        const prompt = `请仓细分析这张彩票/购彩订单截图，提取其中的数据。
+每一条记录包含以下字段：用户名、订单号、彩种、玩法、期号、时间、倍数、金额、内容、中奖状态、赔率、余额。
+如果某个字段不存在或无法识别，请留空。
+请以JSON格式返回，格式如下：
+{
+  "records": [
+    {
+      "username": "",
+      "order_no": "",
+      "lottery_type": "",
+      "play_method": "",
+      "issue_no": "",
+      "trade_time": "",
+      "multiplier": "",
+      "amount": "",
+      "content": "",
+      "win_status": "",
+      "odds": "",
+      "balance": ""
+    }
+  ]
+}
+只返回JSON，不要其他文字。`;
+        const response = await invokeLLM({
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${input.imageBase64}`, detail: 'high' } }
+              ]
+            }
+          ],
+          response_format: { type: 'json_object' }
+        });
+        const content = response?.choices?.[0]?.message?.content || '{}';
+        const parsed = JSON.parse(content);
+        return { records: parsed.records || [] };
+      } catch (err) {
+        console.error('[QQ交易] AI识别失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI识别失败' });
+      }
+    }),
+
+  // 交易记录：删除指定批次
+  deleteQQTradeBatch: protectedProcedure
+    .input(z.object({ batchId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        await (conn as any).execute(`DELETE FROM qq_trade_records WHERE batch_id = ?`, [input.batchId]);
+        return { success: true };
+      } catch (err) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '删除失败' });
+      }
+    }),
+
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
