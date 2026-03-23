@@ -735,7 +735,7 @@ export default function QQTradeRecords() {
                         )}
                         {/* 编号列 */}
                         <td className="px-1 py-2 text-center text-gray-600 text-[10px]">{rowNumber}</td>
-                        {/* 操作列 */
+                        {/* 操作列 */}
                         <td className="px-1 py-2 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {isEditing ? (
