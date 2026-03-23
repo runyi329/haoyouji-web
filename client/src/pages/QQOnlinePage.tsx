@@ -38,13 +38,18 @@ function gradientColor(value: number, min: number, max: number): string {
 }
 
 // σ等级配色和标签
-function sigmaDisplay(level: string): { label: string; color: string } {
+function sigmaDisplay(level: string, betCount?: number, theoryPct?: number): { label: string; color: string } {
+  if (level === 'insufficient') {
+    // 计算正态近似所需最小样本: n*p>=5 且 n*(1-p)>=5
+    const p = (theoryPct || 10) / 100;
+    const minN = Math.ceil(Math.max(5 / p, 5 / (1 - p)));
+    return { label: `<${minN}次`, color: '#5A6B7F' };
+  }
   switch (level) {
     case 'normal':       return { label: '1σ 正常', color: '#3DD68C' };
     case 'watch':        return { label: '2σ 关注', color: '#E7E740' };
     case 'suspect':      return { label: '3σ 可疑', color: '#E78340' };
     case 'abnormal':     return { label: '3σ+ 异常', color: '#E74040' };
-    case 'insufficient': return { label: '样本不足', color: '#5A6B7F' };
     default:             return { label: '--', color: '#5A6B7F' };
   }
 }
@@ -78,12 +83,12 @@ function AIRiskControlPanel() {
               <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>实际</span></div>
               <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>理论</span></div>
               <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
-              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-right"><span style={{ color: LABEL_COLOR }}>分布</span></div>
+              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-right"><span style={{ color: LABEL_COLOR }}>正态分布</span></div>
             </div>
 
             {/* \u6570\u636e\u884c */}
             {riskData.map((item: any, idx: number) => {
-              const sig = sigmaDisplay(item.sigmaLevel);
+              const sig = sigmaDisplay(item.sigmaLevel, item.betCount, item.theoryPct);
               // \u504f\u79bb\u5ea6\u989c\u8272\uff1a\u7edd\u5bf9\u503c\u8d8a\u5c0f\u8d8a\u7eff\uff0c\u8d8a\u5927\u8d8a\u7ea2
               const absDeviation = Math.abs(item.deviation);
               const devColor = absDeviation <= 5 ? '#3DD68C'
