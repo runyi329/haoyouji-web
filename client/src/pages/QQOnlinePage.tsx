@@ -149,184 +149,18 @@ function ShortCycleMonitorPanel() {
 
   const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
 
-  // 方案1：渐变弧线需虹灯管仪表盘组件
-  function GaugeMeter({ score, label, alertLevel, alertMsg, winRate, expectedRate, sigma }: {
-    score: number; label: string; alertLevel: string; alertMsg: string;
-    winRate: number; expectedRate: number; sigma: number;
-  }) {
-    const uid = label.replace(/[^a-zA-Z0-9]/g, '');
-    const s = Math.min(100, Math.max(0, score));
-
-    // 布局参数：宽裕viewBox，确保刻度数字不被裁切
-    const cx = 80, cy = 76, R = 56, thick = 12;
-    const svgW = 160, svgH = 90;
-
-    // 极坐标转换：0度=12点，顺时针
-    function polar(r: number, deg: number) {
-      const rad = ((deg - 90) * Math.PI) / 180;
-      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-    }
-    // 半圆弧：180°(9点) → 360°(3点)
-    const startDeg = 180, endDeg = 360;
-    const needleDeg = startDeg + (s / 100) * 180;
-
-    // 弧路径生成器
-    function arcPath(r: number, from: number, to: number) {
-      const a = polar(r, from), b = polar(r, to);
-      const large = (to - from) > 180 ? 1 : 0;
-      return `M ${a.x} ${a.y} A ${r} ${r} 0 ${large} 1 ${b.x} ${b.y}`;
-    }
-
-    // 指针颜色
-    let needleColor = '#3DD68C';
-    let glowRgba = 'rgba(61,214,140,0.5)';
-    if (s >= 80) { needleColor = '#F47068'; glowRgba = 'rgba(244,112,104,0.6)'; }
-    else if (s >= 50) { needleColor = '#E78340'; glowRgba = 'rgba(231,131,64,0.5)'; }
-    else if (s >= 25) { needleColor = '#C9A84C'; glowRgba = 'rgba(201,168,76,0.5)'; }
-
-    // 刻度数字
-    const ticks = [0, 25, 50, 75, 100];
-    const needleTip = polar(R - thick / 2 - 4, needleDeg);
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '1 1 0', minWidth: 0 }}>
-        <div className="text-[11px] font-medium mb-1" style={{ color: LABEL_COLOR }}>{label}</div>
-        <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{ maxWidth: '170px', overflow: 'visible' }}>
-          <defs>
-            {/* 弧线渐变：绿→金→橙→红 */}
-            <linearGradient id={`grad-${uid}`} x1="0%" y1="50%" x2="100%" y2="50%">
-              <stop offset="0%" stopColor="#22C55E" />
-              <stop offset="35%" stopColor="#C9A84C" />
-              <stop offset="65%" stopColor="#E78340" />
-              <stop offset="100%" stopColor="#EF4444" />
-            </linearGradient>
-            {/* 外发光 */}
-            <filter id={`glow-${uid}`} x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            {/* 内发光 */}
-            <filter id={`iglow-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="2" result="b" />
-              <feMerge>
-                <feMergeNode in="b" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            {/* 指针发光 */}
-            <filter id={`nglow-${uid}`} x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3" result="b" />
-              <feMerge>
-                <feMergeNode in="b" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* 背景弧：深色底座，带微弱内光 */}
-          <path d={arcPath(R, startDeg, endDeg)}
-            fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={thick + 4} strokeLinecap="round" />
-          {/* 渐变弧线：全量底色（暗） */}
-          <path d={arcPath(R, startDeg, endDeg)}
-            fill="none" stroke={`url(#grad-${uid})`} strokeWidth={thick} strokeLinecap="round"
-            opacity="0.15" />
-          {/* 渐变弧线：进度部分（亮）——需虹灯管效果 */}
-          {s > 0 && (
-            <>
-              {/* 外层发光 */}
-              <path d={arcPath(R, startDeg, needleDeg)}
-                fill="none" stroke={`url(#grad-${uid})`} strokeWidth={thick + 6} strokeLinecap="round"
-                opacity="0.25" filter={`url(#glow-${uid})`} />
-              {/* 主弧线 */}
-              <path d={arcPath(R, startDeg, needleDeg)}
-                fill="none" stroke={`url(#grad-${uid})`} strokeWidth={thick} strokeLinecap="round"
-                filter={`url(#iglow-${uid})`} />
-              {/* 高光层：模拟玉璐质感 */}
-              <path d={arcPath(R, startDeg, needleDeg)}
-                fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={thick - 6} strokeLinecap="round" />
-            </>
-          )}
-
-          {/* 刻度线 + 数字 */}
-          {ticks.map(t => {
-            const deg = startDeg + (t / 100) * 180;
-            const inner = polar(R + thick / 2 + 2, deg);
-            const outer = polar(R + thick / 2 + 7, deg);
-            const txtP = polar(R + thick / 2 + 15, deg);
-            let anchor = 'middle';
-            if (t <= 10) anchor = 'end';
-            else if (t >= 90) anchor = 'start';
-            return (
-              <g key={t}>
-                <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
-                  stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" />
-                <text x={txtP.x} y={txtP.y + 3.5} textAnchor={anchor}
-                  fill="rgba(255,255,255,0.5)" fontSize="9" fontFamily="'SF Mono',monospace">{t}</text>
-              </g>
-            );
-          })}
-
-          {/* 指针 */}
-          <line x1={cx} y1={cy} x2={needleTip.x} y2={needleTip.y}
-            stroke={needleColor} strokeWidth="2.5" strokeLinecap="round"
-            filter={`url(#nglow-${uid})`} />
-          {/* 指针尖端小圆点 */}
-          <circle cx={needleTip.x} cy={needleTip.y} r="2" fill={needleColor} />
-          {/* 圆心装饰：铬合金质感 */}
-          <circle cx={cx} cy={cy} r="7" fill="rgba(255,255,255,0.08)" />
-          <circle cx={cx} cy={cy} r="5" fill={needleColor} opacity="0.85" />
-          <circle cx={cx} cy={cy} r="2.5" fill="#0D1B2A" />
-
-          {/* 分数显示在圆心下方 */}
-          <text x={cx} y={cy + 18} textAnchor="middle"
-            fill={needleColor} fontSize="15" fontWeight="bold" fontFamily="'SF Mono',monospace"
-            style={{ textShadow: `0 0 10px ${glowRgba}` } as any}>
-            {s}
-          </text>
-
-          {/* 底部水平基线 */}
-          <line x1={cx - R - 2} y1={cy} x2={cx + R + 2} y2={cy}
-            stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-        </svg>
-
-        {/* 状态标签 */}
-        <div className="text-[9px] font-bold px-3 py-0.5 rounded-full mt-1"
-          style={{
-            color: needleColor,
-            backgroundColor: `${needleColor}15`,
-            border: `1px solid ${needleColor}30`,
-            textShadow: `0 0 6px ${glowRgba}`,
-          }}>
-          {alertMsg}
-        </div>
-        {/* 详细数据 */}
-        <div className="mt-1.5 w-full" style={{ fontSize: '9px', maxWidth: '150px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '2px' }}>
-            <span style={{ color: LABEL_COLOR }}>实际胜率</span>
-            <span className="font-mono font-bold" style={{ color: winRate > expectedRate * 1.5 ? '#F47068' : DATA_COLOR }}>{winRate.toFixed(1)}%</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '2px' }}>
-            <span style={{ color: LABEL_COLOR }}>期望胜率</span>
-            <span className="font-mono" style={{ color: LABEL_COLOR }}>{expectedRate.toFixed(1)}%</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '2px' }}>
-            <span style={{ color: LABEL_COLOR }}>标准差偏离</span>
-            <span className="font-mono font-bold" style={{ color: Math.abs(sigma) > 2 ? '#F47068' : Math.abs(sigma) > 1 ? '#C9A84C' : '#3DD68C' }}>
-              {sigma > 0 ? '+' : ''}{sigma.toFixed(2)}σ
-            </span>
-          </div>
-        </div>
-      </div>
-    );
+  // 风险颜色计算
+  function riskColor(score: number) {
+    if (score >= 80) return '#F47068';
+    if (score >= 50) return '#E78340';
+    if (score >= 25) return '#C9A84C';
+    return '#3DD68C';
   }
 
   return (
     <div className="px-4 pt-3">
       <div className="rounded-2xl px-3 py-3" style={cardStyle}>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div className="text-[11px]" style={{ color: LABEL_COLOR }}>短周期监控</div>
           <div className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: GOLD_COLOR, backgroundColor: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)' }}>加权胜率离群检测</div>
         </div>
@@ -341,24 +175,66 @@ function ShortCycleMonitorPanel() {
 
         {!isLoading && monitorData?.windows && monitorData.windows.length > 0 && (
           <>
-            {/* 两个仪表盘横排居中 */}
-            <div style={{ display: 'flex', gap: '16px', width: '100%', justifyContent: 'center' }}>
-              {monitorData.windows.map((w: any) => (
-                <GaugeMeter
-                  key={w.size}
-                  score={w.riskScore}
-                  label={`近${w.actualSize}笔`}
-                  alertLevel={w.alertLevel}
-                  alertMsg={w.alertMsg}
-                  winRate={w.overallWinRate}
-                  expectedRate={w.expectedWinRate}
-                  sigma={w.sigmaValue}
-                />
-              ))}
+            {/* 三列布局：近50笔 | 近100笔 | 近200笔，与上方投注统计对称 */}
+            <div style={{ display: 'flex', width: '100%' }}>
+              {monitorData.windows.map((w: any, idx: number) => {
+                const isLast = idx === monitorData.windows.length - 1;
+                const scoreColor = riskColor(w.riskScore);
+                const sigmaColor = Math.abs(w.sigmaValue) > 2 ? '#F47068' : Math.abs(w.sigmaValue) > 1 ? '#C9A84C' : '#3DD68C';
+                const winRateColor = w.overallWinRate > w.expectedWinRate * 1.5 ? '#F47068' : DATA_COLOR;
+                return (
+                  <div key={w.size}
+                    style={{
+                      flex: '1 1 0', minWidth: 0,
+                      paddingLeft: idx > 0 ? '8px' : '0',
+                      paddingRight: !isLast ? '8px' : '0',
+                      borderRight: !isLast ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                    }}
+                    className="flex flex-col gap-2.5">
+                    {/* 标题 */}
+                    <div className="text-center">
+                      <div className="text-[10px] mb-1" style={{ color: GOLD_COLOR }}>近{w.actualSize}笔</div>
+                    </div>
+                    {/* 风险评分 */}
+                    <div>
+                      <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>风险评分</div>
+                      <div className="text-sm font-bold font-mono" style={{ color: scoreColor }}>{w.riskScore}<span className="text-[9px] font-normal" style={{ color: LABEL_COLOR }}>/100</span></div>
+                    </div>
+                    {/* 实际胜率 */}
+                    <div>
+                      <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>实际胜率</div>
+                      <div className="text-sm font-bold font-mono" style={{ color: winRateColor }}>{w.overallWinRate.toFixed(1)}%</div>
+                    </div>
+                    {/* 期望胜率 */}
+                    <div>
+                      <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>期望胜率</div>
+                      <div className="text-sm font-bold font-mono" style={{ color: LABEL_COLOR }}>{w.expectedWinRate.toFixed(1)}%</div>
+                    </div>
+                    {/* 标准差偏离 */}
+                    <div>
+                      <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>偏离度</div>
+                      <div className="text-sm font-bold font-mono" style={{ color: sigmaColor }}>
+                        {w.sigmaValue > 0 ? '+' : ''}{w.sigmaValue.toFixed(2)}σ
+                      </div>
+                    </div>
+                    {/* 状态 */}
+                    <div>
+                      <div className="text-[9px] font-bold px-2 py-0.5 rounded-full text-center"
+                        style={{
+                          color: scoreColor,
+                          backgroundColor: `${scoreColor}15`,
+                          border: `1px solid ${scoreColor}30`,
+                        }}>
+                        {w.alertMsg}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* 分组明细（可展开） */}
-            <details className="mt-2">
+            <details className="mt-3" style={{ paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
               <summary className="text-[9px] cursor-pointer" style={{ color: LABEL_COLOR, opacity: 0.7 }}>
                 展开分组明细
               </summary>

@@ -13508,8 +13508,8 @@ insights 数组每项包含：
           };
         });
 
-        // 两个窗口维度
-        const windowSizes = [100, 200];
+        // 三个窗口维度
+        const windowSizes = [50, 100, 200];
         const GROUP_SIZE = 10;
 
         const windows = windowSizes.map(size => {
