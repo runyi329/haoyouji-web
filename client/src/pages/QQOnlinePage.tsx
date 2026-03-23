@@ -149,84 +149,161 @@ function ShortCycleMonitorPanel() {
 
   const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
 
-  // AI生成底图 + SVG指针仪表盘组件
-  const GAUGE_BG_URL = 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/ui-assets/gauge-bg.png';
-
+  // 方案1：渐变弧线需虹灯管仪表盘组件
   function GaugeMeter({ score, label, alertLevel, alertMsg, winRate, expectedRate, sigma }: {
     score: number; label: string; alertLevel: string; alertMsg: string;
     winRate: number; expectedRate: number; sigma: number;
   }) {
-    // 指针角度计算：底图是正半圆，0分在左侧(9点/-90°)，100分在右侧(3点/90°)
-    // CSS rotate: -90° = 9点, 0° = 12点, 90° = 3点
-    const needleRotation = -90 + (Math.min(100, Math.max(0, score)) / 100) * 180;
+    const uid = label.replace(/[^a-zA-Z0-9]/g, '');
+    const s = Math.min(100, Math.max(0, score));
 
-    // 颜色
-    let arcColor = '#3DD68C';
-    let glowColor = 'rgba(61,214,140,0.3)';
-    if (score >= 80) { arcColor = '#F47068'; glowColor = 'rgba(244,112,104,0.4)'; }
-    else if (score >= 50) { arcColor = '#E78340'; glowColor = 'rgba(231,131,64,0.35)'; }
-    else if (score >= 25) { arcColor = '#C9A84C'; glowColor = 'rgba(201,168,76,0.3)'; }
+    // 布局参数：宽裕viewBox，确保刻度数字不被裁切
+    const cx = 80, cy = 76, R = 56, thick = 12;
+    const svgW = 160, svgH = 90;
+
+    // 极坐标转换：0度=12点，顺时针
+    function polar(r: number, deg: number) {
+      const rad = ((deg - 90) * Math.PI) / 180;
+      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    }
+    // 半圆弧：180°(9点) → 360°(3点)
+    const startDeg = 180, endDeg = 360;
+    const needleDeg = startDeg + (s / 100) * 180;
+
+    // 弧路径生成器
+    function arcPath(r: number, from: number, to: number) {
+      const a = polar(r, from), b = polar(r, to);
+      const large = (to - from) > 180 ? 1 : 0;
+      return `M ${a.x} ${a.y} A ${r} ${r} 0 ${large} 1 ${b.x} ${b.y}`;
+    }
+
+    // 指针颜色
+    let needleColor = '#3DD68C';
+    let glowRgba = 'rgba(61,214,140,0.5)';
+    if (s >= 80) { needleColor = '#F47068'; glowRgba = 'rgba(244,112,104,0.6)'; }
+    else if (s >= 50) { needleColor = '#E78340'; glowRgba = 'rgba(231,131,64,0.5)'; }
+    else if (s >= 25) { needleColor = '#C9A84C'; glowRgba = 'rgba(201,168,76,0.5)'; }
+
+    // 刻度数字
+    const ticks = [0, 25, 50, 75, 100];
+    const needleTip = polar(R - thick / 2 - 4, needleDeg);
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '1 1 0', minWidth: 0 }}>
         <div className="text-[11px] font-medium mb-1" style={{ color: LABEL_COLOR }}>{label}</div>
-        {/* 仪表盘容器：AI底图 + SVG指针叠加 */}
-        <div style={{ position: 'relative', width: '140px', aspectRatio: '1 / 0.58' }}>
-          {/* AI生成的精美底图 */}
-          <img
-            src={GAUGE_BG_URL}
-            alt="gauge"
-            style={{
-              position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-              objectFit: 'contain', objectPosition: 'center top',
-            }}
-          />
-          {/* SVG指针叠加层 */}
-          <svg
-            viewBox="0 0 140 82"
-            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-          >
-            <defs>
-              <filter id={`glow-${label}`}>
-                <feGaussianBlur stdDeviation="2" result="b" />
-                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-            </defs>
-            {/* 指针：从圆心向外指向弧线 */}
-            <g transform={`rotate(${needleRotation}, 70, 72)`}>
-              {/* 指针主体 */}
-              <line x1="70" y1="72" x2="70" y2="22"
-                stroke={arcColor} strokeWidth="2.5" strokeLinecap="round"
-                filter={`url(#glow-${label})`} />
-              {/* 指针尖端小三角 */}
-              <polygon points="67,26 70,18 73,26" fill={arcColor} />
-            </g>
-            {/* 圆心装饰 */}
-            <circle cx="70" cy="72" r="5" fill={arcColor} opacity="0.9" />
-            <circle cx="70" cy="72" r="2.5" fill="#1B2838" />
-          </svg>
+        <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{ maxWidth: '170px', overflow: 'visible' }}>
+          <defs>
+            {/* 弧线渐变：绿→金→橙→红 */}
+            <linearGradient id={`grad-${uid}`} x1="0%" y1="50%" x2="100%" y2="50%">
+              <stop offset="0%" stopColor="#22C55E" />
+              <stop offset="35%" stopColor="#C9A84C" />
+              <stop offset="65%" stopColor="#E78340" />
+              <stop offset="100%" stopColor="#EF4444" />
+            </linearGradient>
+            {/* 外发光 */}
+            <filter id={`glow-${uid}`} x="-30%" y="-30%" width="160%" height="160%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            {/* 内发光 */}
+            <filter id={`iglow-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="2" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            {/* 指针发光 */}
+            <filter id={`nglow-${uid}`} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* 背景弧：深色底座，带微弱内光 */}
+          <path d={arcPath(R, startDeg, endDeg)}
+            fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={thick + 4} strokeLinecap="round" />
+          {/* 渐变弧线：全量底色（暗） */}
+          <path d={arcPath(R, startDeg, endDeg)}
+            fill="none" stroke={`url(#grad-${uid})`} strokeWidth={thick} strokeLinecap="round"
+            opacity="0.15" />
+          {/* 渐变弧线：进度部分（亮）——需虹灯管效果 */}
+          {s > 0 && (
+            <>
+              {/* 外层发光 */}
+              <path d={arcPath(R, startDeg, needleDeg)}
+                fill="none" stroke={`url(#grad-${uid})`} strokeWidth={thick + 6} strokeLinecap="round"
+                opacity="0.25" filter={`url(#glow-${uid})`} />
+              {/* 主弧线 */}
+              <path d={arcPath(R, startDeg, needleDeg)}
+                fill="none" stroke={`url(#grad-${uid})`} strokeWidth={thick} strokeLinecap="round"
+                filter={`url(#iglow-${uid})`} />
+              {/* 高光层：模拟玉璐质感 */}
+              <path d={arcPath(R, startDeg, needleDeg)}
+                fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={thick - 6} strokeLinecap="round" />
+            </>
+          )}
+
+          {/* 刻度线 + 数字 */}
+          {ticks.map(t => {
+            const deg = startDeg + (t / 100) * 180;
+            const inner = polar(R + thick / 2 + 2, deg);
+            const outer = polar(R + thick / 2 + 7, deg);
+            const txtP = polar(R + thick / 2 + 15, deg);
+            let anchor = 'middle';
+            if (t <= 10) anchor = 'end';
+            else if (t >= 90) anchor = 'start';
+            return (
+              <g key={t}>
+                <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
+                  stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" />
+                <text x={txtP.x} y={txtP.y + 3.5} textAnchor={anchor}
+                  fill="rgba(255,255,255,0.5)" fontSize="9" fontFamily="'SF Mono',monospace">{t}</text>
+              </g>
+            );
+          })}
+
+          {/* 指针 */}
+          <line x1={cx} y1={cy} x2={needleTip.x} y2={needleTip.y}
+            stroke={needleColor} strokeWidth="2.5" strokeLinecap="round"
+            filter={`url(#nglow-${uid})`} />
+          {/* 指针尖端小圆点 */}
+          <circle cx={needleTip.x} cy={needleTip.y} r="2" fill={needleColor} />
+          {/* 圆心装饰：铬合金质感 */}
+          <circle cx={cx} cy={cy} r="7" fill="rgba(255,255,255,0.08)" />
+          <circle cx={cx} cy={cy} r="5" fill={needleColor} opacity="0.85" />
+          <circle cx={cx} cy={cy} r="2.5" fill="#0D1B2A" />
+
           {/* 分数显示在圆心下方 */}
-          <div style={{
-            position: 'absolute', bottom: '-2px', left: 0, right: 0,
-            textAlign: 'center', fontSize: '14px', fontWeight: 'bold',
-            fontFamily: 'monospace', color: arcColor,
-            textShadow: `0 0 8px ${glowColor}`,
-          }}>
-            {score}
-          </div>
-        </div>
+          <text x={cx} y={cy + 18} textAnchor="middle"
+            fill={needleColor} fontSize="15" fontWeight="bold" fontFamily="'SF Mono',monospace"
+            style={{ textShadow: `0 0 10px ${glowRgba}` } as any}>
+            {s}
+          </text>
+
+          {/* 底部水平基线 */}
+          <line x1={cx - R - 2} y1={cy} x2={cx + R + 2} y2={cy}
+            stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+        </svg>
+
         {/* 状态标签 */}
         <div className="text-[9px] font-bold px-3 py-0.5 rounded-full mt-1"
           style={{
-            color: arcColor,
-            backgroundColor: `${arcColor}15`,
-            border: `1px solid ${arcColor}30`,
-            textShadow: `0 0 6px ${glowColor}`,
+            color: needleColor,
+            backgroundColor: `${needleColor}15`,
+            border: `1px solid ${needleColor}30`,
+            textShadow: `0 0 6px ${glowRgba}`,
           }}>
           {alertMsg}
         </div>
         {/* 详细数据 */}
-        <div className="mt-1.5 w-full" style={{ fontSize: '9px', maxWidth: '140px' }}>
+        <div className="mt-1.5 w-full" style={{ fontSize: '9px', maxWidth: '150px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '2px' }}>
             <span style={{ color: LABEL_COLOR }}>实际胜率</span>
             <span className="font-mono font-bold" style={{ color: winRate > expectedRate * 1.5 ? '#F47068' : DATA_COLOR }}>{winRate.toFixed(1)}%</span>
