@@ -149,39 +149,38 @@ function ShortCycleMonitorPanel() {
 
   const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
 
-  // SVG仪表盘组件：大半圆形（240°弧），顶部圆弧底部平开口
+  // SVG仪表盘组件：正半圆（180°，9点到3点）
   function GaugeMeter({ score, label, alertLevel, alertMsg, winRate, expectedRate, sigma }: {
     score: number; label: string; alertLevel: string; alertMsg: string;
     winRate: number; expectedRate: number; sigma: number;
   }) {
     const svgW = 110;
-    const svgH = 90;
+    const svgH = 78;
     const cx = svgW / 2;
-    const cy = 62; // 圆心偏下，让弧顶部有空间
-    const radius = 38;
+    const cy = 64; // 圆心在底部附近，半圆向上
+    const radius = 40;
     const strokeWidth = 8;
-    // 240°弧：从150°到390°（0°=正上方，顺时针）
-    // 即从左下方开始，经过顶部，到右下方结束
-    const startAngle = 150;
-    const endAngle = 390;
-    const totalAngle = endAngle - startAngle; // 240°
+    // 180°弧：从270°(9点位置)到450°(3点位置)
+    // 在我们的坐标系中 0°=正上方，顺时针
+    // 270°=正左(9点), 0°/360°=正上(12点), 90°=正右(3点)
+    const startAngle = 270;
+    const endAngle = 450; // 450 = 360+90
+    const totalAngle = 180;
     const needleAngle = startAngle + (Math.min(100, Math.max(0, score)) / 100) * totalAngle;
 
-    function polar(cxP: number, cyP: number, r: number, deg: number) {
+    function polar(r: number, deg: number) {
       const rad = ((deg - 90) * Math.PI) / 180;
-      return { x: cxP + r * Math.cos(rad), y: cyP + r * Math.sin(rad) };
+      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
     }
 
-    // 背景弧
-    const bgS = polar(cx, cy, radius, startAngle);
-    const bgE = polar(cx, cy, radius, endAngle);
-    const bgArc = `M ${bgS.x} ${bgS.y} A ${radius} ${radius} 0 1 1 ${bgE.x} ${bgE.y}`;
+    // 背景弧（9点到3点，经过12点）
+    const bgS = polar(radius, startAngle);
+    const bgE = polar(radius, endAngle);
+    const bgArc = `M ${bgS.x} ${bgS.y} A ${radius} ${radius} 0 0 1 ${bgE.x} ${bgE.y}`;
 
     // 进度弧
-    const pE = polar(cx, cy, radius, needleAngle);
-    const sweep = needleAngle - startAngle;
-    const largeArc = sweep > 180 ? 1 : 0;
-    const progressArc = `M ${bgS.x} ${bgS.y} A ${radius} ${radius} 0 ${largeArc} 1 ${pE.x} ${pE.y}`;
+    const pE = polar(radius, needleAngle);
+    const progressArc = `M ${bgS.x} ${bgS.y} A ${radius} ${radius} 0 0 1 ${pE.x} ${pE.y}`;
 
     // 颜色
     let arcColor = '#3DD68C';
@@ -191,19 +190,21 @@ function ShortCycleMonitorPanel() {
     else if (score >= 25) { arcColor = '#C9A84C'; glowColor = 'rgba(201,168,76,0.3)'; }
 
     // 指针
-    const needleTip = polar(cx, cy, radius - 12, needleAngle);
+    const needleTip = polar(radius - 12, needleAngle);
+
+    // 指针外围分数位置
+    const scoreTxtP = polar(radius + 14, needleAngle);
 
     // 刻度：0 25 50 75 100
     const ticks = [0, 25, 50, 75, 100];
     const tickEls = ticks.map(t => {
       const angle = startAngle + (t / 100) * totalAngle;
-      const inner = polar(cx, cy, radius + 2, angle);
-      const outer = polar(cx, cy, radius + 7, angle);
-      const txtP = polar(cx, cy, radius + 13, angle);
+      const inner = polar(radius + 2, angle);
+      const outer = polar(radius + 7, angle);
+      const txtP = polar(radius + 14, angle);
       return { t, inner, outer, txtP };
     });
 
-    // 唯一ID防止多个仪表盘filter冲突
     const uid = label.replace(/[^a-zA-Z0-9]/g, '');
 
     return (
@@ -232,15 +233,15 @@ function ShortCycleMonitorPanel() {
                 fontSize="7" fontFamily="monospace">{t}</text>
             </g>
           ))}
+          {/* 指针外围当前分数（用强调色区分于预设刻度） */}
+          <text x={scoreTxtP.x} y={scoreTxtP.y + 2} textAnchor="middle" fill={arcColor}
+            fontSize="7" fontWeight="bold" fontFamily="monospace">{score}</text>
           {/* 指针 */}
           <line x1={cx} y1={cy} x2={needleTip.x} y2={needleTip.y}
             stroke={arcColor} strokeWidth="2" strokeLinecap="round"
             filter={`url(#gl-${uid})`} />
           <circle cx={cx} cy={cy} r="3.5" fill={arcColor} />
           <circle cx={cx} cy={cy} r="1.5" fill="#0D1B2A" />
-          {/* 分数显示在圆心下方 */}
-          <text x={cx} y={cy + 14} textAnchor="middle" fill={arcColor}
-            fontSize="13" fontWeight="bold" fontFamily="monospace">{score}</text>
         </svg>
         {/* 状态标签 */}
         <div className="text-[8px] font-bold px-2 py-0.5 rounded-full"
@@ -249,22 +250,22 @@ function ShortCycleMonitorPanel() {
             backgroundColor: `${arcColor}15`,
             border: `1px solid ${arcColor}30`,
             textShadow: `0 0 6px ${glowColor}`,
-            marginTop: '-2px',
+            marginTop: '1px',
           }}>
           {alertMsg}
         </div>
         {/* 详细数据 */}
         <div className="mt-1 w-full px-0.5" style={{ fontSize: '8px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: LABEL_COLOR }}>实际</span>
+            <span style={{ color: LABEL_COLOR }}>实际胜率</span>
             <span className="font-mono font-bold" style={{ color: winRate > expectedRate * 1.5 ? '#F47068' : DATA_COLOR }}>{winRate.toFixed(1)}%</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: LABEL_COLOR }}>期望</span>
+            <span style={{ color: LABEL_COLOR }}>期望胜率</span>
             <span className="font-mono" style={{ color: LABEL_COLOR }}>{expectedRate.toFixed(1)}%</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: LABEL_COLOR }}>Z</span>
+            <span style={{ color: LABEL_COLOR }}>标准差偏离</span>
             <span className="font-mono font-bold" style={{ color: Math.abs(sigma) > 2 ? '#F47068' : Math.abs(sigma) > 1 ? '#C9A84C' : '#3DD68C' }}>
               {sigma > 0 ? '+' : ''}{sigma.toFixed(2)}σ
             </span>
