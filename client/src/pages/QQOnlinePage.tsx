@@ -64,7 +64,14 @@ function AIRiskControlPanel() {
   return (
     <div className="px-4 pt-3">
       <div className="rounded-2xl px-3 py-3" style={cardStyle}>
-        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>AI监控</div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[11px]" style={{ color: LABEL_COLOR }}>AI监控 <span style={{ color: GOLD_COLOR }}>投注号码</span></div>
+          {riskData && riskData.length > 0 && (
+            <div className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: GOLD_COLOR, backgroundColor: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)' }}>
+              共 <span className="font-mono font-bold">{riskData.reduce((s: number, r: any) => s + (r.betCount || 0), 0)}</span> 次投注
+            </div>
+          )}
+        </div>
 
         {isLoading && (
           <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>加载中...</div>
