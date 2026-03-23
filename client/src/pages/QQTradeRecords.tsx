@@ -53,6 +53,7 @@ export default function QQTradeRecords() {
   // 行内编辑
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<TradeRow>(emptyRow());
+  const [recognizeDetail, setRecognizeDetail] = useState<{ count: number; details: string } | null>(null);
 
   const { data, isLoading, refetch } = trpc.getQQTradeRecords.useQuery(
     { page, pageSize, search: search || undefined, sortField, sortOrder },
@@ -100,7 +101,7 @@ export default function QQTradeRecords() {
   const recognizeMutation = trpc.recognizeQQTradeImage.useMutation({
     onSuccess: (res) => {
       if (res.records && res.records.length > 0) {
-        setPendingRows(res.records.map((r: any) => ({
+        const mapped = res.records.map((r: any) => ({
           username: r.username || "",
           order_no: r.order_no || "",
           lottery_type: r.lottery_type || "",
@@ -113,9 +114,14 @@ export default function QQTradeRecords() {
           win_status: r.win_status || "",
           odds: r.odds || "",
           balance: r.balance || "",
-        })));
+        }));
+        setPendingRows(mapped);
         setUploadMode("manual");
-        showToast(`AI识别到 ${res.records.length} 条记录，请确认后保存`);
+        // 详细提示识别结果
+        const details = mapped.map((r: any, i: number) =>
+          `#${i + 1} 订单:${r.order_no || '-'} 金额:${r.amount || '-'} 内容:${r.content || '-'} 状态:${r.win_status === '0' ? '未中奖' : r.win_status || '-'}`
+        ).join('\n');
+        setRecognizeDetail({ count: mapped.length, details });
       } else {
         showToast("未识别到数据，请手动输入");
         setUploadMode("manual");
@@ -296,6 +302,32 @@ export default function QQTradeRecords() {
       {toast && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-gray-700 text-white text-sm px-4 py-2 rounded-full shadow-lg">
           {toast}
+        </div>
+      )}
+
+      {/* 识别结果详情弹窗 */}
+      {recognizeDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setRecognizeDetail(null)}>
+          <div className="bg-gray-800 rounded-xl p-4 mx-4 max-w-sm w-full shadow-2xl border border-gray-600" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-green-400 font-bold text-base">AI识别完成</h3>
+              <button onClick={() => setRecognizeDetail(null)} className="text-gray-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="text-yellow-300 text-sm mb-3">共识别到 {recognizeDetail.count} 条记录</div>
+            <div className="bg-gray-900/60 rounded-lg p-3 max-h-60 overflow-y-auto">
+              {recognizeDetail.details.split('\n').map((line, i) => (
+                <div key={i} className="text-gray-200 text-xs py-1 border-b border-gray-700/50 last:border-0 whitespace-pre-wrap">{line}</div>
+              ))}
+            </div>
+            <button
+              onClick={() => setRecognizeDetail(null)}
+              className="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg font-medium"
+            >
+              确认，去编辑
+            </button>
+          </div>
         </div>
       )}
 
