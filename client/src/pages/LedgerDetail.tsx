@@ -779,15 +779,31 @@ export default function LedgerDetail() {
                   })()}
                 </div>
               </div>
-              {effectiveIsManager && (
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
-                  onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-                >
-                  <Settings className="w-4 h-4 text-white" />
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                {/* QQ 快捷入口：仅 jiang(870413) 和 yjh(4957151) 可见 */}
+                {(user?.id === 870413 || user?.id === 4957151) && isCustomAF && (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                    style={{ backgroundColor: '#12B7F5', border: '1.5px solid rgba(255,255,255,0.5)' }}
+                    onClick={() => setLocation(`/ledger/${ledgerId}/qq`)}
+                  >
+                    <img
+                      src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/qq-icon.png"
+                      alt="QQ"
+                      className="w-5 h-5 object-contain"
+                    />
+                  </div>
+                )}
+                {effectiveIsManager && (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+                    onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+                  >
+                    <Settings className="w-4 h-4 text-white" />
+                  </div>
+                )}
+              </div>
             </div>
             {/* 第二行：操作按钮 */}
             <div className="flex items-center gap-2 mt-2">
