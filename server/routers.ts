@@ -13432,7 +13432,7 @@ insights 数组每项包含：
     }),
 
 
-  // ========== AI风控部 ==========
+  // ========== AI监控 ==========
   getAIRiskControl: protectedProcedure
     .query(async ({ ctx }) => {
       const JIANG_ID = 870413;
@@ -13503,12 +13503,12 @@ insights 数组每项包含：
         });
         return results;
       } catch (err) {
-        console.error('[AI风控部] 分析失败:', err);
+        console.error('[AI监控] 分析失败:', err);
         return [];
       }
     }),
 
-  // ========== 投注金额分析（按金额档位分组，消除号码影响） ==========
+  // ========== AI监控 - 投注金额（按金额档位分组，消除号码影响） ==========
   getAmountAnalysis: protectedProcedure
     .query(async ({ ctx }) => {
       const JIANG_ID = 870413;
@@ -13595,7 +13595,7 @@ insights 数组每项包含：
         results.sort((a, b) => b.amountYuan - a.amountYuan);
         return results;
       } catch (err) {
-        console.error('[投注金额分析] 失败:', err);
+        console.error('[AI监控-投注金额] 失败:', err);
         return [];
       }
     }),
