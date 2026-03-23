@@ -275,6 +275,7 @@ function HistoryScanPanel() {
   const [scanning, setScanning] = React.useState(false);
   const [scanResult, setScanResult] = React.useState<{ scanned: number; newAlerts: number; total: number } | null>(null);
   const [daysFilter, setDaysFilter] = React.useState(7);
+  const [showHelp, setShowHelp] = React.useState(false);
 
   const { data: alertsData, isLoading: alertsLoading, refetch: refetchAlerts } = trpc.getRiskAlerts.useQuery(
     { days: daysFilter },
@@ -305,7 +306,120 @@ function HistoryScanPanel() {
     <div className="px-4 pt-3">
       <div className="rounded-2xl px-3 py-3" style={cardStyle}>
         <div className="flex items-center justify-between mb-3">
-          <div className="text-[11px]" style={{ color: LABEL_COLOR }}>历史滑动扫描预警</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div className="text-[11px]" style={{ color: LABEL_COLOR }}>历史滑动扫描预警</div>
+            <button
+              onClick={() => setShowHelp(true)}
+              style={{
+                width: '14px', height: '14px', borderRadius: '50%',
+                backgroundColor: 'rgba(201,168,76,0.15)',
+                border: '1px solid rgba(201,168,76,0.3)',
+                color: GOLD_COLOR, fontSize: '9px', fontWeight: 'bold',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', flexShrink: 0,
+              }}>?
+            </button>
+          </div>
+
+          {/* 说明弹窗 */}
+          {showHelp && (
+            <div style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              backgroundColor: 'rgba(0,0,0,0.75)',
+              display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            }} onClick={() => setShowHelp(false)}>
+              <div style={{
+                width: '100%', maxWidth: '480px',
+                backgroundColor: '#1A1A1A',
+                border: '1px solid rgba(201,168,76,0.2)',
+                borderRadius: '20px 20px 0 0',
+                padding: '20px 16px 32px',
+                maxHeight: '80vh', overflowY: 'auto',
+              }} onClick={e => e.stopPropagation()}>
+                {/* 头部 */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div style={{ color: GOLD_COLOR, fontSize: '14px', fontWeight: 'bold' }}>历史滑动扫描预警 — 原理说明</div>
+                  <button onClick={() => setShowHelp(false)} style={{ color: LABEL_COLOR, fontSize: '18px', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+                </div>
+
+                {/* 一、作用 */}
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ color: GOLD_COLOR, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px', paddingBottom: '4px', borderBottom: '1px solid rgba(201,168,76,0.15)' }}>一、为什么需要它？</div>
+                  <div style={{ color: '#D0D0D0', fontSize: '11px', lineHeight: '1.7' }}>
+                    实时监控只看“最新的N笔”，异常发生10分钟后就被新数据淹没，永远不会留下痕迹。
+                    历史滑动扫描解决这个问题：对<span style={{ color: GOLD_COLOR }}>全部历史数据</span>做一次完整的回测，把每一个曾经发生过的异常时间段永久入库、留存证据。
+                  </div>
+                </div>
+
+                {/* 二、工作原理 */}
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ color: GOLD_COLOR, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px', paddingBottom: '4px', borderBottom: '1px solid rgba(201,168,76,0.15)' }}>二、工作原理</div>
+                  <div style={{ color: '#D0D0D0', fontSize: '11px', lineHeight: '1.7' }}>
+                    想象把1000笔历史数据排成一行，用一个滑动的“窗口”从左向右扫过每一个位置：
+                  </div>
+                  <div style={{ backgroundColor: 'rgba(201,168,76,0.06)', borderRadius: '8px', padding: '10px', margin: '8px 0', fontFamily: 'monospace', fontSize: '10px', color: '#C0C0C0', lineHeight: '1.8' }}>
+                    第1笔 → 第30笔：检验这30笔是否异常<br/>
+                    第11笔 → 第40笔：检验这30笔是否异常<br/>
+                    第21笔 → 第50笔：检验这30笔是否异常<br/>
+                    ……共进行数百次独立检验
+                  </div>
+                  <div style={{ color: '#D0D0D0', fontSize: '11px', lineHeight: '1.7' }}>
+                    每次扫描步长为<span style={{ color: GOLD_COLOR }}>10笔</span>，三个窗口尺寸分别为<span style={{ color: GOLD_COLOR }}>30笔、150笔、500笔</span>，覆盖短期、中期、长期三个时间维度。
+                  </div>
+                </div>
+
+                {/* 三、计算逻辑 */}
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ color: GOLD_COLOR, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px', paddingBottom: '4px', borderBottom: '1px solid rgba(201,168,76,0.15)' }}>三、计算逻辑（加权概率）</div>
+                  <div style={{ color: '#D0D0D0', fontSize: '11px', lineHeight: '1.7' }}>
+                    每笔投注的号码不同，理论中奖概率也不同，因此不能简单用“10笔中了几笔”来判断，而是采用加权计算：
+                  </div>
+                  <div style={{ backgroundColor: 'rgba(201,168,76,0.06)', borderRadius: '8px', padding: '10px', margin: '8px 0', fontSize: '10px', color: '#C0C0C0', lineHeight: '1.9' }}>
+                    <div style={{ color: GOLD_COLOR, marginBottom: '4px' }}>期望中奖数 = 每笔理论概率之和</div>
+                    <div>如：10笔中，每笔理论概率分别为 8%、8%、12%、15%…</div>
+                    <div>期望中奖数 = 0.08+0.08+0.12+0.15+… = 1.05笔</div>
+                    <div style={{ color: GOLD_COLOR, margin: '6px 0 2px' }}>Z-Score = (实际中奖数 − 期望中奖数) ÷ 加权标准差</div>
+                    <div>加权标准差 = √(每笔概率 × (1−概率) 之和)</div>
+                  </div>
+                </div>
+
+                {/* 四、预警等级 */}
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ color: GOLD_COLOR, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px', paddingBottom: '4px', borderBottom: '1px solid rgba(201,168,76,0.15)' }}>四、预警等级划分</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {[
+                      { color: '#C9A84C', label: '需关注', desc: 'Z > 2.5，实际胜率较期望偏高，属于边界异常' },
+                      { color: '#E78340', label: '高度异常', desc: 'Z > 3.0，异常显著，在正常随机情况下概率低于0.1%' },
+                      { color: '#F47068', label: '确定异常', desc: 'Z > 3.5 且连续多组离群，几乎不可能是偶然，是确定性作弊的强烈信号' },
+                    ].map(item => (
+                      <div key={item.label} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                        <div style={{ width: '52px', flexShrink: 0, fontSize: '9px', fontWeight: 'bold', color: item.color, backgroundColor: `${item.color}15`, border: `1px solid ${item.color}30`, borderRadius: '4px', padding: '2px 4px', textAlign: 'center', marginTop: '1px' }}>{item.label}</div>
+                        <div style={{ color: '#B0B0B0', fontSize: '10px', lineHeight: '1.6' }}>{item.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 五、使用建议 */}
+                <div>
+                  <div style={{ color: GOLD_COLOR, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px', paddingBottom: '4px', borderBottom: '1px solid rgba(201,168,76,0.15)' }}>五、使用建议</div>
+                  <div style={{ color: '#D0D0D0', fontSize: '11px', lineHeight: '1.8' }}>
+                    ① 首次使用时点击「全量扫描」，对历史所有数据做一次完整回测，建立基线数据库。<br/>
+                    ② 此后每天或每周定期扫描一次，新增的异常窗口会自动入库。<br/>
+                    ③ 通过「近N天」过滤器查看不同时间范围的历史预警。<br/>
+                    ④ 当“确定异常”条数较多时，结合具体时间段和第几笔到第几笔的区间进行证据取证。
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'center', marginTop: '16px' }}>
+                  <button onClick={() => setShowHelp(false)}
+                    style={{ backgroundColor: GOLD_COLOR, color: '#0D0D0D', fontSize: '12px', fontWeight: 'bold', padding: '8px 32px', borderRadius: '20px', border: 'none', cursor: 'pointer' }}>
+                    我明白了
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             {/* 时间过滤 */}
             {[7, 30, 90].map(d => (
