@@ -257,7 +257,7 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
                 <div style={{ flex: '1.5 1 0' }} className="text-[10px] text-gray-500">选号</div>
                 <div style={{ flex: '1 1 0' }} className="text-[10px] text-gray-500 text-center">组合</div>
                 <div style={{ flex: '1 1 0' }} className="text-[10px] text-gray-500 text-center">中奖率</div>
-                <div style={{ flex: '1 1 0' }} className="text-[10px] text-gray-500 text-center">赔率</div>
+                <div style={{ flex: '1 1 0' }} className="text-[10px] text-gray-500 text-center">赔率(含本金)</div>
                 <div style={{ flex: '1.2 1 0' }} className="text-[10px] text-gray-500 text-center">EV</div>
                 <div style={{ width: '28px' }} />
               </div>
