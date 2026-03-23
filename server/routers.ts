@@ -12973,7 +12973,7 @@ insights 数组每项包含：
         if (!conn) return { list: [], total: 0 };
         const offset = (input.page - 1) * input.pageSize;
         const limit = input.pageSize;
-        const allowedSortFields = ['id','username','order_no','lottery_type','play_method','issue_no','trade_time','multiplier','amount','win_status','odds','balance'];
+        const allowedSortFields = ['id','username','order_no','lottery_type','play_method','issue_no','trade_time','multiplier','amount','win_amount','win_status','odds','balance'];
         const sortField = allowedSortFields.includes(input.sortField || '') ? input.sortField : 'id';
         const sortOrder = input.sortOrder === 'asc' ? 'ASC' : 'DESC';
         let whereClause = '';
@@ -12985,7 +12985,7 @@ insights 数组每项包含：
         }
         const [rows] = await (conn as any).execute(
           `SELECT id, username, order_no, lottery_type, play_method, issue_no, trade_time,
-                  multiplier, amount, content, win_status, odds, balance, created_at, batch_id
+                  multiplier, amount, content, win_amount, win_status, odds, balance, created_at, batch_id
            FROM qq_trade_records
            ${whereClause}
            ORDER BY ${sortField} ${sortOrder}
@@ -13017,6 +13017,7 @@ insights 数组每项包含：
         multiplier: z.string().optional(),
         amount: z.string().optional(),
         content: z.string().optional(),
+        win_amount: z.string().optional(),
         win_status: z.string().optional(),
         odds: z.string().optional(),
         balance: z.string().optional(),
@@ -13038,12 +13039,12 @@ insights 数组每项包含：
         let filled = 0;
         const details: { order_no: string; status: 'new' | 'skip' | 'fill'; fillFields?: string[] }[] = [];
 
-        const FILL_FIELDS = ['username','lottery_type','play_method','issue_no','trade_time','multiplier','amount','content','win_status','odds','balance'] as const;
+        const FILL_FIELDS = ['username','lottery_type','play_method','issue_no','trade_time','multiplier','amount','content','win_amount','win_status','odds','balance'] as const;
         const FIELD_LABELS: Record<string, string> = {
           username:'\u7528\u6237\u540d', lottery_type:'\u5f69\u79cd', play_method:'\u73a9\u6cd5',
           issue_no:'\u671f\u53f7', trade_time:'\u65f6\u95f4', multiplier:'\u500d\u6570',
-          amount:'\u91d1\u989d', content:'\u5185\u5bb9', win_status:'\u4e2d\u5956\u72b6\u6001',
-          odds:'\u8d54\u7387', balance:'\u4f59\u989d'
+          amount:'\u6295\u6ce8\u989d', content:'\u5185\u5bb9', win_amount:'\u4e2d\u5956\u91d1\u989d',
+          win_status:'\u4e2d\u5956\u72b6\u6001', odds:'\u8d54\u7387', balance:'\u4f59\u989d'
         };
 
         for (const r of input.records) {
@@ -13096,14 +13097,22 @@ insights 数组每项包含：
 
           // ---- \u65b0\u589e\u8bb0\u5f55 ----
           const amt = r.amount ? parseFloat(r.amount) || null : null;
+          const winAmt = r.win_amount ? parseFloat(r.win_amount) || null : null;
           const bal = r.balance ? parseFloat(r.balance) || null : null;
+          // \u81ea\u52a8\u8ba1\u7b97\u8d54\u7387: \u4e2d\u5956\u91d1\u989d / \u6295\u6ce8\u989d
+          let autoOdds = r.odds || null;
+          if (amt && winAmt && winAmt > 0) {
+            autoOdds = (winAmt / amt).toFixed(2);
+          } else if (winAmt === null || winAmt === 0) {
+            autoOdds = '0';
+          }
           await (conn as any).execute(
             `INSERT INTO qq_trade_records
-             (username, order_no, lottery_type, play_method, issue_no, trade_time, multiplier, amount, content, win_status, odds, balance, created_by, batch_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (username, order_no, lottery_type, play_method, issue_no, trade_time, multiplier, amount, content, win_amount, win_status, odds, balance, created_by, batch_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [r.username||null, orderNo||null, r.lottery_type||null, r.play_method||null,
              r.issue_no||null, r.trade_time||null, r.multiplier||null, amt,
-             r.content||null, r.win_status||null, r.odds||null, bal,
+             r.content||null, winAmt, r.win_status||null, autoOdds, bal,
              (ctx.user as any).id, batchId]
           );
           inserted++;
@@ -13350,6 +13359,7 @@ insights 数组每项包含：
       multiplier: z.string().optional(),
       amount: z.string().optional(),
       content: z.string().optional(),
+      win_amount: z.string().optional(),
       win_status: z.string().optional(),
       odds: z.string().optional(),
       balance: z.string().optional(),
@@ -13365,7 +13375,7 @@ insights 数组每项包含：
         if (!conn) throw new Error('数据库连接失败');
         const { id, ...fields } = input;
         // 过滤掉undefined的字段，DECIMAL列空字符串转NULL
-        const DECIMAL_COLS = ['amount', 'balance'];
+        const DECIMAL_COLS = ['amount', 'win_amount', 'balance'];
         const validFields: Record<string, string | null> = {};
         for (const [k, v] of Object.entries(fields)) {
           if (v === undefined) continue;
@@ -13521,7 +13531,7 @@ insights 数组每项包含：
         if (!conn) return [];
         // 查询所有有效记录：金额、投注内容、中奖状态
         const [rows] = await (conn as any).execute(
-          `SELECT amount, content, win_status FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' AND content IS NOT NULL AND content != ''`
+          `SELECT amount, content, win_status, win_amount FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' AND content IS NOT NULL AND content != ''`
         );
         // 差值概率表
         const COMBO_MAP: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
@@ -13545,7 +13555,7 @@ insights 数组每项包含：
           const combos = digits.reduce((sum, d) => sum + (COMBO_MAP[d] || 0), 0);
           const theoryPct = combos / 100;
           const isWin = Number(row.win_status) > 0 ? 1 : 0;
-          const winAmount = isWin ? Number(row.win_status) * 100 : 0;
+          const winAmount = row.win_amount ? Number(row.win_amount) : 0;
           if (!amountGroups[amtKey]) {
             amountGroups[amtKey] = { betCount: 0, winCount: 0, theoryPctSum: 0, totalBet: 0, totalWin: 0 };
           }

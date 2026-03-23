@@ -12,8 +12,9 @@ const FIELDS = [
   { key: "issue_no", label: "期号" },
   { key: "trade_time", label: "时间" },
   { key: "multiplier", label: "倍数" },
-  { key: "amount", label: "金额" },
+  { key: "amount", label: "投注额" },
   { key: "content", label: "内容" },
+  { key: "win_amount", label: "中奖金额" },
   { key: "win_status", label: "中奖状态" },
   { key: "odds", label: "赔率" },
   { key: "balance", label: "余额" },
@@ -26,7 +27,7 @@ function emptyRow(): TradeRow {
   return {
     username: "", order_no: "", lottery_type: "", play_method: "",
     issue_no: "", trade_time: "", multiplier: "", amount: "",
-    content: "", win_status: "", odds: "", balance: "",
+    content: "", win_amount: "", win_status: "", odds: "", balance: "",
   };
 }
 
@@ -185,7 +186,7 @@ export default function QQTradeRecords() {
           username: r.username, order_no: r.order_no, lottery_type: r.lottery_type,
           play_method: r.play_method, issue_no: r.issue_no, trade_time: r.trade_time,
           multiplier: r.multiplier, amount: r.amount, content: r.content,
-          win_status: r.win_status, odds: r.odds, balance: r.balance,
+          win_amount: r.win_amount, win_status: r.win_status, odds: r.odds, balance: r.balance,
         });
       } else if (r._status === 'fill' && r._existingId) {
         // 补录记录 → 直接调用更新接口
@@ -257,9 +258,10 @@ export default function QQTradeRecords() {
       multiplier: cols[6]?.trim() || "",
       amount: cols[7]?.trim() || "",
       content: cols[8]?.trim() || "",
-      win_status: cols[9]?.trim() || "",
-      odds: cols[10]?.trim() || "",
-      balance: cols[11]?.trim() || "",
+      win_amount: cols[9]?.trim() || "",
+      win_status: cols[10]?.trim() || "",
+      odds: cols[11]?.trim() || "",
+      balance: cols[12]?.trim() || "",
     };
   }
 
@@ -702,12 +704,16 @@ export default function QQTradeRecords() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={batchMode ? 14 : 13} className="text-center py-10 text-gray-500">加载中...</td></tr>
+                  <tr><td colSpan={batchMode ? 15 : 14} className="text-center py-10 text-gray-500">加载中...</td></tr>
                 ) : list.length === 0 ? (
-                  <tr><td colSpan={batchMode ? 14 : 13} className="text-center py-10 text-gray-500">暂无数据</td></tr>
+                  <tr><td colSpan={batchMode ? 15 : 14} className="text-center py-10 text-gray-500">暂无数据</td></tr>
                 ) : (
                   list.map((row: any) => {
                     const isEditing = editingId === row.id;
+                    // 自动计算赔率：中奖金额 / 投注额
+                    const amt = parseFloat(row.amount) || 0;
+                    const winAmt = parseFloat(row.win_amount) || 0;
+                    const autoOdds = amt > 0 && winAmt > 0 ? (winAmt / amt).toFixed(2) : '0';
                     return (
                       <tr key={row.id} className={`border-b border-gray-800 ${isEditing ? 'bg-gray-800' : 'hover:bg-gray-900'} ${selectedIds.has(row.id) ? 'bg-red-900/20' : ''}`}>
                         {batchMode && (
@@ -762,6 +768,7 @@ export default function QQTradeRecords() {
                         </td>
                         {FIELDS.map(f => {
                           if (isEditing) {
+                            // 赔率和余额在编辑模式下也可以手动输入（但显示时自动计算）
                             return (
                               <td key={f.key} className="px-1 py-1">
                                 <input
@@ -773,14 +780,59 @@ export default function QQTradeRecords() {
                               </td>
                             );
                           }
+                          // 中奖状态列：显示已中奖/未中奖
                           if (f.key === 'win_status') {
-                            const val = Number(row[f.key]);
-                            const won = !isNaN(val) && val > 0;
+                            // 兼容旧数据: win_status存的是中奖金额数字，odds存的是"已中奖"/"未中奖"
+                            // 新数据: win_amount存中奖金额，win_status存状态
+                            const wa = parseFloat(row.win_amount) || 0;
+                            const wsVal = Number(row.win_status);
+                            const won = wa > 0 || (!isNaN(wsVal) && wsVal > 0) || row.odds === '已中奖';
                             return (
                               <td key={f.key} className="px-2 py-2 text-center whitespace-nowrap">
                                 <span className={won ? 'text-green-400 font-bold' : 'text-red-400'}>
                                   {won ? '已中奖' : '未中奖'}
                                 </span>
+                              </td>
+                            );
+                          }
+                          // 中奖金额列：显示金额，未中奖显示0
+                          if (f.key === 'win_amount') {
+                            const wa = parseFloat(row.win_amount) || 0;
+                            return (
+                              <td key={f.key} className="px-2 py-2 text-center whitespace-nowrap">
+                                <span className={wa > 0 ? 'text-green-400 font-bold' : 'text-gray-500'}>
+                                  {wa > 0 ? wa.toFixed(2) : '0'}
+                                </span>
+                              </td>
+                            );
+                          }
+                          // 赔率列：自动计算 = 中奖金额 / 投注额
+                          if (f.key === 'odds') {
+                            return (
+                              <td key={f.key} className="px-2 py-2 text-center whitespace-nowrap">
+                                <span className={Number(autoOdds) > 0 ? 'text-yellow-400 font-bold' : 'text-gray-500'}>
+                                  {autoOdds}
+                                </span>
+                              </td>
+                            );
+                          }
+                          // 余额列：显示数据库值（后端自动计算）
+                          if (f.key === 'balance') {
+                            const bal = row.balance != null ? parseFloat(row.balance) : null;
+                            return (
+                              <td key={f.key} className="px-2 py-2 text-center whitespace-nowrap">
+                                <span className="text-gray-300 font-mono">
+                                  {bal != null ? bal.toFixed(2) : '--'}
+                                </span>
+                              </td>
+                            );
+                          }
+                          // 投注额列：保留两位小数
+                          if (f.key === 'amount') {
+                            const a = parseFloat(row.amount) || 0;
+                            return (
+                              <td key={f.key} className="px-2 py-2 text-center text-gray-300 whitespace-nowrap">
+                                {a.toFixed(2)}
                               </td>
                             );
                           }
@@ -815,11 +867,11 @@ export default function QQTradeRecords() {
       {uploadMode === "paste" && (
         <div className="px-4 pt-4">
           <div className="text-xs text-gray-400 mb-2">从Excel或网页复制表格数据后粘贴到下方，支持Tab分隔和逗号分隔</div>
-          <div className="text-xs text-gray-600 mb-3">格式: 用户名, 订单号, 彩种, 玩法, 期号, 时间, 倍数, 金额, 内容, 中奖状态, 赔率, 余额</div>
+          <div className="text-xs text-gray-600 mb-3">格式: 用户名, 订单号, 彩种, 玩法, 期号, 时间, 倍数, 投注额, 内容, 中奖金额, 中奖状态, 赔率, 余额</div>
           <textarea
             value={pasteText}
             onChange={e => setPasteText(e.target.value)}
-            placeholder={"粘贴数据到这里...\n\n示例(逗号分隔):\njjh2378,ORD001,奇趣腾讯分分彩,后二跨度,20250301001,2025-03-01 10:00,1,2.000,0369,中奖,5.880,100\n\n示例(Tab分隔 - 从Excel复制):\njjh2378\tORD002\t奇趣腾讯分分彩\t后二跨度\t..."}
+            placeholder={"粘贴数据到这里...\n\n示例(逗号分隔):\njjh2378,ORD001,奇趣腾讯分分彩,后二跨度,20250301001,2025-03-01 10:00,1,2.000,0369,5.880,中奖,2.94,100\n\n示例(Tab分隔 - 从Excel复制):\njjh2378\tORD002\t奇趣腾讯分分彩\t后二跨度\t..."}
             className="w-full h-64 bg-gray-800 text-white text-xs p-3 rounded-lg border border-gray-700 focus:border-cyan-500 outline-none resize-none font-mono"
           />
           <div className="flex items-center justify-between mt-3">
