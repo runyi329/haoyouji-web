@@ -75,17 +75,40 @@ export default function QQTradeRecords() {
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / pageSize);
 
+  // 批量选中
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchMode, setBatchMode] = useState(false);
+
+  // 查重结果弹窗
+  const [importResult, setImportResult] = useState<{ inserted: number; skipped: number; filled: number; details: { order_no: string; status: string; fillFields?: string[] }[] } | null>(null);
+
   const addMutation = trpc.addQQTradeRecords.useMutation({
     onSuccess: (res) => {
-      showToast(`成功导入 ${res.inserted} 条记录`);
       setSaving(false);
       setUploadMode(null);
       setPendingRows([emptyRow()]);
       refetch();
+      if (res.skipped > 0 || res.filled > 0) {
+        setImportResult({ inserted: res.inserted, skipped: res.skipped, filled: res.filled, details: res.details || [] });
+      } else {
+        showToast(`成功导入 ${res.inserted} 条记录`);
+      }
     },
     onError: (err) => {
       showToast("导入失败：" + err.message);
       setSaving(false);
+    },
+  });
+
+  const batchDeleteMutation = trpc.batchDeleteQQTradeRecords.useMutation({
+    onSuccess: (res) => {
+      showToast(`已删除 ${res.deleted} 条记录`);
+      setSelectedIds(new Set());
+      setBatchMode(false);
+      refetch();
+    },
+    onError: (err) => {
+      showToast("批量删除失败：" + err.message);
     },
   });
 
@@ -621,11 +644,50 @@ export default function QQTradeRecords() {
             </div>
           )}
 
+          {/* 批量操作栏 */}
+          <div className="px-4 pb-2 flex items-center gap-2">
+            <button
+              onClick={() => { setBatchMode(!batchMode); setSelectedIds(new Set()); }}
+              className={`px-3 py-1.5 text-xs rounded-lg ${batchMode ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-400'} active:opacity-80`}
+            >
+              {batchMode ? '取消批量' : '批量删除'}
+            </button>
+            {batchMode && selectedIds.size > 0 && (
+              <button
+                onClick={() => {
+                  if (confirm(`确认删除选中的 ${selectedIds.size} 条记录？此操作不可撤销！`)) {
+                    batchDeleteMutation.mutate({ ids: Array.from(selectedIds) });
+                  }
+                }}
+                disabled={batchDeleteMutation.isPending}
+                className="px-3 py-1.5 text-xs rounded-lg bg-red-700 text-white active:bg-red-600 disabled:opacity-50"
+              >
+                {batchDeleteMutation.isPending ? '删除中...' : `删除选中 (${selectedIds.size})`}
+              </button>
+            )}
+          </div>
+
           {/* 表格 */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[1000px]">
               <thead>
                 <tr className="bg-gray-900 text-gray-500">
+                  {batchMode && (
+                    <th className="px-1 py-2 text-center border-b border-gray-800 w-10">
+                      <input
+                        type="checkbox"
+                        checked={list.length > 0 && list.every((r: any) => selectedIds.has(r.id))}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setSelectedIds(new Set(list.map((r: any) => r.id)));
+                          } else {
+                            setSelectedIds(new Set());
+                          }
+                        }}
+                        className="accent-red-500"
+                      />
+                    </th>
+                  )}
                   <th className="px-2 py-2 text-center border-b border-gray-800 w-16">操作</th>
                   {FIELDS.map(f => (
                     <th
@@ -640,14 +702,29 @@ export default function QQTradeRecords() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={13} className="text-center py-10 text-gray-500">加载中...</td></tr>
+                  <tr><td colSpan={batchMode ? 14 : 13} className="text-center py-10 text-gray-500">加载中...</td></tr>
                 ) : list.length === 0 ? (
-                  <tr><td colSpan={13} className="text-center py-10 text-gray-500">暂无数据</td></tr>
+                  <tr><td colSpan={batchMode ? 14 : 13} className="text-center py-10 text-gray-500">暂无数据</td></tr>
                 ) : (
                   list.map((row: any) => {
                     const isEditing = editingId === row.id;
                     return (
-                      <tr key={row.id} className={`border-b border-gray-800 ${isEditing ? 'bg-gray-800' : 'hover:bg-gray-900'}`}>
+                      <tr key={row.id} className={`border-b border-gray-800 ${isEditing ? 'bg-gray-800' : 'hover:bg-gray-900'} ${selectedIds.has(row.id) ? 'bg-red-900/20' : ''}`}>
+                        {batchMode && (
+                          <td className="px-1 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(row.id)}
+                              onChange={e => {
+                                const next = new Set(selectedIds);
+                                if (e.target.checked) next.add(row.id);
+                                else next.delete(row.id);
+                                setSelectedIds(next);
+                              }}
+                              className="accent-red-500"
+                            />
+                          </td>
+                        )}
                         {/* 操作列 */}
                         <td className="px-1 py-2 text-center">
                           <div className="flex items-center justify-center gap-1">
@@ -801,6 +878,42 @@ export default function QQTradeRecords() {
               className="px-6 py-2 text-sm bg-gray-800 text-gray-300 rounded-lg active:bg-gray-700"
             >
               + 添加一行
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 导入结果弹窗（查重/补缺结果） */}
+      {importResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setImportResult(null)}>
+          <div className="bg-gray-800 rounded-xl p-4 mx-3 max-w-md w-full shadow-2xl border border-gray-600 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-white mb-3">导入结果</h3>
+            <div className="flex gap-3 mb-3 text-xs">
+              <span className="text-green-400">新增 {importResult.inserted} 条</span>
+              <span className="text-yellow-400">补录 {importResult.filled} 条</span>
+              <span className="text-gray-500">跳过 {importResult.skipped} 条</span>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-1.5">
+              {importResult.details.map((d, i) => (
+                <div key={i} className={`text-xs px-2 py-1.5 rounded border ${
+                  d.status === 'new' ? 'bg-green-900/20 border-green-700/40 text-green-300' :
+                  d.status === 'fill' ? 'bg-yellow-900/20 border-yellow-700/40 text-yellow-300' :
+                  'bg-gray-800/50 border-gray-700/40 text-gray-500'
+                }`}>
+                  <span className="font-mono">{d.order_no || '(无订单号)'}</span>
+                  <span className="ml-2">
+                    {d.status === 'new' ? '→ 新增' :
+                     d.status === 'fill' ? `→ 补录: ${(d.fillFields || []).join(', ')}` :
+                     '→ 跳过(已存在)'}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setImportResult(null)}
+              className="mt-3 w-full py-2 bg-blue-600 text-white text-sm rounded-lg active:bg-blue-500"
+            >
+              确定
             </button>
           </div>
         </div>
