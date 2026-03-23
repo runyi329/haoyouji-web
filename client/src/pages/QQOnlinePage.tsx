@@ -40,11 +40,11 @@ function gradientColor(value: number, min: number, max: number): string {
 // σ等级配色和标签
 function sigmaDisplay(level: string): { label: string; color: string } {
   switch (level) {
-    case 'normal':       return { label: '1\u03c3 \u6b63\u5e38', color: '#3DD68C' };
-    case 'watch':        return { label: '2\u03c3 \u5173\u6ce8', color: '#E7E740' };
-    case 'suspect':      return { label: '3\u03c3 \u53ef\u7591', color: '#E78340' };
-    case 'abnormal':     return { label: '3\u03c3+ \u5f02\u5e38', color: '#E74040' };
-    case 'insufficient': return { label: '\u6837\u672c\u4e0d\u8db3', color: '#5A6B7F' };
+    case 'normal':       return { label: '1σ 正常', color: '#3DD68C' };
+    case 'watch':        return { label: '2σ 关注', color: '#E7E740' };
+    case 'suspect':      return { label: '3σ 可疑', color: '#E78340' };
+    case 'abnormal':     return { label: '3σ+ 异常', color: '#E74040' };
+    case 'insufficient': return { label: '样本不足', color: '#5A6B7F' };
     default:             return { label: '--', color: '#5A6B7F' };
   }
 }
@@ -59,26 +59,26 @@ function AIRiskControlPanel() {
   return (
     <div className="px-4 pt-3">
       <div className="rounded-2xl px-3 py-3" style={cardStyle}>
-        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>AI\u98ce\u63a7\u90e8</div>
+        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>AI风控部</div>
 
         {isLoading && (
-          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>\u52a0\u8f7d\u4e2d...</div>
+          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>加载中...</div>
         )}
 
         {!isLoading && (!riskData || riskData.length === 0) && (
-          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>\u6682\u65e0\u6295\u6ce8\u6570\u636e</div>
+          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>暂无投注数据</div>
         )}
 
         {!isLoading && riskData && riskData.length > 0 && (
           <>
             {/* \u8868\u5934 */}
             <div style={{ display: 'flex', width: '100%', paddingBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium" ><span style={{ color: LABEL_COLOR }}>\u53f7\u7801</span></div>
-              <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>\u6b21\u6570</span></div>
-              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>\u5b9e\u9645</span></div>
-              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>\u7406\u8bba</span></div>
-              <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>\u504f\u79bb</span></div>
-              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-right"><span style={{ color: LABEL_COLOR }}>\u5206\u5e03</span></div>
+              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium" ><span style={{ color: LABEL_COLOR }}>号码</span></div>
+              <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>次数</span></div>
+              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>实际</span></div>
+              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>理论</span></div>
+              <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
+              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-right"><span style={{ color: LABEL_COLOR }}>分布</span></div>
             </div>
 
             {/* \u6570\u636e\u884c */}
