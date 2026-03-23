@@ -96,7 +96,7 @@ function AIHabitsPanel() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span className="text-[11px]" style={{ color: LABEL_COLOR }}>AI监控</span>
-            <span className="text-[11px] font-bold" style={{ color: GOLD_COLOR }}>习惯</span>
+            <span className="text-[11px] font-bold" style={{ color: GOLD_COLOR }}>客户习惯</span>
             {lastTime && (
               <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: LABEL_COLOR, background: 'rgba(255,255,255,0.05)' }}>
                 上次 {lastTime}
@@ -121,7 +121,7 @@ function AIHabitsPanel() {
                 分析中...
               </>
             ) : (
-              <>⚡ 全量分析</>
+              <>全量分析</>
             )}
           </button>
         </div>
