@@ -711,7 +711,7 @@ export default function QQTradeRecords() {
                 ) : (
                   list.map((row: any, rowIndex: number) => {
                     const isEditing = editingId === row.id;
-                    const rowNumber = rowIndex + 1;
+                    const rowNumber = (page - 1) * pageSize + rowIndex + 1;
                     // 自动计算赔率：中奖金额 / 投注额
                     const amt = parseFloat(row.amount) || 0;
                     const winAmt = parseFloat(row.win_amount) || 0;
