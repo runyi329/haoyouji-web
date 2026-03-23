@@ -292,11 +292,24 @@ export default function QQTradeRecords() {
                 ) : (
                   list.map((row: any) => (
                     <tr key={row.id} className="border-b border-gray-800 hover:bg-gray-900">
-                      {FIELDS.map(f => (
-                        <td key={f.key} className="px-2 py-2 text-center text-gray-300 whitespace-nowrap">
-                          {row[f.key] ?? ""}
-                        </td>
-                      ))}
+                      {FIELDS.map(f => {
+                        if (f.key === 'win_status') {
+                          const val = Number(row[f.key]);
+                          const won = !isNaN(val) && val > 0;
+                          return (
+                            <td key={f.key} className="px-2 py-2 text-center whitespace-nowrap">
+                              <span className={won ? 'text-green-400 font-bold' : 'text-red-400'}>
+                                {won ? '已中奖' : '未中奖'}
+                              </span>
+                            </td>
+                          );
+                        }
+                        return (
+                          <td key={f.key} className="px-2 py-2 text-center text-gray-300 whitespace-nowrap">
+                            {row[f.key] ?? ""}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))
                 )}
