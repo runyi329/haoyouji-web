@@ -78,12 +78,12 @@ function AIRiskControlPanel() {
           <>
             {/* \u8868\u5934 */}
             <div style={{ display: 'flex', width: '100%', paddingBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium" ><span style={{ color: LABEL_COLOR }}>号码</span></div>
-              <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>次数</span></div>
-              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>实际</span></div>
-              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>理论</span></div>
-              <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
-              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-right"><span style={{ color: LABEL_COLOR }}>正态分布</span></div>
+              <div style={{ flex: '3 1 0', minWidth: 0 }} className="text-[9px] font-medium" ><span style={{ color: LABEL_COLOR }}>号码</span></div>
+              <div style={{ flex: '1 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>次数</span></div>
+              <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>实际</span></div>
+              <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>理论</span></div>
+              <div style={{ flex: '1.3 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
+              <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-[9px] font-medium text-right"><span style={{ color: LABEL_COLOR }}>正态分布</span></div>
             </div>
 
             {/* \u6570\u636e\u884c */}
@@ -105,26 +105,26 @@ function AIRiskControlPanel() {
                     borderBottom: idx < riskData.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none'
                   }}
                 >
-                  <div style={{ flex: '2 1 0', minWidth: 0 }}>
-                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR, wordBreak: 'break-all' }}>
+                  <div style={{ flex: '3 1 0', minWidth: 0 }}>
+                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR, whiteSpace: 'nowrap' }}>
                       {item.digits.join(',')}
                     </span>
                   </div>
-                  <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-center">
+                  <div style={{ flex: '1 1 0', minWidth: 0 }} className="text-center">
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.betCount}</span>
                   </div>
-                  <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
+                  <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-center">
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{Number(item.actualPct).toFixed(2)}%</span>
                   </div>
-                  <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
+                  <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-center">
                     <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{Number(item.theoryPct).toFixed(2)}%</span>
                   </div>
-                  <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-center">
+                  <div style={{ flex: '1.3 1 0', minWidth: 0 }} className="text-center">
                     <span className="text-[10px] font-bold font-mono" style={{ color: devColor }}>
                       {item.deviation > 0 ? '+' : ''}{Number(item.deviation).toFixed(2)}%
                     </span>
                   </div>
-                  <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-right">
+                  <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-right">
                     <span
                       className="text-[9px] font-bold px-1.5 py-0.5 rounded"
                       style={{ color: sig.color, backgroundColor: `${sig.color}15` }}
