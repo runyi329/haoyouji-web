@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Edit2 } from "lucide-react";
+import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Edit2, Settings } from "lucide-react";
 
 const FIELDS = [
   { key: "username", label: "用户名" },
@@ -315,7 +315,7 @@ export default function QQTradeRecords() {
           {/* 上传按钮区 */}
           <div className="px-4 pt-4 pb-2">
             <div className="text-xs text-gray-500 mb-3">选择上传方式</div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-2">
               <button
                 onClick={() => photoInputRef.current?.click()}
                 className="flex flex-col items-center gap-2 py-4 rounded-xl bg-gray-800 active:bg-gray-700"
@@ -336,6 +336,13 @@ export default function QQTradeRecords() {
               >
                 <PenLine size={22} className="text-yellow-400" />
                 <span className="text-xs text-gray-300">手动输入</span>
+              </button>
+              <button
+                onClick={() => setLocation(id ? `/ledger/${id}/qq/settings` : '/')}
+                className="flex flex-col items-center gap-2 py-4 rounded-xl bg-gray-800 active:bg-gray-700"
+              >
+                <Settings size={22} className="text-purple-400" />
+                <span className="text-xs text-gray-300">设置</span>
               </button>
             </div>
             <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
