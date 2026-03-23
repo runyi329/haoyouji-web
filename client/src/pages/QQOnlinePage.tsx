@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { History, Plus } from "lucide-react";
+import { History, Plus, RefreshCw, ClipboardList, X } from "lucide-react";
 
 // 管理员（jiang）每月20万，yjh为1/5即4万
 // 每秒收益 = 月收益 ÷ 30 ÷ 24 ÷ 3600
@@ -36,6 +36,7 @@ export default function QQOnlinePage() {
   const latest = data?.list?.[0];
 
   // 倒计时（对齐QQ数据每分钟第1秒更新）
+  const [showMenu, setShowMenu] = useState(false);
   const [countdown, setCountdown] = useState(0);
   useEffect(() => {
     function calcCountdown() {
@@ -179,13 +180,42 @@ export default function QQOnlinePage() {
 
       {/* 底部悬浮添加按钮（仅jiang可见） */}
       {currentUserId === 870413 && (
-        <button
-          onClick={() => setLocation(`/ledger/${id}/qq/trade`)}
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center rounded-full shadow-lg active:opacity-80"
-          style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
-        >
-          <Plus className="w-7 h-7 text-white" />
-        </button>
+        <>
+          {/* 弹出菜单 */}
+          {showMenu && (
+            <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
+          )}
+          {showMenu && (
+            <div
+              className="fixed z-30 flex flex-col gap-2"
+              style={{ bottom: '80px', left: '50%', transform: 'translateX(-50%)' }}
+            >
+              <button
+                onClick={() => { setShowMenu(false); refetch(); }}
+                className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lg text-white text-sm font-medium"
+                style={{ background: 'rgba(26,86,219,0.92)', backdropFilter: 'blur(8px)', minWidth: '160px' }}
+              >
+                <RefreshCw className="w-4 h-4" />
+                刷新
+              </button>
+              <button
+                onClick={() => { setShowMenu(false); setLocation(`/ledger/${id}/qq/trade`); }}
+                className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lg text-white text-sm font-medium"
+                style={{ background: 'rgba(26,86,219,0.92)', backdropFilter: 'blur(8px)', minWidth: '160px' }}
+              >
+                <ClipboardList className="w-4 h-4" />
+                交易记录
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setShowMenu(v => !v)}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center rounded-full shadow-lg active:opacity-80"
+            style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
+          >
+            {showMenu ? <X className="w-6 h-6 text-white" /> : <Plus className="w-7 h-7 text-white" />}
+          </button>
+        </>
       )}
     </div>
   );
