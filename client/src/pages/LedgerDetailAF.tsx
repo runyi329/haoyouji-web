@@ -277,6 +277,21 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
               size="md"
             />
           )}
+          {/* QQ 快捷入口：仅 jiang(870413) 和 yjh(4957151) 可见 */}
+          {(user?.id === 870413 || user?.id === 4957151) && (
+            <button
+              className="w-7 h-7 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0"
+              style={{ backgroundColor: '#12B7F5', border: '1.5px solid rgba(255,255,255,0.5)' }}
+              onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/qq`); }}
+              title="QQ 交易记录"
+            >
+              <img
+                src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/qq-icon.png"
+                alt="QQ"
+                className="w-5 h-5 object-contain"
+              />
+            </button>
+          )}
           <span className="text-base font-semibold">{ledgerData?.name}</span>
         </div>
         <div className="flex items-center gap-2">
