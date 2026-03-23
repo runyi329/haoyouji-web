@@ -98,11 +98,14 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
   function addSample() {
     const raw = inputVal.trim();
     if (!raw) return;
-    // 解析：支持 "0369" 或 "0,3,6,9" 或 "0 3 6 9"
-    const digits = raw
-      .split(/[,\s]+/)
-      .map(s => parseInt(s.trim(), 10))
-      .filter(n => !isNaN(n) && n >= 0 && n <= 9);
+    // 智能解析：逐字符拆分，支持 "0369" "0,3,6,9" "0 3 6 9" "25" 等任意格式
+    const digits: number[] = [];
+    for (const ch of raw) {
+      if (ch >= '0' && ch <= '9') {
+        const n = parseInt(ch, 10);
+        if (!digits.includes(n)) digits.push(n);
+      }
+    }
     if (digits.length === 0) return;
     setSamples(prev => [...prev, { id: Date.now(), digits }]);
     setInputVal("");
