@@ -30,6 +30,113 @@ const GOLD_COLOR = '#C9A84C';
 const GREEN_COLOR = '#3DD68C';
 const RED_COLOR = '#F47068';
 
+// QQ 全局渐变色函数（红→橙→黄→黄绿→绿）
+function gradientColor(value: number, min: number, max: number): string {
+  const ratio = Math.max(0, Math.min(1, (value - min) / (max - min || 1)));
+  const hue = ratio * 120;
+  return `hsl(${hue}, 78%, 58%)`;
+}
+
+// σ等级配色和标签
+function sigmaDisplay(level: string): { label: string; color: string } {
+  switch (level) {
+    case 'normal':       return { label: '1\u03c3 \u6b63\u5e38', color: '#3DD68C' };
+    case 'watch':        return { label: '2\u03c3 \u5173\u6ce8', color: '#E7E740' };
+    case 'suspect':      return { label: '3\u03c3 \u53ef\u7591', color: '#E78340' };
+    case 'abnormal':     return { label: '3\u03c3+ \u5f02\u5e38', color: '#E74040' };
+    case 'insufficient': return { label: '\u6837\u672c\u4e0d\u8db3', color: '#5A6B7F' };
+    default:             return { label: '--', color: '#5A6B7F' };
+  }
+}
+
+function AIRiskControlPanel() {
+  const { data: riskData, isLoading } = trpc.getAIRiskControl.useQuery(undefined, {
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
+
+  return (
+    <div className="px-4 pt-3">
+      <div className="rounded-2xl px-3 py-3" style={cardStyle}>
+        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>AI\u98ce\u63a7\u90e8</div>
+
+        {isLoading && (
+          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>\u52a0\u8f7d\u4e2d...</div>
+        )}
+
+        {!isLoading && (!riskData || riskData.length === 0) && (
+          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>\u6682\u65e0\u6295\u6ce8\u6570\u636e</div>
+        )}
+
+        {!isLoading && riskData && riskData.length > 0 && (
+          <>
+            {/* \u8868\u5934 */}
+            <div style={{ display: 'flex', width: '100%', paddingBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium" ><span style={{ color: LABEL_COLOR }}>\u53f7\u7801</span></div>
+              <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>\u6b21\u6570</span></div>
+              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>\u5b9e\u9645</span></div>
+              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>\u7406\u8bba</span></div>
+              <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>\u504f\u79bb</span></div>
+              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-right"><span style={{ color: LABEL_COLOR }}>\u5206\u5e03</span></div>
+            </div>
+
+            {/* \u6570\u636e\u884c */}
+            {riskData.map((item: any, idx: number) => {
+              const sig = sigmaDisplay(item.sigmaLevel);
+              // \u504f\u79bb\u5ea6\u989c\u8272\uff1a\u7edd\u5bf9\u503c\u8d8a\u5c0f\u8d8a\u7eff\uff0c\u8d8a\u5927\u8d8a\u7ea2
+              const absDeviation = Math.abs(item.deviation);
+              const devColor = absDeviation <= 5 ? '#3DD68C'
+                : absDeviation <= 15 ? gradientColor(100 - absDeviation, 0, 100)
+                : absDeviation <= 30 ? '#E78340'
+                : '#E74040';
+
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex', width: '100%', alignItems: 'center',
+                    paddingTop: '5px', paddingBottom: '5px',
+                    borderBottom: idx < riskData.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none'
+                  }}
+                >
+                  <div style={{ flex: '2 1 0', minWidth: 0 }}>
+                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR, wordBreak: 'break-all' }}>
+                      {item.digits.join(',')}
+                    </span>
+                  </div>
+                  <div style={{ flex: '1.2 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.betCount}</span>
+                  </div>
+                  <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.actualPct}%</span>
+                  </div>
+                  <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{item.theoryPct}%</span>
+                  </div>
+                  <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-bold font-mono" style={{ color: devColor }}>
+                      {item.deviation > 0 ? '+' : ''}{item.deviation}%
+                    </span>
+                  </div>
+                  <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-right">
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                      style={{ color: sig.color, backgroundColor: `${sig.color}15` }}
+                    >
+                      {sig.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
@@ -262,6 +369,9 @@ export default function QQOnlinePage() {
 
         </div>
       </div>
+
+      {/* ── AI风控部（仅jiang可见）── */}
+      {currentUserId === JIANG_ID && <AIRiskControlPanel />}
 
       <div className="h-20" />
 

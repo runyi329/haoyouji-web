@@ -13229,7 +13229,82 @@ insights 数组每项包含：
     }),
 
 
-  // ========== 已结利息管理 ==========
+  // ========== AI风控部 ==========
+  getAIRiskControl: protectedProcedure
+    .query(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return [];
+        // 按 content（号码组合）分组，统计投注次数、中奖次数
+        const [rows] = await (conn as any).execute(
+          `SELECT
+             content,
+             COUNT(*) as bet_count,
+             SUM(CASE WHEN win_status > 0 THEN 1 ELSE 0 END) as win_count
+           FROM qq_trade_records
+           WHERE content IS NOT NULL AND content != ''
+           GROUP BY content
+           ORDER BY COUNT(*) DESC`
+        );
+        // 差值概率表
+        const COMBO_MAP: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
+        const results = (rows as any[]).map((row: any) => {
+          const content = String(row.content || '').trim();
+          const betCount = Number(row.bet_count) || 0;
+          const winCount = Number(row.win_count) || 0;
+          // 从 content 解析号码（逐字符提取0-9）
+          const digits: number[] = [];
+          for (const ch of content) {
+            if (ch >= '0' && ch <= '9') {
+              const n = parseInt(ch, 10);
+              if (!digits.includes(n)) digits.push(n);
+            }
+          }
+          // 计算理论概率
+          const combos = digits.reduce((sum, d) => sum + (COMBO_MAP[d] || 0), 0);
+          const theoryPct = combos / 100; // 0~1
+          const actualPct = betCount > 0 ? winCount / betCount : 0;
+          // 偏离度
+          const deviation = theoryPct > 0 ? ((actualPct - theoryPct) / theoryPct) * 100 : 0;
+          // 正态分布 sigma 分析
+          let sigmaLevel = 'insufficient'; // 样本不足
+          let sigmaValue = 0;
+          if (betCount >= 15 && theoryPct > 0 && theoryPct < 1) {
+            const expected = betCount * theoryPct;
+            const sigma = Math.sqrt(betCount * theoryPct * (1 - theoryPct));
+            if (sigma > 0) {
+              sigmaValue = (winCount - expected) / sigma;
+              const absSigma = Math.abs(sigmaValue);
+              if (absSigma <= 1) sigmaLevel = 'normal';       // ±1σ
+              else if (absSigma <= 2) sigmaLevel = 'watch';    // ±1σ~2σ
+              else if (absSigma <= 3) sigmaLevel = 'suspect';  // ±2σ~3σ
+              else sigmaLevel = 'abnormal';                     // ±3σ+
+            }
+          }
+          return {
+            content,
+            digits: digits.sort((a,b) => a-b),
+            betCount,
+            winCount,
+            theoryPct: Math.round(theoryPct * 10000) / 100,
+            actualPct: Math.round(actualPct * 10000) / 100,
+            deviation: Math.round(deviation * 100) / 100,
+            sigmaLevel,
+            sigmaValue: Math.round(sigmaValue * 100) / 100,
+          };
+        });
+        return results;
+      } catch (err) {
+        console.error('[AI风控部] 分析失败:', err);
+        return [];
+      }
+    }),
+    // ========== 已结利息管理 ==========
   // 获取已结利息列表
   getInterestSettlements: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
