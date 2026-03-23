@@ -23,7 +23,7 @@ export default function QQOnlinePage() {
   const deposit = currentUserId === YJH_ID ? '4万元' : '20万元';
 
   // 投注统计（仅jiang可见）
-  const { data: tradeStats } = trpc.getQQTradeStats.useQuery(undefined, {
+  const { data: tradeStats, refetch: refetchStats } = trpc.getQQTradeStats.useQuery(undefined, {
     enabled: currentUserId === 870413,
     refetchInterval: 60 * 1000,
   });
@@ -196,7 +196,7 @@ export default function QQOnlinePage() {
               style={{ bottom: '80px', left: '50%', transform: 'translateX(-50%)' }}
             >
               <button
-                onClick={() => { setShowMenu(false); refetch(); }}
+                onClick={() => { window.location.reload(); }}
                 className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lg text-white text-sm font-medium"
                 style={{ background: 'rgba(26,86,219,0.92)', backdropFilter: 'blur(8px)', minWidth: '160px' }}
               >
