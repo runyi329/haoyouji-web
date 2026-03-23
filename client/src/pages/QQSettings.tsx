@@ -3,6 +3,13 @@ import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Loader2, X, Check, Calculator } from "lucide-react";
 
+// QQ 全局渐变色函数（红→橙→黄→黄绿→绿）
+function gradientColor(value: number, min: number, max: number): string {
+  const ratio = Math.max(0, Math.min(1, (value - min) / (max - min || 1)));
+  const hue = ratio * 120;
+  return `hsl(${hue}, 78%, 58%)`;
+}
+
 // 差值概率表（固定数据，纯计算）
 const DIFF_TABLE: { diff: number; combos: number; pct: number }[] = [
   { diff: 0, combos: 10, pct: 10 },
@@ -161,7 +168,7 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
               <div style={{ flex: '1 1 0' }} className="text-right">
                 <span
                   className="text-sm font-bold font-mono"
-                  style={{ color: row.pct >= 14 ? '#3DD68C' : row.pct >= 8 ? '#FACC15' : '#F87171' }}
+                  style={{ color: gradientColor(row.pct, 2, 18) }}
                 >
                   {row.pct}%
                 </span>
@@ -226,7 +233,7 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
                     <div style={{ flex: '1 1 0' }} className="text-center">
                       <span
                         className="text-sm font-bold font-mono"
-                        style={{ color: pct >= 30 ? '#3DD68C' : pct >= 15 ? '#FACC15' : '#F87171' }}
+                        style={{ color: gradientColor(pct, 0, 100) }}
                       >
                         {pct}%
                       </span>
