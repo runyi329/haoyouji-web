@@ -232,41 +232,34 @@ export default function QQOnlinePage() {
                   </div>
                 </div>
 
-                {/* 右列：金额 */}
+                {/* 右列：投注额 + 派彩 */}
                 <div className="flex flex-col gap-2.5 pl-4">
-                  {/* 最大投注额 */}
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最大投注额</div>
                     <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt(tradeStats?.maxAmount)}</div>
                   </div>
-                  {/* 最小投注额 */}
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最小投注额</div>
                     <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt(tradeStats?.minAmount)}</div>
                   </div>
-                  {/* 平均投注额 */}
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>平均投注额</div>
                     <div className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{fmt(tradeStats?.avgAmount)}</div>
                   </div>
-                </div>
-              </div>
-
-              {/* 派彩统计分隔线 */}
-              <div className="mt-3 mb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />
-              <div className="text-[11px] mb-3" style={{ color: LABEL_COLOR }}>派彩统计（中奖订单）</div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最大派彩</div>
-                  <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.maxPayout)}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最小派彩</div>
-                  <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.minPayout)}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>平均派彩</div>
-                  <div className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{fmt((tradeStats as any)?.avgPayout)}</div>
+                  {/* 派彩分隔 */}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '2px', marginBottom: '2px' }} />
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最大派彩</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.maxPayout)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最小派彩</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.minPayout)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>平均派彩</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{fmt((tradeStats as any)?.avgPayout)}</div>
+                  </div>
                 </div>
               </div>
             </div>
