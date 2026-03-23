@@ -4,55 +4,59 @@ import { trpc } from "@/lib/trpc";
 import { History, Plus, RefreshCw, ClipboardList, X } from "lucide-react";
 
 // 管理员（jiang）每月20万，yjh为1/5即4万
-// 每秒收益 = 月收益 ÷ 30 ÷ 24 ÷ 3600
-const PER_SECOND_FULL = 200000 / 30 / 24 / 3600;  // jiang
-const PER_SECOND_YJH  =  40000 / 30 / 24 / 3600;  // yjh (1/5)
+const PER_SECOND_FULL = 200000 / 30 / 24 / 3600;
+const PER_SECOND_YJH  =  40000 / 30 / 24 / 3600;
 const YJH_ID = 4957151;
 const JIANG_ID = 870413;
 const START_TIME = new Date('2026-03-23T00:00:00+08:00').getTime();
 const LEDGER_ID = 52;
 
+// ─── 配色系统（银行级深色商业报表风格）───
+// 背景：深炭蓝 #0D1B2A
+// 容器：#0F2236（深海军蓝半透明）
+// 标签：#7A9BBF（冷蓝灰）
+// 主数据：#E8F0FE（近白冷蓝）
+// 强调金：#C9A84C
+// 绿色：#3DD68C
+// 红色：#F47068
+// 分隔线：rgba(255,255,255,0.06)
+
+const BG = 'linear-gradient(160deg, #0D1B2A 0%, #0A1628 60%, #0D1F35 100%)';
+const CARD_BG = 'rgba(15,34,54,0.85)';
+const CARD_BORDER = '1px solid rgba(255,255,255,0.07)';
+const LABEL_COLOR = '#7A9BBF';
+const DATA_COLOR = '#E8F0FE';
+const GOLD_COLOR = '#C9A84C';
+const GREEN_COLOR = '#3DD68C';
+const RED_COLOR = '#F47068';
+
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
 
-  // 获取当前用户ID，判断利息份额
   const { data: meData } = trpc.auth.me.useQuery();
   const currentUserId = (meData as any)?.id;
   const perSecond = currentUserId === YJH_ID ? PER_SECOND_YJH : PER_SECOND_FULL;
-  // 开始金额和保证金也按比例
   const startAmount = currentUserId === YJH_ID ? '40万元整' : '200万元整';
   const deposit = currentUserId === YJH_ID ? '4万元' : '20万元';
 
-  // 投注统计（仅jiang可见）
   const { data: tradeStats } = trpc.getQQTradeStats.useQuery(undefined, {
     enabled: currentUserId === JIANG_ID,
     refetchInterval: 60 * 1000,
   });
 
-  // 已结利息（仅jiang可见，从数据库读取）
   const { data: settlementData } = trpc.getInterestSettlements.useQuery(
     { ledgerId: LEDGER_ID },
-    {
-      enabled: currentUserId === JIANG_ID,
-      refetchInterval: 5 * 60 * 1000, // 5分钟刷新一次
-    }
+    { enabled: currentUserId === JIANG_ID, refetchInterval: 5 * 60 * 1000 }
   );
-  // yjh看到的已结利息 = jiang已结利息 / 5
-  const settledTotal = currentUserId === JIANG_ID
-    ? (settlementData?.total || 0)
-    : currentUserId === YJH_ID
-      ? 0  // yjh暂不显示已结（如需要可改为 / 5）
-      : 0;
+  const settledTotal = currentUserId === JIANG_ID ? (settlementData?.total || 0) : 0;
 
   const { data, refetch } = trpc.getQQOnlineRecords.useQuery(
     { page: 1, pageSize: 1 },
     { refetchInterval: 60 * 1000 }
   );
-
   const latest = data?.list?.[0];
 
-  // 倒计时（对齐QQ数据每分钟第1秒更新）
   const [showMenu, setShowMenu] = useState(false);
   const [countdown, setCountdown] = useState(0);
   useEffect(() => {
@@ -65,12 +69,8 @@ export default function QQOnlinePage() {
     const timer = setInterval(calcCountdown, 1000);
     return () => clearInterval(timer);
   }, []);
+  useEffect(() => { if (countdown === 0) refetch(); }, [countdown, refetch]);
 
-  useEffect(() => {
-    if (countdown === 0) refetch();
-  }, [countdown, refetch]);
-
-  // 运行时长（按小时，先收后计）
   const [runHours, setRunHours] = useState(1);
   useEffect(() => {
     function calc() {
@@ -82,11 +82,10 @@ export default function QQOnlinePage() {
     return () => clearInterval(timer);
   }, []);
 
-  // 累计利息（按秒实时增长，根据用户份额计算）
   const [interest, setInterest] = useState(0);
   useEffect(() => {
     function calcInterest() {
-      const elapsed = Math.max(0, Date.now() - START_TIME) / 1000; // 已过秒数
+      const elapsed = Math.max(0, Date.now() - START_TIME) / 1000;
       setInterest(elapsed * perSecond);
     }
     calcInterest();
@@ -94,157 +93,193 @@ export default function QQOnlinePage() {
     return () => clearInterval(timer);
   }, [perSecond]);
 
-  function formatNum(n: number): string {
-    return n.toLocaleString("zh-CN");
+  function formatNum(n: number): string { return n.toLocaleString("zh-CN"); }
+  function fmt(v: number | null | undefined, prefix = '¥'): string {
+    if (v == null) return '--';
+    return `${prefix}${v.toFixed(2)}`;
+  }
+  function pct(part: number, total: number): string {
+    if (!total) return '--';
+    return `${((part / total) * 100).toFixed(1)}%`;
   }
 
   const interestCNY = interest.toFixed(2);
   const interestUSDT = (interest / 7).toFixed(2);
-
-  // 待结利息 = 累计利息 - 已结利息
   const pendingInterest = Math.max(0, interest - settledTotal);
   const pendingCNY = pendingInterest.toFixed(2);
   const pendingUSDT = (pendingInterest / 7).toFixed(2);
   const settledCNY = settledTotal.toFixed(2);
   const settledUSDT = (settledTotal / 7).toFixed(2);
 
-  return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
+  // 共用卡片样式
+  const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
 
-      {/* 主数据卡片 - 直接置顶 */}
+  return (
+    <div className="min-h-screen" style={{ background: BG }}>
+
+      {/* ── 主在线数据卡片 ── */}
       <div className="px-4 pt-4">
-        <div className="rounded-2xl px-5 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+        <div className="rounded-2xl px-5 py-3" style={cardStyle}>
           <div className="flex items-center justify-between gap-3">
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-xs text-white/60">当前在线</span>
-                <span className="text-[11px] text-white/40">{latest ? latest.online_time : ''}</span>
+                <span className="text-xs" style={{ color: LABEL_COLOR }}>当前在线</span>
+                <span className="text-[11px]" style={{ color: LABEL_COLOR, opacity: 0.6 }}>{latest ? latest.online_time : ''}</span>
               </div>
-              <div className="text-3xl font-bold text-white font-mono tracking-wide leading-tight">
+              <div className="text-3xl font-bold font-mono tracking-wide leading-tight" style={{ color: DATA_COLOR }}>
                 {latest ? formatNum(latest.online_num) : '加载中...'}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div
                 className="rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '40px', height: '40px' }}
+                style={{ backgroundColor: 'rgba(200,168,76,0.15)', border: '1px solid rgba(200,168,76,0.3)', width: '40px', height: '40px' }}
               >
-                <span className="text-base font-bold font-mono text-white">{countdown}</span>
+                <span className="text-base font-bold font-mono" style={{ color: GOLD_COLOR }}>{countdown}</span>
               </div>
               <button
                 onClick={() => setLocation(`/ledger/${id}/qq/history`)}
                 className="rounded-xl flex items-center justify-center active:opacity-70"
-                style={{ backgroundColor: 'rgba(255,255,255,0.12)', width: '40px', height: '40px' }}
+                style={{ backgroundColor: 'rgba(255,255,255,0.06)', border: CARD_BORDER, width: '40px', height: '40px' }}
               >
-                <History className="w-4 h-4 text-white/80" />
+                <History className="w-4 h-4" style={{ color: LABEL_COLOR }} />
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2x2 数据卡片 */}
+      {/* ── 数据卡片网格 ── */}
       <div className="px-4 pt-3">
         <div className="grid grid-cols-2 gap-3">
-          {/* 第1个：开始时间 + 运行时长 */}
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-            <div className="text-[11px] text-white/55 mb-1">开始时间</div>
-            <div className="text-sm font-bold text-white leading-snug">2026年3月23日</div>
-            <div className="text-[11px] text-white/55 mt-2 mb-0.5">运行时长</div>
-            <div className="text-sm font-bold text-white">
+
+          {/* 卡片1：开始时间 + 运行时长 */}
+          <div className="rounded-2xl px-4 py-3" style={cardStyle}>
+            <div className="text-[11px] mb-1" style={{ color: LABEL_COLOR }}>开始时间</div>
+            <div className="text-sm font-bold" style={{ color: DATA_COLOR }}>2026年3月23日</div>
+            <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>运行时长</div>
+            <div className="text-sm font-bold" style={{ color: DATA_COLOR }}>
               {runHours >= 24
                 ? `${Math.floor(runHours / 24)}天${runHours % 24}小时`
                 : `${runHours}小时`}
             </div>
           </div>
-          {/* 第2个：开始金额 + 保证金 */}
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-            <div className="text-[11px] text-white/55 mb-1">开始金额</div>
-            <div className="text-sm font-bold text-white">{startAmount}</div>
-            <div className="text-[11px] text-white/55 mt-2 mb-0.5">保证金</div>
-            <div className="text-sm font-bold text-white">{deposit}</div>
+
+          {/* 卡片2：开始金额 + 保证金 */}
+          <div className="rounded-2xl px-4 py-3" style={cardStyle}>
+            <div className="text-[11px] mb-1" style={{ color: LABEL_COLOR }}>开始金额</div>
+            <div className="text-sm font-bold" style={{ color: DATA_COLOR }}>{startAmount}</div>
+            <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>保证金</div>
+            <div className="text-sm font-bold" style={{ color: DATA_COLOR }}>{deposit}</div>
           </div>
-          {/* 第3个：累计利息 + 待结利息 + 已结利息 */}
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-            <div className="text-[11px] text-white/55 mb-1">累计利息</div>
+
+          {/* 卡片3：累计/待结/已结利息 */}
+          <div className="rounded-2xl px-4 py-3" style={cardStyle}>
+            <div className="text-[11px] mb-1" style={{ color: LABEL_COLOR }}>累计利息</div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-white font-mono">¥{interestCNY}</span>
-              <span className="text-[10px] text-white/50">≈{interestUSDT} U</span>
+              <span className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>¥{interestCNY}</span>
+              <span className="text-[10px]" style={{ color: LABEL_COLOR }}>≈{interestUSDT} U</span>
             </div>
-            <div className="text-[11px] text-white/55 mt-2 mb-0.5">待结利息</div>
+            <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>待结利息</div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-yellow-200 font-mono">¥{pendingCNY}</span>
-              <span className="text-[10px] text-white/50">≈{pendingUSDT} U</span>
+              <span className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>¥{pendingCNY}</span>
+              <span className="text-[10px]" style={{ color: LABEL_COLOR }}>≈{pendingUSDT} U</span>
             </div>
-            <div className="text-[11px] text-white/55 mt-2 mb-0.5">已结利息</div>
+            <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>已结利息</div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-green-300 font-mono">¥{settledCNY}</span>
-              <span className="text-[10px] text-white/50">≈{settledUSDT} U</span>
+              <span className="text-sm font-bold font-mono" style={{ color: GREEN_COLOR }}>¥{settledCNY}</span>
+              <span className="text-[10px]" style={{ color: LABEL_COLOR }}>≈{settledUSDT} U</span>
             </div>
           </div>
-          {/* 投注统计（横跨两列，仅jiang可见） */}
+
+          {/* 卡片4（占位，仅非jiang用户显示空白） */}
+          {currentUserId !== JIANG_ID && (
+            <div className="rounded-2xl px-4 py-3" style={{ ...cardStyle, minHeight: '80px' }} />
+          )}
+
+          {/* 卡片5：投注统计（横跨两列，仅jiang可见） */}
           {currentUserId === JIANG_ID && (
-            <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-              <div className="text-[11px] text-white/55 mb-2">投注统计</div>
+            <div className="col-span-2 rounded-2xl px-4 py-3" style={cardStyle}>
+              <div className="text-[11px] mb-3" style={{ color: LABEL_COLOR }}>投注统计</div>
               <div className="grid grid-cols-2 gap-0">
+
                 {/* 左列：次数 */}
-                <div className="flex flex-col gap-2 pr-3 border-r border-white/10">
+                <div className="flex flex-col gap-2.5 pr-4" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+                  {/* 中奖 */}
                   <div>
-                    <div className="text-[10px] text-white/50 mb-0.5">投注次数</div>
-                    <div className="text-base font-bold text-white font-mono">{tradeStats?.total ?? 0} 次</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] text-white/50 mb-0.5">中奖</div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>中奖次数</div>
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-sm font-bold text-green-300 font-mono">{tradeStats?.won ?? 0} 次</span>
-                      <span className="text-[10px] text-green-400/70">
-                        {tradeStats?.total ? `${((tradeStats.won / tradeStats.total) * 100).toFixed(1)}%` : '--'}
+                      <span className="text-sm font-bold font-mono" style={{ color: GREEN_COLOR }}>{tradeStats?.won ?? 0} 次</span>
+                      <span className="text-[10px]" style={{ color: GREEN_COLOR, opacity: 0.7 }}>
+                        {pct(tradeStats?.won ?? 0, tradeStats?.total ?? 0)}
                       </span>
                     </div>
                   </div>
+                  {/* 未中奖 */}
                   <div>
-                    <div className="text-[10px] text-white/50 mb-0.5">未中奖</div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>未中奖次数</div>
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-sm font-bold text-red-300 font-mono">{tradeStats?.lost ?? 0} 次</span>
-                      <span className="text-[10px] text-red-400/70">
-                        {tradeStats?.total ? `${((tradeStats.lost / tradeStats.total) * 100).toFixed(1)}%` : '--'}
+                      <span className="text-sm font-bold font-mono" style={{ color: RED_COLOR }}>{tradeStats?.lost ?? 0} 次</span>
+                      <span className="text-[10px]" style={{ color: RED_COLOR, opacity: 0.7 }}>
+                        {pct(tradeStats?.lost ?? 0, tradeStats?.total ?? 0)}
                       </span>
                     </div>
+                  </div>
+                  {/* 投注总数 */}
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>投注总数</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{tradeStats?.total ?? 0} 次</div>
                   </div>
                 </div>
+
                 {/* 右列：金额 */}
-                <div className="flex flex-col gap-2 pl-3">
+                <div className="flex flex-col gap-2.5 pl-4">
+                  {/* 最大投注额 */}
                   <div>
-                    <div className="text-[10px] text-white/50 mb-0.5">平均投注额</div>
-                    <div className="text-sm font-bold text-yellow-200 font-mono">
-                      {tradeStats?.avgAmount != null ? `¥${tradeStats.avgAmount.toFixed(2)}` : '--'}
-                    </div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最大投注额</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt(tradeStats?.maxAmount)}</div>
                   </div>
+                  {/* 最小投注额 */}
                   <div>
-                    <div className="text-[10px] text-white/50 mb-0.5">最大投注额</div>
-                    <div className="text-sm font-bold text-white font-mono">
-                      {tradeStats?.maxAmount != null ? `¥${tradeStats.maxAmount.toFixed(2)}` : '--'}
-                    </div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最小投注额</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt(tradeStats?.minAmount)}</div>
                   </div>
+                  {/* 平均投注额 */}
                   <div>
-                    <div className="text-[10px] text-white/50 mb-0.5">最小投注额</div>
-                    <div className="text-sm font-bold text-white font-mono">
-                      {tradeStats?.minAmount != null ? `¥${tradeStats.minAmount.toFixed(2)}` : '--'}
-                    </div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>平均投注额</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{fmt(tradeStats?.avgAmount)}</div>
                   </div>
+                </div>
+              </div>
+
+              {/* 派彩统计分隔线 */}
+              <div className="mt-3 mb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />
+              <div className="text-[11px] mb-3" style={{ color: LABEL_COLOR }}>派彩统计（中奖订单）</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最大派彩</div>
+                  <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.maxPayout)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>最小派彩</div>
+                  <div className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.minPayout)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>平均派彩</div>
+                  <div className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{fmt((tradeStats as any)?.avgPayout)}</div>
                 </div>
               </div>
             </div>
           )}
+
         </div>
       </div>
 
       <div className="h-20" />
 
-      {/* 底部悬浮添加按钮（仅jiang可见） */}
+      {/* ── 底部悬浮按钮（仅jiang可见）── */}
       {currentUserId === JIANG_ID && (
         <>
-          {/* 弹出菜单 */}
           {showMenu && (
             <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
           )}
@@ -255,18 +290,18 @@ export default function QQOnlinePage() {
             >
               <button
                 onClick={() => { location.assign(location.href); }}
-                className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lg text-white text-sm font-medium"
-                style={{ background: 'rgba(26,86,219,0.92)', backdropFilter: 'blur(8px)', minWidth: '160px' }}
+                className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lg text-sm font-medium"
+                style={{ background: 'rgba(13,27,42,0.95)', border: '1px solid rgba(200,168,76,0.3)', backdropFilter: 'blur(12px)', minWidth: '160px', color: DATA_COLOR }}
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-4 h-4" style={{ color: LABEL_COLOR }} />
                 刷新
               </button>
               <button
                 onClick={() => { setShowMenu(false); setLocation(`/ledger/${id}/qq/trade`); }}
-                className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lg text-white text-sm font-medium"
-                style={{ background: 'rgba(26,86,219,0.92)', backdropFilter: 'blur(8px)', minWidth: '160px' }}
+                className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lg text-sm font-medium"
+                style={{ background: 'rgba(13,27,42,0.95)', border: '1px solid rgba(200,168,76,0.3)', backdropFilter: 'blur(12px)', minWidth: '160px', color: DATA_COLOR }}
               >
-                <ClipboardList className="w-4 h-4" />
+                <ClipboardList className="w-4 h-4" style={{ color: LABEL_COLOR }} />
                 交易记录
               </button>
             </div>
@@ -274,9 +309,12 @@ export default function QQOnlinePage() {
           <button
             onClick={() => setShowMenu(v => !v)}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center rounded-full shadow-lg active:opacity-80"
-            style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
+            style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, #0D1B2A 0%, #1A3A5C 100%)', border: '1px solid rgba(200,168,76,0.4)' }}
           >
-            {showMenu ? <X className="w-6 h-6 text-white" /> : <Plus className="w-7 h-7 text-white" />}
+            {showMenu
+              ? <X className="w-6 h-6" style={{ color: GOLD_COLOR }} />
+              : <Plus className="w-7 h-7" style={{ color: GOLD_COLOR }} />
+            }
           </button>
         </>
       )}
