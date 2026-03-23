@@ -142,6 +142,131 @@ function AIRiskControlPanel() {
   );
 }
 
+function AmountAnalysisPanel() {
+  const { data: amountData, isLoading } = trpc.getAmountAnalysis.useQuery(undefined, {
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
+
+  // 计算汇总
+  const summary = amountData && amountData.length > 0 ? {
+    totalBets: amountData.reduce((s: number, r: any) => s + r.betCount, 0),
+    totalWins: amountData.reduce((s: number, r: any) => s + r.winCount, 0),
+    totalProfit: amountData.reduce((s: number, r: any) => s + r.profit, 0),
+  } : null;
+
+  return (
+    <div className="px-4 pt-3">
+      <div className="rounded-2xl px-3 py-3" style={cardStyle}>
+        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>投注金额分析</div>
+
+        {isLoading && (
+          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>加载中...</div>
+        )}
+
+        {!isLoading && (!amountData || amountData.length === 0) && (
+          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>暂无投注数据</div>
+        )}
+
+        {!isLoading && amountData && amountData.length > 0 && (
+          <>
+            {/* 汇总概览 */}
+            {summary && (
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ flex: '1 1 0' }} className="text-center">
+                  <div className="text-[9px]" style={{ color: LABEL_COLOR }}>金额档位</div>
+                  <div className="text-[12px] font-bold font-mono" style={{ color: DATA_COLOR }}>{amountData.length}</div>
+                </div>
+                <div style={{ flex: '1 1 0' }} className="text-center">
+                  <div className="text-[9px]" style={{ color: LABEL_COLOR }}>总投注</div>
+                  <div className="text-[12px] font-bold font-mono" style={{ color: DATA_COLOR }}>{summary.totalBets}</div>
+                </div>
+                <div style={{ flex: '1 1 0' }} className="text-center">
+                  <div className="text-[9px]" style={{ color: LABEL_COLOR }}>总中奖</div>
+                  <div className="text-[12px] font-bold font-mono" style={{ color: GREEN_COLOR }}>{summary.totalWins}</div>
+                </div>
+                <div style={{ flex: '1 1 0' }} className="text-center">
+                  <div className="text-[9px]" style={{ color: LABEL_COLOR }}>净获利</div>
+                  <div className="text-[12px] font-bold font-mono" style={{ color: summary.totalProfit >= 0 ? GREEN_COLOR : RED_COLOR }}>
+                    {summary.totalProfit >= 0 ? '+' : ''}{summary.totalProfit}元
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 表头 */}
+            <div style={{ display: 'flex', width: '100%', paddingBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>金额</span></div>
+              <div style={{ flex: '1 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>次数</span></div>
+              <div style={{ flex: '1.3 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>实际</span></div>
+              <div style={{ flex: '1.3 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>理论</span></div>
+              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
+              <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-[9px] font-medium text-center"><span style={{ color: LABEL_COLOR }}>获利</span></div>
+              <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-[9px] font-medium text-right"><span style={{ color: LABEL_COLOR }}>正态</span></div>
+            </div>
+
+            {/* 数据行 */}
+            {amountData.map((item: any, idx: number) => {
+              const sig = sigmaDisplay(item.sigmaLevel, item.betCount, item.theoryPct);
+              const absDeviation = Math.abs(item.deviation);
+              const devColor = absDeviation <= 5 ? '#3DD68C'
+                : absDeviation <= 15 ? gradientColor(100 - absDeviation, 0, 100)
+                : absDeviation <= 30 ? '#E78340'
+                : '#E74040';
+              const profitColor = item.profit >= 0 ? GREEN_COLOR : RED_COLOR;
+
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex', width: '100%', alignItems: 'center',
+                    paddingTop: '5px', paddingBottom: '5px',
+                    borderBottom: idx < amountData.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none'
+                  }}
+                >
+                  <div style={{ flex: '1.5 1 0', minWidth: 0 }}>
+                    <span className="text-[10px] font-bold font-mono" style={{ color: GOLD_COLOR }}>
+                      {item.amountYuan}元
+                    </span>
+                  </div>
+                  <div style={{ flex: '1 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.betCount}</span>
+                  </div>
+                  <div style={{ flex: '1.3 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.actualPct}%</span>
+                  </div>
+                  <div style={{ flex: '1.3 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{item.theoryPct}%</span>
+                  </div>
+                  <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-bold font-mono" style={{ color: devColor }}>
+                      {item.deviation > 0 ? '+' : ''}{item.deviation}%
+                    </span>
+                  </div>
+                  <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
+                    <span className="text-[10px] font-bold font-mono" style={{ color: profitColor }}>
+                      {item.profit >= 0 ? '+' : ''}{item.profit}
+                    </span>
+                  </div>
+                  <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-right">
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                      style={{ color: sig.color, backgroundColor: `${sig.color}15` }}
+                    >
+                      {sig.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
@@ -377,6 +502,9 @@ export default function QQOnlinePage() {
 
       {/* ── AI风控部（仅jiang可见）── */}
       {currentUserId === JIANG_ID && <AIRiskControlPanel />}
+
+      {/* ── 投注金额分析（仅jiang可见）── */}
+      {currentUserId === JIANG_ID && <AmountAnalysisPanel />}
 
       <div className="h-20" />
 
