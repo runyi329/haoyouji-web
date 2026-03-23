@@ -149,121 +149,122 @@ function ShortCycleMonitorPanel() {
 
   const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
 
-  // SVG仪表盘组件
+  // SVG仪表盘组件：大半圆形（240°弧），顶部圆弧底部平开口
   function GaugeMeter({ score, label, alertLevel, alertMsg, winRate, expectedRate, sigma }: {
     score: number; label: string; alertLevel: string; alertMsg: string;
     winRate: number; expectedRate: number; sigma: number;
   }) {
-    const size = 110;
-    const cx = size / 2;
-    const cy = size / 2 + 8;
-    const radius = 40;
-    const strokeWidth = 7;
-    // 弧形从210°到330°（底部开口的半圆）
-    const startAngle = 210;
-    const endAngle = 330;
-    const totalAngle = endAngle - startAngle; // 120°
-    // 指针角度
+    const svgW = 110;
+    const svgH = 90;
+    const cx = svgW / 2;
+    const cy = 62; // 圆心偏下，让弧顶部有空间
+    const radius = 38;
+    const strokeWidth = 8;
+    // 240°弧：从150°到390°（0°=正上方，顺时针）
+    // 即从左下方开始，经过顶部，到右下方结束
+    const startAngle = 150;
+    const endAngle = 390;
+    const totalAngle = endAngle - startAngle; // 240°
     const needleAngle = startAngle + (Math.min(100, Math.max(0, score)) / 100) * totalAngle;
 
-    function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
-      const rad = ((angleDeg - 90) * Math.PI) / 180;
-      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    function polar(cxP: number, cyP: number, r: number, deg: number) {
+      const rad = ((deg - 90) * Math.PI) / 180;
+      return { x: cxP + r * Math.cos(rad), y: cyP + r * Math.sin(rad) };
     }
 
     // 背景弧
-    const bgStart = polarToCartesian(cx, cy, radius, startAngle);
-    const bgEnd = polarToCartesian(cx, cy, radius, endAngle);
-    const bgArc = `M ${bgStart.x} ${bgStart.y} A ${radius} ${radius} 0 0 1 ${bgEnd.x} ${bgEnd.y}`;
+    const bgS = polar(cx, cy, radius, startAngle);
+    const bgE = polar(cx, cy, radius, endAngle);
+    const bgArc = `M ${bgS.x} ${bgS.y} A ${radius} ${radius} 0 1 1 ${bgE.x} ${bgE.y}`;
 
     // 进度弧
-    const progressEnd = polarToCartesian(cx, cy, radius, needleAngle);
-    const largeArc = (needleAngle - startAngle) > 180 ? 1 : 0;
-    const progressArc = `M ${bgStart.x} ${bgStart.y} A ${radius} ${radius} 0 ${largeArc} 1 ${progressEnd.x} ${progressEnd.y}`;
+    const pE = polar(cx, cy, radius, needleAngle);
+    const sweep = needleAngle - startAngle;
+    const largeArc = sweep > 180 ? 1 : 0;
+    const progressArc = `M ${bgS.x} ${bgS.y} A ${radius} ${radius} 0 ${largeArc} 1 ${pE.x} ${pE.y}`;
 
-    // 颜色根据分数渐变
-    let arcColor = '#3DD68C'; // 绿色安全
+    // 颜色
+    let arcColor = '#3DD68C';
     let glowColor = 'rgba(61,214,140,0.3)';
     if (score >= 80) { arcColor = '#F47068'; glowColor = 'rgba(244,112,104,0.4)'; }
     else if (score >= 50) { arcColor = '#E78340'; glowColor = 'rgba(231,131,64,0.35)'; }
     else if (score >= 25) { arcColor = '#C9A84C'; glowColor = 'rgba(201,168,76,0.3)'; }
 
     // 指针
-    const needleTip = polarToCartesian(cx, cy, radius - 10, needleAngle);
+    const needleTip = polar(cx, cy, radius - 12, needleAngle);
 
-    // 刻度标记
+    // 刻度：0 25 50 75 100
     const ticks = [0, 25, 50, 75, 100];
-    const tickLabels = ticks.map(t => {
+    const tickEls = ticks.map(t => {
       const angle = startAngle + (t / 100) * totalAngle;
-      const outer = polarToCartesian(cx, cy, radius + 10, angle);
-      const inner = polarToCartesian(cx, cy, radius + 4, angle);
-      return { t, outer, inner, angle };
+      const inner = polar(cx, cy, radius + 2, angle);
+      const outer = polar(cx, cy, radius + 7, angle);
+      const txtP = polar(cx, cy, radius + 13, angle);
+      return { t, inner, outer, txtP };
     });
+
+    // 唯一ID防止多个仪表盘filter冲突
+    const uid = label.replace(/[^a-zA-Z0-9]/g, '');
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '1 1 0', minWidth: 0 }}>
-        <div className="text-[10px] font-medium mb-1" style={{ color: LABEL_COLOR }}>{label}</div>
-        <svg width={size} height={size * 0.75} viewBox={`0 0 ${size} ${size * 0.75}`}>
+        <div className="text-[10px] font-medium mb-0.5" style={{ color: LABEL_COLOR }}>{label}</div>
+        <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}>
           <defs>
-            <filter id={`glow-${label}`}>
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            <filter id={`gl-${uid}`}>
+              <feGaussianBlur stdDeviation="2.5" result="b" />
+              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
-            <linearGradient id={`grad-${label}`} x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#3DD68C" />
-              <stop offset="40%" stopColor="#C9A84C" />
-              <stop offset="70%" stopColor="#E78340" />
-              <stop offset="100%" stopColor="#F47068" />
-            </linearGradient>
           </defs>
           {/* 背景弧 */}
-          <path d={bgArc} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} strokeLinecap="round" />
+          <path d={bgArc} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={strokeWidth} strokeLinecap="round" />
           {/* 进度弧 */}
           {score > 0 && (
             <path d={progressArc} fill="none" stroke={arcColor} strokeWidth={strokeWidth} strokeLinecap="round"
-              filter={`url(#glow-${label})`} />
+              filter={`url(#gl-${uid})`} />
           )}
-          {/* 刻度 */}
-          {tickLabels.map(({ t, outer, inner }) => (
+          {/* 刻度线 + 数字 */}
+          {tickEls.map(({ t, inner, outer, txtP }) => (
             <g key={t}>
               <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
-                stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-              <text x={outer.x} y={outer.y - 2} textAnchor="middle" fill={LABEL_COLOR}
-                fontSize="6" fontFamily="monospace">{t}</text>
+                stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
+              <text x={txtP.x} y={txtP.y + 2} textAnchor="middle" fill={LABEL_COLOR}
+                fontSize="7" fontFamily="monospace">{t}</text>
             </g>
           ))}
           {/* 指针 */}
           <line x1={cx} y1={cy} x2={needleTip.x} y2={needleTip.y}
             stroke={arcColor} strokeWidth="2" strokeLinecap="round"
-            filter={`url(#glow-${label})`} />
-          <circle cx={cx} cy={cy} r="3" fill={arcColor} />
+            filter={`url(#gl-${uid})`} />
+          <circle cx={cx} cy={cy} r="3.5" fill={arcColor} />
           <circle cx={cx} cy={cy} r="1.5" fill="#0D1B2A" />
-          {/* 中心分数 */}
-          <text x={cx} y={cy + 16} textAnchor="middle" fill={arcColor}
-            fontSize="14" fontWeight="bold" fontFamily="monospace">{score}</text>
+          {/* 分数显示在圆心下方 */}
+          <text x={cx} y={cy + 14} textAnchor="middle" fill={arcColor}
+            fontSize="13" fontWeight="bold" fontFamily="monospace">{score}</text>
         </svg>
         {/* 状态标签 */}
-        <div className="text-[8px] font-bold px-2 py-0.5 rounded-full mt-0.5"
+        <div className="text-[8px] font-bold px-2 py-0.5 rounded-full"
           style={{
             color: arcColor,
             backgroundColor: `${arcColor}15`,
             border: `1px solid ${arcColor}30`,
             textShadow: `0 0 6px ${glowColor}`,
+            marginTop: '-2px',
           }}>
           {alertMsg}
         </div>
         {/* 详细数据 */}
-        <div className="mt-1.5 w-full px-1" style={{ fontSize: '8px' }}>
+        <div className="mt-1 w-full px-0.5" style={{ fontSize: '8px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: LABEL_COLOR }}>实际胜率</span>
-            <span className="font-mono font-bold" style={{ color: winRate > expectedRate * 1.5 ? '#F47068' : DATA_COLOR }}>{winRate.toFixed(2)}%</span>
+            <span style={{ color: LABEL_COLOR }}>实际</span>
+            <span className="font-mono font-bold" style={{ color: winRate > expectedRate * 1.5 ? '#F47068' : DATA_COLOR }}>{winRate.toFixed(1)}%</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: LABEL_COLOR }}>期望胜率</span>
-            <span className="font-mono" style={{ color: LABEL_COLOR }}>{expectedRate.toFixed(2)}%</span>
+            <span style={{ color: LABEL_COLOR }}>期望</span>
+            <span className="font-mono" style={{ color: LABEL_COLOR }}>{expectedRate.toFixed(1)}%</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: LABEL_COLOR }}>Z-Score</span>
+            <span style={{ color: LABEL_COLOR }}>Z</span>
             <span className="font-mono font-bold" style={{ color: Math.abs(sigma) > 2 ? '#F47068' : Math.abs(sigma) > 1 ? '#C9A84C' : '#3DD68C' }}>
               {sigma > 0 ? '+' : ''}{sigma.toFixed(2)}σ
             </span>
