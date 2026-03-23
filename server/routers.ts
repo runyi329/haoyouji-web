@@ -13176,10 +13176,16 @@ insights 数组每项包含：
         const conn = await getDbConnection();
         if (!conn) throw new Error('数据库连接失败');
         const { id, ...fields } = input;
-        // 过滤掉undefined的字段
-        const validFields: Record<string, string> = {};
+        // 过滤掉undefined的字段，DECIMAL列空字符串转NULL
+        const DECIMAL_COLS = ['amount', 'balance'];
+        const validFields: Record<string, string | null> = {};
         for (const [k, v] of Object.entries(fields)) {
-          if (v !== undefined) validFields[k] = v;
+          if (v === undefined) continue;
+          if (DECIMAL_COLS.includes(k) && (v === '' || v.trim() === '')) {
+            validFields[k] = null;
+          } else {
+            validFields[k] = v;
+          }
         }
         if (Object.keys(validFields).length === 0) {
           return { success: true }; // 没有字段需要更新
