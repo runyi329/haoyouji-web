@@ -154,17 +154,18 @@ function ShortCycleMonitorPanel() {
     score: number; label: string; alertLevel: string; alertMsg: string;
     winRate: number; expectedRate: number; sigma: number;
   }) {
-    const svgW = 110;
-    const svgH = 78;
-    const cx = svgW / 2;
-    const cy = 64; // 圆心在底部附近，半圆向上
-    const radius = 40;
-    const strokeWidth = 8;
-    // 180°弧：从270°(9点位置)到450°(3点位置)
-    // 在我们的坐标系中 0°=正上方，顺时针
-    // 270°=正左(9点), 0°/360°=正上(12点), 90°=正右(3点)
+    // viewBox充足大，确保左右刻度数字不被裁切
+    const pad = 22; // 左右内边距
+    const radius = 48;
+    const cx = pad + radius; // 圆心X
+    const svgW = (pad + radius) * 2; // 对称
+    const cy = pad + radius; // 圆心Y在底部水平线
+    const svgH = cy + 6; // 底部留少量空间
+    const strokeWidth = 10;
+
+    // 180°弧：从9点(270°)经过12点(360°)到30点(450°)
     const startAngle = 270;
-    const endAngle = 450; // 450 = 360+90
+    const endAngle = 450;
     const totalAngle = 180;
     const needleAngle = startAngle + (Math.min(100, Math.max(0, score)) / 100) * totalAngle;
 
@@ -173,7 +174,7 @@ function ShortCycleMonitorPanel() {
       return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
     }
 
-    // 背景弧（9点到3点，经过12点）
+    // 背景弧
     const bgS = polar(radius, startAngle);
     const bgE = polar(radius, endAngle);
     const bgArc = `M ${bgS.x} ${bgS.y} A ${radius} ${radius} 0 0 1 ${bgE.x} ${bgE.y}`;
@@ -189,82 +190,96 @@ function ShortCycleMonitorPanel() {
     else if (score >= 50) { arcColor = '#E78340'; glowColor = 'rgba(231,131,64,0.35)'; }
     else if (score >= 25) { arcColor = '#C9A84C'; glowColor = 'rgba(201,168,76,0.3)'; }
 
-    // 指针
-    const needleTip = polar(radius - 12, needleAngle);
+    // 指针（从圆心到弧内侧）
+    const needleTip = polar(radius - 14, needleAngle);
 
     // 指针外围分数位置
-    const scoreTxtP = polar(radius + 14, needleAngle);
+    const scoreTxtP = polar(radius + 16, needleAngle);
 
     // 刻度：0 25 50 75 100
     const ticks = [0, 25, 50, 75, 100];
     const tickEls = ticks.map(t => {
       const angle = startAngle + (t / 100) * totalAngle;
-      const inner = polar(radius + 2, angle);
-      const outer = polar(radius + 7, angle);
-      const txtP = polar(radius + 14, angle);
-      return { t, inner, outer, txtP };
+      const inner = polar(radius + 3, angle);
+      const outer = polar(radius + 8, angle);
+      const txtP = polar(radius + 16, angle);
+      // 左侧刻度文字右对齐，右侧左对齐，顶部居中
+      let anchor = 'middle';
+      if (t === 0) anchor = 'end';
+      else if (t === 100) anchor = 'start';
+      return { t, inner, outer, txtP, anchor };
     });
 
     const uid = label.replace(/[^a-zA-Z0-9]/g, '');
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '1 1 0', minWidth: 0 }}>
-        <div className="text-[10px] font-medium mb-0.5" style={{ color: LABEL_COLOR }}>{label}</div>
-        <svg width={svgW} height={svgH} viewBox={`0 0 ${svgW} ${svgH}`}>
+        <div className="text-[10px] font-medium mb-1" style={{ color: LABEL_COLOR }}>{label}</div>
+        <svg width="100%" height="auto" viewBox={`0 0 ${svgW} ${svgH}`} style={{ maxWidth: '160px' }}>
           <defs>
             <filter id={`gl-${uid}`}>
-              <feGaussianBlur stdDeviation="2.5" result="b" />
+              <feGaussianBlur stdDeviation="3" result="b" />
               <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
           </defs>
           {/* 背景弧 */}
-          <path d={bgArc} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={strokeWidth} strokeLinecap="round" />
+          <path d={bgArc} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} strokeLinecap="round" />
           {/* 进度弧 */}
           {score > 0 && (
             <path d={progressArc} fill="none" stroke={arcColor} strokeWidth={strokeWidth} strokeLinecap="round"
               filter={`url(#gl-${uid})`} />
           )}
           {/* 刻度线 + 数字 */}
-          {tickEls.map(({ t, inner, outer, txtP }) => (
+          {tickEls.map(({ t, inner, outer, txtP, anchor }) => (
             <g key={t}>
               <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
-                stroke="rgba(255,255,255,0.2)" strokeWidth="1" />
-              <text x={txtP.x} y={txtP.y + 2} textAnchor="middle" fill={LABEL_COLOR}
-                fontSize="7" fontFamily="monospace">{t}</text>
+                stroke="rgba(255,255,255,0.25)" strokeWidth="1.2" />
+              <text x={txtP.x} y={txtP.y + 3} textAnchor={anchor} fill={LABEL_COLOR}
+                fontSize="9" fontFamily="monospace">{t}</text>
             </g>
           ))}
-          {/* 指针外围当前分数（用强调色区分于预设刻度） */}
-          <text x={scoreTxtP.x} y={scoreTxtP.y + 2} textAnchor="middle" fill={arcColor}
-            fontSize="7" fontWeight="bold" fontFamily="monospace">{score}</text>
+          {/* 指针外围当前分数（强调色） */}
+          {(() => {
+            let sAnchor = 'middle';
+            const normAngle = ((needleAngle % 360) + 360) % 360;
+            if (normAngle > 180 && normAngle < 350) sAnchor = 'end';
+            else if (normAngle > 10 && normAngle < 180) sAnchor = 'start';
+            return (
+              <text x={scoreTxtP.x} y={scoreTxtP.y + 3} textAnchor={sAnchor} fill={arcColor}
+                fontSize="9" fontWeight="bold" fontFamily="monospace">{score}</text>
+            );
+          })()}
           {/* 指针 */}
           <line x1={cx} y1={cy} x2={needleTip.x} y2={needleTip.y}
-            stroke={arcColor} strokeWidth="2" strokeLinecap="round"
+            stroke={arcColor} strokeWidth="2.5" strokeLinecap="round"
             filter={`url(#gl-${uid})`} />
-          <circle cx={cx} cy={cy} r="3.5" fill={arcColor} />
-          <circle cx={cx} cy={cy} r="1.5" fill="#0D1B2A" />
+          <circle cx={cx} cy={cy} r="4" fill={arcColor} />
+          <circle cx={cx} cy={cy} r="2" fill="#0D1B2A" />
+          {/* 底部水平基线 */}
+          <line x1={cx - radius - 2} y1={cy} x2={cx + radius + 2} y2={cy}
+            stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
         </svg>
         {/* 状态标签 */}
-        <div className="text-[8px] font-bold px-2 py-0.5 rounded-full"
+        <div className="text-[9px] font-bold px-3 py-0.5 rounded-full mt-1"
           style={{
             color: arcColor,
             backgroundColor: `${arcColor}15`,
             border: `1px solid ${arcColor}30`,
             textShadow: `0 0 6px ${glowColor}`,
-            marginTop: '1px',
           }}>
           {alertMsg}
         </div>
         {/* 详细数据 */}
-        <div className="mt-1 w-full px-0.5" style={{ fontSize: '8px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div className="mt-1.5 w-full" style={{ fontSize: '9px', maxWidth: '140px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '2px' }}>
             <span style={{ color: LABEL_COLOR }}>实际胜率</span>
             <span className="font-mono font-bold" style={{ color: winRate > expectedRate * 1.5 ? '#F47068' : DATA_COLOR }}>{winRate.toFixed(1)}%</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '2px' }}>
             <span style={{ color: LABEL_COLOR }}>期望胜率</span>
             <span className="font-mono" style={{ color: LABEL_COLOR }}>{expectedRate.toFixed(1)}%</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '2px' }}>
             <span style={{ color: LABEL_COLOR }}>标准差偏离</span>
             <span className="font-mono font-bold" style={{ color: Math.abs(sigma) > 2 ? '#F47068' : Math.abs(sigma) > 1 ? '#C9A84C' : '#3DD68C' }}>
               {sigma > 0 ? '+' : ''}{sigma.toFixed(2)}σ
@@ -293,8 +308,8 @@ function ShortCycleMonitorPanel() {
 
         {!isLoading && monitorData?.windows && monitorData.windows.length > 0 && (
           <>
-            {/* 三个仪表盘横排 */}
-            <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+            {/* 两个仪表盘横排居中 */}
+            <div style={{ display: 'flex', gap: '16px', width: '100%', justifyContent: 'center' }}>
               {monitorData.windows.map((w: any) => (
                 <GaugeMeter
                   key={w.size}
