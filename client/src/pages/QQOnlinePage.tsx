@@ -182,53 +182,60 @@ export default function QQOnlinePage() {
               <span className="text-[10px] text-white/50">≈{settledUSDT} U</span>
             </div>
           </div>
-          {/* 第4个：投注统计（仅jiang可见时显示数据，否则空白） */}
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
-            {currentUserId === JIANG_ID && (
-              <>
-                <div className="text-[11px] text-white/55 mb-1">投注次数</div>
-                <div className="text-sm font-bold text-white font-mono">{tradeStats?.total ?? 0} 次</div>
-                <div className="flex gap-3 mt-2">
+          {/* 投注统计（横跨两列，仅jiang可见） */}
+          {currentUserId === JIANG_ID && (
+            <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+              <div className="text-[11px] text-white/55 mb-2">投注统计</div>
+              <div className="grid grid-cols-2 gap-0">
+                {/* 左列：次数 */}
+                <div className="flex flex-col gap-2 pr-3 border-r border-white/10">
                   <div>
-                    <div className="text-[10px] text-white/50">中奖</div>
-                    <div className="text-sm font-bold text-green-300 font-mono">{tradeStats?.won ?? 0}</div>
+                    <div className="text-[10px] text-white/50 mb-0.5">投注次数</div>
+                    <div className="text-base font-bold text-white font-mono">{tradeStats?.total ?? 0} 次</div>
                   </div>
                   <div>
-                    <div className="text-[10px] text-white/50">未中</div>
-                    <div className="text-sm font-bold text-red-300 font-mono">{tradeStats?.lost ?? 0}</div>
+                    <div className="text-[10px] text-white/50 mb-0.5">中奖</div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-sm font-bold text-green-300 font-mono">{tradeStats?.won ?? 0} 次</span>
+                      <span className="text-[10px] text-green-400/70">
+                        {tradeStats?.total ? `${((tradeStats.won / tradeStats.total) * 100).toFixed(1)}%` : '--'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-white/50 mb-0.5">未中奖</div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-sm font-bold text-red-300 font-mono">{tradeStats?.lost ?? 0} 次</span>
+                      <span className="text-[10px] text-red-400/70">
+                        {tradeStats?.total ? `${((tradeStats.lost / tradeStats.total) * 100).toFixed(1)}%` : '--'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </>
-            )}
-          </div>
-          {/* 第5个：订单金额统计（仅jiang可见） */}
-          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
-            {currentUserId === JIANG_ID && (
-              <>
-                <div className="text-[11px] text-white/55 mb-2">订单金额统计</div>
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-white/50">最大订单</span>
-                    <span className="text-sm font-bold text-white font-mono">
-                      {tradeStats?.maxAmount != null ? `¥${tradeStats.maxAmount.toFixed(2)}` : '--'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-white/50">最小订单</span>
-                    <span className="text-sm font-bold text-white font-mono">
-                      {tradeStats?.minAmount != null ? `¥${tradeStats.minAmount.toFixed(2)}` : '--'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] text-white/50">平均订单</span>
-                    <span className="text-sm font-bold text-yellow-200 font-mono">
+                {/* 右列：金额 */}
+                <div className="flex flex-col gap-2 pl-3">
+                  <div>
+                    <div className="text-[10px] text-white/50 mb-0.5">平均投注额</div>
+                    <div className="text-sm font-bold text-yellow-200 font-mono">
                       {tradeStats?.avgAmount != null ? `¥${tradeStats.avgAmount.toFixed(2)}` : '--'}
-                    </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-white/50 mb-0.5">最大投注额</div>
+                    <div className="text-sm font-bold text-white font-mono">
+                      {tradeStats?.maxAmount != null ? `¥${tradeStats.maxAmount.toFixed(2)}` : '--'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-white/50 mb-0.5">最小投注额</div>
+                    <div className="text-sm font-bold text-white font-mono">
+                      {tradeStats?.minAmount != null ? `¥${tradeStats.minAmount.toFixed(2)}` : '--'}
+                    </div>
                   </div>
                 </div>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
