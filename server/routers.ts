@@ -13512,6 +13512,63 @@ insights 数组每项包含：
       }
     }),
 
+  // ========== 投注赔率配置（采样计算器用） ==========
+  getBetOddsConfig: protectedProcedure
+    .query(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { betContents: [], oddsMap: {} };
+        // 1. 从订单表获取所有去重的投注内容
+        const [contentRows] = await (conn as any).execute(
+          `SELECT DISTINCT content FROM qq_trade_records WHERE content IS NOT NULL AND TRIM(content) != '' ORDER BY content`
+        );
+        const betContents = (contentRows as any[]).map((r: any) => r.content);
+        // 2. 从赔率配置表获取已配置的赔率
+        const [oddsRows] = await (conn as any).execute(
+          `SELECT content, odds FROM qq_bet_odds WHERE odds IS NOT NULL`
+        );
+        const oddsMap: Record<string, number> = {};
+        for (const r of oddsRows as any[]) {
+          oddsMap[r.content] = Number(r.odds);
+        }
+        return { betContents, oddsMap };
+      } catch (err) {
+        console.error('[getBetOddsConfig] 失败:', err);
+        return { betContents: [], oddsMap: {} };
+      }
+    }),
+
+  updateBetOdds: protectedProcedure
+    .input(z.object({
+      content: z.string(),
+      odds: z.number().positive(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await (conn as any).execute(
+          `INSERT INTO qq_bet_odds (content, odds) VALUES (?, ?)
+           ON DUPLICATE KEY UPDATE odds = VALUES(odds)`,
+          [input.content, input.odds]
+        );
+        return { success: true };
+      } catch (err) {
+        console.error('[updateBetOdds] 失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '保存赔率失败' });
+      }
+    }),
+
     // ========== 已结利息管理 ==========
   // 获取已结利息列表
   getInterestSettlements: protectedProcedure
