@@ -13067,23 +13067,39 @@ insights 数组每项包含：
       }
       try {
         const { invokeLLM } = await import('./_core/llm');
-        const prompt = `请仓细分析这张彩票/购彩订单截图，提取其中的数据。
-每一条记录包含以下字段：用户名、订单号、彩种、玩法、期号、时间、倍数、金额、内容、中奖状态、赔率、余额。
-如果某个字段不存在或无法识别，请留空。
-请以JSON格式返回，格式如下：
+        const prompt = `这是一张彩票投注记录截图，格式固定。每条记录包含：
+- 订单号（如 OXIMQLJQGNM）
+- 彩种（如 奇趣腾讯分分彩）
+- 玩法（如 后二直选跨度、前二直选跨度）
+- 期号（如 202603230646）
+- 时间（如 2026-03-23 10:46）
+- 倍数（如 1）
+- 投注金额（截图中显示的原始数字，如 0.340）
+- 投注内容（如 0, 3, 6, 9）
+- 中奖金额（截图中显示的原始数字，如 0 表示未中奖）
+- 状态（未中奖/已中奖）
+
+重要规则：
+1. 金额必须×100转换：截图中0.340实际是34元，0.360实际是36元
+2. 中奖金额也×100：截图中0就是0，如果是0.850则是85
+3. 用户名统一填写空字符串
+4. 赔率和余额如果截图中没有则留空
+5. 请仔细识别每一条记录，不要遗漏
+
+请以JSON格式返回：
 {
   "records": [
     {
       "username": "",
-      "order_no": "",
-      "lottery_type": "",
-      "play_method": "",
-      "issue_no": "",
-      "trade_time": "",
-      "multiplier": "",
-      "amount": "",
-      "content": "",
-      "win_status": "",
+      "order_no": "订单号",
+      "lottery_type": "彩种",
+      "play_method": "玩法",
+      "issue_no": "期号",
+      "trade_time": "时间",
+      "multiplier": "倍数",
+      "amount": "金额(已×100)",
+      "content": "投注内容",
+      "win_status": "中奖金额(已×100)，未中奖填0",
       "odds": "",
       "balance": ""
     }
@@ -13230,12 +13246,12 @@ insights 数组每项包含：
           total: Number(row.total) || 0,
           won: Number(row.won) || 0,
           lost: Number(row.lost) || 0,
-          maxAmount: row.max_amount != null ? Number(row.max_amount) * 1000 : null,
-          minAmount: row.min_amount != null ? Number(row.min_amount) * 1000 : null,
-          avgAmount: row.avg_amount != null ? Number(row.avg_amount) * 1000 : null,
-          maxPayout: row.max_payout != null ? Number(row.max_payout) * 1000 : null,
-          minPayout: row.min_payout != null ? Number(row.min_payout) * 1000 : null,
-          avgPayout: row.avg_payout != null ? Number(row.avg_payout) * 1000 : null,
+          maxAmount: row.max_amount != null ? Number(row.max_amount) * 100 : null,
+          minAmount: row.min_amount != null ? Number(row.min_amount) * 100 : null,
+          avgAmount: row.avg_amount != null ? Number(row.avg_amount) * 100 : null,
+          maxPayout: row.max_payout != null ? Number(row.max_payout) * 100 : null,
+          minPayout: row.min_payout != null ? Number(row.min_payout) * 100 : null,
+          avgPayout: row.avg_payout != null ? Number(row.avg_payout) * 100 : null,
         };
       } catch (err) {
         console.error('[QQ交易] 统计失败:', err);
