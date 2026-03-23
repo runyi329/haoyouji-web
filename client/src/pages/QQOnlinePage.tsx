@@ -85,12 +85,12 @@ function AIRiskControlPanel() {
           <>
             {/* \u8868\u5934 */}
             <div style={{ display: 'flex', width: '100%', paddingBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.08)', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ width: '72px', flexShrink: 0 }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>号码</span></div>
-              <div style={{ width: '28px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>次数</span></div>
-              <div style={{ width: '40px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>实际</span></div>
-              <div style={{ width: '40px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>理论</span></div>
-              <div style={{ width: '42px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
-              <div style={{ width: '52px', flexShrink: 0, textAlign: 'right' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>正态分布</span></div>
+              <div style={{ width: '64px', flexShrink: 0 }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>号码</span></div>
+              <div style={{ width: '24px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>次数</span></div>
+              <div style={{ width: '36px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>实际</span></div>
+              <div style={{ width: '36px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>理论</span></div>
+              <div style={{ width: '38px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
+              <div style={{ width: '46px', flexShrink: 0, textAlign: 'right' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>正态分布</span></div>
             </div>
 
             {/* \u6570\u636e\u884c */}
@@ -111,29 +111,29 @@ function AIRiskControlPanel() {
                     borderBottom: idx < riskData.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none'
                   }}
                 >
-                  <div style={{ width: '72px', flexShrink: 0 }}>
+                  <div style={{ width: '64px', flexShrink: 0 }}>
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR, whiteSpace: 'nowrap' }}>
                       {item.digits.join(',')}
                     </span>
                   </div>
-                  <div style={{ width: '28px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '24px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.betCount}</span>
                   </div>
-                  <div style={{ width: '40px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '36px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{Number(item.actualPct).toFixed(1)}%</span>
                   </div>
-                  <div style={{ width: '40px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '36px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{Number(item.theoryPct).toFixed(1)}%</span>
                   </div>
-                  <div style={{ width: '42px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '38px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-bold font-mono" style={{ color: devColor }}>
                       {item.deviation > 0 ? '+' : ''}{Number(item.deviation).toFixed(1)}%
                     </span>
                   </div>
-                  <div style={{ width: '52px', flexShrink: 0, textAlign: 'right' }}>
+                  <div style={{ width: '46px', flexShrink: 0, textAlign: 'right' }}>
                     <span
-                      className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                      style={{ color: sig.color, backgroundColor: `${sig.color}15` }}
+                      className="text-[9px] font-bold px-1 py-0.5 rounded"
+                      style={{ color: sig.color, backgroundColor: `${sig.color}15`, whiteSpace: 'nowrap', display: 'inline-block' }}
                     >
                       {sig.label}
                     </span>
@@ -586,12 +586,12 @@ function AmountAnalysisPanel() {
 
             {/* 表头 */}
             <div style={{ display: 'flex', width: '100%', paddingBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.08)', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ width: '64px', flexShrink: 0 }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>金额</span></div>
-              <div style={{ width: '24px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>次数</span></div>
-              <div style={{ width: '38px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>实际</span></div>
-              <div style={{ width: '38px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>理论</span></div>
-              <div style={{ width: '38px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
-              <div style={{ width: '44px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>获利</span></div>
+              <div style={{ width: '58px', flexShrink: 0 }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>金额</span></div>
+              <div style={{ width: '22px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>次数</span></div>
+              <div style={{ width: '34px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>实际</span></div>
+              <div style={{ width: '34px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>理论</span></div>
+              <div style={{ width: '36px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>偏离</span></div>
+              <div style={{ width: '40px', flexShrink: 0, textAlign: 'center' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>获利</span></div>
               <div style={{ width: '40px', flexShrink: 0, textAlign: 'right' }} className="text-[9px] font-medium"><span style={{ color: LABEL_COLOR }}>正态</span></div>
             </div>
 
@@ -614,34 +614,34 @@ function AmountAnalysisPanel() {
                     borderBottom: idx < amountData.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none'
                   }}
                 >
-                  <div style={{ width: '64px', flexShrink: 0 }}>
+                  <div style={{ width: '58px', flexShrink: 0 }}>
                     <span className="text-[10px] font-bold font-mono" style={{ color: GOLD_COLOR, whiteSpace: 'nowrap' }}>
                       {item.amountYuan.toFixed(2)}元
                     </span>
                   </div>
-                  <div style={{ width: '24px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '22px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.betCount}</span>
                   </div>
-                  <div style={{ width: '38px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '34px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{Number(item.actualPct).toFixed(1)}%</span>
                   </div>
-                  <div style={{ width: '38px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '34px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{Number(item.theoryPct).toFixed(1)}%</span>
                   </div>
-                  <div style={{ width: '38px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '36px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-bold font-mono" style={{ color: devColor }}>
                       {item.deviation > 0 ? '+' : ''}{Number(item.deviation).toFixed(1)}%
                     </span>
                   </div>
-                  <div style={{ width: '44px', flexShrink: 0, textAlign: 'center' }}>
+                  <div style={{ width: '40px', flexShrink: 0, textAlign: 'center' }}>
                     <span className="text-[10px] font-bold font-mono" style={{ color: profitColor }}>
                       {item.profit >= 0 ? '+' : ''}{item.profit.toFixed(1)}
                     </span>
                   </div>
                   <div style={{ width: '40px', flexShrink: 0, textAlign: 'right' }}>
                     <span
-                      className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                      style={{ color: sig.color, backgroundColor: `${sig.color}15` }}
+                      className="text-[9px] font-bold px-1 py-0.5 rounded"
+                      style={{ color: sig.color, backgroundColor: `${sig.color}15`, whiteSpace: 'nowrap', display: 'inline-block' }}
                     >
                       {sig.label}
                     </span>
