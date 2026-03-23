@@ -690,6 +690,7 @@ export default function QQTradeRecords() {
                       />
                     </th>
                   )}
+                  <th className="px-1 py-2 text-center border-b border-gray-800 w-8 text-gray-600">#</th>
                   <th className="px-2 py-2 text-center border-b border-gray-800 w-16">操作</th>
                   {FIELDS.map(f => (
                     <th
@@ -704,12 +705,13 @@ export default function QQTradeRecords() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={batchMode ? 15 : 14} className="text-center py-10 text-gray-500">加载中...</td></tr>
+                  <tr><td colSpan={batchMode ? 16 : 15} className="text-center py-10 text-gray-500">加载中...</td></tr>
                 ) : list.length === 0 ? (
-                  <tr><td colSpan={batchMode ? 15 : 14} className="text-center py-10 text-gray-500">暂无数据</td></tr>
+                  <tr><td colSpan={batchMode ? 16 : 15} className="text-center py-10 text-gray-500">暂无数据</td></tr>
                 ) : (
-                  list.map((row: any) => {
+                  list.map((row: any, rowIndex: number) => {
                     const isEditing = editingId === row.id;
+                    const rowNumber = rowIndex + 1;
                     // 自动计算赔率：中奖金额 / 投注额
                     const amt = parseFloat(row.amount) || 0;
                     const winAmt = parseFloat(row.win_amount) || 0;
@@ -731,7 +733,9 @@ export default function QQTradeRecords() {
                             />
                           </td>
                         )}
-                        {/* 操作列 */}
+                        {/* 编号列 */}
+                        <td className="px-1 py-2 text-center text-gray-600 text-[10px]">{rowNumber}</td>
+                        {/* 操作列 */
                         <td className="px-1 py-2 text-center">
                           <div className="flex items-center justify-center gap-1">
                             {isEditing ? (
