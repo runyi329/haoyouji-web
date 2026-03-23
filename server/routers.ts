@@ -12958,6 +12958,9 @@ insights 数组每项包含：
     .input(z.object({
       page: z.number().min(1).default(1),
       pageSize: z.number().min(1).max(200).default(50),
+      search: z.string().optional(),
+      sortField: z.string().optional(),
+      sortOrder: z.enum(['asc', 'desc']).optional(),
     }))
     .query(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
@@ -12970,15 +12973,28 @@ insights 数组每项包含：
         if (!conn) return { list: [], total: 0 };
         const offset = (input.page - 1) * input.pageSize;
         const limit = input.pageSize;
+        const allowedSortFields = ['id','username','order_no','lottery_type','play_method','issue_no','trade_time','multiplier','amount','win_status','odds','balance'];
+        const sortField = allowedSortFields.includes(input.sortField || '') ? input.sortField : 'id';
+        const sortOrder = input.sortOrder === 'asc' ? 'ASC' : 'DESC';
+        let whereClause = '';
+        let params: any[] = [];
+        if (input.search && input.search.trim()) {
+          const s = `%${input.search.trim()}%`;
+          whereClause = `WHERE username LIKE ? OR order_no LIKE ? OR lottery_type LIKE ? OR play_method LIKE ? OR issue_no LIKE ? OR content LIKE ?`;
+          params = [s, s, s, s, s, s];
+        }
         const [rows] = await (conn as any).execute(
           `SELECT id, username, order_no, lottery_type, play_method, issue_no, trade_time,
                   multiplier, amount, content, win_status, odds, balance, created_at, batch_id
            FROM qq_trade_records
-           ORDER BY id DESC
-           LIMIT ${Number(limit)} OFFSET ${Number(offset)}`
+           ${whereClause}
+           ORDER BY ${sortField} ${sortOrder}
+           LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+          params
         );
         const [countRows] = await (conn as any).execute(
-          `SELECT COUNT(*) as total FROM qq_trade_records`
+          `SELECT COUNT(*) as total FROM qq_trade_records ${whereClause}`,
+          params
         );
         const total = Number((countRows as any[])[0]?.total) || 0;
         return { list: rows as any[], total };
@@ -13111,6 +13127,61 @@ insights 数组每项包含：
         return { success: true };
       } catch (err) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '删除失败' });
+      }
+    }),
+
+  // 交易记录：单条删除
+  deleteQQTradeRecord: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        await (conn as any).execute(`DELETE FROM qq_trade_records WHERE id = ?`, [input.id]);
+        return { success: true };
+      } catch (err) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '删除失败' });
+      }
+    }),
+
+  // 交易记录：单条编辑
+  updateQQTradeRecord: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      username: z.string().optional(),
+      order_no: z.string().optional(),
+      lottery_type: z.string().optional(),
+      play_method: z.string().optional(),
+      issue_no: z.string().optional(),
+      trade_time: z.string().optional(),
+      multiplier: z.string().optional(),
+      amount: z.string().optional(),
+      content: z.string().optional(),
+      win_status: z.string().optional(),
+      odds: z.string().optional(),
+      balance: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        const { id, ...fields } = input;
+        const sets = Object.keys(fields).map(k => `${k} = ?`).join(', ');
+        const vals = [...Object.values(fields), id];
+        await (conn as any).execute(`UPDATE qq_trade_records SET ${sets} WHERE id = ?`, vals);
+        return { success: true };
+      } catch (err) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '更新失败' });
       }
     }),
 

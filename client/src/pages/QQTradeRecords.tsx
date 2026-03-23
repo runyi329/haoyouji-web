@@ -1,7 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2 } from "lucide-react";
+import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Edit2 } from "lucide-react";
 
 const FIELDS = [
   { key: "username", label: "用户名" },
@@ -44,8 +44,18 @@ export default function QQTradeRecords() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // 搜索和排序
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [sortField, setSortField] = useState<string>("id");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  // 行内编辑
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingRow, setEditingRow] = useState<TradeRow>(emptyRow());
+
   const { data, isLoading, refetch } = trpc.getQQTradeRecords.useQuery(
-    { page, pageSize },
+    { page, pageSize, search: search || undefined, sortField, sortOrder },
     { refetchOnWindowFocus: false }
   );
   const list = data?.list || [];
@@ -63,6 +73,27 @@ export default function QQTradeRecords() {
     onError: (err) => {
       showToast("导入失败：" + err.message);
       setSaving(false);
+    },
+  });
+
+  const deleteMutation = trpc.deleteQQTradeRecord.useMutation({
+    onSuccess: () => {
+      showToast("已删除");
+      refetch();
+    },
+    onError: (err) => {
+      showToast("删除失败：" + err.message);
+    },
+  });
+
+  const updateMutation = trpc.updateQQTradeRecord.useMutation({
+    onSuccess: () => {
+      showToast("已保存");
+      setEditingId(null);
+      refetch();
+    },
+    onError: (err) => {
+      showToast("保存失败：" + err.message);
     },
   });
 
@@ -133,12 +164,10 @@ export default function QQTradeRecords() {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    // 解析CSV/Excel（简单CSV解析）
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const lines = text.split(/\r?\n/).filter(l => l.trim());
-      // 跳过表头行（如果第一行是中文字段名）
       const startIdx = lines[0] && lines[0].includes("用户名") ? 1 : 0;
       const rows: TradeRow[] = [];
       for (let i = startIdx; i < lines.length; i++) {
@@ -180,6 +209,50 @@ export default function QQTradeRecords() {
 
   function removeRow(idx: number) {
     setPendingRows(rows => rows.length === 1 ? [emptyRow()] : rows.filter((_, i) => i !== idx));
+  }
+
+  function handleSort(field: string) {
+    if (sortField === field) {
+      setSortOrder(o => o === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("desc");
+    }
+    setPage(1);
+  }
+
+  function handleSearch() {
+    setSearch(searchInput);
+    setPage(1);
+  }
+
+  function startEdit(row: any) {
+    setEditingId(row.id);
+    setEditingRow({
+      username: row.username || "",
+      order_no: row.order_no || "",
+      lottery_type: row.lottery_type || "",
+      play_method: row.play_method || "",
+      issue_no: row.issue_no || "",
+      trade_time: row.trade_time || "",
+      multiplier: row.multiplier || "",
+      amount: row.amount || "",
+      content: row.content || "",
+      win_status: row.win_status || "",
+      odds: row.odds || "",
+      balance: row.balance || "",
+    });
+  }
+
+  function saveEdit(id: number) {
+    updateMutation.mutate({ id, ...editingRow });
+  }
+
+  function SortIcon({ field }: { field: string }) {
+    if (sortField !== field) return <ArrowUpDown size={10} className="text-gray-600 inline ml-0.5" />;
+    return sortOrder === "asc"
+      ? <ArrowUp size={10} className="text-blue-400 inline ml-0.5" />
+      : <ArrowDown size={10} className="text-blue-400 inline ml-0.5" />;
   }
 
   return (
@@ -269,49 +342,139 @@ export default function QQTradeRecords() {
             <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileChange} />
           </div>
 
-          {/* 数据列表 */}
-          <div className="px-4 pt-2">
-            <div className="text-xs text-gray-500 mb-2">共 {total} 条记录</div>
+          {/* 搜索栏 */}
+          <div className="px-4 pb-2">
+            <div className="flex gap-2">
+              <div className="flex-1 flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-2">
+                <Search size={14} className="text-gray-500 flex-shrink-0" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  placeholder="搜索用户名、订单号、彩种、内容..."
+                  className="flex-1 bg-transparent text-white text-xs outline-none placeholder-gray-600"
+                />
+                {searchInput && (
+                  <button onClick={() => { setSearchInput(""); setSearch(""); setPage(1); }}>
+                    <X size={12} className="text-gray-500" />
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={handleSearch}
+                className="px-3 py-2 bg-blue-600 rounded-lg text-xs text-white active:bg-blue-500"
+              >
+                搜索
+              </button>
+            </div>
+            {search && (
+              <div className="text-xs text-blue-400 mt-1">搜索：{search} · 共 {total} 条</div>
+            )}
           </div>
+
+          {/* 数据列表 */}
+          {!search && (
+            <div className="px-4 pb-1">
+              <div className="text-xs text-gray-500">共 {total} 条记录</div>
+            </div>
+          )}
 
           {/* 表格 */}
           <div className="overflow-x-auto">
-            <table className="w-full text-xs min-w-[900px]">
+            <table className="w-full text-xs min-w-[1000px]">
               <thead>
                 <tr className="bg-gray-900 text-gray-500">
+                  <th className="px-2 py-2 text-center border-b border-gray-800 w-16">操作</th>
                   {FIELDS.map(f => (
-                    <th key={f.key} className="px-2 py-2 text-center whitespace-nowrap border-b border-gray-800">{f.label}</th>
+                    <th
+                      key={f.key}
+                      className="px-2 py-2 text-center whitespace-nowrap border-b border-gray-800 cursor-pointer active:bg-gray-800 select-none"
+                      onClick={() => handleSort(f.key)}
+                    >
+                      {f.label}<SortIcon field={f.key} />
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={12} className="text-center py-10 text-gray-500">加载中...</td></tr>
+                  <tr><td colSpan={13} className="text-center py-10 text-gray-500">加载中...</td></tr>
                 ) : list.length === 0 ? (
-                  <tr><td colSpan={12} className="text-center py-10 text-gray-500">暂无数据</td></tr>
+                  <tr><td colSpan={13} className="text-center py-10 text-gray-500">暂无数据</td></tr>
                 ) : (
-                  list.map((row: any) => (
-                    <tr key={row.id} className="border-b border-gray-800 hover:bg-gray-900">
-                      {FIELDS.map(f => {
-                        if (f.key === 'win_status') {
-                          const val = Number(row[f.key]);
-                          const won = !isNaN(val) && val > 0;
+                  list.map((row: any) => {
+                    const isEditing = editingId === row.id;
+                    return (
+                      <tr key={row.id} className={`border-b border-gray-800 ${isEditing ? 'bg-gray-800' : 'hover:bg-gray-900'}`}>
+                        {/* 操作列 */}
+                        <td className="px-1 py-2 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {isEditing ? (
+                              <>
+                                <button
+                                  onClick={() => saveEdit(row.id)}
+                                  disabled={updateMutation.isPending}
+                                  className="text-green-400 active:text-green-300 disabled:opacity-50"
+                                >
+                                  {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                                </button>
+                                <button onClick={() => setEditingId(null)} className="text-gray-500 active:text-gray-300">
+                                  <X size={13} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button onClick={() => startEdit(row)} className="text-blue-400 active:text-blue-300">
+                                  <Edit2 size={13} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm('确认删除这条记录？')) {
+                                      deleteMutation.mutate({ id: row.id });
+                                    }
+                                  }}
+                                  className="text-gray-600 active:text-red-400"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        {FIELDS.map(f => {
+                          if (isEditing) {
+                            return (
+                              <td key={f.key} className="px-1 py-1">
+                                <input
+                                  type="text"
+                                  value={editingRow[f.key as FieldKey]}
+                                  onChange={e => setEditingRow(r => ({ ...r, [f.key]: e.target.value }))}
+                                  className="w-full bg-gray-700 text-white text-xs px-1.5 py-1 rounded border border-gray-600 focus:border-blue-500 outline-none min-w-[64px]"
+                                />
+                              </td>
+                            );
+                          }
+                          if (f.key === 'win_status') {
+                            const val = Number(row[f.key]);
+                            const won = !isNaN(val) && val > 0;
+                            return (
+                              <td key={f.key} className="px-2 py-2 text-center whitespace-nowrap">
+                                <span className={won ? 'text-green-400 font-bold' : 'text-red-400'}>
+                                  {won ? '已中奖' : '未中奖'}
+                                </span>
+                              </td>
+                            );
+                          }
                           return (
-                            <td key={f.key} className="px-2 py-2 text-center whitespace-nowrap">
-                              <span className={won ? 'text-green-400 font-bold' : 'text-red-400'}>
-                                {won ? '已中奖' : '未中奖'}
-                              </span>
+                            <td key={f.key} className="px-2 py-2 text-center text-gray-300 whitespace-nowrap">
+                              {row[f.key] ?? ""}
                             </td>
                           );
-                        }
-                        return (
-                          <td key={f.key} className="px-2 py-2 text-center text-gray-300 whitespace-nowrap">
-                            {row[f.key] ?? ""}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))
+                        })}
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
