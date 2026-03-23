@@ -13723,8 +13723,12 @@ insights 数组每项包含：
           }
           const combos = digits.reduce((sum, d) => sum + (COMBO_MAP[d] || 0), 0);
           const theoryPct = combos / 100;
-          const isWin = Number(row.win_status) > 0 ? 1 : 0;
-          const winAmount = row.win_amount ? Number(row.win_amount) : 0;
+          // win_status可能是文字"已中奖"/"未中奖"或数字
+          const wsStr = String(row.win_status || '').trim();
+          const isWin = (wsStr === '已中奖' || wsStr === '1' || wsStr === 'true' || Number(wsStr) > 0) ? 1 : 0;
+          // win_amount也需要乘100转换为元
+          const rawWinAmt = row.win_amount ? Number(row.win_amount) : 0;
+          const winAmount = Math.round(rawWinAmt * 100);
           if (!amountGroups[amtKey]) {
             amountGroups[amtKey] = { betCount: 0, winCount: 0, theoryPctSum: 0, totalBet: 0, totalWin: 0 };
           }
