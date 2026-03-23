@@ -14078,6 +14078,45 @@ insights 数组每项包含：
       }
     }),
 
+  // 从交易记录自动同步赔率到qq_bet_odds表
+  syncBetOddsFromRecords: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 从交易记录中按投注内容分组，取最大赔率(win_amount/amount)作为该内容的赔率
+        const [rows] = await (conn as any).execute(
+          `SELECT content, MAX(ROUND(win_amount/amount, 3)) AS calc_odds
+           FROM qq_trade_records
+           WHERE win_amount > 0 AND amount > 0
+             AND content IS NOT NULL AND TRIM(content) != ''
+           GROUP BY content
+           ORDER BY content`
+        );
+        let synced = 0;
+        for (const r of rows as any[]) {
+          const content = r.content;
+          const odds = Number(r.calc_odds);
+          if (!content || isNaN(odds) || odds <= 0) continue;
+          await (conn as any).execute(
+            `INSERT INTO qq_bet_odds (content, odds) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE odds = VALUES(odds)`,
+            [content, odds]
+          );
+          synced++;
+        }
+        return { success: true, synced };
+      } catch (err) {
+        console.error('[syncBetOddsFromRecords] 失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '同步赔率失败' });
+      }
+    }),
+
     // ========== 已结利息管理 ==========
   // 获取已结利息列表
   getInterestSettlements: protectedProcedure

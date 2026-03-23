@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Loader2, X, Check, Calculator, Pencil } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Loader2, X, Check, Calculator, Pencil, RefreshCw } from "lucide-react";
 
 // QQ 全局渐变色函数（红→橙→黄→黄绿→绿）
 function gradientColor(value: number, min: number, max: number): string {
@@ -124,6 +124,10 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
   const updateOddsMut = trpc.updateBetOdds.useMutation({
     onSuccess: () => { refetchOdds(); setEditingContent(null); setEditOddsVal(""); },
   });
+  const syncOddsMut = trpc.syncBetOddsFromRecords.useMutation({
+    onSuccess: (data) => { refetchOdds(); alert(`同步完成，共更新 ${data.synced} 条赔率`); },
+    onError: (err) => { alert('同步失败: ' + err.message); },
+  });
 
   function addSample() {
     const raw = inputVal.trim();
@@ -222,6 +226,14 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
           <div className="px-4 py-2.5 border-b border-gray-800 flex items-center gap-2">
             <Calculator size={14} className="text-blue-400" />
             <span className="text-xs font-semibold text-blue-400">采样中奖率计算器</span>
+            <button
+              onClick={() => { if (confirm('从交易记录中自动提取赔率并同步？')) syncOddsMut.mutate(); }}
+              disabled={syncOddsMut.isPending}
+              className="ml-auto flex items-center gap-1 px-2 py-1 rounded bg-yellow-600/20 text-yellow-400 text-[10px] font-medium active:bg-yellow-600/40 disabled:opacity-50"
+            >
+              {syncOddsMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+              同步赔率
+            </button>
           </div>
 
           {/* 输入区 */}
