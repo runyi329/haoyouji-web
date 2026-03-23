@@ -13195,7 +13195,7 @@ insights 数组每项包含：
       try {
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
-        if (!conn) return { total: 0, won: 0, lost: 0, maxAmount: null, minAmount: null, avgAmount: null };
+        if (!conn) return { total: 0, won: 0, lost: 0, maxAmount: null, minAmount: null, avgAmount: null, maxPayout: null, minPayout: null, avgPayout: null };
         const [rows] = await (conn as any).execute(
           `SELECT
              COUNT(*) as total,
@@ -13203,7 +13203,10 @@ insights 数组每项包含：
              SUM(CASE WHEN win_status = 0 OR win_status IS NULL THEN 1 ELSE 0 END) as lost,
              MAX(CAST(amount AS DECIMAL(20,4))) as max_amount,
              MIN(CAST(amount AS DECIMAL(20,4))) as min_amount,
-             AVG(CAST(amount AS DECIMAL(20,4))) as avg_amount
+             AVG(CAST(amount AS DECIMAL(20,4))) as avg_amount,
+             MAX(CASE WHEN win_status > 0 THEN CAST(win_status AS DECIMAL(20,4)) ELSE NULL END) as max_payout,
+             MIN(CASE WHEN win_status > 0 THEN CAST(win_status AS DECIMAL(20,4)) ELSE NULL END) as min_payout,
+             AVG(CASE WHEN win_status > 0 THEN CAST(win_status AS DECIMAL(20,4)) ELSE NULL END) as avg_payout
            FROM qq_trade_records
            WHERE amount IS NOT NULL AND amount != ''`
         );
@@ -13215,6 +13218,9 @@ insights 数组每项包含：
           maxAmount: row.max_amount != null ? Number(row.max_amount) * 1000 : null,
           minAmount: row.min_amount != null ? Number(row.min_amount) * 1000 : null,
           avgAmount: row.avg_amount != null ? Number(row.avg_amount) * 1000 : null,
+          maxPayout: row.max_payout != null ? Number(row.max_payout) * 1000 : null,
+          minPayout: row.min_payout != null ? Number(row.min_payout) * 1000 : null,
+          avgPayout: row.avg_payout != null ? Number(row.avg_payout) * 1000 : null,
         };
       } catch (err) {
         console.error('[QQ交易] 统计失败:', err);
