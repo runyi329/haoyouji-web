@@ -13176,12 +13176,21 @@ insights 数组每项包含：
         const conn = await getDbConnection();
         if (!conn) throw new Error('数据库连接失败');
         const { id, ...fields } = input;
-        const sets = Object.keys(fields).map(k => `${k} = ?`).join(', ');
-        const vals = [...Object.values(fields), id];
+        // 过滤掉undefined的字段
+        const validFields: Record<string, string> = {};
+        for (const [k, v] of Object.entries(fields)) {
+          if (v !== undefined) validFields[k] = v;
+        }
+        if (Object.keys(validFields).length === 0) {
+          return { success: true }; // 没有字段需要更新
+        }
+        const sets = Object.keys(validFields).map(k => `\`${k}\` = ?`).join(', ');
+        const vals = [...Object.values(validFields), id];
         await (conn as any).execute(`UPDATE qq_trade_records SET ${sets} WHERE id = ?`, vals);
         return { success: true };
-      } catch (err) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '更新失败' });
+      } catch (err: any) {
+        console.error('updateQQTradeRecord error:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: err?.message || '更新失败' });
       }
     }),
 
