@@ -784,13 +784,13 @@ export default function LedgerDetail() {
                 {(user?.id === 870413 || user?.id === 4957151) && isCustomAF && (
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
-                    style={{ backgroundColor: '#12B7F5', border: '1.5px solid rgba(255,255,255,0.5)' }}
+                    style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
                     onClick={() => setLocation(`/ledger/${ledgerId}/qq`)}
                   >
                     <img
-                      src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/qq-icon.png"
+                      src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/qq-icon-circle.png"
                       alt="QQ"
-                      className="w-5 h-5 object-contain"
+                      className="w-full h-full object-cover rounded-full"
                     />
                   </div>
                 )}
