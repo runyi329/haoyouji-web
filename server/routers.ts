@@ -13419,6 +13419,99 @@ insights 数组每项包含：
         return [];
       }
     }),
+
+  // ========== 投注金额分析（按金额档位分组，消除号码影响） ==========
+  getAmountAnalysis: protectedProcedure
+    .query(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return [];
+        // 查询所有有效记录：金额、投注内容、中奖状态
+        const [rows] = await (conn as any).execute(
+          `SELECT amount, content, win_status FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' AND content IS NOT NULL AND content != ''`
+        );
+        // 差值概率表
+        const COMBO_MAP: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
+        // 按金额分组
+        const amountGroups: Record<string, { betCount: number; winCount: number; theoryPctSum: number; totalBet: number; totalWin: number }> = {};
+        for (const row of (rows as any[])) {
+          const amt = Number(row.amount);
+          if (isNaN(amt) || amt <= 0) continue;
+          // 金额转换为元显示（数据库存的是x100后的值，如0.34代表34元）
+          const amtYuan = Math.round(amt * 100);
+          const amtKey = String(amtYuan);
+          // 解析投注内容计算理论概率
+          const content = String(row.content || '').trim();
+          const digits: number[] = [];
+          for (const ch of content) {
+            if (ch >= '0' && ch <= '9') {
+              const n = parseInt(ch, 10);
+              if (!digits.includes(n)) digits.push(n);
+            }
+          }
+          const combos = digits.reduce((sum, d) => sum + (COMBO_MAP[d] || 0), 0);
+          const theoryPct = combos / 100;
+          const isWin = Number(row.win_status) > 0 ? 1 : 0;
+          const winAmount = isWin ? Number(row.win_status) * 100 : 0;
+          if (!amountGroups[amtKey]) {
+            amountGroups[amtKey] = { betCount: 0, winCount: 0, theoryPctSum: 0, totalBet: 0, totalWin: 0 };
+          }
+          amountGroups[amtKey].betCount += 1;
+          amountGroups[amtKey].winCount += isWin;
+          amountGroups[amtKey].theoryPctSum += theoryPct;
+          amountGroups[amtKey].totalBet += amtYuan;
+          amountGroups[amtKey].totalWin += winAmount;
+        }
+        // 转为数组并计算各指标
+        const results = Object.entries(amountGroups).map(([amtKey, g]) => {
+          const amountYuan = Number(amtKey);
+          const avgTheoryPct = g.betCount > 0 ? g.theoryPctSum / g.betCount : 0;
+          const actualPct = g.betCount > 0 ? g.winCount / g.betCount : 0;
+          const deviation = avgTheoryPct > 0 ? ((actualPct - avgTheoryPct) / avgTheoryPct) * 100 : 0;
+          const profit = g.totalWin - g.totalBet;
+          // 正态分布 sigma
+          let sigmaLevel = 'insufficient';
+          let sigmaValue = 0;
+          if (g.betCount >= 15 && avgTheoryPct > 0 && avgTheoryPct < 1) {
+            const expected = g.betCount * avgTheoryPct;
+            const sigma = Math.sqrt(g.betCount * avgTheoryPct * (1 - avgTheoryPct));
+            if (sigma > 0) {
+              sigmaValue = (g.winCount - expected) / sigma;
+              const absSigma = Math.abs(sigmaValue);
+              if (absSigma <= 1) sigmaLevel = 'normal';
+              else if (absSigma <= 2) sigmaLevel = 'watch';
+              else if (absSigma <= 3) sigmaLevel = 'suspect';
+              else sigmaLevel = 'abnormal';
+            }
+          }
+          return {
+            amountYuan,
+            betCount: g.betCount,
+            winCount: g.winCount,
+            theoryPct: Math.round(avgTheoryPct * 10000) / 100,
+            actualPct: Math.round(actualPct * 10000) / 100,
+            deviation: Math.round(deviation * 100) / 100,
+            totalBet: g.totalBet,
+            totalWin: g.totalWin,
+            profit,
+            sigmaLevel,
+            sigmaValue: Math.round(sigmaValue * 100) / 100,
+          };
+        });
+        // 按金额从大到小排序
+        results.sort((a, b) => b.amountYuan - a.amountYuan);
+        return results;
+      } catch (err) {
+        console.error('[投注金额分析] 失败:', err);
+        return [];
+      }
+    }),
+
     // ========== 已结利息管理 ==========
   // 获取已结利息列表
   getInterestSettlements: protectedProcedure
