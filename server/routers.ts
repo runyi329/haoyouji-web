@@ -13026,32 +13026,120 @@ insights 数组每项包含：
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
       if ((ctx.user as any).id !== JIANG_ID) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        throw new TRPCError({ code: 'FORBIDDEN', message: '\u65e0\u6743\u9650' });
       }
       try {
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
-        if (!conn) throw new Error('数据库连接失败');
+        if (!conn) throw new Error('\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25');
         const batchId = input.batchId || `batch_${Date.now()}`;
         let inserted = 0;
+        let skipped = 0;
+        let filled = 0;
+        const details: { order_no: string; status: 'new' | 'skip' | 'fill'; fillFields?: string[] }[] = [];
+
+        const FILL_FIELDS = ['username','lottery_type','play_method','issue_no','trade_time','multiplier','amount','content','win_status','odds','balance'] as const;
+        const FIELD_LABELS: Record<string, string> = {
+          username:'\u7528\u6237\u540d', lottery_type:'\u5f69\u79cd', play_method:'\u73a9\u6cd5',
+          issue_no:'\u671f\u53f7', trade_time:'\u65f6\u95f4', multiplier:'\u500d\u6570',
+          amount:'\u91d1\u989d', content:'\u5185\u5bb9', win_status:'\u4e2d\u5956\u72b6\u6001',
+          odds:'\u8d54\u7387', balance:'\u4f59\u989d'
+        };
+
         for (const r of input.records) {
+          const orderNo = (r.order_no || '').trim();
+
+          // ---- \u67e5\u91cd\u903b\u8f91 ----
+          if (orderNo) {
+            const [existRows] = await (conn as any).execute(
+              'SELECT * FROM qq_trade_records WHERE order_no = ? LIMIT 1',
+              [orderNo]
+            );
+            if (existRows && existRows.length > 0) {
+              const existing = existRows[0];
+              // \u68c0\u67e5\u662f\u5426\u6709\u7a7a\u7f3a\u5b57\u6bb5\u53ef\u4ee5\u8865\u5f55
+              const fillFields: string[] = [];
+              const updates: string[] = [];
+              const updateVals: any[] = [];
+              for (const f of FILL_FIELDS) {
+                const existVal = existing[f];
+                const newVal = (r as any)[f];
+                const existEmpty = existVal === null || existVal === undefined || String(existVal).trim() === '' || String(existVal).trim() === '0';
+                const newHasVal = newVal && String(newVal).trim() !== '' && String(newVal).trim() !== '0';
+                if (existEmpty && newHasVal) {
+                  if (f === 'amount' || f === 'balance') {
+                    updates.push(`${f} = ?`);
+                    updateVals.push(parseFloat(newVal) || null);
+                  } else {
+                    updates.push(`${f} = ?`);
+                    updateVals.push(String(newVal).trim());
+                  }
+                  fillFields.push(FIELD_LABELS[f] || f);
+                }
+              }
+              if (fillFields.length > 0) {
+                // \u8865\u5f55
+                await (conn as any).execute(
+                  `UPDATE qq_trade_records SET ${updates.join(', ')} WHERE id = ?`,
+                  [...updateVals, existing.id]
+                );
+                filled++;
+                details.push({ order_no: orderNo, status: 'fill', fillFields });
+              } else {
+                // \u5b8c\u5168\u91cd\u590d\uff0c\u8df3\u8fc7
+                skipped++;
+                details.push({ order_no: orderNo, status: 'skip' });
+              }
+              continue;
+            }
+          }
+
+          // ---- \u65b0\u589e\u8bb0\u5f55 ----
           const amt = r.amount ? parseFloat(r.amount) || null : null;
           const bal = r.balance ? parseFloat(r.balance) || null : null;
           await (conn as any).execute(
             `INSERT INTO qq_trade_records
              (username, order_no, lottery_type, play_method, issue_no, trade_time, multiplier, amount, content, win_status, odds, balance, created_by, batch_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [r.username||null, r.order_no||null, r.lottery_type||null, r.play_method||null,
+            [r.username||null, orderNo||null, r.lottery_type||null, r.play_method||null,
              r.issue_no||null, r.trade_time||null, r.multiplier||null, amt,
              r.content||null, r.win_status||null, r.odds||null, bal,
              (ctx.user as any).id, batchId]
           );
           inserted++;
+          details.push({ order_no: orderNo, status: 'new' });
         }
-        return { success: true, inserted };
+        return { success: true, inserted, skipped, filled, details };
       } catch (err) {
-        console.error('[QQ交易] 导入失败:', err);
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '导入失败' });
+        console.error('[QQ\u4ea4\u6613] \u5bfc\u5165\u5931\u8d25:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '\u5bfc\u5165\u5931\u8d25' });
+      }
+    }),
+
+  // 交易记录：批量删除
+  batchDeleteQQTradeRecords: protectedProcedure
+    .input(z.object({
+      ids: z.array(z.number()),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '\u65e0\u6743\u9650' });
+      }
+      if (input.ids.length === 0) return { success: true, deleted: 0 };
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25');
+        const placeholders = input.ids.map(() => '?').join(',');
+        await (conn as any).execute(
+          `DELETE FROM qq_trade_records WHERE id IN (${placeholders})`,
+          input.ids
+        );
+        return { success: true, deleted: input.ids.length };
+      } catch (err) {
+        console.error('[QQ\u4ea4\u6613] \u6279\u91cf\u5220\u9664\u5931\u8d25:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '\u5220\u9664\u5931\u8d25' });
       }
     }),
 
