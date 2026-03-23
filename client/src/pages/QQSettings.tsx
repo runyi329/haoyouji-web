@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Loader2, X, Check, Calculator } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Loader2, X, Check, Calculator, Pencil } from "lucide-react";
 
 // QQ 全局渐变色函数（红→橙→黄→黄绿→绿）
 function gradientColor(value: number, min: number, max: number): string {
@@ -99,13 +99,22 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
   // 采样列表：每项是一组数字
   const [samples, setSamples] = useState<{ id: number; digits: number[] }[]>([]);
   const [inputVal, setInputVal] = useState("");
-  const nextId = useState(() => 1)[0];
-  const idRef = { current: nextId };
+
+  // 赔率编辑状态
+  const [editingContent, setEditingContent] = useState<string | null>(null);
+  const [editOddsVal, setEditOddsVal] = useState("");
+
+  // 从数据库获取已有投注内容 + 赔率配置
+  const { data: betOddsData, refetch: refetchOdds } = trpc.getBetOddsConfig.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const updateOddsMut = trpc.updateBetOdds.useMutation({
+    onSuccess: () => { refetchOdds(); setEditingContent(null); setEditOddsVal(""); },
+  });
 
   function addSample() {
     const raw = inputVal.trim();
     if (!raw) return;
-    // 智能解析：逐字符拆分，支持 "0369" "0,3,6,9" "0 3 6 9" "25" 等任意格式
     const digits: number[] = [];
     for (const ch of raw) {
       if (ch >= '0' && ch <= '9') {
@@ -120,6 +129,24 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
 
   function removeSample(id: number) {
     setSamples(prev => prev.filter(s => s.id !== id));
+  }
+
+  function saveOdds(content: string) {
+    const val = parseFloat(editOddsVal);
+    if (isNaN(val) || val <= 0) return;
+    updateOddsMut.mutate({ content, odds: val });
+  }
+
+  // 将数据库投注内容解析为 digits 数组
+  function parseContentToDigits(content: string): number[] {
+    const digits: number[] = [];
+    for (const ch of content) {
+      if (ch >= '0' && ch <= '9') {
+        const n = parseInt(ch, 10);
+        if (!digits.includes(n)) digits.push(n);
+      }
+    }
+    return digits.sort((a, b) => a - b);
   }
 
   return (
@@ -207,36 +234,143 @@ function GameRulesPage({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
-          {/* 采样结果列表 */}
-          {samples.length === 0 ? (
+          {/* 手动添加的采样结果列表 */}
+          {samples.length === 0 && (!betOddsData || betOddsData.betContents.length === 0) ? (
             <div className="text-center py-6 text-gray-600 text-xs">暂无采样，请输入选号后点击添加</div>
           ) : (
             <div className="divide-y divide-gray-800/60">
               {/* 列表表头 */}
               <div style={{ display: 'flex' }} className="px-4 py-1.5 bg-gray-800/40">
-                <div style={{ flex: '2 1 0' }} className="text-[10px] text-gray-500">选号</div>
-                <div style={{ flex: '1 1 0' }} className="text-[10px] text-gray-500 text-center">组合数</div>
+                <div style={{ flex: '1.5 1 0' }} className="text-[10px] text-gray-500">选号</div>
+                <div style={{ flex: '1 1 0' }} className="text-[10px] text-gray-500 text-center">组合</div>
                 <div style={{ flex: '1 1 0' }} className="text-[10px] text-gray-500 text-center">中奖率</div>
+                <div style={{ flex: '1 1 0' }} className="text-[10px] text-gray-500 text-center">赔率</div>
+                <div style={{ flex: '1.2 1 0' }} className="text-[10px] text-gray-500 text-center">EV</div>
                 <div style={{ width: '28px' }} />
               </div>
-              {samples.map(s => {
-                const { combos, pct } = calcSample(s.digits);
-                const label = [...new Set(s.digits)].sort((a, b) => a - b).join(', ');
+
+              {/* 数据库已有投注内容（自动陈列） */}
+              {betOddsData && betOddsData.betContents.map((content: string) => {
+                const digits = parseContentToDigits(content);
+                const { combos, pct } = calcSample(digits);
+                const label = digits.join(', ');
+                const odds = betOddsData.oddsMap[content];
+                const ev = odds ? (pct / 100) * odds - 1 : null;
+                const isEditing = editingContent === content;
+
                 return (
-                  <div key={s.id} style={{ display: 'flex', alignItems: 'center' }} className="px-4 py-2.5">
-                    <div style={{ flex: '2 1 0' }}>
+                  <div key={`db-${content}`} style={{ display: 'flex', alignItems: 'center' }} className="px-4 py-2.5">
+                    <div style={{ flex: '1.5 1 0' }}>
                       <span className="text-sm font-mono text-white">{label}</span>
                     </div>
                     <div style={{ flex: '1 1 0' }} className="text-center">
-                      <span className="text-sm font-mono text-gray-300">{combos} 种</span>
+                      <span className="text-xs font-mono text-gray-300">{combos}</span>
                     </div>
                     <div style={{ flex: '1 1 0' }} className="text-center">
-                      <span
-                        className="text-sm font-bold font-mono"
-                        style={{ color: gradientColor(pct, 0, 100) }}
-                      >
+                      <span className="text-xs font-bold font-mono" style={{ color: gradientColor(pct, 0, 100) }}>
                         {pct}%
                       </span>
+                    </div>
+                    <div style={{ flex: '1 1 0' }} className="text-center">
+                      {isEditing ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'center' }}>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={editOddsVal}
+                            onChange={e => setEditOddsVal(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && saveOdds(content)}
+                            className="bg-gray-800 text-white text-xs px-1 py-0.5 rounded border border-blue-500 outline-none"
+                            style={{ width: '40px' }}
+                            autoFocus
+                          />
+                          <button onClick={() => saveOdds(content)} className="text-green-400 active:text-green-300">
+                            <Check size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span
+                          className="text-xs font-mono cursor-pointer"
+                          style={{ color: odds ? '#C9A84C' : '#5A6B7F' }}
+                          onClick={() => { setEditingContent(content); setEditOddsVal(odds ? String(odds) : ''); }}
+                        >
+                          {odds ? `${odds}x` : '--'}
+                          {!odds && <Pencil size={9} className="inline ml-0.5 text-gray-600" />}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ flex: '1.2 1 0' }} className="text-center">
+                      {ev !== null ? (
+                        <span className="text-xs font-bold font-mono" style={{ color: ev >= 0 ? '#3DD68C' : '#F47068' }}>
+                          {ev >= 0 ? '+' : ''}{(ev * 100).toFixed(1)}%
+                        </span>
+                      ) : (
+                        <span className="text-xs font-mono text-gray-600">--</span>
+                      )}
+                    </div>
+                    <div style={{ width: '28px' }} />
+                  </div>
+                );
+              })}
+
+              {/* 手动添加的采样 */}
+              {samples.map(s => {
+                const { combos, pct } = calcSample(s.digits);
+                const label = [...new Set(s.digits)].sort((a, b) => a - b).join(', ');
+                const contentKey = [...new Set(s.digits)].sort((a, b) => a - b).join(',');
+                const odds = betOddsData?.oddsMap[contentKey];
+                const ev = odds ? (pct / 100) * odds - 1 : null;
+                const isEditing = editingContent === contentKey;
+
+                return (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center' }} className="px-4 py-2.5">
+                    <div style={{ flex: '1.5 1 0' }}>
+                      <span className="text-sm font-mono text-white">{label}</span>
+                    </div>
+                    <div style={{ flex: '1 1 0' }} className="text-center">
+                      <span className="text-xs font-mono text-gray-300">{combos}</span>
+                    </div>
+                    <div style={{ flex: '1 1 0' }} className="text-center">
+                      <span className="text-xs font-bold font-mono" style={{ color: gradientColor(pct, 0, 100) }}>
+                        {pct}%
+                      </span>
+                    </div>
+                    <div style={{ flex: '1 1 0' }} className="text-center">
+                      {isEditing ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'center' }}>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={editOddsVal}
+                            onChange={e => setEditOddsVal(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && saveOdds(contentKey)}
+                            className="bg-gray-800 text-white text-xs px-1 py-0.5 rounded border border-blue-500 outline-none"
+                            style={{ width: '40px' }}
+                            autoFocus
+                          />
+                          <button onClick={() => saveOdds(contentKey)} className="text-green-400 active:text-green-300">
+                            <Check size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span
+                          className="text-xs font-mono cursor-pointer"
+                          style={{ color: odds ? '#C9A84C' : '#5A6B7F' }}
+                          onClick={() => { setEditingContent(contentKey); setEditOddsVal(odds ? String(odds) : ''); }}
+                        >
+                          {odds ? `${odds}x` : '--'}
+                          {!odds && <Pencil size={9} className="inline ml-0.5 text-gray-600" />}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ flex: '1.2 1 0' }} className="text-center">
+                      {ev !== null ? (
+                        <span className="text-xs font-bold font-mono" style={{ color: ev >= 0 ? '#3DD68C' : '#F47068' }}>
+                          {ev >= 0 ? '+' : ''}{(ev * 100).toFixed(1)}%
+                        </span>
+                      ) : (
+                        <span className="text-xs font-mono text-gray-600">--</span>
+                      )}
                     </div>
                     <button
                       onClick={() => removeSample(s.id)}
