@@ -1630,3 +1630,7 @@
 - [ ] 迁移数据库中 ownerMerchantId=NULL 的商品到管理员商家账号
 - [ ] 更新后端 merchant-router.ts，移除 getPlatformProducts/createPlatformProduct 等平台总库专用接口
 - [ ] 更新 PRODUCT_RULES.md 文档，明确"所有商品必须归属于具体商家"规则
+
+## QQ交易记录赔率优化（2026-03-23）
+- [ ] 赔率列显示从2位小数改为3位小数
+- [ ] 从交易记录中提取投注内容对应的赔率，自动同步到QQSettings采样计算器的赔率配置

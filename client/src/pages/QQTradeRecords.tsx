@@ -713,7 +713,7 @@ export default function QQTradeRecords() {
                     // 自动计算赔率：中奖金额 / 投注额
                     const amt = parseFloat(row.amount) || 0;
                     const winAmt = parseFloat(row.win_amount) || 0;
-                    const autoOdds = amt > 0 && winAmt > 0 ? (winAmt / amt).toFixed(2) : '0';
+                    const autoOdds = amt > 0 && winAmt > 0 ? (winAmt / amt).toFixed(3) : '0';
                     return (
                       <tr key={row.id} className={`border-b border-gray-800 ${isEditing ? 'bg-gray-800' : 'hover:bg-gray-900'} ${selectedIds.has(row.id) ? 'bg-red-900/20' : ''}`}>
                         {batchMode && (
