@@ -13222,6 +13222,94 @@ insights 数组每项包含：
       }
     }),
 
+
+  // ========== 已结利息管理 ==========
+  // 获取已结利息列表
+  getInterestSettlements: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { list: [], total: 0 };
+        const [rows] = await (conn as any).execute(
+          `SELECT id, ledger_id, settle_date, amount, note, created_by, created_at
+           FROM interest_settlements
+           WHERE ledger_id = ?
+           ORDER BY settle_date DESC, id DESC`,
+          [input.ledgerId]
+        );
+        const list = (rows as any[]).map(r => ({
+          id: r.id,
+          ledgerId: r.ledger_id,
+          settleDate: r.settle_date,
+          amount: Number(r.amount),
+          note: r.note || '',
+          createdBy: r.created_by,
+          createdAt: r.created_at,
+        }));
+        const total = list.reduce((s, r) => s + r.amount, 0);
+        return { list, total };
+      } catch (err) {
+        console.error('[利息结算] 查询失败:', err);
+        return { list: [], total: 0 };
+      }
+    }),
+
+  // 添加已结利息记录
+  addInterestSettlement: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      settleDate: z.string(),
+      amount: z.number(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        await (conn as any).execute(
+          `INSERT INTO interest_settlements (ledger_id, settle_date, amount, note, created_by) VALUES (?, ?, ?, ?, ?)`,
+          [input.ledgerId, input.settleDate, input.amount, input.note || '', JIANG_ID]
+        );
+        return { success: true };
+      } catch (err) {
+        console.error('[利息结算] 添加失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '添加失败' });
+      }
+    }),
+
+  // 删除已结利息记录
+  deleteInterestSettlement: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        await (conn as any).execute(
+          `DELETE FROM interest_settlements WHERE id = ?`,
+          [input.id]
+        );
+        return { success: true };
+      } catch (err) {
+        console.error('[利息结算] 删除失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '删除失败' });
+      }
+    }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({

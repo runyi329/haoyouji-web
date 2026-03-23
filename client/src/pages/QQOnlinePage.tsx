@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { History, Plus, RefreshCw, ClipboardList, X } from "lucide-react";
@@ -8,7 +8,9 @@ import { History, Plus, RefreshCw, ClipboardList, X } from "lucide-react";
 const PER_SECOND_FULL = 200000 / 30 / 24 / 3600;  // jiang
 const PER_SECOND_YJH  =  40000 / 30 / 24 / 3600;  // yjh (1/5)
 const YJH_ID = 4957151;
+const JIANG_ID = 870413;
 const START_TIME = new Date('2026-03-23T00:00:00+08:00').getTime();
+const LEDGER_ID = 52;
 
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
@@ -23,10 +25,25 @@ export default function QQOnlinePage() {
   const deposit = currentUserId === YJH_ID ? '4万元' : '20万元';
 
   // 投注统计（仅jiang可见）
-  const { data: tradeStats, refetch: refetchStats } = trpc.getQQTradeStats.useQuery(undefined, {
-    enabled: currentUserId === 870413,
+  const { data: tradeStats } = trpc.getQQTradeStats.useQuery(undefined, {
+    enabled: currentUserId === JIANG_ID,
     refetchInterval: 60 * 1000,
   });
+
+  // 已结利息（仅jiang可见，从数据库读取）
+  const { data: settlementData } = trpc.getInterestSettlements.useQuery(
+    { ledgerId: LEDGER_ID },
+    {
+      enabled: currentUserId === JIANG_ID,
+      refetchInterval: 5 * 60 * 1000, // 5分钟刷新一次
+    }
+  );
+  // yjh看到的已结利息 = jiang已结利息 / 5
+  const settledTotal = currentUserId === JIANG_ID
+    ? (settlementData?.total || 0)
+    : currentUserId === YJH_ID
+      ? 0  // yjh暂不显示已结（如需要可改为 / 5）
+      : 0;
 
   const { data, refetch } = trpc.getQQOnlineRecords.useQuery(
     { page: 1, pageSize: 1 },
@@ -84,6 +101,13 @@ export default function QQOnlinePage() {
   const interestCNY = interest.toFixed(2);
   const interestUSDT = (interest / 7).toFixed(2);
 
+  // 待结利息 = 累计利息 - 已结利息
+  const pendingInterest = Math.max(0, interest - settledTotal);
+  const pendingCNY = pendingInterest.toFixed(2);
+  const pendingUSDT = (pendingInterest / 7).toFixed(2);
+  const settledCNY = settledTotal.toFixed(2);
+  const settledUSDT = (settledTotal / 7).toFixed(2);
+
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
 
@@ -114,7 +138,6 @@ export default function QQOnlinePage() {
               >
                 <History className="w-4 h-4 text-white/80" />
               </button>
-
             </div>
           </div>
         </div>
@@ -141,7 +164,7 @@ export default function QQOnlinePage() {
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">保证金</div>
             <div className="text-sm font-bold text-white">{deposit}</div>
           </div>
-          {/* 第3个：累计利息 + 待结利息 + 已结利息（按秒实时增长） */}
+          {/* 第3个：累计利息 + 待结利息 + 已结利息 */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">累计利息</div>
             <div className="flex items-baseline gap-1.5">
@@ -150,18 +173,18 @@ export default function QQOnlinePage() {
             </div>
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">待结利息</div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-white font-mono">¥{interestCNY}</span>
-              <span className="text-[10px] text-white/50">≈{interestUSDT} U</span>
+              <span className="text-sm font-bold text-yellow-200 font-mono">¥{pendingCNY}</span>
+              <span className="text-[10px] text-white/50">≈{pendingUSDT} U</span>
             </div>
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">已结利息</div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold text-white font-mono">¥{(interest - interest).toFixed(2)}</span>
-              <span className="text-[10px] text-white/50">≈{((interest - interest) / 7).toFixed(2)} U</span>
+              <span className="text-sm font-bold text-green-300 font-mono">¥{settledCNY}</span>
+              <span className="text-[10px] text-white/50">≈{settledUSDT} U</span>
             </div>
           </div>
           {/* 第4个：投注统计（仅jiang可见时显示数据，否则空白） */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
-            {currentUserId === 870413 && (
+            {currentUserId === JIANG_ID && (
               <>
                 <div className="text-[11px] text-white/55 mb-1">投注次数</div>
                 <div className="text-sm font-bold text-white font-mono">{tradeStats?.total ?? 0} 次</div>
@@ -180,7 +203,7 @@ export default function QQOnlinePage() {
           </div>
           {/* 第5个：订单金额统计（仅jiang可见） */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
-            {currentUserId === 870413 && (
+            {currentUserId === JIANG_ID && (
               <>
                 <div className="text-[11px] text-white/55 mb-2">订单金额统计</div>
                 <div className="flex flex-col gap-1.5">
@@ -212,7 +235,7 @@ export default function QQOnlinePage() {
       <div className="h-20" />
 
       {/* 底部悬浮添加按钮（仅jiang可见） */}
-      {currentUserId === 870413 && (
+      {currentUserId === JIANG_ID && (
         <>
           {/* 弹出菜单 */}
           {showMenu && (
