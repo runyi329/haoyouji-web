@@ -64,7 +64,7 @@ function AIRiskControlPanel() {
   return (
     <div className="px-4 pt-3">
       <div className="rounded-2xl px-3 py-3" style={cardStyle}>
-        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>AI风控部</div>
+        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>AI监控</div>
 
         {isLoading && (
           <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>加载中...</div>
@@ -159,7 +159,7 @@ function AmountAnalysisPanel() {
   return (
     <div className="px-4 pt-3">
       <div className="rounded-2xl px-3 py-3" style={cardStyle}>
-        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>投注金额分析</div>
+        <div className="text-[11px] mb-2" style={{ color: LABEL_COLOR }}>AI监控 - 投注金额</div>
 
         {isLoading && (
           <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>加载中...</div>
@@ -500,10 +500,10 @@ export default function QQOnlinePage() {
         </div>
       </div>
 
-      {/* ── AI风控部（仅jiang可见）── */}
+      {/* ── AI监控（仅jiang可见）── */}
       {currentUserId === JIANG_ID && <AIRiskControlPanel />}
 
-      {/* ── 投注金额分析（仅jiang可见）── */}
+      {/* ── AI监控 - 投注金额（仅jiang可见）── */}
       {currentUserId === JIANG_ID && <AmountAnalysisPanel />}
 
       <div className="h-20" />
