@@ -13124,23 +13124,30 @@ insights 数组每项包含：
       try {
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
-        if (!conn) return { total: 0, won: 0, lost: 0 };
+        if (!conn) return { total: 0, won: 0, lost: 0, maxAmount: null, minAmount: null, avgAmount: null };
         const [rows] = await (conn as any).execute(
           `SELECT
              COUNT(*) as total,
              SUM(CASE WHEN win_status > 0 THEN 1 ELSE 0 END) as won,
-             SUM(CASE WHEN win_status = 0 OR win_status IS NULL THEN 1 ELSE 0 END) as lost
-           FROM qq_trade_records`
+             SUM(CASE WHEN win_status = 0 OR win_status IS NULL THEN 1 ELSE 0 END) as lost,
+             MAX(CAST(amount AS DECIMAL(20,4))) as max_amount,
+             MIN(CAST(amount AS DECIMAL(20,4))) as min_amount,
+             AVG(CAST(amount AS DECIMAL(20,4))) as avg_amount
+           FROM qq_trade_records
+           WHERE amount IS NOT NULL AND amount != ''`
         );
         const row = (rows as any[])[0] || {};
         return {
           total: Number(row.total) || 0,
           won: Number(row.won) || 0,
           lost: Number(row.lost) || 0,
+          maxAmount: row.max_amount != null ? Number(row.max_amount) * 1000 : null,
+          minAmount: row.min_amount != null ? Number(row.min_amount) * 1000 : null,
+          avgAmount: row.avg_amount != null ? Number(row.avg_amount) * 1000 : null,
         };
       } catch (err) {
         console.error('[QQ交易] 统计失败:', err);
-        return { total: 0, won: 0, lost: 0 };
+        return { total: 0, won: 0, lost: 0, maxAmount: null, minAmount: null, avgAmount: null };
       }
     }),
 

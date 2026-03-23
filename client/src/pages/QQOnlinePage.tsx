@@ -178,6 +178,34 @@ export default function QQOnlinePage() {
               </>
             )}
           </div>
+          {/* 第5个：订单金额统计（仅jiang可见） */}
+          <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
+            {currentUserId === 870413 && (
+              <>
+                <div className="text-[11px] text-white/55 mb-2">订单金额统计</div>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-white/50">最大订单</span>
+                    <span className="text-sm font-bold text-white font-mono">
+                      {tradeStats?.maxAmount != null ? `¥${tradeStats.maxAmount.toFixed(2)}` : '--'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-white/50">最小订单</span>
+                    <span className="text-sm font-bold text-white font-mono">
+                      {tradeStats?.minAmount != null ? `¥${tradeStats.minAmount.toFixed(2)}` : '--'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-white/50">平均订单</span>
+                    <span className="text-sm font-bold text-yellow-200 font-mono">
+                      {tradeStats?.avgAmount != null ? `¥${tradeStats.avgAmount.toFixed(2)}` : '--'}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
