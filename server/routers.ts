@@ -13114,6 +13114,36 @@ insights 数组每项包含：
       }
     }),
 
+  // 交易记录统计：总投注、中奖、未中奖次数（仅jiang可访问）
+  getQQTradeStats: protectedProcedure
+    .query(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { total: 0, won: 0, lost: 0 };
+        const [rows] = await (conn as any).execute(
+          `SELECT
+             COUNT(*) as total,
+             SUM(CASE WHEN win_status > 0 THEN 1 ELSE 0 END) as won,
+             SUM(CASE WHEN win_status = 0 OR win_status IS NULL THEN 1 ELSE 0 END) as lost
+           FROM qq_trade_records`
+        );
+        const row = (rows as any[])[0] || {};
+        return {
+          total: Number(row.total) || 0,
+          won: Number(row.won) || 0,
+          lost: Number(row.lost) || 0,
+        };
+      } catch (err) {
+        console.error('[QQ交易] 统计失败:', err);
+        return { total: 0, won: 0, lost: 0 };
+      }
+    }),
+
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({

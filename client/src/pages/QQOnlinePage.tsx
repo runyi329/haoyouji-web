@@ -22,6 +22,12 @@ export default function QQOnlinePage() {
   const startAmount = currentUserId === YJH_ID ? '40万元整' : '200万元整';
   const deposit = currentUserId === YJH_ID ? '4万元' : '20万元';
 
+  // 投注统计（仅jiang可见）
+  const { data: tradeStats } = trpc.getQQTradeStats.useQuery(undefined, {
+    enabled: currentUserId === 870413,
+    refetchInterval: 60 * 1000,
+  });
+
   const { data, refetch } = trpc.getQQOnlineRecords.useQuery(
     { page: 1, pageSize: 1 },
     { refetchInterval: 60 * 1000 }
@@ -147,8 +153,24 @@ export default function QQOnlinePage() {
               <span className="text-[10px] text-white/50">≈{interestUSDT} U</span>
             </div>
           </div>
-          {/* 第4个：空 */}
+          {/* 第4个：投注统计（仅jiang可见时显示数据，否则空白） */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', minHeight: '80px' }}>
+            {currentUserId === 870413 && (
+              <>
+                <div className="text-[11px] text-white/55 mb-1">投注次数</div>
+                <div className="text-sm font-bold text-white font-mono">{tradeStats?.total ?? 0} 次</div>
+                <div className="flex gap-3 mt-2">
+                  <div>
+                    <div className="text-[10px] text-white/50">中奖</div>
+                    <div className="text-sm font-bold text-green-300 font-mono">{tradeStats?.won ?? 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-white/50">未中</div>
+                    <div className="text-sm font-bold text-red-300 font-mono">{tradeStats?.lost ?? 0}</div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
