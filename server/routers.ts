@@ -13095,16 +13095,29 @@ insights 数组每项包含：
             }
           }
 
-          // ---- \u65b0\u589e\u8bb0\u5f55 ----
+          // ---- 新增记录 ----
           const amt = r.amount ? parseFloat(r.amount) || null : null;
           const winAmt = r.win_amount ? parseFloat(r.win_amount) || null : null;
-          const bal = r.balance ? parseFloat(r.balance) || null : null;
-          // \u81ea\u52a8\u8ba1\u7b97\u8d54\u7387: \u4e2d\u5956\u91d1\u989d / \u6295\u6ce8\u989d
+          // 自动计算赔率: 中奖金额 / 投注额
           let autoOdds = r.odds || null;
           if (amt && winAmt && winAmt > 0) {
             autoOdds = (winAmt / amt).toFixed(2);
           } else if (winAmt === null || winAmt === 0) {
             autoOdds = '0';
+          }
+          // 自动计算余额: 基于数据库最后一笔余额
+          let bal = r.balance ? parseFloat(r.balance) || null : null;
+          if (bal === null) {
+            // 查询最后一笔有余额的记录
+            const [lastRows] = await (conn as any).execute(
+              'SELECT balance FROM qq_trade_records WHERE balance IS NOT NULL ORDER BY trade_time DESC, id DESC LIMIT 1'
+            );
+            if (lastRows && lastRows.length > 0 && lastRows[0].balance != null) {
+              const lastBal = parseFloat(lastRows[0].balance);
+              const curAmt = amt || 0;
+              const curWin = winAmt || 0;
+              bal = Math.round((lastBal - curAmt + curWin) * 100) / 100;
+            }
           }
           await (conn as any).execute(
             `INSERT INTO qq_trade_records
