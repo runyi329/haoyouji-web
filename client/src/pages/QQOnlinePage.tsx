@@ -175,7 +175,7 @@ function ShortCycleMonitorPanel() {
 
         {!isLoading && monitorData?.windows && monitorData.windows.length > 0 && (
           <>
-            {/* 三列布局：近50笔 | 近100笔 | 近200笔，与上方投注统计对称 */}
+            {/* 三列布局：近30笔 | 近150笔 | 近500笔，与上方投注统计对称 */}
             <div style={{ display: 'flex', width: '100%' }}>
               {monitorData.windows.map((w: any, idx: number) => {
                 const isLast = idx === monitorData.windows.length - 1;
@@ -264,6 +264,151 @@ function ShortCycleMonitorPanel() {
               </div>
             </details>
           </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ========== 历史滑动扫描预警面板 ==========
+function HistoryScanPanel() {
+  const [scanning, setScanning] = React.useState(false);
+  const [scanResult, setScanResult] = React.useState<{ scanned: number; newAlerts: number; total: number } | null>(null);
+  const [daysFilter, setDaysFilter] = React.useState(7);
+
+  const { data: alertsData, isLoading: alertsLoading, refetch: refetchAlerts } = trpc.getRiskAlerts.useQuery(
+    { days: daysFilter },
+    { refetchInterval: 0 }
+  );
+
+  const scanMutation = trpc.runRollingWindowScan.useMutation({
+    onSuccess: (result) => {
+      setScanResult(result);
+      setScanning(false);
+      refetchAlerts();
+    },
+    onError: () => setScanning(false),
+  });
+
+  const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
+
+  function alertLevelLabel(level: string) {
+    if (level === 'abnormal') return { text: '确定异常', color: '#F47068' };
+    if (level === 'suspect') return { text: '疯疫嵌入', color: '#E78340' };
+    return { text: '需关注', color: '#C9A84C' };
+  }
+
+  const summary = alertsData?.summary || {};
+  const alerts = alertsData?.alerts || [];
+
+  return (
+    <div className="px-4 pt-3">
+      <div className="rounded-2xl px-3 py-3" style={cardStyle}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[11px]" style={{ color: LABEL_COLOR }}>历史滑动扫描预警</div>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {/* 时间过滤 */}
+            {[7, 30, 90].map(d => (
+              <button key={d}
+                onClick={() => setDaysFilter(d)}
+                className="text-[9px] px-1.5 py-0.5 rounded"
+                style={{
+                  color: daysFilter === d ? GOLD_COLOR : LABEL_COLOR,
+                  backgroundColor: daysFilter === d ? 'rgba(201,168,76,0.15)' : 'transparent',
+                  border: `1px solid ${daysFilter === d ? 'rgba(201,168,76,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                }}>
+                近{d}天
+              </button>
+            ))}
+            {/* 扫描按鈕 */}
+            <button
+              onClick={() => { setScanning(true); scanMutation.mutate({}); }}
+              disabled={scanning}
+              className="text-[9px] px-2 py-0.5 rounded"
+              style={{
+                color: scanning ? LABEL_COLOR : '#0D0D0D',
+                backgroundColor: scanning ? 'rgba(255,255,255,0.05)' : GOLD_COLOR,
+                border: 'none',
+                opacity: scanning ? 0.6 : 1,
+              }}>
+              {scanning ? '扫描中...' : '全量扫描'}
+            </button>
+          </div>
+        </div>
+
+        {/* 扫描结果提示 */}
+        {scanResult && (
+          <div className="text-[9px] mb-2 px-2 py-1 rounded" style={{ backgroundColor: 'rgba(61,214,140,0.08)', color: GREEN_COLOR }}>
+            扫描完成：共扫描 {scanResult.scanned} 个窗口（全量 {scanResult.total} 笔），新增 {scanResult.newAlerts} 条预警
+          </div>
+        )}
+
+        {/* 汇总统计卡片 */}
+        {Object.keys(summary).length > 0 && (
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            {[30, 150, 500].map(ws => {
+              const s = (summary as any)[ws];
+              if (!s) return null;
+              const hasAbnormal = s.abnormalCount > 0;
+              return (
+                <div key={ws} style={{ flex: '1 1 0' }} className="text-center">
+                  <div className="text-[9px] mb-0.5" style={{ color: GOLD_COLOR }}>窗口{ws}笔</div>
+                  <div className="text-[12px] font-bold font-mono" style={{ color: hasAbnormal ? '#F47068' : DATA_COLOR }}>
+                    {s.totalAlerts}
+                  </div>
+                  <div className="text-[8px]" style={{ color: LABEL_COLOR }}>预警条数</div>
+                  {s.abnormalCount > 0 && (
+                    <div className="text-[8px] font-bold" style={{ color: '#F47068' }}>确定异常 {s.abnormalCount}条</div>
+                  )}
+                  <div className="text-[8px]" style={{ color: LABEL_COLOR }}>max σ {Number(s.maxSigma).toFixed(1)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 预警列表 */}
+        {alertsLoading && (
+          <div className="text-center py-4 text-xs" style={{ color: LABEL_COLOR }}>加载中...</div>
+        )}
+        {!alertsLoading && alerts.length === 0 && (
+          <div className="text-center py-4 text-[10px]" style={{ color: LABEL_COLOR }}>
+            {Object.keys(summary).length === 0 ? '尚未扫描，点击「全量扫描」开始检测' : '最近没有预警记录'}
+          </div>
+        )}
+        {!alertsLoading && alerts.length > 0 && (
+          <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+            {alerts.slice(0, 50).map((a: any) => {
+              const lv = alertLevelLabel(a.alertLevel);
+              return (
+                <div key={a.id} className="mb-1.5 px-2 py-1.5 rounded"
+                  style={{ backgroundColor: `${lv.color}10`, border: `1px solid ${lv.color}25` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <span className="text-[9px] font-bold px-1 py-0.5 rounded" style={{ color: lv.color, backgroundColor: `${lv.color}20` }}>{lv.text}</span>
+                      <span className="text-[9px]" style={{ color: GOLD_COLOR }}>窗口{a.windowSize}笔</span>
+                      <span className="text-[9px]" style={{ color: LABEL_COLOR }}>#{a.startIndex}-{a.endIndex}</span>
+                    </div>
+                    <div className="text-[9px] font-mono font-bold" style={{ color: lv.color }}>+{a.sigmaValue.toFixed(2)}σ</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '3px' }}>
+                    <span className="text-[8px]" style={{ color: LABEL_COLOR }}>实际胜率 <span style={{ color: DATA_COLOR }}>{a.actualWinRate.toFixed(1)}%</span></span>
+                    <span className="text-[8px]" style={{ color: LABEL_COLOR }}>期望胜率 <span style={{ color: LABEL_COLOR }}>{a.expectedWinRate.toFixed(1)}%</span></span>
+                    {a.consecutiveOutlierGroups > 0 && (
+                      <span className="text-[8px] font-bold" style={{ color: '#F47068' }}>连续{a.consecutiveOutlierGroups}组离群</span>
+                    )}
+                  </div>
+                  {a.windowStartTime && (
+                    <div className="text-[8px] mt-0.5" style={{ color: LABEL_COLOR, opacity: 0.6 }}>
+                      {new Date(a.windowStartTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      {' ~ '}
+                      {new Date(a.windowEndTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>
@@ -670,6 +815,9 @@ export default function QQOnlinePage() {
 
       {/* ── 短周期监控（仅jiang可见）── */}
       {currentUserId === JIANG_ID && <ShortCycleMonitorPanel />}
+
+      {/* ── 历史滑动扫描预警（仅jiang可见）── */}
+      {currentUserId === JIANG_ID && <HistoryScanPanel />}
 
       {/* ── AI监控（仅jiang可见）── */}
       {currentUserId === JIANG_ID && <AIRiskControlPanel />}

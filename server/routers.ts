@@ -13467,13 +13467,13 @@ insights 数组每项包含：
         const conn = await getDbConnection();
         if (!conn) return { windows: [] };
 
-        // 获取最近200笔有效投注记录（按时间倒序），包含 content 用于计算每笔的理论中奖概率
+        // 获取最近500笔有效投注记录（按时间倒序），包含 content 用于计算每笔的理论中奖概率
         const [rows] = await (conn as any).execute(
           `SELECT id, trade_time, win_status, content
            FROM qq_trade_records
            WHERE amount IS NOT NULL AND amount != ''
            ORDER BY trade_time DESC, id DESC
-           LIMIT 200`
+           LIMIT 500`
         );
 
         // 差值概率表：每个号码对应的组合数
@@ -13508,14 +13508,19 @@ insights 数组每项包含：
           };
         });
 
-        // 三个窗口维度
-        const windowSizes = [50, 100, 200];
-        const GROUP_SIZE = 10;
+        // 三个窗口维度：30/150/500，分组粒度：6/15/25
+        const windowConfigs = [
+          { size: 30, groupSize: 6, threshold: 3.0, consecutiveTrigger: 2 },
+          { size: 150, groupSize: 15, threshold: 3.5, consecutiveTrigger: 3 },
+          { size: 500, groupSize: 25, threshold: 4.0, consecutiveTrigger: 4 },
+        ];
+        const windowSizes = windowConfigs.map(c => c.size);
+        const GROUP_SIZE = 10; // 保留兼容，下面用各自的groupSize
 
-        const windows = windowSizes.map(size => {
+        const windows = windowConfigs.map(({ size, groupSize, threshold, consecutiveTrigger }) => {
           const slice = records.slice(0, Math.min(size, records.length));
           const actualSize = slice.length;
-          if (actualSize < GROUP_SIZE) {
+          if (actualSize < groupSize) {
             return {
               size, actualSize,
               groups: [] as any[],
@@ -13526,28 +13531,25 @@ insights 数组每项包含：
             };
           }
 
-          // 分组（每10笔一组）
+          // 分组（每 groupSize 笔一组）
           const groups: { index: number; total: number; won: number; expectedWon: number; winRate: number; expectedRate: number; sigmaValue: number; isOutlier: boolean }[] = [];
-          const numGroups = Math.floor(actualSize / GROUP_SIZE);
+          const numGroups = Math.floor(actualSize / groupSize);
           for (let g = 0; g < numGroups; g++) {
-            const groupSlice = slice.slice(g * GROUP_SIZE, (g + 1) * GROUP_SIZE);
+            const groupSlice = slice.slice(g * groupSize, (g + 1) * groupSize);
             const groupWon = groupSlice.filter(r => r.won).length;
-            // 加权期望中奖数 = 各笔理论概率之和
             const expectedWon = groupSlice.reduce((s, r) => s + r.theoryProb, 0);
-            // 加权方差 = 各笔 p*(1-p) 之和
             const variance = groupSlice.reduce((s, r) => s + r.theoryProb * (1 - r.theoryProb), 0);
             const sigma = Math.sqrt(variance);
-            // Z-score: (实际中奖 - 期望中奖) / 标准差
             const zScore = sigma > 0 ? (groupWon - expectedWon) / sigma : 0;
-            // 离群判定：Z-score > 2（实际中奖显著高于期望）
-            const isOutlier = zScore > 2;
+            // 离群判定：使用各窗口自己的阈値
+            const isOutlier = zScore > threshold;
             groups.push({
               index: g + 1,
-              total: GROUP_SIZE,
+              total: groupSize,
               won: groupWon,
               expectedWon: Math.round(expectedWon * 100) / 100,
-              winRate: Math.round((groupWon / GROUP_SIZE) * 10000) / 100,
-              expectedRate: Math.round((expectedWon / GROUP_SIZE) * 10000) / 100,
+              winRate: Math.round((groupWon / groupSize) * 10000) / 100,
+              expectedRate: Math.round((expectedWon / groupSize) * 10000) / 100,
               sigmaValue: Math.round(zScore * 100) / 100,
               isOutlier,
             });
@@ -13578,15 +13580,15 @@ insights 数组每项包含：
           const consecutivePart = Math.min(40, maxConsecutive * 15);
           const riskScore = Math.min(100, Math.round(zScorePart + consecutivePart));
 
-          // 预警等级
+          // 预警等级（使用各窗口自己的consecutiveTrigger）
           let alertLevel = 'safe';
           let alertMsg = '正常';
-          if (riskScore >= 80 || maxConsecutive >= 3) {
+          if (riskScore >= 80 || maxConsecutive >= consecutiveTrigger) {
             alertLevel = 'danger';
-            alertMsg = maxConsecutive >= 3 ? `连续${maxConsecutive}组离群! 确定性作弊预警` : '胜率严重异常';
-          } else if (riskScore >= 50 || maxConsecutive >= 2) {
+            alertMsg = maxConsecutive >= consecutiveTrigger ? `连续${maxConsecutive}组离群! 确定性作弊预警` : '胜率严重异常';
+          } else if (riskScore >= 50 || maxConsecutive >= consecutiveTrigger - 1) {
             alertLevel = 'warning';
-            alertMsg = maxConsecutive >= 2 ? `连续${maxConsecutive}组离群，需关注` : '胜率偏离较大';
+            alertMsg = maxConsecutive >= consecutiveTrigger - 1 ? `连续${maxConsecutive}组离群，需关注` : '胜率偏离较大';
           } else if (riskScore >= 25) {
             alertLevel = 'caution';
             alertMsg = '轻微偏离，暂时安全';
@@ -13608,6 +13610,242 @@ insights 数组每项包含：
       } catch (err) {
         console.error('[短周期监控] 查询失败:', err);
         return { windows: [] };
+      }
+    }),
+
+  // ========== 全量历史滑动扫描预警 ==========
+  runRollingWindowScan: protectedProcedure
+    .input(z.object({ fullScan: z.boolean().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      const YJH_ID = 4957151;
+      const uid = (ctx.user as any).id;
+      if (uid !== JIANG_ID && uid !== YJH_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { scanned: 0, newAlerts: 0 };
+
+        // 自动建表（如不存在）
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS qq_risk_alerts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            window_size INT NOT NULL,
+            start_index INT NOT NULL,
+            end_index INT NOT NULL,
+            actual_win INT NOT NULL,
+            expected_win DECIMAL(8,4) NOT NULL,
+            sigma_value DECIMAL(8,4) NOT NULL,
+            actual_win_rate DECIMAL(8,4) NOT NULL,
+            expected_win_rate DECIMAL(8,4) NOT NULL,
+            consecutive_outlier_groups INT DEFAULT 0,
+            alert_level VARCHAR(20) NOT NULL,
+            scan_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            window_start_time DATETIME NULL,
+            window_end_time DATETIME NULL,
+            UNIQUE KEY uk_window_start (window_size, start_index)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // 获取全量数据（按时间正序，方便用index对应时间）
+        const [rows] = await (conn as any).execute(
+          `SELECT id, trade_time, win_status, content FROM qq_trade_records
+           WHERE amount IS NOT NULL AND amount != ''
+           ORDER BY trade_time ASC, id ASC`
+        );
+        const allRecords = (rows as any[]).map((r: any) => {
+          const content = String(r.content || '').trim();
+          const COMBO_MAP: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
+          const digits: number[] = [];
+          for (const ch of content) {
+            if (ch >= '0' && ch <= '9') {
+              const n = parseInt(ch, 10);
+              if (!digits.includes(n)) digits.push(n);
+            }
+          }
+          const combos = digits.length > 0 ? digits.reduce((s, d) => s + (COMBO_MAP[d] || 0), 0) : 10;
+          const theoryProb = combos / 100;
+          const ws = String(r.win_status || '').trim();
+          const won = (ws === '已中奖') || (ws !== '' && ws !== '0' && ws !== '未中奖' && Number(ws) > 0);
+          return { tradeTime: r.trade_time, won, theoryProb };
+        });
+
+        const total = allRecords.length;
+        // 三个窗口配置：大小、步长、离群阈值
+        const scanConfigs = [
+          { windowSize: 30, step: 10, threshold: 3.0, groupSize: 6, consecutiveTrigger: 2 },
+          { windowSize: 150, step: 25, threshold: 3.5, groupSize: 15, consecutiveTrigger: 3 },
+          { windowSize: 500, step: 50, threshold: 4.0, groupSize: 25, consecutiveTrigger: 4 },
+        ];
+
+        let scanned = 0;
+        let newAlerts = 0;
+
+        for (const cfg of scanConfigs) {
+          const { windowSize, step, threshold, groupSize, consecutiveTrigger } = cfg;
+          if (total < windowSize) continue;
+
+          for (let startIdx = 0; startIdx + windowSize <= total; startIdx += step) {
+            scanned++;
+            const slice = allRecords.slice(startIdx, startIdx + windowSize);
+
+            // 计算整体Z-score
+            const totalWon = slice.filter(r => r.won).length;
+            const totalExpected = slice.reduce((s, r) => s + r.theoryProb, 0);
+            const totalVariance = slice.reduce((s, r) => s + r.theoryProb * (1 - r.theoryProb), 0);
+            const totalSigma = Math.sqrt(totalVariance);
+            const overallZ = totalSigma > 0 ? (totalWon - totalExpected) / totalSigma : 0;
+
+            // 分组检测连续离群
+            let maxConsecutive = 0;
+            let currentConsecutive = 0;
+            const numGroups = Math.floor(windowSize / groupSize);
+            for (let g = 0; g < numGroups; g++) {
+              const gs = slice.slice(g * groupSize, (g + 1) * groupSize);
+              const gWon = gs.filter(r => r.won).length;
+              const gExp = gs.reduce((s, r) => s + r.theoryProb, 0);
+              const gVar = gs.reduce((s, r) => s + r.theoryProb * (1 - r.theoryProb), 0);
+              const gSigma = Math.sqrt(gVar);
+              const gZ = gSigma > 0 ? (gWon - gExp) / gSigma : 0;
+              if (gZ > threshold) {
+                currentConsecutive++;
+                maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+              } else {
+                currentConsecutive = 0;
+              }
+            }
+
+            // 只记录有意义的异常：整体Z > threshold 或 连续离群组数 >= consecutiveTrigger
+            if (overallZ <= threshold && maxConsecutive < consecutiveTrigger) continue;
+
+            // 确定预警等级
+            let alertLevel = 'watch';
+            if (maxConsecutive >= consecutiveTrigger || overallZ > threshold * 1.2) alertLevel = 'abnormal';
+            else if (overallZ > threshold) alertLevel = 'suspect';
+
+            const actualWinRate = Math.round((totalWon / windowSize) * 10000) / 100;
+            const expectedWinRate = Math.round((totalExpected / windowSize) * 10000) / 100;
+            const sigmaVal = Math.round(overallZ * 100) / 100;
+            const windowStartTime = slice[0].tradeTime;
+            const windowEndTime = slice[slice.length - 1].tradeTime;
+
+            // 插入或忽略（UNIQUE KEY 防重复）
+            try {
+              await (conn as any).execute(
+                `INSERT IGNORE INTO qq_risk_alerts
+                 (window_size, start_index, end_index, actual_win, expected_win, sigma_value,
+                  actual_win_rate, expected_win_rate, consecutive_outlier_groups, alert_level,
+                  window_start_time, window_end_time)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [windowSize, startIdx + 1, startIdx + windowSize, totalWon,
+                 Math.round(totalExpected * 10000) / 10000, sigmaVal,
+                 actualWinRate, expectedWinRate, maxConsecutive, alertLevel,
+                 windowStartTime, windowEndTime]
+              );
+              newAlerts++;
+            } catch (_) {}
+          }
+        }
+
+        return { scanned, newAlerts, total };
+      } catch (err) {
+        console.error('[全量滑动扫描] 失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '扫描失败' });
+      }
+    }),
+
+  // ========== 查询历史预警记录 ==========
+  getRiskAlerts: protectedProcedure
+    .input(z.object({
+      days: z.number().optional().default(7),
+      windowSize: z.number().optional(),
+      alertLevel: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      const YJH_ID = 4957151;
+      const uid = (ctx.user as any).id;
+      if (uid !== JIANG_ID && uid !== YJH_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { alerts: [], summary: {} };
+
+        // 自动建表
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS qq_risk_alerts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            window_size INT NOT NULL,
+            start_index INT NOT NULL,
+            end_index INT NOT NULL,
+            actual_win INT NOT NULL,
+            expected_win DECIMAL(8,4) NOT NULL,
+            sigma_value DECIMAL(8,4) NOT NULL,
+            actual_win_rate DECIMAL(8,4) NOT NULL,
+            expected_win_rate DECIMAL(8,4) NOT NULL,
+            consecutive_outlier_groups INT DEFAULT 0,
+            alert_level VARCHAR(20) NOT NULL,
+            scan_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            window_start_time DATETIME NULL,
+            window_end_time DATETIME NULL,
+            UNIQUE KEY uk_window_start (window_size, start_index)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        let sql = `SELECT * FROM qq_risk_alerts WHERE scan_time >= DATE_SUB(NOW(), INTERVAL ? DAY)`;
+        const params: any[] = [input.days];
+        if (input.windowSize) { sql += ` AND window_size = ?`; params.push(input.windowSize); }
+        if (input.alertLevel) { sql += ` AND alert_level = ?`; params.push(input.alertLevel); }
+        sql += ` ORDER BY sigma_value DESC, scan_time DESC LIMIT 200`;
+
+        const [alertRows] = await (conn as any).execute(sql, params);
+        const alerts = (alertRows as any[]).map((r: any) => ({
+          id: r.id,
+          windowSize: r.window_size,
+          startIndex: r.start_index,
+          endIndex: r.end_index,
+          actualWin: r.actual_win,
+          expectedWin: Number(r.expected_win),
+          sigmaValue: Number(r.sigma_value),
+          actualWinRate: Number(r.actual_win_rate),
+          expectedWinRate: Number(r.expected_win_rate),
+          consecutiveOutlierGroups: r.consecutive_outlier_groups,
+          alertLevel: r.alert_level,
+          scanTime: r.scan_time,
+          windowStartTime: r.window_start_time,
+          windowEndTime: r.window_end_time,
+        }));
+
+        // 汇总统计
+        const [summaryRows] = await (conn as any).execute(
+          `SELECT window_size,
+            COUNT(*) as total_alerts,
+            SUM(CASE WHEN alert_level='abnormal' THEN 1 ELSE 0 END) as abnormal_count,
+            MAX(sigma_value) as max_sigma,
+            MAX(scan_time) as last_scan
+           FROM qq_risk_alerts
+           WHERE scan_time >= DATE_SUB(NOW(), INTERVAL ? DAY)
+           GROUP BY window_size`,
+          [input.days]
+        );
+        const summary: Record<number, any> = {};
+        for (const r of (summaryRows as any[])) {
+          summary[r.window_size] = {
+            totalAlerts: Number(r.total_alerts),
+            abnormalCount: Number(r.abnormal_count),
+            maxSigma: Number(r.max_sigma),
+            lastScan: r.last_scan,
+          };
+        }
+
+        return { alerts, summary };
+      } catch (err) {
+        console.error('[预警查询] 失败:', err);
+        return { alerts: [], summary: {} };
       }
     }),
 
