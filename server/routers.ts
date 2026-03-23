@@ -13498,7 +13498,12 @@ insights 数组每项包含：
           return {
             id: r.id,
             tradeTime: r.trade_time,
-            won: r.win_status != null && String(r.win_status).trim() !== '' && Number(r.win_status) > 0,
+            won: (() => {
+              const ws = String(r.win_status || '').trim();
+              if (ws === '' || ws === '0' || ws === '未中奖') return false;
+              if (ws === '已中奖') return true;
+              return Number(ws) > 0;
+            })(),
             theoryProb: calcTheoryProb(content),
           };
         });
