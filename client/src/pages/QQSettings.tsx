@@ -181,12 +181,15 @@ function InterestSettlementPage({
           <div className="flex flex-col gap-3">
             <div>
               <div className="text-xs text-gray-500 mb-1">结算日期</div>
-              <input
-                type="date"
-                value={addDate}
-                onChange={e => setAddDate(e.target.value)}
-                className="w-full bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 outline-none"
-              />
+              <div className="w-full">
+                <input
+                  type="date"
+                  value={addDate}
+                  onChange={e => setAddDate(e.target.value)}
+                  style={{ width: '100%', minWidth: '100%', display: 'block', boxSizing: 'border-box' }}
+                  className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:border-blue-500 outline-none appearance-none"
+                />
+              </div>
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1">结算金额（元）</div>
