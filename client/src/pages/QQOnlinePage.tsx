@@ -90,7 +90,7 @@ function AIHabitsPanel() {
   };
 
   return (
-    <div className="mx-4 mb-4">
+    <div className="px-4 pt-3">
       <div className="rounded-2xl px-4 py-3" style={cardStyle}>
         {/* 标题行 */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
