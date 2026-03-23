@@ -224,7 +224,7 @@ export default function QQOnlinePage() {
               style={{ bottom: '80px', left: '50%', transform: 'translateX(-50%)' }}
             >
               <button
-                onClick={() => { window.location.reload(); }}
+                onClick={() => { location.assign(location.href); }}
                 className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lg text-white text-sm font-medium"
                 style={{ background: 'rgba(26,86,219,0.92)', backdropFilter: 'blur(8px)', minWidth: '160px' }}
               >
