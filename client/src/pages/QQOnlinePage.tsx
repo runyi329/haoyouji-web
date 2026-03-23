@@ -142,6 +142,208 @@ function AIRiskControlPanel() {
   );
 }
 
+function ShortCycleMonitorPanel() {
+  const { data: monitorData, isLoading } = trpc.getShortCycleMonitor.useQuery(undefined, {
+    refetchInterval: 60 * 1000,
+  });
+
+  const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
+
+  // SVG仪表盘组件
+  function GaugeMeter({ score, label, alertLevel, alertMsg, winRate, expectedRate, sigma }: {
+    score: number; label: string; alertLevel: string; alertMsg: string;
+    winRate: number; expectedRate: number; sigma: number;
+  }) {
+    const size = 110;
+    const cx = size / 2;
+    const cy = size / 2 + 8;
+    const radius = 40;
+    const strokeWidth = 7;
+    // 弧形从210°到330°（底部开口的半圆）
+    const startAngle = 210;
+    const endAngle = 330;
+    const totalAngle = endAngle - startAngle; // 120°
+    // 指针角度
+    const needleAngle = startAngle + (Math.min(100, Math.max(0, score)) / 100) * totalAngle;
+
+    function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+      const rad = ((angleDeg - 90) * Math.PI) / 180;
+      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    }
+
+    // 背景弧
+    const bgStart = polarToCartesian(cx, cy, radius, startAngle);
+    const bgEnd = polarToCartesian(cx, cy, radius, endAngle);
+    const bgArc = `M ${bgStart.x} ${bgStart.y} A ${radius} ${radius} 0 0 1 ${bgEnd.x} ${bgEnd.y}`;
+
+    // 进度弧
+    const progressEnd = polarToCartesian(cx, cy, radius, needleAngle);
+    const largeArc = (needleAngle - startAngle) > 180 ? 1 : 0;
+    const progressArc = `M ${bgStart.x} ${bgStart.y} A ${radius} ${radius} 0 ${largeArc} 1 ${progressEnd.x} ${progressEnd.y}`;
+
+    // 颜色根据分数渐变
+    let arcColor = '#3DD68C'; // 绿色安全
+    let glowColor = 'rgba(61,214,140,0.3)';
+    if (score >= 80) { arcColor = '#F47068'; glowColor = 'rgba(244,112,104,0.4)'; }
+    else if (score >= 50) { arcColor = '#E78340'; glowColor = 'rgba(231,131,64,0.35)'; }
+    else if (score >= 25) { arcColor = '#C9A84C'; glowColor = 'rgba(201,168,76,0.3)'; }
+
+    // 指针
+    const needleTip = polarToCartesian(cx, cy, radius - 10, needleAngle);
+
+    // 刻度标记
+    const ticks = [0, 25, 50, 75, 100];
+    const tickLabels = ticks.map(t => {
+      const angle = startAngle + (t / 100) * totalAngle;
+      const outer = polarToCartesian(cx, cy, radius + 10, angle);
+      const inner = polarToCartesian(cx, cy, radius + 4, angle);
+      return { t, outer, inner, angle };
+    });
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: '1 1 0', minWidth: 0 }}>
+        <div className="text-[10px] font-medium mb-1" style={{ color: LABEL_COLOR }}>{label}</div>
+        <svg width={size} height={size * 0.75} viewBox={`0 0 ${size} ${size * 0.75}`}>
+          <defs>
+            <filter id={`glow-${label}`}>
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+            <linearGradient id={`grad-${label}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#3DD68C" />
+              <stop offset="40%" stopColor="#C9A84C" />
+              <stop offset="70%" stopColor="#E78340" />
+              <stop offset="100%" stopColor="#F47068" />
+            </linearGradient>
+          </defs>
+          {/* 背景弧 */}
+          <path d={bgArc} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} strokeLinecap="round" />
+          {/* 进度弧 */}
+          {score > 0 && (
+            <path d={progressArc} fill="none" stroke={arcColor} strokeWidth={strokeWidth} strokeLinecap="round"
+              filter={`url(#glow-${label})`} />
+          )}
+          {/* 刻度 */}
+          {tickLabels.map(({ t, outer, inner }) => (
+            <g key={t}>
+              <line x1={inner.x} y1={inner.y} x2={outer.x} y2={outer.y}
+                stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+              <text x={outer.x} y={outer.y - 2} textAnchor="middle" fill={LABEL_COLOR}
+                fontSize="6" fontFamily="monospace">{t}</text>
+            </g>
+          ))}
+          {/* 指针 */}
+          <line x1={cx} y1={cy} x2={needleTip.x} y2={needleTip.y}
+            stroke={arcColor} strokeWidth="2" strokeLinecap="round"
+            filter={`url(#glow-${label})`} />
+          <circle cx={cx} cy={cy} r="3" fill={arcColor} />
+          <circle cx={cx} cy={cy} r="1.5" fill="#0D1B2A" />
+          {/* 中心分数 */}
+          <text x={cx} y={cy + 16} textAnchor="middle" fill={arcColor}
+            fontSize="14" fontWeight="bold" fontFamily="monospace">{score}</text>
+        </svg>
+        {/* 状态标签 */}
+        <div className="text-[8px] font-bold px-2 py-0.5 rounded-full mt-0.5"
+          style={{
+            color: arcColor,
+            backgroundColor: `${arcColor}15`,
+            border: `1px solid ${arcColor}30`,
+            textShadow: `0 0 6px ${glowColor}`,
+          }}>
+          {alertMsg}
+        </div>
+        {/* 详细数据 */}
+        <div className="mt-1.5 w-full px-1" style={{ fontSize: '8px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: LABEL_COLOR }}>实际胜率</span>
+            <span className="font-mono font-bold" style={{ color: winRate > expectedRate * 1.5 ? '#F47068' : DATA_COLOR }}>{winRate.toFixed(2)}%</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: LABEL_COLOR }}>期望胜率</span>
+            <span className="font-mono" style={{ color: LABEL_COLOR }}>{expectedRate.toFixed(2)}%</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: LABEL_COLOR }}>Z-Score</span>
+            <span className="font-mono font-bold" style={{ color: Math.abs(sigma) > 2 ? '#F47068' : Math.abs(sigma) > 1 ? '#C9A84C' : '#3DD68C' }}>
+              {sigma > 0 ? '+' : ''}{sigma.toFixed(2)}σ
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 pt-3">
+      <div className="rounded-2xl px-3 py-3" style={cardStyle}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-[11px]" style={{ color: LABEL_COLOR }}>短周期监控</div>
+          <div className="text-[8px] px-1.5 py-0.5 rounded" style={{ color: GOLD_COLOR, backgroundColor: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)' }}>加权胜率离群检测</div>
+        </div>
+
+        {isLoading && (
+          <div className="text-center py-6 text-xs" style={{ color: LABEL_COLOR }}>加载中...</div>
+        )}
+
+        {!isLoading && (!monitorData?.windows || monitorData.windows.length === 0) && (
+          <div className="text-center py-6 text-xs" style={{ color: LABEL_COLOR }}>暂无数据</div>
+        )}
+
+        {!isLoading && monitorData?.windows && monitorData.windows.length > 0 && (
+          <>
+            {/* 三个仪表盘横排 */}
+            <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+              {monitorData.windows.map((w: any) => (
+                <GaugeMeter
+                  key={w.size}
+                  score={w.riskScore}
+                  label={`近${w.actualSize}笔`}
+                  alertLevel={w.alertLevel}
+                  alertMsg={w.alertMsg}
+                  winRate={w.overallWinRate}
+                  expectedRate={w.expectedWinRate}
+                  sigma={w.sigmaValue}
+                />
+              ))}
+            </div>
+
+            {/* 分组明细（可展开） */}
+            <details className="mt-2">
+              <summary className="text-[9px] cursor-pointer" style={{ color: LABEL_COLOR, opacity: 0.7 }}>
+                展开分组明细
+              </summary>
+              <div className="mt-1">
+                {monitorData.windows.map((w: any) => (
+                  <div key={w.size} className="mb-2">
+                    <div className="text-[9px] font-medium mb-1" style={{ color: GOLD_COLOR }}>近{w.actualSize}笔 ({w.groups?.length || 0}组)</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                      {(w.groups || []).map((g: any) => {
+                        const bgC = g.isOutlier ? 'rgba(244,112,104,0.15)' : 'rgba(61,214,140,0.08)';
+                        const borderC = g.isOutlier ? 'rgba(244,112,104,0.4)' : 'rgba(255,255,255,0.06)';
+                        return (
+                          <div key={g.index} className="rounded px-1.5 py-1" style={{ backgroundColor: bgC, border: `1px solid ${borderC}`, minWidth: '52px' }}>
+                            <div className="text-[7px]" style={{ color: LABEL_COLOR }}>#{g.index}</div>
+                            <div className="text-[9px] font-mono font-bold" style={{ color: g.isOutlier ? '#F47068' : DATA_COLOR }}>
+                              {g.won}/{g.total}
+                            </div>
+                            <div className="text-[7px] font-mono" style={{ color: LABEL_COLOR }}>
+                              期望{g.expectedWon} | {g.sigmaValue > 0 ? '+' : ''}{g.sigmaValue}σ
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AmountAnalysisPanel() {
   const { data: amountData, isLoading } = trpc.getAmountAnalysis.useQuery(undefined, {
     refetchInterval: 5 * 60 * 1000,
@@ -539,6 +741,9 @@ export default function QQOnlinePage() {
 
         </div>
       </div>
+
+      {/* ── 短周期监控（仅jiang可见）── */}
+      {currentUserId === JIANG_ID && <ShortCycleMonitorPanel />}
 
       {/* ── AI监控（仅jiang可见）── */}
       {currentUserId === JIANG_ID && <AIRiskControlPanel />}

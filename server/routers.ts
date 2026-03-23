@@ -13455,6 +13455,157 @@ insights 数组每项包含：
     }),
 
 
+  // ========== 短周期窗口监控：胜率离群值检测 ==========
+  getShortCycleMonitor: protectedProcedure
+    .query(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      if ((ctx.user as any).id !== JIANG_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { windows: [] };
+
+        // 获取最近200笔有效投注记录（按时间倒序），包含 content 用于计算每笔的理论中奖概率
+        const [rows] = await (conn as any).execute(
+          `SELECT id, trade_time, win_status, content
+           FROM qq_trade_records
+           WHERE amount IS NOT NULL AND amount != ''
+           ORDER BY trade_time DESC, id DESC
+           LIMIT 200`
+        );
+
+        // 差值概率表：每个号码对应的组合数
+        const COMBO_MAP: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
+
+        // 根据投注内容计算单笔理论中奖概率
+        function calcTheoryProb(content: string): number {
+          const digits: number[] = [];
+          for (const ch of content) {
+            if (ch >= '0' && ch <= '9') {
+              const n = parseInt(ch, 10);
+              if (!digits.includes(n)) digits.push(n);
+            }
+          }
+          if (digits.length === 0) return 0.1; // 无法解析时用默认值
+          const combos = digits.reduce((sum, d) => sum + (COMBO_MAP[d] || 0), 0);
+          return combos / 100; // 0~1
+        }
+
+        const records = (rows as any[]).map((r: any) => {
+          const content = String(r.content || '').trim();
+          return {
+            id: r.id,
+            tradeTime: r.trade_time,
+            won: r.win_status != null && String(r.win_status).trim() !== '' && Number(r.win_status) > 0,
+            theoryProb: calcTheoryProb(content),
+          };
+        });
+
+        // 三个窗口维度
+        const windowSizes = [50, 100, 200];
+        const GROUP_SIZE = 10;
+
+        const windows = windowSizes.map(size => {
+          const slice = records.slice(0, Math.min(size, records.length));
+          const actualSize = slice.length;
+          if (actualSize < GROUP_SIZE) {
+            return {
+              size, actualSize,
+              groups: [] as any[],
+              alertLevel: 'none' as string, alertMsg: '数据不足',
+              overallWinRate: 0, expectedWinRate: 0,
+              sigmaValue: 0, riskScore: 0,
+              consecutiveOutliers: 0, maxConsecutiveOutliers: 0,
+            };
+          }
+
+          // 分组（每10笔一组）
+          const groups: { index: number; total: number; won: number; expectedWon: number; winRate: number; expectedRate: number; sigmaValue: number; isOutlier: boolean }[] = [];
+          const numGroups = Math.floor(actualSize / GROUP_SIZE);
+          for (let g = 0; g < numGroups; g++) {
+            const groupSlice = slice.slice(g * GROUP_SIZE, (g + 1) * GROUP_SIZE);
+            const groupWon = groupSlice.filter(r => r.won).length;
+            // 加权期望中奖数 = 各笔理论概率之和
+            const expectedWon = groupSlice.reduce((s, r) => s + r.theoryProb, 0);
+            // 加权方差 = 各笔 p*(1-p) 之和
+            const variance = groupSlice.reduce((s, r) => s + r.theoryProb * (1 - r.theoryProb), 0);
+            const sigma = Math.sqrt(variance);
+            // Z-score: (实际中奖 - 期望中奖) / 标准差
+            const zScore = sigma > 0 ? (groupWon - expectedWon) / sigma : 0;
+            // 离群判定：Z-score > 2（实际中奖显著高于期望）
+            const isOutlier = zScore > 2;
+            groups.push({
+              index: g + 1,
+              total: GROUP_SIZE,
+              won: groupWon,
+              expectedWon: Math.round(expectedWon * 100) / 100,
+              winRate: Math.round((groupWon / GROUP_SIZE) * 10000) / 100,
+              expectedRate: Math.round((expectedWon / GROUP_SIZE) * 10000) / 100,
+              sigmaValue: Math.round(zScore * 100) / 100,
+              isOutlier,
+            });
+          }
+
+          // 检测连续离群组数
+          let maxConsecutive = 0;
+          let currentConsecutive = 0;
+          for (const g of groups) {
+            if (g.isOutlier) {
+              currentConsecutive++;
+              maxConsecutive = Math.max(maxConsecutive, currentConsecutive);
+            } else {
+              currentConsecutive = 0;
+            }
+          }
+
+          // 整个窗口的加权统计
+          const totalWon = slice.filter(r => r.won).length;
+          const totalExpected = slice.reduce((s, r) => s + r.theoryProb, 0);
+          const totalVariance = slice.reduce((s, r) => s + r.theoryProb * (1 - r.theoryProb), 0);
+          const totalSigma = Math.sqrt(totalVariance);
+          const overallZScore = totalSigma > 0 ? (totalWon - totalExpected) / totalSigma : 0;
+
+          // 风险分数 0~100，基于Z-score和连续离群组数
+          // Z-score贡献最多60分，连续离群贡献最多40分
+          const zScorePart = Math.min(60, Math.max(0, overallZScore * 20));
+          const consecutivePart = Math.min(40, maxConsecutive * 15);
+          const riskScore = Math.min(100, Math.round(zScorePart + consecutivePart));
+
+          // 预警等级
+          let alertLevel = 'safe';
+          let alertMsg = '正常';
+          if (riskScore >= 80 || maxConsecutive >= 3) {
+            alertLevel = 'danger';
+            alertMsg = maxConsecutive >= 3 ? `连续${maxConsecutive}组离群! 确定性作弊预警` : '胜率严重异常';
+          } else if (riskScore >= 50 || maxConsecutive >= 2) {
+            alertLevel = 'warning';
+            alertMsg = maxConsecutive >= 2 ? `连续${maxConsecutive}组离群，需关注` : '胜率偏离较大';
+          } else if (riskScore >= 25) {
+            alertLevel = 'caution';
+            alertMsg = '轻微偏离，暂时安全';
+          }
+
+          return {
+            size, actualSize, groups,
+            alertLevel, alertMsg,
+            overallWinRate: Math.round((totalWon / actualSize) * 10000) / 100,
+            expectedWinRate: Math.round((totalExpected / actualSize) * 10000) / 100,
+            sigmaValue: Math.round(overallZScore * 100) / 100,
+            riskScore,
+            consecutiveOutliers: currentConsecutive,
+            maxConsecutiveOutliers: maxConsecutive,
+          };
+        });
+
+        return { windows };
+      } catch (err) {
+        console.error('[短周期监控] 查询失败:', err);
+        return { windows: [] };
+      }
+    }),
+
   // ========== AI监控 ==========
   getAIRiskControl: protectedProcedure
     .query(async ({ ctx }) => {
