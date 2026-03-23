@@ -58,7 +58,7 @@ export default function QQTradeRecords() {
   // 搜索和排序
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
-  const [sortField, setSortField] = useState<string>("id");
+  const [sortField, setSortField] = useState<string>("trade_time");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   // 行内编辑
@@ -852,12 +852,29 @@ export default function QQTradeRecords() {
 
           {/* 分页 */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-4 py-4 border-t border-gray-800">
+            <div className="flex items-center justify-center gap-2 py-4 border-t border-gray-800 flex-wrap">
+              <button onClick={() => setPage(1)} disabled={page <= 1}
+                className="px-2 py-1 text-xs bg-gray-800 rounded disabled:opacity-40">首页</button>
               <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
                 className="px-3 py-1 text-sm bg-gray-800 rounded disabled:opacity-40">上一页</button>
               <span className="text-sm text-gray-400">{page} / {totalPages}</span>
               <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
                 className="px-3 py-1 text-sm bg-gray-800 rounded disabled:opacity-40">下一页</button>
+              <button onClick={() => setPage(totalPages)} disabled={page >= totalPages}
+                className="px-2 py-1 text-xs bg-gray-800 rounded disabled:opacity-40">末页</button>
+              <div className="flex items-center gap-1 ml-2">
+                <span className="text-xs text-gray-500">跳至</span>
+                <input type="number" min={1} max={totalPages}
+                  className="w-12 px-1 py-0.5 text-xs text-center bg-gray-800 border border-gray-700 rounded text-white"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt((e.target as HTMLInputElement).value);
+                      if (val >= 1 && val <= totalPages) { setPage(val); (e.target as HTMLInputElement).value = ''; }
+                    }
+                  }}
+                />
+                <span className="text-xs text-gray-500">页</span>
+              </div>
             </div>
           )}
         </>
