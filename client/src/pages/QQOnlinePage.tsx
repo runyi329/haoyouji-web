@@ -54,6 +54,125 @@ function sigmaDisplay(level: string, betCount?: number, theoryPct?: number): { l
   }
 }
 
+// ========== AI监控 习惯板块 ==========
+function AIHabitsPanel() {
+  const [result, setResult] = React.useState<{ analysis: string; stats: any } | null>(null);
+  const [analyzing, setAnalyzing] = React.useState(false);
+  const [lastTime, setLastTime] = React.useState<string | null>(null);
+
+  const analyzeMutation = trpc.analyzeQQBettingHabits.useMutation({
+    onSuccess: (data) => {
+      setResult(data);
+      setLastTime(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+      setAnalyzing(false);
+    },
+    onError: (err) => {
+      setAnalyzing(false);
+      alert('分析失败: ' + err.message);
+    }
+  });
+
+  const handleAnalyze = () => {
+    setAnalyzing(true);
+    analyzeMutation.mutate();
+  };
+
+  const cardStyle = { background: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
+
+  // 将分析结果按维度分割
+  const parseAnalysis = (text: string) => {
+    const sections: { title: string; content: string }[] = [];
+    const parts = text.split(/【([^】]+)】/);
+    for (let i = 1; i < parts.length; i += 2) {
+      sections.push({ title: parts[i], content: (parts[i + 1] || '').trim() });
+    }
+    return sections.length > 0 ? sections : [{ title: '分析结果', content: text }];
+  };
+
+  return (
+    <div className="mx-4 mb-4">
+      <div className="rounded-2xl px-4 py-3" style={cardStyle}>
+        {/* 标题行 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="text-[11px]" style={{ color: LABEL_COLOR }}>AI监控</span>
+            <span className="text-[11px] font-bold" style={{ color: GOLD_COLOR }}>习惯</span>
+            {lastTime && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: LABEL_COLOR, background: 'rgba(255,255,255,0.05)' }}>
+                上次 {lastTime}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={handleAnalyze}
+            disabled={analyzing}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold"
+            style={{
+              background: analyzing ? 'rgba(201,168,76,0.15)' : 'rgba(201,168,76,0.2)',
+              color: GOLD_COLOR,
+              border: `1px solid ${GOLD_COLOR}40`,
+              opacity: analyzing ? 0.7 : 1,
+              cursor: analyzing ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {analyzing ? (
+              <>
+                <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite', fontSize: '10px' }}>◔</span>
+                分析中...
+              </>
+            ) : (
+              <>⚡ 全量分析</>
+            )}
+          </button>
+        </div>
+
+        {/* 未分析时的提示 */}
+        {!result && !analyzing && (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: LABEL_COLOR }} className="text-[10px]">
+            点击「全量分析」，调用 DeepSeek 分析投注习惯、心理状态与行为预测
+          </div>
+        )}
+
+        {/* 加载中 */}
+        {analyzing && (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: GOLD_COLOR }} className="text-[10px]">
+            正在读取全量数据并调用 DeepSeek 分析，通常需要 10–30 秒...
+          </div>
+        )}
+
+        {/* 分析结果 */}
+        {result && !analyzing && (
+          <div>
+            {/* 数据摘要标签 */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: GOLD_COLOR, background: `${GOLD_COLOR}18`, border: `1px solid ${GOLD_COLOR}30` }}>
+                总 {result.stats.totalBets} 笔
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: GREEN_COLOR, background: `${GREEN_COLOR}18`, border: `1px solid ${GREEN_COLOR}30` }}>
+                胜率 {result.stats.winRate}%
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: result.stats.netProfit >= 0 ? GREEN_COLOR : '#F47068', background: result.stats.netProfit >= 0 ? `${GREEN_COLOR}18` : '#F4706818', border: `1px solid ${result.stats.netProfit >= 0 ? GREEN_COLOR : '#F47068'}30` }}>
+                净{result.stats.netProfit >= 0 ? '+' : ''}{result.stats.netProfit}元
+              </span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: LABEL_COLOR, background: 'rgba(255,255,255,0.05)' }}>
+                {result.stats.activeDays}天
+              </span>
+            </div>
+
+            {/* 三个维度分析 */}
+            {parseAnalysis(result.analysis).map((section, i) => (
+              <div key={i} style={{ marginBottom: i < 2 ? '10px' : 0, paddingBottom: i < 2 ? '10px' : 0, borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.05)' : 'none' }}>
+                <div className="text-[10px] font-bold mb-1.5" style={{ color: GOLD_COLOR }}>【{section.title}】</div>
+                <div className="text-[10px] leading-relaxed" style={{ color: DATA_COLOR, opacity: 0.9 }}>{section.content}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function AIRiskControlPanel() {
   const { data: riskData, isLoading } = trpc.getAIRiskControl.useQuery(undefined, {
     refetchInterval: 5 * 60 * 1000,
@@ -928,6 +1047,9 @@ export default function QQOnlinePage() {
 
         </div>
       </div>
+
+      {/* ── AI监控 习惯（仅jiang可见）── */}
+      {currentUserId === JIANG_ID && <AIHabitsPanel />}
 
       {/* ── 短周期监控（仅jiang可见）── */}
       {currentUserId === JIANG_ID && <ShortCycleMonitorPanel />}
