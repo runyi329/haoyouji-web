@@ -141,7 +141,7 @@ export default function QQOnlinePage() {
             <div className="text-[11px] text-white/55 mt-2 mb-0.5">保证金</div>
             <div className="text-sm font-bold text-white">{deposit}</div>
           </div>
-          {/* 第3个：累计利息 + 待结利息（按秒实时增长） */}
+          {/* 第3个：累计利息 + 待结利息 + 已结利息（按秒实时增长） */}
           <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
             <div className="text-[11px] text-white/55 mb-1">累计利息</div>
             <div className="flex items-baseline gap-1.5">
@@ -152,6 +152,11 @@ export default function QQOnlinePage() {
             <div className="flex items-baseline gap-1.5">
               <span className="text-sm font-bold text-white font-mono">¥{interestCNY}</span>
               <span className="text-[10px] text-white/50">≈{interestUSDT} U</span>
+            </div>
+            <div className="text-[11px] text-white/55 mt-2 mb-0.5">已结利息</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm font-bold text-white font-mono">¥{(interest - interest).toFixed(2)}</span>
+              <span className="text-[10px] text-white/50">≈{((interest - interest) / 7).toFixed(2)} U</span>
             </div>
           </div>
           {/* 第4个：投注统计（仅jiang可见时显示数据，否则空白） */}
