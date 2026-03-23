@@ -13578,15 +13578,15 @@ insights 数组每项包含：
             }
           }
           return {
-            amountYuan,
+            amountYuan: Math.round(amountYuan * 100) / 100,
             betCount: g.betCount,
             winCount: g.winCount,
             theoryPct: Math.round(avgTheoryPct * 10000) / 100,
             actualPct: Math.round(actualPct * 10000) / 100,
             deviation: Math.round(deviation * 100) / 100,
-            totalBet: g.totalBet,
-            totalWin: g.totalWin,
-            profit,
+            totalBet: Math.round(g.totalBet * 100) / 100,
+            totalWin: Math.round(g.totalWin * 100) / 100,
+            profit: Math.round(profit * 100) / 100,
             sigmaLevel,
             sigmaValue: Math.round(sigmaValue * 100) / 100,
           };

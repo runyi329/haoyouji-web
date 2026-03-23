@@ -114,14 +114,14 @@ function AIRiskControlPanel() {
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.betCount}</span>
                   </div>
                   <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
-                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.actualPct}%</span>
+                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{Number(item.actualPct).toFixed(2)}%</span>
                   </div>
                   <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
-                    <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{item.theoryPct}%</span>
+                    <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{Number(item.theoryPct).toFixed(2)}%</span>
                   </div>
                   <div style={{ flex: '1.8 1 0', minWidth: 0 }} className="text-center">
                     <span className="text-[10px] font-bold font-mono" style={{ color: devColor }}>
-                      {item.deviation > 0 ? '+' : ''}{item.deviation}%
+                      {item.deviation > 0 ? '+' : ''}{Number(item.deviation).toFixed(2)}%
                     </span>
                   </div>
                   <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-right">
@@ -189,7 +189,7 @@ function AmountAnalysisPanel() {
                 <div style={{ flex: '1 1 0' }} className="text-center">
                   <div className="text-[9px]" style={{ color: LABEL_COLOR }}>净获利</div>
                   <div className="text-[12px] font-bold font-mono" style={{ color: summary.totalProfit >= 0 ? GREEN_COLOR : RED_COLOR }}>
-                    {summary.totalProfit >= 0 ? '+' : ''}{summary.totalProfit}元
+                    {summary.totalProfit >= 0 ? '+' : ''}{summary.totalProfit.toFixed(2)}元
                   </div>
                 </div>
               </div>
@@ -227,26 +227,26 @@ function AmountAnalysisPanel() {
                 >
                   <div style={{ flex: '1.5 1 0', minWidth: 0 }}>
                     <span className="text-[10px] font-bold font-mono" style={{ color: GOLD_COLOR }}>
-                      {item.amountYuan}元
+                      {item.amountYuan.toFixed(2)}元
                     </span>
                   </div>
                   <div style={{ flex: '1 1 0', minWidth: 0 }} className="text-center">
                     <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.betCount}</span>
                   </div>
                   <div style={{ flex: '1.3 1 0', minWidth: 0 }} className="text-center">
-                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{item.actualPct}%</span>
+                    <span className="text-[10px] font-mono" style={{ color: DATA_COLOR }}>{Number(item.actualPct).toFixed(2)}%</span>
                   </div>
                   <div style={{ flex: '1.3 1 0', minWidth: 0 }} className="text-center">
-                    <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{item.theoryPct}%</span>
+                    <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>{Number(item.theoryPct).toFixed(2)}%</span>
                   </div>
                   <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
                     <span className="text-[10px] font-bold font-mono" style={{ color: devColor }}>
-                      {item.deviation > 0 ? '+' : ''}{item.deviation}%
+                      {item.deviation > 0 ? '+' : ''}{Number(item.deviation).toFixed(2)}%
                     </span>
                   </div>
                   <div style={{ flex: '1.5 1 0', minWidth: 0 }} className="text-center">
                     <span className="text-[10px] font-bold font-mono" style={{ color: profitColor }}>
-                      {item.profit >= 0 ? '+' : ''}{item.profit}
+                      {item.profit >= 0 ? '+' : ''}{item.profit.toFixed(2)}
                     </span>
                   </div>
                   <div style={{ flex: '2 1 0', minWidth: 0 }} className="text-right">
@@ -337,7 +337,7 @@ export default function QQOnlinePage() {
   }
   function pct(part: number, total: number): string {
     if (!total) return '--';
-    return `${((part / total) * 100).toFixed(1)}%`;
+    return `(${((part / total) * 100).toFixed(2)}%)`;
   }
 
   const interestCNY = interest.toFixed(2);
@@ -446,14 +446,14 @@ export default function QQOnlinePage() {
                     <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>中奖次数</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px' }}>
                       <span className="text-sm font-bold font-mono" style={{ color: GREEN_COLOR }}>{tradeStats?.won ?? 0}</span>
-                      <span className="text-[10px]" style={{ color: GREEN_COLOR, opacity: 0.7 }}>{pct(tradeStats?.won ?? 0, tradeStats?.total ?? 0)}</span>
+                      <span className="text-[10px] ml-1" style={{ color: '#FFFFFF', opacity: 0.6 }}>{pct(tradeStats?.won ?? 0, tradeStats?.total ?? 0)}</span>
                     </div>
                   </div>
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>未中奖次数</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px' }}>
                       <span className="text-sm font-bold font-mono" style={{ color: RED_COLOR }}>{tradeStats?.lost ?? 0}</span>
-                      <span className="text-[10px]" style={{ color: RED_COLOR, opacity: 0.7 }}>{pct(tradeStats?.lost ?? 0, tradeStats?.total ?? 0)}</span>
+                      <span className="text-[10px] ml-1" style={{ color: '#FFFFFF', opacity: 0.6 }}>{pct(tradeStats?.lost ?? 0, tradeStats?.total ?? 0)}</span>
                     </div>
                   </div>
                   <div>
