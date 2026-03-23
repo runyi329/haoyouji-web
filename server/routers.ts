@@ -13767,6 +13767,98 @@ insights 数组每项包含：
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '删除失败' });
       }
     }),
+
+  // 获取盈利结算记录列表
+  getProfitSettlements: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      const YJH_ID = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { list: [], total: 0, settled: 0, lastSettle: null };
+        const [rows] = await (conn as any).execute(
+          `SELECT id, ledger_id, settle_date, amount, note, created_by, created_at
+           FROM profit_settlements
+           WHERE ledger_id = ?
+           ORDER BY settle_date DESC, id DESC`,
+          [input.ledgerId]
+        );
+        const list = (rows as any[]).map(r => ({
+          id: r.id,
+          ledgerId: r.ledger_id,
+          settleDate: r.settle_date,
+          amount: Number(r.amount),
+          note: r.note || '',
+          createdBy: r.created_by,
+          createdAt: r.created_at,
+        }));
+        const total = list.reduce((s, r) => s + r.amount, 0);
+        const settled = list.filter(r => r.amount > 0).reduce((s, r) => s + r.amount, 0);
+        const lastSettle = list.length > 0 ? { date: list[0].settleDate, amount: list[0].amount } : null;
+        return { list, total, settled, lastSettle };
+      } catch (err) {
+        console.error('[盈利结算] 查询失败:', err);
+        return { list: [], total: 0, settled: 0, lastSettle: null };
+      }
+    }),
+
+  // 添加盈利结算记录
+  addProfitSettlement: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      settleDate: z.string(),
+      amount: z.number(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      const YJH_ID = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        await (conn as any).execute(
+          `INSERT INTO profit_settlements (ledger_id, settle_date, amount, note, created_by) VALUES (?, ?, ?, ?, ?)`,
+          [input.ledgerId, input.settleDate, input.amount, input.note || '', (ctx.user as any).id]
+        );
+        return { success: true };
+      } catch (err) {
+        console.error('[盈利结算] 添加失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '添加失败' });
+      }
+    }),
+
+  // 删除盈利结算记录
+  deleteProfitSettlement: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const JIANG_ID = 870413;
+      const YJH_ID = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        await (conn as any).execute(
+          `DELETE FROM profit_settlements WHERE id = ?`,
+          [input.id]
+        );
+        return { success: true };
+      } catch (err) {
+        console.error('[盈利结算] 删除失败:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '删除失败' });
+      }
+    }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({

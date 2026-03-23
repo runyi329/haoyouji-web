@@ -288,6 +288,15 @@ export default function QQOnlinePage() {
   );
   const settledTotal = currentUserId === JIANG_ID ? (settlementData?.total || 0) : 0;
 
+  // 盈利结算数据
+  const { data: profitData } = trpc.getProfitSettlements.useQuery(
+    { ledgerId: LEDGER_ID },
+    { enabled: currentUserId === JIANG_ID || currentUserId === YJH_ID, refetchInterval: 5 * 60 * 1000 }
+  );
+  const profitTotal = profitData?.total || 0;
+  const profitSettled = profitData?.settled || 0;
+  const profitLast = profitData?.lastSettle || null;
+
   const { data, refetch } = trpc.getQQOnlineRecords.useQuery(
     { page: 1, pageSize: 1 },
     { refetchInterval: 60 * 1000 }
@@ -429,8 +438,39 @@ export default function QQOnlinePage() {
             </div>
           </div>
 
-          {/* 卡片4（占位，仅非jiang用户显示空白） */}
-          {currentUserId !== JIANG_ID && (
+          {/* 卡片4：累计盈利（仅 jiang 和 yjh 可见） */}
+          {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && (
+            <div className="rounded-2xl px-4 py-3" style={cardStyle}>
+              <div className="text-[11px] mb-1" style={{ color: LABEL_COLOR }}>累计盈利</div>
+              <div className="flex items-baseline gap-1.5">
+                <span className={`text-sm font-bold font-mono`} style={{ color: profitTotal >= 0 ? GREEN_COLOR : '#EF4444' }}>
+                  {profitTotal >= 0 ? '+' : ''}{"\u00A5"}{profitTotal.toFixed(2)}
+                </span>
+              </div>
+              <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>已结盈利</div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-sm font-bold font-mono" style={{ color: GREEN_COLOR }}>
+                  {"\u00A5"}{profitSettled.toFixed(2)}
+                </span>
+              </div>
+              <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>最近结算</div>
+              <div className="flex items-baseline gap-1.5">
+                {profitLast ? (
+                  <>
+                    <span className="text-[11px] font-mono" style={{ color: DATA_COLOR }}>{profitLast.date}</span>
+                    <span className="text-[11px] font-bold font-mono" style={{ color: GREEN_COLOR }}>
+                      {"\u00A5"}{profitLast.amount.toFixed(2)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[11px]" style={{ color: LABEL_COLOR }}>暂无记录</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 占位（非 jiang/yjh 用户显示空白） */}
+          {currentUserId !== JIANG_ID && currentUserId !== YJH_ID && (
             <div className="rounded-2xl px-4 py-3" style={{ ...cardStyle, minHeight: '80px' }} />
           )}
 
