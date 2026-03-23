@@ -13067,45 +13067,51 @@ insights 数组每项包含：
       }
       try {
         const { invokeLLM } = await import('./_core/llm');
-        const prompt = `这是一张彩票投注记录截图，格式固定。每条记录包含：
-- 订单号（如 OXIMQLJQGNM）
-- 彩种（如 奇趣腾讯分分彩）
-- 玩法（如 后二直选跨度、前二直选跨度）
-- 期号（如 202603230646）
-- 时间（如 2026-03-23 10:46）
-- 倍数（如 1）
-- 投注金额（截图中显示的原始数字，如 0.340）
-- 投注内容（如 0, 3, 6, 9）
-- 中奖金额（截图中显示的原始数字，如 0 表示未中奖）
-- 状态（未中奖/已中奖）
-
-重要规则：
-1. 金额必须×100转换：截图中0.340实际是34元，0.360实际是36元
-2. 中奖金额也×100：截图中0就是0，如果是0.850则是85
-3. 用户名统一填写空字符串
-4. 赔率和余额如果截图中没有则留空
-5. 请仔细识别每一条记录，不要遗漏
-
-请以JSON格式返回：
-{
-  "records": [
-    {
-      "username": "",
-      "order_no": "订单号",
-      "lottery_type": "彩种",
-      "play_method": "玩法",
-      "issue_no": "期号",
-      "trade_time": "时间",
-      "multiplier": "倍数",
-      "amount": "金额(已×100)",
-      "content": "投注内容",
-      "win_status": "中奖金额(已×100)，未中奖填0",
-      "odds": "",
-      "balance": ""
-    }
-  ]
-}
-只返回JSON，不要其他文字。`;
+        const prompt = [
+          '你是一个彩票投注截图识别助手。请从截图中提取所有投注记录。',
+          '',
+          '固定规则（必须严格遵守）：',
+          '1. username（用户名）：固定填 "jjh2378"，不从截图读取',
+          '2. lottery_type（彩种）：固定填 "奇趣腾讯分分彩"，不从截图读取',
+          '3. play_method（玩法）：从截图读取，只会是 "后二直选跨度" 或 "前二直选跨度"',
+          '4. order_no（订单号）：从截图读取，是一串英文大写字母（如 OXIMQLJQGNM）',
+          '5. issue_no（期号）：从截图读取，是一串数字（如 202603230646）',
+          '6. trade_time（时间）：从截图读取，格式 "YYYY-MM-DD HH:mm"。如果截图中时间不完整或被遮挡看不清，填空字符串 ""',
+          '7. multiplier（倍数）：从截图读取（如 "1"）',
+          '8. amount（投注金额）：从截图读取原始数字，保留原始格式（如 "0.340"、"0.360"），不要做任何乘除转换',
+          '9. content（投注内容）：从截图读取投注的数字，用英文逗号分隔（如 "0,3,6,9"），逗号后不要有空格',
+          '10. win_amount（中奖金额）：从截图读取原始数字，保留原始格式。未中奖填 "0"',
+          '11. win_status_text（中奖状态文字）：从截图读取，"未中奖" 或 "已中奖"',
+          '12. odds（赔率）：截图中有则读取，没有填空字符串',
+          '13. balance（余额）：截图中有则读取，没有填空字符串',
+          '',
+          '注意事项：',
+          '- 金额字段（amount、win_amount）保持截图中的原始数字，不做任何数学运算',
+          '- 仔细识别每一条记录，不要遗漏',
+          '- 投注内容中的数字用英文逗号分隔，不要有空格',
+          '',
+          '请以JSON格式返回：',
+          '{',
+          '  "records": [',
+          '    {',
+          '      "username": "jjh2378",',
+          '      "order_no": "订单号",',
+          '      "lottery_type": "奇趣腾讯分分彩",',
+          '      "play_method": "玩法",',
+          '      "issue_no": "期号",',
+          '      "trade_time": "时间或空字符串",',
+          '      "multiplier": "倍数",',
+          '      "amount": "原始金额数字",',
+          '      "content": "投注内容",',
+          '      "win_amount": "原始中奖金额或0",',
+          '      "win_status_text": "未中奖或已中奖",',
+          '      "odds": "",',
+          '      "balance": ""',
+          '    }',
+          '  ]',
+          '}',
+          '只返回JSON，不要其他文字。',
+        ].join('\n');
         const response = await invokeLLM({
           messages: [
             {
@@ -13118,9 +13124,87 @@ insights 数组每项包含：
           ],
           response_format: { type: 'json_object' }
         });
-        const content = response?.choices?.[0]?.message?.content || '{}';
-        const parsed = JSON.parse(content);
-        return { records: parsed.records || [] };
+        const rawContent = response?.choices?.[0]?.message?.content || '{}';
+        const parsed = JSON.parse(rawContent);
+        const aiRecords = parsed.records || [];
+
+        // ===== 代码查重 + 补录逻辑 =====
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+
+        // 提取所有识别到的订单号，批量查数据库
+        const orderNos = aiRecords.map((r: any) => r.order_no).filter((v: string) => v && v.trim());
+        let existingMap: Record<string, any> = {};
+        if (conn && orderNos.length > 0) {
+          const placeholders = orderNos.map(() => '?').join(',');
+          const [existRows] = await (conn as any).execute(
+            `SELECT id, order_no, username, lottery_type, play_method, issue_no, trade_time, multiplier, amount, content, win_status, odds, balance FROM qq_trade_records WHERE order_no IN (${placeholders})`,
+            orderNos
+          );
+          for (const row of (existRows as any[])) {
+            existingMap[row.order_no] = row;
+          }
+        }
+
+        // 对每条识别记录进行分类
+        const results = aiRecords.map((r: any) => {
+          // 金额转换：原始值保留，前端x100显示
+          const amountRaw = r.amount ? String(r.amount) : '';
+          const winAmountRaw = r.win_amount ? String(r.win_amount) : '0';
+          // win_status 存中奖金额原始值，未中奖存 "0"
+          const winStatusVal = (winAmountRaw === '0' || winAmountRaw === '') ? '0' : winAmountRaw;
+
+          const record = {
+            username: r.username || 'jjh2378',
+            order_no: r.order_no || '',
+            lottery_type: r.lottery_type || '奇趣腾讯分分彩',
+            play_method: r.play_method || '',
+            issue_no: r.issue_no || '',
+            trade_time: r.trade_time || '',
+            multiplier: r.multiplier || '',
+            amount: amountRaw,
+            content: r.content || '',
+            win_status: winStatusVal,
+            odds: r.odds || '',
+            balance: r.balance || '',
+          };
+
+          const existing = existingMap[r.order_no];
+          if (!existing) {
+            // 全新订单
+            return { ...record, _status: 'new', _statusText: '新增', _fillFields: [] as string[] };
+          }
+
+          // 订单已存在，检查是否有空缺字段可以补录
+          const FIELD_LABELS: Record<string, string> = {
+            trade_time: '时间', play_method: '玩法', issue_no: '期号',
+            multiplier: '倍数', content: '内容', odds: '赔率', balance: '余额',
+          };
+          const fillableFields = ['trade_time', 'play_method', 'issue_no', 'multiplier', 'content', 'odds', 'balance'];
+          const fillFields: string[] = [];
+          for (const f of fillableFields) {
+            const dbVal = existing[f];
+            const newVal = (record as any)[f];
+            if ((!dbVal || String(dbVal).trim() === '') && newVal && String(newVal).trim() !== '') {
+              fillFields.push(f);
+            }
+          }
+          // 也检查 win_status：如果数据库中是0或空，新识别到有中奖金额
+          if ((!existing.win_status || String(existing.win_status).trim() === '' || String(existing.win_status).trim() === '0') && winStatusVal !== '0') {
+            fillFields.push('win_status');
+          }
+
+          if (fillFields.length > 0) {
+            // 有空缺可补录
+            const fillLabels = fillFields.map(f => FIELD_LABELS[f] || f);
+            return { ...record, _status: 'fill', _statusText: '补录(' + fillLabels.join(',') + ')', _fillFields: fillFields, _existingId: existing.id };
+          }
+
+          // 完全重复，跳过
+          return { ...record, _status: 'skip', _statusText: '跳过(已存在)', _fillFields: [] as string[] };
+        });
+
+        return { records: results };
       } catch (err) {
         console.error('[QQ交易] AI识别失败:', err);
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI识别失败' });

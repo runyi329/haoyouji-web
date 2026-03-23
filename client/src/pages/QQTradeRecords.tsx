@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Edit2, Settings } from "lucide-react";
+import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Edit2, Settings, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
 
 const FIELDS = [
   { key: "username", label: "用户名" },
@@ -31,6 +31,14 @@ function emptyRow(): TradeRow {
 
 type UploadMode = "photo" | "file" | "manual" | null;
 
+// 识别记录带状态
+interface RecognizedRecord extends TradeRow {
+  _status: 'new' | 'fill' | 'skip';
+  _statusText: string;
+  _fillFields: string[];
+  _existingId?: number;
+}
+
 export default function QQTradeRecords() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
@@ -53,7 +61,9 @@ export default function QQTradeRecords() {
   // 行内编辑
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<TradeRow>(emptyRow());
-  const [recognizeDetail, setRecognizeDetail] = useState<{ count: number; details: string } | null>(null);
+
+  // 识别结果预览（带查重/补录状态）
+  const [recognizeResults, setRecognizeResults] = useState<RecognizedRecord[] | null>(null);
 
   const { data, isLoading, refetch } = trpc.getQQTradeRecords.useQuery(
     { page, pageSize, search: search || undefined, sortField, sortOrder },
@@ -101,27 +111,8 @@ export default function QQTradeRecords() {
   const recognizeMutation = trpc.recognizeQQTradeImage.useMutation({
     onSuccess: (res) => {
       if (res.records && res.records.length > 0) {
-        const mapped = res.records.map((r: any) => ({
-          username: r.username || "",
-          order_no: r.order_no || "",
-          lottery_type: r.lottery_type || "",
-          play_method: r.play_method || "",
-          issue_no: r.issue_no || "",
-          trade_time: r.trade_time || "",
-          multiplier: r.multiplier || "",
-          amount: r.amount || "",
-          content: r.content || "",
-          win_status: r.win_status || "",
-          odds: r.odds || "",
-          balance: r.balance || "",
-        }));
-        setPendingRows(mapped);
-        setUploadMode("manual");
-        // 详细提示识别结果
-        const details = mapped.map((r: any, i: number) =>
-          `#${i + 1} 订单:${r.order_no || '-'} 金额:${r.amount || '-'} 内容:${r.content || '-'} 状态:${r.win_status === '0' ? '未中奖' : r.win_status || '-'}`
-        ).join('\n');
-        setRecognizeDetail({ count: mapped.length, details });
+        // 后端返回带 _status/_statusText/_fillFields 的记录
+        setRecognizeResults(res.records as RecognizedRecord[]);
       } else {
         showToast("未识别到数据，请手动输入");
         setUploadMode("manual");
@@ -152,6 +143,69 @@ export default function QQTradeRecords() {
       records: validRows,
       batchId: `batch_${Date.now()}`,
     });
+  }
+
+  // 确认识别结果：新增的进入编辑，补录的自动更新，跳过的忽略
+  async function handleConfirmRecognize() {
+    if (!recognizeResults) return;
+    setSaving(true);
+
+    const newRecords: TradeRow[] = [];
+    const fillPromises: Promise<void>[] = [];
+
+    for (const r of recognizeResults) {
+      if (r._status === 'new') {
+        // 新增记录 → 放入待编辑列表
+        newRecords.push({
+          username: r.username, order_no: r.order_no, lottery_type: r.lottery_type,
+          play_method: r.play_method, issue_no: r.issue_no, trade_time: r.trade_time,
+          multiplier: r.multiplier, amount: r.amount, content: r.content,
+          win_status: r.win_status, odds: r.odds, balance: r.balance,
+        });
+      } else if (r._status === 'fill' && r._existingId) {
+        // 补录记录 → 直接调用更新接口
+        const updateFields: Record<string, string> = {};
+        for (const f of r._fillFields) {
+          updateFields[f] = (r as any)[f] || '';
+        }
+        fillPromises.push(
+          new Promise<void>((resolve) => {
+            updateMutation.mutate(
+              { id: r._existingId!, ...updateFields } as any,
+              { onSuccess: () => resolve(), onError: () => resolve() }
+            );
+          })
+        );
+      }
+      // skip 的不做任何操作
+    }
+
+    // 等待所有补录完成
+    if (fillPromises.length > 0) {
+      await Promise.all(fillPromises);
+      const fillCount = fillPromises.length;
+      showToast(`已补录 ${fillCount} 条记录`);
+    }
+
+    // 关闭预览弹窗
+    setRecognizeResults(null);
+
+    if (newRecords.length > 0) {
+      // 有新增记录 → 进入编辑模式
+      setPendingRows(newRecords);
+      setUploadMode("manual");
+      if (fillPromises.length === 0) {
+        showToast(`${newRecords.length} 条新记录，请确认后保存`);
+      }
+    } else {
+      // 没有新增记录
+      setSaving(false);
+      refetch();
+      if (fillPromises.length === 0) {
+        showToast("所有记录均已存在，无需操作");
+      }
+    }
+    setSaving(false);
   }
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -261,6 +315,20 @@ export default function QQTradeRecords() {
       : <ArrowDown size={10} className="text-blue-400 inline ml-0.5" />;
   }
 
+  // 状态颜色映射
+  function statusColor(status: string) {
+    if (status === 'new') return 'text-green-400';
+    if (status === 'fill') return 'text-yellow-400';
+    if (status === 'skip') return 'text-gray-500';
+    return 'text-gray-400';
+  }
+  function statusBg(status: string) {
+    if (status === 'new') return 'bg-green-900/30 border-green-700/50';
+    if (status === 'fill') return 'bg-yellow-900/30 border-yellow-700/50';
+    if (status === 'skip') return 'bg-gray-800/50 border-gray-700/50';
+    return 'bg-gray-800/50 border-gray-700/50';
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* 顶部导航 */}
@@ -305,28 +373,84 @@ export default function QQTradeRecords() {
         </div>
       )}
 
-      {/* 识别结果详情弹窗 */}
-      {recognizeDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setRecognizeDetail(null)}>
-          <div className="bg-gray-800 rounded-xl p-4 mx-4 max-w-sm w-full shadow-2xl border border-gray-600" onClick={e => e.stopPropagation()}>
+      {/* ===== 识别结果预览弹窗（带查重/补录状态） ===== */}
+      {recognizeResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setRecognizeResults(null)}>
+          <div className="bg-gray-800 rounded-xl p-4 mx-3 max-w-md w-full shadow-2xl border border-gray-600 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-green-400 font-bold text-base">AI识别完成</h3>
-              <button onClick={() => setRecognizeDetail(null)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setRecognizeResults(null)} className="text-gray-400 active:text-white">
                 <X size={18} />
               </button>
             </div>
-            <div className="text-yellow-300 text-sm mb-3">共识别到 {recognizeDetail.count} 条记录</div>
-            <div className="bg-gray-900/60 rounded-lg p-3 max-h-60 overflow-y-auto">
-              {recognizeDetail.details.split('\n').map((line, i) => (
-                <div key={i} className="text-gray-200 text-xs py-1 border-b border-gray-700/50 last:border-0 whitespace-pre-wrap">{line}</div>
+
+            {/* 统计摘要 */}
+            <div className="flex gap-3 mb-3 text-xs">
+              <span className="text-green-400">
+                新增: {recognizeResults.filter(r => r._status === 'new').length}
+              </span>
+              <span className="text-yellow-400">
+                补录: {recognizeResults.filter(r => r._status === 'fill').length}
+              </span>
+              <span className="text-gray-500">
+                跳过: {recognizeResults.filter(r => r._status === 'skip').length}
+              </span>
+              <span className="text-gray-400 ml-auto">
+                共 {recognizeResults.length} 条
+              </span>
+            </div>
+
+            {/* 记录详情列表 */}
+            <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
+              {recognizeResults.map((r, i) => (
+                <div key={i} className={`rounded-lg border p-3 ${statusBg(r._status)}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white text-sm font-medium">#{i + 1}</span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                      r._status === 'new' ? 'bg-green-800 text-green-300' :
+                      r._status === 'fill' ? 'bg-yellow-800 text-yellow-300' :
+                      'bg-gray-700 text-gray-400'
+                    }`}>
+                      {r._statusText}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <div><span className="text-gray-500">订单号: </span><span className="text-gray-200">{r.order_no || '-'}</span></div>
+                    <div><span className="text-gray-500">玩法: </span><span className="text-gray-200">{r.play_method || '-'}</span></div>
+                    <div><span className="text-gray-500">期号: </span><span className="text-gray-200">{r.issue_no || '-'}</span></div>
+                    <div><span className="text-gray-500">时间: </span><span className="text-gray-200">{r.trade_time || '(空)'}</span></div>
+                    <div><span className="text-gray-500">金额: </span><span className="text-gray-200">{r.amount || '-'}</span></div>
+                    <div><span className="text-gray-500">倍数: </span><span className="text-gray-200">{r.multiplier || '-'}</span></div>
+                    <div><span className="text-gray-500">内容: </span><span className="text-blue-300">{r.content || '-'}</span></div>
+                    <div><span className="text-gray-500">中奖: </span><span className={r.win_status !== '0' ? 'text-green-400 font-bold' : 'text-red-400'}>{r.win_status === '0' ? '未中奖' : r.win_status}</span></div>
+                  </div>
+                  {r._status === 'fill' && r._fillFields.length > 0 && (
+                    <div className="mt-2 text-xs text-yellow-400 flex items-center gap-1">
+                      <RefreshCw size={10} />
+                      将补录: {r._fillFields.join(', ')}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
-            <button
-              onClick={() => setRecognizeDetail(null)}
-              className="mt-3 w-full py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg font-medium"
-            >
-              确认，去编辑
-            </button>
+
+            {/* 操作按钮 */}
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => setRecognizeResults(null)}
+                className="flex-1 py-2.5 bg-gray-700 text-gray-300 text-sm rounded-lg font-medium active:bg-gray-600"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleConfirmRecognize}
+                disabled={saving}
+                className="flex-1 py-2.5 bg-blue-600 text-white text-sm rounded-lg font-medium active:bg-blue-500 disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                确认执行
+              </button>
+            </div>
           </div>
         </div>
       )}
