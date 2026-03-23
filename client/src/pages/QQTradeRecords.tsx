@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Edit2, Settings, AlertTriangle, CheckCircle, RefreshCw } from "lucide-react";
+import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Edit2, Settings, AlertTriangle, CheckCircle, RefreshCw, ClipboardPaste } from "lucide-react";
+import * as XLSX from "xlsx";
 
 const FIELDS = [
   { key: "username", label: "用户名" },
@@ -29,7 +30,7 @@ function emptyRow(): TradeRow {
   };
 }
 
-type UploadMode = "photo" | "file" | "manual" | null;
+type UploadMode = "photo" | "file" | "manual" | "paste" | null;
 
 // 识别记录带状态
 interface RecognizedRecord extends TradeRow {
@@ -51,6 +52,7 @@ export default function QQTradeRecords() {
   const [toast, setToast] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [pasteText, setPasteText] = useState("");
 
   // 搜索和排序
   const [search, setSearch] = useState("");
@@ -221,42 +223,101 @@ export default function QQTradeRecords() {
     e.target.value = "";
   }
 
+  function parseColumnsToRow(cols: string[]): TradeRow {
+    return {
+      username: cols[0]?.trim() || "",
+      order_no: cols[1]?.trim() || "",
+      lottery_type: cols[2]?.trim() || "",
+      play_method: cols[3]?.trim() || "",
+      issue_no: cols[4]?.trim() || "",
+      trade_time: cols[5]?.trim() || "",
+      multiplier: cols[6]?.trim() || "",
+      amount: cols[7]?.trim() || "",
+      content: cols[8]?.trim() || "",
+      win_status: cols[9]?.trim() || "",
+      odds: cols[10]?.trim() || "",
+      balance: cols[11]?.trim() || "",
+    };
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      const lines = text.split(/\r?\n/).filter(l => l.trim());
-      const startIdx = lines[0] && lines[0].includes("用户名") ? 1 : 0;
-      const rows: TradeRow[] = [];
-      for (let i = startIdx; i < lines.length; i++) {
-        const cols = lines[i].split(",");
-        rows.push({
-          username: cols[0]?.trim() || "",
-          order_no: cols[1]?.trim() || "",
-          lottery_type: cols[2]?.trim() || "",
-          play_method: cols[3]?.trim() || "",
-          issue_no: cols[4]?.trim() || "",
-          trade_time: cols[5]?.trim() || "",
-          multiplier: cols[6]?.trim() || "",
-          amount: cols[7]?.trim() || "",
-          content: cols[8]?.trim() || "",
-          win_status: cols[9]?.trim() || "",
-          odds: cols[10]?.trim() || "",
-          balance: cols[11]?.trim() || "",
-        });
-      }
-      if (rows.length > 0) {
-        setPendingRows(rows);
-        setUploadMode("manual");
-        showToast(`解析到 ${rows.length} 行数据，请确认后保存`);
-      } else {
-        showToast("未解析到数据");
-      }
-    };
-    reader.readAsText(file, "utf-8");
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext === "xlsx" || ext === "xls") {
+      // Excel
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = new Uint8Array(ev.target?.result as ArrayBuffer);
+          const wb = XLSX.read(data, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const jsonRows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+          const startIdx = jsonRows[0] && String(jsonRows[0][0]).includes("用户名") ? 1 : 0;
+          const rows: TradeRow[] = [];
+          for (let i = startIdx; i < jsonRows.length; i++) {
+            const cols = jsonRows[i].map(c => String(c));
+            if (cols.some(c => c.trim())) rows.push(parseColumnsToRow(cols));
+          }
+          if (rows.length > 0) {
+            setPendingRows(rows);
+            setUploadMode("manual");
+            showToast(`Excel解析到 ${rows.length} 行数据，请确认后保存`);
+          } else {
+            showToast("Excel中未解析到数据");
+          }
+        } catch {
+          showToast("Excel解析失败，请检查文件格式");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // CSV/TXT
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        const startIdx = lines[0] && lines[0].includes("用户名") ? 1 : 0;
+        const rows: TradeRow[] = [];
+        for (let i = startIdx; i < lines.length; i++) {
+          const cols = lines[i].split(",");
+          if (cols.some(c => c.trim())) rows.push(parseColumnsToRow(cols));
+        }
+        if (rows.length > 0) {
+          setPendingRows(rows);
+          setUploadMode("manual");
+          showToast(`解析到 ${rows.length} 行数据，请确认后保存`);
+        } else {
+          showToast("未解析到数据");
+        }
+      };
+      reader.readAsText(file, "utf-8");
+    }
     e.target.value = "";
+  }
+
+  function handleParsePaste() {
+    if (!pasteText.trim()) {
+      showToast("请先粘贴数据");
+      return;
+    }
+    const lines = pasteText.split(/\r?\n/).filter(l => l.trim());
+    const startIdx = lines[0] && lines[0].includes("用户名") ? 1 : 0;
+    const rows: TradeRow[] = [];
+    for (let i = startIdx; i < lines.length; i++) {
+      // 支持Tab分隔(从Excel/网页复制)和逗号分隔
+      const line = lines[i];
+      const cols = line.includes("\t") ? line.split("\t") : line.split(",");
+      if (cols.some(c => c.trim())) rows.push(parseColumnsToRow(cols));
+    }
+    if (rows.length > 0) {
+      setPendingRows(rows);
+      setUploadMode("manual");
+      setPasteText("");
+      showToast(`粘贴解析到 ${rows.length} 行数据，请确认后保存`);
+    } else {
+      showToast("未解析到有效数据，请检查格式");
+    }
   }
 
   function updateRow(idx: number, key: FieldKey, val: string) {
@@ -350,7 +411,7 @@ export default function QQTradeRecords() {
           <span className="text-sm">{uploadMode ? "取消" : "返回"}</span>
         </button>
         <h1 className="text-base font-bold text-white">
-          {uploadMode === "manual" ? "编辑数据" : "交易记录"}
+          {uploadMode === "manual" ? "编辑数据" : uploadMode === "paste" ? "粘贴数据" : "交易记录"}
         </h1>
         {uploadMode === "manual" ? (
           <button
@@ -360,6 +421,14 @@ export default function QQTradeRecords() {
           >
             {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
             <span className="text-sm">保存</span>
+          </button>
+        ) : uploadMode === "paste" ? (
+          <button
+            onClick={handleParsePaste}
+            className="flex items-center gap-1 text-cyan-400 active:text-cyan-300"
+          >
+            <Check size={16} />
+            <span className="text-sm">解析</span>
           </button>
         ) : (
           <div className="w-14" />
@@ -494,6 +563,15 @@ export default function QQTradeRecords() {
                 <span className="text-xs text-gray-300">手动输入</span>
               </button>
               <button
+                onClick={() => { setPasteText(""); setUploadMode("paste"); }}
+                className="flex flex-col items-center gap-2 py-4 rounded-xl bg-gray-800 active:bg-gray-700"
+              >
+                <ClipboardPaste size={22} className="text-cyan-400" />
+                <span className="text-xs text-gray-300">粘贴数据</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-2 mt-2">
+              <button
                 onClick={() => setLocation(id ? `/ledger/${id}/qq/settings` : '/')}
                 className="flex flex-col items-center gap-2 py-4 rounded-xl bg-gray-800 active:bg-gray-700"
               >
@@ -502,7 +580,7 @@ export default function QQTradeRecords() {
               </button>
             </div>
             <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
-            <input ref={fileInputRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFileChange} />
+            <input ref={fileInputRef} type="file" accept=".csv,.txt,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
           </div>
 
           {/* 搜索栏 */}
@@ -654,6 +732,29 @@ export default function QQTradeRecords() {
             </div>
           )}
         </>
+      )}
+
+      {/* 粘贴数据模式 */}
+      {uploadMode === "paste" && (
+        <div className="px-4 pt-4">
+          <div className="text-xs text-gray-400 mb-2">从Excel或网页复制表格数据后粘贴到下方，支持Tab分隔和逗号分隔</div>
+          <div className="text-xs text-gray-600 mb-3">格式: 用户名, 订单号, 彩种, 玩法, 期号, 时间, 倍数, 金额, 内容, 中奖状态, 赔率, 余额</div>
+          <textarea
+            value={pasteText}
+            onChange={e => setPasteText(e.target.value)}
+            placeholder={"粘贴数据到这里...\n\n示例(逗号分隔):\njjh2378,ORD001,奇趣腾讯分分彩,后二跨度,20250301001,2025-03-01 10:00,1,2.000,0369,中奖,5.880,100\n\n示例(Tab分隔 - 从Excel复制):\njjh2378\tORD002\t奇趣腾讯分分彩\t后二跨度\t..."}
+            className="w-full h-64 bg-gray-800 text-white text-xs p-3 rounded-lg border border-gray-700 focus:border-cyan-500 outline-none resize-none font-mono"
+          />
+          <div className="flex items-center justify-between mt-3">
+            <span className="text-xs text-gray-500">{pasteText.split(/\r?\n/).filter(l => l.trim()).length} 行</span>
+            <button
+              onClick={() => setPasteText("")}
+              className="text-xs text-gray-500 active:text-white"
+            >
+              清空
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 手动输入/编辑模式 */}
