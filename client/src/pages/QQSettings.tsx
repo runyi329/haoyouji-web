@@ -35,10 +35,13 @@ export default function QQSettings() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
   const ledgerId = Number(id) || 52;
-  const [subPage, setSubPage] = useState<"main" | "interest" | "rules">("main");
+  const [subPage, setSubPage] = useState<"main" | "interest" | "rules" | "profit">("main");
 
   if (subPage === "interest") {
     return <InterestSettlementPage ledgerId={ledgerId} onBack={() => setSubPage("main")} />;
+  }
+  if (subPage === "profit") {
+    return <ProfitSettlementPage ledgerId={ledgerId} onBack={() => setSubPage("main")} />;
   }
   if (subPage === "rules") {
     return <GameRulesPage onBack={() => setSubPage("main")} />;
@@ -73,6 +76,16 @@ export default function QQSettings() {
             <div className="flex flex-col items-start gap-0.5">
               <span className="text-sm text-white">已结利息设置</span>
               <span className="text-xs text-gray-500">管理已结算的利息记录</span>
+            </div>
+            <ChevronRight size={16} className="text-gray-600" />
+          </button>
+          <button
+            onClick={() => setSubPage("profit")}
+            className="w-full flex items-center justify-between px-4 py-4 active:bg-gray-800"
+          >
+            <div className="flex flex-col items-start gap-0.5">
+              <span className="text-sm text-white">盈利收支设置</span>
+              <span className="text-xs text-gray-500">管理已结算的盈利记录</span>
             </div>
             <ChevronRight size={16} className="text-gray-600" />
           </button>
@@ -521,6 +534,168 @@ function InterestSettlementPage({
                 </div>
                 <button
                   onClick={() => { if (confirm('确认删除这条结算记录？')) deleteMutation.mutate({ id: item.id }); }}
+                  disabled={deleteMutation.isPending}
+                  className="text-gray-700 active:text-red-400 disabled:opacity-40 ml-3"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="h-10" />
+    </div>
+  );
+}
+
+// ─── 盈利收支管理子页面 ────────────────────────────────────────────────────
+function ProfitSettlementPage({
+  ledgerId,
+  onBack,
+}: {
+  ledgerId: number;
+  onBack: () => void;
+}) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [addDate, setAddDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [addAmount, setAddAmount] = useState("");
+  const [addNote, setAddNote] = useState("");
+  const [toast, setToast] = useState("");
+
+  const { data, refetch, isLoading } = trpc.getProfitSettlements.useQuery(
+    { ledgerId },
+    { refetchOnWindowFocus: false }
+  );
+  const list = data?.list || [];
+  const total = data?.total || 0;
+  const settled = data?.settled || 0;
+  const lastSettle = data?.lastSettle || null;
+
+  const addMutation = trpc.addProfitSettlement.useMutation({
+    onSuccess: () => { showToastMsg("添加成功"); setShowAdd(false); setAddAmount(""); setAddNote(""); refetch(); },
+    onError: (err) => showToastMsg("添加失败: " + err.message),
+  });
+
+  const deleteMutation = trpc.deleteProfitSettlement.useMutation({
+    onSuccess: () => { showToastMsg("已删除"); refetch(); },
+    onError: (err) => showToastMsg("删除失败: " + err.message),
+  });
+
+  function showToastMsg(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  }
+
+  function handleAdd() {
+    const amount = parseFloat(addAmount);
+    if (isNaN(amount) || amount === 0) { showToastMsg("请输入有效金额"); return; }
+    addMutation.mutate({ ledgerId, settleDate: addDate, amount, note: addNote || undefined });
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-white">
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
+        <button onClick={onBack} className="flex items-center gap-1 text-gray-400 active:text-white">
+          <ChevronLeft size={20} />
+          <span className="text-sm">返回</span>
+        </button>
+        <h1 className="text-base font-bold text-white">盈利收支设置</h1>
+        <button onClick={() => setShowAdd(true)} className="flex items-center gap-1 text-green-400 active:text-green-300">
+          <Plus size={18} />
+          <span className="text-sm">添加</span>
+        </button>
+      </div>
+
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-gray-700 text-white text-sm px-4 py-2 rounded-full shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      <div className="px-4 pt-4 pb-3">
+        <div className="rounded-2xl px-5 py-4" style={{ background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-xs text-white/70 mb-1">累计盈利</div>
+              <div className="text-2xl font-bold text-white font-mono">{'\u00A5'}{total.toFixed(2)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-white/70 mb-1">已结盈利</div>
+              <div className="text-lg font-bold text-white font-mono">{'\u00A5'}{settled.toFixed(2)}</div>
+            </div>
+          </div>
+          <div className="text-xs text-white/60">
+            {lastSettle
+              ? `最近结算: ${lastSettle.date} · ${'\u00A5'}${lastSettle.amount.toFixed(2)}`
+              : '暂无结算记录'}
+            {' · '}共 {list.length} 笔
+          </div>
+        </div>
+      </div>
+
+      {showAdd && (
+        <div className="mx-4 mb-4 rounded-xl bg-gray-900 border border-gray-700 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-medium text-white">新增盈利记录</span>
+            <button onClick={() => setShowAdd(false)}><X size={16} className="text-gray-500" /></button>
+          </div>
+          <div className="flex flex-col gap-3">
+            <div>
+              <div className="text-xs text-gray-500 mb-1">结算日期</div>
+              <div className="w-full">
+                <input
+                  type="date"
+                  value={addDate}
+                  onChange={e => setAddDate(e.target.value)}
+                  style={{ width: '100%', minWidth: '100%', display: 'block', boxSizing: 'border-box' }}
+                  className="bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:border-green-500 outline-none appearance-none"
+                />
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">盈利金额（元，正数为盈利，负数为亏损）</div>
+              <input type="number" value={addAmount} onChange={e => setAddAmount(e.target.value)} placeholder="如: 5000.00"
+                className="w-full bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:border-green-500 outline-none" />
+            </div>
+            <div>
+              <div className="text-xs text-gray-500 mb-1">备注（可选）</div>
+              <input type="text" value={addNote} onChange={e => setAddNote(e.target.value)} placeholder="如: 3月份盈利结算"
+                className="w-full bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:border-green-500 outline-none" />
+            </div>
+            <button onClick={handleAdd} disabled={addMutation.isPending}
+              className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-green-600 text-white text-sm font-medium active:bg-green-500 disabled:opacity-50">
+              {addMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+              确认添加
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="px-4">
+        <div className="text-xs text-gray-500 mb-2 px-1">盈利记录</div>
+        {isLoading ? (
+          <div className="text-center py-10 text-gray-500 text-sm">加载中...</div>
+        ) : list.length === 0 ? (
+          <div className="text-center py-10 text-gray-600 text-sm">暂无盈利记录</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {list.map((item) => (
+              <div key={item.id} className="rounded-xl bg-gray-900 px-4 py-3 flex items-center justify-between">
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold font-mono ${item.amount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {item.amount >= 0 ? '+' : ''}{'\u00A5'}{item.amount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {item.settleDate}
+                    {item.note ? <span className="ml-2 text-gray-600">{item.note}</span> : null}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { if (confirm('确认删除这条盈利记录?')) deleteMutation.mutate({ id: item.id }); }}
                   disabled={deleteMutation.isPending}
                   className="text-gray-700 active:text-red-400 disabled:opacity-40 ml-3"
                 >
