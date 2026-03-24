@@ -279,5 +279,10 @@ export function startFunderScanner() {
   }
 
   console.log('[资方扫描] 资金方收益权监控已启动，对齐北京时间 0/4/8/12/16/20 点整点扫描');
+  // 启动时立即执行一次，不等整点
+  setTimeout(async () => {
+    console.log('[资方扫描] 启动即时扫描（初始化）...');
+    await runFunderScan();
+  }, 5000);
   scheduleNext();
 }
