@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp } from "lucide-react";
+import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
 // 币种选项
@@ -14,11 +14,106 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: '已取消' },
 ];
 
+const INTEREST_PAYMENT_OPTIONS = [
+  { value: 'monthly_pre', label: '月付先付' },
+  { value: 'monthly_post', label: '月付后付' },
+  { value: 'semi_pre', label: '半年付先付' },
+  { value: 'semi_post', label: '半年付后付' },
+  { value: 'annual_pre', label: '年付先付' },
+  { value: 'annual_post', label: '年付后付' },
+  { value: 'end_post', label: '结束后付' },
+];
+
 const COIN_COLORS: Record<CoinType, string> = {
   BTC: '#F7931A',
   ETH: '#627EEA',
   SOL: '#9945FF',
 };
+
+// 简单日历选择器组件
+function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth()); // 0-indexed
+
+  const selected = value ? new Date(value + 'T00:00:00') : null;
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const handleDay = (d: number) => {
+    const mm = String(viewMonth + 1).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    onChange(`${viewYear}-${mm}-${dd}`);
+  };
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const isSelected = (d: number) => {
+    if (!selected) return false;
+    return selected.getFullYear() === viewYear && selected.getMonth() === viewMonth && selected.getDate() === d;
+  };
+
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden" style={{ backgroundColor: '#FAFBFF' }}>
+      {/* 月份导航 */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+        <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-gray-100">
+          <CalLeft className="w-4 h-4 text-gray-400" />
+        </button>
+        <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
+          {viewYear}年 {monthNames[viewMonth]}
+        </span>
+        <button onClick={nextMonth} className="p-1 rounded-lg hover:bg-gray-100">
+          <CalRight className="w-4 h-4 text-gray-400" />
+        </button>
+      </div>
+      {/* 星期头 */}
+      <div className="grid grid-cols-7 text-center py-1">
+        {['日', '一', '二', '三', '四', '五', '六'].map(d => (
+          <div key={d} className="text-[10px] text-gray-400 py-0.5">{d}</div>
+        ))}
+      </div>
+      {/* 日期格子 */}
+      <div className="grid grid-cols-7 text-center pb-2 px-1">
+        {cells.map((d, i) => (
+          <div key={i} className="py-0.5">
+            {d !== null ? (
+              <button
+                onClick={() => handleDay(d)}
+                className="w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium"
+                style={isSelected(d)
+                  ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                  : { color: '#374151' }}
+              >
+                {d}
+              </button>
+            ) : <div className="w-7 h-7" />}
+          </div>
+        ))}
+      </div>
+      {/* 已选日期显示 */}
+      {value && (
+        <div className="px-3 pb-2 text-center text-xs text-blue-500 font-medium">
+          已选：{value}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function FunderManagement() {
   const [, params] = useRoute("/ledger/:id/funder-management");
@@ -28,18 +123,31 @@ export default function FunderManagement() {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [formData, setFormData] = useState({
     userId: 0,
     coin: 'BTC' as CoinType,
-    amount: '',
     buyPrice: '',
-    buyDate: '',
     buyQuantity: '',
+    buyDate: '',
     storageAccount: '',
     status: 'active',
     adminNote: '',
+    publicNote: '',
+    interestRateAnnual: '',
+    interestPaymentType: '',
   });
+
+  // 自动折算总金额
+  const computedAmount = useMemo(() => {
+    const price = parseFloat(formData.buyPrice);
+    const qty = parseFloat(formData.buyQuantity);
+    if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
+      return (price * qty).toFixed(2);
+    }
+    return '';
+  }, [formData.buyPrice, formData.buyQuantity]);
 
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
     { ledgerId },
@@ -82,15 +190,18 @@ export default function FunderManagement() {
     setFormData({
       userId,
       coin: 'BTC',
-      amount: '',
       buyPrice: '',
-      buyDate: '',
       buyQuantity: '',
+      buyDate: '',
       storageAccount: '',
       status: 'active',
       adminNote: '',
+      publicNote: '',
+      interestRateAnnual: '',
+      interestPaymentType: '',
     });
     setEditingOrder(null);
+    setShowDatePicker(false);
     setShowForm(true);
   };
 
@@ -98,48 +209,43 @@ export default function FunderManagement() {
     setFormData({
       userId: order.user_id,
       coin: order.coin as CoinType,
-      amount: order.amount,
       buyPrice: order.buy_price || '',
-      buyDate: order.buy_date || '',
       buyQuantity: order.buy_quantity || '',
+      buyDate: order.buy_date || '',
       storageAccount: order.storage_account || '',
       status: order.status,
       adminNote: order.admin_note || '',
+      publicNote: order.public_note || '',
+      interestRateAnnual: order.interest_rate_annual || '',
+      interestPaymentType: order.interest_payment_type || '',
     });
     setEditingOrder(order);
+    setShowDatePicker(false);
     setShowForm(true);
   };
 
   const handleSubmit = () => {
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      toast.error('请输入有效的投入金额');
+    if (!computedAmount || parseFloat(computedAmount) <= 0) {
+      toast.error('请填写买入价格和买入数量以自动计算总金额');
       return;
     }
+    const payload = {
+      ledgerId,
+      coin: formData.coin,
+      amount: computedAmount,
+      buyPrice: formData.buyPrice || undefined,
+      buyDate: formData.buyDate || undefined,
+      buyQuantity: formData.buyQuantity || undefined,
+      storageAccount: formData.storageAccount || undefined,
+      adminNote: formData.adminNote || undefined,
+      publicNote: formData.publicNote || undefined,
+      interestRateAnnual: formData.interestRateAnnual || undefined,
+      interestPaymentType: formData.interestPaymentType || undefined,
+    };
     if (editingOrder) {
-      updateMutation.mutate({
-        id: editingOrder.id,
-        ledgerId,
-        coin: formData.coin,
-        amount: formData.amount,
-        buyPrice: formData.buyPrice || undefined,
-        buyDate: formData.buyDate || undefined,
-        buyQuantity: formData.buyQuantity || undefined,
-        storageAccount: formData.storageAccount || undefined,
-        status: formData.status,
-        adminNote: formData.adminNote || undefined,
-      });
+      updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
     } else {
-      createMutation.mutate({
-        ledgerId,
-        userId: formData.userId,
-        coin: formData.coin,
-        amount: formData.amount,
-        buyPrice: formData.buyPrice || undefined,
-        buyDate: formData.buyDate || undefined,
-        buyQuantity: formData.buyQuantity || undefined,
-        storageAccount: formData.storageAccount || undefined,
-        adminNote: formData.adminNote || undefined,
-      });
+      createMutation.mutate({ userId: formData.userId, ...payload });
     }
   };
 
@@ -147,6 +253,8 @@ export default function FunderManagement() {
     if (!confirm('确定要删除这笔订单吗？')) return;
     deleteMutation.mutate({ id: orderId, ledgerId });
   };
+
+  const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
@@ -177,10 +285,10 @@ export default function FunderManagement() {
             <div className="flex gap-2 overflow-x-auto pb-1">
               <button
                 onClick={() => setSelectedUserId(null)}
-                className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                  selectedUserId === null ? 'text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200'
-                }`}
-                style={selectedUserId === null ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' } : {}}
+                className="shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all"
+                style={selectedUserId === null
+                  ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                  : { backgroundColor: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }}
               >
                 全部
               </button>
@@ -188,10 +296,10 @@ export default function FunderManagement() {
                 <button
                   key={u.userId}
                   onClick={() => setSelectedUserId(u.userId)}
-                  className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                    selectedUserId === u.userId ? 'text-white shadow-md' : 'bg-white text-gray-500 border border-gray-200'
-                  }`}
-                  style={selectedUserId === u.userId ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' } : {}}
+                  className="shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all"
+                  style={selectedUserId === u.userId
+                    ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                    : { backgroundColor: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }}
                 >
                   {u.nickname || u.name || u.username}
                 </button>
@@ -238,22 +346,15 @@ export default function FunderManagement() {
                     className="bg-white rounded-2xl p-4 shadow-sm"
                     style={{ border: '1px solid #E5EDFF' }}
                   >
-                    {/* 头部 */}
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
-                        <span
-                          className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white"
-                          style={{ backgroundColor: coinColor }}
-                        >
+                        <span className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
                           {order.coin}
                         </span>
                         <span className="text-sm font-medium text-gray-700">
                           {order.userName || order.username}
                         </span>
-                        <span
-                          className="text-xs px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: `${statusColor}18`, color: statusColor }}
-                        >
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
                           {statusLabel}
                         </span>
                       </div>
@@ -267,26 +368,19 @@ export default function FunderManagement() {
                       </div>
                     </div>
 
-                    {/* 投入金额 */}
+                    {/* 总金额 */}
                     <div className="flex items-baseline gap-1 mb-2">
                       <span className="text-xl font-bold" style={{ color: '#1A2340' }}>
                         {parseFloat(order.amount).toLocaleString()}
                       </span>
-                      <span className="text-xs text-gray-400">USDT 投入</span>
+                      <span className="text-xs text-gray-400">USDT 总价</span>
                     </div>
 
-                    {/* 详情网格 */}
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                       {order.buy_price && (
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">买入价</span>
                           <span className="font-medium text-gray-700">{order.buy_price} U</span>
-                        </div>
-                      )}
-                      {order.buy_date && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400">买入日期</span>
-                          <span className="font-medium text-gray-700">{order.buy_date}</span>
                         </div>
                       )}
                       {order.buy_quantity && (
@@ -295,17 +389,35 @@ export default function FunderManagement() {
                           <span className="font-medium text-gray-700">{order.buy_quantity} {order.coin}</span>
                         </div>
                       )}
+                      {order.buy_date && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">买入日期</span>
+                          <span className="font-medium text-gray-700">{order.buy_date}</span>
+                        </div>
+                      )}
                       {order.storage_account && (
                         <div className="flex items-center gap-1 col-span-2">
                           <span className="text-gray-400">存放账号</span>
                           <span className="font-medium text-gray-700 truncate">{order.storage_account}</span>
                         </div>
                       )}
+                      {order.interest_rate_annual && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">年化利息</span>
+                          <span className="font-medium text-gray-700">{order.interest_rate_annual}%</span>
+                        </div>
+                      )}
+                      {order.interest_payment_type && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">支付方式</span>
+                          <span className="font-medium text-gray-700">{getPaymentLabel(order.interest_payment_type)}</span>
+                        </div>
+                      )}
                     </div>
 
                     {order.admin_note && (
                       <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
-                        备注：{order.admin_note}
+                        内部备注：{order.admin_note}
                       </div>
                     )}
                   </div>
@@ -319,13 +431,13 @@ export default function FunderManagement() {
       {/* 创建/编辑弹窗 */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[88vh] overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] overflow-y-auto">
             <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
                 {editingOrder ? '编辑订单' : '添加订单'}
               </h3>
               <button
-                onClick={() => { setShowForm(false); setEditingOrder(null); }}
+                onClick={() => { setShowForm(false); setEditingOrder(null); setShowDatePicker(false); }}
                 className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg leading-none"
               >
                 &times;
@@ -354,25 +466,11 @@ export default function FunderManagement() {
                 </div>
               </div>
 
-              {/* 投入金额 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  投入金额（USDT）<span className="text-red-400 ml-0.5">*</span>
-                </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.amount}
-                  onChange={e => setFormData(d => ({ ...d, amount: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="输入USDT金额"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>
-
               {/* 买入价格 */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">买入价格（USDT）</label>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  买入价格（USDT）<span className="text-red-400 ml-0.5">*</span>
+                </label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -384,24 +482,10 @@ export default function FunderManagement() {
                 />
               </div>
 
-              {/* 买入日期 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">买入日期</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={formData.buyDate}
-                  onChange={e => setFormData(d => ({ ...d, buyDate: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：2026-03-24"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>
-
               {/* 买入数量 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">
-                  买入数量（{formData.coin}）
+                  买入数量（{formData.coin}）<span className="text-red-400 ml-0.5">*</span>
                 </label>
                 <input
                   type="number"
@@ -409,9 +493,43 @@ export default function FunderManagement() {
                   value={formData.buyQuantity}
                   onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder={`如：0.5`}
+                  placeholder="如：0.5"
                   style={{ display: 'block', boxSizing: 'border-box' }}
                 />
+              </div>
+
+              {/* 自动折算总金额 */}
+              <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#EEF4FF', border: '1px solid #C7D9FF' }}>
+                <div className="text-xs text-gray-400 mb-0.5">自动折算总金额（USDT）</div>
+                <div className="text-xl font-bold" style={{ color: '#1A56DB' }}>
+                  {computedAmount ? parseFloat(computedAmount).toLocaleString() : '—'}
+                  {computedAmount && <span className="text-sm font-normal text-blue-400 ml-1">USDT</span>}
+                </div>
+                {computedAmount && (
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {formData.buyQuantity} {formData.coin} × {formData.buyPrice} USDT
+                  </div>
+                )}
+              </div>
+
+              {/* 买入日期 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">买入日期</label>
+                <button
+                  onClick={() => setShowDatePicker(v => !v)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
+                  style={{ backgroundColor: '#fff', color: formData.buyDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                >
+                  {formData.buyDate || '点击选择日期'}
+                </button>
+                {showDatePicker && (
+                  <div className="mt-2">
+                    <DatePicker
+                      value={formData.buyDate}
+                      onChange={v => { setFormData(d => ({ ...d, buyDate: v })); setShowDatePicker(false); }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* 存放账号 */}
@@ -427,7 +545,91 @@ export default function FunderManagement() {
                 />
               </div>
 
-              {/* 状态（编辑时可修改） */}
+              {/* 分隔线：利息约定 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400 shrink-0">利息约定</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* 约定年化利息 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">约定年化利息（%）</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.interestRateAnnual}
+                    onChange={e => setFormData(d => ({ ...d, interestRateAnnual: e.target.value }))}
+                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder="如：8.5"
+                    style={{ display: 'block', boxSizing: 'border-box' }}
+                  />
+                  <span className="text-base font-medium text-gray-500 shrink-0">% / 年</span>
+                </div>
+              </div>
+
+              {/* 利息支付方式 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">利息支付方式</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {INTEREST_PAYMENT_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setFormData(d => ({ ...d, interestPaymentType: d.interestPaymentType === opt.value ? '' : opt.value }))}
+                      className="py-2.5 rounded-xl text-sm font-medium transition-all"
+                      style={
+                        formData.interestPaymentType === opt.value
+                          ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 分隔线：备注 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400 shrink-0">备注</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* 公开备注（资金方可见） */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  公开备注
+                  <span className="ml-1.5 text-xs text-green-500 font-normal">资金方可见</span>
+                </label>
+                <textarea
+                  value={formData.publicNote}
+                  onChange={e => setFormData(d => ({ ...d, publicNote: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  rows={2}
+                  placeholder="填写资金方可见的说明或备注"
+                  style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
+                />
+              </div>
+
+              {/* 内部备注（资金方不可见） */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  内部备注
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">仅管理员可见</span>
+                </label>
+                <textarea
+                  value={formData.adminNote}
+                  onChange={e => setFormData(d => ({ ...d, adminNote: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  rows={2}
+                  placeholder="内部管理备注（资金方不可见）"
+                  style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
+                />
+              </div>
+
+              {/* 状态（编辑时） */}
               {editingOrder && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">订单状态</label>
@@ -449,19 +651,6 @@ export default function FunderManagement() {
                   </div>
                 </div>
               )}
-
-              {/* 管理员备注 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">管理员备注</label>
-                <textarea
-                  value={formData.adminNote}
-                  onChange={e => setFormData(d => ({ ...d, adminNote: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  rows={2}
-                  placeholder="内部备注（资金方不可见）"
-                  style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
-                />
-              </div>
             </div>
 
             {/* 提交按钮 */}
