@@ -124,17 +124,19 @@ export default function FinanceManagement() {
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
 
   // 查询
-  const { data: orders, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
+  const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
   );
+  const orders = Array.isArray((ordersData as any)?.orders) ? (ordersData as any).orders : (Array.isArray(ordersData) ? ordersData : []);
   const { data: members } = trpc.ledger.getMembers.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
   );
-  const { data: interestPayments } = trpc.ledger.financeGetInterestPayments.useQuery(
-    { ledgerId },
-    { enabled: !!ledgerId }
+  const orderIds = orders.map((o: any) => o.id).filter(Boolean);
+  const { data: interestPaymentSummary } = trpc.ledger.financeGetInterestPaymentSummary.useQuery(
+    { ledgerId, orderIds },
+    { enabled: !!ledgerId && orderIds.length > 0 }
   );
 
   const createMutation = trpc.ledger.financeCreateOrder.useMutation({
@@ -267,6 +269,13 @@ export default function FinanceManagement() {
     });
   }
 
+  // 展开结息记录时，按orderId单独查询
+  const { data: openedPayments } = trpc.ledger.financeGetInterestPayments.useQuery(
+    { ledgerId, orderId: showPaymentPanel! },
+    { enabled: !!showPaymentPanel && !!ledgerId }
+  );
+  const openedPaymentList = Array.isArray(openedPayments) ? openedPayments : [];
+
   const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
   return (
@@ -295,20 +304,19 @@ export default function FinanceManagement() {
 
         <div>
           <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
-            融资订单列表 {orders ? `· ${(orders as any[]).length} 笔` : ''}
+            融资订单列表 {orders.length > 0 ? `· ${orders.length} 笔` : ''}
           </h2>
           {ordersLoading ? (
             <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
-          ) : !orders || (orders as any[]).length === 0 ? (
+          ) : orders.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-2xl shadow-sm">
               <TrendingUp className="w-10 h-10 text-gray-200 mx-auto mb-2" />
               <div className="text-gray-400 text-sm">暂无融资订单</div>
             </div>
           ) : (
             <div className="space-y-3">
-              {(orders as any[]).map((order: any) => {
-                const payments = (interestPayments as any[] || []).filter((p: any) => p.order_id === order.id);
-                const totalPaid = payments.reduce((s: number, p: any) => s + parseFloat(p.amount || '0'), 0);
+              {orders.map((order: any) => {
+                const totalPaid = (interestPaymentSummary as any)?.[order.id] ?? 0;
                 const rateStr = String(order.interest_rate_annual || '');
                 const isNegRate = rateStr.startsWith('-');
                 const rateAbs = isNegRate ? rateStr.slice(1) : rateStr;
@@ -498,9 +506,9 @@ export default function FinanceManagement() {
                           </div>
                         )}
 
-                        {payments.length > 0 && (
+                        {showPaymentPanel === order.id && openedPaymentList.length > 0 && (
                           <div className="space-y-1.5">
-                            {payments.map((p: any) => (
+                            {openedPaymentList.map((p: any) => (
                               <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
                                 <div>
                                   <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} USDT</span>
