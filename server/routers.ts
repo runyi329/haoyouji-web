@@ -11510,22 +11510,39 @@ export const appRouter = router({
         }
         // 查询该用户的所有活跃资产订单
         const rows = await db.execute(
-          sql`SELECT coin, amount, quantity, status FROM funder_asset_orders
+          sql`SELECT coin, amount, quantity, buy_price, status FROM funder_asset_orders
               WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND status = 'active'`
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
         // 汇总
         let totalUsdt = 0;
-        const coinBreakdown: Record<string, { amount: number; quantity: number; count: number }> = {};
+        const coinBreakdown: Record<string, { amount: number; quantity: number; count: number; totalCostQty: number; totalCostAmt: number }> = {};
         for (const o of orders) {
           const amt = parseFloat(o.amount) || 0;
+          const qty = parseFloat(o.quantity) || 0;
+          const buyPrice = parseFloat(o.buy_price) || 0;
           totalUsdt += amt;
-          if (!coinBreakdown[o.coin]) coinBreakdown[o.coin] = { amount: 0, quantity: 0, count: 0 };
+          if (!coinBreakdown[o.coin]) coinBreakdown[o.coin] = { amount: 0, quantity: 0, count: 0, totalCostQty: 0, totalCostAmt: 0 };
           coinBreakdown[o.coin].amount += amt;
-          coinBreakdown[o.coin].quantity += parseFloat(o.quantity) || 0;
+          coinBreakdown[o.coin].quantity += qty;
           coinBreakdown[o.coin].count += 1;
+          // 用于计算加权平均成本：有买入价和数量时累加
+          if (buyPrice > 0 && qty > 0) {
+            coinBreakdown[o.coin].totalCostQty += qty;
+            coinBreakdown[o.coin].totalCostAmt += buyPrice * qty;
+          }
         }
-        return { totalUsdt, coinBreakdown, orderCount: orders.length };
+        // 计算平均成本
+        const result: Record<string, { amount: number; quantity: number; count: number; avgCost: number }> = {};
+        for (const [coin, data] of Object.entries(coinBreakdown)) {
+          result[coin] = {
+            amount: data.amount,
+            quantity: data.quantity,
+            count: data.count,
+            avgCost: data.totalCostQty > 0 ? data.totalCostAmt / data.totalCostQty : 0,
+          };
+        }
+        return { totalUsdt, coinBreakdown: result, orderCount: orders.length };
       }),
 
     // 管理员创建资方资产订单
