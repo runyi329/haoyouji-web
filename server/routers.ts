@@ -11524,17 +11524,12 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.string(),
+        coin: z.enum(['BTC', 'ETH', 'SOL']),
         amount: z.string(),
-        quantity: z.string().optional(),
-        startAt: z.string().optional(),
-        endAt: z.string().optional(),
-        interestType: z.string().optional(),
-        interestRate: z.string().optional(),
-        interestNote: z.string().optional(),
-        profitShareType: z.string().optional(),
-        profitShareRate: z.string().optional(),
-        profitShareNote: z.string().optional(),
+        buyPrice: z.string().optional(),
+        buyDate: z.string().optional(),
+        buyQuantity: z.string().optional(),
+        storageAccount: z.string().optional(),
         adminNote: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -11552,8 +11547,8 @@ export const appRouter = router({
         const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
         if (targetRole !== 'funder') throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是资金方角色' });
         await db.execute(
-          sql`INSERT INTO funder_asset_orders (ledger_id, user_id, coin, amount, quantity, start_at, end_at, interest_type, interest_rate, interest_note, profit_share_type, profit_share_rate, profit_share_note, admin_note, created_by)
-              VALUES (${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.quantity || null}, ${input.startAt || null}, ${input.endAt || null}, ${input.interestType || null}, ${input.interestRate || null}, ${input.interestNote || null}, ${input.profitShareType || null}, ${input.profitShareRate || null}, ${input.profitShareNote || null}, ${input.adminNote || null}, ${ctx.user.id})`
+          sql`INSERT INTO funder_asset_orders (ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, created_by)
+              VALUES (${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -11563,17 +11558,12 @@ export const appRouter = router({
       .input(z.object({
         id: z.number(),
         ledgerId: z.number(),
-        coin: z.string().optional(),
+        coin: z.enum(['BTC', 'ETH', 'SOL']).optional(),
         amount: z.string().optional(),
-        quantity: z.string().optional(),
-        startAt: z.string().optional(),
-        endAt: z.string().optional(),
-        interestType: z.string().optional(),
-        interestRate: z.string().optional(),
-        interestNote: z.string().optional(),
-        profitShareType: z.string().optional(),
-        profitShareRate: z.string().optional(),
-        profitShareNote: z.string().optional(),
+        buyPrice: z.string().optional(),
+        buyDate: z.string().optional(),
+        buyQuantity: z.string().optional(),
+        storageAccount: z.string().optional(),
         status: z.string().optional(),
         adminNote: z.string().optional(),
       }))
@@ -11590,23 +11580,16 @@ export const appRouter = router({
         const vals: any[] = [];
         if (input.coin !== undefined) { sets.push('coin = ?'); vals.push(input.coin); }
         if (input.amount !== undefined) { sets.push('amount = ?'); vals.push(input.amount); }
-        if (input.quantity !== undefined) { sets.push('quantity = ?'); vals.push(input.quantity); }
-        if (input.startAt !== undefined) { sets.push('start_at = ?'); vals.push(input.startAt || null); }
-        if (input.endAt !== undefined) { sets.push('end_at = ?'); vals.push(input.endAt || null); }
-        if (input.interestType !== undefined) { sets.push('interest_type = ?'); vals.push(input.interestType || null); }
-        if (input.interestRate !== undefined) { sets.push('interest_rate = ?'); vals.push(input.interestRate || null); }
-        if (input.interestNote !== undefined) { sets.push('interest_note = ?'); vals.push(input.interestNote || null); }
-        if (input.profitShareType !== undefined) { sets.push('profit_share_type = ?'); vals.push(input.profitShareType || null); }
-        if (input.profitShareRate !== undefined) { sets.push('profit_share_rate = ?'); vals.push(input.profitShareRate || null); }
-        if (input.profitShareNote !== undefined) { sets.push('profit_share_note = ?'); vals.push(input.profitShareNote || null); }
+        if (input.buyPrice !== undefined) { sets.push('buy_price = ?'); vals.push(input.buyPrice || null); }
+        if (input.buyDate !== undefined) { sets.push('buy_date = ?'); vals.push(input.buyDate || null); }
+        if (input.buyQuantity !== undefined) { sets.push('buy_quantity = ?'); vals.push(input.buyQuantity || null); }
+        if (input.storageAccount !== undefined) { sets.push('storage_account = ?'); vals.push(input.storageAccount || null); }
         if (input.status !== undefined) { sets.push('status = ?'); vals.push(input.status); }
         if (input.adminNote !== undefined) { sets.push('admin_note = ?'); vals.push(input.adminNote || null); }
         if (sets.length === 0) return { success: true };
         const setClause = sets.join(', ');
-        // sql.raw only accepts a string, so we use template literal with sql`` for parameterized query
         const rawQuery = `UPDATE funder_asset_orders SET ${setClause} WHERE id = ? AND ledger_id = ?`;
         const allVals = [...vals, input.id, input.ledgerId];
-        // Use the underlying mysql2 connection for parameterized raw queries
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
         if (conn) await conn.execute(rawQuery, allVals);
