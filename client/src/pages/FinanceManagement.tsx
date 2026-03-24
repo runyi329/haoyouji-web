@@ -263,7 +263,7 @@ export default function FinanceManagement() {
     addPaymentMutation.mutate({
       orderId,
       ledgerId,
-      amount: paymentForm.amount,
+      amount: parseFloat(paymentForm.amount),
       paymentDate: paymentForm.payDate,
       note: paymentForm.note,
     });

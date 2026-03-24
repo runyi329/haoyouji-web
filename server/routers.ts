@@ -11968,8 +11968,8 @@ export const appRouter = router({
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        const updates: string[] = [];
-        const vals: any[] = [];
+        // 使用 Drizzle sql 模板标签构建动态 UPDATE
+        const setParts: any[] = [];
         const fieldMap: Record<string, string> = {
           coin: 'coin', amount: 'amount', buyPrice: 'buy_price', buyDate: 'buy_date',
           buyQuantity: 'buy_quantity', storageAccount: 'storage_account', status: 'status',
@@ -11977,21 +11977,23 @@ export const appRouter = router({
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestStartDate: 'interest_start_date',
           counterparty: 'counterparty',
         };
-        // 单独处理 userId（字段名不符合驼峰规则）
         if (input.userId !== undefined) {
-          updates.push('user_id = ?');
-          vals.push(input.userId);
+          setParts.push(sql`user_id = ${input.userId}`);
         }
         for (const [key, col] of Object.entries(fieldMap)) {
           if ((input as any)[key] !== undefined) {
-            updates.push(`${col} = ?`);
-            vals.push((input as any)[key]);
+            setParts.push(sql.raw(`${col} = `).append(sql`${(input as any)[key]}`) as any);
           }
         }
-        if (updates.length === 0) return { success: true };
-        vals.push(input.id, input.ledgerId);
-        const rawQuery = `UPDATE finance_interest_orders SET ${updates.join(', ')} WHERE id = ? AND ledger_id = ?`;
-        await (db as any).execute(rawQuery, vals);
+        if (setParts.length === 0) return { success: true };
+        // 拼接所有 SET 片段
+        let setCombined = setParts[0];
+        for (let i = 1; i < setParts.length; i++) {
+          setCombined = sql`${setCombined}, ${setParts[i]}`;
+        }
+        await db.execute(
+          sql`UPDATE finance_interest_orders SET ${setCombined} WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+        );
         return { success: true };
       }),
 
