@@ -227,23 +227,24 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
               className="rounded-2xl p-4"
               style={{ background: 'linear-gradient(135deg, #EEF4FF 0%, #F0F7FF 100%)', border: '1px solid #C7D9FF' }}
             >
-              <div className="text-xs text-gray-400 mb-1">待结利息（精确到秒）</div>
+              <div className="text-xs text-gray-400 mb-1">待结利息</div>
               <div className="flex items-baseline gap-1 mb-1">
                 <span
                   className="text-3xl font-bold tabular-nums"
                   style={{ color: '#1A56DB', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                 >
-                  {accrued.toFixed(6)}
+                  ¥{accrued.toFixed(6)}
                 </span>
-                <span className="text-base font-medium text-blue-400">USDT</span>
               </div>
-              <div className="flex items-center justify-between text-xs text-gray-400">
-                <span>基数 {parseFloat(order.interest_base).toLocaleString()} USDT × {order.interest_rate_annual}% / 年</span>
-                <span>≈ {perSecond.toFixed(8)} U/秒</span>
+              <div className="text-xs text-gray-400 mb-0.5">
+                ≈{(accrued / 7.15).toFixed(6)} USDT
+              </div>
+              <div className="text-xs text-gray-400">
+                基数 {parseFloat(order.interest_base).toLocaleString()} × {order.interest_rate_annual}% / 年
               </div>
               {order.interest_start_date && (
                 <div className="text-xs text-gray-400 mt-1">
-                  计息开始：{order.interest_start_date}
+                  开始日期：{order.interest_start_date}
                 </div>
               )}
             </div>
@@ -279,8 +280,8 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
               <div className="bg-gray-50 rounded-2xl overflow-hidden">
                 {[
                   { label: '约定年化利息', value: order.interest_rate_annual ? `${order.interest_rate_annual}% / 年` : null },
-                  { label: '计息基数', value: order.interest_base ? `${parseFloat(order.interest_base).toLocaleString()} USDT` : null },
-                  { label: '计息开始日期', value: order.interest_start_date || null },
+                  { label: '计息基数', value: order.interest_base ? `${parseFloat(order.interest_base).toLocaleString()}` : null },
+                  { label: '开始日期', value: order.interest_start_date || null },
                   { label: '支付方式', value: order.interest_payment_type ? PAYMENT_TYPE_MAP[order.interest_payment_type] || order.interest_payment_type : null },
                 ].filter(item => item.value !== null).map((item, idx, arr) => (
                   <div

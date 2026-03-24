@@ -89,7 +89,7 @@ function FunderOrderCard({ order, onClick }: { order: any; onClick: () => void }
         <div className="w-36 p-4 pl-3 flex flex-col justify-between">
           {hasInterest ? (
             <>
-              {/* 上：代付利息（跳动秒表） */}
+              {/* 上：代付利息（跳动秒表，人民币单位，折算USDT） */}
               <div className="mb-3">
                 <div className="flex items-center gap-1 mb-1">
                   <Timer className="w-3 h-3" style={{ color: '#1A56DB' }} />
@@ -99,9 +99,9 @@ function FunderOrderCard({ order, onClick }: { order: any; onClick: () => void }
                   className="text-sm font-bold tabular-nums leading-tight"
                   style={{ color: '#1A56DB', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                 >
-                  {accrued.toFixed(4)}
+                  ¥{accrued.toFixed(4)}
                 </div>
-                <div className="text-[10px] text-gray-400">USDT · {order.interest_rate_annual}%/年</div>
+                <div className="text-[10px] text-gray-400">≈{(accrued / 7.15).toFixed(4)} U · {order.interest_rate_annual}%/年</div>
               </div>
               {/* 下：收益权 */}
               <div>
