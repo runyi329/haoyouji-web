@@ -1574,12 +1574,18 @@ export default function CryptoPrediction() {
                                 </span>
                               </div>
                               {isNegativeRate && (
-                                <div className="flex items-center justify-between mt-0.5 text-xs">
-                                  <span className="text-gray-400">担保价値</span>
-                                  <span className="font-medium" style={{ color: '#4B5563' }}>
-                                    {financeLivePrices['ETH'] ? `${(12 * financeLivePrices['ETH']).toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '---'}
-                                  </span>
-                                </div>
+                                <>
+                                  <div className="flex items-center justify-between mt-0.5 text-xs">
+                                    <span className="text-gray-400">担保价値</span>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>
+                                      {financeLivePrices['ETH'] ? `${(12 * financeLivePrices['ETH']).toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '---'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between mt-0.5 text-xs">
+                                    <span className="text-gray-400">付息方式</span>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>年付先付</span>
+                                  </div>
+                                </>
                               )}
                               {order.counterparty && (
                                 <div className="flex items-center justify-between text-xs">
