@@ -11984,14 +11984,17 @@ export const appRouter = router({
         }
         if (updateCols.length === 0) return { success: true };
         updateVals.push(input.id, input.ledgerId);
-        // 使用 mysql2 直接连接执行
+        // 使用 mysql2 直接连接执行（用 URL 解析避免密码含 @ 符号的问题）
         const mysql = await import('mysql2/promise');
         const dbUrl = process.env.DATABASE_URL || '';
-        const match = dbUrl.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):([^/]+)\/(.+)/);
-        if (!match) throw new Error('Invalid DATABASE_URL');
+        // 将 mysql:// 替换为 http:// 以使用标准 URL 解析
+        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
         const conn = await mysql.createConnection({
-          host: match[3], port: parseInt(match[4]), user: match[1],
-          password: match[2], database: match[5],
+          host: parsedUrl.hostname,
+          port: parseInt(parsedUrl.port) || 3306,
+          user: decodeURIComponent(parsedUrl.username),
+          password: decodeURIComponent(parsedUrl.password),
+          database: parsedUrl.pathname.replace(/^\//, ''),
         });
         await conn.execute(`UPDATE finance_interest_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
         await conn.end();
