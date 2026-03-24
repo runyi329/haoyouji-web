@@ -187,7 +187,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
         <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
 
         {/* 右栏：利息 + 收益分成 */}
-        <div className="w-36 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
+        <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
           {hasInterest ? (
             <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} />
           ) : (
