@@ -11519,8 +11519,10 @@ export const appRouter = router({
         const coinBreakdown: Record<string, { amount: number; quantity: number; count: number; totalCostQty: number; totalCostAmt: number }> = {};
         for (const o of orders) {
           const amt = parseFloat(o.amount) || 0;
-          const qty = parseFloat(o.quantity) || 0;
           const buyPrice = parseFloat(o.buy_price) || 0;
+          // quantity为空时用amount/buy_price自动推算
+          const rawQty = parseFloat(o.quantity);
+          const qty = !isNaN(rawQty) && rawQty > 0 ? rawQty : (buyPrice > 0 ? amt / buyPrice : 0);
           totalUsdt += amt;
           if (!coinBreakdown[o.coin]) coinBreakdown[o.coin] = { amount: 0, quantity: 0, count: 0, totalCostQty: 0, totalCostAmt: 0 };
           coinBreakdown[o.coin].amount += amt;
