@@ -60,7 +60,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>元</span>
         </div>
-        <div className="flex items-center justify-between mt-0.5" style={{ fontSize: '11px' }}>
+        <div className="flex items-center justify-between mt-0.5 text-xs">
           <span className="text-gray-400">目前已结</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>0.00元</span>
         </div>
@@ -79,13 +79,13 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
         </div>
-        <div className="flex items-center justify-between mt-0.5" style={{ fontSize: '11px' }}>
+        <div className="flex items-center justify-between mt-0.5 text-xs">
           <span className="text-gray-400">最低价格</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>
             {displayLowest !== null ? displayLowest.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
           </span>
         </div>
-        <div className="flex items-center justify-between" style={{ fontSize: '11px' }}>
+        <div className="flex items-center justify-between text-xs">
           <span className="text-gray-400">发生时间</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel || '---'}</span>
         </div>
@@ -134,7 +134,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
           <div className="space-y-0.5">
             {price > 0 && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400 shrink-0">买入成本</span>
+                <span className="text-gray-400 shrink-0">买入币价</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
               </div>
             )}
@@ -151,7 +151,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
               </div>
             )}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400 shrink-0">当前成本</span>
+              <span className="text-gray-400 shrink-0">今日币价</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
               </span>
