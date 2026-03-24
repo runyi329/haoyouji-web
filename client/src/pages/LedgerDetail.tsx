@@ -790,6 +790,26 @@ export default function LedgerDetail() {
         'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/detail_5.jpg',
       ],
     },
+    milkbundle: {
+      id: 'milkbundle',
+      name: '天润牛奶整箱套餐 买一箱送12瓶天然水',
+      subtitle: '12盒有机纯牛奶 -- 赠12瓶盒马深层天然水 -- 超值组合',
+      basePrice: 118.8,
+      originalPrice: 150,
+      cover: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_carousel_1.jpg',
+      tag: '整箱优惠 -- 买奶送水',
+      carouselImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_carousel_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_carousel_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_carousel_3.jpg',
+      ],
+      detailImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_detail_4.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_detail_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_detail_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_detail_3.jpg',
+      ],
+    },
   } : null;
   // 当前选中商品的快捷引用
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
