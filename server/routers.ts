@@ -11884,7 +11884,14 @@ export const appRouter = router({
             avgCost: totalQty > 0 ? totalCost / totalQty : 0,
           };
         }
-        return { coinBreakdown };
+        // 附带实时价格（与资金方逻辑一致）
+        const { getLatestPrice } = await import('./price-scanner');
+        const livePrices: Record<string, number> = {};
+        for (const coin of ['BTC', 'ETH', 'SOL']) {
+          const p = getLatestPrice(coin);
+          if (p) livePrices[coin] = p;
+        }
+        return { coinBreakdown, livePrices };
       }),
 
     // 管理员创建融资付息订单
