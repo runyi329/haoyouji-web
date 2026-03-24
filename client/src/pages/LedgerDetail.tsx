@@ -56,26 +56,38 @@ function FunderOrderCard({ order, onClick }: { order: any; onClick: () => void }
             </span>
             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
           </div>
-          {/* 买入成本 */}
-          {price > 0 && (
-            <div className="text-xs text-gray-500 mb-0.5">
-              买入成本：{price.toLocaleString()} USDT
-            </div>
-          )}
-          {/* 总价值 */}
-          {totalU > 0 && (
-            <div className="text-xs text-gray-500 mb-0.5">
-              总价值：{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT
-            </div>
-          )}
-          {/* 买入时间 */}
-          {order.buy_date && (
-            <div className="text-xs text-gray-400">
-              买入时间：{order.buy_date}
-            </div>
-          )}
+          {/* 三行信息：四字标题统一颜色 */}
+          <div className="space-y-0.5 mb-2">
+            {price > 0 && (
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-400 w-14 shrink-0">买入成本</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
+              </div>
+            )}
+            {totalU > 0 && (
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-400 w-14 shrink-0">订单价值</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+              </div>
+            )}
+            {order.buy_date && (
+              <div className="flex items-center gap-1 text-xs">
+                <span className="text-gray-400 w-14 shrink-0">买入时间</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
+              </div>
+            )}
+            {order.buy_date && order.status === 'active' && (() => {
+              const days = Math.floor((Date.now() - new Date(order.buy_date + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
+              return days >= 0 ? (
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-gray-400 w-14 shrink-0">持有天数</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{days} 天</span>
+                </div>
+              ) : null;
+            })()}
+          </div>
           {/* 状态 */}
-          <div className="mt-2">
+          <div>
             <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
               {statusLabel}
             </span>
