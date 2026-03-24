@@ -29,6 +29,14 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
     { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
   );
   const profitPct = stats?.profitRightPct ?? 0;
+  const lowestPrice = stats?.allTimeLow;
+  const lowestAt = stats?.allTimeLowAt;
+  // 格式化最低价发生时间
+  let lowestAtLabel = '';
+  if (lowestAt) {
+    const d = new Date(lowestAt);
+    lowestAtLabel = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
   return (
     <div className="flex flex-col h-full">
       {/* 上半：代结利息 */}
@@ -43,7 +51,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>元</span>
         </div>
-        <div className="text-[10px] text-gray-400 mt-0.5">年化 {order.interest_rate_annual || 0}%</div>
+        <div className="text-[10px] text-gray-400 mt-0.5">(年化 {order.interest_rate_annual || 0}%)</div>
+        <div className="text-[10px] text-gray-400 mt-0.5">目前已结 <span className="font-medium" style={{ color: '#4B5563' }}>0.00元</span></div>
       </div>
       {/* 中间分隔线 */}
       <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
@@ -59,6 +68,12 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
         </div>
+        {lowestPrice && (
+          <div className="text-[10px] text-gray-400 mt-0.5">最低价 <span className="font-medium" style={{ color: '#4B5563' }}>{Number(lowestPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+        )}
+        {lowestAtLabel && (
+          <div className="text-[10px] text-gray-400">发生 {lowestAtLabel}</div>
+        )}
       </div>
     </div>
   );
