@@ -1412,7 +1412,11 @@ export default function CryptoPrediction() {
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>融资订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {financeOrders.length} 笔</span>
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('tab', 'finance');
+                  window.location.href = url.toString();
+                }}
                 className="ml-2 px-2.5 py-0.5 rounded text-xs font-medium"
                 style={{ backgroundColor: '#EEF2FF', color: '#3B82F6' }}
               >
