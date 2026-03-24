@@ -1467,7 +1467,7 @@ export default function CryptoPrediction() {
                         {/* 左栏：订单信息 */}
                         <div className="flex-1 p-4 pr-3">
                           {/* 标题：融资资产 */}
-                          <div className="text-[10px] mb-1" style={{ color: '#3B82F6' }}>融资资产</div>
+                          <div className="text-[10px] mb-1" style={{ color: '#3B82F6' }}>融资资产<span className="text-gray-400">(保本分成50%部分)</span></div>
                           {/* 持币数量（大字突出） */}
                           <div className="flex items-baseline gap-1 mb-1">
                             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
