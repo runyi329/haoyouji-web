@@ -160,13 +160,23 @@ export function calcFunderProfitRight(
   }
   // 跌幅（正数表示下跌）
   const dropPct = Math.max(0, (buyPrice - allTimeLow) / buyPrice * 100);
-  // 收益权比例：每降1%获得0.5%收益权
-  const profitRightPct = dropPct * 0.5;
+  // 收益权比例规则：
+  // 跌幅 < 1%：收益分成 = 0%
+  // 跌幅 >= 1% 且 < 2%：收益分成 = 0.5%
+  // 跌幅 >= 2%：收益分成 = 1%
+  let profitRightPct: number;
+  if (dropPct < 1) {
+    profitRightPct = 0;
+  } else if (dropPct < 2) {
+    profitRightPct = 0.5;
+  } else {
+    profitRightPct = 1;
+  }
   // 收益权对应币数
   const profitRightCoins = buyQuantity * (profitRightPct / 100);
   return {
     dropPct: Math.round(dropPct * 100) / 100,
-    profitRightPct: Math.round(profitRightPct * 10000) / 10000,
+    profitRightPct,
     profitRightCoins: Math.round(profitRightCoins * 100000000) / 100000000,
   };
 }
