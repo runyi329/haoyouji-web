@@ -46,7 +46,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
   return (
     <div className="flex flex-col h-full">
       {/* 上半：代结利息 */}
-      <div className="flex-1 flex flex-col justify-center">
+      <div className="flex-1 flex flex-col justify-start">
         <div className="flex items-center justify-between mb-0.5">
           <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
           <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
@@ -68,7 +68,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
       {/* 中间分隔线 */}
       <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
       {/* 下半：收益分成 */}
-      <div className="flex-1 flex flex-col justify-center">
+      <div className="flex-1 flex flex-col justify-start pt-2">
         <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>收益分成</div>
         <div className="flex items-baseline gap-0.5">
           <span
