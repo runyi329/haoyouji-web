@@ -76,18 +76,16 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
         </div>
-        {displayLowest !== null && (
-          <div className="flex items-center justify-between mt-0.5" style={{ fontSize: '11px' }}>
-            <span className="text-gray-400">最低价格</span>
-            <span className="font-medium" style={{ color: '#4B5563' }}>{displayLowest.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-          </div>
-        )}
-        {lowestAtLabel && (
-          <div className="flex items-center justify-between" style={{ fontSize: '11px' }}>
-            <span className="text-gray-400">发生时间</span>
-            <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel}</span>
-          </div>
-        )}
+        <div className="flex items-center justify-between mt-0.5" style={{ fontSize: '11px' }}>
+          <span className="text-gray-400">最低价格</span>
+          <span className="font-medium" style={{ color: '#4B5563' }}>
+            {displayLowest !== null ? displayLowest.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between" style={{ fontSize: '11px' }}>
+          <span className="text-gray-400">发生时间</span>
+          <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel || '---'}</span>
+        </div>
       </div>
     </div>
   );
@@ -149,27 +147,18 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
               </div>
             )}
-            {(() => {
-              const livePrice = livePrices[order.coin];
-              if (!livePrice || !price) return null;
-              return (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400 shrink-0">当前成本</span>
-                  <span className="font-medium" style={{ color: '#4B5563' }}>{livePrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                </div>
-              );
-            })()}
-            {(() => {
-              const livePrice = livePrices[order.coin];
-              if (!livePrice || !qty) return null;
-              const currentValue = qty * livePrice;
-              return (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400 shrink-0">当前价值</span>
-                  <span className="font-medium" style={{ color: '#4B5563' }}>{currentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                </div>
-              );
-            })()}
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400 shrink-0">当前成本</span>
+              <span className="font-medium" style={{ color: '#4B5563' }}>
+                {livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400 shrink-0">当前价值</span>
+              <span className="font-medium" style={{ color: '#4B5563' }}>
+                {livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
+              </span>
+            </div>
             {order.buy_date && order.status === 'active' && (() => {
               const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
               if (elapsed < 0) return null;
