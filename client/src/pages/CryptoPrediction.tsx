@@ -716,7 +716,7 @@ export default function CryptoPrediction() {
   const isFunder = (ledgerInfo as any)?.userRole === 'funder';
 
   // 融资付息：订单列表（仅非资方用户在融资付息Tab时加载）
-  const { data: financeOrdersData } = trpc.ledger.financeGetOrders.useQuery(
+  const { data: financeOrdersData, refetch: refetchFinanceOrders, isFetching: financeOrdersFetching } = trpc.ledger.financeGetOrders.useQuery(
     { ledgerId },
     { enabled: isCustomAF && !isFunder && tab === 'finance' }
   );
@@ -1411,6 +1411,18 @@ export default function CryptoPrediction() {
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>融资订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {financeOrders.length} 笔</span>
+              <button
+                onClick={() => refetchFinanceOrders()}
+                disabled={financeOrdersFetching}
+                className="ml-2 flex items-center justify-center w-6 h-6 rounded-full"
+                style={{ backgroundColor: '#EEF2FF' }}
+                title="刷新"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${financeOrdersFetching ? 'animate-spin' : ''}`}
+                  style={{ color: '#3B82F6' }}
+                />
+              </button>
             </div>
             {financeOrders.length === 0 ? (
               <div className="text-center py-12">
