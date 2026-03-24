@@ -54,7 +54,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
 }
 
 // 单张资金方订单卡片（左右两栏布局）
-function FunderOrderCard({ order, ledgerId, onClick }: { order: any; ledgerId: number; onClick: () => void }) {
+function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any; ledgerId: number; livePrices: Record<string, number>; onClick: () => void }) {
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
@@ -80,14 +80,14 @@ function FunderOrderCard({ order, ledgerId, onClick }: { order: any; ledgerId: n
 
         {/* 左栏：订单信息 */}
         <div className="flex-1 p-4 pr-3">
-          {/* 币种名称 + 数量（大字突出） */}
+          {/* 币种名称 + 数量（大字突出，4位小数） */}
           <div className="flex items-baseline gap-1 mb-1">
             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
-              {qty > 0 ? qty : '—'}
+              {qty > 0 ? qty.toFixed(4) : '—'}
             </span>
             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
           </div>
-          {/* 三行信息：四字标题统一颜色 */}
+          {/* 订单信息列表 */}
           <div className="space-y-0.5 mb-2">
             {price > 0 && (
               <div className="flex items-center gap-1 text-xs">
@@ -97,10 +97,31 @@ function FunderOrderCard({ order, ledgerId, onClick }: { order: any; ledgerId: n
             )}
             {totalU > 0 && (
               <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-400 w-14 shrink-0">订单价值</span>
+                <span className="text-gray-400 w-14 shrink-0">买入价值</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
+            {(() => {
+              const livePrice = livePrices[order.coin];
+              if (!livePrice || !price) return null;
+              return (
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-gray-400 w-14 shrink-0">当前成本</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{livePrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                </div>
+              );
+            })()}
+            {(() => {
+              const livePrice = livePrices[order.coin];
+              if (!livePrice || !qty) return null;
+              const currentValue = qty * livePrice;
+              return (
+                <div className="flex items-center gap-1 text-xs">
+                  <span className="text-gray-400 w-14 shrink-0">当前价值</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{currentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                </div>
+              );
+            })()}
             {order.buy_date && (
               <div className="flex items-center gap-1 text-xs">
                 <span className="text-gray-400 w-14 shrink-0">买入时间</span>
@@ -108,13 +129,18 @@ function FunderOrderCard({ order, ledgerId, onClick }: { order: any; ledgerId: n
               </div>
             )}
             {order.buy_date && order.status === 'active' && (() => {
-              const days = Math.floor((Date.now() - new Date(order.buy_date + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24));
-              return days >= 0 ? (
+              const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+              if (elapsed < 0) return null;
+              const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+              const days = Math.floor(totalHours / 24);
+              const hours = totalHours % 24;
+              const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+              return (
                 <div className="flex items-center gap-1 text-xs">
-                  <span className="text-gray-400 w-14 shrink-0">持有天数</span>
-                  <span className="font-medium" style={{ color: '#4B5563' }}>{days} 天</span>
+                  <span className="text-gray-400 w-14 shrink-0">持有时长</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{label}</span>
                 </div>
-              ) : null;
+              );
             })()}
           </div>
           {/* 状态 */}
@@ -537,10 +563,12 @@ export default function LedgerDetail() {
     { enabled: isCustomAF && isFunder }
   );
   // 资方专属：资产订单列表（仅 funder 角色查询）
-  const { data: funderAssetOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
+  const { data: funderAssetData } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF && isFunder }
   );
+  const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
+  const funderLivePrices: Record<string, number> = (funderAssetData as any)?.livePrices ?? {};
   // AF 账本：YJH邀请树（仅当弹窗打开时才加载）
   const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -1906,6 +1934,7 @@ export default function LedgerDetail() {
                     key={order.id}
                     order={order}
                     ledgerId={ledgerId}
+                    livePrices={funderLivePrices}
                     onClick={() => setSelectedFunderOrder(order)}
                   />
                 ))}

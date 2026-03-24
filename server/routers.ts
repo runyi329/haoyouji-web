@@ -11484,7 +11484,15 @@ export const appRouter = router({
                 ORDER BY fo.created_at DESC`
           );
         }
-        return ((rows[0] || rows) as any[]) || [];
+        const orders = ((rows[0] || rows) as any[]) || [];
+        // 附带实时价格
+        const { getLatestPrice } = await import('./price-scanner');
+        const livePrices: Record<string, number> = {};
+        for (const coin of ['BTC', 'ETH', 'SOL']) {
+          const p = getLatestPrice(coin);
+          if (p) livePrices[coin] = p;
+        }
+        return { orders, livePrices };
       }),
 
     // 获取资方资产汇总（资金方首页用）
