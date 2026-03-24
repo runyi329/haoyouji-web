@@ -746,7 +746,7 @@ function ChartViewContent({
                 tick={{ fontSize: 10, fill: 'var(--text-gray)' }}
                 stroke="var(--text-gray)"
                 width={45}
-                tickFormatter={(value: number) => `¥${(value / 1000).toFixed(0)}k`}
+                tickFormatter={(value: any) => `¥${((Number(value) || 0) / 1000).toFixed(0)}k`}
                 domain={[0, (dataMax: number) => Math.ceil(dataMax * 1.2)]}
               />
               <Tooltip 
@@ -757,7 +757,7 @@ function ChartViewContent({
                   fontSize: '12px'
                 }}
                 formatter={(value: any, name: string) => [
-                  `¥${value.toFixed(2)}`,
+                  `¥${(Number(value) || 0).toFixed(2)}`,
                   name === 'income' ? '收入' : '支出'
                 ]}
               />
