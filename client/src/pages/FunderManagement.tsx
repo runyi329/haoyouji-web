@@ -124,8 +124,11 @@ export default function FunderManagement() {
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
-
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
+  // 结息记录相关 state
+  const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null); // 当前展开结息面板的订单id
+  const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
 
   const [formData, setFormData] = useState({
     userId: 0,
@@ -188,6 +191,21 @@ export default function FunderManagement() {
     onSuccess: () => {
       toast.success('删除成功');
       refetchOrders();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // 结息记录相关
+  const { data: interestPayments, refetch: refetchPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
+    { ledgerId, orderId: showPaymentPanel! },
+    { enabled: showPaymentPanel !== null }
+  );
+
+  const addPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
+    onSuccess: () => {
+      toast.success('结息记录已添加');
+      setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
+      refetchPayments();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -373,6 +391,13 @@ export default function FunderManagement() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
+                          className="px-2 py-1 text-xs rounded-lg font-medium"
+                          style={{ backgroundColor: showPaymentPanel === order.id ? '#1A56DB' : '#EFF6FF', color: showPaymentPanel === order.id ? '#fff' : '#1A56DB' }}
+                        >
+                          记录结息
+                        </button>
                         <button onClick={() => handleOpenEdit(order)} className="p-1.5 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50">
                           <Pencil className="w-4 h-4" />
                         </button>
@@ -432,6 +457,82 @@ export default function FunderManagement() {
                     {order.admin_note && (
                       <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
                         内部备注：{order.admin_note}
+                      </div>
+                    )}
+
+                    {/* 结息记录面板 */}
+                    {showPaymentPanel === order.id && (
+                      <div className="mt-3 pt-3 border-t border-blue-100">
+                        <div className="text-xs font-semibold text-blue-600 mb-2">结息记录</div>
+
+                        {/* 新增表单 */}
+                        <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-400 mb-1">结息金额（元）</div>
+                              <input
+                                type="number"
+                                placeholder="请输入金额"
+                                value={paymentForm.amount}
+                                onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                                className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-400 mb-1">结息日期</div>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  readOnly
+                                  value={paymentForm.payDate}
+                                  onClick={() => setShowPaymentDatePicker(v => !v)}
+                                  className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white cursor-pointer"
+                                />
+                                {showPaymentDatePicker && (
+                                  <div className="absolute top-full left-0 z-50 mt-1 bg-white rounded-xl shadow-lg border border-blue-100">
+                                    <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm(f => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-400 mb-1">备注（可空）</div>
+                            <input
+                              type="text"
+                              placeholder="如：3月利息"
+                              value={paymentForm.note}
+                              onChange={e => setPaymentForm(f => ({ ...f, note: e.target.value }))}
+                              className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
+                            />
+                          </div>
+                          <button
+                            disabled={!paymentForm.amount || addPaymentMutation.isPending}
+                            onClick={() => addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), payDate: paymentForm.payDate, note: paymentForm.note })}
+                            className="w-full py-2 rounded-lg text-sm font-medium text-white"
+                            style={{ backgroundColor: '#1A56DB' }}
+                          >
+                            {addPaymentMutation.isPending ? '提交中...' : '确认添加'}
+                          </button>
+                        </div>
+
+                        {/* 历史记录 */}
+                        {interestPayments && (interestPayments as any[]).length > 0 ? (
+                          <div className="space-y-1.5">
+                            <div className="text-xs text-gray-400 mb-1">历史结息记录</div>
+                            {(interestPayments as any[]).map((p: any) => (
+                              <div key={p.id} className="flex items-center justify-between text-xs bg-white rounded-lg px-3 py-2 border border-gray-100">
+                                <div>
+                                  <span className="font-medium text-gray-700">{p.pay_date?.slice(0, 10)}</span>
+                                  {p.note && <span className="ml-2 text-gray-400">{p.note}</span>}
+                                </div>
+                                <span className="font-semibold" style={{ color: '#1A56DB' }}>+{parseFloat(p.amount).toFixed(2)}元</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 text-center py-2">暂无结息记录</div>
+                        )}
                       </div>
                     )}
                   </div>
