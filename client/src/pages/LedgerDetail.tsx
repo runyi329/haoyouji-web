@@ -30,26 +30,37 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
   );
   const profitPct = stats?.profitRightPct ?? 0;
   return (
-    <>
-      {/* 上：代结利息 */}
-      <div className="mb-3">
-        <div className="text-[10px] text-gray-400 mb-1">代结利息</div>
-        <div
-          className="text-sm font-bold tabular-nums leading-tight"
-          style={{ color: '#1A56DB', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-        >
-          {accrued.toFixed(2)}元
+    <div className="flex flex-col h-full">
+      {/* 上半：代结利息 */}
+      <div className="flex-1 flex flex-col justify-center">
+        <div className="text-[10px] text-gray-400 mb-0.5">代结利息</div>
+        <div className="flex items-baseline gap-0.5">
+          <span
+            className="text-2xl font-bold tabular-nums leading-tight"
+            style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+          >
+            {accrued.toFixed(2)}
+          </span>
+          <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>元</span>
         </div>
-        <div className="text-[10px] text-gray-400">{order.interest_rate_annual}%/年</div>
+        <div className="text-[10px] text-gray-400 mt-0.5">年化 {order.interest_rate_annual || 0}%</div>
       </div>
-      {/* 下：收益分成 */}
-      <div>
-        <div className="text-[10px] text-gray-400 mb-1">收益分成</div>
-        <div className="text-sm font-bold tabular-nums" style={{ color: cc }}>
-          {profitPct.toFixed(2)}%
+      {/* 中间分隔线 */}
+      <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
+      {/* 下半：收益分成 */}
+      <div className="flex-1 flex flex-col justify-center">
+        <div className="text-[10px] text-gray-400 mb-0.5">收益分成</div>
+        <div className="flex items-baseline gap-0.5">
+          <span
+            className="text-2xl font-bold tabular-nums leading-tight"
+            style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+          >
+            {profitPct.toFixed(2)}
+          </span>
+          <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -155,7 +166,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
         <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
 
         {/* 右栏：利息 + 收益分成 */}
-        <div className="w-36 p-4 pl-3 flex flex-col justify-between">
+        <div className="w-36 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
           {hasInterest ? (
             <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} />
           ) : (
