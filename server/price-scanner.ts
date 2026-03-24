@@ -76,9 +76,9 @@ async function scanPrices() {
 export function getLatestPrice(coin: string): number | null {
   const entry = latestPrices[coin.toUpperCase()];
   if (!entry) return null;
-  // 如果价格超过5分钟未更新，视为过期
+  // 如果价格超30分钟未更新，视为过期
   const age = Date.now() - new Date(entry.updatedAt).getTime();
-  if (age > 5 * 60 * 1000) return null;
+  if (age > 30 * 60 * 1000) return null;;
   return entry.price;
 }
 
