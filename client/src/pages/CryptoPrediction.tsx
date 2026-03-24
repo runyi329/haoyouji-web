@@ -1518,12 +1518,7 @@ export default function CryptoPrediction() {
                                 {coinPrice && coinQty ? (coinQty * coinPrice).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
                               </span>
                             </div>
-                            {holdingLabel && (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400 shrink-0">持有时长</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span>
-                              </div>
-                            )}
+
                             {order.order_no && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">订单编号</span>
@@ -1569,6 +1564,12 @@ export default function CryptoPrediction() {
                                       return d;
                                     })()}
                                   </span>
+                                </div>
+                              )}
+                              {holdingLabel && (
+                                <div className="flex items-center justify-between mt-0.5 text-xs">
+                                  <span className="text-gray-400">持有时长</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span>
                                 </div>
                               )}
                               <div className="flex items-center justify-between mt-0.5 text-xs">
