@@ -11968,8 +11968,9 @@ export const appRouter = router({
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        // 使用 Drizzle sql 模板标签构建动态 UPDATE
-        const setParts: any[] = [];
+        // 动态构建 UPDATE，直接使用 mysql2 连接执行带占位符的原始 SQL
+        const updateCols: string[] = [];
+        const updateVals: any[] = [];
         const fieldMap: Record<string, string> = {
           coin: 'coin', amount: 'amount', buyPrice: 'buy_price', buyDate: 'buy_date',
           buyQuantity: 'buy_quantity', storageAccount: 'storage_account', status: 'status',
@@ -11977,23 +11978,23 @@ export const appRouter = router({
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestStartDate: 'interest_start_date',
           counterparty: 'counterparty',
         };
-        if (input.userId !== undefined) {
-          setParts.push(sql`user_id = ${input.userId}`);
-        }
+        if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
         for (const [key, col] of Object.entries(fieldMap)) {
-          if ((input as any)[key] !== undefined) {
-            setParts.push(sql.raw(`${col} = `).append(sql`${(input as any)[key]}`) as any);
-          }
+          if ((input as any)[key] !== undefined) { updateCols.push(`${col} = ?`); updateVals.push((input as any)[key]); }
         }
-        if (setParts.length === 0) return { success: true };
-        // 拼接所有 SET 片段
-        let setCombined = setParts[0];
-        for (let i = 1; i < setParts.length; i++) {
-          setCombined = sql`${setCombined}, ${setParts[i]}`;
-        }
-        await db.execute(
-          sql`UPDATE finance_interest_orders SET ${setCombined} WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
-        );
+        if (updateCols.length === 0) return { success: true };
+        updateVals.push(input.id, input.ledgerId);
+        // 使用 mysql2 直接连接执行
+        const mysql = await import('mysql2/promise');
+        const dbUrl = process.env.DATABASE_URL || '';
+        const match = dbUrl.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):([^/]+)\/(.+)/);
+        if (!match) throw new Error('Invalid DATABASE_URL');
+        const conn = await mysql.createConnection({
+          host: match[3], port: parseInt(match[4]), user: match[1],
+          password: match[2], database: match[5],
+        });
+        await conn.execute(`UPDATE finance_interest_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
+        await conn.end();
         return { success: true };
       }),
 
