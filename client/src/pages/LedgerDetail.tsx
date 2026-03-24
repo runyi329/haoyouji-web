@@ -86,6 +86,18 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
         </div>
         <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">最低跌幅</span>
+          <span className="font-medium" style={{ color: '#4B5563' }}>
+            {(() => {
+              if (!buyPrice || buyPrice <= 0) return '0.00%';
+              const drop = rawLowest && rawLowest < buyPrice
+                ? ((buyPrice - rawLowest) / buyPrice * 100)
+                : 0;
+              return drop.toFixed(2) + '%';
+            })()}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
           <span className="text-gray-400">发生时间</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel || '---'}</span>
         </div>
