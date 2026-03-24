@@ -29,13 +29,16 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
     { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
   );
   const profitPct = stats?.profitRightPct ?? 0;
-  const lowestPrice = stats?.allTimeLow;
+  const rawLowest = stats?.allTimeLow ? Number(stats.allTimeLow) : null;
+  const buyPrice = order.buy_price ? Number(order.buy_price) : null;
+  // 最低价：如果扫描到的最低价比买入价更低，就显示最低价；否则显示买入价
+  const displayLowest = rawLowest && buyPrice && rawLowest < buyPrice ? rawLowest : buyPrice;
   const lowestAt = stats?.allTimeLowAt;
-  // 格式化最低价发生时间
+  // 格式化扫描时间：X月X日 HH:MM
   let lowestAtLabel = '';
   if (lowestAt) {
     const d = new Date(lowestAt);
-    lowestAtLabel = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    lowestAtLabel = `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   }
   return (
     <div className="flex flex-col h-full">
@@ -54,7 +57,10 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>元</span>
         </div>
-        <div className="text-[10px] text-gray-400 mt-0.5">目前已结 <span className="font-medium" style={{ color: '#4B5563' }}>0.00元</span></div>
+        <div className="flex items-center justify-between text-[10px] mt-0.5">
+          <span className="text-gray-400">目前已结</span>
+          <span className="font-medium" style={{ color: '#4B5563' }}>0.00元</span>
+        </div>
       </div>
       {/* 中间分隔线 */}
       <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
@@ -70,11 +76,17 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
         </div>
-        {lowestPrice && (
-          <div className="text-[10px] text-gray-400 mt-0.5">最低价 <span className="font-medium" style={{ color: '#4B5563' }}>{Number(lowestPrice).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+        {displayLowest !== null && (
+          <div className="flex items-center justify-between text-[10px] mt-0.5">
+            <span className="text-gray-400">最低价格</span>
+            <span className="font-medium" style={{ color: '#4B5563' }}>{displayLowest.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+          </div>
         )}
         {lowestAtLabel && (
-          <div className="text-[10px] text-gray-400">发生 {lowestAtLabel}</div>
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-gray-400">扫描时间</span>
+            <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel}</span>
+          </div>
         )}
       </div>
     </div>
