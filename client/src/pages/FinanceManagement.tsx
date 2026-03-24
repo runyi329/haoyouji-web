@@ -1,0 +1,798 @@
+import { useState, useMemo } from "react";
+import { useRoute, useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
+import { toast } from "sonner";
+
+// 币种选项
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL'] as const;
+type CoinType = typeof COIN_OPTIONS[number];
+
+const STATUS_OPTIONS = [
+  { value: 'active', label: '持有中' },
+  { value: 'settled', label: '已结算' },
+  { value: 'cancelled', label: '已取消' },
+];
+
+const INTEREST_PAYMENT_OPTIONS = [
+  { value: 'monthly_pre', label: '月付先付' },
+  { value: 'monthly_post', label: '月付后付' },
+  { value: 'semi_pre', label: '半年付先付' },
+  { value: 'semi_post', label: '半年付后付' },
+  { value: 'annual_pre', label: '年付先付' },
+  { value: 'annual_post', label: '年付后付' },
+  { value: 'end_post', label: '结束后付' },
+];
+
+const COIN_COLORS: Record<CoinType, string> = {
+  BTC: '#F7931A',
+  ETH: '#627EEA',
+  SOL: '#9945FF',
+};
+
+// 简单日历选择器组件
+function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+
+  const selected = value ? new Date(value + 'T00:00:00') : null;
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+  const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
+    else setViewMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const handleDay = (d: number) => {
+    const mm = String(viewMonth + 1).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    onChange(`${viewYear}-${mm}-${dd}`);
+  };
+
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const isSelected = (d: number) => {
+    if (!selected) return false;
+    return selected.getFullYear() === viewYear && selected.getMonth() === viewMonth && selected.getDate() === d;
+  };
+
+  return (
+    <div className="border border-gray-200 rounded-xl overflow-hidden" style={{ backgroundColor: '#FAFBFF' }}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
+        <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-gray-100">
+          <CalLeft className="w-4 h-4 text-gray-400" />
+        </button>
+        <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
+          {viewYear}年 {monthNames[viewMonth]}
+        </span>
+        <button onClick={nextMonth} className="p-1 rounded-lg hover:bg-gray-100">
+          <CalRight className="w-4 h-4 text-gray-400" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 text-center py-1">
+        {['日', '一', '二', '三', '四', '五', '六'].map(d => (
+          <div key={d} className="text-[10px] text-gray-400 py-0.5">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 text-center pb-2 px-1">
+        {cells.map((d, i) => (
+          <div key={i} className="py-0.5">
+            {d !== null ? (
+              <button
+                onClick={() => handleDay(d)}
+                className="w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium"
+                style={isSelected(d)
+                  ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                  : { color: '#374151' }}
+              >
+                {d}
+              </button>
+            ) : <div className="w-7 h-7" />}
+          </div>
+        ))}
+      </div>
+      {value && (
+        <div className="px-3 pb-2 text-center text-xs text-blue-500 font-medium">
+          已选：{value}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function FinanceManagement() {
+  const [, params] = useRoute("/ledger/:id/finance-management");
+  const [, setLocation] = useLocation();
+  const ledgerId = params?.id ? parseInt(params.id) : 0;
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
+  // 结息记录相关 state
+  const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
+
+  const [formData, setFormData] = useState({
+    coin: 'BTC' as CoinType,
+    buyPrice: '',
+    buyQuantity: '',
+    buyDate: '',
+    storageAccount: '',
+    status: 'active',
+    adminNote: '',
+    publicNote: '',
+    interestRateAnnual: '',
+    interestPaymentType: '',
+    interestBase: '',
+    interestStartDate: '',
+    counterparty: '',
+  });
+
+  // 自动折算总金额
+  const computedAmount = useMemo(() => {
+    const price = parseFloat(formData.buyPrice);
+    const qty = parseFloat(formData.buyQuantity);
+    if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
+      return (price * qty).toFixed(2);
+    }
+    return '';
+  }, [formData.buyPrice, formData.buyQuantity]);
+
+  const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 }
+  );
+  const orders = (ordersData as any)?.orders ?? ordersData ?? [];
+
+  const createMutation = trpc.ledger.financeCreateOrder.useMutation({
+    onSuccess: () => {
+      toast.success('创建成功');
+      setShowForm(false);
+      refetchOrders();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
+    onSuccess: () => {
+      toast.success('更新成功');
+      setShowForm(false);
+      setEditingOrder(null);
+      refetchOrders();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const deleteMutation = trpc.ledger.financeDeleteOrder.useMutation({
+    onSuccess: () => {
+      toast.success('删除成功');
+      refetchOrders();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  // 结息记录相关
+  const { data: interestPayments, refetch: refetchPayments } = trpc.ledger.financeGetInterestPayments.useQuery(
+    { ledgerId, orderId: showPaymentPanel! },
+    { enabled: showPaymentPanel !== null }
+  );
+
+  const addPaymentMutation = trpc.ledger.financeAddInterestPayment.useMutation({
+    onSuccess: () => {
+      toast.success('结息记录已添加');
+      setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
+      refetchPayments();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const handleOpenCreate = () => {
+    setFormData({
+      coin: 'BTC',
+      buyPrice: '',
+      buyQuantity: '',
+      buyDate: '',
+      storageAccount: '',
+      status: 'active',
+      adminNote: '',
+      publicNote: '',
+      interestRateAnnual: '',
+      interestPaymentType: '',
+      interestBase: '',
+      interestStartDate: '',
+      counterparty: '',
+    });
+    setEditingOrder(null);
+    setShowDatePicker(false);
+    setShowInterestDatePicker(false);
+    setShowForm(true);
+  };
+
+  const handleOpenEdit = (order: any) => {
+    setFormData({
+      coin: order.coin as CoinType,
+      buyPrice: order.buy_price || '',
+      buyQuantity: order.buy_quantity || '',
+      buyDate: order.buy_date || '',
+      storageAccount: order.storage_account || '',
+      status: order.status,
+      adminNote: order.admin_note || '',
+      publicNote: order.public_note || '',
+      interestRateAnnual: order.interest_rate_annual || '',
+      interestPaymentType: order.interest_payment_type || '',
+      interestBase: order.interest_base || '',
+      interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
+      counterparty: order.counterparty || '',
+    });
+    setEditingOrder(order);
+    setShowDatePicker(false);
+    setShowInterestDatePicker(false);
+    setShowForm(true);
+  };
+
+  const handleSubmit = () => {
+    if (!computedAmount || parseFloat(computedAmount) <= 0) {
+      toast.error('请填写买入价格和买入数量以自动计算总金额');
+      return;
+    }
+    const payload = {
+      ledgerId,
+      coin: formData.coin,
+      amount: computedAmount,
+      buyPrice: formData.buyPrice || undefined,
+      buyDate: formData.buyDate || undefined,
+      buyQuantity: formData.buyQuantity || undefined,
+      storageAccount: formData.storageAccount || undefined,
+      adminNote: formData.adminNote || undefined,
+      publicNote: formData.publicNote || undefined,
+      interestRateAnnual: formData.interestRateAnnual || undefined,
+      interestPaymentType: formData.interestPaymentType || undefined,
+      interestBase: formData.interestBase || undefined,
+      interestStartDate: formData.interestStartDate || undefined,
+      counterparty: formData.counterparty || undefined,
+    };
+    if (editingOrder) {
+      updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
+
+  const handleDelete = (orderId: number) => {
+    if (!confirm('确定要删除这笔融资订单吗？')) return;
+    deleteMutation.mutate({ id: orderId, ledgerId });
+  };
+
+  const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
+
+  return (
+    <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
+      {/* 顶部导航 */}
+      <div
+        className="sticky top-0 z-10 px-4 py-3 flex items-center gap-3"
+        style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
+      >
+        <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1 -ml-2">
+          <ChevronLeft className="w-6 h-6 text-white" />
+        </button>
+        <h1 className="text-lg font-semibold text-white">融资付息订单管理</h1>
+      </div>
+
+      <div className="px-4 py-4">
+        {/* 新增订单按钮 */}
+        <div className="mb-4">
+          <button
+            onClick={handleOpenCreate}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-medium shadow-md"
+            style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+          >
+            <Plus className="w-4 h-4" />
+            添加融资订单
+          </button>
+        </div>
+
+        {/* 订单列表 */}
+        <div>
+          <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
+            融资订单列表 {orders ? `· ${(orders as any[]).length} 笔` : ''}
+          </h2>
+          {ordersLoading ? (
+            <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
+          ) : !orders || (orders as any[]).length === 0 ? (
+            <div className="text-center py-10 bg-white rounded-2xl shadow-sm">
+              <TrendingUp className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+              <div className="text-gray-400 text-sm">暂无融资订单</div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {(orders as any[]).map((order: any) => {
+                const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
+                const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
+                const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
+                return (
+                  <div
+                    key={order.id}
+                    className="bg-white rounded-2xl p-4 shadow-sm"
+                    style={{ border: '1px solid #E5EDFF' }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
+                          {order.coin}
+                        </span>
+                        {order.counterparty && (
+                          <span className="text-sm font-medium text-gray-700">
+                            {order.counterparty}
+                          </span>
+                        )}
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
+                          className="px-2 py-1 text-xs rounded-lg font-medium"
+                          style={{ backgroundColor: showPaymentPanel === order.id ? '#1A56DB' : '#EFF6FF', color: showPaymentPanel === order.id ? '#fff' : '#1A56DB' }}
+                        >
+                          记录结息
+                        </button>
+                        <button onClick={() => handleOpenEdit(order)} className="p-1.5 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50">
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDelete(order.id)} className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 总金额 */}
+                    <div className="flex items-baseline gap-1 mb-2">
+                      <span className="text-xl font-bold" style={{ color: '#1A2340' }}>
+                        {parseFloat(order.amount).toLocaleString()}
+                      </span>
+                      <span className="text-xs text-gray-400">USDT 总价</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                      {order.buy_price && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">买入价</span>
+                          <span className="font-medium text-gray-700">{order.buy_price} U</span>
+                        </div>
+                      )}
+                      {order.buy_quantity && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">买入数量</span>
+                          <span className="font-medium text-gray-700">{order.buy_quantity} {order.coin}</span>
+                        </div>
+                      )}
+                      {order.buy_date && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">买入日期</span>
+                          <span className="font-medium text-gray-700">{order.buy_date}</span>
+                        </div>
+                      )}
+                      {order.storage_account && (
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400">存放账号</span>
+                          <span className="font-medium text-gray-700 truncate">{order.storage_account}</span>
+                        </div>
+                      )}
+                      {order.interest_rate_annual && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">年化利息</span>
+                          <span className="font-medium text-gray-700">{order.interest_rate_annual}%</span>
+                        </div>
+                      )}
+                      {order.interest_payment_type && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">支付方式</span>
+                          <span className="font-medium text-gray-700">{getPaymentLabel(order.interest_payment_type)}</span>
+                        </div>
+                      )}
+                      {order.counterparty && (
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400">对手方</span>
+                          <span className="font-medium text-gray-700">{order.counterparty}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {order.admin_note && (
+                      <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
+                        内部备注：{order.admin_note}
+                      </div>
+                    )}
+
+                    {/* 结息记录面板 */}
+                    {showPaymentPanel === order.id && (
+                      <div className="mt-3 pt-3 border-t border-blue-100">
+                        <div className="text-xs font-semibold text-blue-600 mb-2">结息记录</div>
+
+                        {/* 新增表单 */}
+                        <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-400 mb-1">结息金额（元）</div>
+                              <input
+                                type="number"
+                                placeholder="请输入金额"
+                                value={paymentForm.amount}
+                                onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                                className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-400 mb-1">结息日期</div>
+                              <div className="relative">
+                                <input
+                                  type="text"
+                                  readOnly
+                                  value={paymentForm.payDate}
+                                  onClick={() => setShowPaymentDatePicker(v => !v)}
+                                  className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white cursor-pointer"
+                                />
+                                {showPaymentDatePicker && (
+                                  <div className="absolute top-full left-0 z-50 mt-1 bg-white rounded-xl shadow-lg border border-blue-100">
+                                    <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm(f => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-400 mb-1">备注（可空）</div>
+                            <input
+                              type="text"
+                              placeholder="如：3月利息"
+                              value={paymentForm.note}
+                              onChange={e => setPaymentForm(f => ({ ...f, note: e.target.value }))}
+                              className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
+                            />
+                          </div>
+                          <button
+                            disabled={!paymentForm.amount || addPaymentMutation.isPending}
+                            onClick={() => addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), payDate: paymentForm.payDate, note: paymentForm.note })}
+                            className="w-full py-2 rounded-lg text-sm font-medium text-white"
+                            style={{ backgroundColor: '#1A56DB' }}
+                          >
+                            {addPaymentMutation.isPending ? '提交中...' : '确认添加'}
+                          </button>
+                        </div>
+
+                        {/* 历史记录 */}
+                        {interestPayments && (interestPayments as any[]).length > 0 ? (
+                          <div className="space-y-1.5">
+                            <div className="text-xs text-gray-400 mb-1">历史结息记录</div>
+                            {(interestPayments as any[]).map((p: any) => (
+                              <div key={p.id} className="flex items-center justify-between text-xs bg-white rounded-lg px-3 py-2 border border-gray-100">
+                                <div>
+                                  <span className="font-medium text-gray-700">{p.pay_date?.slice(0, 10)}</span>
+                                  {p.note && <span className="ml-2 text-gray-400">{p.note}</span>}
+                                </div>
+                                <span className="font-semibold" style={{ color: '#1A56DB' }}>+{parseFloat(p.amount).toFixed(2)}元</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400 text-center py-2">暂无结息记录</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 创建/编辑弹窗 */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
+              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
+                {editingOrder ? '编辑融资订单' : '添加融资订单'}
+              </h3>
+              <button
+                onClick={() => { setShowForm(false); setEditingOrder(null); setShowDatePicker(false); }}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-5">
+              {/* 对手方 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">对手方名称</label>
+                <input
+                  type="text"
+                  value={formData.counterparty}
+                  onChange={e => setFormData(d => ({ ...d, counterparty: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：某某基金"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* 币种 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">币种</label>
+                <div className="flex gap-2">
+                  {COIN_OPTIONS.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setFormData(d => ({ ...d, coin: c }))}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all"
+                      style={
+                        formData.coin === c
+                          ? { backgroundColor: COIN_COLORS[c], color: '#fff', boxShadow: `0 4px 12px ${COIN_COLORS[c]}40` }
+                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                      }
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 买入价格 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  买入价格（USDT）<span className="text-red-400 ml-0.5">*</span>
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={formData.buyPrice}
+                  onChange={e => setFormData(d => ({ ...d, buyPrice: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：65000"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* 买入数量 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  买入数量（{formData.coin}）<span className="text-red-400 ml-0.5">*</span>
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={formData.buyQuantity}
+                  onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：0.5"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* 自动折算总金额 */}
+              <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#EEF4FF', border: '1px solid #C7D9FF' }}>
+                <div className="text-xs text-gray-400 mb-0.5">自动折算总金额（USDT）</div>
+                <div className="text-xl font-bold" style={{ color: '#1A56DB' }}>
+                  {computedAmount ? parseFloat(computedAmount).toLocaleString() : '—'}
+                  {computedAmount && <span className="text-sm font-normal text-blue-400 ml-1">USDT</span>}
+                </div>
+                {computedAmount && (
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {formData.buyQuantity} {formData.coin} x {formData.buyPrice} USDT
+                  </div>
+                )}
+              </div>
+
+              {/* 买入日期 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">买入日期</label>
+                <button
+                  onClick={() => setShowDatePicker(v => !v)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
+                  style={{ backgroundColor: '#fff', color: formData.buyDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                >
+                  {formData.buyDate || '点击选择日期'}
+                </button>
+                {showDatePicker && (
+                  <div className="mt-2">
+                    <DatePicker
+                      value={formData.buyDate}
+                      onChange={v => { setFormData(d => ({ ...d, buyDate: v })); setShowDatePicker(false); }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* 存放账号 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">存放账号</label>
+                <input
+                  type="text"
+                  value={formData.storageAccount}
+                  onChange={e => setFormData(d => ({ ...d, storageAccount: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="填写存放的交易所或钱包账号"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* 分隔线：利息约定 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400 shrink-0">利息约定</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* 计息基数 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  计息基数（USDT）
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">利息计算的本金基数</span>
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={formData.interestBase}
+                  onChange={e => setFormData(d => ({ ...d, interestBase: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：120000"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* 计息开始日期 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  计息开始日期
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">利息从此日开始累计</span>
+                </label>
+                <button
+                  onClick={() => setShowInterestDatePicker(v => !v)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
+                  style={{ backgroundColor: '#fff', color: formData.interestStartDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                >
+                  {formData.interestStartDate || '点击选择开始日期'}
+                </button>
+                {showInterestDatePicker && (
+                  <div className="mt-2">
+                    <DatePicker
+                      value={formData.interestStartDate}
+                      onChange={v => { setFormData(d => ({ ...d, interestStartDate: v })); setShowInterestDatePicker(false); }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* 约定年化利息 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">约定年化利息（%）</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.interestRateAnnual}
+                    onChange={e => setFormData(d => ({ ...d, interestRateAnnual: e.target.value }))}
+                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder="如：8.5"
+                    style={{ display: 'block', boxSizing: 'border-box' }}
+                  />
+                  <span className="text-base font-medium text-gray-500 shrink-0">% / 年</span>
+                </div>
+              </div>
+
+              {/* 利息支付方式 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">利息支付方式</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {INTEREST_PAYMENT_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setFormData(d => ({ ...d, interestPaymentType: d.interestPaymentType === opt.value ? '' : opt.value }))}
+                      className="py-2.5 rounded-xl text-sm font-medium transition-all"
+                      style={
+                        formData.interestPaymentType === opt.value
+                          ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 分隔线：备注 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400 shrink-0">备注</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* 公开备注 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  公开备注
+                  <span className="ml-1.5 text-xs text-green-500 font-normal">对外可见</span>
+                </label>
+                <textarea
+                  value={formData.publicNote}
+                  onChange={e => setFormData(d => ({ ...d, publicNote: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  rows={2}
+                  placeholder="填写对外可见的说明或备注"
+                  style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
+                />
+              </div>
+
+              {/* 内部备注 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  内部备注
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">仅管理员可见</span>
+                </label>
+                <textarea
+                  value={formData.adminNote}
+                  onChange={e => setFormData(d => ({ ...d, adminNote: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  rows={2}
+                  placeholder="内部管理备注"
+                  style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
+                />
+              </div>
+
+              {/* 状态（编辑时） */}
+              {editingOrder && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">订单状态</label>
+                  <div className="flex gap-2">
+                    {STATUS_OPTIONS.map(s => (
+                      <button
+                        key={s.value}
+                        onClick={() => setFormData(d => ({ ...d, status: s.value }))}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                        style={
+                          formData.status === s.value
+                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                        }
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 提交按钮 */}
+            <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-gray-100">
+              <button
+                onClick={handleSubmit}
+                disabled={createMutation.isPending || updateMutation.isPending}
+                className="w-full py-3.5 rounded-xl text-white font-semibold text-base disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+              >
+                {(createMutation.isPending || updateMutation.isPending) ? '提交中...' : (editingOrder ? '保存修改' : '确认添加')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
