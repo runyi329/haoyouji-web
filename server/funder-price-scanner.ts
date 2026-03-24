@@ -302,32 +302,23 @@ export function triggerFunderImmediateScan(orderId: number) {
 }
 
 /**
- * 启动定时扫描（每小时整点触发）
+ * 启动定时扫描（每10分钟一次）
  */
 export function startFunderScanner() {
-  function getNextHourMs(): number {
-    const now = new Date();
-    const nextHour = new Date(now);
-    nextHour.setMinutes(1, 0, 0); // 每小时01分触发，避免整点拥堵
-    if (nextHour <= now) {
-      nextHour.setHours(nextHour.getHours() + 1);
-    }
-    return Math.max(nextHour.getTime() - now.getTime(), 60 * 1000);
-  }
+  const INTERVAL_MS = 10 * 60 * 1000; // 10分钟
 
   function scheduleNext() {
-    const delay = getNextHourMs();
-    const nextTime = new Date(Date.now() + delay);
+    const nextTime = new Date(Date.now() + INTERVAL_MS);
     const bjNext = new Date(nextTime.getTime() + 8 * 3600 * 1000);
-    console.log(`[资方扫描] 下次扫描计划在北京时间 ${bjNext.getUTCHours().toString().padStart(2, '0')}:01（${Math.round(delay / 60000)}分钟后）`);
+    console.log(`[资方扫描] 下次扫描计划在北京时间 ${bjNext.getUTCHours().toString().padStart(2, '0')}:${bjNext.getUTCMinutes().toString().padStart(2, '0')}（10分钟后）`);
     setTimeout(async () => {
       await runFunderScan();
       scheduleNext();
-    }, delay);
+    }, INTERVAL_MS);
   }
 
-  console.log('[资方扫描] 资金方收益权监控已启动，每小时整点扫描（Gate.io→Binance→火币→OKX，失败自动重试3次）');
-  // 启动时立即执行一次，不等整点
+  console.log('[资方扫描] 资金方收益权监控已启动，每10分钟扫描一次（Gate.io→Binance→火币→OKX，失败自动重试3次）');
+  // 启动时立即执行一次，不等定时
   setTimeout(async () => {
     console.log('[资方扫描] 启动即时扫描（初始化）...');
     await runFunderScan();
