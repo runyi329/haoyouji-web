@@ -1219,34 +1219,53 @@ export default function LedgerDetail() {
               {/* 卡片 1：资金方看“资产”，其他角色看“余额” */}
               {isFunder ? (
                 <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                  <div className="text-xs text-white/70 mb-1">资产</div>
-                  <div className="flex items-baseline gap-1 mb-2">
-                    <span className="text-xl font-bold text-white">
-                      {funderAssetSummary ? funderAssetSummary.totalUsdt.toFixed(2) : '0.00'}
-                    </span>
-                    <span className="text-xs text-white/60">USDT</span>
-                    {funderAssetSummary && funderAssetSummary.orderCount > 0 && (
-                      <span className="text-[10px] text-white/40 ml-1">{funderAssetSummary.orderCount}笔订单</span>
-                    )}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-white/70">资产</span>
+                    <span className="text-xs text-white/50">总市値 {funderAssetSummary ? (() => {
+                      const bd = funderAssetSummary.coinBreakdown as any;
+                      let total = 0;
+                      for (const coin of ['BTC','ETH','SOL']) {
+                        const d = bd[coin];
+                        const price = funderLivePrices[coin] || 0;
+                        if (d && d.quantity > 0 && price > 0) total += d.quantity * price;
+                      }
+                      return total > 0 ? total.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' U' : '---';
+                    })() : '---'}</span>
                   </div>
-                  {/* 币种分布 */}
-                  {funderAssetSummary && Object.keys(funderAssetSummary.coinBreakdown).length > 0 && (
-                    <div className="flex items-baseline gap-3">
-                      {Object.entries(funderAssetSummary.coinBreakdown).map(([coin, data]: [string, any]) => (
-                        <div key={coin} className="flex items-baseline gap-1">
-                          <span className="text-xs text-white/70 font-medium">{coin}</span>
-                          <span className="text-sm font-bold text-white">{data.amount.toFixed(2)}</span>
-                          <span className="text-[10px] text-white/40">U</span>
-                          {data.quantity > 0 && (
-                            <span className="text-[10px] text-white/40">({data.quantity.toFixed(coin === 'BTC' ? 6 : 4)})</span>
-                          )}
+                  {/* 三列币种统计 */}
+                  <div className="flex items-stretch">
+                    {['ETH','BTC','SOL'].map((coin, idx) => {
+                      const bd = (funderAssetSummary?.coinBreakdown as any)?.[coin];
+                      const qty = bd?.quantity ?? 0;
+                      const avgCost = bd?.avgCost ?? 0;
+                      const livePrice = funderLivePrices[coin] || 0;
+                      const marketValue = qty > 0 && livePrice > 0 ? qty * livePrice : 0;
+                      const decimals = coin === 'BTC' ? 6 : 4;
+                      return (
+                        <div key={coin} className="flex-1 flex flex-col" style={{ borderLeft: idx > 0 ? '1px solid rgba(255,255,255,0.2)' : 'none', paddingLeft: idx > 0 ? '12px' : '0', paddingRight: idx < 2 ? '12px' : '0' }}>
+                          <div className="text-xs font-bold text-white mb-1.5">{coin}</div>
+                          <div className="space-y-1">
+                            <div>
+                              <div className="text-[10px] text-white/40">持有数量</div>
+                              <div className="text-xs font-semibold text-white">{qty > 0 ? qty.toFixed(decimals) : '0'}</div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-white/40">平均成本</div>
+                              <div className="text-xs font-semibold text-white">{avgCost > 0 ? avgCost.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'} U</div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-white/40">当前价格</div>
+                              <div className="text-xs font-semibold text-white">{livePrice > 0 ? livePrice.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'} U</div>
+                            </div>
+                            <div>
+                              <div className="text-[10px] text-white/40">当前市値</div>
+                              <div className="text-xs font-semibold text-white">{marketValue > 0 ? marketValue.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'} U</div>
+                            </div>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {(!funderAssetSummary || Object.keys(funderAssetSummary.coinBreakdown).length === 0) && (
-                    <div className="text-xs text-white/40">暂无资产订单</div>
-                  )}
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
