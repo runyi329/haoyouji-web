@@ -34,11 +34,14 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
   // 最低价：如果扫描到的最低价比买入价更低，就显示最低价；否则显示买入价
   const displayLowest = rawLowest && buyPrice && rawLowest < buyPrice ? rawLowest : buyPrice;
   const lowestAt = stats?.allTimeLowAt;
-  // 格式化扫描时间：X月X日 HH:MM
+  // 格式化时间：X月X日 HH:MM
+  // 如果有扫描时间就用扫描时间，否则用买入日期
   let lowestAtLabel = '';
   if (lowestAt) {
     const d = new Date(lowestAt);
     lowestAtLabel = `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  } else if (order.buy_date) {
+    lowestAtLabel = order.buy_date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_: string, y: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`);
   }
   return (
     <div className="flex flex-col h-full">
