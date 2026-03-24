@@ -1221,7 +1221,7 @@ export default function LedgerDetail() {
                 <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-white/70">资产</span>
-                    <span className="text-xs text-white/50">总市値 {funderAssetSummary ? (() => {
+                    <span className="text-xs text-white/50">{funderAssetSummary ? (() => {
                       const bd = funderAssetSummary.coinBreakdown as any;
                       let total = 0;
                       for (const coin of ['BTC','ETH','SOL']) {
@@ -1229,7 +1229,9 @@ export default function LedgerDetail() {
                         const price = funderLivePrices[coin] || 0;
                         if (d && d.quantity > 0 && price > 0) total += d.quantity * price;
                       }
-                      return total > 0 ? total.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' U' : '---';
+                      if (total <= 0) return '---';
+                      const cny = total * 7.15;
+                      return `总市值 ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })} U ≈ ${(cny / 10000).toFixed(2)}万元`;
                     })() : '---'}</span>
                   </div>
                   {/* 三列币种统计 */}
