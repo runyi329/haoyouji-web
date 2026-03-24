@@ -1422,9 +1422,10 @@ export default function CryptoPrediction() {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                   const principal = parseFloat(order.principal || '0');
                   const annualRate = parseFloat(order.annualInterestRate || '0');
+                  const isNegativeRate = annualRate < 0; // 负利率：用户需付出
                   const startDate = order.startDate ? new Date(order.startDate) : null;
                   const elapsedDays = startDate ? Math.max(0, (Date.now() - startDate.getTime()) / 86400000) : 0;
-                  const accruedInterest = principal * (annualRate / 100) * (elapsedDays / 365);
+                  const accruedInterest = Math.abs(principal * (annualRate / 100) * (elapsedDays / 365));
                   const unpaidInterest = Math.max(0, accruedInterest - paidInterest);
                   const coinQty = parseFloat(order.coinQuantity || '0');
                   const coinPrice = financeLivePrices[order.coin] || 0;
@@ -1444,7 +1445,9 @@ export default function CryptoPrediction() {
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-gray-400">年利率</div>
-                          <div className="font-bold text-base" style={{ color: '#1A56DB' }}>{annualRate}%</div>
+                          <div className="font-bold text-base" style={{ color: isNegativeRate ? '#EF4444' : '#1A56DB' }}>
+                            {isNegativeRate ? '' : '+'}{annualRate}%
+                          </div>
                         </div>
                       </div>
                       {/* 融资信息 */}
@@ -1461,15 +1464,17 @@ export default function CryptoPrediction() {
                           <div className="text-xs text-gray-400 mb-0.5">当前市值</div>
                           <div className="font-semibold" style={{ color: '#1A2340' }}>{marketValue ? marketValue.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' U' : '--'}</div>
                         </div>
-                        <div className="rounded-xl p-2.5" style={{ backgroundColor: '#FFF7ED' }}>
-                          <div className="text-xs text-gray-400 mb-0.5">待付利息</div>
-                          <div className="font-semibold" style={{ color: unpaidInterest > 0 ? '#D97706' : '#1A2340' }}>{unpaidInterest.toFixed(2)} USDT</div>
+                        <div className="rounded-xl p-2.5" style={{ backgroundColor: isNegativeRate ? '#FFF1F1' : '#FFF7ED' }}>
+                          <div className="text-xs text-gray-400 mb-0.5">{isNegativeRate ? '待付利息' : '待收利息'}</div>
+                          <div className="font-semibold" style={{ color: isNegativeRate ? '#EF4444' : (unpaidInterest > 0 ? '#D97706' : '#1A2340') }}>
+                            {isNegativeRate && unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)} USDT
+                          </div>
                         </div>
                       </div>
-                      {/* 已付利息 */}
+                      {/* 已付/已收利息 */}
                       <div className="flex justify-between items-center text-xs text-gray-400 pt-2" style={{ borderTop: '1px solid #F0F4FF' }}>
-                        <span>已付利息：<span className="text-green-600 font-medium">{paidInterest.toFixed(2)} USDT</span></span>
-                        <span>累计利息：<span style={{ color: '#1A56DB' }} className="font-medium">{accruedInterest.toFixed(2)} USDT</span></span>
+                        <span>{isNegativeRate ? '已付利息：' : '已收利息：'}<span className={isNegativeRate ? 'text-red-500 font-medium' : 'text-green-600 font-medium'}>{isNegativeRate && paidInterest > 0 ? '-' : ''}{paidInterest.toFixed(2)} USDT</span></span>
+                        <span>累计利息：<span style={{ color: isNegativeRate ? '#EF4444' : '#1A56DB' }} className="font-medium">{isNegativeRate ? '-' : ''}{accruedInterest.toFixed(2)} USDT</span></span>
                       </div>
                     </div>
                   );

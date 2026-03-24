@@ -138,6 +138,7 @@ export default function FinanceManagement() {
     adminNote: '',
     publicNote: '',
     interestRateAnnual: '',
+    interestRateSign: '+' as '+' | '-',
     interestPaymentType: '',
     interestBase: '',
     interestStartDate: '',
@@ -225,10 +226,11 @@ export default function FinanceManagement() {
       adminNote: '',
       publicNote: '',
       interestRateAnnual: '',
+      interestRateSign: '+' as '+' | '-',
       interestPaymentType: '',
       interestBase: '',
       interestStartDate: '',
-      counterparty: '',
+      counterparty: ''
     });
     setEditingOrder(null);
     setShowDatePicker(false);
@@ -249,7 +251,8 @@ export default function FinanceManagement() {
       status: order.status,
       adminNote: order.admin_note || '',
       publicNote: order.public_note || '',
-      interestRateAnnual: order.interest_rate_annual || '',
+      interestRateAnnual: order.interest_rate_annual ? String(Math.abs(parseFloat(order.interest_rate_annual))) : '',
+      interestRateSign: (order.interest_rate_annual && parseFloat(order.interest_rate_annual) < 0) ? '-' : '+' as '+' | '-',
       interestPaymentType: order.interest_payment_type || '',
       interestBase: order.interest_base || '',
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
@@ -280,7 +283,9 @@ export default function FinanceManagement() {
       storageAccount: formData.storageAccount || undefined,
       adminNote: formData.adminNote || undefined,
       publicNote: formData.publicNote || undefined,
-      interestRateAnnual: formData.interestRateAnnual || undefined,
+      interestRateAnnual: formData.interestRateAnnual
+        ? (formData.interestRateSign === '-' ? '-' : '') + formData.interestRateAnnual
+        : undefined,
       interestPaymentType: formData.interestPaymentType || undefined,
       interestBase: formData.interestBase || undefined,
       interestStartDate: formData.interestStartDate || undefined,
@@ -811,6 +816,17 @@ export default function FinanceManagement() {
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">约定年化利息（%）</label>
                 <div className="flex items-center gap-2">
+                  {/* 正负切换 */}
+                  <button
+                    onClick={() => setFormData(d => ({ ...d, interestRateSign: d.interestRateSign === '+' ? '-' : '+' }))}
+                    className="shrink-0 w-10 h-12 rounded-xl text-lg font-bold transition-all"
+                    style={formData.interestRateSign === '-'
+                      ? { background: 'linear-gradient(135deg, #EF4444, #F87171)', color: '#fff' }
+                      : { background: 'linear-gradient(135deg, #10B981, #34D399)', color: '#fff' }
+                    }
+                  >
+                    {formData.interestRateSign}
+                  </button>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -821,6 +837,9 @@ export default function FinanceManagement() {
                     style={{ display: 'block', boxSizing: 'border-box' }}
                   />
                   <span className="text-base font-medium text-gray-500 shrink-0">% / 年</span>
+                </div>
+                <div className="mt-1.5 text-xs" style={{ color: formData.interestRateSign === '-' ? '#EF4444' : '#10B981' }}>
+                  {formData.interestRateSign === '-' ? '负値：对用户而言属于待付利息（支出）' : '正値：对用户而言属于应收利息（收入）'}
                 </div>
               </div>
 
