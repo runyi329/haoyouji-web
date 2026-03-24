@@ -767,6 +767,29 @@ export default function LedgerDetail() {
         'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/charger/detail_w7.jpg',
       ],
     },
+    milk: {
+      id: 'milk',
+      name: '天润喀拉峻 有机纯牛奶',
+      subtitle: '新疆伊犁特克斯 -- 蛋白质3.8g -- 有机认证牧场',
+      basePrice: 9.9,
+      originalPrice: 19.9,
+      cover: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/carousel_1.jpg',
+      tag: '天润喀拉峻 -- 新疆有机认证',
+      carouselImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/carousel_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/carousel_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/carousel_3.jpg',
+      ],
+      detailImages: [
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/model_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/model_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/detail_1.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/detail_2.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/detail_3.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/detail_4.jpg',
+        'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/tianrun-milk/detail_5.jpg',
+      ],
+    },
   } : null;
   // 当前选中商品的快捷引用
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
