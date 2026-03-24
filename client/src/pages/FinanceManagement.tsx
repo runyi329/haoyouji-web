@@ -1,10 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
-// 币种选项
 const COIN_OPTIONS = ['BTC', 'ETH', 'SOL'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
@@ -30,58 +29,34 @@ const COIN_COLORS: Record<CoinType, string> = {
   SOL: '#9945FF',
 };
 
-// 简单日历选择器组件
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
-
   const selected = value ? new Date(value + 'T00:00:00') : null;
-
   const firstDay = new Date(viewYear, viewMonth, 1).getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-
-  const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
-
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
-  };
-
-  const handleDay = (d: number) => {
-    const mm = String(viewMonth + 1).padStart(2, '0');
-    const dd = String(d).padStart(2, '0');
-    onChange(`${viewYear}-${mm}-${dd}`);
-  };
-
+  const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+  const handleDay = (d: number) => { const mm = String(viewMonth + 1).padStart(2, '0'); const dd = String(d).padStart(2, '0'); onChange(`${viewYear}-${mm}-${dd}`); };
+  const isSelected = (d: number) => selected && selected.getFullYear() === viewYear && selected.getMonth() === viewMonth && selected.getDate() === d;
   const cells: (number | null)[] = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  const isSelected = (d: number) => {
-    if (!selected) return false;
-    return selected.getFullYear() === viewYear && selected.getMonth() === viewMonth && selected.getDate() === d;
-  };
-
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden" style={{ backgroundColor: '#FAFBFF' }}>
       <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
         <button onClick={prevMonth} className="p-1 rounded-lg hover:bg-gray-100">
           <CalLeft className="w-4 h-4 text-gray-400" />
         </button>
-        <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
-          {viewYear}年 {monthNames[viewMonth]}
-        </span>
+        <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{viewYear}年 {monthNames[viewMonth]}</span>
         <button onClick={nextMonth} className="p-1 rounded-lg hover:bg-gray-100">
           <CalRight className="w-4 h-4 text-gray-400" />
         </button>
       </div>
       <div className="grid grid-cols-7 text-center py-1">
-        {['日', '一', '二', '三', '四', '五', '六'].map(d => (
+        {['日','一','二','三','四','五','六'].map(d => (
           <div key={d} className="text-[10px] text-gray-400 py-0.5">{d}</div>
         ))}
       </div>
@@ -92,9 +67,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
               <button
                 onClick={() => handleDay(d)}
                 className="w-7 h-7 mx-auto flex items-center justify-center rounded-full text-xs font-medium"
-                style={isSelected(d)
-                  ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                  : { color: '#374151' }}
+                style={isSelected(d) ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' } : { color: '#374151' }}
               >
                 {d}
               </button>
@@ -103,13 +76,29 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
         ))}
       </div>
       {value && (
-        <div className="px-3 pb-2 text-center text-xs text-blue-500 font-medium">
-          已选：{value}
-        </div>
+        <div className="px-3 pb-2 text-center text-xs text-blue-500 font-medium">已选：{value}</div>
       )}
     </div>
   );
 }
+
+const emptyForm = {
+  coin: 'BTC' as CoinType,
+  amount: '',
+  buyPrice: '',
+  buyDate: '',
+  buyQuantity: '',
+  storageAccount: '',
+  counterparty: '',
+  interestBase: '',
+  interestStartDate: '',
+  interestRateAnnual: '',
+  interestRateSign: '+' as '+' | '-',
+  interestPaymentType: '',
+  publicNote: '',
+  adminNote: '',
+  status: 'active',
+};
 
 export default function FinanceManagement() {
   const [, params] = useRoute("/ledger/:id/finance-management");
@@ -118,196 +107,170 @@ export default function FinanceManagement() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [formData, setFormData] = useState({ ...emptyForm });
+
+  // 用户选择
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userSearchText, setUserSearchText] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // 日期选择器
+  const [showBuyDatePicker, setShowBuyDatePicker] = useState(false);
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
-  // 结息记录相关 state
+
+  // 结息记录
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null);
   const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
 
-  const [formData, setFormData] = useState({
-    coin: 'BTC' as CoinType,
-    buyPrice: '',
-    buyQuantity: '',
-    buyDate: '',
-    storageAccount: '',
-    status: 'active',
-    adminNote: '',
-    publicNote: '',
-    interestRateAnnual: '',
-    interestRateSign: '+' as '+' | '-',
-    interestPaymentType: '',
-    interestBase: '',
-    interestStartDate: '',
-    counterparty: '',
-  });
-
-  // 自动折算总金额
-  const computedAmount = useMemo(() => {
-    const price = parseFloat(formData.buyPrice);
-    const qty = parseFloat(formData.buyQuantity);
-    if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
-      return (price * qty).toFixed(2);
-    }
-    return '';
-  }, [formData.buyPrice, formData.buyQuantity]);
-
-  // 获取账本成员列表（用于选择用户）
-  const { data: membersData } = trpc.ledger.getMembers.useQuery(
+  // 查询
+  const { data: orders, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
     { ledgerId },
-    { enabled: ledgerId > 0 }
+    { enabled: !!ledgerId }
   );
-  const members = (membersData as any[]) ?? [];
-  // 过滤掉AI分身，只显示真实用户（userId > 0）
-  const realMembers = members.filter((m: any) => m.userId > 0 && m.memberType !== 'ai');
-
-  const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
+  const { data: members } = trpc.ledger.getMembers.useQuery(
     { ledgerId },
-    { enabled: ledgerId > 0 }
+    { enabled: !!ledgerId }
   );
-  const orders = (ordersData as any)?.orders ?? ordersData ?? [];
+  const { data: interestPayments } = trpc.ledger.financeGetInterestPayments.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
 
   const createMutation = trpc.ledger.financeCreateOrder.useMutation({
-    onSuccess: () => {
-      toast.success('创建成功');
-      setShowForm(false);
-      refetchOrders();
-    },
-    onError: (err: any) => toast.error(err.message),
+    onSuccess: () => { toast.success('订单已创建'); refetchOrders(); closeForm(); },
+    onError: (e) => toast.error(e.message),
   });
-
   const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
-    onSuccess: () => {
-      toast.success('更新成功');
-      setShowForm(false);
-      setEditingOrder(null);
-      refetchOrders();
-    },
-    onError: (err: any) => toast.error(err.message),
+    onSuccess: () => { toast.success('订单已更新'); refetchOrders(); closeForm(); },
+    onError: (e) => toast.error(e.message),
   });
-
   const deleteMutation = trpc.ledger.financeDeleteOrder.useMutation({
-    onSuccess: () => {
-      toast.success('删除成功');
-      refetchOrders();
-    },
-    onError: (err: any) => toast.error(err.message),
+    onSuccess: () => { toast.success('订单已删除'); refetchOrders(); },
+    onError: (e) => toast.error(e.message),
   });
-
-  // 结息记录相关
-  const { data: interestPayments, refetch: refetchPayments } = trpc.ledger.financeGetInterestPayments.useQuery(
-    { ledgerId, orderId: showPaymentPanel! },
-    { enabled: showPaymentPanel !== null }
-  );
-
   const addPaymentMutation = trpc.ledger.financeAddInterestPayment.useMutation({
-    onSuccess: () => {
-      toast.success('结息记录已添加');
-      setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
-      refetchPayments();
-    },
-    onError: (err: any) => toast.error(err.message),
+    onSuccess: () => { toast.success('结息记录已添加'); refetchOrders(); setShowPaymentPanel(null); },
+    onError: (e) => toast.error(e.message),
   });
 
-  const handleOpenCreate = () => {
+  const realMembers = (members as any[] || []).filter((m: any) => !m.isAiClone);
+
+  const filteredMembers = realMembers.filter((m: any) => {
+    const name = (m.nickname || m.username || '').toLowerCase();
+    return name.includes(userSearchText.toLowerCase());
+  });
+
+  const selectedUser = realMembers.find((m: any) => m.userId === selectedUserId);
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingOrder(null);
+    setFormData({ ...emptyForm });
     setSelectedUserId(null);
     setUserSearchText('');
-    setShowUserDropdown(false);
-    setFormData({
-      coin: 'BTC',
-      buyPrice: '',
-      buyQuantity: '',
-      buyDate: '',
-      storageAccount: '',
-      status: 'active',
-      adminNote: '',
-      publicNote: '',
-      interestRateAnnual: '',
-      interestRateSign: '+' as '+' | '-',
-      interestPaymentType: '',
-      interestBase: '',
-      interestStartDate: '',
-      counterparty: ''
-    });
+    setShowBuyDatePicker(false);
+    setShowInterestDatePicker(false);
+  }
+
+  function openCreate() {
     setEditingOrder(null);
-    setShowDatePicker(false);
-    setShowInterestDatePicker(false);
-    setShowForm(true);
-  };
-
-  const handleOpenEdit = (order: any) => {
-    setSelectedUserId(order.user_id ?? null);
+    setFormData({ ...emptyForm });
+    setSelectedUserId(null);
     setUserSearchText('');
-    setShowUserDropdown(false);
-    setFormData({
-      coin: order.coin as CoinType,
-      buyPrice: order.buy_price || '',
-      buyQuantity: order.buy_quantity || '',
-      buyDate: order.buy_date || '',
-      storageAccount: order.storage_account || '',
-      status: order.status,
-      adminNote: order.admin_note || '',
-      publicNote: order.public_note || '',
-      interestRateAnnual: order.interest_rate_annual ? String(Math.abs(parseFloat(order.interest_rate_annual))) : '',
-      interestRateSign: (order.interest_rate_annual && parseFloat(order.interest_rate_annual) < 0) ? '-' : '+' as '+' | '-',
-      interestPaymentType: order.interest_payment_type || '',
-      interestBase: order.interest_base || '',
-      interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
-      counterparty: order.counterparty || '',
-    });
-    setEditingOrder(order);
-    setShowDatePicker(false);
-    setShowInterestDatePicker(false);
     setShowForm(true);
-  };
+  }
 
-  const handleSubmit = () => {
-    if (!selectedUserId) {
-      toast.error('请先选择要为哪位用户添加/编辑订单');
-      return;
-    }
-    if (!computedAmount || parseFloat(computedAmount) <= 0) {
-      toast.error('请填写买入价格和买入数量以自动计算总金额');
-      return;
-    }
-    const payload = {
-      ledgerId,
-      coin: formData.coin,
-      amount: computedAmount,
-      buyPrice: formData.buyPrice || undefined,
-      buyDate: formData.buyDate || undefined,
-      buyQuantity: formData.buyQuantity || undefined,
-      storageAccount: formData.storageAccount || undefined,
-      adminNote: formData.adminNote || undefined,
-      publicNote: formData.publicNote || undefined,
-      interestRateAnnual: formData.interestRateAnnual
-        ? (formData.interestRateSign === '-' ? '-' : '') + formData.interestRateAnnual
-        : undefined,
-      interestPaymentType: formData.interestPaymentType || undefined,
-      interestBase: formData.interestBase || undefined,
-      interestStartDate: formData.interestStartDate || undefined,
-      counterparty: formData.counterparty || undefined,
-    };
+  function openEdit(order: any) {
+    const rateStr = String(order.interest_rate_annual || '');
+    const isNeg = rateStr.startsWith('-');
+    setFormData({
+      coin: order.coin || 'BTC',
+      amount: order.amount || '',
+      buyPrice: order.buy_price || '',
+      buyDate: order.buy_date || '',
+      buyQuantity: order.buy_quantity || '',
+      storageAccount: order.storage_account || '',
+      counterparty: order.counterparty || '',
+      interestBase: order.interest_base || '',
+      interestStartDate: order.interest_start_date || '',
+      interestRateAnnual: isNeg ? rateStr.slice(1) : rateStr,
+      interestRateSign: isNeg ? '-' : '+',
+      interestPaymentType: order.interest_payment_type || '',
+      publicNote: order.public_note || '',
+      adminNote: order.admin_note || '',
+      status: order.status || 'active',
+    });
+    setSelectedUserId(order.user_id || null);
+    const u = realMembers.find((m: any) => m.userId === order.user_id);
+    setUserSearchText(u ? (u.nickname || u.username || '') : '');
+    setEditingOrder(order);
+    setShowForm(true);
+  }
+
+  function handleSubmit() {
+    if (!selectedUserId) { toast.error('请先选择要为哪位用户添加订单'); return; }
+    if (!formData.coin) { toast.error('请选择币种'); return; }
+    if (!formData.amount) { toast.error('请填写融资金额'); return; }
+    const rateVal = formData.interestRateAnnual
+      ? (formData.interestRateSign === '-' ? '-' : '') + formData.interestRateAnnual
+      : '';
     if (editingOrder) {
-      updateMutation.mutate({ id: editingOrder.id, status: formData.status, userId: selectedUserId!, ...payload });
+      updateMutation.mutate({
+        id: editingOrder.id,
+        ledgerId,
+        userId: selectedUserId,
+        coin: formData.coin,
+        amount: formData.amount,
+        buyPrice: formData.buyPrice,
+        buyDate: formData.buyDate,
+        buyQuantity: formData.buyQuantity,
+        storageAccount: formData.storageAccount,
+        counterparty: formData.counterparty,
+        interestBase: formData.interestBase,
+        interestStartDate: formData.interestStartDate,
+        interestRateAnnual: rateVal,
+        interestPaymentType: formData.interestPaymentType,
+        publicNote: formData.publicNote,
+        adminNote: formData.adminNote,
+        status: formData.status,
+      });
     } else {
-      createMutation.mutate({ ...payload, userId: selectedUserId! });
+      createMutation.mutate({
+        ledgerId,
+        userId: selectedUserId,
+        coin: formData.coin,
+        amount: formData.amount,
+        buyPrice: formData.buyPrice,
+        buyDate: formData.buyDate,
+        buyQuantity: formData.buyQuantity,
+        storageAccount: formData.storageAccount,
+        counterparty: formData.counterparty,
+        interestBase: formData.interestBase,
+        interestStartDate: formData.interestStartDate,
+        interestRateAnnual: rateVal,
+        interestPaymentType: formData.interestPaymentType,
+        publicNote: formData.publicNote,
+        adminNote: formData.adminNote,
+      });
     }
-  };
+  }
 
-  const handleDelete = (orderId: number) => {
-    if (!confirm('确定要删除这笔融资订单吗？')) return;
-    deleteMutation.mutate({ id: orderId, ledgerId });
-  };
+  function handleAddPayment(orderId: number) {
+    if (!paymentForm.amount) { toast.error('请填写结息金额'); return; }
+    addPaymentMutation.mutate({
+      orderId,
+      ledgerId,
+      amount: paymentForm.amount,
+      paymentDate: paymentForm.payDate,
+      note: paymentForm.note,
+    });
+  }
 
   const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
-      {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 px-4 py-3 flex items-center gap-3"
         style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
@@ -319,10 +282,9 @@ export default function FinanceManagement() {
       </div>
 
       <div className="px-4 py-4">
-        {/* 新增订单按钮 */}
         <div className="mb-4">
           <button
-            onClick={handleOpenCreate}
+            onClick={openCreate}
             className="flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-medium shadow-md"
             style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
           >
@@ -331,7 +293,6 @@ export default function FinanceManagement() {
           </button>
         </div>
 
-        {/* 订单列表 */}
         <div>
           <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
             融资订单列表 {orders ? `· ${(orders as any[]).length} 笔` : ''}
@@ -346,180 +307,212 @@ export default function FinanceManagement() {
           ) : (
             <div className="space-y-3">
               {(orders as any[]).map((order: any) => {
-                const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
-                const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
-                const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
+                const payments = (interestPayments as any[] || []).filter((p: any) => p.order_id === order.id);
+                const totalPaid = payments.reduce((s: number, p: any) => s + parseFloat(p.amount || '0'), 0);
+                const rateStr = String(order.interest_rate_annual || '');
+                const isNegRate = rateStr.startsWith('-');
+                const rateAbs = isNegRate ? rateStr.slice(1) : rateStr;
+                const rateColor = isNegRate ? '#EF4444' : '#1A56DB';
+                const rateSign = isNegRate ? '-' : '+';
+                const memberName = realMembers.find((m: any) => m.userId === order.user_id);
+                const displayName = memberName ? (memberName.nickname || memberName.username || `用户${order.user_id}`) : `用户${order.user_id}`;
                 return (
                   <div
                     key={order.id}
-                    className="bg-white rounded-2xl p-4 shadow-sm"
-                    style={{ border: '1px solid #E5EDFF' }}
+                    className="bg-white rounded-2xl shadow-sm overflow-hidden"
+                    style={{ border: '1px solid #E8EDFF' }}
                   >
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
-                          {order.coin}
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: COIN_COLORS[order.coin as CoinType] || '#999' }}
+                        />
+                        <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
+                          {order.coin} · {order.amount} USDT
                         </span>
-                        {order.counterparty && (
-                          <span className="text-sm font-medium text-gray-700">
-                            {order.counterparty}
-                          </span>
-                        )}
-                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
-                          {statusLabel}
-                        </span>
+                        <span className="text-xs text-gray-400">#{order.order_no}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
-                          className="px-2 py-1 text-xs rounded-lg font-medium"
-                          style={{ backgroundColor: showPaymentPanel === order.id ? '#1A56DB' : '#EFF6FF', color: showPaymentPanel === order.id ? '#fff' : '#1A56DB' }}
-                        >
-                          记录结息
-                        </button>
-                        <button onClick={() => handleOpenEdit(order)} className="p-1.5 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDelete(order.id)} className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 总金额 */}
-                    <div className="flex items-baseline gap-1 mb-2">
-                      <span className="text-xl font-bold" style={{ color: '#1A2340' }}>
-                        {parseFloat(order.amount).toLocaleString()}
-                      </span>
-                      <span className="text-xs text-gray-400">USDT 总价</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-                      {order.buy_price && (
                         <div className="flex items-center gap-1">
-                          <span className="text-gray-400">买入价</span>
-                          <span className="font-medium text-gray-700">{order.buy_price} U</span>
-                        </div>
-                      )}
-                      {order.buy_quantity && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400">买入数量</span>
-                          <span className="font-medium text-gray-700">{order.buy_quantity} {order.coin}</span>
-                        </div>
-                      )}
-                      {order.buy_date && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400">买入日期</span>
-                          <span className="font-medium text-gray-700">{order.buy_date}</span>
-                        </div>
-                      )}
-                      {order.storage_account && (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400">存放账号</span>
-                          <span className="font-medium text-gray-700 truncate">{order.storage_account}</span>
-                        </div>
-                      )}
-                      {order.interest_rate_annual && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400">年化利息</span>
-                          <span className="font-medium text-gray-700">{order.interest_rate_annual}%</span>
-                        </div>
-                      )}
-                      {order.interest_payment_type && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400">支付方式</span>
-                          <span className="font-medium text-gray-700">{getPaymentLabel(order.interest_payment_type)}</span>
-                        </div>
-                      )}
-                      {order.counterparty && (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400">对手方</span>
-                          <span className="font-medium text-gray-700">{order.counterparty}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {order.admin_note && (
-                      <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
-                        内部备注：{order.admin_note}
-                      </div>
-                    )}
-
-                    {/* 结息记录面板 */}
-                    {showPaymentPanel === order.id && (
-                      <div className="mt-3 pt-3 border-t border-blue-100">
-                        <div className="text-xs font-semibold text-blue-600 mb-2">结息记录</div>
-
-                        {/* 新增表单 */}
-                        <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
-                          <div className="flex gap-2">
-                            <div className="flex-1">
-                              <div className="text-xs text-gray-400 mb-1">结息金额（元）</div>
-                              <input
-                                type="number"
-                                placeholder="请输入金额"
-                                value={paymentForm.amount}
-                                onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
-                                className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <div className="text-xs text-gray-400 mb-1">结息日期</div>
-                              <div className="relative">
-                                <input
-                                  type="text"
-                                  readOnly
-                                  value={paymentForm.payDate}
-                                  onClick={() => setShowPaymentDatePicker(v => !v)}
-                                  className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white cursor-pointer"
-                                />
-                                {showPaymentDatePicker && (
-                                  <div className="absolute top-full left-0 z-50 mt-1 bg-white rounded-xl shadow-lg border border-blue-100">
-                                    <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm(f => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-xs text-gray-400 mb-1">备注（可空）</div>
-                            <input
-                              type="text"
-                              placeholder="如：3月利息"
-                              value={paymentForm.note}
-                              onChange={e => setPaymentForm(f => ({ ...f, note: e.target.value }))}
-                              className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
-                            />
-                          </div>
-                          <button
-                            disabled={!paymentForm.amount || addPaymentMutation.isPending}
-                            onClick={() => addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), payDate: paymentForm.payDate, note: paymentForm.note })}
-                            className="w-full py-2 rounded-lg text-sm font-medium text-white"
-                            style={{ backgroundColor: '#1A56DB' }}
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full font-medium"
+                            style={
+                              order.status === 'active'
+                                ? { backgroundColor: '#EEF4FF', color: '#1A56DB' }
+                                : order.status === 'settled'
+                                ? { backgroundColor: '#F0FDF4', color: '#16A34A' }
+                                : { backgroundColor: '#F9FAFB', color: '#9CA3AF' }
+                            }
                           >
-                            {addPaymentMutation.isPending ? '提交中...' : '确认添加'}
+                            {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => openEdit(order)}
+                          className="p-1.5 rounded-lg hover:bg-blue-50"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                        </button>
+                        <button
+                          onClick={() => { if (confirm('确认删除此订单？')) deleteMutation.mutate({ id: order.id, ledgerId }); }}
+                          className="p-1.5 rounded-lg hover:bg-red-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="px-4 py-3">
+                      <div className="flex items-baseline gap-1 mb-2">
+                        <span className="text-xs text-gray-400">归属用户：</span>
+                        <span className="text-xs font-medium" style={{ color: '#1A2340' }}>{displayName}</span>
+                        {order.counterparty && (
+                          <>
+                            <span className="text-xs text-gray-300 mx-1">·</span>
+                            <span className="text-xs text-gray-400">对手方：{order.counterparty}</span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                        {order.buy_price && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">买入价</span>
+                            <span className="font-medium" style={{ color: '#1A2340' }}>${parseFloat(order.buy_price).toLocaleString()}</span>
+                          </div>
+                        )}
+                        {order.buy_quantity && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">持币量</span>
+                            <span className="font-medium" style={{ color: '#1A2340' }}>{order.buy_quantity} {order.coin}</span>
+                          </div>
+                        )}
+                        {order.buy_date && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">买入日</span>
+                            <span className="font-medium" style={{ color: '#1A2340' }}>{order.buy_date}</span>
+                          </div>
+                        )}
+                        {order.storage_account && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">存放账号</span>
+                            <span className="font-medium truncate" style={{ color: '#1A2340' }}>{order.storage_account}</span>
+                          </div>
+                        )}
+                        {rateAbs && (
+                          <div className="flex items-center gap-1 col-span-2">
+                            <span className="text-gray-400">年化利率</span>
+                            <span className="font-semibold" style={{ color: rateColor }}>{rateSign}{rateAbs}%</span>
+                            {order.interest_payment_type && (
+                              <span className="text-gray-400 ml-1">· {getPaymentLabel(order.interest_payment_type)}</span>
+                            )}
+                          </div>
+                        )}
+                        {order.interest_base && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">计息基数</span>
+                            <span className="font-medium" style={{ color: '#1A2340' }}>{parseFloat(order.interest_base).toLocaleString()} USDT</span>
+                          </div>
+                        )}
+                        {order.interest_start_date && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">计息开始</span>
+                            <span className="font-medium" style={{ color: '#1A2340' }}>{order.interest_start_date}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {order.public_note && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
+                          备注：{order.public_note}
+                        </div>
+                      )}
+
+                      <div className="mt-3 pt-3 border-t border-blue-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
+                            已结利息：<span style={{ color: '#16A34A' }}>{totalPaid.toFixed(2)} USDT</span>
+                          </span>
+                          <button
+                            onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
+                            className="text-xs px-3 py-1 rounded-full font-medium"
+                            style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
+                          >
+                            {showPaymentPanel === order.id ? '收起' : '+ 记录结息'}
                           </button>
                         </div>
 
-                        {/* 历史记录 */}
-                        {interestPayments && (interestPayments as any[]).length > 0 ? (
-                          <div className="space-y-1.5">
-                            <div className="text-xs text-gray-400 mb-1">历史结息记录</div>
-                            {(interestPayments as any[]).map((p: any) => (
-                              <div key={p.id} className="flex items-center justify-between text-xs bg-white rounded-lg px-3 py-2 border border-gray-100">
-                                <div>
-                                  <span className="font-medium text-gray-700">{p.pay_date?.slice(0, 10)}</span>
-                                  {p.note && <span className="ml-2 text-gray-400">{p.note}</span>}
+                        {showPaymentPanel === order.id && (
+                          <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
+                            <div className="flex gap-2">
+                              <div className="flex-1">
+                                <label className="block text-xs text-gray-500 mb-1">结息金额 (USDT)</label>
+                                <input
+                                  type="number"
+                                  inputMode="decimal"
+                                  value={paymentForm.amount}
+                                  onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                  placeholder="如：500"
+                                  style={{ display: 'block', boxSizing: 'border-box' }}
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <label className="block text-xs text-gray-500 mb-1">结息日期</label>
+                                <div className="relative">
+                                  <button
+                                    onClick={() => setShowPaymentDatePicker(v => !v)}
+                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-left focus:outline-none"
+                                    style={{ backgroundColor: '#fff', color: paymentForm.payDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                                  >
+                                    {paymentForm.payDate || '选择日期'}
+                                  </button>
+                                  {showPaymentDatePicker && (
+                                    <div className="absolute top-full left-0 z-50 mt-1 bg-white rounded-xl shadow-lg" style={{ minWidth: 260 }}>
+                                      <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm(f => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
+                                    </div>
+                                  )}
                                 </div>
-                                <span className="font-semibold" style={{ color: '#1A56DB' }}>+{parseFloat(p.amount).toFixed(2)}元</span>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-1">备注（可选）</label>
+                              <input
+                                type="text"
+                                value={paymentForm.note}
+                                onChange={e => setPaymentForm(f => ({ ...f, note: e.target.value }))}
+                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                placeholder="结息说明"
+                                style={{ display: 'block', boxSizing: 'border-box' }}
+                              />
+                            </div>
+                            <button
+                              onClick={() => handleAddPayment(order.id)}
+                              disabled={addPaymentMutation.isPending}
+                              className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
+                              style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                            >
+                              {addPaymentMutation.isPending ? '提交中...' : '确认记录'}
+                            </button>
+                          </div>
+                        )}
+
+                        {payments.length > 0 && (
+                          <div className="space-y-1.5">
+                            {payments.map((p: any) => (
+                              <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+                                <div>
+                                  <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} USDT</span>
+                                  {p.note && <span className="text-gray-400 ml-2">{p.note}</span>}
+                                </div>
+                                <span className="text-gray-400">{p.payment_date}</span>
                               </div>
                             ))}
                           </div>
-                        ) : (
-                          <div className="text-xs text-gray-400 text-center py-2">暂无结息记录</div>
                         )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               })}
@@ -528,123 +521,96 @@ export default function FinanceManagement() {
         </div>
       </div>
 
-      {/* 创建/编辑弹窗 */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+        >
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] overflow-y-auto">
             <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
                 {editingOrder ? '编辑融资订单' : '添加融资订单'}
               </h3>
               <button
-                onClick={() => { setShowForm(false); setEditingOrder(null); setShowDatePicker(false); }}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg leading-none"
+                onClick={closeForm}
+                className="p-2 rounded-full hover:bg-gray-100 text-gray-400 text-lg leading-none"
               >
-                &times;
+                ×
               </button>
             </div>
 
             <div className="px-5 py-4 space-y-5">
-              {/* 选择用户（新增和编辑都显示） */}
-              <div className="relative">
-                  <label className="block text-sm font-medium text-gray-600 mb-2">
-                    {editingOrder ? '订单归属用户' : '为哪位用户添加'} <span className="text-red-400 ml-0.5">*</span>
-                  </label>
-                  {/* 已选用户展示 + 搜索输入框 */}
-                  <div
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-text"
-                    style={{
-                      border: showUserDropdown ? '1.5px solid #1A56DB' : '1.5px solid #E5E7EB',
-                      backgroundColor: '#fff',
-                      minHeight: '48px',
-                    }}
-                    onClick={() => setShowUserDropdown(true)}
-                  >
-                    {selectedUserId ? (() => {
-                      const sel = realMembers.find((m: any) => m.userId === selectedUserId);
-                      if (!sel) return null;
-                      const name = sel.nickname || sel.username || `用户${sel.userId}`;
-                      return (
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          {sel.avatar ? (
-                            <img src={sel.avatar} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
-                          ) : (
-                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                              style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}>
-                              {name.slice(0, 1).toUpperCase()}
-                            </div>
-                          )}
-                          <span className="text-sm font-medium text-gray-800 truncate">{name}</span>
-                          <button
-                            onClick={e => { e.stopPropagation(); setSelectedUserId(null); setUserSearchText(''); }}
-                            className="ml-auto shrink-0 text-gray-400 hover:text-gray-600 text-base leading-none"
-                          >&times;</button>
-                        </div>
-                      );
-                    })() : (
-                      <input
-                        type="text"
-                        value={userSearchText}
-                        onChange={e => { setUserSearchText(e.target.value); setShowUserDropdown(true); }}
-                        onFocus={() => setShowUserDropdown(true)}
-                        placeholder="搜索或选择用户..."
-                        className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder-gray-400"
-                        style={{ minWidth: 0 }}
-                      />
-                    )}
-                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
 
-                  {/* 下拉列表 */}
-                  {showUserDropdown && (
-                    <>
-                      {/* 点击外部关闭 */}
-                      <div className="fixed inset-0 z-10" onClick={() => setShowUserDropdown(false)} />
+              {/* 选择用户 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  {editingOrder ? '订单归属用户' : '为哪位用户添加'} <span className="text-red-400 ml-0.5">*</span>
+                </label>
+                <div className="relative">
+                  {selectedUser ? (
+                    <div
+                      className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-blue-300 bg-blue-50 cursor-pointer"
+                      onClick={() => { setShowUserDropdown(true); setUserSearchText(''); }}
+                    >
                       <div
-                        className="absolute left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden"
-                        style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.12)', backgroundColor: '#fff', border: '1px solid #E5E7EB', maxHeight: '220px', overflowY: 'auto' }}
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                        style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
                       >
-                        {(() => {
-                          const filtered = realMembers.filter((m: any) => {
-                            const name = (m.nickname || m.username || '').toLowerCase();
-                            return name.includes(userSearchText.toLowerCase());
-                          });
-                          if (filtered.length === 0) {
-                            return <div className="px-4 py-3 text-sm text-gray-400 text-center">无匹配用户</div>;
-                          }
-                          return filtered.map((m: any) => {
-                            const displayName = m.nickname || m.username || `用户${m.userId}`;
-                            const roleLabel = m.role === 'owner' || m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资方' : '成员';
-                            return (
-                              <button
-                                key={m.userId}
-                                onClick={() => { setSelectedUserId(m.userId); setUserSearchText(''); setShowUserDropdown(false); }}
-                                className="flex items-center gap-3 w-full px-4 py-2.5 text-left"
-                                style={{ backgroundColor: selectedUserId === m.userId ? '#EEF4FF' : 'transparent' }}
-                              >
-                                {m.avatar ? (
-                                  <img src={m.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
-                                ) : (
-                                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                                    style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}>
-                                    {displayName.slice(0, 1).toUpperCase()}
-                                  </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-sm font-medium text-gray-800 truncate">{displayName}</div>
-                                  <div className="text-xs text-gray-400">{roleLabel}</div>
-                                </div>
-                                {selectedUserId === m.userId && (
-                                  <svg className="w-4 h-4 shrink-0" style={{ color: '#1A56DB' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                  </svg>
-                                )}
-                              </button>
-                            );
-                          });
-                        })()}
+                        {(selectedUser.nickname || selectedUser.username || '?')[0].toUpperCase()}
+                      </div>
+                      <span className="text-sm font-medium flex-1" style={{ color: '#1A2340' }}>
+                        {selectedUser.nickname || selectedUser.username}
+                      </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); setSelectedUserId(null); setUserSearchText(''); }}
+                        className="text-gray-400 hover:text-gray-600 text-base leading-none px-1"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={userSearchText}
+                      onChange={e => { setUserSearchText(e.target.value); setShowUserDropdown(true); }}
+                      onFocus={() => setShowUserDropdown(true)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="搜索或选择用户..."
+                      style={{ display: 'block', boxSizing: 'border-box' }}
+                    />
+                  )}
+                  {showUserDropdown && !selectedUser && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setShowUserDropdown(false)}
+                      />
+                      <div
+                        className="absolute top-full left-0 right-0 z-20 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden"
+                        style={{ maxHeight: 200, overflowY: 'auto' }}
+                      >
+                        {filteredMembers.length === 0 ? (
+                          <div className="px-4 py-3 text-sm text-gray-400 text-center">无匹配用户</div>
+                        ) : filteredMembers.map((m: any) => (
+                          <button
+                            key={m.userId}
+                            onClick={() => { setSelectedUserId(m.userId); setUserSearchText(m.nickname || m.username || ''); setShowUserDropdown(false); }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
+                          >
+                            <div
+                              className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                              style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                            >
+                              {(m.nickname || m.username || '?')[0].toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium truncate" style={{ color: '#1A2340' }}>
+                                {m.nickname || m.username}
+                              </div>
+                              <div className="text-xs text-gray-400">{m.role}</div>
+                            </div>
+                          </button>
+                        ))}
                       </div>
                     </>
                   )}
@@ -659,23 +625,23 @@ export default function FinanceManagement() {
                   value={formData.counterparty}
                   onChange={e => setFormData(d => ({ ...d, counterparty: e.target.value }))}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：某某基金"
+                  placeholder="融资对手方名称"
                   style={{ display: 'block', boxSizing: 'border-box' }}
                 />
               </div>
 
               {/* 币种 */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">币种</label>
+                <label className="block text-sm font-medium text-gray-600 mb-2">币种 <span className="text-red-400 ml-0.5">*</span></label>
                 <div className="flex gap-2">
                   {COIN_OPTIONS.map(c => (
                     <button
                       key={c}
                       onClick={() => setFormData(d => ({ ...d, coin: c }))}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all"
+                      className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
                       style={
                         formData.coin === c
-                          ? { backgroundColor: COIN_COLORS[c], color: '#fff', boxShadow: `0 4px 12px ${COIN_COLORS[c]}40` }
+                          ? { backgroundColor: COIN_COLORS[c], color: '#fff' }
                           : { backgroundColor: '#F3F4F6', color: '#6B7280' }
                       }
                     >
@@ -685,70 +651,63 @@ export default function FinanceManagement() {
                 </div>
               </div>
 
+              {/* 融资金额 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">融资金额 (USDT) <span className="text-red-400 ml-0.5">*</span></label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={formData.amount}
+                  onChange={e => setFormData(d => ({ ...d, amount: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：100000"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+
               {/* 买入价格 */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  买入价格（USDT）<span className="text-red-400 ml-0.5">*</span>
-                </label>
+                <label className="block text-sm font-medium text-gray-600 mb-2">买入价格 (USD)</label>
                 <input
                   type="number"
                   inputMode="decimal"
                   value={formData.buyPrice}
                   onChange={e => setFormData(d => ({ ...d, buyPrice: e.target.value }))}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：65000"
+                  placeholder="如：95000"
                   style={{ display: 'block', boxSizing: 'border-box' }}
                 />
-              </div>
-
-              {/* 买入数量 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  买入数量（{formData.coin}）<span className="text-red-400 ml-0.5">*</span>
-                </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.buyQuantity}
-                  onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：0.5"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              {/* 自动折算总金额 */}
-              <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#EEF4FF', border: '1px solid #C7D9FF' }}>
-                <div className="text-xs text-gray-400 mb-0.5">自动折算总金额（USDT）</div>
-                <div className="text-xl font-bold" style={{ color: '#1A56DB' }}>
-                  {computedAmount ? parseFloat(computedAmount).toLocaleString() : '—'}
-                  {computedAmount && <span className="text-sm font-normal text-blue-400 ml-1">USDT</span>}
-                </div>
-                {computedAmount && (
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    {formData.buyQuantity} {formData.coin} x {formData.buyPrice} USDT
-                  </div>
-                )}
               </div>
 
               {/* 买入日期 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">买入日期</label>
                 <button
-                  onClick={() => setShowDatePicker(v => !v)}
+                  onClick={() => setShowBuyDatePicker(v => !v)}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
                   style={{ backgroundColor: '#fff', color: formData.buyDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
                 >
-                  {formData.buyDate || '点击选择日期'}
+                  {formData.buyDate || '点击选择买入日期'}
                 </button>
-                {showDatePicker && (
+                {showBuyDatePicker && (
                   <div className="mt-2">
-                    <DatePicker
-                      value={formData.buyDate}
-                      onChange={v => { setFormData(d => ({ ...d, buyDate: v })); setShowDatePicker(false); }}
-                    />
+                    <DatePicker value={formData.buyDate} onChange={v => { setFormData(d => ({ ...d, buyDate: v })); setShowBuyDatePicker(false); }} />
                   </div>
                 )}
+              </div>
+
+              {/* 买入数量 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">买入数量 ({formData.coin})</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={formData.buyQuantity}
+                  onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：1.05"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
               </div>
 
               {/* 存放账号 */}
@@ -764,7 +723,6 @@ export default function FinanceManagement() {
                 />
               </div>
 
-              {/* 分隔线：利息约定 */}
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">利息约定</span>
@@ -803,10 +761,7 @@ export default function FinanceManagement() {
                 </button>
                 {showInterestDatePicker && (
                   <div className="mt-2">
-                    <DatePicker
-                      value={formData.interestStartDate}
-                      onChange={v => { setFormData(d => ({ ...d, interestStartDate: v })); setShowInterestDatePicker(false); }}
-                    />
+                    <DatePicker value={formData.interestStartDate} onChange={v => { setFormData(d => ({ ...d, interestStartDate: v })); setShowInterestDatePicker(false); }} />
                   </div>
                 )}
               </div>
@@ -815,13 +770,13 @@ export default function FinanceManagement() {
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">约定年化利息（%）</label>
                 <div className="flex items-center gap-2">
-                  {/* 正负切换 */}
                   <button
                     onClick={() => setFormData(d => ({ ...d, interestRateSign: d.interestRateSign === '+' ? '-' : '+' }))}
-                    className="shrink-0 w-10 h-12 rounded-xl text-lg font-bold transition-all"
-                    style={formData.interestRateSign === '-'
-                      ? { background: 'linear-gradient(135deg, #EF4444, #F87171)', color: '#fff' }
-                      : { background: 'linear-gradient(135deg, #10B981, #34D399)', color: '#fff' }
+                    className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold flex-shrink-0 transition-all"
+                    style={
+                      formData.interestRateSign === '-'
+                        ? { backgroundColor: '#FEE2E2', color: '#EF4444', border: '2px solid #EF4444' }
+                        : { backgroundColor: '#DCFCE7', color: '#16A34A', border: '2px solid #16A34A' }
                     }
                   >
                     {formData.interestRateSign}
@@ -835,10 +790,12 @@ export default function FinanceManagement() {
                     placeholder="如：8.5"
                     style={{ display: 'block', boxSizing: 'border-box' }}
                   />
-                  <span className="text-base font-medium text-gray-500 shrink-0">% / 年</span>
                 </div>
-                <div className="mt-1.5 text-xs" style={{ color: formData.interestRateSign === '-' ? '#EF4444' : '#10B981' }}>
-                  {formData.interestRateSign === '-' ? '负値：对用户而言属于待付利息（支出）' : '正値：对用户而言属于应收利息（收入）'}
+                <div
+                  className="mt-1.5 text-xs"
+                  style={{ color: formData.interestRateSign === '-' ? '#EF4444' : '#16A34A' }}
+                >
+                  {formData.interestRateSign === '-' ? '负值：用户需付出利息（融资成本）' : '正值：用户可收取利息（融资收益）'}
                 </div>
               </div>
 
@@ -863,7 +820,6 @@ export default function FinanceManagement() {
                 </div>
               </div>
 
-              {/* 分隔线：备注 */}
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">备注</span>
@@ -924,9 +880,9 @@ export default function FinanceManagement() {
                   </div>
                 </div>
               )}
+
             </div>
 
-            {/* 提交按钮 */}
             <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-gray-100">
               <button
                 onClick={handleSubmit}
