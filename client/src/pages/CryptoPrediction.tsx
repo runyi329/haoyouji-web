@@ -1467,7 +1467,7 @@ export default function CryptoPrediction() {
                         {/* 左栏：订单信息 */}
                         <div className="flex-1 p-4 pr-3">
                           {/* 标题：融资资产 */}
-                          <div className="text-[10px] mb-1" style={{ color: '#3B82F6' }}>融资资产<span className="text-gray-400">(保本分成50%部分)</span></div>
+                          <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>融资资产<span className="text-gray-400">(保本分成50%部分)</span></div>
                           {/* 持币数量（大字突出） */}
                           <div className="flex items-baseline gap-1 mb-1">
                             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
@@ -1530,13 +1530,13 @@ export default function CryptoPrediction() {
                           <div className="flex flex-col h-full">
                             {/* 待付/待收利息 */}
                             <div className="flex flex-col justify-start">
-                              <div className="flex items-center gap-1 mb-0.5">
+                              <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
                                 <span className="text-[10px]" style={{ color: '#3B82F6' }}>
                                   {isNegativeRate ? '待付利息' : '待收利息'}
                                 </span>
                                 <span className="text-[10px] text-gray-400">{isNegativeRate ? '(整体部分年化12%)' : `(年化 ${Math.abs(annualRate)}%)`}</span>
                               </div>
-                              <div className="flex items-baseline gap-0.5">
+                              <div className="flex items-baseline gap-0.5 mb-1">
                                 <span
                                   className="text-2xl font-bold tabular-nums leading-tight"
                                   style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
@@ -1545,7 +1545,7 @@ export default function CryptoPrediction() {
                                 </span>
                                 <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
                               </div>
-                              <div className="flex items-center justify-between mt-0.5 text-xs">
+                              <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} USDT</span>
                               </div>
