@@ -115,7 +115,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
 }
 
 // 单张资金方订单卡片（左右两栏布局）
-function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any; ledgerId: number; livePrices: Record<string, number>; onClick: () => void }) {
+function FunderOrderCard({ order, ledgerId, livePrices, onClick, canClick }: { order: any; ledgerId: number; livePrices: Record<string, number>; onClick: () => void; canClick?: boolean }) {
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
@@ -130,7 +130,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
   return (
     <div
       className="rounded-2xl shadow-sm"
-      style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', cursor: 'pointer', overflow: 'hidden' }}
+      style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', cursor: canClick ? 'pointer' : 'default', overflow: 'hidden' }}
       onClick={onClick}
     >
       {/* 顶部色条 */}
@@ -1989,7 +1989,8 @@ export default function LedgerDetail() {
                     order={order}
                     ledgerId={ledgerId}
                     livePrices={funderLivePrices}
-                    onClick={() => setSelectedFunderOrder(order)}
+                    onClick={() => { if (isOwner || isAdmin) setSelectedFunderOrder(order); }}
+                    canClick={isOwner || isAdmin}
                   />
                 ))}
               </div>
