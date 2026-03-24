@@ -119,6 +119,8 @@ export default function FinanceManagement() {
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [userSearchText, setUserSearchText] = useState('');
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
   // 结息记录相关 state
@@ -211,6 +213,8 @@ export default function FinanceManagement() {
 
   const handleOpenCreate = () => {
     setSelectedUserId(null);
+    setUserSearchText('');
+    setShowUserDropdown(false);
     setFormData({
       coin: 'BTC',
       buyPrice: '',
@@ -234,6 +238,8 @@ export default function FinanceManagement() {
 
   const handleOpenEdit = (order: any) => {
     setSelectedUserId(order.user_id ?? null);
+    setUserSearchText('');
+    setShowUserDropdown(false);
     setFormData({
       coin: order.coin as CoinType,
       buyPrice: order.buy_price || '',
@@ -536,53 +542,108 @@ export default function FinanceManagement() {
             <div className="px-5 py-4 space-y-5">
               {/* 选择用户（仅新增时显示） */}
               {!editingOrder && (
-                <div>
+                <div className="relative">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     为哪位用户添加 <span className="text-red-400 ml-0.5">*</span>
                   </label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {realMembers.length === 0 ? (
-                      <div className="text-sm text-gray-400 py-2 text-center">暂无成员</div>
-                    ) : (
-                      realMembers.map((m: any) => {
-                        const displayName = m.nickname || m.username || `用户${m.userId}`;
-                        const roleLabel = m.role === 'owner' ? '管理员' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资方' : '成员';
-                        const isSelected = selectedUserId === m.userId;
-                        return (
-                          <button
-                            key={m.userId}
-                            onClick={() => setSelectedUserId(m.userId)}
-                            className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
-                            style={isSelected
-                              ? { background: 'linear-gradient(135deg, #EEF4FF, #DBEAFE)', border: '1.5px solid #1A56DB' }
-                              : { backgroundColor: '#F9FAFB', border: '1.5px solid #E5E7EB' }
-                            }
-                          >
-                            {m.avatar ? (
-                              <img src={m.avatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
-                            ) : (
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
-                                style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}>
-                                {displayName.slice(0, 1).toUpperCase()}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-medium text-gray-800 truncate">{displayName}</div>
-                              <div className="text-xs text-gray-400">{roleLabel}</div>
+                  {/* 已选用户展示 + 搜索输入框 */}
+                  <div
+                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-text"
+                    style={{
+                      border: showUserDropdown ? '1.5px solid #1A56DB' : '1.5px solid #E5E7EB',
+                      backgroundColor: '#fff',
+                      minHeight: '48px',
+                    }}
+                    onClick={() => setShowUserDropdown(true)}
+                  >
+                    {selectedUserId ? (() => {
+                      const sel = realMembers.find((m: any) => m.userId === selectedUserId);
+                      if (!sel) return null;
+                      const name = sel.nickname || sel.username || `用户${sel.userId}`;
+                      return (
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {sel.avatar ? (
+                            <img src={sel.avatar} alt="" className="w-6 h-6 rounded-full object-cover shrink-0" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                              style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}>
+                              {name.slice(0, 1).toUpperCase()}
                             </div>
-                            {isSelected && (
-                              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-                                style={{ backgroundColor: '#1A56DB' }}>
-                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })
+                          )}
+                          <span className="text-sm font-medium text-gray-800 truncate">{name}</span>
+                          <button
+                            onClick={e => { e.stopPropagation(); setSelectedUserId(null); setUserSearchText(''); }}
+                            className="ml-auto shrink-0 text-gray-400 hover:text-gray-600 text-base leading-none"
+                          >&times;</button>
+                        </div>
+                      );
+                    })() : (
+                      <input
+                        type="text"
+                        value={userSearchText}
+                        onChange={e => { setUserSearchText(e.target.value); setShowUserDropdown(true); }}
+                        onFocus={() => setShowUserDropdown(true)}
+                        placeholder="搜索或选择用户..."
+                        className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder-gray-400"
+                        style={{ minWidth: 0 }}
+                      />
                     )}
+                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
                   </div>
+
+                  {/* 下拉列表 */}
+                  {showUserDropdown && (
+                    <>
+                      {/* 点击外部关闭 */}
+                      <div className="fixed inset-0 z-10" onClick={() => setShowUserDropdown(false)} />
+                      <div
+                        className="absolute left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden"
+                        style={{ boxShadow: '0 8px 24px rgba(0,0,0,0.12)', backgroundColor: '#fff', border: '1px solid #E5E7EB', maxHeight: '220px', overflowY: 'auto' }}
+                      >
+                        {(() => {
+                          const filtered = realMembers.filter((m: any) => {
+                            const name = (m.nickname || m.username || '').toLowerCase();
+                            return name.includes(userSearchText.toLowerCase());
+                          });
+                          if (filtered.length === 0) {
+                            return <div className="px-4 py-3 text-sm text-gray-400 text-center">无匹配用户</div>;
+                          }
+                          return filtered.map((m: any) => {
+                            const displayName = m.nickname || m.username || `用户${m.userId}`;
+                            const roleLabel = m.role === 'owner' || m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资方' : '成员';
+                            return (
+                              <button
+                                key={m.userId}
+                                onClick={() => { setSelectedUserId(m.userId); setUserSearchText(''); setShowUserDropdown(false); }}
+                                className="flex items-center gap-3 w-full px-4 py-2.5 text-left"
+                                style={{ backgroundColor: selectedUserId === m.userId ? '#EEF4FF' : 'transparent' }}
+                              >
+                                {m.avatar ? (
+                                  <img src={m.avatar} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+                                ) : (
+                                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                                    style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}>
+                                    {displayName.slice(0, 1).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium text-gray-800 truncate">{displayName}</div>
+                                  <div className="text-xs text-gray-400">{roleLabel}</div>
+                                </div>
+                                {selectedUserId === m.userId && (
+                                  <svg className="w-4 h-4 shrink-0" style={{ color: '#1A56DB' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
