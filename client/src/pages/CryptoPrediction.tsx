@@ -1521,29 +1521,27 @@ export default function CryptoPrediction() {
                         </div>
 
                         {/* 中间分隔线 */}
-                        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+                        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF', display: 'none' }} />
 
                         {/* 右栏：利息信息 */}
                         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
                           <div className="flex flex-col h-full">
-                            {/* 上半：待付/待收利息 */}
-                            <div className="flex-1 flex flex-col justify-start">
-                              <div className="flex items-center justify-between mb-0.5">
-                                <div className="flex items-center gap-1">
-                                  <span className="text-[10px]" style={{ color: isNegativeRate ? '#EF4444' : '#3B82F6' }}>
-                                    {isNegativeRate ? '待付利息' : '待收利息'}
-                                  </span>
-                                  <span className="text-[10px] text-gray-400">(年化 {Math.abs(annualRate)}%)</span>
-                                </div>
+                            {/* 待付/待收利息 */}
+                            <div className="flex flex-col justify-start">
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <span className="text-[10px]" style={{ color: '#3B82F6' }}>
+                                  {isNegativeRate ? '待付利息' : '待收利息'}
+                                </span>
+                                <span className="text-[10px] text-gray-400">(年化 {Math.abs(annualRate)}%)</span>
                               </div>
                               <div className="flex items-baseline gap-0.5">
                                 <span
                                   className="text-2xl font-bold tabular-nums leading-tight"
-                                  style={{ color: isNegativeRate ? '#EF4444' : '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                                  style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                                 >
                                   {isNegativeRate ? '-' : ''}{unpaidInterest.toFixed(2)}
                                 </span>
-                                <span className="text-sm font-semibold" style={{ color: isNegativeRate ? '#EF4444' : '#1A2340' }}>USDT</span>
+                                <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
                               </div>
                               <div className="flex items-center justify-between mt-0.5 text-xs">
                                 <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
@@ -1560,24 +1558,10 @@ export default function CryptoPrediction() {
                                   </span>
                                 </div>
                               )}
-                            </div>
-                            {/* 中间分隔线 */}
-                            <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
-                            {/* 下半：状态信息 */}
-                            <div className="flex-1 flex flex-col justify-start pt-2">
-                              <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>订单状态</div>
-                              <div className="flex items-baseline gap-0.5">
-                                <span
-                                  className="text-lg font-bold leading-tight"
-                                  style={{ color: statusColor }}
-                                >
-                                  {statusLabel}
-                                </span>
-                              </div>
                               <div className="flex items-center justify-between mt-0.5 text-xs">
                                 <span className="text-gray-400">累计利息</span>
-                                <span className="font-medium" style={{ color: isNegativeRate ? '#EF4444' : '#1A56DB' }}>
-                                  {isNegativeRate ? '-' : ''}{accruedInterest.toFixed(2)}
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {isNegativeRate ? '-' : ''}{accruedInterest.toFixed(2)} USDT
                                 </span>
                               </div>
                               {order.counterparty && (
