@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense, useCallback } from "react";
+import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 
 // 精确到秒的利息计数器 Hook
 function useAccruedInterest(interestBase: string | null, interestRateAnnual: string | null, interestStartDate: string | null) {
@@ -23,7 +23,7 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
 }
 
 // 单张资金方订单卡片右栏（包含扫描数据查询）
-function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; ledgerId: number; accrued: number; cc: string }) {
+function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number }) {
   const { data: stats } = trpc.ledger.funderGetOrderScanStats.useQuery(
     { orderId: order.id, ledgerId },
     { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
@@ -61,8 +61,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>元</span>
         </div>
         <div className="flex items-center justify-between mt-0.5 text-xs">
-          <span className="text-gray-400">目前已结</span>
-          <span className="font-medium" style={{ color: '#4B5563' }}>0.00元</span>
+          <span className="text-gray-400">已结利息</span>
+          <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)}元</span>
         </div>
         {order.interest_start_date && (
           <div className="flex items-center justify-between text-xs">
@@ -115,7 +115,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
 }
 
 // 单张资金方订单卡片（左右两栏布局）
-function FunderOrderCard({ order, ledgerId, livePrices, onClick, canClick }: { order: any; ledgerId: number; livePrices: Record<string, number>; onClick: () => void; canClick?: boolean }) {
+function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean }) {
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
@@ -211,7 +211,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick, canClick }: { o
         {/* 右栏：利息 + 收益分成 */}
         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
           {hasInterest ? (
-            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} />
+            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <ChevronRight className="w-5 h-5 text-gray-200" />
@@ -623,6 +623,11 @@ export default function LedgerDetail() {
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
   const funderLivePrices: Record<string, number> = (funderAssetData as any)?.livePrices ?? {};
+  const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => o.id), [funderAssetOrders]);
+  const { data: interestSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
+    { ledgerId: Number(ledgerId), orderIds: funderOrderIds },
+    { enabled: isCustomAF && funderOrderIds.length > 0 }
+  );
   // AF 账本：YJH邀请树（仅当弹窗打开时才加载）
   const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -1989,6 +1994,7 @@ export default function LedgerDetail() {
                     order={order}
                     ledgerId={ledgerId}
                     livePrices={funderLivePrices}
+                    paidInterest={(interestSummary as any)?.[order.id] ?? 0}
                     onClick={() => { if (isOwner || isAdmin) setSelectedFunderOrder(order); }}
                     canClick={isOwner || isAdmin}
                   />
