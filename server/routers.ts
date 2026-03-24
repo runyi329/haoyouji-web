@@ -28,6 +28,7 @@ import { contacts, contactFieldCategories, contactFieldValues, contactTags, user
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray, like, or, gt } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
+import { triggerFunderImmediateScan, calcFunderProfitRight } from "./funder-price-scanner";
 import { equityRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
 import { workGroupsRouter } from "./work-groups-api";
@@ -11556,7 +11557,6 @@ export const appRouter = router({
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
         if (newOrderId) {
-          const { triggerFunderImmediateScan } = await import('../funder-price-scanner');
           triggerFunderImmediateScan(newOrderId);
         }
         return { success: true };
@@ -11649,7 +11649,6 @@ export const appRouter = router({
         ) as any[];
         const stats = (statsRows as any[])?.[0] || null;
         if (!stats) return { scanCount: 0, lastScanAt: null, allTimeLow: null, allTimeLowAt: null, dropPct: 0, profitRightPct: 0, profitRightCoins: 0 };
-        const { calcFunderProfitRight } = await import('../funder-price-scanner');
         const buyPrice = parseFloat(order.buy_price) || 0;
         const buyQuantity = parseFloat(order.buy_quantity) || 0;
         const allTimeLow = parseFloat(stats.all_time_low_price) || 0;
