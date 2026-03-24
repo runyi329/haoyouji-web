@@ -528,6 +528,9 @@ export default function LedgerDetail() {
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
   const aiProductImages = aiProduct ? aiProduct.detailImages : [];
   const aiCarouselImages = aiProduct ? aiProduct.carouselImages : [];
+  // 资金方订单详情弹窗 state
+  const [selectedFunderOrder, setSelectedFunderOrder] = useState<any>(null);
+
   // 食物热量扫描相关 state
   const [foodScanImage, setFoodScanImage] = useState<string | null>(null); // base64 图片
   const [foodScanResult, setFoodScanResult] = useState<any>(null); // AI 分析结果
@@ -1755,46 +1758,149 @@ export default function LedgerDetail() {
             ) : (
               <div className="space-y-3">
                 {(funderAssetOrders as any[]).map((order: any) => {
-                  const statusLabel = order.status === 'active' ? '进行中' : order.status === 'settled' ? '已结算' : '已取消';
+                  const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消';
                   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
+                  const coinColor: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
+                  const cc = coinColor[order.coin] || '#6B7280';
                   return (
                     <div
                       key={order.id}
                       className="rounded-2xl p-4 shadow-sm"
-                      style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
+                      style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', cursor: 'pointer' }}
+                      onClick={() => setSelectedFunderOrder(order)}
                     >
-                      <div className="flex items-center justify-between mb-2">
+                      {/* 头部：币种 + 状态 */}
+                      <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <span className="text-base font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
-                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}20`, color: statusColor }}>{statusLabel}</span>
+                          <span
+                            className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white"
+                            style={{ backgroundColor: cc }}
+                          >
+                            {order.coin}
+                          </span>
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full"
+                            style={{ backgroundColor: `${statusColor}18`, color: statusColor }}
+                          >
+                            {statusLabel}
+                          </span>
                         </div>
-                        <span className="text-lg font-bold" style={{ color: '#1A2340' }}>{parseFloat(order.amount).toLocaleString()} U</span>
+                        <ChevronRight className="w-4 h-4 text-gray-300" />
                       </div>
-                      {order.quantity && (
-                        <div className="text-xs text-gray-500 mb-1">数量: {order.quantity} {order.coin}</div>
-                      )}
-                      <div className="flex items-center gap-4 text-xs text-gray-400">
-                        {order.start_at && (
-                          <span>开始: {new Date(order.start_at).toLocaleDateString('zh-CN')}</span>
+                      {/* 投入金额 */}
+                      <div className="flex items-baseline gap-1 mb-2">
+                        <span className="text-2xl font-bold" style={{ color: '#1A2340' }}>
+                          {parseFloat(order.amount).toLocaleString()}
+                        </span>
+                        <span className="text-xs text-gray-400">USDT 投入</span>
+                      </div>
+                      {/* 订单摘要 */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        {order.buy_price && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">买入价</span>
+                            <span className="font-medium text-gray-700">{order.buy_price} U</span>
+                          </div>
                         )}
-                        {order.interest_rate && (
-                          <span>利率: {order.interest_rate}%</span>
+                        {order.buy_date && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">日期</span>
+                            <span className="font-medium text-gray-700">{order.buy_date}</span>
+                          </div>
                         )}
-                        {order.profit_share_rate && (
-                          <span>分成: {order.profit_share_rate}%</span>
+                        {order.buy_quantity && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">数量</span>
+                            <span className="font-medium text-gray-700">{order.buy_quantity} {order.coin}</span>
+                          </div>
+                        )}
+                        {order.storage_account && (
+                          <div className="flex items-center gap-1 col-span-2">
+                            <span className="text-gray-400">账号</span>
+                            <span className="font-medium text-gray-700 truncate">{order.storage_account}</span>
+                          </div>
                         )}
                       </div>
-                      {(order.interest_note || order.profit_share_note) && (
-                        <div className="mt-2 text-xs text-gray-400 border-t border-gray-100 pt-2">
-                          {order.interest_note && <div>利息协议: {order.interest_note}</div>}
-                          {order.profit_share_note && <div>分成协议: {order.profit_share_note}</div>}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 资金方订单详情弹窗 */}
+      {selectedFunderOrder && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[85vh] overflow-y-auto">
+            {/* 弹窗头部 */}
+            <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-sm font-bold px-3 py-1 rounded-full text-white"
+                  style={{ backgroundColor: ({ BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' } as any)[selectedFunderOrder.coin] || '#6B7280' }}
+                >
+                  {selectedFunderOrder.coin}
+                </span>
+                <span className="text-base font-semibold" style={{ color: '#1A2340' }}>订单详情</span>
+              </div>
+              <button
+                onClick={() => setSelectedFunderOrder(null)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="px-5 py-5 space-y-4">
+              {/* 金额卡片 */}
+              <div
+                className="rounded-2xl p-4"
+                style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
+              >
+                <div className="text-xs text-white/70 mb-1">投入金额</div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-3xl font-bold text-white">
+                    {parseFloat(selectedFunderOrder.amount).toLocaleString()}
+                  </span>
+                  <span className="text-sm text-white/70">USDT</span>
+                </div>
+                <div className="mt-2">
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white"
+                  >
+                    {selectedFunderOrder.status === 'active' ? '持有中' : selectedFunderOrder.status === 'settled' ? '已结算' : '已取消'}
+                  </span>
+                </div>
+              </div>
+
+              {/* 订单信息列表 */}
+              <div className="bg-gray-50 rounded-2xl overflow-hidden">
+                {[
+                  { label: '币种', value: selectedFunderOrder.coin },
+                  { label: '买入价格', value: selectedFunderOrder.buy_price ? `${selectedFunderOrder.buy_price} USDT` : null },
+                  { label: '买入日期', value: selectedFunderOrder.buy_date || null },
+                  { label: '买入数量', value: selectedFunderOrder.buy_quantity ? `${selectedFunderOrder.buy_quantity} ${selectedFunderOrder.coin}` : null },
+                  { label: '存放账号', value: selectedFunderOrder.storage_account || null },
+                  { label: '创建时间', value: selectedFunderOrder.created_at ? new Date(selectedFunderOrder.created_at).toLocaleDateString('zh-CN') : null },
+                ].filter(item => item.value !== null).map((item, idx, arr) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center justify-between px-4 py-3"
+                    style={{ borderBottom: idx < arr.length - 1 ? '1px solid #F3F4F6' : 'none' }}
+                  >
+                    <span className="text-sm text-gray-400">{item.label}</span>
+                    <span className="text-sm font-medium" style={{ color: '#1A2340' }}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 订单编号 */}
+              <div className="text-center text-xs text-gray-300">
+                订单编号 #{selectedFunderOrder.id}
+              </div>
+            </div>
           </div>
         </div>
       )}

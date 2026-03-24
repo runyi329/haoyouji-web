@@ -1658,4 +1658,10 @@
 - [x] 编号基于全局总数据，最新记录永远为1，最旧记录为总条数N，不受分页影响
 
 ## AI监控客户习惯容器间距修复（2026-03-24）
-- [ ] 修复AIHabitsPanel与上下容器间距不协调，参照其他容器统一margin-top
+- [x] 修复AIHabitsPanel与上下容器间距不协调，参照其他容器统一margin-top
+
+## 资金方订单系统重构（2026-03-24）
+- [x] 数据库Schema：funder_asset_orders新增buyPrice(买入价格)、buyDate(买入日期)、buyQuantity(买入数量)、storageAccount(存放账号)字段；币种限制为BTC/ETH/SOL
+- [x] 后端API：更新funderCreateAssetOrder/funderUpdateAssetOrder/funderGetAssetOrders适配新字段
+- [x] 管理员页面FunderManagement.tsx：重构订单表单，字段改为币种(BTC/ETH/SOL三选一)、买入价格、买入日期、买入数量、存放账号
+- [x] 资金方前端LedgerDetail.tsx：重构订单列表展示，显示新字段；新增订单详情弹窗
