@@ -158,10 +158,12 @@ export default function FunderManagement() {
     { enabled: ledgerId > 0 }
   );
 
-  const { data: assetOrders, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
+  const { data: assetOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}) },
     { enabled: ledgerId > 0 }
   );
+  // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
+  const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
 
   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: () => {
