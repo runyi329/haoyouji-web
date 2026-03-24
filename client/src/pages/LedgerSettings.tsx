@@ -603,6 +603,9 @@ export default function LedgerSettings() {
  {ledgerData?.type === 'custom_af' && (
    <SettingItem label="资方管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/funder-management`)} />
  )}
+ {ledgerData?.type === 'custom_af' && (
+   <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-management`)} />
+ )}
  {/* - */}
  {(() => {
  const currentMember = members?.find(m => m.userId === user?.id);
