@@ -619,12 +619,23 @@ export default function LedgerDetail() {
     { enabled: isCustomAF && isFunder }
   );
   // 资方专属：资产订单列表（仅 funder 角色查询）
+  const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const { data: funderAssetData } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && isFunder }
+    { enabled: isCustomAF && isFunder, staleTime: 5 * 60 * 1000 }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
-  const funderLivePrices: Record<string, number> = (funderAssetData as any)?.livePrices ?? {};
+  // livePrices：优先用接口返回的最新价格，若还未加载则从 localStorage 读取上次缓存
+  const freshPrices: Record<string, number> = (funderAssetData as any)?.livePrices ?? {};
+  const hasFreshPrices = Object.keys(freshPrices).length > 0;
+  // 当有新数据时写入缓存
+  if (hasFreshPrices) {
+    try { localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(freshPrices)); } catch {}
+  }
+  // 读取缓存价格（新数据优先，无新数据时用缓存）
+  let cachedPrices: Record<string, number> = {};
+  try { cachedPrices = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || '{}'); } catch {}
+  const funderLivePrices: Record<string, number> = hasFreshPrices ? freshPrices : cachedPrices;
   const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => o.id), [funderAssetOrders]);
   const { data: interestSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId: Number(ledgerId), orderIds: funderOrderIds },
