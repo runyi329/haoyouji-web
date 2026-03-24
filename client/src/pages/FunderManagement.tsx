@@ -125,6 +125,8 @@ export default function FunderManagement() {
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
+  const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
+
   const [formData, setFormData] = useState({
     userId: 0,
     coin: 'BTC' as CoinType,
@@ -137,6 +139,8 @@ export default function FunderManagement() {
     publicNote: '',
     interestRateAnnual: '',
     interestPaymentType: '',
+    interestBase: '',
+    interestStartDate: '',
   });
 
   // 自动折算总金额
@@ -199,9 +203,12 @@ export default function FunderManagement() {
       publicNote: '',
       interestRateAnnual: '',
       interestPaymentType: '',
+      interestBase: '',
+      interestStartDate: '',
     });
     setEditingOrder(null);
     setShowDatePicker(false);
+    setShowInterestDatePicker(false);
     setShowForm(true);
   };
 
@@ -218,9 +225,12 @@ export default function FunderManagement() {
       publicNote: order.public_note || '',
       interestRateAnnual: order.interest_rate_annual || '',
       interestPaymentType: order.interest_payment_type || '',
+      interestBase: order.interest_base || '',
+      interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
     });
     setEditingOrder(order);
     setShowDatePicker(false);
+    setShowInterestDatePicker(false);
     setShowForm(true);
   };
 
@@ -241,6 +251,8 @@ export default function FunderManagement() {
       publicNote: formData.publicNote || undefined,
       interestRateAnnual: formData.interestRateAnnual || undefined,
       interestPaymentType: formData.interestPaymentType || undefined,
+      interestBase: formData.interestBase || undefined,
+      interestStartDate: formData.interestStartDate || undefined,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
@@ -550,6 +562,46 @@ export default function FunderManagement() {
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">利息约定</span>
                 <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* 计息基数 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">
+                  计息基数（USDT）
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">利息计算的本金基数</span>
+                </label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={formData.interestBase}
+                  onChange={e => setFormData(d => ({ ...d, interestBase: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：120000"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              {/* 计息开始日期 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  计息开始日期
+                  <span className="ml-1.5 text-xs text-gray-400 font-normal">利息从此日开始累计</span>
+                </label>
+                <button
+                  onClick={() => setShowInterestDatePicker(v => !v)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
+                  style={{ backgroundColor: '#fff', color: formData.interestStartDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                >
+                  {formData.interestStartDate || '点击选择开始日期'}
+                </button>
+                {showInterestDatePicker && (
+                  <div className="mt-2">
+                    <DatePicker
+                      value={formData.interestStartDate}
+                      onChange={v => { setFormData(d => ({ ...d, interestStartDate: v })); setShowInterestDatePicker(false); }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* 约定年化利息 */}
