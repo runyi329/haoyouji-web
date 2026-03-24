@@ -11976,7 +11976,6 @@ export const appRouter = router({
           buyQuantity: 'buy_quantity', storageAccount: 'storage_account', status: 'status',
           adminNote: 'admin_note', publicNote: 'public_note', interestRateAnnual: 'interest_rate_annual',
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestStartDate: 'interest_start_date',
-          counterparty: 'counterparty',
         };
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
         for (const [key, col] of Object.entries(fieldMap)) {
