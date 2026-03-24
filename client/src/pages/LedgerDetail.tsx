@@ -45,7 +45,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
       {/* 上半：代结利息 */}
       <div className="flex-1 flex flex-col justify-center">
         <div className="flex items-center justify-between mb-0.5">
-          <span className="text-[10px]" style={{ color: '#3B82F6' }}>代结利息</span>
+          <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
           <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
         </div>
         <div className="flex items-baseline gap-0.5">
@@ -57,7 +57,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>元</span>
         </div>
-        <div className="flex items-center justify-between text-[10px] mt-0.5">
+        <div className="flex items-center justify-between mt-0.5" style={{ fontSize: '11px' }}>
           <span className="text-gray-400">目前已结</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>0.00元</span>
         </div>
@@ -77,14 +77,14 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
         </div>
         {displayLowest !== null && (
-          <div className="flex items-center justify-between text-[10px] mt-0.5">
+          <div className="flex items-center justify-between mt-0.5" style={{ fontSize: '11px' }}>
             <span className="text-gray-400">最低价格</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>{displayLowest.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
           </div>
         )}
         {lowestAtLabel && (
-          <div className="flex items-center justify-between text-[10px]">
-            <span className="text-gray-400">扫描时间</span>
+          <div className="flex items-center justify-between" style={{ fontSize: '11px' }}>
+            <span className="text-gray-400">发生时间</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel}</span>
           </div>
         )}
@@ -143,6 +143,12 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
                 <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
+            {order.buy_date && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">买入时间</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
+              </div>
+            )}
             {(() => {
               const livePrice = livePrices[order.coin];
               if (!livePrice || !price) return null;
@@ -164,12 +170,6 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
                 </div>
               );
             })()}
-            {order.buy_date && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400 shrink-0">买入时间</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
-              </div>
-            )}
             {order.buy_date && order.status === 'active' && (() => {
               const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
               if (elapsed < 0) return null;
