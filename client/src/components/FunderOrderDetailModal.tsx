@@ -233,11 +233,12 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
                   className="text-3xl font-bold tabular-nums"
                   style={{ color: '#1A56DB', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                 >
-                  ¥{accrued.toFixed(6)}
+                  {accrued.toFixed(2)}
                 </span>
+                <span className="text-base font-medium text-blue-400">元</span>
               </div>
               <div className="text-xs text-gray-400 mb-0.5">
-                ≈{(accrued / 7.15).toFixed(6)} USDT
+                ≈{(accrued / 7.15).toFixed(4)} USDT
               </div>
               <div className="text-xs text-gray-400">
                 基数 {parseFloat(order.interest_base).toLocaleString()} × {order.interest_rate_annual}% / 年
