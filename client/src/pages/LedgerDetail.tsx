@@ -581,8 +581,6 @@ export default function LedgerDetail() {
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isFunder = (ledgerData as any)?.userRole === 'funder';
   const isClient = (ledgerData as any)?.userRole === 'client';
-  // AF账本子Tab（谷底增筹 / 融资付息 / 行情评估）—— 仅非资方用户
-  const [afSubTab, setAfSubTab] = useState<'gudizengchou' | 'rongzifuxi' | 'hangqingpinggu'>('gudizengchou');
   const isEmployee = (ledgerData as any)?.userRole === 'employee';
   // AH 账本角色名称映射
   const ahRoleName = isCustomAH ? (
@@ -619,23 +617,6 @@ export default function LedgerDetail() {
   const { data: funderAssetSummary } = trpc.ledger.funderGetAssetSummary.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF && isFunder }
-  );
-  // 融资付息：订单列表
-  const { data: financeOrdersData } = trpc.ledger.financeGetOrders.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && !isFunder && afSubTab === 'rongzifuxi' }
-  );
-  const financeOrders = (financeOrdersData as any)?.orders ?? [];
-  // 融资付息：资产汇总
-  const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && !isFunder && afSubTab === 'rongzifuxi' }
-  );
-  // 融资付息：已结利息汇总
-  const financeOrderIds = useMemo(() => (financeOrders as any[]).map((o: any) => o.id), [financeOrders]);
-  const { data: financeInterestSummary } = trpc.ledger.financeGetInterestPaymentSummary.useQuery(
-    { ledgerId: Number(ledgerId), orderIds: financeOrderIds },
-    { enabled: isCustomAF && financeOrderIds.length > 0 }
   );
   // 资方专属：资产订单列表（仅 funder 角色查询）
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
@@ -1978,29 +1959,7 @@ export default function LedgerDetail() {
       {/* AF账本非资方用户：三Tab切换（谷底增筹 / 融资付息 / 行情评估） */}
       {isCustomAF && !isFunder && (
         <div className="flex-1 px-4 pb-20">
-          {/* Tab栏 */}
-          <div className="flex gap-2 mt-2 mb-4">
-            {(['gudizengchou', 'rongzifuxi', 'hangqingpinggu'] as const).map(tab => {
-              const labels = { gudizengchou: '谷底增筹', rongzifuxi: '融资付息', hangqingpinggu: '行情评估' };
-              const isActive = afSubTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setAfSubTab(tab)}
-                  className={`flex-1 py-2 rounded-full text-sm font-medium transition-all ${
-                    isActive ? 'text-white shadow-md' : 'text-gray-500 bg-gray-100'
-                  }`}
-                  style={isActive ? { backgroundColor: '#3B5BDB' } : {}}
-                >
-                  {labels[tab]}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 谷底增筹内容 */}
-          {afSubTab === 'gudizengchou' && (
-            <div className="space-y-3">
+          <div className="space-y-3 mt-2">
               <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                 className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
@@ -2041,87 +2000,6 @@ export default function LedgerDetail() {
                 </div>
               </button>
             </div>
-          )}
-
-          {/* 融资付息内容（参照资方订单卡片样式） */}
-          {afSubTab === 'rongzifuxi' && (
-            <div>
-              {/* 融资付息资产汇总卡片 */}
-              {(() => {
-                const cb = (financeAssetSummary as any)?.coinBreakdown || {};
-                const coins = ['ETH', 'BTC', 'SOL'];
-                let totalMarketValue = 0;
-                for (const c of coins) {
-                  const qty = cb[c]?.quantity || 0;
-                  const price = funderLivePrices[c] || 0;
-                  totalMarketValue += qty * price;
-                }
-                const cnyValue = totalMarketValue * 7.15;
-                return (
-                  <div className="rounded-2xl p-4 mb-4" style={{ background: 'linear-gradient(135deg, #1a3a8a 0%, #3B5BDB 100%)' }}>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-white/70 text-xs">融资资产</span>
-                      <span className="text-white/70 text-xs">总市值 {totalMarketValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U ≈ {cnyValue >= 10000 ? (cnyValue / 10000).toFixed(2) + '万元' : cnyValue.toFixed(0) + '元'}</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-0">
-                      {coins.map((coin, idx) => {
-                        const info = cb[coin] || { quantity: 0, avgCost: 0 };
-                        const price = funderLivePrices[coin] || 0;
-                        const qty = info.quantity || 0;
-                        const marketVal = qty * price;
-                        return (
-                          <div key={coin} className={`${idx < 2 ? 'border-r border-white/20' : ''} px-2`}>
-                            <div className="text-white font-bold text-sm mb-1">{coin}</div>
-                            <div className="text-white/60 text-[10px]">持有数量</div>
-                            <div className="text-white text-xs font-medium">{coin === 'BTC' ? qty.toFixed(6) : qty.toFixed(4)}</div>
-                            <div className="text-white/60 text-[10px] mt-1">平均成本</div>
-                            <div className="text-white text-xs">{info.avgCost ? info.avgCost.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '0 U'}</div>
-                            <div className="text-white/60 text-[10px] mt-1">当前价格</div>
-                            <div className="text-white text-xs">{price ? price.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '0 U'}</div>
-                            <div className="text-white/60 text-[10px] mt-1">当前市值</div>
-                            <div className="text-white text-xs">{marketVal ? marketVal.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' U' : '0 U'}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-              {/* 融资付息订单列表 */}
-              <div className="flex items-center mb-3">
-                <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>融资订单</h3>
-                <span className="text-xs text-gray-400 ml-1.5">共 {financeOrders.length} 笔</span>
-              </div>
-              {financeOrders.length === 0 ? (
-                <div className="text-center py-12">
-                  <Receipt className="w-14 h-14 text-gray-200 mx-auto mb-3" />
-                  <div className="text-gray-400 text-base mb-1">暂无融资订单</div>
-                  <div className="text-gray-400 text-sm">管理员将为您配置融资订单</div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {financeOrders.map((order: any) => (
-                    <FunderOrderCard
-                      key={order.id}
-                      order={order}
-                      ledgerId={ledgerId}
-                      livePrices={funderLivePrices}
-                      paidInterest={(financeInterestSummary as any)?.[order.id] ?? 0}
-                      onClick={() => {}}
-                      canClick={false}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 行情评估内容（待实现） */}
-          {afSubTab === 'hangqingpinggu' && (
-            <div className="text-center py-12">
-              <div className="text-gray-400 text-base">行情评估功能开发中...</div>
-            </div>
-          )}
         </div>
       )}
 
