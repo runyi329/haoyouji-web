@@ -98,17 +98,17 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
             </span>
             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
           </div>
-          {/* 订单信息列表 */}
+          {/* 订单信息列表：标题靠左，数值靠右 */}
           <div className="space-y-0.5 mb-2">
             {price > 0 && (
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-400 w-14 shrink-0">买入成本</span>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">买入成本</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
               </div>
             )}
             {totalU > 0 && (
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-400 w-14 shrink-0">买入价值</span>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">买入价值</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
@@ -116,8 +116,8 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
               const livePrice = livePrices[order.coin];
               if (!livePrice || !price) return null;
               return (
-                <div className="flex items-center gap-1 text-xs">
-                  <span className="text-gray-400 w-14 shrink-0">当前成本</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 shrink-0">当前成本</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{livePrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
                 </div>
               );
@@ -127,15 +127,15 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
               if (!livePrice || !qty) return null;
               const currentValue = qty * livePrice;
               return (
-                <div className="flex items-center gap-1 text-xs">
-                  <span className="text-gray-400 w-14 shrink-0">当前价值</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 shrink-0">当前价值</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{currentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
                 </div>
               );
             })()}
             {order.buy_date && (
-              <div className="flex items-center gap-1 text-xs">
-                <span className="text-gray-400 w-14 shrink-0">买入时间</span>
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">买入时间</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
               </div>
             )}
@@ -147,12 +147,18 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
               const hours = totalHours % 24;
               const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
               return (
-                <div className="flex items-center gap-1 text-xs">
-                  <span className="text-gray-400 w-14 shrink-0">持有时长</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400 shrink-0">持有时长</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{label}</span>
                 </div>
               );
             })()}
+            {order.order_no && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">订单编号</span>
+                <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
+              </div>
+            )}
           </div>
           {/* 状态 */}
           <div>

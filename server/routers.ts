@@ -11560,9 +11560,22 @@ export const appRouter = router({
         ) as any;
         const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
         if (targetRole !== 'funder') throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是资金方角色' });
+        // 生成唯一订单号（2个大写字母 + 4个数字）
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const digits = '0123456789';
+        let orderNo = '';
+        let isUnique = false;
+        while (!isUnique) {
+          orderNo = chars[Math.floor(Math.random() * 26)] + chars[Math.floor(Math.random() * 26)] +
+            digits[Math.floor(Math.random() * 10)] + digits[Math.floor(Math.random() * 10)] +
+            digits[Math.floor(Math.random() * 10)] + digits[Math.floor(Math.random() * 10)];
+          const existRows = await db.execute(sql`SELECT id FROM funder_asset_orders WHERE order_no = ${orderNo} LIMIT 1`) as any;
+          const exists = ((existRows[0] || existRows) as any[]).length > 0;
+          if (!exists) isUnique = true;
+        }
         const insertResult = await db.execute(
-          sql`INSERT INTO funder_asset_orders (ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_start_date, created_by)
-              VALUES (${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestStartDate || null}, ${ctx.user.id})`
+          sql`INSERT INTO funder_asset_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_start_date, created_by)
+              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestStartDate || null}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
