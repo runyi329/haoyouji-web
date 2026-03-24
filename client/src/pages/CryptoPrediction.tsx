@@ -731,14 +731,16 @@ export default function CryptoPrediction() {
     { ledgerId, orderIds: financeOrders.map((o: any) => o.id) },
     { enabled: isCustomAF && !isFunder && tab === 'finance' && financeOrders.length > 0 }
   );
-  // 融资付息：实时价格（复用 funderLivePrices 逻辑，从 localStorage 读取）
+  // 融资付息：实时价格（与资金方共用同一个 localStorage key）
   const FINANCE_PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
-  const financeLivePrices: Record<string, number> = (() => {
-    try {
-      const raw = localStorage.getItem(FINANCE_PRICE_CACHE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
-  })();
+  const freshFinancePrices: Record<string, number> = (financeAssetSummary as any)?.livePrices ?? {};
+  const hasFreshFinancePrices = Object.keys(freshFinancePrices).length > 0;
+  if (hasFreshFinancePrices) {
+    try { localStorage.setItem(FINANCE_PRICE_CACHE_KEY, JSON.stringify(freshFinancePrices)); } catch {}
+  }
+  let cachedFinancePrices: Record<string, number> = {};
+  try { cachedFinancePrices = JSON.parse(localStorage.getItem(FINANCE_PRICE_CACHE_KEY) || '{}'); } catch {}
+  const financeLivePrices: Record<string, number> = hasFreshFinancePrices ? freshFinancePrices : cachedFinancePrices;
 
   // 当前登录用户（用于权限判断）
   const { data: meData } = trpc.auth.me.useQuery();
@@ -1521,7 +1523,7 @@ export default function CryptoPrediction() {
                         </div>
 
                         {/* 中间分隔线 */}
-                        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF', display: 'none' }} />
+                        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
 
                         {/* 右栏：利息信息 */}
                         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
