@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
+const FunderOrderDetailModal = lazy(() => import('@/components/FunderOrderDetailModal'));
 const LedgerDetailAA = lazy(() => import('./LedgerDetailAA'));
 const LedgerDetailAG = lazy(() => import('./LedgerDetailAG'));
 const MemoLedgerPage = lazy(() => import('./MemoLedgerPage'));
@@ -1838,114 +1839,16 @@ export default function LedgerDetail() {
 
       {/* 资金方订单详情弹窗 */}
       {selectedFunderOrder && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[90vh] overflow-y-auto">
-            {/* 弹窗头部 */}
-            <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
-              <div className="flex items-center gap-2">
-                <span
-                  className="text-sm font-bold px-3 py-1 rounded-full text-white"
-                  style={{ backgroundColor: ({ BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' } as any)[selectedFunderOrder.coin] || '#6B7280' }}
-                >
-                  {selectedFunderOrder.coin}
-                </span>
-                <span className="text-base font-semibold" style={{ color: '#1A2340' }}>订单详情</span>
-              </div>
-              <button
-                onClick={() => setSelectedFunderOrder(null)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg leading-none"
-              >
-                &times;
-              </button>
-            </div>
-
-            <div className="px-5 py-5 space-y-4">
-              {/* 金额卡片 */}
-              <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
-                <div className="text-xs text-white/70 mb-1">总金额（自动折算）</div>
-                <div className="flex items-baseline gap-1 mb-1">
-                  <span className="text-3xl font-bold text-white">
-                    {parseFloat(selectedFunderOrder.amount).toLocaleString()}
-                  </span>
-                  <span className="text-sm text-white/70">USDT</span>
-                </div>
-                {selectedFunderOrder.buy_quantity && selectedFunderOrder.buy_price && (
-                  <div className="text-xs text-white/50">
-                    {selectedFunderOrder.buy_quantity} {selectedFunderOrder.coin} × {selectedFunderOrder.buy_price} USDT
-                  </div>
-                )}
-                <div className="mt-2">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white">
-                    {selectedFunderOrder.status === 'active' ? '持有中' : selectedFunderOrder.status === 'settled' ? '已结算' : '已取消'}
-                  </span>
-                </div>
-              </div>
-
-              {/* 基本信息 */}
-              <div className="bg-gray-50 rounded-2xl overflow-hidden">
-                {[
-                  { label: '币种', value: selectedFunderOrder.coin },
-                  { label: '买入价格', value: selectedFunderOrder.buy_price ? `${selectedFunderOrder.buy_price} USDT` : null },
-                  { label: '买入数量', value: selectedFunderOrder.buy_quantity ? `${selectedFunderOrder.buy_quantity} ${selectedFunderOrder.coin}` : null },
-                  { label: '买入日期', value: selectedFunderOrder.buy_date || null },
-                  { label: '存放账号', value: selectedFunderOrder.storage_account || null },
-                ].filter(item => item.value !== null).map((item, idx, arr) => (
-                  <div
-                    key={item.label}
-                    className="flex items-center justify-between px-4 py-3"
-                    style={{ borderBottom: idx < arr.length - 1 ? '1px solid #F3F4F6' : 'none' }}
-                  >
-                    <span className="text-sm text-gray-400">{item.label}</span>
-                    <span className="text-sm font-medium" style={{ color: '#1A2340' }}>{item.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* 利息约定（有内容才显示） */}
-              {(selectedFunderOrder.interest_rate_annual || selectedFunderOrder.interest_payment_type) && (
-                <div>
-                  <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">利息约定</div>
-                  <div className="bg-gray-50 rounded-2xl overflow-hidden">
-                    {[
-                      { label: '约定年化利息', value: selectedFunderOrder.interest_rate_annual ? `${selectedFunderOrder.interest_rate_annual}%` : null },
-                      { label: '支付方式', value: selectedFunderOrder.interest_payment_type ? ({
-                        monthly_pre: '月付先付', monthly_post: '月付后付',
-                        semi_pre: '半年付先付', semi_post: '半年付后付',
-                        annual_pre: '年付先付', annual_post: '年付后付',
-                        end_post: '结束后付',
-                      } as any)[selectedFunderOrder.interest_payment_type] || selectedFunderOrder.interest_payment_type : null },
-                    ].filter(item => item.value !== null).map((item, idx, arr) => (
-                      <div
-                        key={item.label}
-                        className="flex items-center justify-between px-4 py-3"
-                        style={{ borderBottom: idx < arr.length - 1 ? '1px solid #F3F4F6' : 'none' }}
-                      >
-                        <span className="text-sm text-gray-400">{item.label}</span>
-                        <span className="text-sm font-semibold" style={{ color: '#1A56DB' }}>{item.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 公开备注（资金方可见） */}
-              {selectedFunderOrder.public_note && (
-                <div>
-                  <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">备注</div>
-                  <div className="bg-gray-50 rounded-2xl px-4 py-3">
-                    <p className="text-sm text-gray-700 leading-relaxed">{selectedFunderOrder.public_note}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* 订单编号 */}
-              <div className="text-center text-xs text-gray-300">
-                订单编号 #{selectedFunderOrder.id}
-              </div>
-            </div>
-          </div>
-        </div>
+        <Suspense fallback={null}>
+          <FunderOrderDetailModal
+            order={selectedFunderOrder}
+            ledgerId={ledgerId}
+            onClose={() => setSelectedFunderOrder(null)}
+          />
+        </Suspense>
       )}
+
+
 
       {/* AH 账本：公司列表 + 报税授权管理 */}
       {isCustomAH && (
