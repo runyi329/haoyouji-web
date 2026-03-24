@@ -1420,61 +1420,176 @@ export default function CryptoPrediction() {
               <div className="space-y-3">
                 {financeOrders.map((order: any) => {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
-                  const principal = parseFloat(order.principal || '0');
-                  const annualRate = parseFloat(order.annualInterestRate || '0');
-                  const isNegativeRate = annualRate < 0; // 负利率：用户需付出
-                  const startDate = order.startDate ? new Date(order.startDate) : null;
-                  const elapsedDays = startDate ? Math.max(0, (Date.now() - startDate.getTime()) / 86400000) : 0;
-                  const accruedInterest = Math.abs(principal * (annualRate / 100) * (elapsedDays / 365));
-                  const unpaidInterest = Math.max(0, accruedInterest - paidInterest);
-                  const coinQty = parseFloat(order.coinQuantity || '0');
+                  const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
+                  const isNegativeRate = annualRate < 0;
+                  const interestBase = parseFloat(order.interest_base || order.principal || '0');
+                  const startDate = order.interest_start_date || order.startDate || null;
+                  const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
+                  const buyPrice = parseFloat(order.buy_price || '0');
+                  const buyValue = coinQty > 0 && buyPrice > 0 ? coinQty * buyPrice : parseFloat(order.amount || '0');
                   const coinPrice = financeLivePrices[order.coin] || 0;
                   const marketValue = coinQty * coinPrice;
+                  const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消';
+                  const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
+                  const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
+                  const cc = coinColorMap[order.coin] || '#6B7280';
+                  // 精确计息（秒级）
+                  const nowTs = Date.now();
+                  const startTs = startDate ? new Date(startDate + (startDate.includes('T') ? '' : 'T00:00:00')).getTime() : 0;
+                  const elapsedSeconds = startTs > 0 ? Math.max(0, (nowTs - startTs) / 1000) : 0;
+                  const perSecond = interestBase && annualRate ? (interestBase * Math.abs(annualRate) / 100) / (365 * 24 * 3600) : 0;
+                  const accruedInterest = perSecond * elapsedSeconds;
+                  const unpaidInterest = Math.max(0, accruedInterest - paidInterest);
+                  // 持有时长
+                  const holdingLabel = (() => {
+                    if (!order.buy_date || order.status !== 'active') return null;
+                    const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+                    if (elapsed < 0) return null;
+                    const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+                    const days = Math.floor(totalHours / 24);
+                    const hours = totalHours % 24;
+                    return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+                  })();
                   return (
-                    <div key={order.id} className="rounded-2xl p-4" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}>
-                      {/* 卡片头部 */}
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-base" style={{ color: '#1A2340' }}>{order.coin} 融资订单</span>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                              order.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'
-                            }`}>{order.status === 'active' ? '进行中' : '已结束'}</span>
+                    <div
+                      key={order.id}
+                      className="rounded-2xl shadow-sm"
+                      style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', overflow: 'hidden' }}
+                    >
+                      {/* 顶部色条 */}
+                      <div className="h-1" style={{ background: `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
+
+                      {/* 主体：左右两栏 */}
+                      <div className="flex" style={{ minHeight: '100px' }}>
+
+                        {/* 左栏：订单信息 */}
+                        <div className="flex-1 p-4 pr-3">
+                          {/* 标题：融资资产 */}
+                          <div className="text-[10px] mb-1" style={{ color: '#3B82F6' }}>融资资产</div>
+                          {/* 持币数量（大字突出） */}
+                          <div className="flex items-baseline gap-1 mb-1">
+                            <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
+                              {coinQty > 0 ? (order.coin === 'BTC' ? coinQty.toFixed(6) : coinQty.toFixed(4)) : '—'}
+                            </span>
+                            <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
                           </div>
-                          <div className="text-xs text-gray-400 mt-0.5">开始日期：{order.startDate ? new Date(order.startDate).toLocaleDateString('zh-CN') : '--'}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-gray-400">年利率</div>
-                          <div className="font-bold text-base" style={{ color: isNegativeRate ? '#EF4444' : '#1A56DB' }}>
-                            {isNegativeRate ? '' : '+'}{annualRate}%
+                          {/* 订单详情列表 */}
+                          <div className="space-y-0.5">
+                            {buyPrice > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">买入币价</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{buyPrice.toLocaleString()} U</span>
+                              </div>
+                            )}
+                            {buyValue > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">买入价值</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                              </div>
+                            )}
+                            {order.buy_date && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">买入时间</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-400 shrink-0">今日币价</span>
+                              <span className="font-medium" style={{ color: '#4B5563' }}>
+                                {coinPrice ? coinPrice.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-400 shrink-0">当前价值</span>
+                              <span className="font-medium" style={{ color: '#4B5563' }}>
+                                {coinPrice && coinQty ? (coinQty * coinPrice).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
+                              </span>
+                            </div>
+                            {holdingLabel && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">持有时长</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span>
+                              </div>
+                            )}
+                            {order.order_no && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">订单编号</span>
+                                <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
-                      {/* 融资信息 */}
-                      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                        <div className="rounded-xl p-2.5" style={{ backgroundColor: '#F0F4FF' }}>
-                          <div className="text-xs text-gray-400 mb-0.5">融资本金</div>
-                          <div className="font-semibold" style={{ color: '#1A2340' }}>{principal.toLocaleString()} USDT</div>
-                        </div>
-                        <div className="rounded-xl p-2.5" style={{ backgroundColor: '#F0F4FF' }}>
-                          <div className="text-xs text-gray-400 mb-0.5">持币数量</div>
-                          <div className="font-semibold" style={{ color: '#1A2340' }}>{order.coin === 'BTC' ? coinQty.toFixed(6) : coinQty.toFixed(4)} {order.coin}</div>
-                        </div>
-                        <div className="rounded-xl p-2.5" style={{ backgroundColor: '#F0F4FF' }}>
-                          <div className="text-xs text-gray-400 mb-0.5">当前市值</div>
-                          <div className="font-semibold" style={{ color: '#1A2340' }}>{marketValue ? marketValue.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' U' : '--'}</div>
-                        </div>
-                        <div className="rounded-xl p-2.5" style={{ backgroundColor: isNegativeRate ? '#FFF1F1' : '#FFF7ED' }}>
-                          <div className="text-xs text-gray-400 mb-0.5">{isNegativeRate ? '待付利息' : '待收利息'}</div>
-                          <div className="font-semibold" style={{ color: isNegativeRate ? '#EF4444' : (unpaidInterest > 0 ? '#D97706' : '#1A2340') }}>
-                            {isNegativeRate && unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)} USDT
+
+                        {/* 中间分隔线 */}
+                        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+
+                        {/* 右栏：利息信息 */}
+                        <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
+                          <div className="flex flex-col h-full">
+                            {/* 上半：待付/待收利息 */}
+                            <div className="flex-1 flex flex-col justify-start">
+                              <div className="flex items-center justify-between mb-0.5">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px]" style={{ color: isNegativeRate ? '#EF4444' : '#3B82F6' }}>
+                                    {isNegativeRate ? '待付利息' : '待收利息'}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400">(年化 {Math.abs(annualRate)}%)</span>
+                                </div>
+                              </div>
+                              <div className="flex items-baseline gap-0.5">
+                                <span
+                                  className="text-2xl font-bold tabular-nums leading-tight"
+                                  style={{ color: isNegativeRate ? '#EF4444' : '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                                >
+                                  {isNegativeRate ? '-' : ''}{unpaidInterest.toFixed(2)}
+                                </span>
+                                <span className="text-sm font-semibold" style={{ color: isNegativeRate ? '#EF4444' : '#1A2340' }}>USDT</span>
+                              </div>
+                              <div className="flex items-center justify-between mt-0.5 text-xs">
+                                <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} USDT</span>
+                              </div>
+                              {startDate && (
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-400">计息日期</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>
+                                    {(() => {
+                                      const d = startDate.replace(/^\d{4}-(\d{2})-(\d{2}).*$/, (_: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`);
+                                      return d;
+                                    })()}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            {/* 中间分隔线 */}
+                            <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
+                            {/* 下半：状态信息 */}
+                            <div className="flex-1 flex flex-col justify-start pt-2">
+                              <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>订单状态</div>
+                              <div className="flex items-baseline gap-0.5">
+                                <span
+                                  className="text-lg font-bold leading-tight"
+                                  style={{ color: statusColor }}
+                                >
+                                  {statusLabel}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between mt-0.5 text-xs">
+                                <span className="text-gray-400">累计利息</span>
+                                <span className="font-medium" style={{ color: isNegativeRate ? '#EF4444' : '#1A56DB' }}>
+                                  {isNegativeRate ? '-' : ''}{accruedInterest.toFixed(2)}
+                                </span>
+                              </div>
+                              {order.counterparty && (
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-400">对手方</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>{order.counterparty}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      {/* 已付/已收利息 */}
-                      <div className="flex justify-between items-center text-xs text-gray-400 pt-2" style={{ borderTop: '1px solid #F0F4FF' }}>
-                        <span>{isNegativeRate ? '已付利息：' : '已收利息：'}<span className={isNegativeRate ? 'text-red-500 font-medium' : 'text-green-600 font-medium'}>{isNegativeRate && paidInterest > 0 ? '-' : ''}{paidInterest.toFixed(2)} USDT</span></span>
-                        <span>累计利息：<span style={{ color: isNegativeRate ? '#EF4444' : '#1A56DB' }} className="font-medium">{isNegativeRate ? '-' : ''}{accruedInterest.toFixed(2)} USDT</span></span>
+
                       </div>
                     </div>
                   );
