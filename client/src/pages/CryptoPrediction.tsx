@@ -1534,7 +1534,7 @@ export default function CryptoPrediction() {
                                 <span className="text-[10px]" style={{ color: '#3B82F6' }}>
                                   {isNegativeRate ? '待付利息' : '待收利息'}
                                 </span>
-                                <span className="text-[10px] text-gray-400">(年化 {Math.abs(annualRate)}%)</span>
+                                <span className="text-[10px] text-gray-400">{isNegativeRate ? '整体部分年化12%' : `(年化 ${Math.abs(annualRate)}%)`}</span>
                               </div>
                               <div className="flex items-baseline gap-0.5">
                                 <span
@@ -1561,9 +1561,9 @@ export default function CryptoPrediction() {
                                 </div>
                               )}
                               <div className="flex items-center justify-between mt-0.5 text-xs">
-                                <span className="text-gray-400">累计利息</span>
+                                <span className="text-gray-400">利息担保</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {isNegativeRate ? '-' : ''}{accruedInterest.toFixed(2)} USDT
+                                  {isNegativeRate ? '12ETH' : `${accruedInterest.toFixed(2)} USDT`}
                                 </span>
                               </div>
                               {order.counterparty && (
