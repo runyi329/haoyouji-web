@@ -22,9 +22,10 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
   return accrued;
 }
 
-// 单张资金方订单卡片（含跳动利息）
+// 单张资金方订单卡片（左右两栏布局）
 function FunderOrderCard({ order, onClick }: { order: any; onClick: () => void }) {
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
+  const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
   const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消';
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
@@ -32,8 +33,8 @@ function FunderOrderCard({ order, onClick }: { order: any; onClick: () => void }
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
   const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
-  // 收益权（从scan_stats中读取，这里先用order字段占位，详情页再展示完整数据）
   const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date && order.status === 'active';
+  const coinName = coinNameMap[order.coin] || order.coin;
   return (
     <div
       className="rounded-2xl shadow-sm"
@@ -41,77 +42,81 @@ function FunderOrderCard({ order, onClick }: { order: any; onClick: () => void }
       onClick={onClick}
     >
       {/* 顶部色条 */}
-      <div className="h-1" style={{ background: `linear-gradient(90deg, ${cc}, ${cc}88)` }} />
-      <div className="p-4">
-        {/* 头部：币种标签 + 状态 + 箭头 */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: cc }}>
-              {order.coin}
+      <div className="h-1" style={{ background: `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
+
+      {/* 主体：左右两栏 */}
+      <div className="flex" style={{ minHeight: '100px' }}>
+
+        {/* 左栏：订单信息 */}
+        <div className="flex-1 p-4 pr-3">
+          {/* 币种名称 + 数量（大字突出） */}
+          <div className="flex items-baseline gap-1 mb-1">
+            <span className="text-2xl font-bold tabular-nums" style={{ color: cc }}>
+              {qty > 0 ? qty : '—'}
             </span>
-            <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
+            <span className="text-sm font-semibold" style={{ color: cc }}>{coinName}</span>
+          </div>
+          {/* 买入成本 */}
+          {price > 0 && (
+            <div className="text-xs text-gray-500 mb-0.5">
+              买入成本：{price.toLocaleString()} USDT
+            </div>
+          )}
+          {/* 总价值 */}
+          {totalU > 0 && (
+            <div className="text-xs text-gray-500 mb-0.5">
+              总价值：{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT
+            </div>
+          )}
+          {/* 买入时间 */}
+          {order.buy_date && (
+            <div className="text-xs text-gray-400">
+              买入时间：{order.buy_date}
+            </div>
+          )}
+          {/* 状态 */}
+          <div className="mt-2">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
               {statusLabel}
             </span>
           </div>
-          <ChevronRight className="w-4 h-4 text-gray-300" />
         </div>
 
-        {/* 核心数据：买入数量（大字）+ 折算总价（弱化） */}
-        <div className="flex items-end justify-between mb-3">
-          <div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-bold tracking-tight" style={{ color: cc }}>
-                {qty > 0 ? qty : '—'}
-              </span>
-              <span className="text-base font-semibold" style={{ color: cc }}>{order.coin}</span>
-            </div>
-            {order.buy_price && (
-              <div className="text-xs text-gray-400 mt-0.5">
-                @{parseFloat(order.buy_price).toLocaleString()} USDT
+        {/* 中间分隔线 */}
+        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+
+        {/* 右栏：利息 + 收益权 */}
+        <div className="w-36 p-4 pl-3 flex flex-col justify-between">
+          {hasInterest ? (
+            <>
+              {/* 上：代付利息（跳动秒表） */}
+              <div className="mb-3">
+                <div className="flex items-center gap-1 mb-1">
+                  <Timer className="w-3 h-3" style={{ color: '#1A56DB' }} />
+                  <span className="text-[10px] text-gray-400">代付利息</span>
+                </div>
+                <div
+                  className="text-sm font-bold tabular-nums leading-tight"
+                  style={{ color: '#1A56DB', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                >
+                  {accrued.toFixed(4)}
+                </div>
+                <div className="text-[10px] text-gray-400">USDT · {order.interest_rate_annual}%/年</div>
               </div>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-base font-semibold text-gray-500">
-              {totalU > 0 ? totalU.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}
-            </div>
-            <div className="text-xs text-gray-300">USDT</div>
-          </div>
-        </div>
-
-        {/* 利息+收益权区域（仅持有中且有利息设置时显示） */}
-        {hasInterest && (
-          <div className="rounded-xl p-3 mt-1" style={{ background: 'linear-gradient(135deg, #EEF4FF 0%, #F0F7FF 100%)', border: '1px solid #C7D9FF' }}>
-            <div className="flex items-center justify-between">
-              {/* 左：累计利息（跳动） */}
+              {/* 下：收益权 */}
               <div>
-                <div className="text-[10px] text-gray-400 mb-0.5">待结利息</div>
-                <div className="text-base font-bold tabular-nums" style={{ color: '#1A56DB', fontVariantNumeric: 'tabular-nums' }}>
-                  {accrued.toFixed(6)}
-                  <span className="text-xs font-normal text-blue-400 ml-0.5">U</span>
-                </div>
-                <div className="text-[10px] text-gray-400">{order.interest_rate_annual}% / 年</div>
+                <div className="text-[10px] text-gray-400 mb-1">目前收益权</div>
+                <div className="text-sm font-bold" style={{ color: cc }}>点击查看</div>
+                <div className="text-[10px] text-gray-400">{coinName}占比</div>
               </div>
-              {/* 分隔 */}
-              <div className="w-px h-8 bg-blue-100 mx-2" />
-              {/* 右：收益权（从详情页获取，列表页显示提示） */}
-              <div className="text-right">
-                <div className="text-[10px] text-gray-400 mb-0.5">收益权</div>
-                <div className="text-base font-bold" style={{ color: '#9945FF' }}>
-                  点击查看
-                </div>
-                <div className="text-[10px] text-gray-400">历史最低价计算</div>
-              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <ChevronRight className="w-5 h-5 text-gray-200" />
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* 买入日期 */}
-        {order.buy_date && (
-          <div className="mt-2 text-xs text-gray-400">
-            买入日期：{order.buy_date}
-          </div>
-        )}
       </div>
     </div>
   );
