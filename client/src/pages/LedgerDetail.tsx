@@ -120,6 +120,8 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
 
         {/* 左栏：订单信息 */}
         <div className="flex-1 p-4 pr-3">
+          {/* 标题：持有资产 */}
+          <div className="text-[10px] text-gray-400 mb-1">持有资产</div>
           {/* 币种名称 + 数量（大字突出，4位小数） */}
           <div className="flex items-baseline gap-1 mb-1">
             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
@@ -128,7 +130,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
           </div>
           {/* 订单信息列表：标题靠左，数值靠右 */}
-          <div className="space-y-0.5 mb-2">
+          <div className="space-y-0.5">
             {price > 0 && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">买入成本</span>
@@ -188,12 +190,6 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
               </div>
             )}
-          </div>
-          {/* 状态 */}
-          <div>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
-              {statusLabel}
-            </span>
           </div>
         </div>
 
