@@ -45,7 +45,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
       {/* 上半：代结利息 */}
       <div className="flex-1 flex flex-col justify-center">
         <div className="flex items-center justify-between mb-0.5">
-          <span className="text-[10px] text-gray-400">代结利息</span>
+          <span className="text-[10px]" style={{ color: '#3B82F6' }}>代结利息</span>
           <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
         </div>
         <div className="flex items-baseline gap-0.5">
@@ -66,7 +66,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
       <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
       {/* 下半：收益分成 */}
       <div className="flex-1 flex flex-col justify-center">
-        <div className="text-[10px] text-gray-400 mb-0.5">收益分成</div>
+        <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>收益分成</div>
         <div className="flex items-baseline gap-0.5">
           <span
             className="text-2xl font-bold tabular-nums leading-tight"
@@ -121,7 +121,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, onClick }: { order: any;
         {/* 左栏：订单信息 */}
         <div className="flex-1 p-4 pr-3">
           {/* 标题：持有资产 */}
-          <div className="text-[10px] text-gray-400 mb-1">持有资产</div>
+          <div className="text-[10px] mb-1" style={{ color: '#3B82F6' }}>持有资产</div>
           {/* 币种名称 + 数量（大字突出，4位小数） */}
           <div className="flex items-baseline gap-1 mb-1">
             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
