@@ -64,6 +64,14 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
           <span className="text-gray-400">目前已结</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>0.00元</span>
         </div>
+        {order.interest_start_date && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-400">计息日期</span>
+            <span className="font-medium" style={{ color: '#4B5563' }}>
+              {order.interest_start_date.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+            </span>
+          </div>
+        )}
       </div>
       {/* 中间分隔线 */}
       <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
