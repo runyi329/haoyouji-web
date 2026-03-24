@@ -265,8 +265,8 @@ export default function FinanceManagement() {
   };
 
   const handleSubmit = () => {
-    if (!editingOrder && !selectedUserId) {
-      toast.error('请先选择要为哪位用户添加订单');
+    if (!selectedUserId) {
+      toast.error('请先选择要为哪位用户添加/编辑订单');
       return;
     }
     if (!computedAmount || parseFloat(computedAmount) <= 0) {
@@ -292,7 +292,7 @@ export default function FinanceManagement() {
       counterparty: formData.counterparty || undefined,
     };
     if (editingOrder) {
-      updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
+      updateMutation.mutate({ id: editingOrder.id, status: formData.status, userId: selectedUserId!, ...payload });
     } else {
       createMutation.mutate({ ...payload, userId: selectedUserId! });
     }
@@ -545,11 +545,10 @@ export default function FinanceManagement() {
             </div>
 
             <div className="px-5 py-4 space-y-5">
-              {/* 选择用户（仅新增时显示） */}
-              {!editingOrder && (
-                <div className="relative">
+              {/* 选择用户（新增和编辑都显示） */}
+              <div className="relative">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
-                    为哪位用户添加 <span className="text-red-400 ml-0.5">*</span>
+                    {editingOrder ? '订单归属用户' : '为哪位用户添加'} <span className="text-red-400 ml-0.5">*</span>
                   </label>
                   {/* 已选用户展示 + 搜索输入框 */}
                   <div
@@ -650,7 +649,7 @@ export default function FinanceManagement() {
                     </>
                   )}
                 </div>
-              )}
+              </div>
 
               {/* 对手方 */}
               <div>
