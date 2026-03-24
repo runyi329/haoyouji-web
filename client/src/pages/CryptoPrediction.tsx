@@ -692,10 +692,10 @@ export default function CryptoPrediction() {
   const [interval, setIntervalVal] = useState("1h");
   const initialTab = (() => {
     const t = urlParams.get("tab");
-    if (t === "market" || t === "spot" || t === "contract") return t;
+    if (t === "market" || t === "spot" || t === "contract" || t === "finance") return t;
     return "contract";
-  })() as "contract" | "spot" | "market";
-  const [tab, setTab] = useState<"contract" | "spot" | "market">(initialTab);
+  })() as "contract" | "spot" | "market" | "finance";
+  const [tab, setTab] = useState<"contract" | "spot" | "market" | "finance">(initialTab);
 
   // 委托交易面板状态
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
@@ -713,6 +713,32 @@ export default function CryptoPrediction() {
     { enabled: !!ledgerId, staleTime: 60000 }
   );
   const isCustomAF = (ledgerInfo as any)?.type === 'custom_af';
+  const isFunder = (ledgerInfo as any)?.userRole === 'funder';
+
+  // 融资付息：订单列表（仅非资方用户在融资付息Tab时加载）
+  const { data: financeOrdersData } = trpc.ledger.financeGetOrders.useQuery(
+    { ledgerId },
+    { enabled: isCustomAF && !isFunder && tab === 'finance' }
+  );
+  const financeOrders: any[] = (financeOrdersData as any)?.orders ?? [];
+  // 融资付息：资产汇总
+  const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
+    { ledgerId },
+    { enabled: isCustomAF && !isFunder && tab === 'finance' }
+  );
+  // 融资付息：已结利息汇总
+  const { data: financeInterestSummary } = trpc.ledger.financeGetInterestPaymentSummary.useQuery(
+    { ledgerId, orderIds: financeOrders.map((o: any) => o.id) },
+    { enabled: isCustomAF && !isFunder && tab === 'finance' && financeOrders.length > 0 }
+  );
+  // 融资付息：实时价格（复用 funderLivePrices 逻辑，从 localStorage 读取）
+  const FINANCE_PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
+  const financeLivePrices: Record<string, number> = (() => {
+    try {
+      const raw = localStorage.getItem(FINANCE_PRICE_CACHE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  })();
 
   // 当前登录用户（用于权限判断）
   const { data: meData } = trpc.auth.me.useQuery();
@@ -867,13 +893,17 @@ export default function CryptoPrediction() {
         </div>
       )}
 
-      {/* 三 Tab 切换 */}
+      {/* Tab 切换 */}
       <div className="px-4 pt-3">
         <div className="flex rounded-xl p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
-          {[
+          {(isCustomAF && !isFunder ? [
+            { key: "contract", label: "谷底增筹" },
+            { key: "finance", label: "融资付息" },
+            { key: "market", label: "行情评估" },
+          ] : [
             { key: "contract", label: isCustomAF ? "谷底增筹" : "无损合约" },
             { key: "market", label: "行情评估" },
-          ].map((t) => (
+          ]).map((t) => (
             <button key={t.key} onClick={() => {
               setTab(t.key as any);
             }}
@@ -1326,6 +1356,124 @@ export default function CryptoPrediction() {
                     <div className="text-xs text-gray-400 mt-1">波动率 {analysis.volatility.toFixed(2)}%</div>
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 融资付息 */}
+        {tab === "finance" && (
+          <div className="pb-4">
+            {/* 融资资产汇总卡片 */}
+            {(() => {
+              const cb = (financeAssetSummary as any)?.coinBreakdown || {};
+              const coins = ['ETH', 'BTC', 'SOL'];
+              let totalMarketValue = 0;
+              for (const c of coins) {
+                const qty = cb[c]?.quantity || 0;
+                const price = financeLivePrices[c] || 0;
+                totalMarketValue += qty * price;
+              }
+              const cnyValue = totalMarketValue * 7.15;
+              return (
+                <div className="rounded-2xl p-4 mb-4" style={{ background: 'linear-gradient(135deg, #1a3a8a 0%, #3B5BDB 100%)' }}>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-white/70 text-xs">融资资产</span>
+                    <span className="text-white/70 text-xs">总市值 {totalMarketValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U ≈ {cnyValue >= 10000 ? (cnyValue / 10000).toFixed(2) + '万元' : cnyValue.toFixed(0) + '元'}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-0">
+                    {coins.map((coin, idx) => {
+                      const info = cb[coin] || { quantity: 0, avgCost: 0 };
+                      const price = financeLivePrices[coin] || 0;
+                      const qty = info.quantity || 0;
+                      const marketVal = qty * price;
+                      return (
+                        <div key={coin} className={`${idx < 2 ? 'border-r border-white/20' : ''} px-2`}>
+                          <div className="text-white font-bold text-sm mb-1">{coin}</div>
+                          <div className="text-white/60 text-[10px]">持有数量</div>
+                          <div className="text-white text-xs font-medium">{coin === 'BTC' ? qty.toFixed(6) : qty.toFixed(4)}</div>
+                          <div className="text-white/60 text-[10px] mt-1">平均成本</div>
+                          <div className="text-white text-xs">{info.avgCost ? info.avgCost.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '0 U'}</div>
+                          <div className="text-white/60 text-[10px] mt-1">当前价格</div>
+                          <div className="text-white text-xs">{price ? price.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '0 U'}</div>
+                          <div className="text-white/60 text-[10px] mt-1">当前市值</div>
+                          <div className="text-white text-xs">{marketVal ? marketVal.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' U' : '0 U'}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+            {/* 融资订单列表 */}
+            <div className="flex items-center mb-3">
+              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>融资订单</h3>
+              <span className="text-xs text-gray-400 ml-1.5">共 {financeOrders.length} 笔</span>
+            </div>
+            {financeOrders.length === 0 ? (
+              <div className="text-center py-12">
+                <AlertCircle className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+                <div className="text-gray-400 text-base mb-1">暂无融资订单</div>
+                <div className="text-gray-400 text-sm">管理员将为您配置融资订单</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {financeOrders.map((order: any) => {
+                  const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
+                  const principal = parseFloat(order.principal || '0');
+                  const annualRate = parseFloat(order.annualInterestRate || '0');
+                  const startDate = order.startDate ? new Date(order.startDate) : null;
+                  const elapsedDays = startDate ? Math.max(0, (Date.now() - startDate.getTime()) / 86400000) : 0;
+                  const accruedInterest = principal * (annualRate / 100) * (elapsedDays / 365);
+                  const unpaidInterest = Math.max(0, accruedInterest - paidInterest);
+                  const coinQty = parseFloat(order.coinQuantity || '0');
+                  const coinPrice = financeLivePrices[order.coin] || 0;
+                  const marketValue = coinQty * coinPrice;
+                  return (
+                    <div key={order.id} className="rounded-2xl p-4" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}>
+                      {/* 卡片头部 */}
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-base" style={{ color: '#1A2340' }}>{order.coin} 融资订单</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              order.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'
+                            }`}>{order.status === 'active' ? '进行中' : '已结束'}</span>
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">开始日期：{order.startDate ? new Date(order.startDate).toLocaleDateString('zh-CN') : '--'}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs text-gray-400">年利率</div>
+                          <div className="font-bold text-base" style={{ color: '#1A56DB' }}>{annualRate}%</div>
+                        </div>
+                      </div>
+                      {/* 融资信息 */}
+                      <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                        <div className="rounded-xl p-2.5" style={{ backgroundColor: '#F0F4FF' }}>
+                          <div className="text-xs text-gray-400 mb-0.5">融资本金</div>
+                          <div className="font-semibold" style={{ color: '#1A2340' }}>{principal.toLocaleString()} USDT</div>
+                        </div>
+                        <div className="rounded-xl p-2.5" style={{ backgroundColor: '#F0F4FF' }}>
+                          <div className="text-xs text-gray-400 mb-0.5">持币数量</div>
+                          <div className="font-semibold" style={{ color: '#1A2340' }}>{order.coin === 'BTC' ? coinQty.toFixed(6) : coinQty.toFixed(4)} {order.coin}</div>
+                        </div>
+                        <div className="rounded-xl p-2.5" style={{ backgroundColor: '#F0F4FF' }}>
+                          <div className="text-xs text-gray-400 mb-0.5">当前市值</div>
+                          <div className="font-semibold" style={{ color: '#1A2340' }}>{marketValue ? marketValue.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' U' : '--'}</div>
+                        </div>
+                        <div className="rounded-xl p-2.5" style={{ backgroundColor: '#FFF7ED' }}>
+                          <div className="text-xs text-gray-400 mb-0.5">待付利息</div>
+                          <div className="font-semibold" style={{ color: unpaidInterest > 0 ? '#D97706' : '#1A2340' }}>{unpaidInterest.toFixed(2)} USDT</div>
+                        </div>
+                      </div>
+                      {/* 已付利息 */}
+                      <div className="flex justify-between items-center text-xs text-gray-400 pt-2" style={{ borderTop: '1px solid #F0F4FF' }}>
+                        <span>已付利息：<span className="text-green-600 font-medium">{paidInterest.toFixed(2)} USDT</span></span>
+                        <span>累计利息：<span style={{ color: '#1A56DB' }} className="font-medium">{accruedInterest.toFixed(2)} USDT</span></span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
