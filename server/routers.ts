@@ -11549,10 +11549,16 @@ export const appRouter = router({
         ) as any;
         const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
         if (targetRole !== 'funder') throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是资金方角色' });
-        await db.execute(
+        const insertResult = await db.execute(
           sql`INSERT INTO funder_asset_orders (ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, created_by)
               VALUES (${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${ctx.user.id})`
-        );
+        ) as any;
+        // 新订单创建后触发即时扫描
+        const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
+        if (newOrderId) {
+          const { triggerFunderImmediateScan } = await import('../funder-price-scanner');
+          triggerFunderImmediateScan(newOrderId);
+        }
         return { success: true };
       }),
 
@@ -11603,6 +11609,61 @@ export const appRouter = router({
         const conn = await getDbConnection();
         if (conn) await conn.execute(rawQuery, allVals);
         return { success: true };
+      }),
+
+    // 获取资金方订单扫描统计（资金方可查看）
+    funderGetOrderScanStats: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证权限：资金方只能看自己的，管理员可看全部
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        const isFunder = role === 'funder';
+        if (!isManager && !isFunder) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 资金方只能查看属于自己的订单
+        if (isFunder && !isManager) {
+          const orderRows = await db.execute(
+            sql`SELECT id FROM funder_asset_orders WHERE id = ${input.orderId} AND user_id = ${ctx.user.id} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          ) as any;
+          if (!((orderRows[0] || orderRows) as any[]).length) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看此订单' });
+          }
+        }
+        // 获取订单基本信息
+        const orderRows = await db.execute(
+          sql`SELECT buy_price, buy_quantity, coin FROM funder_asset_orders WHERE id = ${input.orderId} LIMIT 1`
+        ) as any;
+        const order = ((orderRows[0] || orderRows) as any[])[0];
+        if (!order) return null;
+        // 获取扫描统计
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return null;
+        const [statsRows] = await conn.execute(
+          `SELECT scan_count, last_scan_at, last_low_price, all_time_low_price, all_time_low_at FROM funder_order_scan_stats WHERE order_id = ? LIMIT 1`,
+          [input.orderId]
+        ) as any[];
+        const stats = (statsRows as any[])?.[0] || null;
+        if (!stats) return { scanCount: 0, lastScanAt: null, allTimeLow: null, allTimeLowAt: null, dropPct: 0, profitRightPct: 0, profitRightCoins: 0 };
+        const { calcFunderProfitRight } = await import('../funder-price-scanner');
+        const buyPrice = parseFloat(order.buy_price) || 0;
+        const buyQuantity = parseFloat(order.buy_quantity) || 0;
+        const allTimeLow = parseFloat(stats.all_time_low_price) || 0;
+        const { dropPct, profitRightPct, profitRightCoins } = calcFunderProfitRight(buyPrice, allTimeLow, buyQuantity);
+        return {
+          scanCount: stats.scan_count || 0,
+          lastScanAt: stats.last_scan_at,
+          allTimeLow: stats.all_time_low_price,
+          allTimeLowAt: stats.all_time_low_at,
+          dropPct,
+          profitRightPct,
+          profitRightCoins,
+          coin: order.coin,
+        };
       }),
 
     // 管理员删除资方资产订单

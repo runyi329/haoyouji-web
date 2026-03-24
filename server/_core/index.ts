@@ -11,6 +11,7 @@ import { getDb } from "../db";
 import { startScanner } from "../blockchain-scanner";
 import { startTierScanner } from "../af-tier-scanner";
 import { startPriceScanner } from "../price-scanner";
+import { startFunderScanner } from "../funder-price-scanner";
 import { ensureBeautyTables } from "../db-beauty-init";
 
 async function initFieldCategories() {
@@ -322,6 +323,9 @@ async function startServer() {
 
     // 启动实时价格扫描器（每60秒刷新 BTC/ETH/SOL 现货价格）
     startPriceScanner();
+
+    // 启动资金方订单收益权扫描器（每4小时扫描一次，对齐北京时间整点）
+    startFunderScanner();
 
     // ─── 内嵌定时备份任务（每天北京时间凌晨 2:00 执行）───
     // 北京时间 = UTC+8，凌晨 2:00 BJT = UTC 18:00（前一天）
