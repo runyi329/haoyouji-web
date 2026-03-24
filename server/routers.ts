@@ -11937,6 +11937,7 @@ export const appRouter = router({
       .input(z.object({
         id: z.number(),
         ledgerId: z.number(),
+        userId: z.number().optional(),
         coin: z.enum(['BTC', 'ETH', 'SOL']).optional(),
         amount: z.string().optional(),
         buyPrice: z.string().optional(),
@@ -11950,6 +11951,7 @@ export const appRouter = router({
         interestPaymentType: z.string().optional(),
         interestBase: z.string().optional(),
         interestStartDate: z.string().optional(),
+        counterparty: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -11965,7 +11967,13 @@ export const appRouter = router({
           buyQuantity: 'buy_quantity', storageAccount: 'storage_account', status: 'status',
           adminNote: 'admin_note', publicNote: 'public_note', interestRateAnnual: 'interest_rate_annual',
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestStartDate: 'interest_start_date',
+          counterparty: 'counterparty',
         };
+        // 单独处理 userId（字段名不符合驼峰规则）
+        if (input.userId !== undefined) {
+          updates.push('user_id = ?');
+          vals.push(input.userId);
+        }
         for (const [key, col] of Object.entries(fieldMap)) {
           if ((input as any)[key] !== undefined) {
             updates.push(`${col} = ?`);
