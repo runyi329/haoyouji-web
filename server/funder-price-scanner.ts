@@ -14,6 +14,10 @@
  *   - 历史最低价 vs 买入价的跌幅
  *   - 当前收益权比例（%）
  *   - 收益权对应币数
+ *
+ * 价格来源优先级：Gate.io → Binance → 火币 → OKX
+ * 每次失败自动重试3次，间隔5秒
+ * 扫描频率：每小时一次
  */
 
 const COIN_SYMBOLS: Record<string, string> = {
@@ -26,26 +30,44 @@ const COIN_SYMBOLS: Record<string, string> = {
 let globalFunderScanLock = false;
 
 /**
- * 获取指定币种过去4小时的最低价
- * 复用 af-tier-scanner 的三交易所策略（Gate.io → 火币 → OKX）
+ * 带重试的 fetch 封装
  */
-async function fetch4hLowPrice(coin: string): Promise<{ low: number } | null> {
+async function fetchWithRetry(url: string, timeoutMs: number, retries = 3): Promise<Response | null> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      if (r.ok) return r;
+    } catch (e) {
+      if (i < retries - 1) {
+        await new Promise(res => setTimeout(res, 5000));
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 获取指定币种当前价格（最近1小时最低价）
+ * 优先级：Gate.io → Binance → 火币 → OKX
+ */
+async function fetch1hLowPrice(coin: string): Promise<{ low: number } | null> {
   const symbol = COIN_SYMBOLS[coin];
   if (!symbol) return null;
 
-  // Gate.io 主用
+  // 1. Gate.io 主用（1h K线）
   try {
     const pair = symbol.replace(/^(BTC|ETH|SOL)(USDT)$/, '$1_$2');
-    const r = await fetch(
-      `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${pair}&interval=4h&limit=2`,
-      { signal: AbortSignal.timeout(10000) }
+    const r = await fetchWithRetry(
+      `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${pair}&interval=1h&limit=2`,
+      12000
     );
-    if (r.ok) {
+    if (r) {
       const data: any[] = await r.json();
       if (Array.isArray(data) && data.length > 0) {
+        // Gate.io K线格式: [时间戳, 成交量, 开盘, 最高, 最低, 收盘, ...]
         const low = Math.min(...data.map((k: any[]) => parseFloat(k[4])));
         if (!isNaN(low) && low > 0) {
-          console.log(`[资方扫描] Gate.io ${coin} 4h最低价: ${low}`);
+          console.log(`[资方扫描] Gate.io ${coin} 1h最低价: ${low}`);
           return { low };
         }
       }
@@ -54,19 +76,40 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number } | null> {
     console.warn(`[资方扫描] Gate.io获取 ${coin} 失败:`, e);
   }
 
-  // 火币备用
+  // 2. Binance 备用（1h K线）
+  try {
+    const r = await fetchWithRetry(
+      `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&limit=2`,
+      12000
+    );
+    if (r) {
+      const data: any[] = await r.json();
+      if (Array.isArray(data) && data.length > 0) {
+        // Binance K线格式: [时间戳, 开盘, 最高, 最低, 收盘, ...]
+        const low = Math.min(...data.map((k: any[]) => parseFloat(k[3])));
+        if (!isNaN(low) && low > 0) {
+          console.log(`[资方扫描] Binance ${coin} 1h最低价: ${low}`);
+          return { low };
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`[资方扫描] Binance获取 ${coin} 失败:`, e);
+  }
+
+  // 3. 火币备用（1h K线）
   try {
     const sym = symbol.toLowerCase();
-    const r = await fetch(
-      `https://api.huobi.pro/market/history/kline?symbol=${sym}&period=4hour&size=2`,
-      { signal: AbortSignal.timeout(8000) }
+    const r = await fetchWithRetry(
+      `https://api.huobi.pro/market/history/kline?symbol=${sym}&period=60min&size=2`,
+      10000
     );
-    if (r.ok) {
+    if (r) {
       const j: any = await r.json();
       if (j.status === 'ok' && j.data?.length > 0) {
         const low = Math.min(...j.data.map((k: any) => parseFloat(k.low)));
         if (!isNaN(low) && low > 0) {
-          console.log(`[资方扫描] 火币 ${coin} 4h最低价: ${low}`);
+          console.log(`[资方扫描] 火币 ${coin} 1h最低价: ${low}`);
           return { low };
         }
       }
@@ -75,19 +118,20 @@ async function fetch4hLowPrice(coin: string): Promise<{ low: number } | null> {
     console.warn(`[资方扫描] 火币获取 ${coin} 失败:`, e);
   }
 
-  // OKX 备用
+  // 4. OKX 备用（1H K线）
   try {
     const instId = symbol.replace(/^(BTC|ETH|SOL)(USDT)$/, '$1-$2');
-    const res = await fetch(
-      `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=4H&limit=2`,
-      { signal: AbortSignal.timeout(8000) }
+    const res = await fetchWithRetry(
+      `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=1H&limit=2`,
+      10000
     );
-    if (res.ok) {
+    if (res) {
       const json: any = await res.json();
       if (json.code === '0' && json.data?.length > 0) {
+        // OKX K线格式: [时间戳, 开盘, 最高, 最低, 收盘, ...]
         const low = Math.min(...json.data.map((k: any[]) => parseFloat(k[3])));
         if (!isNaN(low) && low > 0) {
-          console.log(`[资方扫描] OKX ${coin} 4h最低价: ${low}`);
+          console.log(`[资方扫描] OKX ${coin} 1h最低价: ${low}`);
           return { low };
         }
       }
@@ -152,10 +196,10 @@ export async function runFunderScan(targetOrderId?: number) {
 
   for (const coin of Object.keys(COIN_SYMBOLS)) {
     try {
-      // 1. 获取4小时最低价
-      const priceData = await fetch4hLowPrice(coin);
+      // 1. 获取1小时最低价
+      const priceData = await fetch1hLowPrice(coin);
       if (!priceData) {
-        console.warn(`[资方扫描] ${coin} 价格获取失败，跳过`);
+        console.warn(`[资方扫描] ${coin} 价格获取失败（四个交易所均不可用），跳过`);
         continue;
       }
       const { low } = priceData;
@@ -248,37 +292,31 @@ export function triggerFunderImmediateScan(orderId: number) {
 }
 
 /**
- * 启动定时扫描（对齐北京时间 0/4/8/12/16/20 点整点触发）
+ * 启动定时扫描（每小时整点触发）
  */
 export function startFunderScanner() {
-  function getNextAlignedMs(): number {
+  function getNextHourMs(): number {
     const now = new Date();
-    const bjMs = now.getTime() + 8 * 3600 * 1000;
-    const bjDate = new Date(bjMs);
-    const bjHour = bjDate.getUTCHours();
-    const nextBjHour = (Math.floor(bjHour / 4) + 1) * 4;
-    const nextBjDate = new Date(bjMs);
-    nextBjDate.setUTCHours(nextBjHour % 24, 0, 45, 0); // 整点后45秒触发（与af-tier-scanner错开）
-    if (nextBjHour >= 24) {
-      nextBjDate.setUTCDate(nextBjDate.getUTCDate() + 1);
-      nextBjDate.setUTCHours(0, 0, 45, 0);
+    const nextHour = new Date(now);
+    nextHour.setMinutes(1, 0, 0); // 每小时01分触发，避免整点拥堵
+    if (nextHour <= now) {
+      nextHour.setHours(nextHour.getHours() + 1);
     }
-    const nextUtcMs = nextBjDate.getTime() - 8 * 3600 * 1000;
-    return Math.max(nextUtcMs - now.getTime(), 60 * 1000);
+    return Math.max(nextHour.getTime() - now.getTime(), 60 * 1000);
   }
 
   function scheduleNext() {
-    const delay = getNextAlignedMs();
+    const delay = getNextHourMs();
     const nextTime = new Date(Date.now() + delay);
     const bjNext = new Date(nextTime.getTime() + 8 * 3600 * 1000);
-    console.log(`[资方扫描] 下次扫描计划在北京时间 ${bjNext.getUTCHours().toString().padStart(2, '0')}:00（${Math.round(delay / 60000)}分钟后）`);
+    console.log(`[资方扫描] 下次扫描计划在北京时间 ${bjNext.getUTCHours().toString().padStart(2, '0')}:01（${Math.round(delay / 60000)}分钟后）`);
     setTimeout(async () => {
       await runFunderScan();
       scheduleNext();
     }, delay);
   }
 
-  console.log('[资方扫描] 资金方收益权监控已启动，对齐北京时间 0/4/8/12/16/20 点整点扫描');
+  console.log('[资方扫描] 资金方收益权监控已启动，每小时整点扫描（Gate.io→Binance→火币→OKX，失败自动重试3次）');
   // 启动时立即执行一次，不等整点
   setTimeout(async () => {
     console.log('[资方扫描] 启动即时扫描（初始化）...');
