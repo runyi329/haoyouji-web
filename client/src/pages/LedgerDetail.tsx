@@ -51,10 +51,10 @@ function FunderOrderCard({ order, onClick }: { order: any; onClick: () => void }
         <div className="flex-1 p-4 pr-3">
           {/* 币种名称 + 数量（大字突出） */}
           <div className="flex items-baseline gap-1 mb-1">
-            <span className="text-2xl font-bold tabular-nums" style={{ color: cc }}>
+            <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
               {qty > 0 ? qty : '—'}
             </span>
-            <span className="text-sm font-semibold" style={{ color: cc }}>{coinName}</span>
+            <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
           </div>
           {/* 买入成本 */}
           {price > 0 && (
