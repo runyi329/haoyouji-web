@@ -48,8 +48,10 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { 
       {/* 上半：代结利息 */}
       <div className="flex-1 flex flex-col justify-start">
         <div className="flex items-center justify-between mb-0.5">
-          <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
-          <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
+            <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
+          </div>
         </div>
         <div className="flex items-baseline gap-0.5">
           <span
@@ -1997,9 +1999,9 @@ export default function LedgerDetail() {
       {isCustomAF && isFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
-              <span className="text-xs text-gray-400">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
+              <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
             </div>
             {(!funderAssetOrders || (funderAssetOrders as any[]).length === 0) ? (
               <div className="text-center py-12">
