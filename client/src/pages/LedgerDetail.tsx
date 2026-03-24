@@ -1760,8 +1760,14 @@ export default function LedgerDetail() {
                 {(funderAssetOrders as any[]).map((order: any) => {
                   const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消';
                   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
-                  const coinColor: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
-                  const cc = coinColor[order.coin] || '#6B7280';
+                  const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
+                  const cc = coinColorMap[order.coin] || '#6B7280';
+                  const paymentLabels: Record<string, string> = {
+                    monthly_pre: '月付先付', monthly_post: '月付后付',
+                    semi_pre: '半年付先付', semi_post: '半年付后付',
+                    annual_pre: '年付先付', annual_post: '年付后付',
+                    end_post: '结束后付',
+                  };
                   return (
                     <div
                       key={order.id}
@@ -1772,27 +1778,21 @@ export default function LedgerDetail() {
                       {/* 头部：币种 + 状态 */}
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <span
-                            className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white"
-                            style={{ backgroundColor: cc }}
-                          >
+                          <span className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: cc }}>
                             {order.coin}
                           </span>
-                          <span
-                            className="text-xs px-2 py-0.5 rounded-full"
-                            style={{ backgroundColor: `${statusColor}18`, color: statusColor }}
-                          >
+                          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
                             {statusLabel}
                           </span>
                         </div>
                         <ChevronRight className="w-4 h-4 text-gray-300" />
                       </div>
-                      {/* 投入金额 */}
+                      {/* 总金额 */}
                       <div className="flex items-baseline gap-1 mb-2">
                         <span className="text-2xl font-bold" style={{ color: '#1A2340' }}>
                           {parseFloat(order.amount).toLocaleString()}
                         </span>
-                        <span className="text-xs text-gray-400">USDT 投入</span>
+                        <span className="text-xs text-gray-400">USDT 总价</span>
                       </div>
                       {/* 订单摘要 */}
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -1802,22 +1802,28 @@ export default function LedgerDetail() {
                             <span className="font-medium text-gray-700">{order.buy_price} U</span>
                           </div>
                         )}
-                        {order.buy_date && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-gray-400">日期</span>
-                            <span className="font-medium text-gray-700">{order.buy_date}</span>
-                          </div>
-                        )}
                         {order.buy_quantity && (
                           <div className="flex items-center gap-1">
                             <span className="text-gray-400">数量</span>
                             <span className="font-medium text-gray-700">{order.buy_quantity} {order.coin}</span>
                           </div>
                         )}
-                        {order.storage_account && (
+                        {order.buy_date && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">日期</span>
+                            <span className="font-medium text-gray-700">{order.buy_date}</span>
+                          </div>
+                        )}
+                        {order.interest_rate_annual && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">年化</span>
+                            <span className="font-medium text-gray-700">{order.interest_rate_annual}%</span>
+                          </div>
+                        )}
+                        {order.interest_payment_type && (
                           <div className="flex items-center gap-1 col-span-2">
-                            <span className="text-gray-400">账号</span>
-                            <span className="font-medium text-gray-700 truncate">{order.storage_account}</span>
+                            <span className="text-gray-400">支付</span>
+                            <span className="font-medium text-gray-700">{paymentLabels[order.interest_payment_type] || order.interest_payment_type}</span>
                           </div>
                         )}
                       </div>
@@ -1833,7 +1839,7 @@ export default function LedgerDetail() {
       {/* 资金方订单详情弹窗 */}
       {selectedFunderOrder && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[85vh] overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[90vh] overflow-y-auto">
             {/* 弹窗头部 */}
             <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
               <div className="flex items-center gap-2">
@@ -1855,35 +1861,34 @@ export default function LedgerDetail() {
 
             <div className="px-5 py-5 space-y-4">
               {/* 金额卡片 */}
-              <div
-                className="rounded-2xl p-4"
-                style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
-              >
-                <div className="text-xs text-white/70 mb-1">投入金额</div>
-                <div className="flex items-baseline gap-1">
+              <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
+                <div className="text-xs text-white/70 mb-1">总金额（自动折算）</div>
+                <div className="flex items-baseline gap-1 mb-1">
                   <span className="text-3xl font-bold text-white">
                     {parseFloat(selectedFunderOrder.amount).toLocaleString()}
                   </span>
                   <span className="text-sm text-white/70">USDT</span>
                 </div>
+                {selectedFunderOrder.buy_quantity && selectedFunderOrder.buy_price && (
+                  <div className="text-xs text-white/50">
+                    {selectedFunderOrder.buy_quantity} {selectedFunderOrder.coin} × {selectedFunderOrder.buy_price} USDT
+                  </div>
+                )}
                 <div className="mt-2">
-                  <span
-                    className="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white"
-                  >
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-white/20 text-white">
                     {selectedFunderOrder.status === 'active' ? '持有中' : selectedFunderOrder.status === 'settled' ? '已结算' : '已取消'}
                   </span>
                 </div>
               </div>
 
-              {/* 订单信息列表 */}
+              {/* 基本信息 */}
               <div className="bg-gray-50 rounded-2xl overflow-hidden">
                 {[
                   { label: '币种', value: selectedFunderOrder.coin },
                   { label: '买入价格', value: selectedFunderOrder.buy_price ? `${selectedFunderOrder.buy_price} USDT` : null },
-                  { label: '买入日期', value: selectedFunderOrder.buy_date || null },
                   { label: '买入数量', value: selectedFunderOrder.buy_quantity ? `${selectedFunderOrder.buy_quantity} ${selectedFunderOrder.coin}` : null },
+                  { label: '买入日期', value: selectedFunderOrder.buy_date || null },
                   { label: '存放账号', value: selectedFunderOrder.storage_account || null },
-                  { label: '创建时间', value: selectedFunderOrder.created_at ? new Date(selectedFunderOrder.created_at).toLocaleDateString('zh-CN') : null },
                 ].filter(item => item.value !== null).map((item, idx, arr) => (
                   <div
                     key={item.label}
@@ -1895,6 +1900,43 @@ export default function LedgerDetail() {
                   </div>
                 ))}
               </div>
+
+              {/* 利息约定（有内容才显示） */}
+              {(selectedFunderOrder.interest_rate_annual || selectedFunderOrder.interest_payment_type) && (
+                <div>
+                  <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">利息约定</div>
+                  <div className="bg-gray-50 rounded-2xl overflow-hidden">
+                    {[
+                      { label: '约定年化利息', value: selectedFunderOrder.interest_rate_annual ? `${selectedFunderOrder.interest_rate_annual}%` : null },
+                      { label: '支付方式', value: selectedFunderOrder.interest_payment_type ? ({
+                        monthly_pre: '月付先付', monthly_post: '月付后付',
+                        semi_pre: '半年付先付', semi_post: '半年付后付',
+                        annual_pre: '年付先付', annual_post: '年付后付',
+                        end_post: '结束后付',
+                      } as any)[selectedFunderOrder.interest_payment_type] || selectedFunderOrder.interest_payment_type : null },
+                    ].filter(item => item.value !== null).map((item, idx, arr) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between px-4 py-3"
+                        style={{ borderBottom: idx < arr.length - 1 ? '1px solid #F3F4F6' : 'none' }}
+                      >
+                        <span className="text-sm text-gray-400">{item.label}</span>
+                        <span className="text-sm font-semibold" style={{ color: '#1A56DB' }}>{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 公开备注（资金方可见） */}
+              {selectedFunderOrder.public_note && (
+                <div>
+                  <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">备注</div>
+                  <div className="bg-gray-50 rounded-2xl px-4 py-3">
+                    <p className="text-sm text-gray-700 leading-relaxed">{selectedFunderOrder.public_note}</p>
+                  </div>
+                </div>
+              )}
 
               {/* 订单编号 */}
               <div className="text-center text-xs text-gray-300">

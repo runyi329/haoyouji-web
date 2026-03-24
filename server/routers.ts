@@ -11531,6 +11531,9 @@ export const appRouter = router({
         buyQuantity: z.string().optional(),
         storageAccount: z.string().optional(),
         adminNote: z.string().optional(),
+        publicNote: z.string().optional(),
+        interestRateAnnual: z.string().optional(),
+        interestPaymentType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -11547,8 +11550,8 @@ export const appRouter = router({
         const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
         if (targetRole !== 'funder') throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是资金方角色' });
         await db.execute(
-          sql`INSERT INTO funder_asset_orders (ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, created_by)
-              VALUES (${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${ctx.user.id})`
+          sql`INSERT INTO funder_asset_orders (ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, created_by)
+              VALUES (${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -11566,6 +11569,9 @@ export const appRouter = router({
         storageAccount: z.string().optional(),
         status: z.string().optional(),
         adminNote: z.string().optional(),
+        publicNote: z.string().optional(),
+        interestRateAnnual: z.string().optional(),
+        interestPaymentType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -11586,6 +11592,9 @@ export const appRouter = router({
         if (input.storageAccount !== undefined) { sets.push('storage_account = ?'); vals.push(input.storageAccount || null); }
         if (input.status !== undefined) { sets.push('status = ?'); vals.push(input.status); }
         if (input.adminNote !== undefined) { sets.push('admin_note = ?'); vals.push(input.adminNote || null); }
+        if (input.publicNote !== undefined) { sets.push('public_note = ?'); vals.push(input.publicNote || null); }
+        if (input.interestRateAnnual !== undefined) { sets.push('interest_rate_annual = ?'); vals.push(input.interestRateAnnual || null); }
+        if (input.interestPaymentType !== undefined) { sets.push('interest_payment_type = ?'); vals.push(input.interestPaymentType || null); }
         if (sets.length === 0) return { success: true };
         const setClause = sets.join(', ');
         const rawQuery = `UPDATE funder_asset_orders SET ${setClause} WHERE id = ? AND ledger_id = ?`;
