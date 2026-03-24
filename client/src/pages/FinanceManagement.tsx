@@ -118,6 +118,7 @@ export default function FinanceManagement() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
   // 结息记录相关 state
@@ -150,6 +151,15 @@ export default function FinanceManagement() {
     }
     return '';
   }, [formData.buyPrice, formData.buyQuantity]);
+
+  // 获取账本成员列表（用于选择用户）
+  const { data: membersData } = trpc.ledger.getMembers.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 }
+  );
+  const members = (membersData as any[]) ?? [];
+  // 过滤掉AI分身，只显示真实用户（userId > 0）
+  const realMembers = members.filter((m: any) => m.userId > 0 && m.memberType !== 'ai');
 
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
     { ledgerId },
@@ -200,6 +210,7 @@ export default function FinanceManagement() {
   });
 
   const handleOpenCreate = () => {
+    setSelectedUserId(null);
     setFormData({
       coin: 'BTC',
       buyPrice: '',
@@ -222,6 +233,7 @@ export default function FinanceManagement() {
   };
 
   const handleOpenEdit = (order: any) => {
+    setSelectedUserId(order.user_id ?? null);
     setFormData({
       coin: order.coin as CoinType,
       buyPrice: order.buy_price || '',
@@ -244,6 +256,10 @@ export default function FinanceManagement() {
   };
 
   const handleSubmit = () => {
+    if (!editingOrder && !selectedUserId) {
+      toast.error('请先选择要为哪位用户添加订单');
+      return;
+    }
     if (!computedAmount || parseFloat(computedAmount) <= 0) {
       toast.error('请填写买入价格和买入数量以自动计算总金额');
       return;
@@ -267,7 +283,7 @@ export default function FinanceManagement() {
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
     } else {
-      createMutation.mutate(payload);
+      createMutation.mutate({ ...payload, userId: selectedUserId! });
     }
   };
 
@@ -518,6 +534,58 @@ export default function FinanceManagement() {
             </div>
 
             <div className="px-5 py-4 space-y-5">
+              {/* 选择用户（仅新增时显示） */}
+              {!editingOrder && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    为哪位用户添加 <span className="text-red-400 ml-0.5">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 gap-2">
+                    {realMembers.length === 0 ? (
+                      <div className="text-sm text-gray-400 py-2 text-center">暂无成员</div>
+                    ) : (
+                      realMembers.map((m: any) => {
+                        const displayName = m.nickname || m.username || `用户${m.userId}`;
+                        const roleLabel = m.role === 'owner' ? '管理员' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资方' : '成员';
+                        const isSelected = selectedUserId === m.userId;
+                        return (
+                          <button
+                            key={m.userId}
+                            onClick={() => setSelectedUserId(m.userId)}
+                            className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
+                            style={isSelected
+                              ? { background: 'linear-gradient(135deg, #EEF4FF, #DBEAFE)', border: '1.5px solid #1A56DB' }
+                              : { backgroundColor: '#F9FAFB', border: '1.5px solid #E5E7EB' }
+                            }
+                          >
+                            {m.avatar ? (
+                              <img src={m.avatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                                style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}>
+                                {displayName.slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-800 truncate">{displayName}</div>
+                              <div className="text-xs text-gray-400">{roleLabel}</div>
+                            </div>
+                            {isSelected && (
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                                style={{ backgroundColor: '#1A56DB' }}>
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* 对手方 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">对手方名称</label>
