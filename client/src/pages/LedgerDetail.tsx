@@ -39,7 +39,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc }: { order: any; le
   let lowestAtLabel = '';
   if (lowestAt) {
     const d = new Date(lowestAt);
-    lowestAtLabel = `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    lowestAtLabel = `${d.getMonth()+1}月${d.getDate()}日`;
   } else if (order.buy_date) {
     lowestAtLabel = order.buy_date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_: string, y: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`);
   }
