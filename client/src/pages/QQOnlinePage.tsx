@@ -55,16 +55,38 @@ function sigmaDisplay(level: string, betCount?: number, theoryPct?: number): { l
 }
 
 // ========== AI监控 习惯板块 ==========
+const AI_HABITS_CACHE_KEY = 'qq_ai_habits_cache';
+
 function AIHabitsPanel() {
   const [result, setResult] = React.useState<{ analysis: string; stats: any } | null>(null);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [lastTime, setLastTime] = React.useState<string | null>(null);
 
+  // 初始化时从 localStorage 加载缓存
+  React.useEffect(() => {
+    try {
+      const cached = localStorage.getItem(AI_HABITS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.result) setResult(parsed.result);
+        if (parsed.lastTime) setLastTime(parsed.lastTime);
+      }
+    } catch (e) {
+      // 忽略解析错误
+    }
+  }, []);
+
   const analyzeMutation = trpc.analyzeQQBettingHabits.useMutation({
     onSuccess: (data) => {
+      const now = new Date();
+      const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
       setResult(data);
-      setLastTime(new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }));
+      setLastTime(timeStr);
       setAnalyzing(false);
+      // 写入 localStorage 持久化
+      try {
+        localStorage.setItem(AI_HABITS_CACHE_KEY, JSON.stringify({ result: data, lastTime: timeStr }));
+      } catch (e) {}
     },
     onError: (err) => {
       setAnalyzing(false);
@@ -98,8 +120,8 @@ function AIHabitsPanel() {
             <span className="text-[11px]" style={{ color: LABEL_COLOR }}>AI监控</span>
             <span className="text-[11px] font-bold" style={{ color: GOLD_COLOR }}>客户习惯</span>
             {lastTime && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: LABEL_COLOR, background: 'rgba(255,255,255,0.05)' }}>
-                上次 {lastTime}
+              <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ color: LABEL_COLOR, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                上次分析：{lastTime}
               </span>
             )}
           </div>
