@@ -143,6 +143,7 @@ export default function FunderManagement() {
     interestRateAnnual: '',
     interestPaymentType: '',
     interestBase: '',
+    interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
     interestStartDate: '',
   });
 
@@ -224,6 +225,7 @@ export default function FunderManagement() {
       interestRateAnnual: '',
       interestPaymentType: '',
       interestBase: '',
+      interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
       interestStartDate: '',
     });
     setEditingOrder(null);
@@ -246,6 +248,7 @@ export default function FunderManagement() {
       interestRateAnnual: order.interest_rate_annual || '',
       interestPaymentType: order.interest_payment_type || '',
       interestBase: order.interest_base || '',
+      interestBaseCurrency: (order.interest_base_currency || 'USDT') as 'USDT' | 'CNY',
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
     });
     setEditingOrder(order);
@@ -272,6 +275,7 @@ export default function FunderManagement() {
       interestRateAnnual: formData.interestRateAnnual || undefined,
       interestPaymentType: formData.interestPaymentType || undefined,
       interestBase: formData.interestBase || undefined,
+      interestBaseCurrency: formData.interestBaseCurrency,
       interestStartDate: formData.interestStartDate || undefined,
     };
     if (editingOrder) {
@@ -450,6 +454,16 @@ export default function FunderManagement() {
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">支付方式</span>
                           <span className="font-medium text-gray-700">{getPaymentLabel(order.interest_payment_type)}</span>
+                        </div>
+                      )}
+                      {order.interest_base && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">计息基数</span>
+                          <span className="font-medium text-gray-700">
+                            {order.interest_base_currency === 'CNY'
+                              ? `人民币 ${parseFloat(order.interest_base).toLocaleString()} 元`
+                              : `${parseFloat(order.interest_base).toLocaleString()} USDT`}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -670,18 +684,40 @@ export default function FunderManagement() {
               {/* 计息基数 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
-                  计息基数（USDT）
+                  计息基数
                   <span className="ml-1.5 text-xs text-gray-400 font-normal">利息计算的本金基数</span>
                 </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.interestBase}
-                  onChange={e => setFormData(d => ({ ...d, interestBase: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：120000"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
+                <div className="flex gap-2">
+                  <div className="flex rounded-xl border border-gray-200 overflow-hidden shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, interestBaseCurrency: 'USDT' }))}
+                      className={`px-3 py-3 text-sm font-medium transition-colors ${
+                        formData.interestBaseCurrency === 'USDT'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-500'
+                      }`}
+                    >USDT</button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, interestBaseCurrency: 'CNY' }))}
+                      className={`px-3 py-3 text-sm font-medium transition-colors ${
+                        formData.interestBaseCurrency === 'CNY'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-500'
+                      }`}
+                    >人民币</button>
+                  </div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.interestBase}
+                    onChange={e => setFormData(d => ({ ...d, interestBase: e.target.value }))}
+                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder={formData.interestBaseCurrency === 'CNY' ? '如：800000' : '如：120000'}
+                    style={{ display: 'block', boxSizing: 'border-box' }}
+                  />
+                </div>
               </div>
 
               {/* 计息开始日期 */}
