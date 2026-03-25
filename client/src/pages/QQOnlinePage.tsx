@@ -808,20 +808,19 @@ export default function QQOnlinePage() {
   const deposit = '20万元';
 
   const { data: tradeStats } = trpc.getQQTradeStats.useQuery(undefined, {
-    enabled: currentUserId === JIANG_ID || currentUserId === YJH_ID,
     refetchInterval: 60 * 1000,
   });
 
   const { data: settlementData } = trpc.getInterestSettlements.useQuery(
     { ledgerId: LEDGER_ID },
-    { enabled: currentUserId === JIANG_ID, refetchInterval: 5 * 60 * 1000 }
+    { refetchInterval: 5 * 60 * 1000 }
   );
-  const settledTotal = currentUserId === JIANG_ID ? (settlementData?.total || 0) : 0;
+  const settledTotal = settlementData?.total || 0;
 
   // 盈利结算数据
   const { data: profitData } = trpc.getProfitSettlements.useQuery(
     { ledgerId: LEDGER_ID },
-    { enabled: currentUserId === JIANG_ID || currentUserId === YJH_ID, refetchInterval: 5 * 60 * 1000 }
+    { refetchInterval: 5 * 60 * 1000 }
   );
   const profitTotal = profitData?.total || 0;
   const profitSettled = profitData?.settled || 0;
