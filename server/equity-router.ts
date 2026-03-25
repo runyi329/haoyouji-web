@@ -219,4 +219,84 @@ export const equityRouter = router({
     .query(async ({ ctx }) => {
       return await dbEquity.getUserWeeklyReports(ctx.user.id);
     }),
+
+  // ===== 账本股权管理（59号账本蓄水池股东专用）=====
+
+  // 获取账本内所有股权记录（按成员分组）
+  getLedgerShares: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [rows] = await (conn as any).execute(
+        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.grantDate, es.reason, es.createdAt
+         FROM equity_shares es
+         WHERE es.ledgerId=?
+         ORDER BY es.userId, es.grantDate DESC, es.id DESC`,
+        [input.ledgerId]
+      );
+      return rows as any[];
+    }),
+
+  // 获取账本内某成员的股权记录
+  getMemberShares: protectedProcedure
+    .input(z.object({ ledgerId: z.number(), userId: z.number() }))
+    .query(async ({ input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [rows] = await (conn as any).execute(
+        `SELECT id, userId, memberNickname, shareCount, grantDate, reason, createdAt
+         FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
+        [input.ledgerId, input.userId]
+      );
+      return rows as any[];
+    }),
+
+  // 添加股权记录（仅owner/admin可操作）
+  addLedgerShare: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      userId: z.number(),
+      memberNickname: z.string(),
+      shareCount: z.number().positive(),
+      grantDate: z.string(), // YYYY-MM-DD
+      reason: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 验证操作者是账本owner或admin
+      const [members] = await (conn as any).execute(
+        `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+        [input.ledgerId, ctx.user.id]
+      );
+      const member = (members as any[])[0];
+      if (!member || !['owner','admin'].includes(member.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
+      }
+      const [result] = await (conn as any).execute(
+        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, grantDate, reason, createdBy)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.grantDate, input.reason, ctx.user.id]
+      );
+      return { id: (result as any).insertId };
+    }),
+
+  // 删除股权记录（仅owner/admin可操作）
+  deleteLedgerShare: protectedProcedure
+    .input(z.object({ id: z.number(), ledgerId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [members] = await (conn as any).execute(
+        `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+        [input.ledgerId, ctx.user.id]
+      );
+      const member = (members as any[])[0];
+      if (!member || !['owner','admin'].includes(member.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
+      }
+      await (conn as any).execute(`DELETE FROM equity_shares WHERE id=? AND ledgerId=?`, [input.id, input.ledgerId]);
+      return { success: true };
+    }),
 });

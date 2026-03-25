@@ -545,6 +545,14 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/ag-data-sources`)}
  />
  )}
+ {/* AI 型股权管理入口：59号账本且是owner/admin显示 */}
+ {ledgerId === 59 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="股权管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/equity-manage`)}
+ />
+ )}
  {/* / */}
  {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
