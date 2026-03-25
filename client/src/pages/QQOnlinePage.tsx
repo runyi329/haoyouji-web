@@ -1067,7 +1067,7 @@ export default function QQOnlinePage() {
               </div>
 
               {/* 第四行：派彩 */}
-              <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
+              <div className="rounded-xl px-3 py-2 mb-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
                 <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>派彩</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0' }}>
                   <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '8px' }}>
