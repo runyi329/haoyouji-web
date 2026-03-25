@@ -31,6 +31,12 @@ export default function LedgerEquityManage() {
   // 获取所有股权记录
   const { data: shares, refetch: refetchShares } = trpc.equity.getLedgerShares.useQuery({ ledgerId });
 
+  // 生成6位股权登记编号（大写字母+数字混合）
+  const genRegNo = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  };
+
   // 添加股权弹窗状态
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -40,6 +46,7 @@ export default function LedgerEquityManage() {
     shareType: "资金股",
     grantDate: new Date().toISOString().slice(0, 10),
     reason: "",
+    regNo: genRegNo(),
   });
 
   // 删除确认
@@ -51,7 +58,7 @@ export default function LedgerEquityManage() {
     onSuccess: () => {
       toast.success("股权记录已添加");
       setShowAddDialog(false);
-      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "资金股", grantDate: new Date().toISOString().slice(0, 10), reason: "" });
+      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "资金股", grantDate: new Date().toISOString().slice(0, 10), reason: "", regNo: genRegNo() });
       refetchShares();
     },
     onError: (e) => toast.error(e.message || "添加失败"),
@@ -80,6 +87,7 @@ export default function LedgerEquityManage() {
       shareType: addForm.shareType || '资金股',
       grantDate: addForm.grantDate,
       reason: addForm.reason.trim(),
+      regNo: addForm.regNo.trim() || undefined,
     });
   };
 
@@ -152,6 +160,7 @@ export default function LedgerEquityManage() {
                         )}
                         <span className="text-xs text-gray-400">{formatDate(record.grantDate)}</span>
                       </div>
+                      {record.regNo && <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace', letterSpacing: '1px', marginTop: '2px' }}>登记编号: {record.regNo}</div>}
                       {record.reason && <div className="text-xs text-gray-500 leading-relaxed">{record.reason}</div>}
                     </div>
                     <button
@@ -227,6 +236,25 @@ export default function LedgerEquityManage() {
                   onChange={(e) => setAddForm(f => ({ ...f, grantDate: e.target.value }))}
                   style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none', WebkitAppearance: 'none', appearance: 'none' }}
                 />
+              </div>
+              {/* 股权登记编号 */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>股权登记编号</div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    placeholder="自动生成"
+                    value={addForm.regNo}
+                    onChange={(e) => setAddForm(f => ({ ...f, regNo: e.target.value.toUpperCase() }))}
+                    style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '15px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none', fontFamily: 'monospace', letterSpacing: '3px', fontWeight: 600 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setAddForm(f => ({ ...f, regNo: genRegNo() }))}
+                    style={{ padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '12px', background: '#f3f4f6', color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+                  >换一个</button>
+                </div>
               </div>
               {/* 备注 */}
               <div>
