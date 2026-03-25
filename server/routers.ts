@@ -14719,7 +14719,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const data = await response.json();
         const analysis = data.choices?.[0]?.message?.content || '分析失败';
 
-        return {
+        const resultObj = {
           analysis,
           stats: {
             totalBets,
@@ -14731,10 +14731,55 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             lastBet
           }
         };
+
+        // 8. 将分析结果写入数据库全局缓存（所有用户共享最新一次分析结果）
+        try {
+          const resultJson = JSON.stringify(resultObj);
+          const now = new Date();
+          await (conn as any).execute(
+            `INSERT INTO qq_ai_analysis_cache (cache_key, result, analyzed_by, analyzed_at)
+             VALUES ('habits', ?, ?, ?)
+             ON DUPLICATE KEY UPDATE result = VALUES(result), analyzed_by = VALUES(analyzed_by), analyzed_at = VALUES(analyzed_at)`,
+            [resultJson, (ctx.user as any).id, now]
+          );
+        } catch (cacheErr) {
+          console.error('[analyzeQQBettingHabits] 写入缓存失败:', cacheErr);
+          // 缓存写入失败不影响返回结果
+        }
+
+        return resultObj;
       } catch (err) {
         if (err instanceof TRPCError) throw err;
         console.error('[analyzeQQBettingHabits] 失败:', err);
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI分析失败' });
+      }
+    }),
+
+  // ========== 获取QQ AI分析全局缓存 ==========
+  getQQAICache: protectedProcedure
+    .query(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return null;
+        const [rows] = await (conn as any).execute(
+          `SELECT result, analyzed_by, analyzed_at FROM qq_ai_analysis_cache WHERE cache_key = 'habits' LIMIT 1`
+        );
+        const row = (rows as any[])[0];
+        if (!row) return null;
+        const parsed = JSON.parse(row.result);
+        const analyzedAt = row.analyzed_at;
+        const dt = new Date(analyzedAt);
+        const timeStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+        return { ...parsed, lastTime: timeStr, analyzedBy: row.analyzed_by };
+      } catch (err) {
+        console.error('[getQQAICache] 失败:', err);
+        return null;
       }
     }),
 
