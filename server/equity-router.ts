@@ -229,7 +229,7 @@ export const equityRouter = router({
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       const [rows] = await (conn as any).execute(
-        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.grantDate, es.reason, es.createdAt
+        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.createdAt
          FROM equity_shares es
          WHERE es.ledgerId=?
          ORDER BY es.userId, es.grantDate DESC, es.id DESC`,
@@ -245,7 +245,7 @@ export const equityRouter = router({
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       const [rows] = await (conn as any).execute(
-        `SELECT id, userId, memberNickname, shareCount, grantDate, reason, createdAt
+        `SELECT id, userId, memberNickname, shareCount, shareType, grantDate, reason, createdAt
          FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
         [input.ledgerId, input.userId]
       );
@@ -259,6 +259,7 @@ export const equityRouter = router({
       userId: z.number(),
       memberNickname: z.string(),
       shareCount: z.number().positive(),
+      shareType: z.string().default('资金股'),
       grantDate: z.string(), // YYYY-MM-DD
       reason: z.string(),
     }))
@@ -275,9 +276,9 @@ export const equityRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
       }
       const [result] = await (conn as any).execute(
-        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, grantDate, reason, createdBy)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.grantDate, input.reason, ctx.user.id]
+        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, ctx.user.id]
       );
       return { id: (result as any).insertId };
     }),
