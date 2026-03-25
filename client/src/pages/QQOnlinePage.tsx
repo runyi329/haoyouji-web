@@ -1085,21 +1085,26 @@ export default function QQOnlinePage() {
                 </div>
               </div>
 
-              {/* 第五行：订单投入总额 */}
+              {/* 第五行：总流水 / 期望损益 / 实际净盈亏 */}
               <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>订单投入总额 (x100)</div>
+                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>总流水与期望损益</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0' }}>
                   <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>总投入</div>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>总流水</div>
                     <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.sumAmount)}</div>
+                    <div className="text-[9px]" style={{ color: LABEL_COLOR, opacity: 0.6 }}>元</div>
                   </div>
                   <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>总派彩</div>
-                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.sumPayout)}</div>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>期望损益</div>
+                    <div className="text-[11px] font-bold font-mono" style={{ color: ((tradeStats as any)?.expectedLossAmount ?? 0) >= 0 ? GOLD_COLOR : '#f87171' }}>
+                      {((tradeStats as any)?.expectedLossAmount ?? 0) >= 0 ? '+' : ''}{fmt((tradeStats as any)?.expectedLossAmount)}
+                    </div>
+                    <div className="text-[9px]" style={{ color: LABEL_COLOR, opacity: 0.6 }}>赔率加权</div>
                   </div>
                   <div style={{ paddingLeft: '8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>净盈亏</div>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>实际净盈亏</div>
                     <div className="text-[11px] font-bold font-mono" style={{ color: ((tradeStats as any)?.netProfit ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>{((tradeStats as any)?.netProfit ?? 0) >= 0 ? '+' : ''}{fmt((tradeStats as any)?.netProfit)}</div>
+                    <div className="text-[9px]" style={{ color: LABEL_COLOR, opacity: 0.6 }}>元</div>
                   </div>
                 </div>
               </div>

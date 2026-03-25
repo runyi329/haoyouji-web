@@ -13861,7 +13861,7 @@ insights 数组每项包含：
       try {
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
-        if (!conn) return { total: 0, won: 0, lost: 0, maxAmount: null, minAmount: null, avgAmount: null, maxPayout: null, minPayout: null, avgPayout: null, expectedWon: 0, expectedLost: 0, deviation: 0 };
+        if (!conn) return { total: 0, won: 0, lost: 0, maxAmount: null, minAmount: null, avgAmount: null, maxPayout: null, minPayout: null, avgPayout: null, expectedWon: 0, expectedLost: 0, deviation: 0, sumAmount: 0, sumPayout: 0, netProfit: 0, expectedLossAmount: 0 };
         const [rows] = await (conn as any).execute(
           `SELECT
              COUNT(*) as total,
@@ -13886,12 +13886,23 @@ insights 数组每项包含：
         // --- 加权期望计算：逐笔根据号码组合计算理论中奖概率 ---
         const COMBO_MAP_S: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
         const [contentRows] = await (conn as any).execute(
-          `SELECT content FROM qq_trade_records WHERE content IS NOT NULL AND content != '' AND amount IS NOT NULL AND amount != ''`
+          `SELECT content, amount FROM qq_trade_records WHERE content IS NOT NULL AND content != '' AND amount IS NOT NULL AND amount != ''`
         );
+        // 获取赔率表
+        const [oddsRows] = await (conn as any).execute(
+          `SELECT content, odds FROM qq_bet_odds WHERE odds IS NOT NULL`
+        );
+        const oddsMap: Record<string, number> = {};
+        for (const or_ of (oddsRows as any[])) {
+          oddsMap[String(or_.content || '').trim()] = Number(or_.odds);
+        }
         let sumTheoryProb = 0;
         let validCount = 0;
+        let sumExpectedPayout = 0; // 期望总派彩（基于赔率表）
+        let oddsMatchCount = 0; // 有赔率匹配的笔数
         for (const r of (contentRows as any[])) {
           const c = String(r.content || '');
+          const betAmount = Number(r.amount || 0) * 100; // 实际投注额
           const digits = new Set<number>();
           for (const ch of c) {
             const n = parseInt(ch);
@@ -13900,8 +13911,17 @@ insights 数组每项包含：
           if (digits.size > 0) {
             let combos = 0;
             digits.forEach(d => { combos += (COMBO_MAP_S[d] || 0); });
-            sumTheoryProb += combos / 100;
+            const theoryProb = combos / 100;
+            sumTheoryProb += theoryProb;
             validCount++;
+            // 查找该内容对应的赔率（含本金）
+            const contentKey = c.trim();
+            const odds = oddsMap[contentKey];
+            if (odds && betAmount > 0) {
+              // 期望派彩 = 投注额 × 中奖概率 × 赔率
+              sumExpectedPayout += betAmount * theoryProb * odds;
+              oddsMatchCount++;
+            }
           }
         }
         const expectedWon = Math.round(sumTheoryProb * 10) / 10;
@@ -13911,6 +13931,8 @@ insights 数组每项包含：
         const sumAmount = row.sum_amount != null ? Number(row.sum_amount) * 100 : 0;
         const sumPayout = row.sum_payout != null ? Number(row.sum_payout) * 100 : 0;
         const netProfit = sumPayout - sumAmount;
+        // 期望损失 = 期望总派彩 - 总流水（负值表示理论上应亏损，正值表示理论上应盈利）
+        const expectedLossAmount = oddsMatchCount > 0 ? Math.round((sumExpectedPayout - sumAmount) * 100) / 100 : 0;
 
         return {
           total: totalVal,
@@ -13928,6 +13950,7 @@ insights 数组每项包含：
           expectedWon,
           expectedLost,
           deviation,
+          expectedLossAmount,
         };
       } catch (err) {
         console.error('[QQ交易] 统计失败:', err);
