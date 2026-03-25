@@ -164,77 +164,80 @@ export default function LedgerEquityManage() {
         )}
       </div>
 
-      {/* 添加股权弹窗 */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="mx-4 rounded-2xl" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100% - 32px)', maxWidth: '420px' }}>
-          <DialogTitle className="text-base font-semibold text-gray-900 mb-4">添加股权记录</DialogTitle>
-          <div className="space-y-3">
-            {/* 选择成员 */}
-            <div>
-              <div className="text-xs text-gray-500 mb-1">选择成员</div>
-              <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-800"
-                value={addForm.userId}
-                onChange={(e) => {
-                  const uid = Number(e.target.value);
-                  const m = (members || []).find((mb: any) => mb.userId === uid);
-                  setAddForm(f => ({ ...f, userId: uid, memberNickname: m?.nickname || m?.username || "" }));
-                }}
-              >
-                <option value={0}>请选择成员</option>
-                {(members || []).map((m: any) => (
-                  <option key={m.userId} value={m.userId}>
-                    {m.nickname || m.username}
-                  </option>
-                ))}
-              </select>
+      {/* 添加股权弹窗 - 自定义全屏遗罩层，手机端完全居中 */}
+      {showAddDialog && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: '16px' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAddDialog(false); }}
+        >
+          <div style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '400px', padding: '20px', boxSizing: 'border-box' }}>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: '#111', marginBottom: '16px' }}>添加股权记录</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* 选择成员 */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>选择成员</div>
+                <select
+                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box' }}
+                  value={addForm.userId}
+                  onChange={(e) => {
+                    const uid = Number(e.target.value);
+                    const m = (members || []).find((mb: any) => mb.userId === uid);
+                    setAddForm(f => ({ ...f, userId: uid, memberNickname: m?.nickname || m?.username || "" }));
+                  }}
+                >
+                  <option value={0}>请选择成员</option>
+                  {(members || []).map((m: any) => (
+                    <option key={m.userId} value={m.userId}>{m.nickname || m.username}</option>
+                  ))}
+                </select>
+              </div>
+              {/* 股票张数 */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>股票张数</div>
+                <input
+                  type="number"
+                  placeholder="请输入张数（如 100）"
+                  value={addForm.shareCount}
+                  onChange={(e) => setAddForm(f => ({ ...f, shareCount: e.target.value }))}
+                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none' }}
+                />
+              </div>
+              {/* 获得日期 */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>获得日期</div>
+                <input
+                  type="date"
+                  value={addForm.grantDate}
+                  onChange={(e) => setAddForm(f => ({ ...f, grantDate: e.target.value }))}
+                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none', WebkitAppearance: 'none', appearance: 'none' }}
+                />
+              </div>
+              {/* 获得原因 */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>获得原因</div>
+                <textarea
+                  rows={3}
+                  placeholder="请填写获得股权的原因（如：初始投资入股、业绩奖励等）"
+                  value={addForm.reason}
+                  onChange={(e) => setAddForm(f => ({ ...f, reason: e.target.value }))}
+                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', resize: 'none', outline: 'none' }}
+                />
+              </div>
             </div>
-            {/* 股票张数 */}
-            <div>
-              <div className="text-xs text-gray-500 mb-1">股票张数</div>
-              <Input
-                type="number"
-                placeholder="请输入张数（如 100）"
-                value={addForm.shareCount}
-                onChange={(e) => setAddForm(f => ({ ...f, shareCount: e.target.value }))}
-                className="text-sm"
-              />
-            </div>
-            {/* 获得日期 */}
-            <div>
-              <div className="text-xs text-gray-500 mb-1">获得日期</div>
-              <input
-                type="date"
-                value={addForm.grantDate}
-                onChange={(e) => setAddForm(f => ({ ...f, grantDate: e.target.value }))}
-                style={{ WebkitAppearance: 'none', appearance: 'none', width: '100%', boxSizing: 'border-box' }}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-800 outline-none focus:border-blue-400"
-              />
-            </div>
-            {/* 获得原因 */}
-            <div>
-              <div className="text-xs text-gray-500 mb-1">获得原因</div>
-              <textarea
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none bg-white text-gray-800"
-                rows={3}
-                placeholder="请填写获得股权的原因（如：初始投资入股、业绩奖励等）"
-                value={addForm.reason}
-                onChange={(e) => setAddForm(f => ({ ...f, reason: e.target.value }))}
-              />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <button
+                onClick={() => setShowAddDialog(false)}
+                style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#fff', color: '#374151', cursor: 'pointer' }}
+              >取消</button>
+              <button
+                onClick={handleAdd}
+                disabled={addMutation.isPending}
+                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#D32F2F', color: '#fff', cursor: 'pointer', opacity: addMutation.isPending ? 0.7 : 1 }}
+              >{addMutation.isPending ? "添加中..." : "确认添加"}</button>
             </div>
           </div>
-          <div className="flex gap-2 mt-4">
-            <Button variant="outline" className="flex-1" onClick={() => setShowAddDialog(false)}>取消</Button>
-            <Button
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={handleAdd}
-              disabled={addMutation.isPending}
-            >
-              {addMutation.isPending ? "添加中..." : "确认添加"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       {/* 删除确认弹窗 */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
