@@ -14438,7 +14438,7 @@ insights 数组每项包含：
           const theoryPct = combos / 100;
           // win_status可能是文字"已中奖"/"未中奖"或数字
           const wsStr = String(row.win_status || '').trim();
-          const isWin = (wsStr === '已中奖' || wsStr === '1' || wsStr === 'true' || Number(wsStr) > 0) ? 1 : 0;
+          const isWin = (wsStr === '已中奖' || wsStr === '1' || wsStr === 'true' || (wsStr !== '未中奖' && wsStr !== '0' && wsStr !== '' && !isNaN(Number(wsStr)) && Number(wsStr) > 0)) ? 1 : 0;
           // win_amount也需要乘100转换为元
           const rawWinAmt = row.win_amount ? Number(row.win_amount) : 0;
           const winAmount = Math.round(rawWinAmt * 100);
