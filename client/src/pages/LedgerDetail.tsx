@@ -1363,9 +1363,9 @@ export default function LedgerDetail() {
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(184,150,12,0.12)', border: '1px solid rgba(184,150,12,0.3)' }}>
-                <div className="text-xs mb-1" style={{ color: '#B8960C' }}>股东人数</div>
-                <div className="text-lg font-bold" style={{ color: '#D4AF37' }}>--</div>
-                <div className="text-[10px] mt-1" style={{ color: 'rgba(212,175,55,0.5)' }}>待录入</div>
+                <div className="text-xs mb-1" style={{ color: '#B8960C' }}>股东编号</div>
+                <div className="text-lg font-bold tracking-widest" style={{ color: '#D4AF37' }}>{myShares && myShares.length > 0 && (myShares[0] as any).shareNo ? (myShares[0] as any).shareNo : '-'}</div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(212,175,55,0.5)' }}>登记序号</div>
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(184,150,12,0.12)', border: '1px solid rgba(184,150,12,0.3)' }}>
                 <div className="text-xs mb-1" style={{ color: '#B8960C' }}>总股本</div>
@@ -2660,7 +2660,15 @@ export default function LedgerDetail() {
             <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1C1C1C 100%)', border: '1px solid #B8960C' }}>
               {/* 汇总头部 */}
               <div className="px-4 pt-4 pb-3">
-                <div className="text-xs mb-1" style={{ color: '#B8960C' }}>累计股权</div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-xs" style={{ color: '#B8960C' }}>累计股权</div>
+                  {myShares[0]?.shareNo && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px]" style={{ color: 'rgba(184,150,12,0.6)' }}>股东编号</span>
+                      <span className="text-sm font-bold tracking-widest" style={{ color: '#D4AF37' }}>{myShares[0].shareNo}</span>
+                    </div>
+                  )}
+                </div>
                 <div className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
                   {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()} 张
                 </div>
