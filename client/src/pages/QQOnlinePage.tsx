@@ -808,7 +808,7 @@ export default function QQOnlinePage() {
   const deposit = '20万元';
 
   const { data: tradeStats } = trpc.getQQTradeStats.useQuery(undefined, {
-    enabled: currentUserId === JIANG_ID,
+    enabled: currentUserId === JIANG_ID || currentUserId === YJH_ID,
     refetchInterval: 60 * 1000,
   });
 
@@ -1001,7 +1001,7 @@ export default function QQOnlinePage() {
           )}
 
           {/* 卡片5：投注统计（横跨两列，仅jiang可见） */}
-          {currentUserId === JIANG_ID && (
+          {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && (
             <div className="col-span-2 rounded-2xl px-4 py-3" style={cardStyle}>
               <div className="text-[11px] mb-3" style={{ color: LABEL_COLOR }}>投注统计</div>
               <div style={{ display: 'flex', width: '100%' }}>
