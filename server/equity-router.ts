@@ -228,8 +228,10 @@ export const equityRouter = router({
     .query(async ({ input }) => {
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 确保regNo字段存在（兼容旧表）
+      try { await (conn as any).execute(`ALTER TABLE equity_shares ADD COLUMN IF NOT EXISTS regNo VARCHAR(10) DEFAULT NULL`); } catch(e) {}
       const [rows] = await (conn as any).execute(
-        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.createdAt
+        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt
          FROM equity_shares es
          WHERE es.ledgerId=?
          ORDER BY es.userId, es.grantDate DESC, es.id DESC`,
@@ -245,7 +247,7 @@ export const equityRouter = router({
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       const [rows] = await (conn as any).execute(
-        `SELECT id, userId, memberNickname, shareCount, shareType, grantDate, reason, createdAt
+        `SELECT id, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdAt
          FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
         [input.ledgerId, input.userId]
       );
@@ -262,6 +264,7 @@ export const equityRouter = router({
       shareType: z.string().default('资金股'),
       grantDate: z.string(), // YYYY-MM-DD
       reason: z.string(),
+      regNo: z.string().optional(), // 股权登记编号，可选，不填则自动生成
     }))
     .mutation(async ({ ctx, input }) => {
       const conn = await (await import('./db')).getDbConnection();
@@ -275,12 +278,18 @@ export const equityRouter = router({
       if (!member || !['owner','admin'].includes(member.role)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
       }
+      // 生成6位股权登记编号（数字+字母混合），如未提供则自动生成
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const autoRegNo = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      const finalRegNo = input.regNo?.trim() || autoRegNo;
+      // 确保regNo字段存在
+      try { await (conn as any).execute(`ALTER TABLE equity_shares ADD COLUMN IF NOT EXISTS regNo VARCHAR(10) DEFAULT NULL`); } catch(e) {}
       const [result] = await (conn as any).execute(
-        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, ctx.user.id]
+        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, finalRegNo, ctx.user.id]
       );
-      return { id: (result as any).insertId };
+      return { id: (result as any).insertId, regNo: finalRegNo };
     }),
 
   // 删除股权记录（仅owner/admin可操作）
