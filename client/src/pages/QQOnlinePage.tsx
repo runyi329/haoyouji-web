@@ -999,7 +999,7 @@ export default function QQOnlinePage() {
               <div style={{ display: 'flex', width: '100%' }}>
 
                 {/* 左列：次数 */}
-                <div style={{ flex: '1 1 0', minWidth: 0, paddingRight: '8px', borderRight: '1px solid rgba(255,255,255,0.06)' }} className="flex flex-col gap-2.5">
+                <div style={{ flex: '1 1 0', minWidth: 0, paddingRight: '8px', borderRight: '1px solid rgba(255,255,255,0.06)' }} className="flex flex-col gap-2">
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>中奖次数</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px' }}>
@@ -1008,10 +1008,30 @@ export default function QQOnlinePage() {
                     </div>
                   </div>
                   <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>加权期望中奖</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px' }}>
+                      <span className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{tradeStats?.expectedWon ?? '-'}</span>
+                      <span className="text-[10px] ml-1" style={{ color: '#FFFFFF', opacity: 0.6 }}>{tradeStats?.expectedWon ? pct(tradeStats.expectedWon, tradeStats?.total ?? 0) : ''}</span>
+                    </div>
+                  </div>
+                  <div>
                     <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>未中奖次数</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px' }}>
                       <span className="text-sm font-bold font-mono" style={{ color: RED_COLOR }}>{tradeStats?.lost ?? 0}</span>
                       <span className="text-[10px] ml-1" style={{ color: '#FFFFFF', opacity: 0.6 }}>{pct(tradeStats?.lost ?? 0, tradeStats?.total ?? 0)}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>加权期望未中奖</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px' }}>
+                      <span className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{tradeStats?.expectedLost ?? '-'}</span>
+                      <span className="text-[10px] ml-1" style={{ color: '#FFFFFF', opacity: 0.6 }}>{tradeStats?.expectedLost ? pct(tradeStats.expectedLost, tradeStats?.total ?? 0) : ''}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: LABEL_COLOR }}>偏离度(加权)</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'baseline', gap: '2px' }}>
+                      <span className="text-sm font-bold font-mono" style={{ color: (tradeStats?.deviation ?? 0) >= 0 ? GREEN_COLOR : RED_COLOR }}>{(tradeStats?.deviation ?? 0) >= 0 ? '+' : ''}{tradeStats?.deviation ?? 0}%</span>
                     </div>
                   </div>
                   <div>
