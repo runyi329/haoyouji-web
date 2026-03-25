@@ -231,10 +231,12 @@ export const equityRouter = router({
       // 确保regNo字段存在（兼容旧表）
       try { await (conn as any).execute(`ALTER TABLE equity_shares ADD COLUMN IF NOT EXISTS regNo VARCHAR(10) DEFAULT NULL`); } catch(e) {}
       const [rows] = await (conn as any).execute(
-        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt
+        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
+                sn.shareNo
          FROM equity_shares es
+         LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
          WHERE es.ledgerId=?
-         ORDER BY es.userId, es.grantDate DESC, es.id DESC`,
+         ORDER BY COALESCE(sn.shareNo, '9999'), es.userId, es.grantDate DESC, es.id DESC`,
         [input.ledgerId]
       );
       return rows as any[];
@@ -247,8 +249,11 @@ export const equityRouter = router({
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       const [rows] = await (conn as any).execute(
-        `SELECT id, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdAt
-         FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
+        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
+                sn.shareNo
+         FROM equity_shares es
+         LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
+         WHERE es.ledgerId=? AND es.userId=? ORDER BY es.grantDate DESC, es.id DESC`,
         [input.ledgerId, input.userId]
       );
       return rows as any[];
