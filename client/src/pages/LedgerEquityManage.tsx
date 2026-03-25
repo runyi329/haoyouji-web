@@ -237,24 +237,10 @@ export default function LedgerEquityManage() {
                   style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none', WebkitAppearance: 'none', appearance: 'none' }}
                 />
               </div>
-              {/* 股权登记编号 */}
+              {/* 股权登记编号（自动生成，只读） */}
               <div>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>股权登记编号</div>
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    maxLength={10}
-                    placeholder="自动生成"
-                    value={addForm.regNo}
-                    onChange={(e) => setAddForm(f => ({ ...f, regNo: e.target.value.toUpperCase() }))}
-                    style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '15px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none', fontFamily: 'monospace', letterSpacing: '3px', fontWeight: 600 }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setAddForm(f => ({ ...f, regNo: genRegNo() }))}
-                    style={{ padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: '8px', fontSize: '12px', background: '#f3f4f6', color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
-                  >换一个</button>
-                </div>
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '15px', background: '#f9fafb', color: '#374151', fontFamily: 'monospace', letterSpacing: '3px', fontWeight: 600 }}>{addForm.regNo}</div>
               </div>
               {/* 备注 */}
               <div>
