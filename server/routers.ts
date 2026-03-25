@@ -13865,14 +13865,14 @@ insights 数组每项包含：
         const [rows] = await (conn as any).execute(
           `SELECT
              COUNT(*) as total,
-             SUM(CASE WHEN win_status > 0 THEN 1 ELSE 0 END) as won,
-             SUM(CASE WHEN win_status = 0 OR win_status IS NULL THEN 1 ELSE 0 END) as lost,
+             SUM(CASE WHEN win_status = '已中奖' OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0) THEN 1 ELSE 0 END) as won,
+             SUM(CASE WHEN win_status IN ('未中奖','0','') OR win_status IS NULL THEN 1 ELSE 0 END) as lost,
              MAX(CAST(amount AS DECIMAL(20,4))) as max_amount,
              MIN(CAST(amount AS DECIMAL(20,4))) as min_amount,
              AVG(CAST(amount AS DECIMAL(20,4))) as avg_amount,
-             MAX(CASE WHEN win_status > 0 THEN CAST(win_status AS DECIMAL(20,4)) ELSE NULL END) as max_payout,
-             MIN(CASE WHEN win_status > 0 THEN CAST(win_status AS DECIMAL(20,4)) ELSE NULL END) as min_payout,
-             AVG(CASE WHEN win_status > 0 THEN CAST(win_status AS DECIMAL(20,4)) ELSE NULL END) as avg_payout
+             MAX(CAST(win_amount AS DECIMAL(20,4))) as max_payout,
+             MIN(CASE WHEN CAST(win_amount AS DECIMAL(20,4)) > 0 THEN CAST(win_amount AS DECIMAL(20,4)) ELSE NULL END) as min_payout,
+             AVG(CASE WHEN CAST(win_amount AS DECIMAL(20,4)) > 0 THEN CAST(win_amount AS DECIMAL(20,4)) ELSE NULL END) as avg_payout
            FROM qq_trade_records
            WHERE amount IS NOT NULL AND amount != ''`
         );
@@ -14307,7 +14307,7 @@ insights 数组每项包含：
           `SELECT
              content,
              COUNT(*) as bet_count,
-             SUM(CASE WHEN win_status > 0 THEN 1 ELSE 0 END) as win_count
+             SUM(CASE WHEN win_status = '已中奖' OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0) THEN 1 ELSE 0 END) as win_count
            FROM qq_trade_records
            WHERE content IS NOT NULL AND content != ''
            GROUP BY content
@@ -14583,8 +14583,8 @@ insights 数组每项包含：
         const [contentStats] = await (conn as any).execute(
           `SELECT content,
                   COUNT(*) as total,
-                  SUM(CASE WHEN win_status='中奖' THEN 1 ELSE 0 END) as wins,
-                  ROUND(SUM(CASE WHEN win_status='中奖' THEN 1 ELSE 0 END)*100.0/COUNT(*),1) as win_rate,
+                  SUM(CASE WHEN win_status = '已中奖' OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0) THEN 1 ELSE 0 END) as wins,
+                  ROUND(SUM(CASE WHEN win_status = '已中奖' OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0) THEN 1 ELSE 0 END)*100.0/COUNT(*),1) as win_rate,
                   SUM(amount) as total_bet,
                   SUM(COALESCE(win_amount,0)) - SUM(amount) as net_profit
            FROM qq_trade_records
@@ -14617,7 +14617,7 @@ insights 数组每项包含：
         // 5. 整体统计
         const [overall] = await (conn as any).execute(
           `SELECT COUNT(*) as total_bets,
-                  SUM(CASE WHEN win_status='中奖' THEN 1 ELSE 0 END) as total_wins,
+                  SUM(CASE WHEN win_status = '已中奖' OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0) THEN 1 ELSE 0 END) as total_wins,
                   SUM(amount) as total_bet_amount,
                   SUM(COALESCE(win_amount,0)) - SUM(amount) as net_profit,
                   MIN(trade_time) as first_bet,
