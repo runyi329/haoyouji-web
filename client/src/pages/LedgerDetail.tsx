@@ -2653,35 +2653,40 @@ export default function LedgerDetail() {
               <div>暂无股权记录</div>
             </div>
           ) : (
-            <div className="space-y-3">
-              {/* 紫色汇总容器：累计股权 */}
-              <div className="rounded-2xl p-4" style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' }}>
+            <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' }}>
+              {/* 汇总头部 */}
+              <div className="px-4 pt-4 pb-3">
                 <div className="text-xs text-white/70 mb-1">累计股权</div>
                 <div className="text-2xl font-bold text-white">
                   {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()} 张
                 </div>
-                <div className="text-xs text-white/60 mt-1">共 {myShares.length} 条记录</div>
               </div>
-              {/* 每条股权记录独立卡片 */}
-              {myShares.map((s: any) => {
+              {/* 分割线 */}
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)' }} />
+              {/* 每条记录内嵌在紫色卡片内 */}
+              {myShares.map((s: any, idx: number) => {
                 const d = new Date(s.grantDate);
                 const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 return (
-                  <div key={s.id} className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0"></div>
-                        <span className="text-xs text-gray-400">{dateStr}</span>
-                        {s.shareType && (
-                          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: s.shareType === '资金股' ? '#EFF6FF' : '#F0FDF4', color: s.shareType === '资金股' ? '#3B82F6' : '#16A34A' }}>{s.shareType}</span>
-                        )}
+                  <div key={s.id}>
+                    <div className="px-4 py-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-white/60">{dateStr}</span>
+                          {s.shareType && (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}>{s.shareType}</span>
+                          )}
+                        </div>
+                        <span className="text-sm font-bold text-white">{Number(s.shareCount).toLocaleString()} 张</span>
                       </div>
-                      <span className="text-sm font-bold text-purple-700">{Number(s.shareCount).toLocaleString()} 张</span>
+                      {s.reason && <div className="text-xs text-white/60">{s.reason}</div>}
                     </div>
-                    {s.reason && <div className="text-xs text-gray-400 mt-1 pl-4">{s.reason}</div>}
+                    {idx < myShares.length - 1 && <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)' }} />}
                   </div>
                 );
               })}
+              {/* 底部边距 */}
+              <div className="pb-1" />
             </div>
           )}
         </div>
