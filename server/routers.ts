@@ -13396,7 +13396,8 @@ insights 数组每项包含：
     }))
     .query(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -13458,7 +13459,8 @@ insights 数组每项包含：
     }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '\u65e0\u6743\u9650' });
       }
       try {
@@ -13577,7 +13579,8 @@ insights 数组每项包含：
     }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '\u65e0\u6743\u9650' });
       }
       if (input.ids.length === 0) return { success: true, deleted: 0 };
@@ -13604,7 +13607,8 @@ insights 数组每项包含：
     }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -13758,7 +13762,8 @@ insights 数组每项包含：
     .input(z.object({ batchId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -13777,7 +13782,8 @@ insights 数组每项包含：
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -13811,7 +13817,8 @@ insights 数组每项包含：
     }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -13847,7 +13854,8 @@ insights 数组每项包含：
   getQQTradeStats: protectedProcedure
     .query(async ({ ctx }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -13891,7 +13899,8 @@ insights 数组每项包含：
   getShortCycleMonitor: protectedProcedure
     .query(async ({ ctx }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -14285,7 +14294,8 @@ insights 数组每项包含：
   getAIRiskControl: protectedProcedure
     .query(async ({ ctx }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -14361,7 +14371,8 @@ insights 数组每项包含：
   getAmountAnalysis: protectedProcedure
     .query(async ({ ctx }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -14457,7 +14468,8 @@ insights 数组每项包含：
   getBetOddsConfig: protectedProcedure
     .query(async ({ ctx }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -14491,7 +14503,8 @@ insights 数组每项包含：
     }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -14514,7 +14527,8 @@ insights 数组每项包含：
   syncBetOddsFromRecords: protectedProcedure
     .mutation(async ({ ctx }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -14730,7 +14744,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -14771,7 +14786,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
@@ -14794,7 +14810,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       const JIANG_ID = 870413;
-      if ((ctx.user as any).id !== JIANG_ID) {
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
       }
       try {
