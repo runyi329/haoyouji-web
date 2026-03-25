@@ -1001,77 +1001,86 @@ export default function QQOnlinePage() {
                 <span className="text-[10px] font-mono" style={{ color: LABEL_COLOR }}>总计 <span style={{ color: DATA_COLOR }}>{tradeStats?.total ?? 0}</span> 笔</span>
               </div>
 
-              {/* 区块一：胜负对比 */}
+              {/* 第一行：实际中奖 / 实际未中奖 / 总数 */}
               <div className="rounded-xl px-3 py-2 mb-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>胜负对比</div>
+                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>实际结果</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0' }}>
-                  {/* 中奖 */}
                   <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>中奖</div>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>实际中奖</div>
                     <div className="text-base font-bold font-mono" style={{ color: GREEN_COLOR }}>{tradeStats?.won ?? 0}</div>
                     <div className="text-[9px]" style={{ color: GREEN_COLOR, opacity: 0.7 }}>{pct(tradeStats?.won ?? 0, tradeStats?.total ?? 0)}</div>
                   </div>
-                  {/* 未中奖 */}
                   <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>未中奖</div>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>实际未中</div>
                     <div className="text-base font-bold font-mono" style={{ color: RED_COLOR }}>{tradeStats?.lost ?? 0}</div>
                     <div className="text-[9px]" style={{ color: RED_COLOR, opacity: 0.7 }}>{pct(tradeStats?.lost ?? 0, tradeStats?.total ?? 0)}</div>
                   </div>
-                  {/* 偏离度 */}
                   <div style={{ paddingLeft: '8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>实际偏离</div>
-                    <div className="text-base font-bold font-mono" style={{ color: (tradeStats?.deviation ?? 0) >= 0 ? GREEN_COLOR : RED_COLOR }}>
-                      {(tradeStats?.deviation ?? 0) >= 0 ? '+' : ''}{tradeStats?.deviation ?? 0}%
-                    </div>
-                    <div className="text-[9px]" style={{ color: LABEL_COLOR }}>加权期望</div>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>投注总数</div>
+                    <div className="text-base font-bold font-mono" style={{ color: DATA_COLOR }}>{tradeStats?.total ?? 0}</div>
+                    <div className="text-[9px]" style={{ color: LABEL_COLOR }}>笔</div>
                   </div>
                 </div>
               </div>
 
-              {/* 区块二：加权期望对比 */}
+              {/* 第二行：加权期望中奖 / 加权期望未中 / 偏离度 */}
               <div className="rounded-xl px-3 py-2 mb-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>加权期望（差値概率表逐笔计算）</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0' }}>
+                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>加权期望（差值概率表逐笔计算）</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0' }}>
                   <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '8px' }}>
                     <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>期望中奖</div>
                     <div className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{tradeStats?.expectedWon ?? '-'}</div>
                     <div className="text-[9px]" style={{ color: GOLD_COLOR, opacity: 0.7 }}>{tradeStats?.expectedWon ? pct(tradeStats.expectedWon, tradeStats?.total ?? 0) : ''}</div>
                   </div>
-                  <div style={{ paddingLeft: '8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>期望未中奖</div>
+                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 8px' }}>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>期望未中</div>
                     <div className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>{tradeStats?.expectedLost ?? '-'}</div>
                     <div className="text-[9px]" style={{ color: GOLD_COLOR, opacity: 0.7 }}>{tradeStats?.expectedLost ? pct(tradeStats.expectedLost, tradeStats?.total ?? 0) : ''}</div>
+                  </div>
+                  <div style={{ paddingLeft: '8px' }}>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>偏离度</div>
+                    <div className="text-sm font-bold font-mono" style={{ color: (tradeStats?.deviation ?? 0) >= 0 ? GREEN_COLOR : RED_COLOR }}>
+                      {(tradeStats?.deviation ?? 0) >= 0 ? '+' : ''}{tradeStats?.deviation ?? 0}%
+                    </div>
+                    <div className="text-[9px]" style={{ color: LABEL_COLOR }}>加权基准</div>
                   </div>
                 </div>
               </div>
 
-              {/* 区块三：投注额 & 派彩 */}
-              <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
-                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>投注额 / 派彩</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr 1fr', gap: '0' }}>
-                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '4px', gridColumn: 'span 1' }}>
+              {/* 第三行：投注额 */}
+              <div className="rounded-xl px-3 py-2 mb-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>投注额</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0' }}>
+                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '8px' }}>
                     <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>最大投</div>
-                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR, wordBreak: 'break-all' }}>{fmt(tradeStats?.maxAmount)}</div>
+                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt(tradeStats?.maxAmount)}</div>
                   </div>
-                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 4px', gridColumn: 'span 1' }}>
+                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 8px' }}>
                     <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>最小投</div>
-                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR, wordBreak: 'break-all' }}>{fmt(tradeStats?.minAmount)}</div>
+                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt(tradeStats?.minAmount)}</div>
                   </div>
-                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 4px', gridColumn: 'span 1' }}>
+                  <div style={{ paddingLeft: '8px' }}>
                     <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>均投</div>
-                    <div className="text-[11px] font-bold font-mono" style={{ color: GOLD_COLOR, wordBreak: 'break-all' }}>{fmt(tradeStats?.avgAmount)}</div>
+                    <div className="text-[11px] font-bold font-mono" style={{ color: GOLD_COLOR }}>{fmt(tradeStats?.avgAmount)}</div>
                   </div>
-                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 4px', gridColumn: 'span 1' }}>
+                </div>
+              </div>
+
+              {/* 第四行：派彩 */}
+              <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>派彩</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0' }}>
+                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '8px' }}>
                     <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>最大彩</div>
-                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR, wordBreak: 'break-all' }}>{fmt((tradeStats as any)?.maxPayout)}</div>
+                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.maxPayout)}</div>
                   </div>
-                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 4px', gridColumn: 'span 1' }}>
+                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 8px' }}>
                     <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>最小彩</div>
-                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR, wordBreak: 'break-all' }}>{fmt((tradeStats as any)?.minPayout)}</div>
+                    <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>{fmt((tradeStats as any)?.minPayout)}</div>
                   </div>
-                  <div style={{ paddingLeft: '4px', gridColumn: 'span 1' }}>
+                  <div style={{ paddingLeft: '8px' }}>
                     <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>均彩</div>
-                    <div className="text-[11px] font-bold font-mono" style={{ color: GOLD_COLOR, wordBreak: 'break-all' }}>{fmt((tradeStats as any)?.avgPayout)}</div>
+                    <div className="text-[11px] font-bold font-mono" style={{ color: GOLD_COLOR }}>{fmt((tradeStats as any)?.avgPayout)}</div>
                   </div>
                 </div>
               </div>
