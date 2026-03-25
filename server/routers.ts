@@ -13861,7 +13861,7 @@ insights 数组每项包含：
       try {
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
-        if (!conn) return { total: 0, won: 0, lost: 0, maxAmount: null, minAmount: null, avgAmount: null, maxPayout: null, minPayout: null, avgPayout: null };
+        if (!conn) return { total: 0, won: 0, lost: 0, maxAmount: null, minAmount: null, avgAmount: null, maxPayout: null, minPayout: null, avgPayout: null, expectedWon: 0, expectedLost: 0, deviation: 0 };
         const [rows] = await (conn as any).execute(
           `SELECT
              COUNT(*) as total,
@@ -13877,16 +13877,48 @@ insights 数组每项包含：
            WHERE amount IS NOT NULL AND amount != ''`
         );
         const row = (rows as any[])[0] || {};
+        const totalVal = Number(row.total) || 0;
+        const wonVal = Number(row.won) || 0;
+        const lostVal = Number(row.lost) || 0;
+
+        // --- 加权期望计算：逐笔根据号码组合计算理论中奖概率 ---
+        const COMBO_MAP_S: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
+        const [contentRows] = await (conn as any).execute(
+          `SELECT content FROM qq_trade_records WHERE content IS NOT NULL AND content != '' AND amount IS NOT NULL AND amount != ''`
+        );
+        let sumTheoryProb = 0;
+        let validCount = 0;
+        for (const r of (contentRows as any[])) {
+          const c = String(r.content || '');
+          const digits = new Set<number>();
+          for (const ch of c) {
+            const n = parseInt(ch);
+            if (!isNaN(n) && n >= 0 && n <= 9) digits.add(n);
+          }
+          if (digits.size > 0) {
+            let combos = 0;
+            digits.forEach(d => { combos += (COMBO_MAP_S[d] || 0); });
+            sumTheoryProb += combos / 100;
+            validCount++;
+          }
+        }
+        const expectedWon = Math.round(sumTheoryProb * 10) / 10;
+        const expectedLost = Math.round((validCount - sumTheoryProb) * 10) / 10;
+        const deviation = wonVal > 0 && expectedWon > 0 ? Math.round(((wonVal - expectedWon) / expectedWon) * 1000) / 10 : 0;
+
         return {
-          total: Number(row.total) || 0,
-          won: Number(row.won) || 0,
-          lost: Number(row.lost) || 0,
+          total: totalVal,
+          won: wonVal,
+          lost: lostVal,
           maxAmount: row.max_amount != null ? Number(row.max_amount) * 100 : null,
           minAmount: row.min_amount != null ? Number(row.min_amount) * 100 : null,
           avgAmount: row.avg_amount != null ? Number(row.avg_amount) * 100 : null,
           maxPayout: row.max_payout != null ? Number(row.max_payout) * 100 : null,
           minPayout: row.min_payout != null ? Number(row.min_payout) * 100 : null,
           avgPayout: row.avg_payout != null ? Number(row.avg_payout) * 100 : null,
+          expectedWon,
+          expectedLost,
+          deviation,
         };
       } catch (err) {
         console.error('[QQ交易] 统计失败:', err);
