@@ -13872,7 +13872,9 @@ insights 数组每项包含：
              AVG(CAST(amount AS DECIMAL(20,4))) as avg_amount,
              MAX(CAST(win_amount AS DECIMAL(20,4))) as max_payout,
              MIN(CASE WHEN CAST(win_amount AS DECIMAL(20,4)) > 0 THEN CAST(win_amount AS DECIMAL(20,4)) ELSE NULL END) as min_payout,
-             AVG(CASE WHEN CAST(win_amount AS DECIMAL(20,4)) > 0 THEN CAST(win_amount AS DECIMAL(20,4)) ELSE NULL END) as avg_payout
+             AVG(CASE WHEN CAST(win_amount AS DECIMAL(20,4)) > 0 THEN CAST(win_amount AS DECIMAL(20,4)) ELSE NULL END) as avg_payout,
+             SUM(CAST(amount AS DECIMAL(20,4))) as sum_amount,
+             SUM(CAST(win_amount AS DECIMAL(20,4))) as sum_payout
            FROM qq_trade_records
            WHERE amount IS NOT NULL AND amount != ''`
         );
@@ -13906,6 +13908,10 @@ insights 数组每项包含：
         const expectedLost = Math.round((validCount - sumTheoryProb) * 10) / 10;
         const deviation = wonVal > 0 && expectedWon > 0 ? Math.round(((wonVal - expectedWon) / expectedWon) * 1000) / 10 : 0;
 
+        const sumAmount = row.sum_amount != null ? Number(row.sum_amount) * 100 : 0;
+        const sumPayout = row.sum_payout != null ? Number(row.sum_payout) * 100 : 0;
+        const netProfit = sumPayout - sumAmount;
+
         return {
           total: totalVal,
           won: wonVal,
@@ -13916,6 +13922,9 @@ insights 数组每项包含：
           maxPayout: row.max_payout != null ? Number(row.max_payout) * 100 : null,
           minPayout: row.min_payout != null ? Number(row.min_payout) * 100 : null,
           avgPayout: row.avg_payout != null ? Number(row.avg_payout) * 100 : null,
+          sumAmount,
+          sumPayout,
+          netProfit,
           expectedWon,
           expectedLost,
           deviation,
