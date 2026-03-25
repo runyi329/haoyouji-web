@@ -774,8 +774,12 @@ export default function LedgerDetail() {
   }
 
   if (isLoading) {
+    // 59号账本(ledgerId===59)用黑金色骨架屏，避免红色闪烁
+    const skeletonBg = Number(ledgerId) === 59
+      ? 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)'
+      : '#D32F2F';
     return (
-      <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#D32F2F' }}>
+      <div className="min-h-screen flex flex-col" style={{ background: skeletonBg }}>
         <div className="h-32 flex-shrink-0"></div>
         <div className="flex-1 rounded-t-2xl flex items-center justify-center" style={{ backgroundColor: '#FAF3ED' }}>
           <div style={{ color: '#888' }} className="text-base">加载中...</div>
