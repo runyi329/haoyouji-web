@@ -289,6 +289,44 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ ag_sync_sources / ag_sync_logs tables checked/created');
     }
 
+    // ===== 股东编号表（shareholder_numbers）=====
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS \`shareholder_numbers\` (
+        \`id\` INT NOT NULL AUTO_INCREMENT,
+        \`ledgerId\` INT NOT NULL,
+        \`userId\` INT NOT NULL,
+        \`shareNo\` VARCHAR(10) NOT NULL,
+        \`createdAt\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`uk_ledger_user\` (\`ledgerId\`, \`userId\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('[DB Init] \u2705 shareholder_numbers table checked/created');
+    // 初始化 59 号账本的 14 位股东编号（已存则跳过）
+    const shareholderData = [
+      { ledgerId: 59, userId: 870413,  shareNo: '0001' }, // 胡永煎
+      { ledgerId: 59, userId: 510025,  shareNo: '0002' }, // Julie
+      { ledgerId: 59, userId: 4957147, shareNo: '0003' }, // 陈奇戌
+      { ledgerId: 59, userId: 4957151, shareNo: '0004' }, // 大饼江湖
+      { ledgerId: 59, userId: 4957141, shareNo: '0005' }, // vesen
+      { ledgerId: 59, userId: 4957213, shareNo: '0006' }, // cyndi2109
+      { ledgerId: 59, userId: 4957217, shareNo: '0007' }, // 李斜Luby
+      { ledgerId: 59, userId: 4680302, shareNo: '0008' }, // 张慧
+      { ledgerId: 59, userId: 4957155, shareNo: '0009' }, // Johnson
+      { ledgerId: 59, userId: 4952766, shareNo: '0010' }, // 刘力凡
+      { ledgerId: 59, userId: 3060001, shareNo: '0011' }, // 阿潇
+      { ledgerId: 59, userId: 4957222, shareNo: '0012' }, // LK070865
+      { ledgerId: 59, userId: 4957247, shareNo: '0013' }, // Mychael
+      { ledgerId: 59, userId: 4957293, shareNo: '0014' }, // 袁赇
+    ];
+    for (const row of shareholderData) {
+      await db.execute(
+        `INSERT IGNORE INTO \`shareholder_numbers\` (\`ledgerId\`, \`userId\`, \`shareNo\`) VALUES (?, ?, ?)`,
+        [row.ledgerId, row.userId, row.shareNo]
+      );
+    }
+    console.log('[DB Init] \u2705 shareholder_numbers seed data checked');
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
