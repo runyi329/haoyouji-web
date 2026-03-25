@@ -2971,7 +2971,7 @@ export default function LedgerDetail() {
       )}
 
       {/* AF/AH 视角切换弹窗：成员列表 + 搜索 */}
-      {showViewAsPicker && (isCustomAF || isCustomAH) && (isOwner || isAdmin) && (
+      {showViewAsPicker && (isCustomAF || isCustomAH || isCustomAI) && (isOwner || isAdmin) && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center" onClick={() => setShowViewAsPicker(false)}>
           <div className="absolute inset-0 bg-black/40" />
           <div
