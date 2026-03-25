@@ -55,26 +55,23 @@ function sigmaDisplay(level: string, betCount?: number, theoryPct?: number): { l
 }
 
 // ========== AI监控 习惯板块 ==========
-const AI_HABITS_CACHE_KEY = 'qq_ai_habits_cache';
 
 function AIHabitsPanel() {
   const [result, setResult] = React.useState<{ analysis: string; stats: any } | null>(null);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [lastTime, setLastTime] = React.useState<string | null>(null);
 
-  // 初始化时从 localStorage 加载缓存
+  // 初始化时从服务器加载全局缓存（所有用户共享最新一次分析结果）
+  const { data: cacheData } = trpc.getQQAICache.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+  });
   React.useEffect(() => {
-    try {
-      const cached = localStorage.getItem(AI_HABITS_CACHE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed.result) setResult(parsed.result);
-        if (parsed.lastTime) setLastTime(parsed.lastTime);
-      }
-    } catch (e) {
-      // 忽略解析错误
+    if (cacheData) {
+      setResult({ analysis: cacheData.analysis, stats: cacheData.stats });
+      if (cacheData.lastTime) setLastTime(cacheData.lastTime);
     }
-  }, []);
+  }, [cacheData]);
 
   const analyzeMutation = trpc.analyzeQQBettingHabits.useMutation({
     onSuccess: (data) => {
@@ -83,10 +80,6 @@ function AIHabitsPanel() {
       setResult(data);
       setLastTime(timeStr);
       setAnalyzing(false);
-      // 写入 localStorage 持久化
-      try {
-        localStorage.setItem(AI_HABITS_CACHE_KEY, JSON.stringify({ result: data, lastTime: timeStr }));
-      } catch (e) {}
     },
     onError: (err) => {
       setAnalyzing(false);
