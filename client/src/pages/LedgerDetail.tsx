@@ -2653,33 +2653,41 @@ export default function LedgerDetail() {
               <div>暂无股权记录</div>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div>
               <div className="text-sm font-semibold text-gray-700 mb-2">我的股权记录</div>
-              {/* 汇总卡片 */}
-              <div className="rounded-2xl p-4 mb-1" style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' }}>
-                <div className="text-xs text-white/70 mb-1">累计持股</div>
-                <div className="text-2xl font-bold text-white">
-                  {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()} 张
-                </div>
-                <div className="text-xs text-white/60 mt-1">共 {myShares.length} 条记录</div>
-              </div>
-              {/* 每条股权记录卡片 */}
-              {myShares.map((s: any) => {
-                const d = new Date(s.grantDate);
-                const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                return (
-                  <div key={s.id} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                        <span className="text-xs text-gray-400">{dateStr}</span>
-                      </div>
-                      <span className="text-base font-bold text-purple-700">{Number(s.shareCount).toLocaleString()} 张</span>
-                    </div>
-                    <div className="text-sm text-gray-600 leading-relaxed">{s.reason}</div>
+              {/* 整体容器：汇总 + 明细卡片合并为一个块 */}
+              <div className="rounded-2xl overflow-hidden shadow-sm">
+                {/* 汇总头部 */}
+                <div className="p-4" style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' }}>
+                  <div className="text-xs text-white/70 mb-1">累计持股</div>
+                  <div className="text-2xl font-bold text-white">
+                    {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()} 张
                   </div>
-                );
-              })}
+                  <div className="text-xs text-white/60 mt-1">共 {myShares.length} 条记录</div>
+                </div>
+                {/* 明细列表 */}
+                <div className="bg-white">
+                  {myShares.map((s: any, idx: number) => {
+                    const d = new Date(s.grantDate);
+                    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    return (
+                      <div key={s.id} className={`px-4 py-3 ${idx < myShares.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-purple-400 flex-shrink-0"></div>
+                            <span className="text-xs text-gray-400">{dateStr}</span>
+                            {s.shareType && (
+                              <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: s.shareType === '资金股' ? '#EFF6FF' : '#F0FDF4', color: s.shareType === '资金股' ? '#3B82F6' : '#16A34A' }}>{s.shareType}</span>
+                            )}
+                          </div>
+                          <span className="text-sm font-bold text-purple-700">{Number(s.shareCount).toLocaleString()} 张</span>
+                        </div>
+                        {s.reason && <div className="text-xs text-gray-400 mt-1 pl-4">{s.reason}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </div>
