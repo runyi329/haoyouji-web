@@ -782,7 +782,7 @@ export default function QQOnlinePage() {
   const { data: meData } = trpc.auth.me.useQuery();
   const currentUserId = (meData as any)?.id;
   const perSecond = currentUserId === YJH_ID ? PER_SECOND_YJH : PER_SECOND_FULL;
-  const startAmount = currentUserId === YJH_ID ? '40万元整' : '200万元整';
+  const startAmount = '200万元整';
   const deposit = currentUserId === YJH_ID ? '4万元' : '20万元';
 
   const { data: tradeStats } = trpc.getQQTradeStats.useQuery(undefined, {
@@ -1048,20 +1048,20 @@ export default function QQOnlinePage() {
         </div>
       </div>
 
-      {/* ── AI监控 习惯（仅jiang可见）── */}
-      {currentUserId === JIANG_ID && <AIHabitsPanel />}
+      {/* ── AI监控 习惯（jiang和yjh可见）── */}
+      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <AIHabitsPanel />}
 
-      {/* ── 短周期监控（仅jiang可见）── */}
-      {currentUserId === JIANG_ID && <ShortCycleMonitorPanel />}
+      {/* ── 短周期监控（jiang和yjh可见）── */}
+      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <ShortCycleMonitorPanel />}
 
-      {/* ── 历史滑动扫描预警（仅jiang可见）── */}
-      {currentUserId === JIANG_ID && <HistoryScanPanel />}
+      {/* ── 历史滑动扫描预警（jiang和yjh可见）── */}
+      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <HistoryScanPanel />}
 
-      {/* ── AI监控（仅jiang可见）── */}
-      {currentUserId === JIANG_ID && <AIRiskControlPanel />}
+      {/* ── AI监控（jiang和yjh可见）── */}
+      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <AIRiskControlPanel />}
 
-      {/* ── AI监控 - 投注金额（仅jiang可见）── */}
-      {currentUserId === JIANG_ID && <AmountAnalysisPanel />}
+      {/* ── AI监控 - 投注金额（jiang和yjh可见）── */}
+      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <AmountAnalysisPanel />}
 
       <div className="h-20" />
 
