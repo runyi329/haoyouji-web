@@ -941,22 +941,22 @@ export default function QQOnlinePage() {
             <div className="text-sm font-bold" style={{ color: DATA_COLOR }}>{deposit}</div>
           </div>
 
-          {/* 卡片3：累计/待结/已结利息 */}
+          {/* 卡牲3：累计/待结/已结利息 */}
           <div className="rounded-2xl px-4 py-3" style={cardStyle}>
             <div className="text-[11px] mb-1" style={{ color: LABEL_COLOR }}>累计利息</div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold font-mono" style={{ color: DATA_COLOR }}>¥{interestCNY}</span>
-              <span className="text-[10px]" style={{ color: LABEL_COLOR }}>≈{interestUSDT} U</span>
+            <div className="flex items-center justify-between gap-1" style={{ flexWrap: 'nowrap' }}>
+              <span className="text-sm font-bold font-mono" style={{ color: DATA_COLOR, whiteSpace: 'nowrap' }}>¥{interestCNY}</span>
+              <span className="text-[10px]" style={{ color: LABEL_COLOR, whiteSpace: 'nowrap', flexShrink: 0 }}>≈{interestUSDT} U</span>
             </div>
             <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>待结利息</div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR }}>¥{pendingCNY}</span>
-              <span className="text-[10px]" style={{ color: LABEL_COLOR }}>≈{pendingUSDT} U</span>
+            <div className="flex items-center justify-between gap-1" style={{ flexWrap: 'nowrap' }}>
+              <span className="text-sm font-bold font-mono" style={{ color: GOLD_COLOR, whiteSpace: 'nowrap' }}>¥{pendingCNY}</span>
+              <span className="text-[10px]" style={{ color: LABEL_COLOR, whiteSpace: 'nowrap', flexShrink: 0 }}>≈{pendingUSDT} U</span>
             </div>
             <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>已结利息</div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold font-mono" style={{ color: GREEN_COLOR }}>¥{settledCNY}</span>
-              <span className="text-[10px]" style={{ color: LABEL_COLOR }}>≈{settledUSDT} U</span>
+            <div className="flex items-center justify-between gap-1" style={{ flexWrap: 'nowrap' }}>
+              <span className="text-sm font-bold font-mono" style={{ color: GREEN_COLOR, whiteSpace: 'nowrap' }}>¥{settledCNY}</span>
+              <span className="text-[10px]" style={{ color: LABEL_COLOR, whiteSpace: 'nowrap', flexShrink: 0 }}>≈{settledUSDT} U</span>
             </div>
           </div>
 
