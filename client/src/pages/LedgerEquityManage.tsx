@@ -166,7 +166,7 @@ export default function LedgerEquityManage() {
 
       {/* 添加股权弹窗 */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="mx-4 rounded-2xl">
+        <DialogContent className="mx-4 rounded-2xl" style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'calc(100% - 32px)', maxWidth: '420px' }}>
           <DialogTitle className="text-base font-semibold text-gray-900 mb-4">添加股权记录</DialogTitle>
           <div className="space-y-3">
             {/* 选择成员 */}
@@ -203,11 +203,12 @@ export default function LedgerEquityManage() {
             {/* 获得日期 */}
             <div>
               <div className="text-xs text-gray-500 mb-1">获得日期</div>
-              <Input
+              <input
                 type="date"
                 value={addForm.grantDate}
                 onChange={(e) => setAddForm(f => ({ ...f, grantDate: e.target.value }))}
-                className="text-sm"
+                style={{ WebkitAppearance: 'none', appearance: 'none', width: '100%', boxSizing: 'border-box' }}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-800 outline-none focus:border-blue-400"
               />
             </div>
             {/* 获得原因 */}
