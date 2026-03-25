@@ -37,6 +37,7 @@ export default function LedgerEquityManage() {
     userId: 0,
     memberNickname: "",
     shareCount: "",
+    shareType: "资金股",
     grantDate: new Date().toISOString().slice(0, 10),
     reason: "",
   });
@@ -50,7 +51,7 @@ export default function LedgerEquityManage() {
     onSuccess: () => {
       toast.success("股权记录已添加");
       setShowAddDialog(false);
-      setAddForm({ userId: 0, memberNickname: "", shareCount: "", grantDate: new Date().toISOString().slice(0, 10), reason: "" });
+      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "资金股", grantDate: new Date().toISOString().slice(0, 10), reason: "" });
       refetchShares();
     },
     onError: (e) => toast.error(e.message || "添加失败"),
@@ -71,12 +72,12 @@ export default function LedgerEquityManage() {
       toast.error("请输入有效的股票张数"); return;
     }
     if (!addForm.grantDate) { toast.error("请选择获得日期"); return; }
-    if (!addForm.reason.trim()) { toast.error("请填写获得原因"); return; }
     addMutation.mutate({
       ledgerId,
       userId: addForm.userId,
       memberNickname: addForm.memberNickname,
       shareCount: Number(addForm.shareCount),
+      shareType: addForm.shareType || '资金股',
       grantDate: addForm.grantDate,
       reason: addForm.reason.trim(),
     });
@@ -146,9 +147,12 @@ export default function LedgerEquityManage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-base font-bold text-gray-900">{Number(record.shareCount).toLocaleString()} 张</span>
+                        {record.shareType && (
+                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: record.shareType === '资金股' ? '#dbeafe' : '#dcfce7', color: record.shareType === '资金股' ? '#1d4ed8' : '#15803d', fontWeight: 500 }}>{record.shareType}</span>
+                        )}
                         <span className="text-xs text-gray-400">{formatDate(record.grantDate)}</span>
                       </div>
-                      <div className="text-xs text-gray-500 leading-relaxed">{record.reason}</div>
+                      {record.reason && <div className="text-xs text-gray-500 leading-relaxed">{record.reason}</div>}
                     </div>
                     <button
                       onClick={() => setDeleteTarget({ id: record.id, name: `${info.nickname} ${Number(record.shareCount)}张` })}
@@ -202,6 +206,18 @@ export default function LedgerEquityManage() {
                   style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none' }}
                 />
               </div>
+              {/* 股权类型 */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>股权类型</div>
+                <select
+                  value={addForm.shareType}
+                  onChange={(e) => setAddForm(f => ({ ...f, shareType: e.target.value }))}
+                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box' }}
+                >
+                  <option value="资金股">资金股</option>
+                  <option value="市场贡献">市场贡献</option>
+                </select>
+              </div>
               {/* 获得日期 */}
               <div>
                 <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>获得日期</div>
@@ -212,12 +228,12 @@ export default function LedgerEquityManage() {
                   style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none', WebkitAppearance: 'none', appearance: 'none' }}
                 />
               </div>
-              {/* 获得原因 */}
+              {/* 备注 */}
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>获得原因</div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>备注</div>
                 <textarea
-                  rows={3}
-                  placeholder="请填写获得股权的原因（如：初始投资入股、业绩奖励等）"
+                  rows={2}
+                  placeholder="备注（可不填）"
                   value={addForm.reason}
                   onChange={(e) => setAddForm(f => ({ ...f, reason: e.target.value }))}
                   style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', resize: 'none', outline: 'none' }}
