@@ -927,7 +927,7 @@ export default function LedgerDetail() {
   return (
     <div className="min-h-screen bg-[var(--bg-cream)]">
       {/* 顶部区域 */}
-      <div className="pb-4" style={(isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAI ? { background: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)', color: '#FFFFFF' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
+      <div className="pb-4" style={(isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAI ? { background: 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)', color: '#FFFFFF', borderBottom: '1px solid #B8960C' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* AF/AH 账本：顶部两行布局 */}
         {(isCustomAF || isCustomAH || isCustomAI) ? (
           <div className="px-4 pt-3 pb-2">
@@ -1358,25 +1358,25 @@ export default function LedgerDetail() {
         {isCustomAI && (
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-xs text-white/70 mb-1">股东人数</div>
-                <div className="text-lg font-bold text-white">--</div>
-                <div className="text-[10px] text-white/50 mt-1">待录入</div>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(184,150,12,0.12)', border: '1px solid rgba(184,150,12,0.3)' }}>
+                <div className="text-xs mb-1" style={{ color: '#B8960C' }}>股东人数</div>
+                <div className="text-lg font-bold" style={{ color: '#D4AF37' }}>--</div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(212,175,55,0.5)' }}>待录入</div>
               </div>
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-xs text-white/70 mb-1">总股本</div>
-                <div className="text-lg font-bold text-white">--</div>
-                <div className="text-[10px] text-white/50 mt-1">待录入</div>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(184,150,12,0.12)', border: '1px solid rgba(184,150,12,0.3)' }}>
+                <div className="text-xs mb-1" style={{ color: '#B8960C' }}>总股本</div>
+                <div className="text-lg font-bold" style={{ color: '#D4AF37' }}>--</div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(212,175,55,0.5)' }}>待录入</div>
               </div>
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-xs text-white/70 mb-1">我的持股</div>
-                <div className="text-lg font-bold text-white">--%</div>
-                <div className="text-[10px] text-white/50 mt-1">待录入</div>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(184,150,12,0.12)', border: '1px solid rgba(184,150,12,0.3)' }}>
+                <div className="text-xs mb-1" style={{ color: '#B8960C' }}>我的持股</div>
+                <div className="text-lg font-bold" style={{ color: '#D4AF37' }}>--%</div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(212,175,55,0.5)' }}>待录入</div>
               </div>
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-xs text-white/70 mb-1">分红记录</div>
-                <div className="text-lg font-bold text-white">--</div>
-                <div className="text-[10px] text-white/50 mt-1">待录入</div>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(184,150,12,0.12)', border: '1px solid rgba(184,150,12,0.3)' }}>
+                <div className="text-xs mb-1" style={{ color: '#B8960C' }}>分红记录</div>
+                <div className="text-lg font-bold" style={{ color: '#D4AF37' }}>--</div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(212,175,55,0.5)' }}>待录入</div>
               </div>
             </div>
           </div>
@@ -2653,16 +2653,16 @@ export default function LedgerDetail() {
               <div>暂无股权记录</div>
             </div>
           ) : (
-            <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #7C3AED 0%, #A78BFA 100%)' }}>
+            <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #0A0A0A 0%, #1C1C1C 100%)', border: '1px solid #B8960C' }}>
               {/* 汇总头部 */}
               <div className="px-4 pt-4 pb-3">
-                <div className="text-xs text-white/70 mb-1">累计股权</div>
-                <div className="text-2xl font-bold text-white">
+                <div className="text-xs mb-1" style={{ color: '#B8960C' }}>累计股权</div>
+                <div className="text-2xl font-bold" style={{ color: '#D4AF37' }}>
                   {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()} 张
                 </div>
               </div>
               {/* 分割线 */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.2)' }} />
+              <div style={{ borderTop: '1px solid rgba(184,150,12,0.3)' }} />
               {/* 每条记录内嵌在紫色卡片内 */}
               {myShares.map((s: any, idx: number) => {
                 const d = new Date(s.grantDate);
@@ -2672,16 +2672,16 @@ export default function LedgerDetail() {
                     <div className="px-4 py-3">
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-white/60">{dateStr}</span>
+                          <span className="text-xs" style={{ color: 'rgba(212,175,55,0.6)' }}>{dateStr}</span>
                           {s.shareType && (
-                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}>{s.shareType}</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(184,150,12,0.2)', color: '#D4AF37', border: '1px solid rgba(184,150,12,0.4)' }}>{s.shareType}</span>
                           )}
                         </div>
-                        <span className="text-sm font-bold text-white">{Number(s.shareCount).toLocaleString()} 张</span>
+                        <span className="text-sm font-bold" style={{ color: '#D4AF37' }}>{Number(s.shareCount).toLocaleString()} 张</span>
                       </div>
-                      {s.reason && <div className="text-xs text-white/60">{s.reason}</div>}
+                      {s.reason && <div className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>{s.reason}</div>}
                     </div>
-                    {idx < myShares.length - 1 && <div style={{ borderTop: '1px solid rgba(255,255,255,0.15)' }} />}
+                    {idx < myShares.length - 1 && <div style={{ borderTop: '1px solid rgba(184,150,12,0.2)' }} />}
                   </div>
                 );
               })}
