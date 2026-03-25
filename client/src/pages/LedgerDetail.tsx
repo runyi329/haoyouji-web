@@ -698,10 +698,11 @@ export default function LedgerDetail() {
 
   // AI 账本：商品数据（硬编码，宜家系列）
   const aiProducts = null; // 商品数据已清空，待重新配置
-  // AI 账本：股权记录（仅当前用户的）
+  // AI 账本：股权记录（支持观察视角）
+  const effectiveShareUserId = viewAsUserId ?? user?.id ?? 0;
   const { data: myShares } = trpc.equity.getMemberShares.useQuery(
-    { ledgerId: Number(ledgerId), userId: user?.id ?? 0 },
-    { enabled: isCustomAI && !!user?.id }
+    { ledgerId: Number(ledgerId), userId: effectiveShareUserId },
+    { enabled: isCustomAI && !!effectiveShareUserId }
   );
   // 当前选中商品的快捷引用
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
