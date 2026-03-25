@@ -783,7 +783,7 @@ export default function QQOnlinePage() {
   const currentUserId = (meData as any)?.id;
   const perSecond = currentUserId === YJH_ID ? PER_SECOND_YJH : PER_SECOND_FULL;
   const startAmount = '200万元整';
-  const deposit = currentUserId === YJH_ID ? '4万元' : '20万元';
+  const deposit = '20万元';
 
   const { data: tradeStats } = trpc.getQQTradeStats.useQuery(undefined, {
     enabled: currentUserId === JIANG_ID,
