@@ -11910,6 +11910,7 @@ export const appRouter = router({
         interestRateAnnual: z.string().optional(),
         interestPaymentType: z.string().optional(),
         interestBase: z.string().optional(),
+        interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
         counterparty: z.string().optional(),
       }))
@@ -11934,8 +11935,8 @@ export const appRouter = router({
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_start_date, counterparty, created_by)
-              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestStartDate || null}, ${input.counterparty || null}, ${ctx.user.id})`
+          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, counterparty, created_by)
+              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.counterparty || null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -11958,6 +11959,7 @@ export const appRouter = router({
         interestRateAnnual: z.string().optional(),
         interestPaymentType: z.string().optional(),
         interestBase: z.string().optional(),
+        interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
         counterparty: z.string().optional(),
       }))
@@ -11975,7 +11977,7 @@ export const appRouter = router({
           coin: 'coin', amount: 'amount', buyPrice: 'buy_price', buyDate: 'buy_date',
           buyQuantity: 'buy_quantity', storageAccount: 'storage_account', status: 'status',
           adminNote: 'admin_note', publicNote: 'public_note', interestRateAnnual: 'interest_rate_annual',
-          interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestStartDate: 'interest_start_date',
+          interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestBaseCurrency: 'interest_base_currency', interestStartDate: 'interest_start_date',
         };
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
         for (const [key, col] of Object.entries(fieldMap)) {
