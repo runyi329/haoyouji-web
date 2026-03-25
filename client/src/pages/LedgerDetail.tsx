@@ -810,6 +810,33 @@ export default function LedgerDetail() {
         'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/products/milk-bundle/bundle_detail_3.jpg',
       ],
     },
+    teacup: {
+      id: 'teacup',
+      name: '钓鱼台国宾馆 手绘花卉陶瓷杯碟套装',
+      subtitle: '国宾馆同款 -- 手绘金边花卉 -- 买即赠12块钓鱼台糕点',
+      basePrice: 59.9,
+      originalPrice: 99.9,
+      cover: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/uexGRRzJzcvFaafp.jpg',
+      tag: '钓鱼台国宾馆 -- 买杯赠糕点',
+      carouselImages: [
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/cAxLJLeecnUGGDkP.png',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/uexGRRzJzcvFaafp.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/abJhUdTqUIlqZmoJ.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/FAeJQKjyxsMfiIzQ.jpg',
+      ],
+      detailImages: [
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/MTgmEkpJaLshSrZC.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/demfMFINEyhdpdvi.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/pksFnBPnALFRQhQp.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/rBGCNSpTudABPLhQ.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/hNFefQNAaNqtYFim.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/CxIJbDRgHpRuMSVI.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/esLHeHWUcnHqGzLV.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/gJhwkQAMOiTEgkqn.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/QbfmluPNubYfrVJH.jpg',
+        'https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/gGHLggMpSMESvDOG.png',
+      ],
+    },
   } : null;
   // 当前选中商品的快捷引用
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
