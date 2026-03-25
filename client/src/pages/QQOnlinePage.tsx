@@ -961,18 +961,14 @@ export default function QQOnlinePage() {
                   {"\u00A5"}{profitSettled.toFixed(2)}
                 </span>
               </div>
-              <div className="text-[11px] mt-2 mb-0.5" style={{ color: LABEL_COLOR }}>最近结算</div>
-              <div className="flex items-baseline gap-1.5">
-                {profitLast ? (
-                  <>
-                    <span className="text-[11px] font-mono" style={{ color: DATA_COLOR }}>{profitLast.date}</span>
-                    <span className="text-[11px] font-bold font-mono" style={{ color: GREEN_COLOR }}>
-                      {"\u00A5"}{profitLast.amount.toFixed(2)}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-[11px]" style={{ color: LABEL_COLOR }}>暂无记录</span>
+              <div className="flex items-baseline gap-1.5 mt-2 mb-0.5">
+                <span className="text-[11px]" style={{ color: LABEL_COLOR }}>最近结算</span>
+                {profitLast && (
+                  <span className="text-[11px] font-mono" style={{ color: LABEL_COLOR, opacity: 0.8 }}>{profitLast.date}</span>
                 )}
+              </div>
+              <div className="text-sm font-bold font-mono" style={{ color: GREEN_COLOR }}>
+                {profitLast ? `¥${profitLast.amount.toFixed(2)}` : <span className="text-[11px]" style={{ color: LABEL_COLOR }}>暂无记录</span>}
               </div>
             </div>
           )}
