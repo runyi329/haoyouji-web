@@ -1386,10 +1386,13 @@ export default function LedgerDetail() {
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.08) 100%)', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1)' }}>
                 <div className="text-xs mb-1" style={{ color: '#D4A830' }}>我的持股</div>
-                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
-                  {myShares && myShares.length > 0 ? myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString() : '-'}
+                <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
+                  <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    {myShares && myShares.length > 0 ? myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString() : '-'}
+                  </span>
+                  {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
                 </div>
-                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>{myShares && myShares.length > 0 ? '张' : '暂无记录'}</div>
+                {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.08) 100%)', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1)' }}>
                 <div className="text-xs mb-1" style={{ color: '#D4A830' }}>分红记录</div>
@@ -2683,8 +2686,11 @@ export default function LedgerDetail() {
                     </div>
                   )}
                 </div>
-                <div className="text-2xl font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #D4A020 50%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
-                  {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()} 张
+                <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
+                  <span className="text-2xl font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #D4A020 50%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()}
+                  </span>
+                  <span className="text-xs font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>
                 </div>
               </div>
               {/* 分割线 */}
@@ -2703,7 +2709,10 @@ export default function LedgerDetail() {
                             <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.12) 100%)', color: '#F0D060', border: '1px solid rgba(201,168,76,0.5)', textShadow: '0 0 4px rgba(255,210,60,0.4)' }}>{s.shareType}</span>
                           )}
                         </div>
-                        <span className="text-sm font-bold" style={{ background: 'linear-gradient(90deg, #FFE566 0%, #C8920A 60%, #F0C830 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>{Number(s.shareCount).toLocaleString()} 张</span>
+                        <span className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
+                          <span className="text-sm font-bold" style={{ background: 'linear-gradient(90deg, #FFE566 0%, #C8920A 60%, #F0C830 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{Number(s.shareCount).toLocaleString()}</span>
+                          <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>
+                        </span>
                       </div>
                       {s.reason && <div className="text-xs" style={{ color: 'rgba(220,185,60,0.55)' }}>{s.reason}</div>}
                     </div>
