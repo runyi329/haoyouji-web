@@ -660,30 +660,7 @@ export const equityTransferRouter = router({
       return { resourceWeight: r, capitalWeight: c, totalWeight: Math.round((r * c) * 10000) / 10000 };
     }),
 
-  // 搜索所有用户（管理员，用于权重管理添加成员）
-  searchAllUsers: protectedProcedure
-    .input(z.object({ keyword: z.string().optional().default('') }))
-    .query(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
-      }
-      const conn = await (await import('./db')).getDbConnection();
-      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      const kw = `%${input.keyword}%`;
-      const [rows] = await (conn as any).execute(
-        `SELECT id as userId, name, username, avatar FROM users
-         WHERE name LIKE ? OR username LIKE ?
-         ORDER BY name ASC LIMIT 50`,
-        [kw, kw]
-      );
-      return (rows as any[]).map((u: any) => ({
-        userId: u.userId,
-        name: u.name || u.username || '未知',
-        avatar: u.avatar,
-      }));
-    }),
-
-  // 获取所有用户权重（管理员）
+  // 获取所有用户权重（管理员）——从 ledger_members 查该账本所有成员
   getAllWeights: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
@@ -692,16 +669,16 @@ export const equityTransferRouter = router({
       }
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      // 获取该账本所有有股权记录的成员（通过equity_shares JOIN users）
+      // 从 ledger_members JOIN users 查该账本所有成员
       const [members] = await (conn as any).execute(
-        `SELECT DISTINCT u.id as userId, u.name, u.username, u.avatar
-         FROM equity_shares es
-         JOIN users u ON es.userId = u.id
-         WHERE es.ledgerId = ?
-         ORDER BY u.name ASC`,
+        `SELECT lm.userId, u.name, u.username, u.avatar
+         FROM ledger_members lm
+         LEFT JOIN users u ON u.id = lm.userId
+         WHERE lm.ledgerId = ? AND lm.userId > 0
+         ORDER BY lm.createdAt ASC`,
         [input.ledgerId]
       );
-      // 获取已设置的权重（不限于该账本）
+      // 获取已设置的权重
       const [weights] = await (conn as any).execute(
         `SELECT user_id, resource_weight, capital_weight FROM equity_weights`
       );
