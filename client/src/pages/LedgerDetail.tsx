@@ -1681,6 +1681,19 @@ export default function LedgerDetail() {
                       )}
                     </div>
                   ))}
+                  {/* 总计行 */}
+                  {(() => {
+                    const totalShares = globalAngelTotal > 0 ? globalAngelTotal / 0.30 : 0;
+                    return totalShares > 0 ? (
+                      <div className="flex items-center justify-between pt-2 mt-1" style={{ borderTop: '1px solid rgba(201,168,76,0.4)' }}>
+                        <span className="text-xs font-bold" style={{ color: 'rgba(220,185,60,0.95)' }}>总计</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-mono font-bold" style={{ color: 'rgba(255,229,102,0.95)' }}>{totalShares.toFixed(2)} 张</span>
+                          <span className="text-xs font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>100%</span>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               )}
             </div>
