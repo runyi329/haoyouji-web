@@ -382,4 +382,43 @@ export const equityRouter = router({
         referralCount: Number(referralCount),
       };
     }),
+  // 获取全网天使股和市场贡献股的总股本（用于持股结构容器）
+  getGlobalShareStats: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 天使股总股本
+      const [angelRows] = await (conn as any).execute(
+        `SELECT COALESCE(SUM(shareCount), 0) as total FROM equity_shares WHERE ledgerId=? AND shareType='天使股'`,
+        [input.ledgerId]
+      );
+      const angelTotal = Number((angelRows as any[])[0]?.total ?? 0);
+      // 天使股授股日期（最早一笔，用于计算全网年化股息起始时间）
+      const [dateRows] = await (conn as any).execute(
+        `SELECT grantDate, shareCount, annualRate FROM equity_shares WHERE ledgerId=? AND shareType='天使股' ORDER BY grantDate ASC`,
+        [input.ledgerId]
+      );
+      const angelShares = (dateRows as any[]).map(r => ({
+        grantDate: r.grantDate,
+        shareCount: Number(r.shareCount),
+        annualRate: Number(r.annualRate ?? 6),
+      }));
+      // 市场贡献股总股本
+      const [marketRows] = await (conn as any).execute(
+        `SELECT COALESCE(SUM(shareCount), 0) as total FROM equity_shares WHERE ledgerId=? AND shareType='市场贡献股'`,
+        [input.ledgerId]
+      );
+      const marketTotal = Number((marketRows as any[])[0]?.total ?? 0);
+      const [marketDateRows] = await (conn as any).execute(
+        `SELECT grantDate, shareCount, annualRate FROM equity_shares WHERE ledgerId=? AND shareType='市场贡献股' ORDER BY grantDate ASC`,
+        [input.ledgerId]
+      );
+      const marketShares = (marketDateRows as any[]).map(r => ({
+        grantDate: r.grantDate,
+        shareCount: Number(r.shareCount),
+        annualRate: Number(r.annualRate ?? 6),
+      }));
+      return { angelTotal, angelShares, marketTotal, marketShares };
+    }),
 });

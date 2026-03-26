@@ -862,6 +862,15 @@ export default function LedgerDetail() {
     { userId: effectiveShareUserId },
     { enabled: isCustomAI && !!effectiveShareUserId }
   );
+  // 全网持股结构数据（用于脉动网持股结构容器）
+  const { data: globalShareStats } = trpc.equity.getGlobalShareStats.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAI }
+  );
+  // 全网天使股实时总张数（股本+实时股息）
+  const globalAngelTotal = useTotalSharesWithDividend(globalShareStats?.angelShares ?? []);
+  // 全网市场贡献股实时总张数（股本+实时股息）
+  const globalMarketTotal = useTotalSharesWithDividend(globalShareStats?.marketShares ?? []);
   // 天使股总持股（股本+实时股息，仅统计天使股）
   const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '天使股');
   // 市场贡献股总持股（股本+实时股息）
@@ -1601,12 +1610,12 @@ export default function LedgerDetail() {
               <div className="text-xs mb-3" style={{ color: '#D4A830' }}>脉动网持股结构</div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                 {[
-                  { name: '天使投资人', pct: '30%' },
-                  { name: '市场贡献值', pct: '12.5%' },
-                  { name: '创始团队', pct: '40%' },
-                  { name: '战略投资股东', pct: '0%' },
-                  { name: '员工持股平台', pct: '15%' },
-                  { name: '联合创始人', pct: '2.5%' },
+                  { name: '\u5929\u4f7f\u6295\u8d44\u4eba', pct: '30%', live: globalAngelTotal },
+                  { name: '\u5e02\u573a\u8d21\u732e\u5024', pct: '12.5%', live: globalMarketTotal },
+                  { name: '\u521b\u59cb\u56e2\u961f', pct: '40%', live: null },
+                  { name: '\u6218\u7565\u6295\u8d44\u80a1\u4e1c', pct: '0%', live: null },
+                  { name: '\u5458\u5de5\u6301\u80a1\u5e73\u53f0', pct: '15%', live: null },
+                  { name: '\u8054\u5408\u521b\u59cb\u4eba', pct: '2.5%', live: null },
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between py-1" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
                     <div className="flex items-center gap-1.5">
@@ -1614,7 +1623,13 @@ export default function LedgerDetail() {
                       <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.85)' }}>{item.name}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>--张</span>
+                      {item.live !== null ? (
+                        <span className="text-[10px] font-mono" style={{ color: 'rgba(255,229,102,0.9)' }}>
+                          {item.live.toFixed(2)}\u5f20
+                        </span>
+                      ) : (
+                        <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.35)' }}>\u2726\u2726\u2726</span>
+                      )}
                       <span className="text-xs font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{item.pct}</span>
                     </div>
                   </div>
