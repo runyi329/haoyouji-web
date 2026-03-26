@@ -383,6 +383,22 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ market contribution shares seed data checked');
     }
 
+    // ===== 一次性修复：将 shareType='市场贡献' 更正为 '市场贡献股' =====
+    try {
+      const dbConn2 = await getDbConnection();
+      if (dbConn2) {
+        const [fixResult] = await (dbConn2 as any).execute(
+          `UPDATE \`equity_shares\` SET shareType='市场贡献股' WHERE shareType='市场贡献'`
+        );
+        const affected = (fixResult as any).affectedRows ?? 0;
+        if (affected > 0) {
+          console.log(`[DB Init] ✅ Fixed ${affected} equity_shares records: '市场贡献' -> '市场贡献股'`);
+        }
+      }
+    } catch (fixErr) {
+      console.warn('[DB Init] ⚠️ shareType fix skipped:', fixErr instanceof Error ? fixErr.message : fixErr);
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
