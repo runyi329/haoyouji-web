@@ -116,37 +116,35 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
   const theme = gold;
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: '#000000', border: theme.border, boxShadow: theme.shadow }}>
-      {/* 汇总头部 */}
-      <div className="px-4 pt-4 pb-3">
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-xs flex items-center gap-1" style={{ color: theme.labelColor }}>
-            <span>持有股权</span>
-            <span style={{ color: theme.dimColor2, fontSize: '10px' }}>（{shares.length}份）</span>
-          </div>
-          {angelShareNo && (
-            <div className="flex items-center gap-1">
-              <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股东编号</span>
-              <span className="text-sm font-bold tracking-widest" style={{ background: theme.shareNoGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: theme.shareNoShadow }}>{angelShareNo}</span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
-          <span className="text-2xl font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {totalWithDividend.toFixed(2)}
+    <div className="w-full">
+      {/* 类型标题行 */}
+      <div className="flex items-center justify-between px-1 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold" style={{ color: theme.labelColor }}>
+            {isMarket ? '市场贡献股' : '天使股'}
           </span>
-          <span className="text-xs font-normal" style={{ color: theme.dimColor }}>张</span>
+          <span style={{ color: theme.dimColor2, fontSize: '10px' }}>（{shares.length}份）</span>
         </div>
+        {angelShareNo && (
+          <div className="flex items-center gap-1">
+            <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股东编号</span>
+            <span className="text-sm font-bold tracking-widest" style={{ background: theme.shareNoGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: theme.shareNoShadow }}>{angelShareNo}</span>
+          </div>
+        )}
       </div>
-      {/* 分隔线 + 折叠汇总行 */}
-      <div style={{ borderTop: `1px solid ${theme.divider}` }} />
+      {/* 折叠汇总行 */}
       <button
-        className="w-full px-4 py-3 flex items-center justify-between"
-        style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+        className="w-full px-1 py-2 flex items-center justify-between"
+        style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${theme.divider}`, cursor: 'pointer' }}
         onClick={() => setExpanded(e => !e)}
       >
         <div className="flex items-center gap-3">
-          <span className="text-xs" style={{ color: theme.dimColor2 }}>{earliest}</span>
+          <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
+            <span className="text-xl font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              {totalWithDividend.toFixed(2)}
+            </span>
+            <span className="text-xs font-normal" style={{ color: theme.dimColor }}>张</span>
+          </div>
           <div className="flex items-baseline gap-0.5">
             <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股本</span>
             <span className="text-sm font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalBase.toFixed(2)}</span>
@@ -162,14 +160,12 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
       </button>
       {/* 展开明细 */}
       {expanded && (
-        <div>
-          <div style={{ borderTop: `1px solid ${theme.divider}` }} />
+        <div className="pt-1">
           {shares.map((s: any, idx: number, arr: any[]) => {
             const d = new Date(s.grantDate);
             const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
             return <AngelShareRow key={s.id} s={s} dateStr={dateStr} isLast={idx === arr.length - 1} />;
           })}
-          <div className="pb-1" />
         </div>
       )}
     </div>
