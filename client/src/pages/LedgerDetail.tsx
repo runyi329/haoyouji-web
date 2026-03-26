@@ -2800,7 +2800,10 @@ export default function LedgerDetail() {
                   {/* 市场贡献股汇总头部 */}
                   <div className="px-4 pt-4 pb-3">
                     <div className="flex items-center justify-between mb-1">
-                      <div className="text-xs" style={{ color: '#5BC870' }}>持有股权</div>
+                      <div className="text-xs flex items-center gap-1" style={{ color: '#5BC870' }}>
+                        <span>持有股权</span>
+                        <span style={{ color: 'rgba(80,180,100,0.6)', fontSize: '10px' }}>（{myShares.filter((s: any) => s.shareType === '市场贡献股').length}份）</span>
+                      </div>
                       {myShares.find((s: any) => s.shareType === '天使股')?.shareNo && (
                         <div className="flex items-center gap-1">
                           <span className="text-[10px]" style={{ color: 'rgba(80,180,100,0.7)' }}>股东编号</span>
