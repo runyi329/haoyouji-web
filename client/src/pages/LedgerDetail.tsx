@@ -1637,14 +1637,18 @@ export default function LedgerDetail() {
                     const marketTheoreticalMax = totalShares * 0.125;
                     // 管理员储备股 = 理论上限 - 实际已发行
                     const adminReserve = Math.max(0, marketTheoreticalMax - globalMarketTotal);
+                    const founderReserve = totalShares * 0.40;
+                    const strategicReserve = totalShares * 0.00;
+                    const employeeReserve = totalShares * 0.15;
+                    const cofounderReserve = totalShares * 0.025;
                     return [
-                      { name: '天使投资人', pct: '30%', live: globalAngelTotal },
-                      { name: '市场贡献値', pct: '12.5%', live: globalMarketTotal },
+                      { name: '天使投资人', pct: '30%', live: globalAngelTotal, isReserve: false },
+                      { name: '市场贡献値', pct: '12.5%', live: globalMarketTotal, isReserve: false },
                       { name: '管理员储备股', pct: '', live: adminReserve, isReserve: true },
-                      { name: '创始团队', pct: '40%', live: null },
-                      { name: '战略投资股东', pct: '0%', live: null },
-                      { name: '员工持股平台', pct: '15%', live: null },
-                      { name: '联合创始人', pct: '2.5%', live: null },
+                      { name: '创始团队', pct: '40%', live: founderReserve, isReserve: true },
+                      { name: '战略投资股东', pct: '0%', live: strategicReserve, isReserve: true },
+                      { name: '员工持股平台', pct: '15%', live: employeeReserve, isReserve: true },
+                      { name: '联合创始人', pct: '2.5%', live: cofounderReserve, isReserve: true },
                     ];
                   })().map((item: any, idx: number) => (
                     <div key={idx} className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)', background: item.isReserve ? 'rgba(255,152,0,0.06)' : 'transparent', borderRadius: item.isReserve ? '6px' : '0', marginBottom: item.isReserve ? '2px' : '0' }}>
