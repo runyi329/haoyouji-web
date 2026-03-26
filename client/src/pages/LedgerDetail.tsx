@@ -1461,7 +1461,7 @@ export default function LedgerDetail() {
                 <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>待录入</div>
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
-                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>我的持股</div>
+                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>累计股权</div>
                 <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
                   <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                     {myShares && myShares.length > 0 ? totalSharesWithDividend.toFixed(2) : '-'}
@@ -2754,7 +2754,7 @@ export default function LedgerDetail() {
               {/* 汇总头部 */}
               <div className="px-4 pt-4 pb-3">
                 <div className="flex items-center justify-between mb-1">
-                  <div className="text-xs" style={{ color: '#D4A830' }}>累计股权</div>
+                  <div className="text-xs" style={{ color: '#D4A830' }}>持有股权</div>
                   {myShares[0]?.shareNo && (
                     <div className="flex items-center gap-1">
                       <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.7)' }}>股东编号</span>
