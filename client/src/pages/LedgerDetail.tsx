@@ -1584,23 +1584,25 @@ export default function LedgerDetail() {
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
                 <div className="text-xs mb-1 flex items-baseline gap-1" style={{ color: '#D4A830' }}>
-                  <span>累计股权</span>
+                  <span>总计股权</span>
                   {myShares && myShares.length > 0 && (myShares[0] as any).shareNo && (
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{(myShares[0] as any).shareNo}）</span>
                   )}
                 </div>
-                {/* 原始股权张数（主数字） */}
+                {/* 加权后总计股权（主数字） */}
                 <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
                   <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {myShares && myShares.length > 0 ? totalAllSharesWithDividend.toFixed(2) : '-'}
+                    {myShares && myShares.length > 0 ? weightedSharesTotal.toFixed(2) : '-'}
                   </span>
                   {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
                 </div>
-                {/* 权重标注 */}
+                {/* 权重 × 原始股权 标注 */}
                 {myShares && myShares.length > 0 && (
-                  <div className="flex items-center gap-1 mt-1">
+                  <div className="flex items-center gap-0.5 mt-1 flex-wrap">
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>权重</span>
-                    <span className="text-[11px] font-semibold" style={{ color: 'rgba(255,210,80,0.85)' }}>{totalWeight.toFixed(2)}</span>
+                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.8)' }}>{totalWeight.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>×</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>{totalAllSharesWithDividend.toFixed(2)}张</span>
                   </div>
                 )}
                 {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
