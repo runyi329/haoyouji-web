@@ -390,6 +390,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import MembersDialog from "@/components/MembersDialog";
+import { EquityHistoryModal } from "@/components/EquityHistoryModal";
 import { UserAvatar } from "@/components/UserAvatar";
 
 import {
@@ -890,6 +891,8 @@ export default function LedgerDetail() {
   const [foodScanLoading, setFoodScanLoading] = useState(false); // 加载中
   const [foodScanError, setFoodScanError] = useState<string | null>(null); // 错误信息
   const [shareholdingExpanded, setShareholdingExpanded] = useState(false); // 持股结构折叠状态
+  const [showEquityHistory, setShowEquityHistory] = useState(false); // 股权流水弹窗
+  const [equityHistoryUserId, setEquityHistoryUserId] = useState<number | null>(null); // 查看哪个用户的流水（null=自己）
   const foodFileInputRef = useRef<HTMLInputElement>(null); // 文件选择器
   const foodCameraInputRef = useRef<HTMLInputElement>(null); // 摄像头输入
   
@@ -1155,7 +1158,7 @@ export default function LedgerDetail() {
                     />
                   </div>
                 )}
-                {/* AI账本：刷新和返回按钮放到右上角头像同一行 */}
+                {/* AI账本：刷新/返回/记录按钮放到右上角头像同一行 */}
                 {isCustomAI && (
                   <>
                     <button
@@ -1164,6 +1167,13 @@ export default function LedgerDetail() {
                       style={{ background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)', border: '1px solid #C8A84B', color: '#F0D060', textShadow: '0 0 8px rgba(240,208,80,0.6)', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)' }}
                     >
                       刷新
+                    </button>
+                    <button
+                      onClick={() => { setEquityHistoryUserId(null); setShowEquityHistory(true); }}
+                      className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
+                      style={{ background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)', border: '1px solid #C8A84B', color: '#F0D060', textShadow: '0 0 8px rgba(240,208,80,0.6)', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)' }}
+                    >
+                      记录
                     </button>
                     <button
                       onClick={() => setLocation('/ledger')}
@@ -1620,28 +1630,38 @@ export default function LedgerDetail() {
               {/* 折叠内容 */}
               {shareholdingExpanded && (
                 <div className="flex flex-col gap-0 px-4 pb-3">
-                  {[
-                    { name: '天使投资人', pct: '30%', live: globalAngelTotal },
-                    { name: '市场贡献值', pct: '12.5%', live: globalMarketTotal },
-                    { name: '创始团队', pct: '40%', live: null },
-                    { name: '战略投资股东', pct: '0%', live: null },
-                    { name: '员工持股平台', pct: '15%', live: null },
-                    { name: '联合创始人', pct: '2.5%', live: null },
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+                  {(() => {
+                    // 以天使股占 30% 反推总股本
+                    const totalShares = globalAngelTotal > 0 ? globalAngelTotal / 0.30 : 0;
+                    // 市场贡献股 12.5% 理论上限
+                    const marketTheoreticalMax = totalShares * 0.125;
+                    // 管理员储备股 = 理论上限 - 实际已发行
+                    const adminReserve = Math.max(0, marketTheoreticalMax - globalMarketTotal);
+                    return [
+                      { name: '天使投资人', pct: '30%', live: globalAngelTotal },
+                      { name: '市场贡献値', pct: '12.5%', live: globalMarketTotal },
+                      { name: '管理员储备股', pct: '', live: adminReserve, isReserve: true },
+                      { name: '创始团队', pct: '40%', live: null },
+                      { name: '战略投资股东', pct: '0%', live: null },
+                      { name: '员工持股平台', pct: '15%', live: null },
+                      { name: '联合创始人', pct: '2.5%', live: null },
+                    ];
+                  })().map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)', background: item.isReserve ? 'rgba(255,152,0,0.06)' : 'transparent', borderRadius: item.isReserve ? '6px' : '0', marginBottom: item.isReserve ? '2px' : '0' }}>
                       <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg, #FFE566, #C8920A)' }} />
-                        <span className="text-xs" style={{ color: 'rgba(220,185,60,0.85)' }}>{item.name}</span>
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: item.isReserve ? '#FF9800' : 'linear-gradient(135deg, #FFE566, #C8920A)' }} />
+                        <span className="text-xs" style={{ color: item.isReserve ? 'rgba(255,152,0,0.9)' : 'rgba(220,185,60,0.85)' }}>{item.name}</span>
+                        {item.isReserve && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,152,0,0.15)', color: 'rgba(255,152,0,0.8)' }}>未发行</span>}
                       </div>
                       <div className="flex items-center gap-3">
                         {item.live !== null ? (
-                          <span className="text-xs font-mono" style={{ color: 'rgba(255,229,102,0.9)' }}>
+                          <span className="text-xs font-mono" style={{ color: item.isReserve ? 'rgba(255,152,0,0.9)' : 'rgba(255,229,102,0.9)' }}>
                             {item.live.toFixed(2)} 张
                           </span>
                         ) : (
-                          <span className="text-xs" style={{ color: 'rgba(220,185,60,0.35)' }}>✦ ✦ ✦</span>
+                          <span className="text-xs" style={{ color: 'rgba(220,185,60,0.35)' }}>❆ ❆ ❆</span>
                         )}
-                        <span className="text-xs font-bold w-10 text-right" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{item.pct}</span>
+                        <span className="text-xs font-bold w-10 text-right" style={{ background: item.isReserve ? 'none' : 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: item.isReserve ? 'unset' : 'text', WebkitTextFillColor: item.isReserve ? 'rgba(255,152,0,0.7)' : 'transparent', color: item.isReserve ? 'rgba(255,152,0,0.7)' : 'inherit' }}>{item.pct}</span>
                       </div>
                     </div>
                   ))}
@@ -3227,6 +3247,21 @@ export default function LedgerDetail() {
             切回我的视角
           </button>
         </div>
+      )}
+
+      {/* 股权流水弹窗 */}
+      {showEquityHistory && isCustomAI && (
+        <EquityHistoryModal
+          ledgerId={Number(ledgerId)}
+          userId={equityHistoryUserId ?? user?.id ?? 0}
+          nickname={equityHistoryUserId
+            ? ((membersData as any[])?.find((m: any) => m.userId === equityHistoryUserId)?.nickname || '成员')
+            : (user?.nickname || user?.username || '我')}
+          isAdmin={isOwner || isAdmin}
+          onClose={() => setShowEquityHistory(false)}
+          onViewUser={(uid) => { setEquityHistoryUserId(uid); }}
+          membersData={membersData as any[]}
+        />
       )}
 
       {/* AF/AH 视角切换弹窗：成员列表 + 搜索 */}

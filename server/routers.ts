@@ -29,7 +29,7 @@ import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray, like, or, gt } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
 import { triggerFunderImmediateScan, calcFunderProfitRight } from "./funder-price-scanner";
-import { equityRouter } from "./equity-router";
+import { equityRouter, equityTransferRouter } from "./equity-router";
 import { invitePermissionRouter } from "./invite-permission-api";
 import { workGroupsRouter } from "./work-groups-api";
 import { partnershipRouter } from "./partnership-router";
@@ -136,6 +136,7 @@ const manusRouter = router({
 export const appRouter = router({
   system: systemRouter,
   equity: equityRouter,
+  equityTransfer: equityTransferRouter,
   partnership: partnershipRouter,
   beauty: beautyRouter,
   diet: dietRouter,
