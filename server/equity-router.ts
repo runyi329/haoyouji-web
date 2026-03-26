@@ -693,7 +693,7 @@ export const equityTransferRouter = router({
       return (members as any[]).map((m: any) => {
         const w = weightMap.get(m.userId);
         const r = w ? Number(w.resource_weight) : 1.00;
-        const c = w ? Number(w.capital_weight) : 0.00;
+        const c = w ? Number(w.capital_weight) : 1.00;
         return {
           userId: m.userId,
           name: m.name || m.nickname || '未知',

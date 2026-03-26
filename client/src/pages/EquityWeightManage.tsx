@@ -68,7 +68,7 @@ export default function EquityWeightManage() {
       {/* 说明 */}
       <div className="px-4 pt-3 pb-2">
         <div className="text-xs rounded-xl px-3 py-2" style={{ background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)', color: 'rgba(220,185,60,0.7)' }}>
-          权重 = 资源权重 + 资金权重，默认 1.0 + 0.0 = 1.0。累计股权 = 原始张数 × 总权重。
+          权重 = 资源权重 + 资金权重，默认各为 1.0，总权重 = 2.0。累计股权 = 原始张数 × 总权重。
         </div>
       </div>
 
@@ -128,7 +128,7 @@ export default function EquityWeightManage() {
             <div className="text-xs mb-4" style={{ color: 'rgba(220,185,60,0.55)' }}>{editingUser.name}</div>
 
             <div className="mb-3">
-              <label className="text-xs block mb-1" style={{ color: 'rgba(220,185,60,0.7)' }}>资源权重（如 1.0、1.2）</label>
+              <label className="text-xs block mb-1" style={{ color: 'rgba(220,185,60,0.7)' }}>资源权重（默认 1.0）</label>
               <input
                 type="number"
                 step="0.1"
@@ -140,7 +140,7 @@ export default function EquityWeightManage() {
               />
             </div>
             <div className="mb-3">
-              <label className="text-xs block mb-1" style={{ color: 'rgba(220,185,60,0.7)' }}>资金权重（如 0.0、0.2）</label>
+              <label className="text-xs block mb-1" style={{ color: 'rgba(220,185,60,0.7)' }}>资金权重（默认 1.0）</label>
               <input
                 type="number"
                 step="0.1"
