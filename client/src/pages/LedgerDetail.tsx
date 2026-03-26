@@ -1115,7 +1115,7 @@ export default function LedgerDetail() {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--bg-cream)]">
+    <div className="min-h-screen" style={isCustomAI ? { backgroundColor: '#000000' } : {}}>
       {/* 顶部区域 */}
       <div className="pb-4" style={(isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAI ? { background: 'linear-gradient(160deg, #0D0D00 0%, #1A1600 40%, #0D0D00 100%)', color: '#FFFFFF', borderBottom: '1px solid #C9A84C' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* AF/AH 账本：顶部两行布局 */}
