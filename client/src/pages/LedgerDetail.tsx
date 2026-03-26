@@ -138,22 +138,26 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
         style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${theme.divider}`, cursor: 'pointer' }}
         onClick={() => setExpanded(e => !e)}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-0.5">
+          {/* 第一行：总张数大数字 */}
           <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
             <span className="text-xl font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               {totalWithDividend.toFixed(2)}
             </span>
             <span className="text-xs font-normal" style={{ color: theme.dimColor }}>张</span>
           </div>
-          <div className="flex items-baseline gap-0.5">
-            <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股本</span>
-            <span className="text-sm font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalBase.toFixed(2)}</span>
-            <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
-          </div>
-          <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
-            <span className="text-[10px]" style={{ color: theme.dimColor2 }}>+</span>
-            <span className="text-sm font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
-            <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
+          {/* 第二行：股本 + 股息小字 */}
+          <div className="flex items-baseline gap-2">
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股本</span>
+              <span className="text-xs font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalBase.toFixed(2)}</span>
+              <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
+            </div>
+            <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
+              <span className="text-[10px]" style={{ color: theme.dimColor2 }}>+</span>
+              <span className="text-xs font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
+              <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
+            </div>
           </div>
         </div>
         <span style={{ color: theme.chevronColor, fontSize: '14px', lineHeight: 1 }}>{expanded ? '▲' : '▼'}</span>
