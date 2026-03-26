@@ -889,6 +889,7 @@ export default function LedgerDetail() {
   const [foodScanResult, setFoodScanResult] = useState<any>(null); // AI 分析结果
   const [foodScanLoading, setFoodScanLoading] = useState(false); // 加载中
   const [foodScanError, setFoodScanError] = useState<string | null>(null); // 错误信息
+  const [shareholdingExpanded, setShareholdingExpanded] = useState(false); // 持股结构折叠状态
   const foodFileInputRef = useRef<HTMLInputElement>(null); // 文件选择器
   const foodCameraInputRef = useRef<HTMLInputElement>(null); // 摄像头输入
   
@@ -1604,38 +1605,48 @@ export default function LedgerDetail() {
 
           </div>
         )}
-        {/* AI 账本：脉动网总持股结构 */}
+        {/* AI 账本：脉动网总持股结构（可折叠） */}
         {isCustomAI && (
           <div className="px-4 pt-0 pb-4">
-            <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
-              <div className="text-xs mb-3" style={{ color: '#D4A830' }}>脉动网持股结构</div>
-              <div className="flex flex-col gap-0">
-                {[
-                  { name: '天使投资人', pct: '30%', live: globalAngelTotal },
-                  { name: '市场贡献值', pct: '12.5%', live: globalMarketTotal },
-                  { name: '创始团队', pct: '40%', live: null },
-                  { name: '战略投资股东', pct: '0%', live: null },
-                  { name: '员工持股平台', pct: '15%', live: null },
-                  { name: '联合创始人', pct: '2.5%', live: null },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg, #FFE566, #C8920A)' }} />
-                      <span className="text-xs" style={{ color: 'rgba(220,185,60,0.85)' }}>{item.name}</span>
+            <div className="rounded-2xl overflow-hidden" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
+              {/* 标题栏 - 点击折叠/展开 */}
+              <button
+                className="w-full flex items-center justify-between px-4 py-3"
+                onClick={() => setShareholdingExpanded(v => !v)}
+              >
+                <span className="text-xs" style={{ color: '#D4A830' }}>脉动网持股结构</span>
+                <span className="text-xs" style={{ color: 'rgba(201,168,76,0.7)', transition: 'transform 0.25s', display: 'inline-block', transform: shareholdingExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
+              </button>
+              {/* 折叠内容 */}
+              {shareholdingExpanded && (
+                <div className="flex flex-col gap-0 px-4 pb-3">
+                  {[
+                    { name: '天使投资人', pct: '30%', live: globalAngelTotal },
+                    { name: '市场贡献值', pct: '12.5%', live: globalMarketTotal },
+                    { name: '创始团队', pct: '40%', live: null },
+                    { name: '战略投资股东', pct: '0%', live: null },
+                    { name: '员工持股平台', pct: '15%', live: null },
+                    { name: '联合创始人', pct: '2.5%', live: null },
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg, #FFE566, #C8920A)' }} />
+                        <span className="text-xs" style={{ color: 'rgba(220,185,60,0.85)' }}>{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {item.live !== null ? (
+                          <span className="text-xs font-mono" style={{ color: 'rgba(255,229,102,0.9)' }}>
+                            {item.live.toFixed(2)} 张
+                          </span>
+                        ) : (
+                          <span className="text-xs" style={{ color: 'rgba(220,185,60,0.35)' }}>✦ ✦ ✦</span>
+                        )}
+                        <span className="text-xs font-bold w-10 text-right" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{item.pct}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {item.live !== null ? (
-                        <span className="text-xs font-mono" style={{ color: 'rgba(255,229,102,0.9)' }}>
-                          {item.live.toFixed(2)} 张
-                        </span>
-                      ) : (
-                        <span className="text-xs" style={{ color: 'rgba(220,185,60,0.35)' }}>✦ ✦ ✦</span>
-                      )}
-                      <span className="text-xs font-bold w-10 text-right" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{item.pct}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
