@@ -1154,6 +1154,27 @@ export default function LedgerDetail() {
                     />
                   </div>
                 )}
+                {/* AI账本：刷新和返回按钮放到右上角头像同一行 */}
+                {isCustomAI && (
+                  <>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
+                      style={{ background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)', border: '1px solid #C8A84B', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)' }}
+                      title="刷新"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" style={{ color: '#F0D060' }} />
+                    </button>
+                    <button
+                      onClick={() => setLocation('/ledger')}
+                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
+                      style={{ background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)', border: '1px solid #C8A84B', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)' }}
+                      title="返回"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" style={{ color: '#F0D060' }} />
+                    </button>
+                  </>
+                )}
                 {effectiveIsManager && (
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
@@ -1197,32 +1218,24 @@ export default function LedgerDetail() {
                   新建
                 </button>
               )}
-              <button
-                onClick={() => window.location.reload()}
-                className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
-                style={isCustomAI ? {
-                  background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)',
-                  border: '1px solid #C8A84B',
-                  color: '#F0D060',
-                  textShadow: '0 0 8px rgba(240,208,80,0.6)',
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)'
-                } : { backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
-              >
-                刷新
-              </button>
-              <button
-                onClick={() => setLocation('/ledger')}
-                className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
-                style={isCustomAI ? {
-                  background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)',
-                  border: '1px solid #C8A84B',
-                  color: '#F0D060',
-                  textShadow: '0 0 8px rgba(240,208,80,0.6)',
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)'
-                } : { backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
-              >
-                返回
-              </button>
+              {!isCustomAI && (
+                <button
+                  onClick={() => window.location.reload()}
+                  className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
+                >
+                  刷新
+                </button>
+              )}
+              {!isCustomAI && (
+                <button
+                  onClick={() => setLocation('/ledger')}
+                  className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
+                >
+                  返回
+                </button>
+              )}
             </div>
           </div>
         ) : (
