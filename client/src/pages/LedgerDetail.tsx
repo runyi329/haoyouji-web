@@ -2677,7 +2677,7 @@ export default function LedgerDetail() {
             <div className="rounded-2xl overflow-hidden" style={{ background: '#000000', border: '1px solid #C9A84C', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2), inset 0 1px 0 rgba(255,230,100,0.12)' }}>
               {/* 汇总头部 */}
               <div className="px-4 pt-4 pb-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-1">
                   <div className="text-xs" style={{ color: '#D4A830' }}>累计股权</div>
                   {myShares[0]?.shareNo && (
                     <div className="flex items-center gap-1">
@@ -2685,6 +2685,12 @@ export default function LedgerDetail() {
                       <span className="text-sm font-bold tracking-widest" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.6))' }}>{myShares[0].shareNo}</span>
                     </div>
                   )}
+                </div>
+                <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
+                  <span className="text-2xl font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #D4A020 50%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()}
+                  </span>
+                  <span className="text-xs font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>
                 </div>
               </div>
               {/* 分割线 */}
@@ -2703,10 +2709,7 @@ export default function LedgerDetail() {
                             <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.12) 100%)', color: '#F0D060', border: '1px solid rgba(201,168,76,0.5)', textShadow: '0 0 4px rgba(255,210,60,0.4)' }}>{s.shareType}</span>
                           )}
                         </div>
-                        <span className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
-                          <span className="text-sm font-bold" style={{ background: 'linear-gradient(90deg, #FFE566 0%, #C8920A 60%, #F0C830 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{Number(s.shareCount).toLocaleString()}</span>
-                          <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>
-                        </span>
+
                       </div>
                       {s.reason && <div className="text-xs" style={{ color: 'rgba(220,185,60,0.55)' }}>{s.reason}</div>}
                     </div>
