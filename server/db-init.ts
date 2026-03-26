@@ -367,12 +367,20 @@ export async function initDatabase() {
     const dbConnMkt = await getDbConnection();
     if (dbConnMkt) {
       for (const row of marketShareData) {
-        await (dbConnMkt as any).execute(
-          `INSERT IGNORE INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`) VALUES (?, ?, ?, ?, '市场贡献股', ?, '市场推荐奖励（天使股30%）', ?, ?, 870413)`,
-          [row.ledgerId, row.userId, row.memberNickname, row.shareCount, row.grantDate, row.regNo, row.annualRate]
+        // 先检查是否已存在（以 regNo 为唯一标识），避免重复插入
+        const [existRows] = await (dbConnMkt as any).execute(
+          `SELECT COUNT(*) as cnt FROM \`equity_shares\` WHERE \`regNo\` = ?`,
+          [row.regNo]
         );
+        const cnt = Array.isArray(existRows) ? (existRows[0] as any).cnt : 0;
+        if (Number(cnt) === 0) {
+          await (dbConnMkt as any).execute(
+            `INSERT INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`) VALUES (?, ?, ?, ?, '市场贡献股', ?, '市场推荐奖励（天使股30%）', ?, ?, 870413)`,
+            [row.ledgerId, row.userId, row.memberNickname, row.shareCount, row.grantDate, row.regNo, row.annualRate]
+          );
+        }
       }
-      console.log('[DB Init] \u2705 market contribution shares seed data checked');
+      console.log('[DB Init] ✅ market contribution shares seed data checked');
     }
 
     console.log("[DB Init] Database initialization completed successfully");
