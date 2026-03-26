@@ -345,4 +345,41 @@ export const equityRouter = router({
       );
       return { success: true };
     }),
+
+  // 获取成员脉动统计（人脉数、联络次数、直接推荐数）
+  getMemberStats: protectedProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+
+      // 人脉数：contacts表中该用户添加的联系人数
+      const [contactRows] = await (conn as any).execute(
+        `SELECT COUNT(*) as cnt FROM contacts WHERE parentUserId=?`,
+        [input.userId]
+      );
+      const contactCount = (contactRows as any[])[0]?.cnt ?? 0;
+
+      // 联络次数：contact_interactions通过contactId关联contacts.parentUserId
+      const [interactionRows] = await (conn as any).execute(
+        `SELECT COUNT(ci.id) as cnt FROM contact_interactions ci
+         JOIN contacts c ON ci.contactId = c.id
+         WHERE c.parentUserId=?`,
+        [input.userId]
+      );
+      const interactionCount = (interactionRows as any[])[0]?.cnt ?? 0;
+
+      // 直接推荐数：users表中invited_by_user_id等于该用户id的数量
+      const [referralRows] = await (conn as any).execute(
+        `SELECT COUNT(*) as cnt FROM users WHERE invited_by_user_id=?`,
+        [input.userId]
+      );
+      const referralCount = (referralRows as any[])[0]?.cnt ?? 0;
+
+      return {
+        contactCount: Number(contactCount),
+        interactionCount: Number(interactionCount),
+        referralCount: Number(referralCount),
+      };
+    }),
 });

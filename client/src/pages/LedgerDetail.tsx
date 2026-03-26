@@ -858,6 +858,10 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), userId: effectiveShareUserId },
     { enabled: isCustomAI && !!effectiveShareUserId }
   );
+  const { data: memberStats } = trpc.equity.getMemberStats.useQuery(
+    { userId: effectiveShareUserId },
+    { enabled: isCustomAI && !!effectiveShareUserId }
+  );
   // 天使股总持股（股本+实时股息，仅统计天使股）
   const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '天使股');
   // 市场贡献股总持股（股本+实时股息）
@@ -1558,6 +1562,30 @@ export default function LedgerDetail() {
                 <div className="text-xs mb-1" style={{ color: '#D4A830' }}>分红记录</div>
                 <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>--</div>
                 <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>待录入</div>
+              </div>
+            </div>
+            {/* 脉动统计：人脉、联络、推荐 */}
+            <div className="grid grid-cols-3 gap-3 mt-3">
+              <div className="rounded-2xl px-3 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
+                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>人脉</div>
+                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
+                  {memberStats ? memberStats.contactCount : '--'}
+                </div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>联系人</div>
+              </div>
+              <div className="rounded-2xl px-3 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
+                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>联络</div>
+                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
+                  {memberStats ? memberStats.interactionCount : '--'}
+                </div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>次</div>
+              </div>
+              <div className="rounded-2xl px-3 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
+                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>推荐</div>
+                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
+                  {memberStats ? memberStats.referralCount : '--'}
+                </div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>直接推荐</div>
               </div>
             </div>
           </div>
