@@ -68,7 +68,7 @@ export default function EquityWeightManage() {
       {/* 说明 */}
       <div className="px-4 pt-3 pb-2">
         <div className="text-xs rounded-xl px-3 py-2" style={{ background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)', color: 'rgba(220,185,60,0.7)' }}>
-          权重 = 资源权重 + 资金权重，默认各为 1.0，总权重 = 2.0。累计股权 = 原始张数 × 总权重。
+          总权重 = 资源权重 × 资金权重，默认 1.0 × 1.0 = 1.0（不加权）。累计股权 = 原始张数 × 总权重。
         </div>
       </div>
 
@@ -97,7 +97,7 @@ export default function EquityWeightManage() {
               <div>
                 <div className="text-sm font-medium" style={{ color: '#fff' }}>{u.name}</div>
                 <div className="text-[11px] mt-0.5" style={{ color: 'rgba(220,185,60,0.6)' }}>
-                  资源 {u.resourceWeight.toFixed(2)} + 资金 {u.capitalWeight.toFixed(2)}
+                  资源 {u.resourceWeight.toFixed(2)} × 资金 {u.capitalWeight.toFixed(2)}
                 </div>
               </div>
             </div>
@@ -154,7 +154,7 @@ export default function EquityWeightManage() {
 
             {/* 预览 */}
             <div className="rounded-xl px-3 py-2 mb-4 text-xs" style={{ background: 'rgba(201,168,76,0.1)', color: 'rgba(220,185,60,0.8)' }}>
-              总权重预览：{(parseFloat(editResource || '0') + parseFloat(editCapital || '0')).toFixed(2)}
+              总权重预览：{(parseFloat(editResource || '1') * parseFloat(editCapital || '1')).toFixed(4)}
             </div>
 
             {saveMsg && <div className="text-xs mb-3" style={{ color: '#ff6b6b' }}>{saveMsg}</div>}
