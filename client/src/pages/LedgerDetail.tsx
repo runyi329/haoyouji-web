@@ -3002,19 +3002,23 @@ export default function LedgerDetail() {
             <div className="space-y-4">
               {/* 天使股卡片（折叠式） */}
               {myShares.some((s: any) => s.shareType === '天使股') && (
-                <AngelShareCard
-                  shares={myShares.filter((s: any) => s.shareType === '天使股')}
-                  isMarket={false}
-                  totalWithDividend={totalSharesWithDividend}
-                />
+                <div style={{ background: '#000000', border: '1px solid #C9A84C', borderRadius: '12px', padding: '12px 14px', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2)' }}>
+                  <AngelShareCard
+                    shares={myShares.filter((s: any) => s.shareType === '天使股')}
+                    isMarket={false}
+                    totalWithDividend={totalSharesWithDividend}
+                  />
+                </div>
               )}
               {/* 市场贡献股卡片（折叠式） */}
               {myShares.some((s: any) => s.shareType === '市场贡献股') && (
-                <AngelShareCard
-                  shares={myShares.filter((s: any) => s.shareType === '市场贡献股')}
-                  isMarket={true}
-                  totalWithDividend={totalMarketSharesWithDividend}
-                />
+                <div style={{ background: '#000000', border: '1px solid #C9A84C', borderRadius: '12px', padding: '12px 14px', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2)' }}>
+                  <AngelShareCard
+                    shares={myShares.filter((s: any) => s.shareType === '市场贡献股')}
+                    isMarket={true}
+                    totalWithDividend={totalMarketSharesWithDividend}
+                  />
+                </div>
               )}
             </div>
           )}
