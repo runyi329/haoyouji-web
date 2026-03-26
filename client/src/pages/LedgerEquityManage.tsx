@@ -1,15 +1,8 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronLeft, Plus, Trash2, Users } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Pencil, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,21 +40,39 @@ export default function LedgerEquityManage() {
     grantDate: new Date().toISOString().slice(0, 10),
     reason: "",
     regNo: genRegNo(),
+    annualRate: "6",
+  });
+
+  // 编辑弹窗状态
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({
+    shareCount: "",
+    shareType: "天使股",
+    grantDate: "",
+    reason: "",
+    annualRate: "6",
   });
 
   // 删除确认
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
-  const utils = trpc.useUtils();
-
   const addMutation = trpc.equity.addLedgerShare.useMutation({
     onSuccess: () => {
       toast.success("股权记录已添加");
       setShowAddDialog(false);
-      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "天使股", grantDate: new Date().toISOString().slice(0, 10), reason: "", regNo: genRegNo() });
+      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "天使股", grantDate: new Date().toISOString().slice(0, 10), reason: "", regNo: genRegNo(), annualRate: "6" });
       refetchShares();
     },
     onError: (e) => toast.error(e.message || "添加失败"),
+  });
+
+  const updateMutation = trpc.equity.updateEquityShare.useMutation({
+    onSuccess: () => {
+      toast.success("已更新");
+      setEditTarget(null);
+      refetchShares();
+    },
+    onError: (e) => toast.error(e.message || "更新失败"),
   });
 
   const deleteMutation = trpc.equity.deleteLedgerShare.useMutation({
@@ -91,6 +102,37 @@ export default function LedgerEquityManage() {
     });
   };
 
+  const openEdit = (record: any) => {
+    setEditTarget(record);
+    setEditForm({
+      shareCount: String(record.shareCount),
+      shareType: record.shareType || '天使股',
+      grantDate: formatDate(record.grantDate),
+      reason: record.reason || "",
+      annualRate: String(record.annualRate ?? 6),
+    });
+  };
+
+  const handleUpdate = () => {
+    if (!editTarget) return;
+    if (!editForm.shareCount || isNaN(Number(editForm.shareCount)) || Number(editForm.shareCount) <= 0) {
+      toast.error("请输入有效的股票张数"); return;
+    }
+    const rate = Number(editForm.annualRate);
+    if (isNaN(rate) || rate < 0 || rate > 100) {
+      toast.error("年化股息率须在0-100之间"); return;
+    }
+    updateMutation.mutate({
+      id: editTarget.id,
+      ledgerId,
+      shareCount: Number(editForm.shareCount),
+      shareType: editForm.shareType,
+      grantDate: editForm.grantDate,
+      reason: editForm.reason.trim(),
+      annualRate: rate,
+    });
+  };
+
   // 按成员分组统计
   const memberShareMap: Record<number, { nickname: string; total: number; records: any[] }> = {};
   (shares || []).forEach((s: any) => {
@@ -106,6 +148,9 @@ export default function LedgerEquityManage() {
     return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
   };
 
+  const inputStyle = { width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box' as const, outline: 'none' };
+  const labelStyle = { fontSize: '12px', color: '#6b7280', marginBottom: '4px' };
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航 */}
@@ -115,10 +160,7 @@ export default function LedgerEquityManage() {
             <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
           <h1 className="text-lg font-medium text-gray-900">股权管理</h1>
-          <button
-            onClick={() => setShowAddDialog(true)}
-            className="p-2 -mr-2"
-          >
+          <button onClick={() => setShowAddDialog(true)} className="p-2 -mr-2">
             <Plus className="w-6 h-6 text-blue-600" />
           </button>
         </div>
@@ -156,19 +198,30 @@ export default function LedgerEquityManage() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-base font-bold text-gray-900">{Number(record.shareCount).toLocaleString()} 张</span>
                         {record.shareType && (
-                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: record.shareType === '天使股' ? '#dbeafe' : '#dcfce7', color: record.shareType === '天使股' ? '#1d4ed8' : '#15803d', fontWeight: 500 }}>{record.shareType}</span>
+                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', fontWeight: 500 }}>{record.shareType}</span>
                         )}
                         <span className="text-xs text-gray-400">{formatDate(record.grantDate)}</span>
                       </div>
-                      {record.regNo && <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace', letterSpacing: '1px', marginTop: '2px' }}>登记编号: {record.regNo}</div>}
-                      {record.reason && <div className="text-xs text-gray-500 leading-relaxed">{record.reason}</div>}
+                      <div className="flex items-center gap-3">
+                        {record.regNo && <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace', letterSpacing: '1px' }}>编号: {record.regNo}</div>}
+                        <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 500 }}>年化 {record.annualRate ?? 6}%</div>
+                      </div>
+                      {record.reason && <div className="text-xs text-gray-500 leading-relaxed mt-0.5">{record.reason}</div>}
                     </div>
-                    <button
-                      onClick={() => setDeleteTarget({ id: record.id, name: `${info.nickname} ${Number(record.shareCount)}张` })}
-                      className="p-1.5 text-gray-300 hover:text-red-400 flex-shrink-0 mt-0.5"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+                      <button
+                        onClick={() => openEdit(record)}
+                        className="p-1.5 text-gray-300 hover:text-blue-400"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget({ id: record.id, name: `${info.nickname} ${Number(record.shareCount)}张` })}
+                        className="p-1.5 text-gray-300 hover:text-red-400"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -177,93 +230,120 @@ export default function LedgerEquityManage() {
         )}
       </div>
 
-      {/* 添加股权弹窗 - 自定义全屏遗罩层，手机端完全居中 */}
+      {/* 添加股权弹窗 */}
       {showAddDialog && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: '16px' }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddDialog(false); }}
         >
-          <div style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '400px', padding: '20px', boxSizing: 'border-box' }}>
+          <div style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '400px', padding: '20px', boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ fontSize: '16px', fontWeight: 600, color: '#111', marginBottom: '16px' }}>添加股权记录</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* 选择成员 */}
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>选择成员</div>
-                <select
-                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box' }}
-                  value={addForm.userId}
-                  onChange={(e) => {
-                    const uid = Number(e.target.value);
-                    const m = (members || []).find((mb: any) => mb.userId === uid);
-                    setAddForm(f => ({ ...f, userId: uid, memberNickname: m?.nickname || m?.username || "" }));
-                  }}
-                >
+                <div style={labelStyle}>选择成员</div>
+                <select style={inputStyle} value={addForm.userId} onChange={(e) => {
+                  const uid = Number(e.target.value);
+                  const m = (members || []).find((mb: any) => mb.userId === uid);
+                  setAddForm(f => ({ ...f, userId: uid, memberNickname: m?.nickname || m?.username || "" }));
+                }}>
                   <option value={0}>请选择成员</option>
                   {(members || []).map((m: any) => (
                     <option key={m.userId} value={m.userId}>{m.nickname || m.username}</option>
                   ))}
                 </select>
               </div>
-              {/* 股票张数 */}
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>股票张数</div>
-                <input
-                  type="number"
-                  placeholder="请输入张数（如 100）"
-                  value={addForm.shareCount}
-                  onChange={(e) => setAddForm(f => ({ ...f, shareCount: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none' }}
-                />
+                <div style={labelStyle}>股票张数</div>
+                <input type="number" placeholder="请输入张数（如 100000）" value={addForm.shareCount}
+                  onChange={(e) => setAddForm(f => ({ ...f, shareCount: e.target.value }))} style={inputStyle} />
               </div>
-              {/* 股权类型 */}
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>股权类型</div>
-                <select
-                  value={addForm.shareType}
-                  onChange={(e) => setAddForm(f => ({ ...f, shareType: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box' }}
-                >
+                <div style={labelStyle}>股权类型</div>
+                <select value={addForm.shareType} onChange={(e) => setAddForm(f => ({ ...f, shareType: e.target.value }))} style={inputStyle}>
                   <option value="天使股">天使股</option>
                   <option value="市场贡献">市场贡献</option>
                 </select>
               </div>
-              {/* 获得日期 */}
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>获得日期</div>
-                <input
-                  type="date"
-                  value={addForm.grantDate}
-                  onChange={(e) => setAddForm(f => ({ ...f, grantDate: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', outline: 'none', WebkitAppearance: 'none', appearance: 'none' }}
-                />
+                <div style={labelStyle}>年化股息率（%）</div>
+                <input type="number" step="0.01" min="0" max="100" placeholder="默认 6" value={addForm.annualRate}
+                  onChange={(e) => setAddForm(f => ({ ...f, annualRate: e.target.value }))} style={inputStyle} />
               </div>
-              {/* 股权登记编号（自动生成，只读） */}
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>股权登记编号</div>
+                <div style={labelStyle}>获得日期</div>
+                <input type="date" value={addForm.grantDate} onChange={(e) => setAddForm(f => ({ ...f, grantDate: e.target.value }))}
+                  style={{ ...inputStyle, WebkitAppearance: 'none', appearance: 'none' } as any} />
+              </div>
+              <div>
+                <div style={labelStyle}>股权登记编号</div>
                 <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '15px', background: '#f9fafb', color: '#374151', fontFamily: 'monospace', letterSpacing: '3px', fontWeight: 600 }}>{addForm.regNo}</div>
               </div>
-              {/* 备注 */}
               <div>
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>备注</div>
-                <textarea
-                  rows={2}
-                  placeholder="备注（可不填）"
-                  value={addForm.reason}
+                <div style={labelStyle}>备注</div>
+                <textarea rows={2} placeholder="备注（可不填）" value={addForm.reason}
                   onChange={(e) => setAddForm(f => ({ ...f, reason: e.target.value }))}
-                  style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box', resize: 'none', outline: 'none' }}
-                />
+                  style={{ ...inputStyle, resize: 'none' }} />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-              <button
-                onClick={() => setShowAddDialog(false)}
-                style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#fff', color: '#374151', cursor: 'pointer' }}
-              >取消</button>
-              <button
-                onClick={handleAdd}
-                disabled={addMutation.isPending}
-                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#D32F2F', color: '#fff', cursor: 'pointer', opacity: addMutation.isPending ? 0.7 : 1 }}
-              >{addMutation.isPending ? "添加中..." : "确认添加"}</button>
+              <button onClick={() => setShowAddDialog(false)}
+                style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#fff', color: '#374151', cursor: 'pointer' }}>取消</button>
+              <button onClick={handleAdd} disabled={addMutation.isPending}
+                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#D32F2F', color: '#fff', cursor: 'pointer', opacity: addMutation.isPending ? 0.7 : 1 }}>
+                {addMutation.isPending ? "添加中..." : "确认添加"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑股权弹窗 */}
+      {editTarget && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: '16px' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setEditTarget(null); }}
+        >
+          <div style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '400px', padding: '20px', boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: '#111', marginBottom: '4px' }}>编辑股权记录</div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>登记编号: {editTarget.regNo}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={labelStyle}>股票张数</div>
+                <input type="number" value={editForm.shareCount}
+                  onChange={(e) => setEditForm(f => ({ ...f, shareCount: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <div style={labelStyle}>股权类型</div>
+                <select value={editForm.shareType} onChange={(e) => setEditForm(f => ({ ...f, shareType: e.target.value }))} style={inputStyle}>
+                  <option value="天使股">天使股</option>
+                  <option value="市场贡献">市场贡献</option>
+                </select>
+              </div>
+              <div>
+                <div style={labelStyle}>年化股息率（%）</div>
+                <input type="number" step="0.01" min="0" max="100" value={editForm.annualRate}
+                  onChange={(e) => setEditForm(f => ({ ...f, annualRate: e.target.value }))} style={inputStyle} />
+                <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>每秒增加：{((Number(editForm.shareCount || 0) * Number(editForm.annualRate || 0) / 100) / 31536000).toFixed(8)} 张</div>
+              </div>
+              <div>
+                <div style={labelStyle}>获得日期</div>
+                <input type="date" value={editForm.grantDate} onChange={(e) => setEditForm(f => ({ ...f, grantDate: e.target.value }))}
+                  style={{ ...inputStyle, WebkitAppearance: 'none', appearance: 'none' } as any} />
+              </div>
+              <div>
+                <div style={labelStyle}>备注</div>
+                <textarea rows={2} value={editForm.reason}
+                  onChange={(e) => setEditForm(f => ({ ...f, reason: e.target.value }))}
+                  style={{ ...inputStyle, resize: 'none' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <button onClick={() => setEditTarget(null)}
+                style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#fff', color: '#374151', cursor: 'pointer' }}>取消</button>
+              <button onClick={handleUpdate} disabled={updateMutation.isPending}
+                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#1d4ed8', color: '#fff', cursor: 'pointer', opacity: updateMutation.isPending ? 0.7 : 1 }}>
+                {updateMutation.isPending ? "保存中..." : "保存修改"}
+              </button>
             </div>
           </div>
         </div>
