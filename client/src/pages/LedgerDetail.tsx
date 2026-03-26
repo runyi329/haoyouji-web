@@ -2763,7 +2763,7 @@ export default function LedgerDetail() {
                 </div>
                 <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
                   <span className="text-2xl font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #D4A020 50%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString()}
+                    {myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toFixed(2)}
                   </span>
                   <span className="text-xs font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>
                 </div>
