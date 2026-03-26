@@ -1599,7 +1599,7 @@ export default function LedgerDetail() {
                 {/* 权重 × 原始股权 标注 */}
                 {myShares && myShares.length > 0 && (
                   <div className="flex items-center gap-0.5 mt-1 flex-wrap">
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>权重</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>加权</span>
                     <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.8)' }}>{totalWeight.toFixed(2)}</span>
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>×</span>
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>{totalAllSharesWithDividend.toFixed(2)}张</span>
