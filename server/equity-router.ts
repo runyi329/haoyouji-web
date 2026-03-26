@@ -664,11 +664,18 @@ export const equityTransferRouter = router({
   getAllWeights: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
-      }
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 检查该用户在该账本的角色（必须是 owner 或 admin）
+      const [roleRows] = await (conn as any).execute(
+        `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+        [input.ledgerId, ctx.user.id]
+      );
+      const ledgerRole = (roleRows as any[])[0]?.role;
+      const isGlobalAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobalAdmin && ledgerRole !== 'owner' && ledgerRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
+      }
       // 从 ledger_members JOIN users 查该账本所有成员
       const [members] = await (conn as any).execute(
         `SELECT lm.userId, u.name, u.username, u.avatar
@@ -698,19 +705,27 @@ export const equityTransferRouter = router({
       });
     }),
 
-  // 设置用户权重（管理员）
+  // 设置用户权重（账本管理员）
   setUserWeight: protectedProcedure
     .input(z.object({
       userId: z.number(),
       resourceWeight: z.number().min(0).max(99),
       capitalWeight: z.number().min(0).max(99),
+      ledgerId: z.number().optional().default(59),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-      }
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 检查该用户在该账本的角色
+      const [roleRows] = await (conn as any).execute(
+        `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+        [input.ledgerId, ctx.user.id]
+      );
+      const ledgerRole = (roleRows as any[])[0]?.role;
+      const isGlobalAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobalAdmin && ledgerRole !== 'owner' && ledgerRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
+      }
       await (conn as any).execute(
         `INSERT INTO equity_weights (user_id, resource_weight, capital_weight)
          VALUES (?, ?, ?)
