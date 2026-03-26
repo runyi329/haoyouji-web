@@ -22,6 +22,37 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
   return accrued;
 }
 
+// 汇总所有天使股记录的股本+实时股息总和
+function useTotalSharesWithDividend(shares: any[]) {
+  const computeTotal = useCallback(() => {
+    if (!shares || shares.length === 0) return 0;
+    let total = 0;
+    const now = Date.now();
+    for (const s of shares) {
+      const base = Number(s.shareCount) || 0;
+      total += base;
+      if (base > 0 && s.grantDate) {
+        const d = new Date(s.grantDate);
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const startTs = new Date(dateStr + 'T00:00:00').getTime();
+        if (!isNaN(startTs)) {
+          const elapsedSeconds = Math.max(0, (now - startTs) / 1000);
+          const perSecond = (base * 6 / 100) / (365 * 24 * 3600);
+          total += perSecond * elapsedSeconds;
+        }
+      }
+    }
+    return total;
+  }, [shares]);
+  const [total, setTotal] = useState<number>(() => computeTotal());
+  useEffect(() => {
+    setTotal(computeTotal());
+    const timer = setInterval(() => setTotal(computeTotal()), 1000);
+    return () => clearInterval(timer);
+  }, [computeTotal]);
+  return total;
+}
+
 // 天使股单条记录，带实时滚动股息
 function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast: boolean }) {
   const grantDateStr = dateStr; // yyyy-MM-dd
@@ -746,6 +777,8 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), userId: effectiveShareUserId },
     { enabled: isCustomAI && !!effectiveShareUserId }
   );
+  // 天使股总持股（股本+实时股息）
+  const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? []);
   // 当前选中商品的快捷引用
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
   const aiProductImages = aiProduct ? aiProduct.detailImages : [];
@@ -1430,7 +1463,7 @@ export default function LedgerDetail() {
                 <div className="text-xs mb-1" style={{ color: '#D4A830' }}>我的持股</div>
                 <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
                   <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {myShares && myShares.length > 0 ? myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString() : '-'}
+                    {myShares && myShares.length > 0 ? totalSharesWithDividend.toFixed(2) : '-'}
                   </span>
                   {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
                 </div>
