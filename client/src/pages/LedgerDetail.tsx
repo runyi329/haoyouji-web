@@ -789,6 +789,8 @@ export default function LedgerDetail() {
   const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '天使股');
   // 市场贡献股总持股（股本+实时股息）
   const totalMarketSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '市场贡献股');
+  // 所有类型股权总和（用于顶部累计股权格子，未来新增类型自动包含）
+  const totalAllSharesWithDividend = useTotalSharesWithDividend(myShares ?? []);
   // 当前选中商品的快捷引用
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
   const aiProductImages = aiProduct ? aiProduct.detailImages : [];
@@ -1473,7 +1475,7 @@ export default function LedgerDetail() {
                 <div className="text-xs mb-1" style={{ color: '#D4A830' }}>累计股权</div>
                 <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
                   <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {myShares && myShares.length > 0 ? totalSharesWithDividend.toFixed(2) : '-'}
+                    {myShares && myShares.length > 0 ? totalAllSharesWithDividend.toFixed(2) : '-'}
                   </span>
                   {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
                 </div>
