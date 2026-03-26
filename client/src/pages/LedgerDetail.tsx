@@ -1386,8 +1386,10 @@ export default function LedgerDetail() {
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.08) 100%)', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1)' }}>
                 <div className="text-xs mb-1" style={{ color: '#D4A830' }}>我的持股</div>
-                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>--%</div>
-                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>待录入</div>
+                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
+                  {myShares && myShares.length > 0 ? myShares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toLocaleString() : '-'}
+                </div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>{myShares && myShares.length > 0 ? '张' : '暂无记录'}</div>
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.18) 0%, rgba(201,168,76,0.08) 100%)', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1)' }}>
                 <div className="text-xs mb-1" style={{ color: '#D4A830' }}>分红记录</div>
