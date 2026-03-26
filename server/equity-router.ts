@@ -314,4 +314,38 @@ export const equityRouter = router({
       await (conn as any).execute(`DELETE FROM equity_shares WHERE id=? AND ledgerId=?`, [input.id, input.ledgerId]);
       return { success: true };
     }),
+
+  // 查询账本成员及其注册邀请推荐关系（仅owner/admin可查）
+  getLedgerMemberReferrals: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 验证操作者是账本owner或admin
+      const [memberCheck] = await (conn as any).execute(
+        `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+        [input.ledgerId, ctx.user.id]
+      );
+      const myRole = (memberCheck as any[])[0];
+      if (!myRole || !['owner','admin'].includes(myRole.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可查看' });
+      }
+      // 查询账本所有成员及其注册邀请推荐关系
+      const [rows] = await (conn as any).execute(
+        `SELECT
+           lm.userId,
+           u.name AS userName,
+           u.invited_by_user_id AS invitedByUserId,
+           ru.name AS inviterName,
+           sn.shareNo
+         FROM ledger_members lm
+         LEFT JOIN users u ON u.id = lm.userId
+         LEFT JOIN users ru ON ru.id = u.invited_by_user_id
+         LEFT JOIN shareholder_numbers sn ON sn.userId = lm.userId AND sn.ledgerId = ?
+         WHERE lm.ledgerId = ?
+         ORDER BY lm.id ASC`,
+        [input.ledgerId, input.ledgerId]
+      );
+      return rows as any[];
+    }),
 });
