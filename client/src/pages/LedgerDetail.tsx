@@ -135,7 +135,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
       {/* 折叠汇总行 */}
       <button
         className="w-full px-1 py-2 flex items-center justify-between"
-        style={{ background: 'transparent', border: 'none', borderBottom: `1px solid ${theme.divider}`, cursor: 'pointer' }}
+        style={{ background: 'transparent', border: 'none', borderBottom: expanded ? `1px solid ${theme.divider}` : 'none', cursor: 'pointer' }}
         onClick={() => setExpanded(e => !e)}
       >
         <div className="flex flex-col gap-0.5">
@@ -146,21 +146,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
             </span>
             <span className="text-xs font-normal" style={{ color: theme.dimColor }}>张</span>
           </div>
-          {/* 第二行：股本 + 股息小字，仅展开时显示 */}
-          {expanded && (
-            <div className="flex items-baseline gap-2">
-              <div className="flex items-baseline gap-0.5">
-                <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股本</span>
-                <span className="text-xs font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalBase.toFixed(2)}</span>
-                <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
-              </div>
-              <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
-                <span className="text-[10px]" style={{ color: theme.dimColor2 }}>+</span>
-                <span className="text-xs font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
-                <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
-              </div>
-            </div>
-          )}
+
         </div>
         <span style={{ color: theme.chevronColor, fontSize: '14px', lineHeight: 1 }}>{expanded ? '▲' : '▼'}</span>
       </button>
