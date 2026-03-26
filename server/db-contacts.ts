@@ -2302,10 +2302,10 @@ export async function getContactsByRegion(parentUserId: number, region: string) 
  */
 export async function getDirectReferrals(contactId: number) {
   const db = await getDb();
- if (!db) throw new Error("Database not available");
-  if (!db) return [];
-  
-  const result = await db.select({
+  if (!db) throw new Error("Database not available");
+
+  // 1. 通过 contacts.referrerId 查询（人脉管理模块的推荐关系）
+  const byReferrerId = await db.select({
     id: contacts.id,
     name: contacts.name,
     title: contacts.title,
@@ -2313,8 +2313,40 @@ export async function getDirectReferrals(contactId: number) {
     .from(contacts)
     .where(eq(contacts.referrerId, contactId))
     .orderBy(desc(contacts.updatedAt));
-  
-  return result;
+
+  // 2. 通过 users.invited_by_user_id 查询（平台注册邀请关系）
+  // 先找到 contactId 对应的 userId（通过 contacts.linkedUserId）
+  const contactRecord = await db.select({ linkedUserId: contacts.linkedUserId })
+    .from(contacts)
+    .where(eq(contacts.id, contactId))
+    .limit(1);
+
+  let byInvitedBy: { id: number; name: string | null; title: string | null }[] = [];
+  if (contactRecord.length > 0 && contactRecord[0].linkedUserId) {
+    const inviterId = contactRecord[0].linkedUserId;
+    // 找到所有 invited_by_user_id = inviterId 的用户，再关联到 contacts 表
+    byInvitedBy = await db.select({
+      id: contacts.id,
+      name: contacts.name,
+      title: contacts.title,
+    })
+      .from(contacts)
+      .innerJoin(users, eq(contacts.linkedUserId, users.id))
+      .where(eq(users.invitedByUserId, inviterId))
+      .orderBy(desc(contacts.updatedAt));
+  }
+
+  // 3. 合并去重（以 contact.id 为唯一键）
+  const seen = new Set<number>();
+  const merged: { id: number; name: string | null; title: string | null }[] = [];
+  for (const r of [...byReferrerId, ...byInvitedBy]) {
+    if (!seen.has(r.id)) {
+      seen.add(r.id);
+      merged.push(r);
+    }
+  }
+
+  return merged;
 }
 
 /**
@@ -2322,33 +2354,53 @@ export async function getDirectReferrals(contactId: number) {
  */
 export async function getIndirectReferrals(contactId: number, maxLevel: number = 10) {
   const db = await getDb();
- if (!db) throw new Error("Database not available");
-  if (!db) return [];
-  
+  if (!db) throw new Error("Database not available");
+
+  // 辅助函数：合并两套推荐关系获取某个 contactId 的直接下级
+  async function getMergedDirectReferrals(cid: number) {
+    // 方式1：contacts.referrerId
+    const byReferrerId = await db!.select({ id: contacts.id, name: contacts.name, title: contacts.title })
+      .from(contacts)
+      .where(eq(contacts.referrerId, cid));
+
+    // 方式2：users.invited_by_user_id
+    const contactRec = await db!.select({ linkedUserId: contacts.linkedUserId })
+      .from(contacts).where(eq(contacts.id, cid)).limit(1);
+
+    let byInvitedBy: { id: number; name: string | null; title: string | null }[] = [];
+    if (contactRec.length > 0 && contactRec[0].linkedUserId) {
+      byInvitedBy = await db!.select({ id: contacts.id, name: contacts.name, title: contacts.title })
+        .from(contacts)
+        .innerJoin(users, eq(contacts.linkedUserId, users.id))
+        .where(eq(users.invitedByUserId, contactRec[0].linkedUserId!));
+    }
+
+    // 合并去重
+    const seen = new Set<number>();
+    const merged: { id: number; name: string | null; title: string | null }[] = [];
+    for (const r of [...byReferrerId, ...byInvitedBy]) {
+      if (!seen.has(r.id)) { seen.add(r.id); merged.push(r); }
+    }
+    return merged;
+  }
+
   const result: any[] = [];
   const visited = new Set<number>();
-  
+
   // BFS 遍历推荐链路
   const queue: { id: number; level: number; referrerName: string }[] = [
     { id: contactId, level: 0, referrerName: "" }
   ];
-  
+
   while (queue.length > 0) {
     const current = queue.shift();
     if (!current || current.level >= maxLevel || visited.has(current.id)) continue;
-    
+
     visited.add(current.id);
-    
-    // 获取该人脉直接推荐的人
-    const directReferrals = await db.select({
-      id: contacts.id,
-      name: contacts.name,
-      title: contacts.title,
-    })
-      .from(contacts)
-      .where(eq(contacts.referrerId, current.id));
-    
-    // 如果当前层级 > 0，说明是间接推荐
+
+    // 获取该人脉直接推荐的人（合并两套）
+    const directReferrals = await getMergedDirectReferrals(current.id);
+
     if (current.level > 0) {
       for (const referral of directReferrals) {
         result.push({
@@ -2358,26 +2410,15 @@ export async function getIndirectReferrals(contactId: number, maxLevel: number =
           level: current.level + 1,
           referrerName: current.referrerName,
         });
-        
-        // 继续遍历下一层
-        queue.push({
-          id: referral.id,
-          level: current.level + 1,
-          referrerName: referral.name,
-        });
+        queue.push({ id: referral.id, level: current.level + 1, referrerName: referral.name ?? "" });
       }
     } else {
-      // 第一层的直接推荐作为间接推荐的起点
       for (const referral of directReferrals) {
-        queue.push({
-          id: referral.id,
-          level: 1,
-          referrerName: referral.name,
-        });
+        queue.push({ id: referral.id, level: 1, referrerName: referral.name ?? "" });
       }
     }
   }
-  
+
   return result;
 }
 
