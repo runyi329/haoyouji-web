@@ -1594,6 +1594,35 @@ export default function LedgerDetail() {
 
           </div>
         )}
+        {/* AI 账本：脉动网总持股结构 */}
+        {isCustomAI && (
+          <div className="px-4 pt-0 pb-4">
+            <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
+              <div className="text-xs mb-3" style={{ color: '#D4A830' }}>脉动网持股结构</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                {[
+                  { name: '天使投资人', pct: '30%' },
+                  { name: '市场贡献值', pct: '12.5%' },
+                  { name: '创始团队', pct: '40%' },
+                  { name: '战略投资股东', pct: '0%' },
+                  { name: '员工持股平台', pct: '15%' },
+                  { name: '联合创始人', pct: '2.5%' },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between py-1" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg, #FFE566, #C8920A)' }} />
+                      <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.85)' }}>{item.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>--张</span>
+                      <span className="text-xs font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{item.pct}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         {/* AH 账本：数据占位符区域 */}
         {isCustomAH && (
           <div className="px-4 pt-2 pb-4">
