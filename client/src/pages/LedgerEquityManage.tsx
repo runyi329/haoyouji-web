@@ -43,7 +43,7 @@ export default function LedgerEquityManage() {
     userId: 0,
     memberNickname: "",
     shareCount: "",
-    shareType: "资金股",
+    shareType: "天使股",
     grantDate: new Date().toISOString().slice(0, 10),
     reason: "",
     regNo: genRegNo(),
@@ -58,7 +58,7 @@ export default function LedgerEquityManage() {
     onSuccess: () => {
       toast.success("股权记录已添加");
       setShowAddDialog(false);
-      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "资金股", grantDate: new Date().toISOString().slice(0, 10), reason: "", regNo: genRegNo() });
+      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "天使股", grantDate: new Date().toISOString().slice(0, 10), reason: "", regNo: genRegNo() });
       refetchShares();
     },
     onError: (e) => toast.error(e.message || "添加失败"),
@@ -84,7 +84,7 @@ export default function LedgerEquityManage() {
       userId: addForm.userId,
       memberNickname: addForm.memberNickname,
       shareCount: Number(addForm.shareCount),
-      shareType: addForm.shareType || '资金股',
+      shareType: addForm.shareType || '天使股',
       grantDate: addForm.grantDate,
       reason: addForm.reason.trim(),
       regNo: addForm.regNo.trim() || undefined,
@@ -156,7 +156,7 @@ export default function LedgerEquityManage() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-base font-bold text-gray-900">{Number(record.shareCount).toLocaleString()} 张</span>
                         {record.shareType && (
-                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: record.shareType === '资金股' ? '#dbeafe' : '#dcfce7', color: record.shareType === '资金股' ? '#1d4ed8' : '#15803d', fontWeight: 500 }}>{record.shareType}</span>
+                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: record.shareType === '天使股' ? '#dbeafe' : '#dcfce7', color: record.shareType === '天使股' ? '#1d4ed8' : '#15803d', fontWeight: 500 }}>{record.shareType}</span>
                         )}
                         <span className="text-xs text-gray-400">{formatDate(record.grantDate)}</span>
                       </div>
@@ -223,7 +223,7 @@ export default function LedgerEquityManage() {
                   onChange={(e) => setAddForm(f => ({ ...f, shareType: e.target.value }))}
                   style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '8px 12px', fontSize: '14px', background: '#fff', color: '#1f2937', boxSizing: 'border-box' }}
                 >
-                  <option value="资金股">资金股</option>
+                  <option value="天使股">天使股</option>
                   <option value="市场贡献">市场贡献</option>
                 </select>
               </div>
