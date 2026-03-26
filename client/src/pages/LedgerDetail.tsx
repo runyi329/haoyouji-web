@@ -891,6 +891,8 @@ export default function LedgerDetail() {
   const [foodScanLoading, setFoodScanLoading] = useState(false); // 加载中
   const [foodScanError, setFoodScanError] = useState<string | null>(null); // 错误信息
   const [shareholdingExpanded, setShareholdingExpanded] = useState(false); // 持股结构折叠状态
+  // 持股结构快照：展开时固定一次，不再实时滚动
+  const [shareholdingSnapshot, setShareholdingSnapshot] = useState<{ angel: number; market: number } | null>(null);
   const [showEquityHistory, setShowEquityHistory] = useState(false); // 股权流水弹窗
   const [equityHistoryUserId, setEquityHistoryUserId] = useState<number | null>(null); // 查看哪个用户的流水（null=自己）
   const foodFileInputRef = useRef<HTMLInputElement>(null); // 文件选择器
@@ -1622,7 +1624,14 @@ export default function LedgerDetail() {
               {/* 标题栏 - 点击折叠/展开 */}
               <button
                 className="w-full flex items-center justify-between px-4 py-3"
-                onClick={() => setShareholdingExpanded(v => !v)}
+                onClick={() => {
+                  const next = !shareholdingExpanded;
+                  setShareholdingExpanded(next);
+                  if (next) {
+                    // 展开时拍下当前实时数据快照，之后不再变动
+                    setShareholdingSnapshot({ angel: globalAngelTotal, market: globalMarketTotal });
+                  }
+                }}
               >
                 <span className="text-xs" style={{ color: '#D4A830' }}>脉动网持股结构</span>
                 <span className="text-xs" style={{ color: 'rgba(201,168,76,0.7)', transition: 'transform 0.25s', display: 'inline-block', transform: shareholdingExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>▼</span>
@@ -1631,16 +1640,18 @@ export default function LedgerDetail() {
               {shareholdingExpanded && (
                 <div className="flex flex-col gap-0 px-4 pb-3">
                   {(() => {
-                    // 以天使股占 30% 反推总股本
-                    const totalShares = globalAngelTotal > 0 ? globalAngelTotal / 0.30 : 0;
+                    // 以天使股占 30% 反推总股本（使用快照数据，不实时滚动）
+                    const snapAngel = shareholdingSnapshot?.angel ?? globalAngelTotal;
+                    const snapMarket = shareholdingSnapshot?.market ?? globalMarketTotal;
+                    const totalShares = snapAngel > 0 ? snapAngel / 0.30 : 0;
                     // 4个类别：已发行 + 未发行
-                    const marketIssued = globalMarketTotal;
-                    const marketUnissued = Math.max(0, totalShares * 0.125 - globalMarketTotal);
+                    const marketIssued = snapMarket;
+                    const marketUnissued = Math.max(0, totalShares * 0.125 - snapMarket);
                     const founderUnissued = totalShares * 0.40;
                     const employeeUnissued = totalShares * 0.15;
                     const cofounderUnissued = totalShares * 0.025;
                     const categories = [
-                      { name: '天使投资人', pct: '30%', issued: globalAngelTotal, unissued: null, singleRow: true },
+                      { name: '天使投资人', pct: '30%', issued: snapAngel, unissued: null, singleRow: true },
                       { name: '市场贡献値', pct: '12.5%', issued: marketIssued, unissued: marketUnissued, singleRow: false },
                       { name: '创始团队', pct: '40%', issued: 0, unissued: founderUnissued, singleRow: false },
                       { name: '员工持股平台', pct: '15%', issued: 0, unissued: employeeUnissued, singleRow: false },
@@ -1683,7 +1694,7 @@ export default function LedgerDetail() {
                   ))}
                   {/* 总计行 */}
                   {(() => {
-                    const totalShares = globalAngelTotal > 0 ? globalAngelTotal / 0.30 : 0;
+                    const totalShares = shareholdingSnapshot ? shareholdingSnapshot.angel / 0.30 : (globalAngelTotal > 0 ? globalAngelTotal / 0.30 : 0);
                     return totalShares > 0 ? (
                       <div className="flex items-center justify-between pt-2 mt-1" style={{ borderTop: '1px solid rgba(201,168,76,0.4)' }}>
                         <span className="text-xs font-bold" style={{ color: 'rgba(220,185,60,0.95)' }}>总计</span>
