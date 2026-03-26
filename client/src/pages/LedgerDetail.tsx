@@ -146,19 +146,21 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
             </span>
             <span className="text-xs font-normal" style={{ color: theme.dimColor }}>张</span>
           </div>
-          {/* 第二行：股本 + 股息小字 */}
-          <div className="flex items-baseline gap-2">
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股本</span>
-              <span className="text-xs font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalBase.toFixed(2)}</span>
-              <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
+          {/* 第二行：股本 + 股息小字，仅展开时显示 */}
+          {expanded && (
+            <div className="flex items-baseline gap-2">
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股本</span>
+                <span className="text-xs font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalBase.toFixed(2)}</span>
+                <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
+              </div>
+              <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
+                <span className="text-[10px]" style={{ color: theme.dimColor2 }}>+</span>
+                <span className="text-xs font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
+                <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
+              </div>
             </div>
-            <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
-              <span className="text-[10px]" style={{ color: theme.dimColor2 }}>+</span>
-              <span className="text-xs font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
-              <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
-            </div>
-          </div>
+          )}
         </div>
         <span style={{ color: theme.chevronColor, fontSize: '14px', lineHeight: 1 }}>{expanded ? '▲' : '▼'}</span>
       </button>
