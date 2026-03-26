@@ -302,7 +302,7 @@ export default function LedgerEquityManage() {
                 <div style={labelStyle}>股权类型</div>
                 <select value={addForm.shareType} onChange={(e) => setAddForm(f => ({ ...f, shareType: e.target.value }))} style={inputStyle}>
                   <option value="天使股">天使股</option>
-                  <option value="市场贡献">市场贡献</option>
+                  <option value="市场贡献股">市场贡献股</option>
                 </select>
               </div>
               <div>
@@ -357,7 +357,7 @@ export default function LedgerEquityManage() {
                 <div style={labelStyle}>股权类型</div>
                 <select value={editForm.shareType} onChange={(e) => setEditForm(f => ({ ...f, shareType: e.target.value }))} style={inputStyle}>
                   <option value="天使股">天使股</option>
-                  <option value="市场贡献">市场贡献</option>
+                  <option value="市场贡献股">市场贡献股</option>
                 </select>
               </div>
               <div>
@@ -433,7 +433,7 @@ export default function LedgerEquityManage() {
                 <div style={labelStyle}>转入后股权类型</div>
                 <select value={transferForm.toShareType} onChange={(e) => setTransferForm(f => ({ ...f, toShareType: e.target.value }))} style={inputStyle}>
                   <option value="天使股">天使股</option>
-                  <option value="市场贡献">市场贡献</option>
+                  <option value="市场贡献股">市场贡献股</option>
                 </select>
               </div>
               <div>
