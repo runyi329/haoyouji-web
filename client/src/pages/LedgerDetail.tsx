@@ -885,7 +885,7 @@ export default function LedgerDetail() {
   );
   const totalWeight = userWeight?.totalWeight ?? 1.00;
   const resourceWeight = userWeight?.resourceWeight ?? 1.00;
-  const capitalWeight = userWeight?.capitalWeight ?? 0.00;
+  const capitalWeight = userWeight?.capitalWeight ?? 1.00;
   // 加权股权 = 原始张数 × 权重
   const weightedSharesTotal = totalAllSharesWithDividend * totalWeight;
 

@@ -700,7 +700,7 @@ export const equityTransferRouter = router({
           avatar: m.avatar,
           resourceWeight: r,
           capitalWeight: c,
-          totalWeight: Math.round((r + c) * 100) / 100,
+          totalWeight: Math.round((r * c) * 10000) / 10000,
         };
       });
     }),
