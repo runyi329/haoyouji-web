@@ -98,6 +98,85 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
   );
 }
 
+// 天使股/市场贡献股折叠式卡片（收起时显示汇总，展开显示明细）
+function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]; isMarket: boolean; totalWithDividend: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const shareNo = shares.find((s: any) => !isMarket)?.shareNo ?? shares[0]?.shareNo;
+  const angelShareNo = shares[0]?.shareNo;
+  // 汇总行：最早授予日期
+  const earliest = shares.reduce((min: string, s: any) => {
+    const d = new Date(s.grantDate);
+    const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    return ds < min ? ds : min;
+  }, '9999');
+  const totalBase = shares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0);
+  const accrued = totalWithDividend - totalBase;
+
+  const gold = { border: '1px solid #C9A84C', shadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2), inset 0 1px 0 rgba(255,230,100,0.12)', divider: 'rgba(201,168,76,0.35)', labelColor: '#D4A830', numGrad: 'linear-gradient(180deg, #FFE566 0%, #D4A020 50%, #C8920A 100%)', dimColor: 'rgba(220,185,60,0.7)', dimColor2: 'rgba(212,175,55,0.6)', chevronColor: 'rgba(212,175,55,0.7)', shareNoGrad: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', shareNoShadow: 'drop-shadow(0 0 4px rgba(255,210,60,0.6))' };
+  const green = { border: '1px solid rgba(60,180,80,0.6)', shadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(60,180,80,0.15), inset 0 1px 0 rgba(100,230,120,0.1)', divider: 'rgba(60,180,80,0.3)', labelColor: '#5BC870', numGrad: 'linear-gradient(180deg, #6EE88A 0%, #3CB85A 100%)', dimColor: 'rgba(100,220,120,0.7)', dimColor2: 'rgba(80,180,100,0.6)', chevronColor: 'rgba(80,220,100,0.7)', shareNoGrad: 'linear-gradient(180deg, #6EE88A 0%, #3CB85A 100%)', shareNoShadow: 'drop-shadow(0 0 4px rgba(80,220,100,0.6))' };
+  const theme = isMarket ? green : gold;
+
+  return (
+    <div className="rounded-2xl overflow-hidden" style={{ background: '#000000', border: theme.border, boxShadow: theme.shadow }}>
+      {/* 汇总头部 */}
+      <div className="px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-xs flex items-center gap-1" style={{ color: theme.labelColor }}>
+            <span>持有股权</span>
+            {isMarket && <span style={{ color: theme.dimColor2, fontSize: '10px' }}>（{shares.length}份）</span>}
+          </div>
+          {angelShareNo && (
+            <div className="flex items-center gap-1">
+              <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股东编号</span>
+              <span className="text-sm font-bold tracking-widest" style={{ background: theme.shareNoGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: theme.shareNoShadow }}>{angelShareNo}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex items-baseline gap-1" style={{ filter: isMarket ? 'drop-shadow(0 0 6px rgba(80,220,100,0.5))' : 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
+          <span className="text-2xl font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            {totalWithDividend.toFixed(2)}
+          </span>
+          <span className="text-xs font-normal" style={{ color: theme.dimColor }}>张</span>
+        </div>
+      </div>
+      {/* 分隔线 + 折叠汇总行 */}
+      <div style={{ borderTop: `1px solid ${theme.divider}` }} />
+      <button
+        className="w-full px-4 py-3 flex items-center justify-between"
+        style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xs" style={{ color: theme.dimColor2 }}>{earliest}</span>
+          <div className="flex items-baseline gap-0.5">
+            <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股本</span>
+            <span className="text-sm font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalBase.toFixed(2)}</span>
+            <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
+          </div>
+          <div className="flex items-baseline gap-0.5" style={{ filter: isMarket ? 'drop-shadow(0 0 4px rgba(80,220,100,0.4))' : 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
+            <span className="text-[10px]" style={{ color: theme.dimColor2 }}>+</span>
+            <span className="text-sm font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
+            <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
+          </div>
+        </div>
+        <span style={{ color: theme.chevronColor, fontSize: '14px', lineHeight: 1 }}>{expanded ? '▲' : '▼'}</span>
+      </button>
+      {/* 展开明细 */}
+      {expanded && (
+        <div>
+          <div style={{ borderTop: `1px solid ${theme.divider}` }} />
+          {shares.map((s: any, idx: number, arr: any[]) => {
+            const d = new Date(s.grantDate);
+            const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            return <AngelShareRow key={s.id} s={s} dateStr={dateStr} isLast={idx === arr.length - 1} />;
+          })}
+          <div className="pb-1" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 单张资金方订单卡片右栏（包含扫描数据查询）
 function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number }) {
   const { data: stats } = trpc.ledger.funderGetOrderScanStats.useQuery(
@@ -2757,72 +2836,21 @@ export default function LedgerDetail() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* 天使股卡片 */}
+              {/* 天使股卡片（折叠式） */}
               {myShares.some((s: any) => s.shareType === '天使股') && (
-                <div className="rounded-2xl overflow-hidden" style={{ background: '#000000', border: '1px solid #C9A84C', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2), inset 0 1px 0 rgba(255,230,100,0.12)' }}>
-                  {/* 天使股汇总头部 */}
-                  <div className="px-4 pt-4 pb-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-xs" style={{ color: '#D4A830' }}>持有股权</div>
-                      {myShares.find((s: any) => s.shareType === '天使股')?.shareNo && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.7)' }}>股东编号</span>
-                          <span className="text-sm font-bold tracking-widest" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.6))' }}>{myShares.find((s: any) => s.shareType === '天使股')?.shareNo}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
-                      <span className="text-2xl font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #D4A020 50%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                        {myShares.filter((s: any) => s.shareType === '天使股').reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toFixed(2)}
-                      </span>
-                      <span className="text-xs font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>
-                    </div>
-                  </div>
-                  <div style={{ borderTop: '1px solid rgba(201,168,76,0.35)' }} />
-                  {myShares.filter((s: any) => s.shareType === '天使股').map((s: any, idx: number, arr: any[]) => {
-                    const d = new Date(s.grantDate);
-                    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                    return (
-                      <AngelShareRow key={s.id} s={s} dateStr={dateStr} isLast={idx === arr.length - 1} />
-                    );
-                  })}
-                  <div className="pb-1" />
-                </div>
+                <AngelShareCard
+                  shares={myShares.filter((s: any) => s.shareType === '天使股')}
+                  isMarket={false}
+                  totalWithDividend={totalSharesWithDividend}
+                />
               )}
-              {/* 市场贡献股卡片 */}
+              {/* 市场贡献股卡片（折叠式） */}
               {myShares.some((s: any) => s.shareType === '市场贡献股') && (
-                <div className="rounded-2xl overflow-hidden" style={{ background: '#000000', border: '1px solid rgba(60,180,80,0.6)', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(60,180,80,0.15), inset 0 1px 0 rgba(100,230,120,0.1)' }}>
-                  {/* 市场贡献股汇总头部 */}
-                  <div className="px-4 pt-4 pb-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="text-xs flex items-center gap-1" style={{ color: '#5BC870' }}>
-                        <span>持有股权</span>
-                        <span style={{ color: 'rgba(80,180,100,0.6)', fontSize: '10px' }}>（{myShares.filter((s: any) => s.shareType === '市场贡献股').length}份）</span>
-                      </div>
-                      {myShares.find((s: any) => s.shareType === '天使股')?.shareNo && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px]" style={{ color: 'rgba(80,180,100,0.7)' }}>股东编号</span>
-                          <span className="text-sm font-bold tracking-widest" style={{ background: 'linear-gradient(180deg, #6EE88A 0%, #3CB85A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(80,220,100,0.6))' }}>{myShares.find((s: any) => s.shareType === '天使股')?.shareNo}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(80,220,100,0.5))' }}>
-                      <span className="text-2xl font-bold" style={{ background: 'linear-gradient(180deg, #6EE88A 0%, #3CB85A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                        {myShares.filter((s: any) => s.shareType === '市场贡献股').reduce((sum: number, s: any) => sum + Number(s.shareCount), 0).toFixed(2)}
-                      </span>
-                      <span className="text-xs font-normal" style={{ color: 'rgba(100,220,120,0.7)' }}>张</span>
-                    </div>
-                  </div>
-                  <div style={{ borderTop: '1px solid rgba(60,180,80,0.3)' }} />
-                  {myShares.filter((s: any) => s.shareType === '市场贡献股').map((s: any, idx: number, arr: any[]) => {
-                    const d = new Date(s.grantDate);
-                    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                    return (
-                      <AngelShareRow key={s.id} s={s} dateStr={dateStr} isLast={idx === arr.length - 1} />
-                    );
-                  })}
-                  <div className="pb-1" />
-                </div>
+                <AngelShareCard
+                  shares={myShares.filter((s: any) => s.shareType === '市场贡献股')}
+                  isMarket={true}
+                  totalWithDividend={totalMarketSharesWithDividend}
+                />
               )}
             </div>
           )}
