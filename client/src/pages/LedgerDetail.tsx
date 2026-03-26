@@ -1539,12 +1539,29 @@ export default function LedgerDetail() {
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
-                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>股东编号</div>
-                <div className="text-lg font-bold tracking-widest" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>{myShares && myShares.length > 0 && (myShares[0] as any).shareNo ? (myShares[0] as any).shareNo : '-'}</div>
-                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>登记序号</div>
+                <div className="text-xs mb-1 flex items-baseline gap-1" style={{ color: '#D4A830' }}>
+                  <span>累计股权</span>
+                  {myShares && myShares.length > 0 && (myShares[0] as any).shareNo && (
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{(myShares[0] as any).shareNo}）</span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
+                  <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    {myShares && myShares.length > 0 ? totalAllSharesWithDividend.toFixed(2) : '-'}
+                  </span>
+                  {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
+                </div>
+                {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
-                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>脉动数据</div>
+                <div className="text-xs mb-1 flex items-baseline gap-1" style={{ color: '#D4A830' }}>
+                  <span>脉动数据</span>
+                  {(() => {
+                    const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
+                    const uname = viewTarget ? (viewTarget.username || viewTarget.nickname) : (user?.username || user?.nickname);
+                    return uname ? <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{uname}）</span> : null;
+                  })()}
+                </div>
                 <div className="grid grid-cols-3 gap-1 mt-1">
                   <div>
                     <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.7)' }}>人脉</div>
@@ -1564,19 +1581,14 @@ export default function LedgerDetail() {
                 </div>
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
-                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>累计股权</div>
-                <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
-                  <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {myShares && myShares.length > 0 ? totalAllSharesWithDividend.toFixed(2) : '-'}
-                  </span>
-                  {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
-                </div>
-                {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
+                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>--</div>
+                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>--</div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>待配置</div>
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
-                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>分红记录</div>
+                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>--</div>
                 <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>--</div>
-                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>待录入</div>
+                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>待配置</div>
               </div>
             </div>
 
