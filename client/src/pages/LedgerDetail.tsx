@@ -1589,16 +1589,6 @@ export default function LedgerDetail() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
-                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>--</div>
-                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>--</div>
-                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>待配置</div>
-              </div>
-              <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
-                <div className="text-xs mb-1" style={{ color: '#D4A830' }}>--</div>
-                <div className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>--</div>
-                <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>待配置</div>
-              </div>
             </div>
 
           </div>
