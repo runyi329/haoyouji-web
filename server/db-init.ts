@@ -399,6 +399,48 @@ export async function initDatabase() {
       console.warn('[DB Init] ⚠️ shareType fix skipped:', fixErr instanceof Error ? fixErr.message : fixErr);
     }
 
+    // ===== 建立 equity_transfers 股权转让申请表 =====
+    try {
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS \`equity_transfers\` (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          from_user_id INT NOT NULL COMMENT '转出方用户ID',
+          from_share_id INT NOT NULL COMMENT '转出股权记录ID',
+          transfer_count DECIMAL(15,4) NOT NULL COMMENT '转让张数',
+          to_user_id INT NOT NULL COMMENT '转入方用户ID',
+          status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending' COMMENT '状态',
+          remark TEXT COMMENT '备注',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          approved_at DATETIME NULL,
+          approved_by INT NULL,
+          INDEX idx_from_user (from_user_id),
+          INDEX idx_to_user (to_user_id),
+          INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股权转让申请表'
+      `);
+      console.log('[DB Init] ✅ equity_transfers table ready');
+    } catch (e) {
+      console.warn('[DB Init] ⚠️ equity_transfers table skipped:', e instanceof Error ? e.message : e);
+    }
+
+    // ===== 建立 equity_weights 股权权重表 =====
+    try {
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS \`equity_weights\` (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL UNIQUE COMMENT '用户ID',
+          resource_weight DECIMAL(5,2) NOT NULL DEFAULT 1.00 COMMENT '资源权重',
+          capital_weight DECIMAL(5,2) NOT NULL DEFAULT 0.00 COMMENT '资金权重',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_user_id (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='股权权重表'
+      `);
+      console.log('[DB Init] ✅ equity_weights table ready');
+    } catch (e) {
+      console.warn('[DB Init] ⚠️ equity_weights table skipped:', e instanceof Error ? e.message : e);
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);

@@ -878,6 +878,17 @@ export default function LedgerDetail() {
   const totalMarketSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '市场贡献股');
   // 所有类型股权总和（用于顶部累计股权格子，未来新增类型自动包含）
   const totalAllSharesWithDividend = useTotalSharesWithDividend(myShares ?? []);
+  // 查询当前用户权重
+  const { data: userWeight } = trpc.equity.getUserWeight.useQuery(
+    { userId: effectiveShareUserId },
+    { enabled: isCustomAI && !!effectiveShareUserId }
+  );
+  const totalWeight = userWeight?.totalWeight ?? 1.00;
+  const resourceWeight = userWeight?.resourceWeight ?? 1.00;
+  const capitalWeight = userWeight?.capitalWeight ?? 0.00;
+  // 加权股权 = 原始张数 × 权重
+  const weightedSharesTotal = totalAllSharesWithDividend * totalWeight;
+
   // 当前选中商品的快捷引用
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
   const aiProductImages = aiProduct ? aiProduct.detailImages : [];
@@ -1578,12 +1589,29 @@ export default function LedgerDetail() {
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{(myShares[0] as any).shareNo}）</span>
                   )}
                 </div>
+                {/* 加权股权（原始张数 × 权重） */}
                 <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
                   <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {myShares && myShares.length > 0 ? totalAllSharesWithDividend.toFixed(2) : '-'}
+                    {myShares && myShares.length > 0 ? weightedSharesTotal.toFixed(2) : '-'}
                   </span>
                   {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
                 </div>
+                {/* 权重行 */}
+                {myShares && myShares.length > 0 && (
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>权重</span>
+                    <span className="text-[11px] font-semibold" style={{ color: 'rgba(255,210,80,0.85)' }}>{totalWeight.toFixed(2)}</span>
+                    <span className="text-[9px]" style={{ color: 'rgba(220,185,60,0.4)' }}>（资源{resourceWeight.toFixed(2)}+资金{capitalWeight.toFixed(2)}）</span>
+                  </div>
+                )}
+                {/* 原始张数 */}
+                {myShares && myShares.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>原始</span>
+                    <span className="text-[11px] font-mono" style={{ color: 'rgba(220,185,60,0.7)' }}>{totalAllSharesWithDividend.toFixed(2)}</span>
+                    <span className="text-[9px]" style={{ color: 'rgba(220,185,60,0.4)' }}>张</span>
+                  </div>
+                )}
                 {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
               </div>
               <div className="rounded-2xl px-4 py-3" style={{ background: '#000000', border: '1px solid rgba(201,168,76,0.45)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8)' }}>
