@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronLeft, Plus, Trash2, Pencil, Users } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Pencil, Users, ArrowLeftRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -56,6 +56,17 @@ export default function LedgerEquityManage() {
   // 删除确认
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
+  // 股权转让弹窗状态
+  const [showTransferDialog, setShowTransferDialog] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    fromShareId: 0,
+    toUserId: 0,
+    toUserNickname: '',
+    shareCount: '',
+    toShareType: '天使股',
+    reason: '',
+  });
+
   const addMutation = trpc.equity.addLedgerShare.useMutation({
     onSuccess: () => {
       toast.success("股权记录已添加");
@@ -83,6 +94,31 @@ export default function LedgerEquityManage() {
     },
     onError: (e) => toast.error(e.message || "删除失败"),
   });
+
+  const transferMutation = trpc.equityTransfer.createTransfer.useMutation({
+    onSuccess: () => {
+      toast.success('转让申请已提交，等待管理员审批');
+      setShowTransferDialog(false);
+      setTransferForm({ fromShareId: 0, toUserId: 0, toUserNickname: '', shareCount: '', toShareType: '天使股', reason: '' });
+    },
+    onError: (e) => toast.error(e.message || '转让申请失败'),
+  });
+
+  const handleTransfer = () => {
+    if (!transferForm.fromShareId) { toast.error('请选择转出的股权记录'); return; }
+    if (!transferForm.toUserId) { toast.error('请选择转入方'); return; }
+    const cnt = Number(transferForm.shareCount);
+    if (!transferForm.shareCount || isNaN(cnt) || cnt <= 0) { toast.error('请输入有效的转让张数'); return; }
+    transferMutation.mutate({
+      ledgerId,
+      fromShareId: transferForm.fromShareId,
+      toUserId: transferForm.toUserId,
+      toUserNickname: transferForm.toUserNickname,
+      fromShareCount: cnt,
+      toShareType: transferForm.toShareType,
+      reason: transferForm.reason.trim(),
+    });
+  };
 
   const handleAdd = () => {
     if (!addForm.userId) { toast.error("请选择成员"); return; }
@@ -160,9 +196,14 @@ export default function LedgerEquityManage() {
             <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
           <h1 className="text-lg font-medium text-gray-900">股权管理</h1>
-          <button onClick={() => setShowAddDialog(true)} className="p-2 -mr-2">
-            <Plus className="w-6 h-6 text-blue-600" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setShowTransferDialog(true)} className="p-2" title="发起转让">
+              <ArrowLeftRight className="w-5 h-5 text-amber-500" />
+            </button>
+            <button onClick={() => setShowAddDialog(true)} className="p-2 -mr-2">
+              <Plus className="w-6 h-6 text-blue-600" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -343,6 +384,71 @@ export default function LedgerEquityManage() {
               <button onClick={handleUpdate} disabled={updateMutation.isPending}
                 style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#1d4ed8', color: '#fff', cursor: 'pointer', opacity: updateMutation.isPending ? 0.7 : 1 }}>
                 {updateMutation.isPending ? "保存中..." : "保存修改"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 股权转让弹窗 */}
+      {showTransferDialog && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.5)', padding: '16px' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowTransferDialog(false); }}
+        >
+          <div style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '400px', padding: '20px', boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: '#111', marginBottom: '4px' }}>股权转让申请</div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>提交后由管理员审批后生效</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={labelStyle}>转出方（选择股权记录）</div>
+                <select style={inputStyle} value={transferForm.fromShareId} onChange={(e) => setTransferForm(f => ({ ...f, fromShareId: Number(e.target.value) }))}>
+                  <option value={0}>请选择要转出的股权</option>
+                  {(shares || []).map((s: any) => (
+                    <option key={s.id} value={s.id}>
+                      {s.memberNickname} - {Number(s.shareCount).toLocaleString()}张 {s.shareType}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div style={labelStyle}>转入方</div>
+                <select style={inputStyle} value={transferForm.toUserId} onChange={(e) => {
+                  const uid = Number(e.target.value);
+                  const m = (members || []).find((mb: any) => mb.userId === uid);
+                  setTransferForm(f => ({ ...f, toUserId: uid, toUserNickname: m?.nickname || m?.username || '' }));
+                }}>
+                  <option value={0}>请选择转入方</option>
+                  {(members || []).map((m: any) => (
+                    <option key={m.userId} value={m.userId}>{m.nickname || m.username}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <div style={labelStyle}>转让张数</div>
+                <input type="number" placeholder="请输入转让张数" value={transferForm.shareCount}
+                  onChange={(e) => setTransferForm(f => ({ ...f, shareCount: e.target.value }))} style={inputStyle} />
+              </div>
+              <div>
+                <div style={labelStyle}>转入后股权类型</div>
+                <select value={transferForm.toShareType} onChange={(e) => setTransferForm(f => ({ ...f, toShareType: e.target.value }))} style={inputStyle}>
+                  <option value="天使股">天使股</option>
+                  <option value="市场贡献">市场贡献</option>
+                </select>
+              </div>
+              <div>
+                <div style={labelStyle}>转让原因（可不填）</div>
+                <textarea rows={2} placeholder="备注" value={transferForm.reason}
+                  onChange={(e) => setTransferForm(f => ({ ...f, reason: e.target.value }))}
+                  style={{ ...inputStyle, resize: 'none' }} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+              <button onClick={() => setShowTransferDialog(false)}
+                style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#fff', color: '#374151', cursor: 'pointer' }}>取消</button>
+              <button onClick={handleTransfer} disabled={transferMutation.isPending}
+                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#D97706', color: '#fff', cursor: 'pointer', opacity: transferMutation.isPending ? 0.7 : 1 }}>
+                {transferMutation.isPending ? '提交中...' : '提交转让申请'}
               </button>
             </div>
           </div>

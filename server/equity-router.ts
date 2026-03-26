@@ -422,3 +422,222 @@ export const equityRouter = router({
       return { angelTotal, angelShares, marketTotal, marketShares };
     }),
 });
+
+// ===== 股权转让功能 =====
+
+export const equityTransferRouter = router({
+  // 发起转让申请（任何持股人均可申请）
+  createTransfer: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      fromShareId: z.number(), // 转出的股权记录ID
+      fromShareCount: z.number().positive(),
+      toUserId: z.number(),
+      toNickname: z.string(),
+      toShareType: z.string(),
+      reason: z.string().optional().default(''),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 查找转出股权记录，必须属于当前用户
+      const [shareRows] = await (conn as any).execute(
+        `SELECT id, userId, memberNickname, shareCount, shareType FROM equity_shares WHERE id=? AND ledgerId=? AND userId=?`,
+        [input.fromShareId, input.ledgerId, ctx.user.id]
+      );
+      const share = (shareRows as any[])[0];
+      if (!share) throw new TRPCError({ code: 'NOT_FOUND', message: '未找到该股权记录或无权操作' });
+      if (Number(share.shareCount) < input.fromShareCount) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `可转让张数不足，当前持有 ${share.shareCount} 张` });
+      }
+      // 检查是否有待审核中的申请（同一股权记录）
+      const [pendingRows] = await (conn as any).execute(
+        `SELECT id FROM equity_transfers WHERE fromUserId=? AND ledgerId=? AND status='pending'`,
+        [ctx.user.id, input.ledgerId]
+      );
+      if ((pendingRows as any[]).length > 0) {
+        throw new TRPCError({ code: 'CONFLICT', message: '您已有待审核的转让申请，请等待管理员处理后再提交' });
+      }
+      const [result] = await (conn as any).execute(
+        `INSERT INTO equity_transfers (ledgerId, fromUserId, fromNickname, fromShareType, fromShareCount, toUserId, toNickname, toShareType, reason, status, createdBy)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        [input.ledgerId, ctx.user.id, share.memberNickname, share.shareType, input.fromShareCount, input.toUserId, input.toNickname, input.toShareType, input.reason, ctx.user.id]
+      );
+      return { id: (result as any).insertId };
+    }),
+
+  // 管理员审批转让申请
+  reviewTransfer: protectedProcedure
+    .input(z.object({
+      transferId: z.number(),
+      action: z.enum(['approved', 'rejected']),
+      adminNote: z.string().optional().default(''),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 必须是管理员
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可审批' });
+      }
+      // 查找申请
+      const [rows] = await (conn as any).execute(
+        `SELECT * FROM equity_transfers WHERE id=? AND status='pending'`,
+        [input.transferId]
+      );
+      const transfer = (rows as any[])[0];
+      if (!transfer) throw new TRPCError({ code: 'NOT_FOUND', message: '未找到待审核的申请' });
+
+      if (input.action === 'approved') {
+        // 查找转出人的对应股权记录（取最新一条同类型，余额足够的）
+        const [fromShares] = await (conn as any).execute(
+          `SELECT id, shareCount FROM equity_shares WHERE ledgerId=? AND userId=? AND shareType=? ORDER BY grantDate ASC, id ASC`,
+          [transfer.ledgerId, transfer.fromUserId, transfer.fromShareType]
+        );
+        const fromShareList = fromShares as any[];
+        const totalFrom = fromShareList.reduce((s: number, r: any) => s + Number(r.shareCount), 0);
+        if (totalFrom < Number(transfer.fromShareCount)) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `转出人当前持有 ${totalFrom} 张，不足以转让 ${transfer.fromShareCount} 张` });
+        }
+        // 按FIFO扣减转出人股权
+        let remaining = Number(transfer.fromShareCount);
+        for (const row of fromShareList) {
+          if (remaining <= 0) break;
+          const rowCount = Number(row.shareCount);
+          if (rowCount <= remaining) {
+            await (conn as any).execute(`DELETE FROM equity_shares WHERE id=?`, [row.id]);
+            remaining -= rowCount;
+          } else {
+            await (conn as any).execute(`UPDATE equity_shares SET shareCount=? WHERE id=?`, [rowCount - remaining, row.id]);
+            remaining = 0;
+          }
+        }
+        // 获取转出人的annualRate（取第一条）
+        const annualRate = fromShareList[0]?.annualRate ?? 6;
+        // 新增转入人的股权记录
+        const today = new Date().toISOString().slice(0, 10);
+        await (conn as any).execute(
+          `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy, annualRate)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [transfer.ledgerId, transfer.toUserId, transfer.toNickname, transfer.fromShareCount, transfer.toShareType,
+           today, `股权转让（来自 ${transfer.fromNickname}）`, ctx.user.id, annualRate]
+        );
+      }
+
+      // 更新申请状态
+      await (conn as any).execute(
+        `UPDATE equity_transfers SET status=?, adminNote=?, reviewedBy=?, reviewedAt=NOW() WHERE id=?`,
+        [input.action, input.adminNote, ctx.user.id, input.transferId]
+      );
+      return { success: true };
+    }),
+
+  // 查询待审核的转让申请（管理员）
+  getPendingTransfers: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+      }
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [rows] = await (conn as any).execute(
+        `SELECT * FROM equity_transfers WHERE ledgerId=? AND status='pending' ORDER BY createdAt DESC`,
+        [input.ledgerId]
+      );
+      return rows as any[];
+    }),
+
+  // 查询所有转让记录（管理员）
+  getAllTransfers: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+      }
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [rows] = await (conn as any).execute(
+        `SELECT * FROM equity_transfers WHERE ledgerId=? ORDER BY createdAt DESC`,
+        [input.ledgerId]
+      );
+      return rows as any[];
+    }),
+
+  // 查询当前用户的股权流水（授予+转入+转出）
+  getMyEquityHistory: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 授予记录（equity_shares）
+      const [grantRows] = await (conn as any).execute(
+        `SELECT id, shareType, shareCount, grantDate as eventDate, reason, createdAt,
+                'grant' as eventType, NULL as counterparty
+         FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
+        [input.ledgerId, ctx.user.id]
+      );
+      // 转入记录（equity_transfers，approved，toUserId=我）
+      const [inRows] = await (conn as any).execute(
+        `SELECT id, toShareType as shareType, fromShareCount as shareCount, reviewedAt as eventDate,
+                reason, createdAt, 'transfer_in' as eventType, fromNickname as counterparty
+         FROM equity_transfers WHERE ledgerId=? AND toUserId=? AND status='approved' ORDER BY reviewedAt DESC`,
+        [input.ledgerId, ctx.user.id]
+      );
+      // 转出记录（equity_transfers，approved/rejected/pending，fromUserId=我）
+      const [outRows] = await (conn as any).execute(
+        `SELECT id, fromShareType as shareType, fromShareCount as shareCount, 
+                COALESCE(reviewedAt, createdAt) as eventDate,
+                reason, createdAt, 
+                CONCAT('transfer_out_', status) as eventType,
+                toNickname as counterparty
+         FROM equity_transfers WHERE ledgerId=? AND fromUserId=? ORDER BY createdAt DESC`,
+        [input.ledgerId, ctx.user.id]
+      );
+      // 合并并按时间倒序
+      const all = [
+        ...(grantRows as any[]).map(r => ({ ...r, eventType: 'grant' })),
+        ...(inRows as any[]).map(r => ({ ...r, eventType: 'transfer_in' })),
+        ...(outRows as any[]),
+      ].sort((a, b) => new Date(b.eventDate || b.createdAt).getTime() - new Date(a.eventDate || a.createdAt).getTime());
+      return all;
+    }),
+
+  // 查询指定用户的股权流水（管理员查看任意用户）
+  getUserEquityHistory: protectedProcedure
+    .input(z.object({ ledgerId: z.number(), userId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+      }
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [grantRows] = await (conn as any).execute(
+        `SELECT id, shareType, shareCount, grantDate as eventDate, reason, createdAt,
+                'grant' as eventType, NULL as counterparty
+         FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
+        [input.ledgerId, input.userId]
+      );
+      const [inRows] = await (conn as any).execute(
+        `SELECT id, toShareType as shareType, fromShareCount as shareCount, reviewedAt as eventDate,
+                reason, createdAt, 'transfer_in' as eventType, fromNickname as counterparty
+         FROM equity_transfers WHERE ledgerId=? AND toUserId=? AND status='approved' ORDER BY reviewedAt DESC`,
+        [input.ledgerId, input.userId]
+      );
+      const [outRows] = await (conn as any).execute(
+        `SELECT id, fromShareType as shareType, fromShareCount as shareCount,
+                COALESCE(reviewedAt, createdAt) as eventDate,
+                reason, createdAt,
+                CONCAT('transfer_out_', status) as eventType,
+                toNickname as counterparty
+         FROM equity_transfers WHERE ledgerId=? AND fromUserId=? ORDER BY createdAt DESC`,
+        [input.ledgerId, input.userId]
+      );
+      const all = [
+        ...(grantRows as any[]).map(r => ({ ...r, eventType: 'grant' })),
+        ...(inRows as any[]).map(r => ({ ...r, eventType: 'transfer_in' })),
+        ...(outRows as any[]),
+      ].sort((a, b) => new Date(b.eventDate || b.createdAt).getTime() - new Date(a.eventDate || a.createdAt).getTime());
+      return all;
+    }),
+});
