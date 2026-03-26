@@ -290,42 +290,45 @@ export async function initDatabase() {
     }
 
     // ===== 股东编号表（shareholder_numbers）=====
-    await db.execute(`
-      CREATE TABLE IF NOT EXISTS \`shareholder_numbers\` (
-        \`id\` INT NOT NULL AUTO_INCREMENT,
-        \`ledgerId\` INT NOT NULL,
-        \`userId\` INT NOT NULL,
-        \`shareNo\` VARCHAR(10) NOT NULL,
-        \`createdAt\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (\`id\`),
-        UNIQUE KEY \`uk_ledger_user\` (\`ledgerId\`, \`userId\`)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-    console.log('[DB Init] \u2705 shareholder_numbers table checked/created');
-    // 初始化 59 号账本的 14 位股东编号（已存则跳过）
-    const shareholderData = [
-      { ledgerId: 59, userId: 870413,  shareNo: '0001' }, // 胡永煎
-      { ledgerId: 59, userId: 510025,  shareNo: '0002' }, // Julie
-      { ledgerId: 59, userId: 4957147, shareNo: '0003' }, // 陈奇戌
-      { ledgerId: 59, userId: 4957151, shareNo: '0004' }, // 大饼江湖
-      { ledgerId: 59, userId: 4957141, shareNo: '0005' }, // vesen
-      { ledgerId: 59, userId: 4957213, shareNo: '0006' }, // cyndi2109
-      { ledgerId: 59, userId: 4957217, shareNo: '0007' }, // 李斜Luby
-      { ledgerId: 59, userId: 4680302, shareNo: '0008' }, // 张慧
-      { ledgerId: 59, userId: 4957155, shareNo: '0009' }, // Johnson
-      { ledgerId: 59, userId: 4952766, shareNo: '0010' }, // 刘力凡
-      { ledgerId: 59, userId: 3060001, shareNo: '0011' }, // 阿潇
-      { ledgerId: 59, userId: 4957222, shareNo: '0012' }, // LK070865
-      { ledgerId: 59, userId: 4957247, shareNo: '0013' }, // Mychael
-      { ledgerId: 59, userId: 4957293, shareNo: '0014' }, // 袁赇
-    ];
-    for (const row of shareholderData) {
-      await db.execute(
-        `INSERT IGNORE INTO \`shareholder_numbers\` (\`ledgerId\`, \`userId\`, \`shareNo\`) VALUES (?, ?, ?)`,
-        [row.ledgerId, row.userId, row.shareNo]
-      );
+    const dbConnSn = await getDbConnection();
+    if (dbConnSn) {
+      await (dbConnSn as any).execute(`
+        CREATE TABLE IF NOT EXISTS \`shareholder_numbers\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`ledgerId\` INT NOT NULL,
+          \`userId\` INT NOT NULL,
+          \`shareNo\` VARCHAR(10) NOT NULL,
+          \`createdAt\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`uk_ledger_user\` (\`ledgerId\`, \`userId\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log('[DB Init] ✅ shareholder_numbers table checked/created');
+      // 初始化 59 号账本的 14 位股东编号（已存则跳过）
+      const shareholderData = [
+        { ledgerId: 59, userId: 870413,  shareNo: '0001' }, // 胡永煜
+        { ledgerId: 59, userId: 510025,  shareNo: '0002' }, // Julie
+        { ledgerId: 59, userId: 4957147, shareNo: '0003' }, // 陈奇戌
+        { ledgerId: 59, userId: 4957151, shareNo: '0004' }, // 大饼江湖
+        { ledgerId: 59, userId: 4957141, shareNo: '0005' }, // vesen
+        { ledgerId: 59, userId: 4957213, shareNo: '0006' }, // cyndi2109
+        { ledgerId: 59, userId: 4957217, shareNo: '0007' }, // 李斌Luby
+        { ledgerId: 59, userId: 4680302, shareNo: '0008' }, // 张慧
+        { ledgerId: 59, userId: 4957155, shareNo: '0009' }, // Johnson
+        { ledgerId: 59, userId: 4952766, shareNo: '0010' }, // 刘力凡
+        { ledgerId: 59, userId: 3060001, shareNo: '0011' }, // 阿潇
+        { ledgerId: 59, userId: 4957222, shareNo: '0012' }, // LK070865
+        { ledgerId: 59, userId: 4957247, shareNo: '0013' }, // Mychael
+        { ledgerId: 59, userId: 4957293, shareNo: '0014' }, // 袁贇
+      ];
+      for (const row of shareholderData) {
+        await (dbConnSn as any).execute(
+          `INSERT IGNORE INTO \`shareholder_numbers\` (\`ledgerId\`, \`userId\`, \`shareNo\`) VALUES (?, ?, ?)`,
+          [row.ledgerId, row.userId, row.shareNo]
+        );
+      }
+      console.log('[DB Init] ✅ shareholder_numbers seed data checked');
     }
-    console.log('[DB Init] \u2705 shareholder_numbers seed data checked');
 
     // ===== 市场贡献股初始化（天使股 × 30%，推荐人获得，INSERT IGNORE 幂等）=====
     // 规则：每位天使股持有人（第1位无推荐人除外）的推荐人，自动获得对应天使股数量×30%的市场贡献股
@@ -361,13 +364,16 @@ export async function initDatabase() {
       // equity_id=16, 袁贇(4957293) 推荐人 vesen(4957141), 天使股100000, 授予2026-03-19
       { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-03-19', annualRate: 6.00, regNo: 'MKT-16' },
     ];
-    for (const row of marketShareData) {
-      await db.execute(
-        `INSERT IGNORE INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`) VALUES (?, ?, ?, ?, '市场贡献股', ?, '市场推荐奖励（天使股30%）', ?, ?, 870413)`,
-        [row.ledgerId, row.userId, row.memberNickname, row.shareCount, row.grantDate, row.regNo, row.annualRate]
-      );
+    const dbConnMkt = await getDbConnection();
+    if (dbConnMkt) {
+      for (const row of marketShareData) {
+        await (dbConnMkt as any).execute(
+          `INSERT IGNORE INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`) VALUES (?, ?, ?, ?, '市场贡献股', ?, '市场推荐奖励（天使股30%）', ?, ?, 870413)`,
+          [row.ledgerId, row.userId, row.memberNickname, row.shareCount, row.grantDate, row.regNo, row.annualRate]
+        );
+      }
+      console.log('[DB Init] \u2705 market contribution shares seed data checked');
     }
-    console.log('[DB Init] \u2705 market contribution shares seed data checked');
 
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
