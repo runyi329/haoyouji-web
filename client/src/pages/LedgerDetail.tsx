@@ -1640,10 +1640,11 @@ export default function LedgerDetail() {
                     const employeeUnissued = totalShares * 0.15;
                     const cofounderUnissued = totalShares * 0.025;
                     const categories = [
-                      { name: '市场贡献值', pct: '12.5%', issued: marketIssued, unissued: marketUnissued },
-                      { name: '创始团队', pct: '40%', issued: 0, unissued: founderUnissued },
-                      { name: '员工持股平台', pct: '15%', issued: 0, unissued: employeeUnissued },
-                      { name: '联合创始人', pct: '2.5%', issued: 0, unissued: cofounderUnissued },
+                      { name: '天使投资人', pct: '30%', issued: globalAngelTotal, unissued: null, singleRow: true },
+                      { name: '市场贡献値', pct: '12.5%', issued: marketIssued, unissued: marketUnissued, singleRow: false },
+                      { name: '创始团队', pct: '40%', issued: 0, unissued: founderUnissued, singleRow: false },
+                      { name: '员工持股平台', pct: '15%', issued: 0, unissued: employeeUnissued, singleRow: false },
+                      { name: '联合创始人', pct: '2.5%', issued: 0, unissued: cofounderUnissued, singleRow: false },
                     ];
                     return categories;
                   })().map((cat: any, idx: number) => (
@@ -1656,18 +1657,28 @@ export default function LedgerDetail() {
                         </div>
                         <span className="text-xs font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{cat.pct}</span>
                       </div>
-                      {/* 子行1：已发行 */}
-                      {cat.issued > 0 && (
+                      {/* 单行模式：只显示已发行张数（如天使投资人） */}
+                      {cat.singleRow ? (
                         <div className="flex items-center justify-between pl-4 py-0.5">
                           <span className="text-[11px]" style={{ color: 'rgba(255,229,102,0.7)' }}>已发行</span>
                           <span className="text-[11px] font-mono" style={{ color: 'rgba(255,229,102,0.85)' }}>{cat.issued.toFixed(2)} 张</span>
                         </div>
+                      ) : (
+                        <>
+                          {/* 子行1：已发行 */}
+                          {cat.issued > 0 && (
+                            <div className="flex items-center justify-between pl-4 py-0.5">
+                              <span className="text-[11px]" style={{ color: 'rgba(255,229,102,0.7)' }}>已发行</span>
+                              <span className="text-[11px] font-mono" style={{ color: 'rgba(255,229,102,0.85)' }}>{cat.issued.toFixed(2)} 张</span>
+                            </div>
+                          )}
+                          {/* 子行2：未发行 */}
+                          <div className="flex items-center justify-between pl-4 py-0.5">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,152,0,0.12)', color: 'rgba(255,152,0,0.8)' }}>未发行</span>
+                            <span className="text-[11px] font-mono" style={{ color: 'rgba(255,152,0,0.85)' }}>{cat.unissued.toFixed(2)} 张</span>
+                          </div>
+                        </>
                       )}
-                      {/* 子行2：未发行 */}
-                      <div className="flex items-center justify-between pl-4 py-0.5">
-                        <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,152,0,0.12)', color: 'rgba(255,152,0,0.8)' }}>未发行</span>
-                        <span className="text-[11px] font-mono" style={{ color: 'rgba(255,152,0,0.85)' }}>{cat.unissued.toFixed(2)} 张</span>
-                      </div>
                     </div>
                   ))}
                 </div>
