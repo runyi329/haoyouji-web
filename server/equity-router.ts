@@ -232,6 +232,7 @@ export const equityRouter = router({
       try { await (conn as any).execute(`ALTER TABLE equity_shares ADD COLUMN IF NOT EXISTS regNo VARCHAR(10) DEFAULT NULL`); } catch(e) {}
       const [rows] = await (conn as any).execute(
         `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
+                COALESCE(es.annualRate, 6.00) as annualRate,
                 sn.shareNo
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
@@ -250,6 +251,7 @@ export const equityRouter = router({
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       const [rows] = await (conn as any).execute(
         `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
+                COALESCE(es.annualRate, 6.00) as annualRate,
                 sn.shareNo
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
@@ -315,37 +317,32 @@ export const equityRouter = router({
       return { success: true };
     }),
 
-  // 查询账本成员及其注册邀请推荐关系（仅owner/admin可查）
-  getLedgerMemberReferrals: protectedProcedure
-    .input(z.object({ ledgerId: z.number() }))
-    .query(async ({ ctx, input }) => {
+  // 编辑股权记录（仅owner/admin可操作）
+  updateEquityShare: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      ledgerId: z.number(),
+      shareCount: z.number().positive(),
+      shareType: z.string(),
+      grantDate: z.string(),
+      reason: z.string(),
+      annualRate: z.number().min(0).max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      // 验证操作者是账本owner或admin
-      const [memberCheck] = await (conn as any).execute(
+      const [members] = await (conn as any).execute(
         `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
         [input.ledgerId, ctx.user.id]
       );
-      const myRole = (memberCheck as any[])[0];
-      if (!myRole || !['owner','admin'].includes(myRole.role)) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可查看' });
+      const member = (members as any[])[0];
+      if (!member || !['owner','admin'].includes(member.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
       }
-      // 查询账本所有成员及其注册邀请推荐关系
-      const [rows] = await (conn as any).execute(
-        `SELECT
-           lm.userId,
-           u.name AS userName,
-           u.invited_by_user_id AS invitedByUserId,
-           ru.name AS inviterName,
-           sn.shareNo
-         FROM ledger_members lm
-         LEFT JOIN users u ON u.id = lm.userId
-         LEFT JOIN users ru ON ru.id = u.invited_by_user_id
-         LEFT JOIN shareholder_numbers sn ON sn.userId = lm.userId AND sn.ledgerId = ?
-         WHERE lm.ledgerId = ?
-         ORDER BY lm.id ASC`,
-        [input.ledgerId, input.ledgerId]
+      await (conn as any).execute(
+        `UPDATE equity_shares SET shareCount=?, shareType=?, grantDate=?, reason=?, annualRate=? WHERE id=? AND ledgerId=?`,
+        [input.shareCount, input.shareType, input.grantDate, input.reason, input.annualRate, input.id, input.ledgerId]
       );
-      return rows as any[];
+      return { success: true };
     }),
 });

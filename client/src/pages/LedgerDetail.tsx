@@ -37,7 +37,8 @@ function useTotalSharesWithDividend(shares: any[]) {
         const startTs = new Date(dateStr + 'T00:00:00').getTime();
         if (!isNaN(startTs)) {
           const elapsedSeconds = Math.max(0, (now - startTs) / 1000);
-          const perSecond = (base * 6 / 100) / (365 * 24 * 3600);
+          const rate = Number(s.annualRate ?? 6);
+          const perSecond = (base * rate / 100) / (365 * 24 * 3600);
           total += perSecond * elapsedSeconds;
         }
       }
@@ -58,7 +59,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
   const grantDateStr = dateStr; // yyyy-MM-dd
   const accrued = useAccruedInterest(
     String(Number(s.shareCount)),
-    '6',
+    String(s.annualRate ?? 6),
     grantDateStr
   );
   return (
@@ -80,7 +81,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
         {/* 股息滚动行 */}
         <div className="flex items-center justify-between mt-1">
           <div className="flex items-center gap-1">
-            <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.5)' }}>年化6%股息</span>
+            <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.5)' }}>年化{s.annualRate ?? 6}%股息</span>
           </div>
           <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
             <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.6)' }}>+</span>
