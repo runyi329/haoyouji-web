@@ -1589,27 +1589,18 @@ export default function LedgerDetail() {
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{(myShares[0] as any).shareNo}）</span>
                   )}
                 </div>
-                {/* 加权股权（原始张数 × 权重） */}
+                {/* 原始股权张数（主数字） */}
                 <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
                   <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {myShares && myShares.length > 0 ? weightedSharesTotal.toFixed(2) : '-'}
+                    {myShares && myShares.length > 0 ? totalAllSharesWithDividend.toFixed(2) : '-'}
                   </span>
                   {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
                 </div>
-                {/* 权重行 */}
+                {/* 权重标注 */}
                 {myShares && myShares.length > 0 && (
                   <div className="flex items-center gap-1 mt-1">
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>权重</span>
                     <span className="text-[11px] font-semibold" style={{ color: 'rgba(255,210,80,0.85)' }}>{totalWeight.toFixed(2)}</span>
-                    <span className="text-[9px]" style={{ color: 'rgba(220,185,60,0.4)' }}>（资源{resourceWeight.toFixed(2)}+资金{capitalWeight.toFixed(2)}）</span>
-                  </div>
-                )}
-                {/* 原始张数 */}
-                {myShares && myShares.length > 0 && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>原始</span>
-                    <span className="text-[11px] font-mono" style={{ color: 'rgba(220,185,60,0.7)' }}>{totalAllSharesWithDividend.toFixed(2)}</span>
-                    <span className="text-[9px]" style={{ color: 'rgba(220,185,60,0.4)' }}>张</span>
                   </div>
                 )}
                 {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
