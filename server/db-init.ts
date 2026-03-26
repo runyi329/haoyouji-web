@@ -327,6 +327,48 @@ export async function initDatabase() {
     }
     console.log('[DB Init] \u2705 shareholder_numbers seed data checked');
 
+    // ===== 市场贡献股初始化（天使股 × 30%，推荐人获得，INSERT IGNORE 幂等）=====
+    // 规则：每位天使股持有人（第1位无推荐人除外）的推荐人，自动获得对应天使股数量×30%的市场贡献股
+    // 起始日期 = 被推荐人的天使股授予日期；年化利率与天使股相同（6%）
+    // 推荐关系来源：users.invited_by_user_id
+    // 注意：同一推荐人可能被多人推荐，每条天使股对应独立一条市场贡献股记录
+    // 使用 regNo 作为唯一标识（格式：MKT-{天使股equity_id}），防止重复插入
+    const marketShareData = [
+      // equity_id=4, Julie(510025) 推荐人 胡永煜(870413), 天使股100000, 授予2026-02-08
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-08', annualRate: 6.00, regNo: 'MKT-4' },
+      // equity_id=5, 陈奇戌(4957147) 推荐人 vesen(4957141), 天使股100000, 授予2026-02-09
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-02-09', annualRate: 6.00, regNo: 'MKT-5' },
+      // equity_id=6, 大饼江湖(4957151) 推荐人 胡永煜(870413), 天使股100000, 授予2026-02-09
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-09', annualRate: 6.00, regNo: 'MKT-6' },
+      // equity_id=7, vesen(4957141) 推荐人 胡永煜(870413), 天使股100000, 授予2026-02-11
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-11', annualRate: 6.00, regNo: 'MKT-7' },
+      // equity_id=8, cyndi2109(4957213) 推荐人 vesen(4957141), 天使股200000, 授予2026-02-11
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 60000.00, grantDate: '2026-02-11', annualRate: 6.00, regNo: 'MKT-8' },
+      // equity_id=9, 李斌Luby(4957217) 推荐人 vesen(4957141), 天使股10000, 授予2026-02-19
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 3000.00, grantDate: '2026-02-19', annualRate: 6.00, regNo: 'MKT-9' },
+      // equity_id=10, 张慧(4680302) 推荐人 胡永煜(870413), 天使股10000, 授予2026-02-26
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 3000.00, grantDate: '2026-02-26', annualRate: 6.00, regNo: 'MKT-10' },
+      // equity_id=11, Johnson(4957155) 推荐人 vesen(4957141), 天使股100000, 授予2026-02-28
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-02-28', annualRate: 6.00, regNo: 'MKT-11' },
+      // equity_id=12, 刘力凡(4952766) 推荐人 胡永煜(870413), 天使股598, 授予2026-03-02
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 179.40, grantDate: '2026-03-02', annualRate: 6.00, regNo: 'MKT-12' },
+      // equity_id=13, 阿潇(3060001) 推荐人 胡永煜(870413), 天使股700, 授予2026-03-06
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 210.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-13' },
+      // equity_id=14, LK070865(4957222) 推荐人 阿潇(3060001), 天使股700, 授予2026-03-06
+      { ledgerId: 59, userId: 3060001, memberNickname: '阿潇', shareCount: 210.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-14' },
+      // equity_id=15, Mychael(4957247) 推荐人 vesen(4957141), 天使股10000, 授予2026-03-06
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 3000.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-15' },
+      // equity_id=16, 袁贇(4957293) 推荐人 vesen(4957141), 天使股100000, 授予2026-03-19
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-03-19', annualRate: 6.00, regNo: 'MKT-16' },
+    ];
+    for (const row of marketShareData) {
+      await db.execute(
+        `INSERT IGNORE INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`) VALUES (?, ?, ?, ?, '市场贡献股', ?, '市场推荐奖励（天使股30%）', ?, ?, 870413)`,
+        [row.ledgerId, row.userId, row.memberNickname, row.shareCount, row.grantDate, row.regNo, row.annualRate]
+      );
+    }
+    console.log('[DB Init] \u2705 market contribution shares seed data checked');
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
