@@ -113,8 +113,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
   const accrued = totalWithDividend - totalBase;
 
   const gold = { border: '1px solid #C9A84C', shadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2), inset 0 1px 0 rgba(255,230,100,0.12)', divider: 'rgba(201,168,76,0.35)', labelColor: '#D4A830', numGrad: 'linear-gradient(180deg, #FFE566 0%, #D4A020 50%, #C8920A 100%)', dimColor: 'rgba(220,185,60,0.7)', dimColor2: 'rgba(212,175,55,0.6)', chevronColor: 'rgba(212,175,55,0.7)', shareNoGrad: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', shareNoShadow: 'drop-shadow(0 0 4px rgba(255,210,60,0.6))' };
-  const green = { border: '1px solid rgba(60,180,80,0.6)', shadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(60,180,80,0.15), inset 0 1px 0 rgba(100,230,120,0.1)', divider: 'rgba(60,180,80,0.3)', labelColor: '#5BC870', numGrad: 'linear-gradient(180deg, #6EE88A 0%, #3CB85A 100%)', dimColor: 'rgba(100,220,120,0.7)', dimColor2: 'rgba(80,180,100,0.6)', chevronColor: 'rgba(80,220,100,0.7)', shareNoGrad: 'linear-gradient(180deg, #6EE88A 0%, #3CB85A 100%)', shareNoShadow: 'drop-shadow(0 0 4px rgba(80,220,100,0.6))' };
-  const theme = isMarket ? green : gold;
+  const theme = gold;
 
   return (
     <div className="rounded-2xl overflow-hidden" style={{ background: '#000000', border: theme.border, boxShadow: theme.shadow }}>
@@ -132,7 +131,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
             </div>
           )}
         </div>
-        <div className="flex items-baseline gap-1" style={{ filter: isMarket ? 'drop-shadow(0 0 6px rgba(80,220,100,0.5))' : 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
+        <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
           <span className="text-2xl font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             {totalWithDividend.toFixed(2)}
           </span>
@@ -153,7 +152,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
             <span className="text-sm font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{totalBase.toFixed(2)}</span>
             <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
           </div>
-          <div className="flex items-baseline gap-0.5" style={{ filter: isMarket ? 'drop-shadow(0 0 4px rgba(80,220,100,0.4))' : 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
+          <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
             <span className="text-[10px]" style={{ color: theme.dimColor2 }}>+</span>
             <span className="text-sm font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
             <span className="text-[10px]" style={{ color: theme.dimColor }}>张</span>
