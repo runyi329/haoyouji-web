@@ -84,12 +84,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
         </div>
         {/* 股息滚动行 */}
         <div className="flex items-center justify-between mt-1">
-          {!isMarket && (
-            <div className="flex items-center gap-1">
-              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.5)' }}>年化{s.annualRate ?? 6}%股息</span>
-            </div>
-          )}
-          {isMarket && <div />}
+          <div />
           <div className="flex items-baseline gap-0.5" style={{ filter: isMarket ? 'drop-shadow(0 0 4px rgba(80,220,100,0.5))' : 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
             <span className="text-[10px]" style={{ color: isMarket ? 'rgba(80,180,100,0.6)' : 'rgba(212,175,55,0.6)' }}>+</span>
             <span className="text-sm font-bold" style={{ background: isMarket ? 'linear-gradient(90deg, #6EE88A 0%, #3CB85A 100%)' : 'linear-gradient(90deg, #FFE566 0%, #F0C830 50%, #D4A020 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
