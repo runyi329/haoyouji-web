@@ -553,7 +553,15 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/equity-manage`)}
  />
  )}
- {/* / */}
+ {/* 成员管理入口：59号账本且是owner/admin显示 */}
+ {ledgerId === 59 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="成员管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/member-manage`)}
+ />
+ )}
+
  {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
  label="账目明细"

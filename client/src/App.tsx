@@ -110,6 +110,7 @@ const AfRechargeManage = lazy(() => import("./pages/AfRechargeManage"));
 const AfOrderManage = lazy(() => import("./pages/AfOrderManage"));
 const AfPayoutManage = lazy(() => import("./pages/AfPayoutManage"));
 const LedgerEquityManage = lazy(() => import("./pages/LedgerEquityManage"));
+const LedgerMemberManage = lazy(() => import("./pages/LedgerMemberManage"));
 const FunderManagement = lazy(() => import("./pages/FunderManagement"));
 const FinanceManagement = lazy(() => import("./pages/FinanceManagement"));
 const AhCompanyWorkspace = lazy(() => import("./pages/AhCompanyWorkspace"));
@@ -375,6 +376,7 @@ function Router() {
         <Route path="/ledger/:id/settings" component={LedgerSettings} />
         <Route path="/ledger/:id/ag-data-sources" component={AgDataSources} />
         <Route path="/ledger/:id/equity-manage" component={LedgerEquityManage} />
+        <Route path="/ledger/:id/member-manage">{(params) => <LedgerMemberManage ledgerId={Number(params.id)} />}</Route>
         <Route path="/ledger/:id/af-recharge-manage" component={AfRechargeManage} />
         <Route path="/ledger/:id/af-order-manage" component={AfOrderManage} />
         <Route path="/ledger/:id/af-payout-manage" component={AfPayoutManage} />
