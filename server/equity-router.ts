@@ -640,4 +640,91 @@ export const equityTransferRouter = router({
       ].sort((a, b) => new Date(b.eventDate || b.createdAt).getTime() - new Date(a.eventDate || a.createdAt).getTime());
       return all;
     }),
+
+  // 获取指定用户的权重
+  getUserWeight: protectedProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const conn = (ctx as any).db || (await import('./db-equity')).getConnection?.();
+      const { getConnection } = await import('./db-equity');
+      const connection = await getConnection();
+      if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [rows] = await (connection as any).execute(
+        `SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ?`,
+        [input.userId]
+      );
+      if ((rows as any[]).length === 0) {
+        return { resourceWeight: 1.00, capitalWeight: 0.00, totalWeight: 1.00 };
+      }
+      const row = (rows as any[])[0];
+      const r = Number(row.resource_weight);
+      const c = Number(row.capital_weight);
+      return { resourceWeight: r, capitalWeight: c, totalWeight: Math.round((r + c) * 100) / 100 };
+    }),
+
+  // 获取所有用户权重（管理员）
+  getAllWeights: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+      }
+      const { getConnection } = await import('./db-equity');
+      const connection = await getConnection();
+      if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 获取该账本所有成员
+      const [members] = await (connection as any).execute(
+        `SELECT DISTINCT u.id as userId, u.name, u.nickname, u.avatar
+         FROM equity_shares es
+         JOIN users u ON es.userId = u.id
+         WHERE es.ledgerId = ?
+         ORDER BY u.name`,
+        [input.ledgerId]
+      );
+      // 获取已设置的权重
+      const [weights] = await (connection as any).execute(
+        `SELECT ew.user_id, ew.resource_weight, ew.capital_weight
+         FROM equity_weights ew
+         JOIN equity_shares es ON ew.user_id = es.userId
+         WHERE es.ledgerId = ?`,
+        [input.ledgerId]
+      );
+      const weightMap = new Map((weights as any[]).map((w: any) => [w.user_id, w]));
+      return (members as any[]).map((m: any) => {
+        const w = weightMap.get(m.userId);
+        const r = w ? Number(w.resource_weight) : 1.00;
+        const c = w ? Number(w.capital_weight) : 0.00;
+        return {
+          userId: m.userId,
+          name: m.name || m.nickname || '未知',
+          avatar: m.avatar,
+          resourceWeight: r,
+          capitalWeight: c,
+          totalWeight: Math.round((r + c) * 100) / 100,
+        };
+      });
+    }),
+
+  // 设置用户权重（管理员）
+  setUserWeight: protectedProcedure
+    .input(z.object({
+      userId: z.number(),
+      resourceWeight: z.number().min(0).max(99),
+      capitalWeight: z.number().min(0).max(99),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+      }
+      const { getConnection } = await import('./db-equity');
+      const connection = await getConnection();
+      if (!connection) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      await (connection as any).execute(
+        `INSERT INTO equity_weights (user_id, resource_weight, capital_weight)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE resource_weight=VALUES(resource_weight), capital_weight=VALUES(capital_weight), updated_at=NOW()`,
+        [input.userId, input.resourceWeight, input.capitalWeight]
+      );
+      return { success: true };
+    }),
 });
