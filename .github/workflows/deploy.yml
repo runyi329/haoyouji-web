@@ -270,8 +270,13 @@ jobs:
 
             echo "💳 注入支付宝环境变量..."
             node /root/haoyouji-web/scripts/inject-alipay-env.cjs
-            echo "🔄 重启服务（使用 ecosystem.config.cjs 确保 COS 环境变量持久化）..."
-            pm2 startOrRestart /root/haoyouji-web/ecosystem.config.cjs --env production
+            echo "🔄 零停机部署（先启动新进程再停旧进程）..."
+            # 如果进程不存在，先用 start；如果已存在，用 reload（零停机热重载）
+            if pm2 describe haoyouji-web > /dev/null 2>&1; then
+              pm2 reload /root/haoyouji-web/ecosystem.config.cjs --env production --update-env
+            else
+              pm2 start /root/haoyouji-web/ecosystem.config.cjs --env production
+            fi
             pm2 save
             echo "✅ 部署完成！"
           ENDSSH
