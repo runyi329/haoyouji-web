@@ -22,6 +22,48 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
   return accrued;
 }
 
+// 天使股单条记录，带实时滚动股息
+function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast: boolean }) {
+  const grantDateStr = dateStr; // yyyy-MM-dd
+  const accrued = useAccruedInterest(
+    String(Number(s.shareCount)),
+    '6',
+    grantDateStr
+  );
+  return (
+    <div>
+      <div className="px-4 py-3">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs" style={{ color: 'rgba(220,185,60,0.65)' }}>{dateStr}</span>
+            {s.shareType && (
+              <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.12) 100%)', color: '#F0D060', border: '1px solid rgba(201,168,76,0.5)', textShadow: '0 0 4px rgba(255,210,60,0.4)' }}>{s.shareType}</span>
+            )}
+          </div>
+          <div className="flex items-baseline gap-0.5">
+            <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.6)' }}>股本</span>
+            <span className="text-sm font-bold" style={{ background: 'linear-gradient(90deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{Number(s.shareCount).toFixed(2)}</span>
+            <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>
+          </div>
+        </div>
+        {/* 股息滚动行 */}
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.5)' }}>年化6%股息</span>
+          </div>
+          <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
+            <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.6)' }}>+</span>
+            <span className="text-sm font-bold" style={{ background: 'linear-gradient(90deg, #FFE566 0%, #F0C830 50%, #D4A020 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
+            <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>
+          </div>
+        </div>
+        {s.reason && <div className="text-xs mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>{s.reason}</div>}
+      </div>
+      {!isLast && <div style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }} />}
+    </div>
+  );
+}
+
 // 单张资金方订单卡片右栏（包含扫描数据查询）
 function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number }) {
   const { data: stats } = trpc.ledger.funderGetOrderScanStats.useQuery(
@@ -2700,21 +2742,7 @@ export default function LedgerDetail() {
                 const d = new Date(s.grantDate);
                 const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
                 return (
-                  <div key={s.id}>
-                    <div className="px-4 py-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs" style={{ color: 'rgba(220,185,60,0.65)' }}>{dateStr}</span>
-                          {s.shareType && (
-                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.12) 100%)', color: '#F0D060', border: '1px solid rgba(201,168,76,0.5)', textShadow: '0 0 4px rgba(255,210,60,0.4)' }}>{s.shareType}</span>
-                          )}
-                        </div>
-
-                      </div>
-                      {s.reason && <div className="text-xs" style={{ color: 'rgba(220,185,60,0.55)' }}>{s.reason}</div>}
-                    </div>
-                    {idx < myShares.length - 1 && <div style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }} />}
-                  </div>
+                  <AngelShareRow key={s.id} s={s} dateStr={dateStr} isLast={idx === myShares.length - 1} />
                 );
               })}
               {/* 底部边距 */}
