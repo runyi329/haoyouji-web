@@ -1633,39 +1633,40 @@ export default function LedgerDetail() {
                   {(() => {
                     // 以天使股占 30% 反推总股本
                     const totalShares = globalAngelTotal > 0 ? globalAngelTotal / 0.30 : 0;
-                    // 市场贡献股 12.5% 理论上限
-                    const marketTheoreticalMax = totalShares * 0.125;
-                    // 管理员储备股 = 理论上限 - 实际已发行
-                    const adminReserve = Math.max(0, marketTheoreticalMax - globalMarketTotal);
-                    const founderReserve = totalShares * 0.40;
-                    const strategicReserve = totalShares * 0.00;
-                    const employeeReserve = totalShares * 0.15;
-                    const cofounderReserve = totalShares * 0.025;
-                    return [
-                      { name: '天使投资人', pct: '30%', live: globalAngelTotal, isReserve: false },
-                      { name: '市场贡献値', pct: '12.5%', live: globalMarketTotal, isReserve: false },
-                      { name: '管理员储备股', pct: '', live: adminReserve, isReserve: true },
-                      { name: '创始团队', pct: '40%', live: founderReserve, isReserve: true },
-                      { name: '战略投资股东', pct: '0%', live: strategicReserve, isReserve: true },
-                      { name: '员工持股平台', pct: '15%', live: employeeReserve, isReserve: true },
-                      { name: '联合创始人', pct: '2.5%', live: cofounderReserve, isReserve: true },
+                    // 4个类别：已发行 + 未发行
+                    const marketIssued = globalMarketTotal;
+                    const marketUnissued = Math.max(0, totalShares * 0.125 - globalMarketTotal);
+                    const founderUnissued = totalShares * 0.40;
+                    const employeeUnissued = totalShares * 0.15;
+                    const cofounderUnissued = totalShares * 0.025;
+                    const categories = [
+                      { name: '市场贡献值', pct: '12.5%', issued: marketIssued, unissued: marketUnissued },
+                      { name: '创始团队', pct: '40%', issued: 0, unissued: founderUnissued },
+                      { name: '员工持股平台', pct: '15%', issued: 0, unissued: employeeUnissued },
+                      { name: '联合创始人', pct: '2.5%', issued: 0, unissued: cofounderUnissued },
                     ];
-                  })().map((item: any, idx: number) => (
-                    <div key={idx} className="flex items-center justify-between py-1.5" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)', background: item.isReserve ? 'rgba(255,152,0,0.06)' : 'transparent', borderRadius: item.isReserve ? '6px' : '0', marginBottom: item.isReserve ? '2px' : '0' }}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: item.isReserve ? '#FF9800' : 'linear-gradient(135deg, #FFE566, #C8920A)' }} />
-                        <span className="text-xs" style={{ color: item.isReserve ? 'rgba(255,152,0,0.9)' : 'rgba(220,185,60,0.85)' }}>{item.name}</span>
-                        {item.isReserve && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,152,0,0.15)', color: 'rgba(255,152,0,0.8)' }}>未发行</span>}
+                    return categories;
+                  })().map((cat: any, idx: number) => (
+                    <div key={idx} style={{ borderBottom: '1px solid rgba(201,168,76,0.15)', marginBottom: '4px', paddingBottom: '4px' }}>
+                      {/* 主行：类别名称 + 总比例 */}
+                      <div className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg, #FFE566, #C8920A)' }} />
+                          <span className="text-xs font-semibold" style={{ color: 'rgba(220,185,60,0.95)' }}>{cat.name}</span>
+                        </div>
+                        <span className="text-xs font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{cat.pct}</span>
                       </div>
-                      <div className="flex items-center gap-3">
-                        {item.live !== null ? (
-                          <span className="text-xs font-mono" style={{ color: item.isReserve ? 'rgba(255,152,0,0.9)' : 'rgba(255,229,102,0.9)' }}>
-                            {item.live.toFixed(2)} 张
-                          </span>
-                        ) : (
-                          <span className="text-xs" style={{ color: 'rgba(220,185,60,0.35)' }}>❆ ❆ ❆</span>
-                        )}
-                        <span className="text-xs font-bold w-10 text-right" style={{ background: item.isReserve ? 'none' : 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: item.isReserve ? 'unset' : 'text', WebkitTextFillColor: item.isReserve ? 'rgba(255,152,0,0.7)' : 'transparent', color: item.isReserve ? 'rgba(255,152,0,0.7)' : 'inherit' }}>{item.pct}</span>
+                      {/* 子行1：已发行 */}
+                      {cat.issued > 0 && (
+                        <div className="flex items-center justify-between pl-4 py-0.5">
+                          <span className="text-[11px]" style={{ color: 'rgba(255,229,102,0.7)' }}>已发行</span>
+                          <span className="text-[11px] font-mono" style={{ color: 'rgba(255,229,102,0.85)' }}>{cat.issued.toFixed(2)} 张</span>
+                        </div>
+                      )}
+                      {/* 子行2：未发行 */}
+                      <div className="flex items-center justify-between pl-4 py-0.5">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,152,0,0.12)', color: 'rgba(255,152,0,0.8)' }}>未发行</span>
+                        <span className="text-[11px] font-mono" style={{ color: 'rgba(255,152,0,0.85)' }}>{cat.unissued.toFixed(2)} 张</span>
                       </div>
                     </div>
                   ))}
