@@ -15278,6 +15278,34 @@ export const adminFeatureRouter = router({
       }
     }),
 
+  // 临时调试：查询win_status异常记录
+  debugAbnormalWinStatus: protectedProcedure
+    .query(async ({ ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return { distribution: [], abnormal: [] };
+      // 查所有win_status分布
+      const [distRows] = await (dbConn as any).execute(
+        `SELECT win_status, COUNT(*) as cnt FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' GROUP BY win_status ORDER BY cnt DESC LIMIT 30`
+      );
+      // 查异常记录：既不是「未中奖」也不是「已中奖」类型
+      const [abnRows] = await (dbConn as any).execute(
+        `SELECT order_id, win_status, amount, win_amount, content FROM qq_trade_records
+         WHERE amount IS NOT NULL AND amount != ''
+           AND (win_status IS NULL OR (win_status != '未中奖' AND win_status != '0' AND win_status != '' AND NOT (CAST(win_status AS DECIMAL(20,4)) > 0)))
+         LIMIT 20`
+      );
+      return {
+        distribution: (distRows as any[]).map((r: any) => ({ winStatus: String(r.win_status ?? 'NULL'), cnt: Number(r.cnt) })),
+        abnormal: (abnRows as any[]).map((r: any) => ({
+          orderId: String(r.order_id ?? ''),
+          winStatus: String(r.win_status ?? 'NULL'),
+          amount: String(r.amount ?? ''),
+          winAmount: String(r.win_amount ?? ''),
+          content: String(r.content ?? '').substring(0, 50),
+        }))
+      };
+    }),
+
 
 });
 export type AppRouter = typeof appRouter;
