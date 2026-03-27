@@ -103,6 +103,18 @@ export default function RechargeHistory() {
                   const amt = parseFloat(String(item.amount));
                   const isPositive = amt >= 0;
                   const amtDisplay = `${isPositive ? '+' : ''}${amt.toFixed(2)} USDT`;
+                  // 根据状态决定标签样式
+                  const statusStyleMap: Record<string, { bg: string; text: string }> = {
+                    completed: { bg: 'bg-green-100', text: 'text-green-700' },
+                    submitted: { bg: 'bg-blue-100', text: 'text-blue-700' },
+                    pending:   { bg: 'bg-orange-100', text: 'text-orange-700' },
+                    expired:   { bg: 'bg-gray-100', text: 'text-gray-500' },
+                    cancelled: { bg: 'bg-red-100', text: 'text-red-600' },
+                  };
+                  const statusStyle = isRecharge
+                    ? (statusStyleMap[item.status] || { bg: 'bg-gray-100', text: 'text-gray-500' })
+                    : { bg: 'bg-blue-100', text: 'text-blue-700' };
+                  const label = isRecharge ? (item.note || '充值') : '系统结算';
                   return (
                     <div key={item.id} className="px-4 py-3">
                       <div className="flex items-center justify-between mb-1.5">
@@ -111,16 +123,12 @@ export default function RechargeHistory() {
                             {amtDisplay}
                           </span>
                         </div>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          isRecharge
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          {isRecharge ? '充值到账' : '系统结算'}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
+                          {label}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>{isRecharge ? (item.note || '-') : ''}</span>
+                        <span>{isRecharge ? '' : ''}</span>
                         <span>{formatDate(item.createdAt)}</span>
                       </div>
                     </div>
