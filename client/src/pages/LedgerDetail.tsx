@@ -3280,18 +3280,17 @@ export default function LedgerDetail() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                           <thead>
                             <tr style={{ backgroundColor: '#F5F5F5' }}>
-                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'left', color: '#9E9E9E', fontWeight: 400, width: 36 }}></th>
+                              {/* A1格：余额 + 数字 */}
+                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'left', color: '#9E9E9E', fontWeight: 400, width: 80 }}>
+                                <div style={{ fontSize: 10, color: '#9E9E9E' }}>余额</div>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)}U</div>
+                              </th>
                               <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>BTC</th>
                               <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>ETH</th>
                               <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>SOL</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {/* 余额行：跨三列 */}
-                            <tr>
-                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>余额</td>
-                              <td colSpan={3} style={{ border: '1px solid #E0E0E0', padding: '3px 8px', fontWeight: 600, color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)} U</td>
-                            </tr>
                             {/* 持仓行 */}
                             <tr>
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>持仓</td>
