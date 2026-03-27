@@ -115,9 +115,9 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
             </div>
             {/* 权重行：资源权重 × 资金权重 = 总权重 × 股本 = 加权后张数 */}
             <div className="flex items-baseline gap-0.5">
-              <span className="text-[10px]" style={{ color: labelColor }}>{(s.resourceWeight ?? 1.0).toFixed(2)}</span>
+              <span className="text-[10px]" style={{ color: labelColor }}>{Number(s.resourceWeight ?? 1.0).toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: labelColor }}>×</span>
-              <span className="text-[10px]" style={{ color: labelColor }}>{(s.capitalWeight ?? 1.0).toFixed(2)}</span>
+              <span className="text-[10px]" style={{ color: labelColor }}>{Number(s.capitalWeight ?? 1.0).toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: labelColor }}>=</span>
               <span className="text-sm font-bold" style={{ background: numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{weightedTotal.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
