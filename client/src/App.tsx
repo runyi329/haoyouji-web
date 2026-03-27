@@ -281,6 +281,11 @@ function Router() {
     }
   }, [user, isLoading, location]);
 
+  // 认证状态加载中时直接显示Loading，避免Switch提前命中NotFound导致刷新页面闪现404
+  if (isLoading) {
+    return <LoadingFallback />;
+  }
+
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
