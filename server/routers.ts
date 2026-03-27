@@ -9989,6 +9989,25 @@ export const appRouter = router({
               console.error('[AF] 备注查询失败:', e);
             }
           }
+          // 查询每个用户是否绑定了钱包地址（digital_wallets 表）
+          let walletBoundSet = new Set<number>();
+          if (result.length > 0) {
+            try {
+              const userIds_w = result.map(u => u.id);
+              const placeholders_w = userIds_w.map(() => '?').join(',');
+              const [walletRows] = await rawDb.execute(
+                `SELECT CAST(user_id AS UNSIGNED) as uid FROM digital_wallets
+                 WHERE wallet_type = 'blockchain' AND user_id IN (${placeholders_w})
+                 GROUP BY user_id`,
+                [...userIds_w]
+              ) as any[];
+              for (const row of (walletRows as any[])) {
+                walletBoundSet.add(Number(row.uid));
+              }
+            } catch (e) {
+              console.error('[AF] 钱包绑定查询失败:', e);
+            }
+          }
           // 查询每个用户在该账本下的余额
           let balanceMap = new Map<number, number>();
           if (result.length > 0) {
@@ -10140,6 +10159,7 @@ export const appRouter = router({
               soldBTC: soldMap.get(u.id)?.BTC ?? 0,
               soldETH: soldMap.get(u.id)?.ETH ?? 0,
               soldSOL: soldMap.get(u.id)?.SOL ?? 0,
+              hasWallet: walletBoundSet.has(u.id),
               totalValue,
             };
           });
