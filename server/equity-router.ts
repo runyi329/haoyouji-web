@@ -417,10 +417,31 @@ export const equityRouter = router({
       );
       const referralCount = (referralRows as any[])[0]?.cnt ?? 0;
 
+      // 标签总数：该用户对自己好友打的标签次数（不含共享好友）
+      // 1. 普通标签：contact_tag_relations JOIN contacts，contacts.parentUserId = userId
+      const [normalTagRows] = await (conn as any).execute(
+        `SELECT COUNT(ctr.id) as cnt
+         FROM contact_tag_relations ctr
+         JOIN contacts c ON ctr.contactId = c.id
+         WHERE c.parentUserId=?`,
+        [input.userId]
+      );
+      const normalTagCount = (normalTagRows as any[])[0]?.cnt ?? 0;
+
+      // 2. 个人标签：personal_contact_tags.parentUserId = userId
+      const [personalTagRows] = await (conn as any).execute(
+        `SELECT COUNT(*) as cnt FROM personal_contact_tags WHERE parentUserId=?`,
+        [input.userId]
+      );
+      const personalTagCount = (personalTagRows as any[])[0]?.cnt ?? 0;
+
+      const tagCount = Number(normalTagCount) + Number(personalTagCount);
+
       return {
         contactCount: Number(contactCount),
         interactionCount: Number(interactionCount),
         referralCount: Number(referralCount),
+        tagCount,
       };
     }),
   // 获取全网天使股和市场贡献股的总股本（用于持股结构容器）
