@@ -372,7 +372,7 @@ export async function completeRechargeOrder(
 export async function adminConfirmRecharge(
   adminId: number,
   orderId: number,
-  txnHash: string,
+  txnHash: string | undefined,
   actualAmount: number
 ) {
   const db = await getDb();
@@ -397,22 +397,26 @@ export async function adminConfirmRecharge(
     .update(rechargeOrders)
     .set({
       status: 'completed',
-      txnHash,
+      ...(txnHash ? { txnHash } : {}),
       completedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
     })
     .where(eq(rechargeOrders.id, orderId));
   
   // 按实际到账金额入账
-  const description = `管理员手动确认充值（操作人ID:${adminId}，交易哈希:${txnHash}）`;
+  const description = txnHash
+    ? `管理员手动确认充值（操作人ID:${adminId}，交易哈希:${txnHash}）`
+    : `管理员手动确认充值（操作人ID:${adminId}）`;
   await addUserBalance(order[0].userId, actualAmount, 'recharge', orderId, description);
   
   // 更新未匹配交易状态（如果有）
-  try {
-    await db.execute(sql`
-      UPDATE unmatched_transactions SET status = 'resolved' WHERE txn_hash = ${txnHash}
-    `);
-  } catch (e) {
-    // 忽略
+  if (txnHash) {
+    try {
+      await db.execute(sql`
+        UPDATE unmatched_transactions SET status = 'resolved' WHERE txn_hash = ${txnHash}
+      `);
+    } catch (e) {
+      // 忽略
+    }
   }
   
   return { success: true, userId: order[0].userId, amount: actualAmount };

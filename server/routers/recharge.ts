@@ -106,7 +106,7 @@ export const rechargeRouter = router({
   adminConfirmRecharge: protectedProcedure
     .input(z.object({
       orderId: z.number(),
-      txnHash: z.string(),
+      txnHash: z.string().optional(),
       actualAmount: z.number().min(0.01),
     }))
     .mutation(async ({ ctx, input }) => {
