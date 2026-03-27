@@ -496,7 +496,40 @@ export const equityRouter = router({
         [input.userId]
       ) as any;
       const r = row ? Number(row.resource_weight) : 1.00;
-      const c = row ? Number(row.capital_weight) : 1.00;
+      // 如果数据库有手动保存的资金权重，直接使用；否则自动计算
+      let c: number;
+      if (row) {
+        c = Number(row.capital_weight);
+      } else {
+        // 没有手动记录，根据股东编号和资金达标系数自动计算资金权重
+        const [[snRow]] = await (db as any).execute(
+          'SELECT shareNo FROM shareholder_numbers WHERE userId = ? LIMIT 1',
+          [input.userId]
+        ) as any;
+        const [[capRow]] = await (db as any).execute(
+          `SELECT COALESCE(SUM(shareCount), 0) AS capitalAmount
+           FROM equity_shares WHERE userId = ? AND shareType = '资源股'`,
+          [input.userId]
+        ) as any;
+        const THRESHOLD_W = 100000;
+        const TIERS_W = 66;
+        const MAX_RANK_W = 660;
+        const MAX_BONUS_W = 1.0;
+        const MIN_BONUS_W = Math.round(MAX_BONUS_W / (TIERS_W - 1) * 10000) / 10000;
+        const stepW = (MAX_BONUS_W - MIN_BONUS_W) / (TIERS_W - 1);
+        const capitalAmount = Number(capRow?.capitalAmount ?? 0);
+        const capitalRatio = Math.min(capitalAmount / THRESHOLD_W, 1.0);
+        let rawBonus = 0;
+        if (snRow?.shareNo) {
+          const rank = parseInt(String(snRow.shareNo), 10);
+          if (!isNaN(rank) && rank <= MAX_RANK_W) {
+            const tier = Math.ceil(rank / 10);
+            rawBonus = Math.round((MAX_BONUS_W - (tier - 1) * stepW) * 10000) / 10000;
+          }
+        }
+        const autoBonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
+        c = Math.round((1.0 + autoBonus) * 10000) / 10000;
+      }
       return {
         resourceWeight: r,
         capitalWeight: c,
