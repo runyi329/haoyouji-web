@@ -69,6 +69,11 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
     grantDateStr
   );
   const isMarket = s.shareType === '市场贡献股';
+  // 该笔快照权重（增量设计，发放时锁定）
+  const w = Number(s.weight ?? 1.0);
+  const base = Number(s.shareCount) || 0;
+  // 加权后总张数：（股本 + 股息）× 权重
+  const weightedTotal = (base + accrued) * w;
   return (
     <div>
       <div className="px-4 py-3">
@@ -83,7 +88,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
           </div>
           <div className="flex items-baseline gap-0.5">
             <span className="text-[10px]" style={{ color: isMarket ? 'rgba(80,180,100,0.6)' : 'rgba(212,175,55,0.6)' }}>股本</span>
-            <span className="text-sm font-bold" style={{ background: isMarket ? 'linear-gradient(90deg, #6EE88A 0%, #3CB85A 100%)' : 'linear-gradient(90deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{Number(s.shareCount).toFixed(2)}</span>
+            <span className="text-sm font-bold" style={{ background: isMarket ? 'linear-gradient(90deg, #6EE88A 0%, #3CB85A 100%)' : 'linear-gradient(90deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{base.toFixed(2)}</span>
             <span className="text-[10px]" style={{ color: isMarket ? 'rgba(100,220,120,0.7)' : 'rgba(220,185,60,0.7)' }}>张</span>
           </div>
         </div>
@@ -96,6 +101,17 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
             <span className="text-[10px]" style={{ color: isMarket ? 'rgba(100,220,120,0.7)' : 'rgba(220,185,60,0.7)' }}>张</span>
           </div>
         </div>
+        {/* 权重信息行：资源权重 × 资金权重 = 总权重 × 股本 = 加权后张数 */}
+        {w !== 1.0 || true ? (
+          <div className="flex items-center gap-0.5 mt-1.5 flex-wrap">
+            <span className="text-[9px]" style={{ color: isMarket ? 'rgba(80,180,100,0.45)' : 'rgba(212,175,55,0.45)' }}>权重</span>
+            <span className="text-[9px] font-semibold" style={{ color: isMarket ? 'rgba(80,200,110,0.7)' : 'rgba(255,210,80,0.7)' }}>{w.toFixed(2)}</span>
+            <span className="text-[9px]" style={{ color: isMarket ? 'rgba(80,180,100,0.35)' : 'rgba(212,175,55,0.35)' }}>×</span>
+            <span className="text-[9px]" style={{ color: isMarket ? 'rgba(80,180,100,0.45)' : 'rgba(212,175,55,0.45)' }}>{base.toFixed(2)}张</span>
+            <span className="text-[9px]" style={{ color: isMarket ? 'rgba(80,180,100,0.35)' : 'rgba(212,175,55,0.35)' }}>=</span>
+            <span className="text-[9px] font-semibold" style={{ color: isMarket ? 'rgba(100,220,130,0.85)' : 'rgba(255,225,100,0.85)' }}>{weightedTotal.toFixed(2)}张</span>
+          </div>
+        ) : null}
         {s.reason && !isMarket && <div className="text-xs mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>{s.reason}</div>}
       </div>
       {!isLast && <div style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }} />}
