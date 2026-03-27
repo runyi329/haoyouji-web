@@ -13960,6 +13960,106 @@ insights 数组每项包含：
     }),
 
 
+  // ========== QQ图表数据接口 ==========
+  getQQChartData: protectedProcedure
+    .query(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { cumPnl: [], hourly: [], multiplier: [], dailyPnl: [], numberPref: [], houseEdge: [] };
+        const COMBO_MAP: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
+        // 1. 累计盈亏曲线（每50笔采样）
+        const [allRows] = await (conn as any).execute(
+          `SELECT amount, win_amount FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' ORDER BY trade_time ASC, id ASC LIMIT 5252`
+        );
+        const cumPnl: { idx: number; pnl: number }[] = [];
+        let running = 0;
+        (allRows as any[]).forEach((r: any, i: number) => {
+          const amt = Number(r.amount) * 100;
+          const win = Number(r.win_amount) * 100;
+          running += (win - amt);
+          if (i % 50 === 0 || i === (allRows as any[]).length - 1) {
+            cumPnl.push({ idx: i + 1, pnl: Math.round(running * 100) / 100 });
+          }
+        });
+        // 2. 每小时胜率
+        const [hourlyRows] = await (conn as any).execute(
+          `SELECT HOUR(trade_time) as hour, COUNT(*) as total,
+                  SUM(CASE WHEN win_status='已中奖' THEN 1 ELSE 0 END) as won
+           FROM qq_trade_records WHERE amount IS NOT NULL AND amount != ''
+           GROUP BY HOUR(trade_time) ORDER BY hour`
+        );
+        const hourly = (hourlyRows as any[]).map((r: any) => ({
+          hour: Number(r.hour),
+          total: Number(r.total),
+          won: Number(r.won),
+          winRate: Number(r.total) > 0 ? Math.round(Number(r.won) / Number(r.total) * 1000) / 10 : 0,
+        }));
+        // 3. 倍投层级分布
+        const [seqRows] = await (conn as any).execute(
+          `SELECT amount FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' ORDER BY trade_time ASC, id ASC`
+        );
+        const multiBuckets: Record<string, number> = {
+          'x1': 0, 'x2-3': 0, 'x4-7': 0, 'x8-15': 0, 'x16-31': 0, 'x32-63': 0, 'x64-127': 0, 'x128+': 0
+        };
+        const BASE_UNIT = 0.10;
+        for (const r of (seqRows as any[])) {
+          const ratio = Number(r.amount) / BASE_UNIT;
+          if (ratio < 2) multiBuckets['x1']++;
+          else if (ratio < 4) multiBuckets['x2-3']++;
+          else if (ratio < 8) multiBuckets['x4-7']++;
+          else if (ratio < 16) multiBuckets['x8-15']++;
+          else if (ratio < 32) multiBuckets['x16-31']++;
+          else if (ratio < 64) multiBuckets['x32-63']++;
+          else if (ratio < 128) multiBuckets['x64-127']++;
+          else multiBuckets['x128+']++;
+        }
+        const multiplier = Object.entries(multiBuckets).map(([label, count]) => ({ label, count }));
+        // 4. 每日盈亏
+        const [dailyRows] = await (conn as any).execute(
+          `SELECT DATE(trade_time) as day,
+                  SUM(CAST(amount AS DECIMAL(20,4)))*100 as bet_sum,
+                  SUM(CAST(win_amount AS DECIMAL(20,4)))*100 as win_sum,
+                  COUNT(*) as total
+           FROM qq_trade_records WHERE amount IS NOT NULL AND amount != ''
+           GROUP BY DATE(trade_time) ORDER BY day`
+        );
+        const dailyPnl = (dailyRows as any[]).map((r: any) => ({
+          day: String(r.day).substring(5),
+          betSum: Math.round(Number(r.bet_sum) * 100) / 100,
+          winSum: Math.round(Number(r.win_sum) * 100) / 100,
+          pnl: Math.round((Number(r.win_sum) - Number(r.bet_sum)) * 100) / 100,
+          total: Number(r.total),
+        }));
+        // 5. 号码偏好（按选号分组）
+        const [numRows] = await (conn as any).execute(
+          `SELECT content, COUNT(*) as cnt FROM qq_trade_records WHERE content IS NOT NULL AND content != '' GROUP BY content ORDER BY cnt DESC LIMIT 10`
+        );
+        const numberPref = (numRows as any[]).map((r: any) => ({ content: String(r.content), cnt: Number(r.cnt) }));
+        // 6. 各玩法庄家优势
+        const [oddsRows] = await (conn as any).execute(`SELECT content, odds FROM qq_bet_odds WHERE odds IS NOT NULL`);
+        const houseEdge = (oddsRows as any[]).map((r: any) => {
+          const c = String(r.content || '');
+          const digits = new Set<number>();
+          for (const ch of c) { const n = parseInt(ch); if (!isNaN(n) && n >= 0 && n <= 9) digits.add(n); }
+          let combos = 0;
+          digits.forEach(d => { combos += (COMBO_MAP[d] || 0); });
+          const prob = combos / 100;
+          const odds = Number(r.odds);
+          const ev = prob * odds - 1;
+          return { content: c, prob: Math.round(prob * 1000) / 10, odds, houseEdgePct: Math.round(-ev * 10000) / 100 };
+        });
+        return { cumPnl, hourly, multiplier, dailyPnl, numberPref, houseEdge };
+      } catch (err) {
+        console.error('[QQ图表] 数据获取失败:', err);
+        return { cumPnl: [], hourly: [], multiplier: [], dailyPnl: [], numberPref: [], houseEdge: [] };
+      }
+    }),
   // ========== 短周期窗口监控：胜率离群值检测 ==========
   getShortCycleMonitor: protectedProcedure
     .query(async ({ ctx }) => {
