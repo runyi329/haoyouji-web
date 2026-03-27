@@ -274,7 +274,7 @@ export const equityRouter = router({
       userId: z.number(),
       memberNickname: z.string(),
       shareCount: z.number().positive(),
-      shareType: z.string().default('资金股'),
+      shareType: z.string().default('资源股'),
       grantDate: z.string(), // YYYY-MM-DD
       reason: z.string(),
       regNo: z.string().optional(), // 股权登记编号，可选，不填则自动生成
@@ -308,7 +308,7 @@ export const equityRouter = router({
       const [result] = await (conn as any).execute(
         `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy, weight, resource_weight, capital_weight)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, finalRegNo, ctx.user.id, snapshotWeight, rw, cw]
+        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资源股', input.grantDate, input.reason, finalRegNo, ctx.user.id, snapshotWeight, rw, cw]
       );
       return { id: (result as any).insertId, regNo: finalRegNo };
     }),
@@ -468,12 +468,12 @@ export const equityRouter = router({
       }));
       // 市场贡献股总股本
       const [marketRows] = await (conn as any).execute(
-        `SELECT COALESCE(SUM(shareCount), 0) as total FROM equity_shares WHERE ledgerId=? AND shareType='市场贡献股'`,
+        `SELECT COALESCE(SUM(shareCount), 0) as total FROM equity_shares WHERE ledgerId=? AND shareType='贡献股'`,
         [input.ledgerId]
       );
       const marketTotal = Number((marketRows as any[])[0]?.total ?? 0);
       const [marketDateRows] = await (conn as any).execute(
-        `SELECT grantDate, shareCount, annualRate FROM equity_shares WHERE ledgerId=? AND shareType='市场贡献股' ORDER BY grantDate ASC`,
+        `SELECT grantDate, shareCount, annualRate FROM equity_shares WHERE ledgerId=? AND shareType='贡献股' ORDER BY grantDate ASC`,
         [input.ledgerId]
       );
       const marketShares = (marketDateRows as any[]).map(r => ({
@@ -526,7 +526,7 @@ export const equityRouter = router({
                 COALESCE((
                   SELECT SUM(es2.shareCount)
                   FROM equity_shares es2
-                  WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = '资金股'
+                  WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = '资源股'
                 ), 0) AS capitalAmount
          FROM ledger_members lm
          LEFT JOIN users u ON u.id = lm.userId
