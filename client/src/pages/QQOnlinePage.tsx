@@ -1694,10 +1694,15 @@ function MonteCarloCard() {
     const bankruptByDay = new Array(days + 1).fill(0);
     const bankruptDay: number[] = []; // 每条路径的破产天（-1=未破产）
 
+    const CAP_LIMIT = 150000; // 本金上限 15万，超出部分每天结算取走
+    let totalWithdrawn = 0; // 记录各路径累计取走总额（用于展示）
+    const withdrawnByDay: number[] = new Array(days + 1).fill(0); // 各天平均取走额
+
     for (let s = 0; s < simCount; s++) {
       let capital = initialCapital;
       let bankrupt = false;
       let bankruptAt = -1;
+      let pathWithdrawn = 0;
       capitalByDay[0].push(capital);
       for (let d = 1; d <= days; d++) {
         if (bankrupt) {
@@ -1706,12 +1711,20 @@ function MonteCarloCard() {
           continue;
         }
         const { won, pnl } = simulateOneDay(capital, dailyTarget);
-        capital = won ? capital + pnl : 0;
         if (!won) {
+          capital = 0;
           bankrupt = true;
           bankruptAt = d;
+        } else {
+          capital = capital + pnl;
+          // 本金上限规则：超过 15 万的部分结算取走
+          if (capital > CAP_LIMIT) {
+            pathWithdrawn += (capital - CAP_LIMIT);
+            capital = CAP_LIMIT;
+          }
         }
         capitalByDay[d].push(capital);
+        withdrawnByDay[d] += pathWithdrawn;
         if (bankrupt) bankruptByDay[d]++;
       }
       bankruptDay.push(bankruptAt);
@@ -1948,22 +1961,22 @@ function MonteCarloCard() {
                   上次模拟：{savedAt}
                 </div>
               )}
-              {/* 3图布局：左上+右上+左下，右下为柱状图 */}
-              <div className="grid grid-cols-2 gap-2 mb-2">
+              {/* 纵向单列布局：4个图全宽一列从上到下 */}
+              <div className="flex flex-col gap-3 mb-2">
                 {/* 图1：实际胜率资金曲线 */}
-                <div style={{ height: '130px' }}>
-                  <Line data={chart1Data} options={commonOptions(`实际胜率 ${p.mcData.actualWinRate}%`, '资产')} />
+                <div style={{ height: '160px' }}>
+                  <Line data={chart1Data} options={commonOptions(`实际胜率 ${p.mcData.actualWinRate}% — 资金曲线（本金上限 15万，超出结算）`, '资产')} />
                 </div>
                 {/* 图2：期望胜率资金曲线 */}
-                <div style={{ height: '130px' }}>
-                  <Line data={chart2Data} options={commonOptions(`期望胜率 ${p.mcData.expectedWinRate}%`, '资产')} />
+                <div style={{ height: '160px' }}>
+                  <Line data={chart2Data} options={commonOptions(`期望胜率 ${p.mcData.expectedWinRate}% — 资金曲线（本金上限 15万，超出结算）`, '资产')} />
                 </div>
-                {/* 图3：破产概率曲线 */}
-                <div style={{ height: '130px' }}>
-                  <Line data={chart3Data} options={commonOptions('破产累计概率', '%', true)} />
+                {/* 图3：破产累计概率 */}
+                <div style={{ height: '160px' }}>
+                  <Line data={chart3Data} options={commonOptions('破产累计概率 — 实际 vs 期望', '%', true)} />
                 </div>
                 {/* 图4：单日赢满概率柱状图 */}
-                <div style={{ height: '130px' }}>
+                <div style={{ height: '160px' }}>
                   <Bar
                     data={chart4Data}
                     options={{
@@ -1971,11 +1984,11 @@ function MonteCarloCard() {
                       maintainAspectRatio: false,
                       plugins: {
                         legend: { display: false },
-                        title: { display: true, text: '单日赢满概率', color: GOLD_COLOR, font: { size: 9, weight: 'bold' as const }, padding: { bottom: 4 } },
+                        title: { display: true, text: '单日赢满概率 — 实际 vs 期望', color: GOLD_COLOR, font: { size: 9, weight: 'bold' as const }, padding: { bottom: 4 } },
                         tooltip: { enabled: false },
                       },
                       scales: {
-                        x: { ticks: { color: LABEL_COLOR, font: { size: 8 } }, grid: { display: false } },
+                        x: { ticks: { color: LABEL_COLOR, font: { size: 9 } }, grid: { display: false } },
                         y: {
                           ticks: { color: LABEL_COLOR, font: { size: 7 }, callback: (v: any) => `${v}%` },
                           grid: { color: 'rgba(255,255,255,0.05)' },
