@@ -3266,6 +3266,10 @@ export default function LedgerDetail() {
                           <div className="flex items-center gap-3 mt-1.5">
                             <span className="text-xs text-gray-400" style={{ minWidth: 76 }}>{(u as any).registeredAt || ''}</span>
                             {u.inviterName ? <span className="text-xs text-gray-400">推荐人：<span className="text-gray-600">{u.inviterName}</span></span> : <span className="text-xs text-gray-300">无推荐人</span>}
+                            {(u as any).hasWallet
+                              ? <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>钱包已绑定</span>
+                              : <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>未绑定钱包</span>
+                            }
                             {(() => {
                               const displayNote = localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '');
                               return displayNote ? <span className="text-xs text-amber-700 truncate">{displayNote}</span> : null;
