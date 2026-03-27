@@ -3248,50 +3248,35 @@ export default function LedgerDetail() {
                         </div>
                         {/* 右侧信息 */}
                         <div className="flex-1 min-w-0">
-                          {/* 第一行：昵称 + 用户名 + 层级 + 拨比 + 备注按钮 */}
+                          {/* 第一行：昵称 + 用户名 + 层级标签 + 拨比标签 + 备注按钮 */}
                           <div className="flex items-center justify-between gap-1">
-                            <div className="flex items-baseline gap-1 min-w-0">
+                            <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
                               <span className="text-sm font-semibold text-gray-900 truncate">{u.name}</span>
                               {(u as any).username && (u as any).username !== u.name && (
                                 <span className="text-xs text-gray-400 font-normal truncate">({(u as any).username})</span>
                               )}
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
-                              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>
-                                第{u.layer}层
-                              </span>
-                              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.payoutRatio > 0 ? '#FFF8E1' : '#F5F5F5', color: u.payoutRatio > 0 ? '#B8860B' : '#9E9E9E' }}>
-                                {u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}
-                              </span>
-                              <button
-                                onClick={() => { setEditingNoteUserId(u.id); setNoteInputValue(localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '')); }}
-                                className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400"
-                                style={{ backgroundColor: '#EEEEEE', fontSize: 12 }}
-                                title="添加备注"
-                              >注</button>
+                              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>第{u.layer}层</span>
+                              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.payoutRatio > 0 ? '#FFF8E1' : '#F5F5F5', color: u.payoutRatio > 0 ? '#B8860B' : '#9E9E9E' }}>{u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}</span>
+                              <button onClick={() => { setEditingNoteUserId(u.id); setNoteInputValue(localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '')); }} className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400" style={{ backgroundColor: '#EEEEEE', fontSize: 12 }} title="添加备注">注</button>
                             </div>
                           </div>
-                          {/* 第二行：注册时间 + 推荐人 + 备注 */}
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            {(u as any).registeredAt && <span className="text-xs text-gray-400">注册：{(u as any).registeredAt}</span>}
-                            {u.inviterName && <span className="text-xs text-gray-400">推荐人：{u.inviterName}</span>}
+                          {/* 第二行：时间 + 推荐人 + 备注，固定间距对齐 */}
+                          <div className="flex items-center gap-3 mt-1.5">
+                            <span className="text-xs text-gray-400" style={{ minWidth: 76 }}>{(u as any).registeredAt || ''}</span>
+                            {u.inviterName ? <span className="text-xs text-gray-400">推荐人：<span className="text-gray-600">{u.inviterName}</span></span> : <span className="text-xs text-gray-300">无推荐人</span>}
                             {(() => {
                               const displayNote = localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '');
-                              return displayNote ? <span className="text-xs text-amber-700 truncate max-w-[120px]">{displayNote}</span> : null;
+                              return displayNote ? <span className="text-xs text-amber-700 truncate">{displayNote}</span> : null;
                             })()}
                           </div>
                         </div>
                       </div>
                       {/* 分隔细线 */}
                       <div style={{ height: 1, backgroundColor: '#E8E8E8', marginLeft: 12, marginRight: 12 }} />
-                      {/* 下层：持仓情况 */}
+                      {/* 下层：持仓情况表格（余额/持仓/挂单三行） */}
                       <div className="px-3 pt-2 pb-2">
-                        {/* 余额行：独占一行 */}
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-xs text-gray-400">余额</span>
-                          <span className="text-xs font-semibold" style={{ color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)} U</span>
-                        </div>
-                        {/* 持仓/挂单表格 */}
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                           <thead>
                             <tr style={{ backgroundColor: '#F5F5F5' }}>
@@ -3302,12 +3287,19 @@ export default function LedgerDetail() {
                             </tr>
                           </thead>
                           <tbody>
+                            {/* 余额行：跨三列 */}
+                            <tr>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>余额</td>
+                              <td colSpan={3} style={{ border: '1px solid #E0E0E0', padding: '3px 8px', fontWeight: 600, color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)} U</td>
+                            </tr>
+                            {/* 持仓行 */}
                             <tr>
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>持仓</td>
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).holdingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).holdingBTC ?? 0).toFixed(4)}</td>
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).holdingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).holdingETH ?? 0).toFixed(4)}</td>
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).holdingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).holdingSOL ?? 0).toFixed(4)}</td>
                             </tr>
+                            {/* 挂单行 */}
                             <tr>
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>挂单</td>
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).pendingBTC ?? 0).toFixed(4)}</td>
