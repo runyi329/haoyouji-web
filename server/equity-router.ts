@@ -641,95 +641,87 @@ export const equityTransferRouter = router({
       return all;
     }),
 
-  // 获取指定用户的权重
-  getUserWeight: protectedProcedure
-    .input(z.object({ userId: z.number() }))
-    .query(async ({ input }) => {
-      const conn = await (await import('./db')).getDbConnection();
-      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      const [rows] = await (conn as any).execute(
-        `SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ?`,
-        [input.userId]
-      );
-      if ((rows as any[]).length === 0) {
-        return { resourceWeight: 1.00, capitalWeight: 1.00, totalWeight: 1.00 };
-      }
-      const row = (rows as any[])[0];
-      const r = Number(row.resource_weight);
-      const c = Number(row.capital_weight);
-      return { resourceWeight: r, capitalWeight: c, totalWeight: Math.round((r * c) * 10000) / 10000 };
-    }),
-
-  // 获取所有用户权重（管理员）——从 ledger_members 查该账本所有成员
-  getAllWeights: protectedProcedure
+  // ===== 权重管理 =====
+  // 获取账本所有成员及其权重（仅账本 owner/admin 可访问）
+  getWeightMembers: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const conn = await (await import('./db')).getDbConnection();
-      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      // 检查该用户在该账本的角色（必须是 owner 或 admin）
-      const [roleRows] = await (conn as any).execute(
-        `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+
+      // 验证操作者是该账本的 owner 或 admin
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
         [input.ledgerId, ctx.user.id]
-      );
-      const ledgerRole = (roleRows as any[])[0]?.role;
-      const isGlobalAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-      if (!isGlobalAdmin && ledgerRole !== 'owner' && ledgerRole !== 'admin') {
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
       }
-      // 从 ledger_members JOIN users 查该账本所有成员
-      const [members] = await (conn as any).execute(
+
+      // 查该账本所有成员
+      const [members] = await (db as any).execute(
         `SELECT lm.userId, u.name, u.username, u.avatar
          FROM ledger_members lm
          LEFT JOIN users u ON u.id = lm.userId
          WHERE lm.ledgerId = ? AND lm.userId > 0
          ORDER BY lm.createdAt ASC`,
         [input.ledgerId]
-      );
-      // 获取已设置的权重
-      const [weights] = await (conn as any).execute(
-        `SELECT user_id, resource_weight, capital_weight FROM equity_weights`
-      );
-      const weightMap = new Map((weights as any[]).map((w: any) => [Number(w.user_id), w]));
+      ) as any;
+
+      // 查所有权重记录
+      const [weights] = await (db as any).execute(
+        'SELECT user_id, resource_weight, capital_weight FROM equity_weights'
+      ) as any;
+      const wMap = new Map<number, { r: number; c: number }>();
+      for (const w of weights) {
+        wMap.set(Number(w.user_id), { r: Number(w.resource_weight), c: Number(w.capital_weight) });
+      }
+
       return (members as any[]).map((m: any) => {
-        const w = weightMap.get(Number(m.userId));
-        const r = w ? Number(w.resource_weight) : 1.00;
-        const c = w ? Number(w.capital_weight) : 1.00;
+        const uid = Number(m.userId);
+        const r = wMap.get(uid)?.r ?? 1.00;
+        const c = wMap.get(uid)?.c ?? 1.00;
         return {
-          userId: m.userId,
+          userId: uid,
           name: m.name || m.username || '未知',
-          avatar: m.avatar,
+          avatar: m.avatar ?? null,
           resourceWeight: r,
           capitalWeight: c,
-          totalWeight: Math.round((r * c) * 10000) / 10000,
+          totalWeight: Math.round(r * c * 10000) / 10000,
         };
       });
     }),
 
-  // 设置用户权重（账本管理员）
-  setUserWeight: protectedProcedure
+  // 设置成员权重（仅账本 owner/admin 可操作）
+  setMemberWeight: protectedProcedure
     .input(z.object({
+      ledgerId: z.number(),
       userId: z.number(),
       resourceWeight: z.number().min(0).max(99),
       capitalWeight: z.number().min(0).max(99),
-      ledgerId: z.number().optional().default(59),
     }))
     .mutation(async ({ ctx, input }) => {
-      const conn = await (await import('./db')).getDbConnection();
-      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      // 检查该用户在该账本的角色
-      const [roleRows] = await (conn as any).execute(
-        `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+
+      // 验证操作者是该账本的 owner 或 admin
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
         [input.ledgerId, ctx.user.id]
-      );
-      const ledgerRole = (roleRows as any[])[0]?.role;
-      const isGlobalAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-      if (!isGlobalAdmin && ledgerRole !== 'owner' && ledgerRole !== 'admin') {
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
       }
-      await (conn as any).execute(
+
+      await (db as any).execute(
         `INSERT INTO equity_weights (user_id, resource_weight, capital_weight)
          VALUES (?, ?, ?)
-         ON DUPLICATE KEY UPDATE resource_weight=VALUES(resource_weight), capital_weight=VALUES(capital_weight), updated_at=NOW()`,
+         ON DUPLICATE KEY UPDATE
+           resource_weight = VALUES(resource_weight),
+           capital_weight  = VALUES(capital_weight),
+           updated_at      = NOW()`,
         [input.userId, input.resourceWeight, input.capitalWeight]
       );
       return { success: true };
