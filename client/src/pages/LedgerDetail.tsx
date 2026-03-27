@@ -3296,10 +3296,16 @@ export default function LedgerDetail() {
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                           <thead>
                             <tr style={{ backgroundColor: '#F5F5F5' }}>
-                              {/* A1格：余额 + 数字 */}
-                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'left', color: '#9E9E9E', fontWeight: 400, width: 80 }}>
-                                <div style={{ fontSize: 10, color: '#9E9E9E' }}>余额</div>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)}U</div>
+                              {/* A1格：当前余额 + 累计充值 */}
+                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'left', color: '#9E9E9E', fontWeight: 400, width: 90 }}>
+                                <div style={{ fontSize: 10, color: '#9E9E9E', marginBottom: 2 }}>
+                                  <span>余额 </span>
+                                  <span style={{ fontWeight: 600, color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)}U</span>
+                                </div>
+                                <div style={{ fontSize: 10, color: '#9E9E9E' }}>
+                                  <span>充值 </span>
+                                  <span style={{ fontWeight: 600, color: (u as any).totalRecharge > 0 ? '#1565C0' : '#9E9E9E' }}>{Number((u as any).totalRecharge ?? 0).toFixed(2)}U</span>
+                                </div>
                               </th>
                               <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>BTC</th>
                               <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>ETH</th>

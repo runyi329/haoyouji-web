@@ -10010,6 +10010,7 @@ export const appRouter = router({
           }
           // 查询每个用户在该账本下的余额
           let balanceMap = new Map<number, number>();
+          let totalRechargeMap = new Map<number, number>();
           if (result.length > 0) {
             try {
               const userIds3 = result.map(u => u.id);
@@ -10020,7 +10021,9 @@ export const appRouter = router({
                 [...userIds3, input.ledgerId]
               ) as any[];
               for (const row of (rechargeRows as any[])) {
-                balanceMap.set(row.user_id, parseFloat(row.recharged?.toString() || '0'));
+                const recharged = parseFloat(row.recharged?.toString() || '0');
+                balanceMap.set(row.user_id, recharged);
+                totalRechargeMap.set(row.user_id, recharged);
               }
               // 手动调账余额
               const [manualRows] = await rawDb.execute(
@@ -10028,8 +10031,12 @@ export const appRouter = router({
                 [...userIds3, input.ledgerId]
               ) as any[];
               for (const row of (manualRows as any[])) {
+                const manualAmt = parseFloat(row.manual?.toString() || '0');
                 const prev = balanceMap.get(row.user_id) ?? 0;
-                balanceMap.set(row.user_id, prev + parseFloat(row.manual?.toString() || '0'));
+                balanceMap.set(row.user_id, prev + manualAmt);
+                // 累计充值也加上手动调账（含正负）
+                const prevRecharge = totalRechargeMap.get(row.user_id) ?? 0;
+                totalRechargeMap.set(row.user_id, prevRecharge + manualAmt);
               }
             } catch (e) {
               console.error('[AF] 余额查询失败:', e);
@@ -10161,6 +10168,7 @@ export const appRouter = router({
               soldSOL: soldMap.get(u.id)?.SOL ?? 0,
               hasWallet: walletBoundSet.has(u.id),
               totalValue,
+              totalRecharge: totalRechargeMap.get(u.id) ?? 0,
             };
           });
           // 按账户总值降序排列
