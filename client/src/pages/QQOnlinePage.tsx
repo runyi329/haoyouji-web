@@ -889,36 +889,28 @@ function CumPnlCard() {
         <div className="text-[8px] mb-2" style={{ color: LABEL_COLOR, opacity: 0.65 }}>每20笔采样一次，共{cumPnl.length}个数据点 · 左滑查看历史 · 双指缩放</div>
         {/* 冻结Y轴 + 横向可滑动 + 双指缩放 */}
         <div style={{ position: 'relative', height: '160px' }}>
-          {/* 冻结Y轴：固定左侧，不随横向滚动 */}
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '52px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)' }}>
-            <Line
-              data={{
-                labels: cumPnl.map((d: any) => d.idx),
-                datasets: [{
-                  data: cumPnl.map((d: any) => d.pnl),
-                  borderColor: 'transparent',
-                  backgroundColor: 'transparent',
-                  borderWidth: 0,
-                  pointRadius: 0,
-                }],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: false,
-                plugins: { legend: { display: false }, tooltip: { enabled: false } },
-                layout: { padding: { right: 0 } },
-                scales: {
-                  x: { display: false },
-                  y: {
-                    position: 'left',
-                    ticks: { color: '#7A9BBF', font: { size: 8 }, maxTicksLimit: 5 },
-                    grid: { color: 'rgba(255,255,255,0.04)' },
-                  },
-                },
-              }}
-            />
-          </div>
+          {/* 冻结Y轴：纯HTML自绘，右对齐，紧贴曲线区域左边界 */}
+          {(() => {
+            const vals = cumPnl.map((d: any) => d.pnl as number);
+            const minV = vals.length ? Math.min(...vals) : 0;
+            const maxV = vals.length ? Math.max(...vals) : 0;
+            const range = maxV - minV || 1;
+            const ticks = 5;
+            const step = range / (ticks - 1);
+            const tickVals = Array.from({ length: ticks }, (_, i) => maxV - i * step);
+            const fmt = (v: number) => {
+              if (Math.abs(v) >= 10000) return (v / 10000).toFixed(1) + 'w';
+              if (Math.abs(v) >= 1000) return (v / 1000).toFixed(1) + 'k';
+              return Math.round(v).toString();
+            };
+            return (
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '46px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingTop: '4px', paddingBottom: '18px', boxSizing: 'border-box' }}>
+                {tickVals.map((v, i) => (
+                  <div key={i} style={{ width: '100%', textAlign: 'right', paddingRight: '4px', fontSize: '9px', color: '#7A9BBF', lineHeight: '1', whiteSpace: 'nowrap' }}>{fmt(v)}</div>
+                ))}
+              </div>
+            );
+          })()}
           {/* 横向可滑动区域（含X轴和曲线，左侧留出Y轴宽度） */}
           <div
             ref={(el) => { (scrollContainerRef as React.MutableRefObject<HTMLDivElement|null>).current = el; (containerRef as React.MutableRefObject<HTMLDivElement|null>).current = el; }}
@@ -928,7 +920,7 @@ function CumPnlCard() {
             style={{
               position: 'absolute',
               top: 0,
-              left: '52px',
+              left: '46px',
               right: 0,
               height: '160px',
               overflowX: 'auto',
