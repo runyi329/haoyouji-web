@@ -1632,14 +1632,13 @@ export default function QQOnlinePage() {
 
 // ========== 临时调试：win_status异常记录查询面板 ==========
 function DebugWinStatusPanel() {
-  const { data, isLoading, refetch } = trpc.debugAbnormalWinStatus.useQuery(undefined, {
-    enabled: false,
+  const [enabled, setEnabled] = React.useState(false);
+  const { data, isLoading } = trpc.debugAbnormalWinStatus.useQuery(undefined, {
+    enabled,
     refetchOnWindowFocus: false,
   });
-  const [loaded, setLoaded] = React.useState(false);
   const handleLoad = () => {
-    setLoaded(true);
-    refetch();
+    setEnabled(true);
   };
   return (
     <div style={{ margin: '12px 0', padding: '12px', background: 'rgba(13,27,42,0.8)', border: '1px solid rgba(200,168,76,0.3)', borderRadius: '12px' }}>
@@ -1652,7 +1651,7 @@ function DebugWinStatusPanel() {
           {isLoading ? '查询中...' : '查询异常记录'}
         </button>
       </div>
-      {loaded && data && (
+      {data && (
         <>
           <div style={{ marginBottom: '8px' }}>
             <div style={{ color: LABEL_COLOR, fontSize: '10px', marginBottom: '4px' }}>win_status全量分布：</div>
