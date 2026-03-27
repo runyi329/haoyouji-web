@@ -1451,19 +1451,24 @@ export default function QQOnlinePage() {
               {/* 第一行：实际中奖 / 实际未中奖 / 总数 */}
               <div className="rounded-xl px-3 py-2 mb-2" style={{ background: 'rgba(255,255,255,0.04)' }}>
                 <div className="text-[9px] mb-1.5 tracking-widest" style={{ color: LABEL_COLOR }}>实际结果</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0' }}>
-                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>实际中奖</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0' }}>
+                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', paddingRight: '6px' }}>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>已中奖</div>
                     <div className="text-base font-bold font-mono" style={{ color: GREEN_COLOR }}>{tradeStats?.won ?? 0}</div>
                     <div className="text-[9px]" style={{ color: GREEN_COLOR, opacity: 0.7 }}>{pct(tradeStats?.won ?? 0, tradeStats?.total ?? 0)}</div>
                   </div>
-                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>实际未中</div>
+                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 6px' }}>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>未中奖</div>
                     <div className="text-base font-bold font-mono" style={{ color: RED_COLOR }}>{tradeStats?.lost ?? 0}</div>
                     <div className="text-[9px]" style={{ color: RED_COLOR, opacity: 0.7 }}>{pct(tradeStats?.lost ?? 0, tradeStats?.total ?? 0)}</div>
                   </div>
-                  <div style={{ paddingLeft: '8px' }}>
-                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>投注总数</div>
+                  <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '0 6px' }}>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>撤单</div>
+                    <div className="text-base font-bold font-mono" style={{ color: '#a78bfa' }}>{(tradeStats as any)?.cancelled ?? 0}</div>
+                    <div className="text-[9px]" style={{ color: '#a78bfa', opacity: 0.7 }}>{pct((tradeStats as any)?.cancelled ?? 0, tradeStats?.total ?? 0)}</div>
+                  </div>
+                  <div style={{ paddingLeft: '6px' }}>
+                    <div className="text-[9px] mb-0.5" style={{ color: LABEL_COLOR }}>总计</div>
                     <div className="text-base font-bold font-mono" style={{ color: DATA_COLOR }}>{tradeStats?.total ?? 0}</div>
                     <div className="text-[9px]" style={{ color: LABEL_COLOR }}>笔</div>
                   </div>
