@@ -10071,21 +10071,38 @@ export const appRouter = router({
               console.error('[AF] 挂单查询失败:', e);
             }
           }
-          return { users: result.map(u => ({
-            ...u,
-            username: u.username,
-            registeredAt: u.registeredAt,
-            payoutRatio: payoutMap.get(u.id) ?? 0,
-            note: noteMap.get(u.id) ?? '',
-            inviterName: u.inviterName,
-            balance: balanceMap.get(u.id) ?? 0,
-            holdingBTC: holdingMap.get(u.id)?.BTC ?? 0,
-            holdingETH: holdingMap.get(u.id)?.ETH ?? 0,
-            holdingSOL: holdingMap.get(u.id)?.SOL ?? 0,
-            pendingBTC: pendingMap.get(u.id)?.BTC ?? 0,
-            pendingETH: pendingMap.get(u.id)?.ETH ?? 0,
-            pendingSOL: pendingMap.get(u.id)?.SOL ?? 0,
-          })) };
+          // 获取实时币价用于计算账户总值
+          const { getLatestPrice } = await import('./price-scanner');
+          const btcPrice = getLatestPrice('BTC') ?? 0;
+          const ethPrice = getLatestPrice('ETH') ?? 0;
+          const solPrice = getLatestPrice('SOL') ?? 0;
+
+          const mappedUsers = result.map(u => {
+            const balance = balanceMap.get(u.id) ?? 0;
+            const holdingBTC = holdingMap.get(u.id)?.BTC ?? 0;
+            const holdingETH = holdingMap.get(u.id)?.ETH ?? 0;
+            const holdingSOL = holdingMap.get(u.id)?.SOL ?? 0;
+            const totalValue = balance + holdingBTC * btcPrice + holdingETH * ethPrice + holdingSOL * solPrice;
+            return {
+              ...u,
+              username: u.username,
+              registeredAt: u.registeredAt,
+              payoutRatio: payoutMap.get(u.id) ?? 0,
+              note: noteMap.get(u.id) ?? '',
+              inviterName: u.inviterName,
+              balance,
+              holdingBTC,
+              holdingETH,
+              holdingSOL,
+              pendingBTC: pendingMap.get(u.id)?.BTC ?? 0,
+              pendingETH: pendingMap.get(u.id)?.ETH ?? 0,
+              pendingSOL: pendingMap.get(u.id)?.SOL ?? 0,
+              totalValue,
+            };
+          });
+          // 按账户总值降序排列
+          mappedUsers.sort((a, b) => b.totalValue - a.totalValue);
+          return { users: mappedUsers };
         } catch (e) {
           console.error('[AF] 邀请树查询失败:', e);
           return { users: [] };
