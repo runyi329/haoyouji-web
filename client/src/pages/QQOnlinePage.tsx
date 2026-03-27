@@ -790,6 +790,192 @@ function AmountAnalysisPanel() {
   );
 }
 
+// ========== 高阶图表分析面板 ==========
+function QQChartsPanel() {
+  const { data, isLoading } = trpc.getQQChartData.useQuery(undefined, {
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  // 动态导入 Chart.js
+  const [Chart, setChart] = React.useState<any>(null);
+  useEffect(() => {
+    Promise.all([
+      import('chart.js'),
+      import('react-chartjs-2'),
+    ]).then(([chartjs, rChartjs]) => {
+      const { Chart: ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } = chartjs;
+      ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
+      setChart({ Line: rChartjs.Line, Bar: rChartjs.Bar });
+    });
+  }, []);
+
+  const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
+  const sectionTitle = (t: string) => (
+    <div className="text-[10px] font-bold tracking-widest mb-2" style={{ color: GOLD_COLOR }}>{t}</div>
+  );
+
+  const chartOptions = (title: string, yLabel = '') => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      title: { display: false },
+      tooltip: { backgroundColor: 'rgba(13,27,42,0.95)', titleColor: '#E8F0FE', bodyColor: '#7A9BBF', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 },
+    },
+    scales: {
+      x: { ticks: { color: '#7A9BBF', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+      y: { ticks: { color: '#7A9BBF', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' }, title: { display: !!yLabel, text: yLabel, color: '#7A9BBF', font: { size: 9 } } },
+    },
+  });
+
+  if (isLoading || !Chart) {
+    return (
+      <div className="mx-3 mb-3 rounded-2xl p-4" style={cardStyle}>
+        <div className="text-[10px] font-bold tracking-widest mb-2" style={{ color: GOLD_COLOR }}>高阶图表分析</div>
+        <div className="text-[11px]" style={{ color: LABEL_COLOR }}>加载中...</div>
+      </div>
+    );
+  }
+
+  const { Line, Bar } = Chart;
+  const cumPnl = data?.cumPnl ?? [];
+  const hourly = data?.hourly ?? [];
+  const multiplier = data?.multiplier ?? [];
+  const dailyPnl = data?.dailyPnl ?? [];
+  const numberPref = data?.numberPref ?? [];
+  const houseEdge = data?.houseEdge ?? [];
+
+  return (
+    <div className="mx-3 mb-3 rounded-2xl p-4" style={cardStyle}>
+      {sectionTitle('高阶图表分析 | 拉斯维加斯/澳门专业视角')}
+
+      {/* 1. 累计盈亏曲线 */}
+      <div className="mb-4">
+        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>累计盈亏曲线（元）</div>
+        <div style={{ height: '140px' }}>
+          <Line
+            data={{
+              labels: cumPnl.map((d: any) => d.idx),
+              datasets: [{
+                data: cumPnl.map((d: any) => d.pnl),
+                borderColor: '#3DD68C',
+                backgroundColor: 'rgba(61,214,140,0.08)',
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: true,
+                tension: 0.3,
+              }],
+            }}
+            options={{
+              ...chartOptions('累计盈亏'),
+              plugins: { ...chartOptions('累计盈亏').plugins, annotation: undefined },
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 2. 每日盈亏柱状图 */}
+      <div className="mb-4">
+        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>每日盈亏（元）</div>
+        <div style={{ height: '120px' }}>
+          <Bar
+            data={{
+              labels: dailyPnl.map((d: any) => d.day),
+              datasets: [
+                { label: '投注', data: dailyPnl.map((d: any) => d.betSum), backgroundColor: 'rgba(122,155,191,0.5)', borderRadius: 3 },
+                { label: '中奖', data: dailyPnl.map((d: any) => d.winSum), backgroundColor: 'rgba(201,168,76,0.7)', borderRadius: 3 },
+              ],
+            }}
+            options={{
+              ...chartOptions('每日盈亏'),
+              plugins: { ...chartOptions('每日盈亏').plugins, legend: { display: true, labels: { color: '#7A9BBF', font: { size: 9 } } } },
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 3. 每小时胜率 */}
+      <div className="mb-4">
+        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>每小时胜率（%）</div>
+        <div style={{ height: '120px' }}>
+          <Bar
+            data={{
+              labels: hourly.map((d: any) => `${d.hour}时`),
+              datasets: [{
+                data: hourly.map((d: any) => d.winRate),
+                backgroundColor: hourly.map((d: any) => d.winRate > 40 ? 'rgba(244,112,104,0.7)' : 'rgba(122,155,191,0.5)'),
+                borderRadius: 3,
+              }],
+            }}
+            options={chartOptions('每小时胜率', '%')}
+          />
+        </div>
+        <div className="text-[8px] mt-1" style={{ color: LABEL_COLOR, opacity: 0.7 }}>* 红色柱表示胜率&gt;40%（应关注）</div>
+      </div>
+
+      {/* 4. 倍投层级分布 */}
+      <div className="mb-4">
+        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>倍投层级分布（斯斐波那契序列）</div>
+        <div style={{ height: '120px' }}>
+          <Bar
+            data={{
+              labels: multiplier.map((d: any) => d.label),
+              datasets: [{
+                data: multiplier.map((d: any) => d.count),
+                backgroundColor: multiplier.map((_: any, i: number) =>
+                  i < 2 ? 'rgba(61,214,140,0.6)' : i < 5 ? 'rgba(201,168,76,0.6)' : 'rgba(244,112,104,0.7)'
+                ),
+                borderRadius: 3,
+              }],
+            }}
+            options={chartOptions('倍投层级', '笔数')}
+          />
+        </div>
+        <div className="text-[8px] mt-1" style={{ color: LABEL_COLOR, opacity: 0.7 }}>* 红色区域（x32+）为极端倍投，庄家需重点监控</div>
+      </div>
+
+      {/* 5. 号码偏好 */}
+      <div className="mb-4">
+        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>选号偏好（前10常用选号）</div>
+        <div style={{ height: '120px' }}>
+          <Bar
+            data={{
+              labels: numberPref.map((d: any) => d.content),
+              datasets: [{
+                data: numberPref.map((d: any) => d.cnt),
+                backgroundColor: 'rgba(201,168,76,0.65)',
+                borderRadius: 3,
+              }],
+            }}
+            options={chartOptions('号码偏好', '投注次数')}
+          />
+        </div>
+      </div>
+
+      {/* 6. 庄家优势表 */}
+      {houseEdge.length > 0 && (
+        <div className="mb-2">
+          <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>庄家优势（%）——各玩法实际庄家优势率</div>
+          <div style={{ height: '120px' }}>
+            <Bar
+              data={{
+                labels: houseEdge.map((d: any) => d.content),
+                datasets: [{
+                  data: houseEdge.map((d: any) => d.houseEdgePct),
+                  backgroundColor: houseEdge.map((d: any) => d.houseEdgePct > 0 ? 'rgba(61,214,140,0.65)' : 'rgba(244,112,104,0.65)'),
+                  borderRadius: 3,
+                }],
+              }}
+              options={chartOptions('庄家优势', '%')}
+            />
+          </div>
+          <div className="text-[8px] mt-1" style={{ color: LABEL_COLOR, opacity: 0.7 }}>* 绿色为庄家正优势，红色为玩家正期望（赏率过高）</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function QQOnlinePage() {
   const [, setLocation] = useLocation();
   const { id } = useParams<{ id: string }>();
@@ -1126,9 +1312,10 @@ export default function QQOnlinePage() {
       {/* ── AI监控（jiang和yjh可见）── */}
       {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <AIRiskControlPanel />}
 
-      {/* ── AI监控 - 投注金额（jiang和yjh可见）── */}
+       {/* ── AI监控 - 投注金额（jiang和yjh可见）── */}
       {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <AmountAnalysisPanel />}
-
+      {/* ── 高阶图表分析（jiang和yjh可见）── */}
+      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <QQChartsPanel />}
       <div className="h-20" />
 
       {/* ── 底部悬浮按钮（仅jiang可见）── */}
