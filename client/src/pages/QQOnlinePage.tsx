@@ -1586,8 +1586,6 @@ export default function QQOnlinePage() {
       {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <QQChartsPanel />}
       {/* ── 蒙特卡洛风险模拟（jiang和yjh可见）── */}
       {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <MonteCarloCard />}
-      {/* ── 临时调试：win_status异常记录查询 ── */}
-      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <DebugWinStatusPanel />}
       <div className="h-20" />
 
       {/* ── 底部悬浮按钮（仅jiang可见）── */}
@@ -1635,93 +1633,7 @@ export default function QQOnlinePage() {
   );
 }
 
-// ========== 临时调试：win_status异常记录查询面板 ==========
-function DebugWinStatusPanel() {
-  const [enabled, setEnabled] = React.useState(false);
-  const { data, isLoading } = trpc.debugAbnormalWinStatus.useQuery(undefined, {
-    enabled,
-    refetchOnWindowFocus: false,
-  });
-  const handleLoad = () => {
-    setEnabled(true);
-  };
-  return (
-    <div style={{ margin: '12px 0', padding: '12px', background: 'rgba(13,27,42,0.8)', border: '1px solid rgba(200,168,76,0.3)', borderRadius: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-        <span style={{ color: GOLD_COLOR, fontSize: '12px', fontWeight: 'bold' }}>■ 临时调试：win_status分布查询</span>
-        <button
-          onClick={handleLoad}
-          style={{ padding: '4px 12px', background: 'rgba(200,168,76,0.15)', border: '1px solid rgba(200,168,76,0.4)', borderRadius: '6px', color: GOLD_COLOR, fontSize: '11px', cursor: 'pointer' }}
-        >
-          {isLoading ? '查询中...' : '查询异常记录'}
-        </button>
-      </div>
-      {data && (
-        <>
-          {/* 汇总 */}
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: DATA_COLOR }}>total: <b>{(data as any).summary?.total}</b></span>
-            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: GREEN_COLOR }}>won: <b>{(data as any).summary?.won}</b></span>
-            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: RED_COLOR }}>lost: <b>{(data as any).summary?.lost}</b></span>
-            <span style={{ fontSize: '11px', fontFamily: 'monospace', color: (data as any).summary?.diff !== 0 ? '#f87171' : GREEN_COLOR }}>差异: <b>{(data as any).summary?.diff}</b></span>
-          </div>
-          {/* win_status 分布 */}
-          <div style={{ marginBottom: '8px' }}>
-            <div style={{ color: LABEL_COLOR, fontSize: '10px', marginBottom: '4px' }}>win_status分布（hex值可查隐藏字符）：</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-              {(data as any).distribution?.map((d: any, i: number) => (
-                <span key={i} style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', fontSize: '10px', color: DATA_COLOR, fontFamily: 'monospace' }}>
-                  "{d.winStatus}"[{d.hexVal}] ×{d.cnt}
-                </span>
-              ))}
-            </div>
-          </div>
-          {/* 漏算记录 */}
-          <div style={{ marginBottom: '8px' }}>
-            <div style={{ color: RED_COLOR, fontSize: '10px', marginBottom: '4px' }}>漏算记录（不属于won也不属lost）：{(data as any).missed?.length}条</div>
-            {(data as any).missed?.length === 0 ? (
-              <div style={{ color: GREEN_COLOR, fontSize: '11px' }}>没有漏算记录</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px', fontFamily: 'monospace' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                      <th style={{ color: LABEL_COLOR, padding: '3px 6px', textAlign: 'left' }}>order_id</th>
-                      <th style={{ color: LABEL_COLOR, padding: '3px 6px', textAlign: 'left' }}>win_status</th>
-                      <th style={{ color: LABEL_COLOR, padding: '3px 6px', textAlign: 'left' }}>hex</th>
-                      <th style={{ color: LABEL_COLOR, padding: '3px 6px', textAlign: 'left' }}>amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data as any).missed?.map((r: any, i: number) => (
-                      <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                        <td style={{ color: DATA_COLOR, padding: '3px 6px' }}>{r.orderId}</td>
-                        <td style={{ color: RED_COLOR, padding: '3px 6px' }}>"{r.winStatus}"</td>
-                        <td style={{ color: GOLD_COLOR, padding: '3px 6px' }}>{r.hexVal}</td>
-                        <td style={{ color: DATA_COLOR, padding: '3px 6px' }}>{r.amount}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-          {/* amount 边界 */}
-          {(data as any).amountEdge?.length > 0 && (
-            <div>
-              <div style={{ color: GOLD_COLOR, fontSize: '10px', marginBottom: '4px' }}>amount字段含隐藏字符：{(data as any).amountEdge?.length}条</div>
-              {(data as any).amountEdge?.map((r: any, i: number) => (
-                <div key={i} style={{ fontSize: '10px', fontFamily: 'monospace', color: DATA_COLOR }}>
-                  {r.orderId}: amount="{r.amount}" hex={r.hexAmount}
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
+
 
 // ========== 蒙特卡洛风险模拟卡片 ==========
 function MonteCarloCard() {
