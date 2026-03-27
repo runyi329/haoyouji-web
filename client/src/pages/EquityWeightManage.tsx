@@ -539,29 +539,43 @@ export default function EquityWeightManage() {
                     <div className="text-[11px] font-medium mb-2" style={{ color: 'rgba(220,185,60,0.6)' }}>资金权重 = 基础值 + 入股早晚加成 × 资金达标系数</div>
 
                     {/* 资金股本金行 */}
-                    <div className="flex items-center justify-between mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
-                      <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>资金股本金（仅资金股类型）</span>
-                      <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
-                        {selected.capitalAmount !== undefined ? formatCapital(selected.capitalAmount) : '—'}
-                      </span>
+                    <div className="mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>资金股本金（仅资金股类型）</span>
+                        <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
+                          {selected.capitalAmount !== undefined ? `¥${selected.capitalAmount.toLocaleString()}` : '—'}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* 达标系数行 */}
-                    <div className="flex items-center justify-between mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
-                      <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>资金达标系数（本金 ÷ 10万，上限1.0）</span>
-                      <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
-                        {selected.capitalRatio !== undefined ? (selected.capitalRatio * 100).toFixed(1) + '%' : '—'}
-                      </span>
+                    {/* 达标系数行 - 展示完整公式 */}
+                    <div className="mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>资金达标系数</span>
+                        <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
+                          {selected.capitalRatio !== undefined ? (selected.capitalRatio * 100).toFixed(2) + '%' : '—'}
+                        </span>
+                      </div>
+                      <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.35)' }}>
+                        {selected.capitalAmount !== undefined
+                          ? `¥${selected.capitalAmount.toLocaleString()} ÷ ¥100,000 = ${selected.capitalRatio !== undefined ? (selected.capitalRatio * 100).toFixed(2) : '—'}%（上限 100%）`
+                          : '—'}
+                      </div>
                     </div>
 
                     {/* 入股早晚加成行 */}
-                    <div className="flex items-center justify-between mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
-                      <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>
-                        入股早晚加成（编号{selected.shareNo ? ` #${selected.shareNo}` : '未分配'}，第{selected.shareNo ? Math.ceil(parseInt(selected.shareNo) / 10) : '—'}档）
-                      </span>
-                      <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
-                        {selected.rawBonus !== undefined ? '+' + selected.rawBonus.toFixed(4) : '—'}
-                      </span>
+                    <div className="mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>入股早晚加成</span>
+                        <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
+                          {selected.rawBonus !== undefined ? '+' + selected.rawBonus.toFixed(4) : '—'}
+                        </span>
+                      </div>
+                      <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.35)' }}>
+                        {selected.shareNo
+                          ? `股东编号 #${selected.shareNo}，第 ${Math.ceil(parseInt(selected.shareNo) / 10)} 档（前660名有效）`
+                          : '未分配股东编号，无入股早晚加成'}
+                      </div>
                     </div>
 
                     {/* 实际加成行 */}
