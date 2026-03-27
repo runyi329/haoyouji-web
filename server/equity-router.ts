@@ -423,6 +423,25 @@ export const equityRouter = router({
     }),
 
   // ===== 权重管理 =====
+  // 获取单个用户的权重（任何已登录用户可查询自己或他人的权重）
+  getUserWeight: protectedProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[row]] = await (db as any).execute(
+        'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
+        [input.userId]
+      ) as any;
+      const r = row ? Number(row.resource_weight) : 1.00;
+      const c = row ? Number(row.capital_weight) : 1.00;
+      return {
+        resourceWeight: r,
+        capitalWeight: c,
+        totalWeight: Math.round(r * c * 10000) / 10000,
+      };
+    }),
+
   // 获取账本所有成员及其权重（仅账本 owner/admin 可访问）
   getWeightMembers: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
