@@ -589,7 +589,11 @@ export default function EquityWeightManage() {
                     {/* 资金权重结果 */}
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,229,102,0.08)', border: `1px solid rgba(255,229,102,0.25)` }}>
                       <span className="text-[11px] font-semibold" style={{ color: GOLD }}>
-                        资金权重 = 1.0 + {selected.autoBonus !== undefined ? selected.autoBonus.toFixed(4) : (parseFloat(capInput) - 1.0).toFixed(4)} = {parseFloat(capInput).toFixed(4)}
+                        {(() => {
+                          const bonus = selected.autoBonus !== undefined ? selected.autoBonus : (parseFloat(capInput) - 1.0);
+                          const computedCap = 1.0 + bonus;
+                          return `资金权重 = 1.0 + ${bonus.toFixed(4)} = ${computedCap.toFixed(4)}`;
+                        })()}
                       </span>
                     </div>
                   </div>
@@ -607,7 +611,13 @@ export default function EquityWeightManage() {
                   <div className="pt-2" style={{ borderTop: `1px solid rgba(201,168,76,0.2)` }}>
                     <div className="flex items-center justify-between px-2 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg,rgba(200,146,10,0.15) 0%,rgba(255,229,102,0.1) 100%)', border: `1px solid rgba(201,168,76,0.4)` }}>
                       <span className="text-xs font-semibold" style={{ color: GOLD }}>总权重 = 资金权重 × 资源权重</span>
-                      <span className="text-base font-bold" style={{ color: '#FFE566' }}>{previewTotal()}</span>
+                      <span className="text-base font-bold" style={{ color: '#FFE566' }}>{(() => {
+                        const bonus = selected.autoBonus !== undefined ? selected.autoBonus : (parseFloat(capInput) - 1.0);
+                        const computedCap = 1.0 + bonus;
+                        const r = parseFloat(resInput);
+                        if (isNaN(r)) return '—';
+                        return (Math.round(computedCap * r * 10000) / 10000).toFixed(4);
+                      })()}</span>
                     </div>
                   </div>
                 </div>
