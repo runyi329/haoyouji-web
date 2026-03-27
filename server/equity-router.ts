@@ -519,11 +519,18 @@ export const equityRouter = router({
       if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
       }
-      // 查该账本所有成员
+      // 查该账本所有成员，并联查资金股本金和股东编号
       const [members] = await (db as any).execute(
-        `SELECT lm.userId, u.name, u.username, u.avatar
+        `SELECT lm.userId, u.name, u.username, u.avatar,
+                COALESCE(sn.shareNo, NULL) AS shareNo,
+                COALESCE((
+                  SELECT SUM(es2.shareCount)
+                  FROM equity_shares es2
+                  WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = '资金股'
+                ), 0) AS capitalAmount
          FROM ledger_members lm
          LEFT JOIN users u ON u.id = lm.userId
+         LEFT JOIN shareholder_numbers sn ON sn.ledgerId = lm.ledgerId AND sn.userId = lm.userId
          WHERE lm.ledgerId = ? AND lm.userId > 0
          ORDER BY lm.createdAt ASC`,
         [input.ledgerId]
@@ -536,10 +543,29 @@ export const equityRouter = router({
       for (const w of weights) {
         wMap.set(Number(w.user_id), { r: Number(w.resource_weight), c: Number(w.capital_weight) });
       }
+      const THRESHOLD_W = 100000;
+      const TIERS_W = 66;
+      const MAX_RANK_W = 660;
+      const MAX_BONUS_W = 1.0;
+      const MIN_BONUS_W = Math.round(MAX_BONUS_W / (TIERS_W - 1) * 10000) / 10000;
+      const stepW = (MAX_BONUS_W - MIN_BONUS_W) / (TIERS_W - 1);
       return (members as any[]).map((m: any) => {
         const uid = Number(m.userId);
         const r = wMap.get(uid)?.r ?? 1.00;
         const c = wMap.get(uid)?.c ?? 1.00;
+        const capitalAmount = Number(m.capitalAmount ?? 0);
+        const capitalRatio = Math.min(capitalAmount / THRESHOLD_W, 1.0);
+        // 根据股东编号计算入股早晚加成
+        const shareNo = m.shareNo ? String(m.shareNo) : null;
+        let rawBonus = 0;
+        if (shareNo) {
+          const rank = parseInt(shareNo, 10);
+          if (!isNaN(rank) && rank <= MAX_RANK_W) {
+            const tier = Math.ceil(rank / 10);
+            rawBonus = Math.round((MAX_BONUS_W - (tier - 1) * stepW) * 10000) / 10000;
+          }
+        }
+        const autoBonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
         return {
           userId: uid,
           name: m.name || m.username || '未知',
@@ -547,6 +573,11 @@ export const equityRouter = router({
           resourceWeight: r,
           capitalWeight: c,
           totalWeight: Math.round(r * c * 10000) / 10000,
+          capitalAmount,
+          capitalRatio: Math.round(capitalRatio * 10000) / 10000,
+          shareNo,
+          rawBonus,
+          autoBonus,
         };
       });
     }),
@@ -709,22 +740,29 @@ export const equityRouter = router({
       // 计算每位符合条件成员的权重
       const preview = eligible.map((r: any, idx: number) => {
         const rank = idx + 1;
-        let bonus: number;
+        const capitalTotal = Number(r.capitalTotal);
+        // 资金达标系数：min(本金/10万, 1.0)
+        const capitalRatio = Math.min(capitalTotal / THRESHOLD, 1.0);
+        let rawBonus: number;
         if (rank > MAX_RANK) {
-          bonus = 0;
+          rawBonus = 0;
         } else {
           const tier = Math.ceil(rank / 10);
-          bonus = Math.round((MAX_BONUS - (tier - 1) * step) * 10000) / 10000;
+          rawBonus = Math.round((MAX_BONUS - (tier - 1) * step) * 10000) / 10000;
         }
+        // 实际加成 = 入股早晚加成 × 资金达标系数
+        const bonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
         const capitalWeight = Math.round((1.0 + bonus) * 10000) / 10000;
         return {
           userId: Number(r.userId),
           name: r.name as string,
           avatar: r.avatar as string | null,
           shareNo: r.shareNo as string,
-          capitalTotal: Number(r.capitalTotal),
+          capitalTotal,
           rank,
           tier: rank <= MAX_RANK ? Math.ceil(rank / 10) : null,
+          rawBonus,
+          capitalRatio: Math.round(capitalRatio * 10000) / 10000,
           bonus,
           capitalWeight,
         };
@@ -782,13 +820,17 @@ export const equityRouter = router({
       for (let idx = 0; idx < eligible.length; idx++) {
         const r = eligible[idx];
         const rank = idx + 1;
-        let bonus: number;
+        const capitalTotal = Number(r.capitalTotal);
+        const capitalRatio = Math.min(capitalTotal / THRESHOLD, 1.0);
+        let rawBonus: number;
         if (rank > MAX_RANK) {
-          bonus = 0;
+          rawBonus = 0;
         } else {
           const tier = Math.ceil(rank / 10);
-          bonus = Math.round((MAX_BONUS - (tier - 1) * step) * 10000) / 10000;
+          rawBonus = Math.round((MAX_BONUS - (tier - 1) * step) * 10000) / 10000;
         }
+        // 实际加成 = 入股早晚加成 × 资金达标系数
+        const bonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
         const capitalWeight = Math.round((1.0 + bonus) * 10000) / 10000;
         // 读取旧值
         const [[oldRow]] = await (db as any).execute(
