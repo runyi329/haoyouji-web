@@ -1589,11 +1589,14 @@ export default function LedgerDetail() {
                   </span>
                   {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
                 </div>
-                {/* 当前权重标注（仅显示最新权重，不再做全局乘法） */}
+                {/* 当前权重标注：资源权重 × 资金权重 = 总权重 */}
                 {myShares && myShares.length > 0 && (
                   <div className="flex items-center gap-0.5 mt-1 flex-wrap">
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>当前权重</span>
-                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.8)' }}>{totalWeight.toFixed(2)}</span>
+                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.75)' }}>{resourceWeight.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>×</span>
+                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.75)' }}>{capitalWeight.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>=</span>
+                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.95)' }}>{totalWeight.toFixed(2)}</span>
                   </div>
                 )}
                 {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
