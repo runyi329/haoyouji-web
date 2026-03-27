@@ -792,6 +792,7 @@ function AmountAnalysisPanel() {
 
 // ========== 累计盈亏曲线（单独卡片，放在投注统计下方）==========
 function CumPnlCard() {
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const { data, isLoading } = trpc.getQQChartData.useQuery(undefined, {
     refetchInterval: 5 * 60 * 1000,
   });
@@ -803,6 +804,13 @@ function CumPnlCard() {
       setChart({ Line: rChartjs.Line });
     });
   }, []);
+
+  // 数据加载完成后自动滚动到最右侧（最新数据）
+  useEffect(() => {
+    if (!isLoading && data?.cumPnl?.length && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
+    }
+  }, [isLoading, data?.cumPnl?.length]);
 
   const cardStyle: React.CSSProperties = {
     background: 'linear-gradient(145deg, rgba(18,42,68,0.95) 0%, rgba(11,28,48,0.98) 100%)',
@@ -842,39 +850,53 @@ function CumPnlCard() {
           </div>
           <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: GOLD_COLOR, border: '1px solid rgba(201,168,76,0.25)' }}>资金轨迹</span>
         </div>
-        <div className="text-[8px] mb-2" style={{ color: LABEL_COLOR, opacity: 0.65 }}>每50笔采样一次，共{cumPnl.length}个数据点</div>
-        <div style={{ height: '150px' }}>
-          <Line
-            data={{
-              labels: cumPnl.map((d: any) => d.idx),
-              datasets: [{
-                data: cumPnl.map((d: any) => d.pnl),
-                borderColor: '#3DD68C',
-                backgroundColor: (ctx: any) => {
-                  const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 150);
-                  gradient.addColorStop(0, 'rgba(61,214,140,0.18)');
-                  gradient.addColorStop(1, 'rgba(61,214,140,0.01)');
-                  return gradient;
+        <div className="text-[8px] mb-2" style={{ color: LABEL_COLOR, opacity: 0.65 }}>每20笔采样一次，共{cumPnl.length}个数据点 · 左滑查看历史</div>
+        {/* 横向可滑动容器 */}
+        <div
+          ref={scrollContainerRef}
+          style={{
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
+          {/* 图表宽度根据数据量动态拉伸，每个数据点占12px，最小宽度100% */}
+          <div style={{ width: Math.max(cumPnl.length * 12, 300) + 'px', height: '150px' }}>
+            <Line
+              data={{
+                labels: cumPnl.map((d: any) => d.idx),
+                datasets: [{
+                  data: cumPnl.map((d: any) => d.pnl),
+                  borderColor: '#3DD68C',
+                  backgroundColor: (ctx: any) => {
+                    const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 150);
+                    gradient.addColorStop(0, 'rgba(61,214,140,0.18)');
+                    gradient.addColorStop(1, 'rgba(61,214,140,0.01)');
+                    return gradient;
+                  },
+                  borderWidth: 1.8,
+                  pointRadius: 0,
+                  fill: true,
+                  tension: 0.35,
+                }],
+              }}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: {
+                  legend: { display: false },
+                  tooltip: { backgroundColor: 'rgba(13,27,42,0.95)', titleColor: '#E8F0FE', bodyColor: '#7A9BBF', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 },
                 },
-                borderWidth: 1.8,
-                pointRadius: 0,
-                fill: true,
-                tension: 0.35,
-              }],
-            }}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { display: false },
-                tooltip: { backgroundColor: 'rgba(13,27,42,0.95)', titleColor: '#E8F0FE', bodyColor: '#7A9BBF', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 },
-              },
-              scales: {
-                x: { ticks: { color: '#7A9BBF', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-                y: { ticks: { color: '#7A9BBF', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-              },
-            }}
-          />
+                scales: {
+                  x: { ticks: { color: '#7A9BBF', font: { size: 9 }, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                  y: { ticks: { color: '#7A9BBF', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                },
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
