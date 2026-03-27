@@ -10015,7 +10015,7 @@ export const appRouter = router({
             try {
               const userIds3 = result.map(u => u.id);
               const placeholders4 = userIds3.map(() => '?').join(',');
-              // 充值订单：用于余额基础 + 累计充值（只算真实外部入金）
+              // 充值订单：用于余额基础 + 累计充值
               const [rechargeRows] = await rawDb.execute(
                 `SELECT user_id, COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as recharged FROM recharge_orders WHERE user_id IN (${placeholders4}) AND ledger_id = ? AND status = 'completed' GROUP BY user_id`,
                 [...userIds3, input.ledgerId]
@@ -10023,9 +10023,9 @@ export const appRouter = router({
               for (const row of (rechargeRows as any[])) {
                 const recharged = parseFloat(row.recharged?.toString() || '0');
                 balanceMap.set(row.user_id, recharged);
-                totalRechargeMap.set(row.user_id, recharged); // 累计充值只算这里
+                totalRechargeMap.set(row.user_id, recharged);
               }
-              // 手动调账（全部，含买入负数、撤单退款等）→ 只用于计算可用余额
+              // 手动调账（全部，含买入负数、撤单退款等）→ 用于计算可用余额
               const [manualRows] = await rawDb.execute(
                 `SELECT user_id, COALESCE(SUM(amount), 0) as manual FROM af_manual_balances WHERE user_id IN (${placeholders4}) AND ledger_id = ? GROUP BY user_id`,
                 [...userIds3, input.ledgerId]
@@ -10034,7 +10034,16 @@ export const appRouter = router({
                 const manualAmt = parseFloat(row.manual?.toString() || '0');
                 const prev = balanceMap.get(row.user_id) ?? 0;
                 balanceMap.set(row.user_id, prev + manualAmt);
-                // 注意：不加入 totalRechargeMap，撤单退款/买入扣减均不算累计充值
+              }
+              // 手动正向调账（管理员手动加款）→ 计入累计充值，但排除撤单退款
+              const [manualPositiveRows] = await rawDb.execute(
+                `SELECT user_id, COALESCE(SUM(amount), 0) as manual_positive FROM af_manual_balances WHERE user_id IN (${placeholders4}) AND ledger_id = ? AND amount > 0 AND note NOT LIKE '%撤单%' GROUP BY user_id`,
+                [...userIds3, input.ledgerId]
+              ) as any[];
+              for (const row of (manualPositiveRows as any[])) {
+                const manualPositive = parseFloat(row.manual_positive?.toString() || '0');
+                const prevRecharge = totalRechargeMap.get(row.user_id) ?? 0;
+                totalRechargeMap.set(row.user_id, prevRecharge + manualPositive);
               }
             } catch (e) {
               console.error('[AF] 余额查询失败:', e);
