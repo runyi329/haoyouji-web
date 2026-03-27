@@ -3250,7 +3250,12 @@ export default function LedgerDetail() {
                         <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
                           {/* 第一行：姓名 + 层级标签 + 拨比标签 */}
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-medium text-gray-800 truncate">{u.name}</span>
+                            <span className="text-sm font-medium text-gray-800 truncate">
+                              {u.name}
+                              {(u as any).username && (u as any).username !== u.name && (
+                                <span className="text-xs text-gray-400 font-normal ml-1">({(u as any).username})</span>
+                              )}
+                            </span>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
                               <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>
                                 第{u.layer}层
