@@ -588,8 +588,9 @@ export default function EquityWeightManage() {
 
                     {/* 资金权重结果 */}
                     <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,229,102,0.08)', border: `1px solid rgba(255,229,102,0.25)` }}>
-                      <span className="text-[11px] font-semibold" style={{ color: GOLD }}>资金权重 = 1.0 + 实际加成</span>
-                      <span className="text-sm font-bold" style={{ color: '#FFE566' }}>{parseFloat(capInput).toFixed(4)}</span>
+                      <span className="text-[11px] font-semibold" style={{ color: GOLD }}>
+                        资金权重 = 1.0 + {selected.autoBonus !== undefined ? selected.autoBonus.toFixed(4) : (parseFloat(capInput) - 1.0).toFixed(4)} = {parseFloat(capInput).toFixed(4)}
+                      </span>
                     </div>
                   </div>
 
