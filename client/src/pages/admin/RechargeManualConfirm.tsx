@@ -46,10 +46,6 @@ export default function RechargeManualConfirm() {
 
   const handleConfirm = () => {
     if (!selectedOrder) return;
-    if (!txnHash.trim()) {
-      toast.error("请输入交易哈希");
-      return;
-    }
     if (!actualAmount || parseFloat(actualAmount) <= 0) {
       toast.error("请输入实际到账金额");
       return;
@@ -211,7 +207,7 @@ export default function RechargeManualConfirm() {
             {/* 交易哈希 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                交易哈希 <span className="text-red-500">*</span>
+                交易哈希 <span className="text-gray-400 text-xs font-normal">（选填）</span>
               </label>
               <input
                 type="text"
