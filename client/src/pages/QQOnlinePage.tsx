@@ -797,6 +797,10 @@ function CumPnlCard() {
     refetchInterval: 5 * 60 * 1000,
   });
   const [Chart, setChart] = React.useState<any>(null);
+  // 每个数据点的像素宽度，用于缩放
+  const [pxPerPoint, setPxPerPoint] = React.useState(14);
+  const pinchRef = React.useRef<{ startDist: number; startPx: number } | null>(null);
+
   useEffect(() => {
     Promise.all([import('chart.js'), import('react-chartjs-2')]).then(([chartjs, rChartjs]) => {
       const { Chart: ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } = chartjs;
@@ -811,6 +815,32 @@ function CumPnlCard() {
       scrollContainerRef.current.scrollLeft = scrollContainerRef.current.scrollWidth;
     }
   }, [isLoading, data?.cumPnl?.length]);
+
+  // 双指捏合缩放处理
+  const handleTouchStart = React.useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      pinchRef.current = { startDist: dist, startPx: pxPerPoint };
+    }
+  }, [pxPerPoint]);
+
+  const handleTouchMove = React.useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchRef.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const scale = dist / pinchRef.current.startDist;
+      const newPx = Math.min(60, Math.max(4, pinchRef.current.startPx * scale));
+      setPxPerPoint(newPx);
+      e.preventDefault();
+    }
+  }, []);
+
+  const handleTouchEnd = React.useCallback(() => {
+    pinchRef.current = null;
+  }, []);
 
   const cardStyle: React.CSSProperties = {
     background: 'linear-gradient(145deg, rgba(18,42,68,0.95) 0%, rgba(11,28,48,0.98) 100%)',
@@ -850,52 +880,92 @@ function CumPnlCard() {
           </div>
           <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: GOLD_COLOR, border: '1px solid rgba(201,168,76,0.25)' }}>资金轨迹</span>
         </div>
-        <div className="text-[8px] mb-2" style={{ color: LABEL_COLOR, opacity: 0.65 }}>每20笔采样一次，共{cumPnl.length}个数据点 · 左滑查看历史</div>
-        {/* 横向可滑动容器 */}
-        <div
-          ref={scrollContainerRef}
-          style={{
-            overflowX: 'auto',
-            overflowY: 'hidden',
-            WebkitOverflowScrolling: 'touch',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-          }}
-        >
-          {/* 图表宽度根据数据量动态拉伸，每个数据点占12px，最小宽度100% */}
-          <div style={{ width: Math.max(cumPnl.length * 12, 300) + 'px', height: '150px' }}>
+        <div className="text-[8px] mb-2" style={{ color: LABEL_COLOR, opacity: 0.65 }}>每20笔采样一次，共{cumPnl.length}个数据点 · 左滑查看历史 · 双指缩放</div>
+        {/* 冻结Y轴 + 横向可滑动 + 双指缩放 */}
+        <div style={{ position: 'relative', height: '160px' }}>
+          {/* 冻结Y轴：固定左侧，不随横向滚动 */}
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '38px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)' }}>
             <Line
               data={{
                 labels: cumPnl.map((d: any) => d.idx),
                 datasets: [{
                   data: cumPnl.map((d: any) => d.pnl),
-                  borderColor: '#3DD68C',
-                  backgroundColor: (ctx: any) => {
-                    const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 150);
-                    gradient.addColorStop(0, 'rgba(61,214,140,0.18)');
-                    gradient.addColorStop(1, 'rgba(61,214,140,0.01)');
-                    return gradient;
-                  },
-                  borderWidth: 1.8,
+                  borderColor: 'transparent',
+                  backgroundColor: 'transparent',
+                  borderWidth: 0,
                   pointRadius: 0,
-                  fill: true,
-                  tension: 0.35,
                 }],
               }}
               options={{
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: false,
-                plugins: {
-                  legend: { display: false },
-                  tooltip: { backgroundColor: 'rgba(13,27,42,0.95)', titleColor: '#E8F0FE', bodyColor: '#7A9BBF', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 },
-                },
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                layout: { padding: { right: 0 } },
                 scales: {
-                  x: { ticks: { color: '#7A9BBF', font: { size: 9 }, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
-                  y: { ticks: { color: '#7A9BBF', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                  x: { display: false },
+                  y: {
+                    position: 'left',
+                    ticks: { color: '#7A9BBF', font: { size: 8 }, maxTicksLimit: 5 },
+                    grid: { color: 'rgba(255,255,255,0.04)' },
+                  },
                 },
               }}
             />
+          </div>
+          {/* 横向可滑动区域（含X轴和曲线，左侧留出Y轴宽度） */}
+          <div
+            ref={scrollContainerRef}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: '38px',
+              right: 0,
+              height: '160px',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            }}
+          >
+            <div style={{ width: Math.max(cumPnl.length * pxPerPoint, 300) + 'px', height: '160px' }}>
+              <Line
+                data={{
+                  labels: cumPnl.map((d: any) => d.idx),
+                  datasets: [{
+                    data: cumPnl.map((d: any) => d.pnl),
+                    borderColor: '#3DD68C',
+                    backgroundColor: (ctx: any) => {
+                      const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 160);
+                      gradient.addColorStop(0, 'rgba(61,214,140,0.18)');
+                      gradient.addColorStop(1, 'rgba(61,214,140,0.01)');
+                      return gradient;
+                    },
+                    borderWidth: 1.8,
+                    pointRadius: 0,
+                    fill: true,
+                    tension: 0.35,
+                  }],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  animation: false,
+                  plugins: {
+                    legend: { display: false },
+                    tooltip: { backgroundColor: 'rgba(13,27,42,0.95)', titleColor: '#E8F0FE', bodyColor: '#7A9BBF', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 },
+                  },
+                  scales: {
+                    x: { ticks: { color: '#7A9BBF', font: { size: 9 }, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                    y: { display: false },
+                  },
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
