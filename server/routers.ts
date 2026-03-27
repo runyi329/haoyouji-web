@@ -15282,26 +15282,68 @@ export const adminFeatureRouter = router({
   debugAbnormalWinStatus: protectedProcedure
     .query(async ({ ctx }) => {
       const dbConn = await getDbConnection();
-      if (!dbConn) return { distribution: [], abnormal: [] };
-      // 查所有win_status分布
-      const [distRows] = await (dbConn as any).execute(
-        `SELECT win_status, COUNT(*) as cnt FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' GROUP BY win_status ORDER BY cnt DESC LIMIT 30`
+      if (!dbConn) return { summary: {}, distribution: [], missed: [], amountEdge: [] };
+
+      // 1. 汇总数字：total / won / lost 各是多少
+      const [sumRows] = await (dbConn as any).execute(
+        `SELECT
+           COUNT(*) as total,
+           SUM(CASE WHEN win_status = '已中奖' OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0) THEN 1 ELSE 0 END) as won,
+           SUM(CASE WHEN win_status IN ('未中奖','0','') OR win_status IS NULL THEN 1 ELSE 0 END) as lost
+         FROM qq_trade_records
+         WHERE amount IS NOT NULL AND amount != ''`
       );
-      // 查异常记录：既不是「未中奖」也不是「已中奖」类型
-      const [abnRows] = await (dbConn as any).execute(
-        `SELECT order_id, win_status, amount, win_amount, content FROM qq_trade_records
+      const s = (sumRows as any[])[0] || {};
+
+      // 2. win_status 全量分布（包含 hex 转义，看清楚隐藏字符）
+      const [distRows] = await (dbConn as any).execute(
+        `SELECT win_status, HEX(win_status) as hex_val, COUNT(*) as cnt
+         FROM qq_trade_records
          WHERE amount IS NOT NULL AND amount != ''
-           AND (win_status IS NULL OR (win_status != '未中奖' AND win_status != '0' AND win_status != '' AND NOT (CAST(win_status AS DECIMAL(20,4)) > 0)))
+         GROUP BY win_status
+         ORDER BY cnt DESC LIMIT 30`
+      );
+
+      // 3. 直接查出「漏算」的记录：不属于 won 也不属于 lost
+      const [missedRows] = await (dbConn as any).execute(
+        `SELECT order_id, win_status, HEX(win_status) as hex_val, amount, win_amount, content
+         FROM qq_trade_records
+         WHERE amount IS NOT NULL AND amount != ''
+           AND NOT (
+             win_status = '已中奖'
+             OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0)
+           )
+           AND NOT (
+             win_status IN ('未中奖','0','') OR win_status IS NULL
+           )
          LIMIT 20`
       );
+
+      // 4. 查 amount 字段边界情况：有没有空格、制表符等
+      const [edgeRows] = await (dbConn as any).execute(
+        `SELECT order_id, HEX(amount) as hex_amount, amount, win_status
+         FROM qq_trade_records
+         WHERE amount IS NOT NULL AND amount != ''
+           AND (TRIM(amount) = '' OR LENGTH(amount) != LENGTH(TRIM(amount)))
+         LIMIT 10`
+      );
+
       return {
-        distribution: (distRows as any[]).map((r: any) => ({ winStatus: String(r.win_status ?? 'NULL'), cnt: Number(r.cnt) })),
-        abnormal: (abnRows as any[]).map((r: any) => ({
+        summary: { total: Number(s.total), won: Number(s.won), lost: Number(s.lost), diff: Number(s.total) - Number(s.won) - Number(s.lost) },
+        distribution: (distRows as any[]).map((r: any) => ({ winStatus: String(r.win_status ?? 'NULL'), hexVal: String(r.hex_val ?? ''), cnt: Number(r.cnt) })),
+        missed: (missedRows as any[]).map((r: any) => ({
           orderId: String(r.order_id ?? ''),
           winStatus: String(r.win_status ?? 'NULL'),
+          hexVal: String(r.hex_val ?? ''),
           amount: String(r.amount ?? ''),
           winAmount: String(r.win_amount ?? ''),
           content: String(r.content ?? '').substring(0, 50),
+        })),
+        amountEdge: (edgeRows as any[]).map((r: any) => ({
+          orderId: String(r.order_id ?? ''),
+          hexAmount: String(r.hex_amount ?? ''),
+          amount: String(r.amount ?? ''),
+          winStatus: String(r.win_status ?? 'NULL'),
         }))
       };
     }),
