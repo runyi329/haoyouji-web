@@ -3345,7 +3345,7 @@ export default function LedgerDetail() {
           nickname={equityHistoryUserId
             ? ((membersData as any[])?.find((m: any) => m.userId === equityHistoryUserId)?.nickname || '成员')
             : (user?.nickname || user?.username || '我')}
-          isAdmin={isOwner || isAdmin}
+          isAdmin={!viewAsUserId && (isOwner || isAdmin)}
           onClose={() => setShowEquityHistory(false)}
           onViewUser={(uid) => { setEquityHistoryUserId(uid); }}
           membersData={membersData as any[]}
