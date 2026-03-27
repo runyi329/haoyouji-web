@@ -36,7 +36,7 @@ export default function LedgerEquityManage() {
     userId: 0,
     memberNickname: "",
     shareCount: "",
-    shareType: "天使股",
+    shareType: "资源股",
     grantDate: new Date().toISOString().slice(0, 10),
     reason: "",
     regNo: genRegNo(),
@@ -47,7 +47,7 @@ export default function LedgerEquityManage() {
   const [editTarget, setEditTarget] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({
     shareCount: "",
-    shareType: "天使股",
+    shareType: "资源股",
     grantDate: "",
     reason: "",
     annualRate: "6",
@@ -63,7 +63,7 @@ export default function LedgerEquityManage() {
     toUserId: 0,
     toUserNickname: '',
     shareCount: '',
-    toShareType: '天使股',
+    toShareType: '资源股',
     reason: '',
   });
 
@@ -71,7 +71,7 @@ export default function LedgerEquityManage() {
     onSuccess: () => {
       toast.success("股权记录已添加");
       setShowAddDialog(false);
-      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "天使股", grantDate: new Date().toISOString().slice(0, 10), reason: "", regNo: genRegNo(), annualRate: "6" });
+      setAddForm({ userId: 0, memberNickname: "", shareCount: "", shareType: "资源股", grantDate: new Date().toISOString().slice(0, 10), reason: "", regNo: genRegNo(), annualRate: "6" });
       refetchShares();
     },
     onError: (e) => toast.error(e.message || "添加失败"),
@@ -99,7 +99,7 @@ export default function LedgerEquityManage() {
     onSuccess: () => {
       toast.success('转让申请已提交，等待管理员审批');
       setShowTransferDialog(false);
-      setTransferForm({ fromShareId: 0, toUserId: 0, toUserNickname: '', shareCount: '', toShareType: '天使股', reason: '' });
+      setTransferForm({ fromShareId: 0, toUserId: 0, toUserNickname: '', shareCount: '', toShareType: '资源股', reason: '' });
     },
     onError: (e) => toast.error(e.message || '转让申请失败'),
   });
@@ -131,7 +131,7 @@ export default function LedgerEquityManage() {
       userId: addForm.userId,
       memberNickname: addForm.memberNickname,
       shareCount: Number(addForm.shareCount),
-      shareType: addForm.shareType || '天使股',
+      shareType: addForm.shareType || '资源股',
       grantDate: addForm.grantDate,
       reason: addForm.reason.trim(),
       regNo: addForm.regNo.trim() || undefined,
@@ -142,7 +142,7 @@ export default function LedgerEquityManage() {
     setEditTarget(record);
     setEditForm({
       shareCount: String(record.shareCount),
-      shareType: record.shareType || '天使股',
+      shareType: record.shareType || '资源股',
       grantDate: formatDate(record.grantDate),
       reason: record.reason || "",
       annualRate: String(record.annualRate ?? 6),
@@ -301,7 +301,7 @@ export default function LedgerEquityManage() {
               <div>
                 <div style={labelStyle}>股权类型</div>
                 <select value={addForm.shareType} onChange={(e) => setAddForm(f => ({ ...f, shareType: e.target.value }))} style={inputStyle}>
-                  <option value="天使股">天使股</option>
+                  <option value="资源股">资源股</option>
                   <option value="市场贡献股">市场贡献股</option>
                 </select>
               </div>
@@ -356,7 +356,7 @@ export default function LedgerEquityManage() {
               <div>
                 <div style={labelStyle}>股权类型</div>
                 <select value={editForm.shareType} onChange={(e) => setEditForm(f => ({ ...f, shareType: e.target.value }))} style={inputStyle}>
-                  <option value="天使股">天使股</option>
+                  <option value="资源股">资源股</option>
                   <option value="市场贡献股">市场贡献股</option>
                 </select>
               </div>
@@ -432,7 +432,7 @@ export default function LedgerEquityManage() {
               <div>
                 <div style={labelStyle}>转入后股权类型</div>
                 <select value={transferForm.toShareType} onChange={(e) => setTransferForm(f => ({ ...f, toShareType: e.target.value }))} style={inputStyle}>
-                  <option value="天使股">天使股</option>
+                  <option value="资源股">资源股</option>
                   <option value="市场贡献股">市场贡献股</option>
                 </select>
               </div>

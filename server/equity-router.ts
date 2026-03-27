@@ -444,21 +444,21 @@ export const equityRouter = router({
         tagCount,
       };
     }),
-  // 获取全网天使股和市场贡献股的总股本（用于持股结构容器）
+  // 获取全网资源股和市场贡献股的总股本（用于持股结构容器）
   getGlobalShareStats: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ input }) => {
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      // 天使股总股本
+      // 资源股总股本
       const [angelRows] = await (conn as any).execute(
-        `SELECT COALESCE(SUM(shareCount), 0) as total FROM equity_shares WHERE ledgerId=? AND shareType='天使股'`,
+        `SELECT COALESCE(SUM(shareCount), 0) as total FROM equity_shares WHERE ledgerId=? AND shareType='资源股'`,
         [input.ledgerId]
       );
       const angelTotal = Number((angelRows as any[])[0]?.total ?? 0);
-      // 天使股授股日期（最早一笔，用于计算全网年化股息起始时间）
+      // 资源股授股日期（最早一笔，用于计算全网年化股息起始时间）
       const [dateRows] = await (conn as any).execute(
-        `SELECT grantDate, shareCount, annualRate FROM equity_shares WHERE ledgerId=? AND shareType='天使股' ORDER BY grantDate ASC`,
+        `SELECT grantDate, shareCount, annualRate FROM equity_shares WHERE ledgerId=? AND shareType='资源股' ORDER BY grantDate ASC`,
         [input.ledgerId]
       );
       const angelShares = (dateRows as any[]).map(r => ({
@@ -699,7 +699,7 @@ export const equityRouter = router({
            COALESCE((
              SELECT SUM(es2.shareCount)
              FROM equity_shares es2
-             WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = 'capital'
+             WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = '资源股'
            ), 0) AS capitalTotal
          FROM ledger_members lm
          LEFT JOIN users u ON u.id = lm.userId
@@ -801,7 +801,7 @@ export const equityRouter = router({
            COALESCE((
              SELECT SUM(es2.shareCount)
              FROM equity_shares es2
-             WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = 'capital'
+             WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = '资源股'
            ), 0) AS capitalTotal
          FROM ledger_members lm
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId = lm.ledgerId AND sn.userId = lm.userId

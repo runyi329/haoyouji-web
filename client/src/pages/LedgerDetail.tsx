@@ -22,7 +22,7 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
   return accrued;
 }
 
-// 汇总所有天使股记录的股本+实时股息总和（增量权重：每笔按发放时快照的weight加权）
+// 汇总所有资源股记录的股本+实时股息总和（增量权重：每笔按发放时快照的weight加权）
 function useTotalSharesWithDividend(shares: any[], filterType?: string) {
   const computeTotal = useCallback(() => {
     if (!shares || shares.length === 0) return 0;
@@ -60,7 +60,7 @@ function useTotalSharesWithDividend(shares: any[], filterType?: string) {
   return total;
 }
 
-// 天使股/市场贡献股单条记录，带实时滚动股息
+// 资源股/市场贡献股单条记录，带实时滚动股息
 function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast: boolean }) {
   const grantDateStr = dateStr; // yyyy-MM-dd
   const accrued = useAccruedInterest(
@@ -131,7 +131,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
   );
 }
 
-// 天使股/市场贡献股折叠式卡片（收起时显示汇总，展开显示明细）
+// 资源股/市场贡献股折叠式卡片（收起时显示汇总，展开显示明细）
 function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]; isMarket: boolean; totalWithDividend: number }) {
   const [expanded, setExpanded] = useState(false);
   const shareNo = shares.find((s: any) => !isMarket)?.shareNo ?? shares[0]?.shareNo;
@@ -889,12 +889,12 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAI }
   );
-  // 全网天使股实时总张数（股本+实时股息）
+  // 全网资源股实时总张数（股本+实时股息）
   const globalAngelTotal = useTotalSharesWithDividend(globalShareStats?.angelShares ?? []);
   // 全网市场贡献股实时总张数（股本+实时股息）
   const globalMarketTotal = useTotalSharesWithDividend(globalShareStats?.marketShares ?? []);
-  // 天使股总持股（股本+实时股息，仅统计天使股）
-  const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '天使股');
+  // 资源股总持股（股本+实时股息，仅统计资源股）
+  const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '资源股');
   // 市场贡献股总持股（股本+实时股息）
   const totalMarketSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '市场贡献股');
   // 所有类型股权总和（用于顶部累计股权格子，未来新增类型自动包含）
@@ -1684,7 +1684,7 @@ export default function LedgerDetail() {
               {shareholdingExpanded && (
                 <div className="flex flex-col gap-0 px-4 pb-3">
                   {(() => {
-                    // 以天使股占 30% 反推总股本（使用快照数据，不实时滚动）
+                    // 以资源股占 30% 反推总股本（使用快照数据，不实时滚动）
                     const snapAngel = shareholdingSnapshot?.angel ?? globalAngelTotal;
                     const snapMarket = shareholdingSnapshot?.market ?? globalMarketTotal;
                     const totalShares = snapAngel > 0 ? snapAngel / 0.30 : 0;
@@ -3027,11 +3027,11 @@ export default function LedgerDetail() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* 天使股卡片（折叠式） */}
-              {myShares.some((s: any) => s.shareType === '天使股') && (
+              {/* 资源股卡片（折叠式） */}
+              {myShares.some((s: any) => s.shareType === '资源股') && (
                 <div style={{ background: '#000000', border: '1px solid #C9A84C', borderRadius: '12px', padding: '12px 14px', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2)' }}>
                   <AngelShareCard
-                    shares={myShares.filter((s: any) => s.shareType === '天使股')}
+                    shares={myShares.filter((s: any) => s.shareType === '资源股')}
                     isMarket={false}
                     totalWithDividend={totalSharesWithDividend}
                   />
