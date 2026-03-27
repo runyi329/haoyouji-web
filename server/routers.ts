@@ -9894,7 +9894,7 @@ export const appRouter = router({
           const rawDb = await getDbConnection();
           if (!rawDb) return { users: [] };
           // BFS 递归查询所有层级下线，记录层数
-          type InviteUser = { id: number; name: string; layer: number; invitedAt: string | null; inviterName: string | null };
+          type InviteUser = { id: number; name: string; username: string; layer: number; invitedAt: string | null; inviterName: string | null };
           const result: InviteUser[] = [];
           let queue: Array<{ id: number; layer: number; name: string }> = [{ id: YJH_USER_ID, layer: 0, name: 'YJH' }];
           const visited = new Set<number>([YJH_USER_ID]);
@@ -9905,7 +9905,7 @@ export const appRouter = router({
             const parentIds = batch.map(b => b.id);
             const layerMap = new Map(batch.map(b => [b.id, b.layer]));
             const [childRows] = await rawDb.execute(
-              `SELECT id, name, invited_by_user_id, invited_at FROM users WHERE invited_by_user_id IN (${placeholders})`,
+              `SELECT id, name, username, invited_by_user_id, invited_at FROM users WHERE invited_by_user_id IN (${placeholders})`,
               parentIds
             ) as any[];
             for (const child of (childRows as any[])) {
@@ -9914,15 +9914,16 @@ export const appRouter = router({
                 const parentLayer = layerMap.get(child.invited_by_user_id) ?? 0;
                 const layer = parentLayer + 1;
                 const inviterName = nameMap.get(child.invited_by_user_id) ?? null;
-                nameMap.set(child.id, child.name || '未知用户');
+                nameMap.set(child.id, child.name || child.username || '未知用户');
                 result.push({
                   id: child.id,
                   name: child.name || '未知用户',
+                  username: child.username || '',
                   layer,
                   invitedAt: child.invited_at ? new Date(child.invited_at).toLocaleDateString('zh-CN') : null,
                   inviterName
                 });
-                queue.push({ id: child.id, layer, name: child.name || '未知用户' });
+                queue.push({ id: child.id, layer, name: child.name || child.username || '未知用户' });
               }
             }
           }
@@ -10014,7 +10015,7 @@ export const appRouter = router({
               console.error('[AF] 余额查询失败:', e);
             }
           }
-          return { users: result.map(u => ({ ...u, payoutRatio: payoutMap.get(u.id) ?? 0, note: noteMap.get(u.id) ?? '', inviterName: u.inviterName, balance: balanceMap.get(u.id) ?? 0 })) };
+          return { users: result.map(u => ({ ...u, username: u.username, payoutRatio: payoutMap.get(u.id) ?? 0, note: noteMap.get(u.id) ?? '', inviterName: u.inviterName, balance: balanceMap.get(u.id) ?? 0 })) };
         } catch (e) {
           console.error('[AF] 邀请树查询失败:', e);
           return { users: [] };
