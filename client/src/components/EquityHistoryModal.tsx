@@ -205,15 +205,18 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
 
         {/* Tab */}
         {isAdmin && (
-          <div className="flex px-4 pt-3 gap-3">
+          <div
+            className="flex px-4 pt-3 pb-3 gap-3"
+            style={{ borderBottom: '1px solid rgba(201,168,76,0.2)', flexShrink: 0 }}
+          >
             {(['history', 'pending'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className="text-xs px-3 py-1.5 rounded-full font-medium"
+                className="text-sm px-4 py-2 rounded-full font-medium"
                 style={tab === t
-                  ? { background: 'linear-gradient(135deg, #C9A84C, #F0D060)', color: '#0D0D00' }
-                  : { background: 'rgba(201,168,76,0.1)', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.3)' }}
+                  ? { background: 'linear-gradient(135deg, #C9A84C, #F0D060)', color: '#0D0D00', flexShrink: 0 }
+                  : { background: 'rgba(201,168,76,0.1)', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.3)', flexShrink: 0 }}
               >
                 {t === 'history' ? '流水记录' : `待审批${pendingList?.length ? ` (${pendingList.length})` : ''}`}
               </button>
