@@ -154,7 +154,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
       <div className="flex items-center justify-between px-1 mb-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold" style={{ color: theme.labelColor }}>
-            {isMarket ? '贡献股' : '天使股'}
+            {isMarket ? '贡献股' : '资金股'}
           </span>
           <span style={{ color: theme.dimColor2, fontSize: '10px' }}>（{shares.length}份）</span>
         </div>
