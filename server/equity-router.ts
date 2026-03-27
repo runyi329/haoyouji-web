@@ -234,12 +234,11 @@ export const equityRouter = router({
         `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
                 COALESCE(es.annualRate, 6.00) as annualRate,
                 COALESCE(es.weight, 1.0000) as weight,
-                COALESCE(ew.resource_weight, 1.0000) as resourceWeight,
-                COALESCE(ew.capital_weight, 1.0000) as capitalWeight,
+                COALESCE(es.resource_weight, 1.0000) as resourceWeight,
+                COALESCE(es.capital_weight, 1.0000) as capitalWeight,
                 sn.shareNo
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
-         LEFT JOIN equity_weights ew ON ew.user_id=es.userId
          WHERE es.ledgerId=?
          ORDER BY COALESCE(sn.shareNo, '9999'), es.userId, es.grantDate DESC, es.id DESC`,
         [input.ledgerId]
@@ -257,12 +256,11 @@ export const equityRouter = router({
         `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
                 COALESCE(es.annualRate, 6.00) as annualRate,
                 COALESCE(es.weight, 1.0000) as weight,
-                COALESCE(ew.resource_weight, 1.0000) as resourceWeight,
-                COALESCE(ew.capital_weight, 1.0000) as capitalWeight,
+                COALESCE(es.resource_weight, 1.0000) as resourceWeight,
+                COALESCE(es.capital_weight, 1.0000) as capitalWeight,
                 sn.shareNo
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
-         LEFT JOIN equity_weights ew ON ew.user_id=es.userId
          WHERE es.ledgerId=? AND es.userId=? ORDER BY es.grantDate DESC, es.id DESC`,
         [input.ledgerId, input.userId]
       );
@@ -308,9 +306,9 @@ export const equityRouter = router({
       const cw = weightRow ? Number(weightRow.capital_weight) : 1.0;
       const snapshotWeight = Math.round(rw * cw * 10000) / 10000;
       const [result] = await (conn as any).execute(
-        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy, weight)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, finalRegNo, ctx.user.id, snapshotWeight]
+        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy, weight, resource_weight, capital_weight)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, finalRegNo, ctx.user.id, snapshotWeight, rw, cw]
       );
       return { id: (result as any).insertId, regNo: finalRegNo };
     }),
@@ -358,6 +356,33 @@ export const equityRouter = router({
       await (conn as any).execute(
         `UPDATE equity_shares SET shareCount=?, shareType=?, grantDate=?, reason=?, annualRate=? WHERE id=? AND ledgerId=?`,
         [input.shareCount, input.shareType, input.grantDate, input.reason, input.annualRate, input.id, input.ledgerId]
+      );
+      return { success: true };
+    }),
+
+  // 管理员单独修改某张订单的权重（不影响其他订单）
+  updateShareWeight: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      ledgerId: z.number(),
+      resourceWeight: z.number().min(0.01).max(100),
+      capitalWeight: z.number().min(0.01).max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [members] = await (conn as any).execute(
+        `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+        [input.ledgerId, ctx.user.id]
+      );
+      const member = (members as any[])[0];
+      if (!member || !['owner','admin'].includes(member.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
+      }
+      const newWeight = Math.round(input.resourceWeight * input.capitalWeight * 10000) / 10000;
+      await (conn as any).execute(
+        `UPDATE equity_shares SET resource_weight=?, capital_weight=?, weight=? WHERE id=? AND ledgerId=?`,
+        [input.resourceWeight, input.capitalWeight, newWeight, input.id, input.ledgerId]
       );
       return { success: true };
     }),
@@ -638,10 +663,10 @@ export const equityTransferRouter = router({
         // 新增转入人的股权记录
         const today = new Date().toISOString().slice(0, 10);
         await (conn as any).execute(
-          `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy, annualRate, weight)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy, annualRate, weight, resource_weight, capital_weight)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [transfer.ledgerId, transfer.toUserId, transfer.toNickname, transfer.fromShareCount, transfer.toShareType,
-           today, `股权转让（来自 ${transfer.fromNickname}）`, ctx.user.id, annualRate, toSnapshotWeight]
+           today, `股权转让（来自 ${transfer.fromNickname}）`, ctx.user.id, annualRate, toSnapshotWeight, toRw, toCw]
         );
       }
 
@@ -693,8 +718,10 @@ export const equityTransferRouter = router({
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       // 授予记录（equity_shares）
       const [grantRows] = await (conn as any).execute(
-        `SELECT id, shareType, shareCount, grantDate as eventDate, reason, createdAt,
-                'grant' as eventType, NULL as counterparty
+        `SELECT id as shareId, shareType, shareCount, grantDate as eventDate, reason, createdAt,
+                'grant' as eventType, NULL as counterparty,
+                COALESCE(resource_weight, 1.0) as resourceWeight,
+                COALESCE(capital_weight, 1.0) as capitalWeight
          FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
         [input.ledgerId, ctx.user.id]
       );
@@ -728,14 +755,22 @@ export const equityTransferRouter = router({
   getUserEquityHistory: protectedProcedure
     .input(z.object({ ledgerId: z.number(), userId: z.number() }))
     .query(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
-      }
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 验证账本级别管理员权限
+      const [lmRows] = await (conn as any).execute(
+        `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+        [input.ledgerId, ctx.user.id]
+      );
+      const lmRole = (lmRows as any[])[0]?.role;
+      if (!lmRole || !['owner','admin'].includes(lmRole)) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
+      }
       const [grantRows] = await (conn as any).execute(
-        `SELECT id, shareType, shareCount, grantDate as eventDate, reason, createdAt,
-                'grant' as eventType, NULL as counterparty
+        `SELECT id as shareId, shareType, shareCount, grantDate as eventDate, reason, createdAt,
+                'grant' as eventType, NULL as counterparty,
+                COALESCE(resource_weight, 1.0) as resourceWeight,
+                COALESCE(capital_weight, 1.0) as capitalWeight
          FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
         [input.ledgerId, input.userId]
       );

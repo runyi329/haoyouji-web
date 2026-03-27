@@ -19,17 +19,124 @@ const EVENT_LABELS: Record<string, { label: string; color: string }> = {
   transfer_out_rejected: { label: "转出(已拒绝)", color: "#9E9E9E" },
 };
 
+// 权重编辑弹窗（管理员修改单张订单权重）
+function EditWeightModal({
+  share,
+  ledgerId,
+  onClose,
+  onSuccess,
+}: {
+  share: any;
+  ledgerId: number;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [rw, setRw] = useState(String(Number(share.resourceWeight ?? 1.0).toFixed(2)));
+  const [cw, setCw] = useState(String(Number(share.capitalWeight ?? 1.0).toFixed(2)));
+  const [err, setErr] = useState('');
+
+  const updateMutation = trpc.equity.updateShareWeight.useMutation({
+    onSuccess: () => {
+      onSuccess();
+      onClose();
+    },
+    onError: (e: any) => setErr(e.message || '操作失败'),
+  });
+
+  const handleSave = () => {
+    const rv = parseFloat(rw);
+    const cv = parseFloat(cw);
+    if (isNaN(rv) || rv <= 0 || rv > 100) { setErr('资源权重需在 0.01 ~ 100 之间'); return; }
+    if (isNaN(cv) || cv <= 0 || cv > 100) { setErr('资金权重需在 0.01 ~ 100 之间'); return; }
+    setErr('');
+    updateMutation.mutate({ id: share.shareId, ledgerId, resourceWeight: rv, capitalWeight: cv });
+  };
+
+  const totalW = (parseFloat(rw) || 0) * (parseFloat(cw) || 0);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70" />
+      <div
+        className="relative w-80 rounded-2xl px-5 py-5"
+        style={{ background: 'linear-gradient(160deg, #0D0D00 0%, #1A1600 100%)', border: '1px solid #C9A84C' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm font-semibold" style={{ color: '#F0D060' }}>修改订单权重</span>
+          <button onClick={onClose} className="text-xl leading-none" style={{ color: '#C9A84C' }}>×</button>
+        </div>
+        <div className="text-xs mb-3" style={{ color: 'rgba(201,168,76,0.55)' }}>
+          仅修改此笔订单权重，不影响其他订单
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs block mb-1" style={{ color: 'rgba(201,168,76,0.7)' }}>资源权重</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max="100"
+              value={rw}
+              onChange={e => setRw(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg text-sm"
+              style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.3)', color: '#F0D060', outline: 'none' }}
+            />
+          </div>
+          <div>
+            <label className="text-xs block mb-1" style={{ color: 'rgba(201,168,76,0.7)' }}>资金权重</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max="100"
+              value={cw}
+              onChange={e => setCw(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg text-sm"
+              style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.3)', color: '#F0D060', outline: 'none' }}
+            />
+          </div>
+          <div className="text-xs text-center" style={{ color: 'rgba(201,168,76,0.55)' }}>
+            合计权重：{isNaN(totalW) ? '-' : totalW.toFixed(4)}
+          </div>
+        </div>
+        {err && <div className="text-xs mt-2 text-center" style={{ color: '#F44336' }}>{err}</div>}
+        <div className="flex gap-3 mt-4">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 rounded-xl text-sm"
+            style={{ background: 'rgba(201,168,76,0.1)', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.3)' }}
+          >
+            取消
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={updateMutation.isPending}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold"
+            style={{ background: 'linear-gradient(135deg, #C9A84C, #F0D060)', color: '#0D0D00' }}
+          >
+            {updateMutation.isPending ? '保存中...' : '保存'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClose, onViewUser, membersData }: Props) {
   const [tab, setTab] = useState<'history' | 'pending'>('history');
   const [searchUser, setSearchUser] = useState('');
   const [showUserPicker, setShowUserPicker] = useState(false);
+  const [editingShare, setEditingShare] = useState<any | null>(null);
+
+  const utils = trpc.useUtils();
 
   // 查询流水
-  const { data: myHistory, isLoading: histLoading } = trpc.equityTransfer.getMyEquityHistory.useQuery(
+  const { data: myHistory, isLoading: histLoading, refetch: refetchMyHistory } = trpc.equityTransfer.getMyEquityHistory.useQuery(
     { ledgerId },
     { enabled: !isAdmin || userId === 0 }
   );
-  const { data: userHistory, isLoading: userHistLoading } = trpc.equityTransfer.getUserEquityHistory.useQuery(
+  const { data: userHistory, isLoading: userHistLoading, refetch: refetchUserHistory } = trpc.equityTransfer.getUserEquityHistory.useQuery(
     { ledgerId, userId },
     { enabled: isAdmin && userId > 0 }
   );
@@ -54,6 +161,18 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
   const formatDate = (d: any) => {
     if (!d) return '-';
     try { return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }); } catch { return '-'; }
+  };
+
+  const handleWeightSaved = () => {
+    // 刷新流水数据
+    if (isAdmin && userId > 0) {
+      refetchUserHistory();
+    } else {
+      refetchMyHistory();
+    }
+    // 同时刷新股权相关查询
+    utils.equity.getMemberShares.invalidate();
+    utils.equity.getGlobalShareStats.invalidate();
   };
 
   return (
@@ -114,6 +233,7 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
               )}
               {history?.map((item: any, idx: number) => {
                 const evInfo = EVENT_LABELS[item.eventType] || { label: item.eventType, color: '#888' };
+                const canEditWeight = isAdmin && item.eventType === 'grant' && item.shareId;
                 return (
                   <div
                     key={idx}
@@ -124,7 +244,18 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: `${evInfo.color}22`, color: evInfo.color }}>
                         {evInfo.label}
                       </span>
-                      <span className="text-xs" style={{ color: 'rgba(201,168,76,0.5)' }}>{formatDate(item.eventDate || item.createdAt)}</span>
+                      <div className="flex items-center gap-2">
+                        {canEditWeight && (
+                          <button
+                            onClick={() => setEditingShare(item)}
+                            className="text-[10px] px-2 py-0.5 rounded-full"
+                            style={{ background: 'rgba(201,168,76,0.12)', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.35)' }}
+                          >
+                            编辑权重
+                          </button>
+                        )}
+                        <span className="text-xs" style={{ color: 'rgba(201,168,76,0.5)' }}>{formatDate(item.eventDate || item.createdAt)}</span>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold" style={{ color: '#F0D060' }}>
@@ -132,6 +263,12 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
                       </span>
                       <span className="text-xs" style={{ color: 'rgba(201,168,76,0.7)' }}>{item.shareType}</span>
                     </div>
+                    {/* 权重信息（仅授予类型显示） */}
+                    {item.eventType === 'grant' && (item.resourceWeight != null || item.capitalWeight != null) && (
+                      <div className="text-xs mt-1" style={{ color: 'rgba(201,168,76,0.45)' }}>
+                        权重：{Number(item.resourceWeight ?? 1).toFixed(2)} × {Number(item.capitalWeight ?? 1).toFixed(2)} = {(Number(item.resourceWeight ?? 1) * Number(item.capitalWeight ?? 1)).toFixed(4)}
+                      </div>
+                    )}
                     {item.counterparty && (
                       <div className="text-xs mt-1" style={{ color: 'rgba(201,168,76,0.55)' }}>
                         {item.eventType === 'transfer_in' ? '来自' : '转给'}：{item.counterparty}
@@ -241,6 +378,16 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
             </div>
           </div>
         </div>
+      )}
+
+      {/* 权重编辑弹窗 */}
+      {editingShare && (
+        <EditWeightModal
+          share={editingShare}
+          ledgerId={ledgerId}
+          onClose={() => setEditingShare(null)}
+          onSuccess={handleWeightSaved}
+        />
       )}
     </div>
   );
