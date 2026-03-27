@@ -1576,6 +1576,8 @@ export default function QQOnlinePage() {
       {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <AmountAnalysisPanel />}
       {/* ── 高阶图表分析（jiang和yjh可见）── */}
       {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <QQChartsPanel />}
+      {/* ── 蒙特卡洛风险模拟（jiang和yjh可见）── */}
+      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <MonteCarloCard />}
       <div className="h-20" />
 
       {/* ── 底部悬浮按钮（仅jiang可见）── */}
@@ -1619,6 +1621,413 @@ export default function QQOnlinePage() {
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+// ========== 蒙特卡洛风险模拟卡片 ==========
+function MonteCarloCard() {
+  const { data: mcData, isLoading } = trpc.getQQMonteCarloData.useQuery(undefined, {
+    refetchInterval: 10 * 60 * 1000,
+  });
+  const [simResult, setSimResult] = React.useState<any>(null);
+  const [simRunning, setSimRunning] = React.useState(false);
+  const [Chart, setChart] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    Promise.all([import('chart.js'), import('react-chartjs-2')]).then(([chartjs, rChartjs]) => {
+      const { Chart: ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } = chartjs;
+      ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
+      setChart({ Line: rChartjs.Line, Bar: rChartjs.Bar });
+    });
+  }, []);
+
+  const cardStyle: React.CSSProperties = {
+    background: 'linear-gradient(145deg, rgba(18,42,68,0.95) 0%, rgba(11,28,48,0.98) 100%)',
+    border: '1px solid rgba(255,255,255,0.09)',
+    borderRadius: '16px',
+    padding: '14px 14px 12px',
+    marginBottom: '10px',
+    marginTop: '12px',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.45)',
+    backdropFilter: 'blur(16px)',
+    position: 'relative',
+    overflow: 'hidden',
+  };
+
+  // 核心模拟函数：每天要么赢满dailyTarget，要么输光本金
+  function runSimulation(params: {
+    winRate: number;       // 胜率 0-1
+    avgBet: number;        // 均投（元）
+    avgPayout: number;     // 均彩（元）
+    initialCapital: number; // 初始本金
+    dailyTarget: number;   // 每日目标
+    days: number;          // 模拟天数
+    simCount: number;      // 模拟次数
+  }) {
+    const { winRate, avgBet, avgPayout, initialCapital, dailyTarget, days, simCount } = params;
+    // 每笔期望净值
+    const betEV = winRate * (avgPayout - avgBet) + (1 - winRate) * (-avgBet);
+    // 每笔标准差
+    const betStd = Math.sqrt(winRate * Math.pow(avgPayout - avgBet - betEV, 2) + (1 - winRate) * Math.pow(-avgBet - betEV, 2));
+
+    // 模拟单天：要么赢满target，要么输光capital
+    // 用正态近似：每笔均值betEV，标准差betStd，连续投注直到累计盈亏>=target或<=−capital
+    function simulateOneDay(capital: number, target: number): { won: boolean; pnl: number } {
+      let cumPnl = 0;
+      let bets = 0;
+      const maxBets = 2000; // 防止无限循环
+      while (bets < maxBets) {
+        // 单笔结果
+        const r = Math.random();
+        const pnl = r < winRate ? (avgPayout - avgBet) : -avgBet;
+        cumPnl += pnl;
+        bets++;
+        if (cumPnl >= target) return { won: true, pnl: target };
+        if (cumPnl <= -capital) return { won: false, pnl: -capital };
+      }
+      return { won: cumPnl > 0, pnl: cumPnl };
+    }
+
+    // 按天统计：各天的资产中位数、25/75分位、5/95分位
+    const capitalByDay: number[][] = Array.from({ length: days + 1 }, () => []);
+    const bankruptByDay = new Array(days + 1).fill(0);
+    const bankruptDay: number[] = []; // 每条路径的破产天（-1=未破产）
+
+    for (let s = 0; s < simCount; s++) {
+      let capital = initialCapital;
+      let bankrupt = false;
+      let bankruptAt = -1;
+      capitalByDay[0].push(capital);
+      for (let d = 1; d <= days; d++) {
+        if (bankrupt) {
+          capitalByDay[d].push(0);
+          bankruptByDay[d]++;
+          continue;
+        }
+        const { won, pnl } = simulateOneDay(capital, dailyTarget);
+        capital = won ? capital + pnl : 0;
+        if (!won) {
+          bankrupt = true;
+          bankruptAt = d;
+        }
+        capitalByDay[d].push(capital);
+        if (bankrupt) bankruptByDay[d]++;
+      }
+      bankruptDay.push(bankruptAt);
+    }
+
+    // 计算各天分位数
+    function percentile(arr: number[], p: number) {
+      const sorted = [...arr].sort((a, b) => a - b);
+      const idx = Math.floor(p * sorted.length);
+      return sorted[Math.min(idx, sorted.length - 1)];
+    }
+
+    const dayLabels = Array.from({ length: days + 1 }, (_, i) => i);
+    const p50 = dayLabels.map(d => percentile(capitalByDay[d], 0.5));
+    const p25 = dayLabels.map(d => percentile(capitalByDay[d], 0.25));
+    const p75 = dayLabels.map(d => percentile(capitalByDay[d], 0.75));
+    const p5  = dayLabels.map(d => percentile(capitalByDay[d], 0.05));
+    const p95 = dayLabels.map(d => percentile(capitalByDay[d], 0.95));
+
+    // 破产累计概率
+    const bankruptCumRate = dayLabels.map(d => Math.round(bankruptByDay[d] / simCount * 1000) / 10);
+
+    // 关键节点统计
+    const checkpoints = [7, 15, 30, 60].filter(d => d <= days);
+    const stats = checkpoints.map(d => {
+      const survivedCount = capitalByDay[d].filter(c => c > 0).length;
+      const profitCount = capitalByDay[d].filter(c => c > initialCapital).length;
+      const avgCapital = capitalByDay[d].reduce((s, c) => s + c, 0) / simCount;
+      return {
+        day: d,
+        profitRate: Math.round(profitCount / simCount * 1000) / 10,
+        bankruptRate: Math.round((simCount - survivedCount) / simCount * 1000) / 10,
+        avgCapital: Math.round(avgCapital),
+      };
+    });
+
+    // 单日赢满概率（模拟1000次单天）
+    let dailyWinCount = 0;
+    for (let i = 0; i < 1000; i++) {
+      const { won } = simulateOneDay(initialCapital, dailyTarget);
+      if (won) dailyWinCount++;
+    }
+    const dailyWinRate = Math.round(dailyWinCount / 10);
+
+    // 平均破产天数
+    const bankruptPaths = bankruptDay.filter(d => d > 0);
+    const avgBankruptDay = bankruptPaths.length > 0
+      ? Math.round(bankruptPaths.reduce((s, d) => s + d, 0) / bankruptPaths.length * 10) / 10
+      : null;
+
+    return { dayLabels, p50, p25, p75, p5, p95, bankruptCumRate, stats, dailyWinRate, avgBankruptDay };
+  }
+
+  function handleSimulate() {
+    if (!mcData) return;
+    setSimRunning(true);
+    // 使用setTimeout让UI先更新显示loading
+    setTimeout(() => {
+      const capital = mcData.currentBalance > 0 ? mcData.currentBalance : 1500;
+      const dailyTarget = capital * 100; // 每日目标 = 本金 × 100
+      const params = {
+        avgBet: mcData.avgBet,
+        avgPayout: mcData.avgPayout,
+        initialCapital: capital,
+        dailyTarget,
+        days: 60,
+        simCount: 100000,
+      };
+      const actualResult = runSimulation({ ...params, winRate: mcData.actualWinRate / 100 });
+      const expectedResult = runSimulation({ ...params, winRate: mcData.expectedWinRate / 100 });
+      setSimResult({ actual: actualResult, expected: expectedResult, params: { ...params, mcData } });
+      setSimRunning(false);
+    }, 50);
+  }
+
+  const fmtMoney = (v: number) => {
+    if (Math.abs(v) >= 10000) return `${(v / 10000).toFixed(1)}w`;
+    if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+    return String(Math.round(v));
+  };
+
+  return (
+    <div className="mx-3 mb-1">
+      <div style={cardStyle}>
+        <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(201,168,76,0.35), transparent)' }} />
+
+        {/* 标题行 */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px]">◈</span>
+            <span className="text-[10px] font-bold tracking-wider" style={{ color: GOLD_COLOR }}>蒙特卡洛风险模拟</span>
+          </div>
+          <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: GOLD_COLOR, border: '1px solid rgba(201,168,76,0.25)' }}>10万次</span>
+        </div>
+
+        {/* 模拟条件说明 */}
+        {mcData && !isLoading && (
+          <div className="mb-3 px-2 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="text-[8px] mb-1 font-medium" style={{ color: GOLD_COLOR }}>模拟规则</div>
+            <div className="text-[8px] leading-relaxed" style={{ color: LABEL_COLOR }}>
+              每天要么赢满每日目标收手，要么把本金全部输光（两种极端）
+            </div>
+            <div className="grid grid-cols-3 gap-1 mt-2">
+              <div className="text-center">
+                <div className="text-[8px]" style={{ color: LABEL_COLOR }}>当前本金</div>
+                <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>¥{mcData.currentBalance.toFixed(0)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[8px]" style={{ color: LABEL_COLOR }}>每日目标</div>
+                <div className="text-[11px] font-bold font-mono" style={{ color: GREEN_COLOR }}>¥{(mcData.currentBalance * 100).toFixed(0)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[8px]" style={{ color: LABEL_COLOR }}>倍数</div>
+                <div className="text-[11px] font-bold font-mono" style={{ color: GOLD_COLOR }}>×100</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1 mt-1.5">
+              <div className="text-center">
+                <div className="text-[8px]" style={{ color: LABEL_COLOR }}>实际胜率</div>
+                <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>{mcData.actualWinRate}%</div>
+              </div>
+              <div className="text-center">
+                <div className="text-[8px]" style={{ color: LABEL_COLOR }}>期望胜率</div>
+                <div className="text-[11px] font-bold font-mono" style={{ color: LABEL_COLOR }}>{mcData.expectedWinRate}%</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 模拟按钮 */}
+        <button
+          onClick={handleSimulate}
+          disabled={simRunning || isLoading || !mcData}
+          className="w-full py-2.5 rounded-xl text-[11px] font-bold tracking-wider mb-3 active:opacity-70"
+          style={{
+            background: simRunning ? 'rgba(201,168,76,0.2)' : 'linear-gradient(135deg, rgba(201,168,76,0.3) 0%, rgba(201,168,76,0.15) 100%)',
+            border: '1px solid rgba(201,168,76,0.4)',
+            color: GOLD_COLOR,
+            cursor: simRunning ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {simRunning ? '模拟运行中... (约2-5秒)' : simResult ? '重新模拟（10万次）' : '开始模拟（10万次）'}
+        </button>
+
+        {/* 模拟结果 */}
+        {simResult && Chart && (() => {
+          const { actual, expected, params: p } = simResult;
+          const { Line, Bar } = Chart;
+          const days = actual.dayLabels;
+          const capital = p.mcData.currentBalance;
+          const dailyTarget = capital * 100;
+
+          // 图表公共配置
+          const commonOptions = (title: string, yLabel: string, isPercent = false) => ({
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: true, labels: { color: LABEL_COLOR, font: { size: 9 }, boxWidth: 10, padding: 6 } },
+              title: { display: true, text: title, color: GOLD_COLOR, font: { size: 9, weight: 'bold' as const }, padding: { bottom: 4 } },
+              tooltip: { enabled: false },
+            },
+            scales: {
+              x: {
+                ticks: { color: LABEL_COLOR, font: { size: 7 }, maxTicksLimit: 8 },
+                grid: { color: 'rgba(255,255,255,0.05)' },
+              },
+              y: {
+                ticks: {
+                  color: LABEL_COLOR,
+                  font: { size: 7 },
+                  callback: (v: any) => isPercent ? `${v}%` : fmtMoney(v),
+                },
+                grid: { color: 'rgba(255,255,255,0.05)' },
+              },
+            },
+          });
+
+          // 图1：实际胜率资金曲线
+          const chart1Data = {
+            labels: days.map((d: number) => d === 0 ? '0' : d % 10 === 0 ? `${d}天` : ''),
+            datasets: [
+              { label: '中位数', data: actual.p50, borderColor: GREEN_COLOR, borderWidth: 1.5, pointRadius: 0, fill: false },
+              { label: '25-75%', data: actual.p75, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.15)', fill: '+1', pointRadius: 0, borderWidth: 0 },
+              { label: '', data: actual.p25, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.15)', fill: false, pointRadius: 0, borderWidth: 0 },
+              { label: '5-95%', data: actual.p95, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.07)', fill: '+1', pointRadius: 0, borderWidth: 0 },
+              { label: '', data: actual.p5, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.07)', fill: false, pointRadius: 0, borderWidth: 0 },
+            ],
+          };
+
+          // 图2：期望胜率资金曲线
+          const chart2Data = {
+            labels: days.map((d: number) => d === 0 ? '0' : d % 10 === 0 ? `${d}天` : ''),
+            datasets: [
+              { label: '中位数', data: expected.p50, borderColor: LABEL_COLOR, borderWidth: 1.5, pointRadius: 0, fill: false },
+              { label: '25-75%', data: expected.p75, borderColor: 'transparent', backgroundColor: 'rgba(122,155,191,0.15)', fill: '+1', pointRadius: 0, borderWidth: 0 },
+              { label: '', data: expected.p25, borderColor: 'transparent', backgroundColor: 'rgba(122,155,191,0.15)', fill: false, pointRadius: 0, borderWidth: 0 },
+            ],
+          };
+
+          // 图3：破产累计概率
+          const chart3Data = {
+            labels: days.map((d: number) => d === 0 ? '0' : d % 10 === 0 ? `${d}天` : ''),
+            datasets: [
+              { label: `实际${p.mcData.actualWinRate}%`, data: actual.bankruptCumRate, borderColor: GREEN_COLOR, borderWidth: 1.5, pointRadius: 0, fill: false },
+              { label: `期望${p.mcData.expectedWinRate}%`, data: expected.bankruptCumRate, borderColor: RED_COLOR, borderWidth: 1.5, pointRadius: 0, fill: false },
+            ],
+          };
+
+          // 图4（柱状图）：单日赢满概率对比
+          const chart4Data = {
+            labels: [`实际\n${p.mcData.actualWinRate}%`, `期望\n${p.mcData.expectedWinRate}%`],
+            datasets: [
+              {
+                label: '单日赢满概率',
+                data: [actual.dailyWinRate, expected.dailyWinRate],
+                backgroundColor: [
+                  'rgba(61,214,140,0.6)',
+                  'rgba(122,155,191,0.6)',
+                ],
+                borderColor: [GREEN_COLOR, LABEL_COLOR],
+                borderWidth: 1,
+                borderRadius: 4,
+              },
+            ],
+          };
+
+          return (
+            <div>
+              {/* 3图布局：左上+右上+左下，右下为柱状图 */}
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {/* 图1：实际胜率资金曲线 */}
+                <div style={{ height: '130px' }}>
+                  <Line data={chart1Data} options={commonOptions(`实际胜率 ${p.mcData.actualWinRate}%`, '资产')} />
+                </div>
+                {/* 图2：期望胜率资金曲线 */}
+                <div style={{ height: '130px' }}>
+                  <Line data={chart2Data} options={commonOptions(`期望胜率 ${p.mcData.expectedWinRate}%`, '资产')} />
+                </div>
+                {/* 图3：破产概率曲线 */}
+                <div style={{ height: '130px' }}>
+                  <Line data={chart3Data} options={commonOptions('破产累计概率', '%', true)} />
+                </div>
+                {/* 图4：单日赢满概率柱状图 */}
+                <div style={{ height: '130px' }}>
+                  <Bar
+                    data={chart4Data}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: '单日赢满概率', color: GOLD_COLOR, font: { size: 9, weight: 'bold' as const }, padding: { bottom: 4 } },
+                        tooltip: { enabled: false },
+                      },
+                      scales: {
+                        x: { ticks: { color: LABEL_COLOR, font: { size: 8 } }, grid: { display: false } },
+                        y: {
+                          ticks: { color: LABEL_COLOR, font: { size: 7 }, callback: (v: any) => `${v}%` },
+                          grid: { color: 'rgba(255,255,255,0.05)' },
+                          max: 100,
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* 汇总表 */}
+              <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', overflow: 'hidden' }}>
+                <div className="grid grid-cols-5 text-center py-1.5" style={{ background: 'rgba(201,168,76,0.1)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div className="text-[8px] font-bold" style={{ color: GOLD_COLOR }}>节点</div>
+                  <div className="text-[8px] font-bold" style={{ color: GREEN_COLOR }}>实际盈利%</div>
+                  <div className="text-[8px] font-bold" style={{ color: RED_COLOR }}>实际破产%</div>
+                  <div className="text-[8px] font-bold" style={{ color: LABEL_COLOR }}>期望盈利%</div>
+                  <div className="text-[8px] font-bold" style={{ color: LABEL_COLOR }}>期望破产%</div>
+                </div>
+                {actual.stats.map((s: any, i: number) => {
+                  const es = expected.stats[i];
+                  return (
+                    <div key={s.day} className="grid grid-cols-5 text-center py-1.5" style={{ borderBottom: i < actual.stats.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                      <div className="text-[9px] font-bold font-mono" style={{ color: DATA_COLOR }}>第{s.day}天</div>
+                      <div className="text-[9px] font-mono" style={{ color: GREEN_COLOR }}>{s.profitRate}%</div>
+                      <div className="text-[9px] font-mono" style={{ color: RED_COLOR }}>{s.bankruptRate}%</div>
+                      <div className="text-[9px] font-mono" style={{ color: LABEL_COLOR }}>{es?.profitRate ?? '-'}%</div>
+                      <div className="text-[9px] font-mono" style={{ color: LABEL_COLOR }}>{es?.bankruptRate ?? '-'}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 补充说明 */}
+              <div className="mt-2 px-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="text-center">
+                    <div className="text-[8px]" style={{ color: LABEL_COLOR }}>实际单日赢满概率</div>
+                    <div className="text-[13px] font-bold font-mono" style={{ color: GREEN_COLOR }}>{actual.dailyWinRate}%</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-[8px]" style={{ color: LABEL_COLOR }}>期望单日赢满概率</div>
+                    <div className="text-[13px] font-bold font-mono" style={{ color: LABEL_COLOR }}>{expected.dailyWinRate}%</div>
+                  </div>
+                </div>
+                {actual.avgBankruptDay && (
+                  <div className="text-center mt-1.5">
+                    <div className="text-[8px]" style={{ color: LABEL_COLOR }}>实际情景平均破产天数</div>
+                    <div className="text-[11px] font-bold font-mono" style={{ color: RED_COLOR }}>第 {actual.avgBankruptDay} 天</div>
+                  </div>
+                )}
+                <div className="text-[7px] mt-2 leading-relaxed" style={{ color: LABEL_COLOR, opacity: 0.6 }}>
+                  本金¥{capital.toFixed(0)} · 每日目标¥{dailyTarget.toFixed(0)}（×100倍） · 10万次蒙特卡洛模拟 · 仅供参考
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 }
