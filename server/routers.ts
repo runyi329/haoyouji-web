@@ -13408,8 +13408,12 @@ insights 数组每项包含：
         const offset = (input.page - 1) * input.pageSize;
         const limit = input.pageSize;
         const allowedSortFields = ['id','username','order_no','lottery_type','play_method','issue_no','trade_time','multiplier','amount','win_amount','win_status','odds','balance'];
-        const sortField = allowedSortFields.includes(input.sortField || '') ? input.sortField : 'id';
+        const rawSortField = allowedSortFields.includes(input.sortField || '') ? input.sortField! : 'id';
         const sortOrder = input.sortOrder === 'asc' ? 'ASC' : 'DESC';
+        // win_status 按语义排序：已中奖=1，未中奖=0，其他=0
+        const orderByExpr = rawSortField === 'win_status'
+          ? `CASE WHEN win_status = '已中奖' OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0) THEN 1 ELSE 0 END ${sortOrder}, id DESC`
+          : `${rawSortField} ${sortOrder}`;
         let whereClause = '';
         let params: any[] = [];
         if (input.search && input.search.trim()) {
@@ -13422,7 +13426,7 @@ insights 数组每项包含：
                   multiplier, amount, content, win_amount, win_status, odds, balance, created_at, batch_id
            FROM qq_trade_records
            ${whereClause}
-           ORDER BY ${sortField} ${sortOrder}
+           ORDER BY ${orderByExpr}
            LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
           params
         );
