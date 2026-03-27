@@ -799,6 +799,8 @@ function CumPnlCard() {
   const [Chart, setChart] = React.useState<any>(null);
   // 每个数据点的像素宽度，用于缩放
   const [pxPerPoint, setPxPerPoint] = React.useState(14);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const cumPnlLengthRef = React.useRef<number>(0);
   const pinchRef = React.useRef<{ startDist: number; startPx: number } | null>(null);
 
   useEffect(() => {
@@ -832,7 +834,9 @@ function CumPnlCard() {
       const dy = e.touches[0].clientY - e.touches[1].clientY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const scale = dist / pinchRef.current.startDist;
-      const newPx = Math.min(60, Math.max(4, pinchRef.current.startPx * scale));
+      const containerWidth = containerRef.current?.offsetWidth ?? 300;
+      const minPx = cumPnlLengthRef.current > 0 ? containerWidth / cumPnlLengthRef.current : 4;
+      const newPx = Math.min(60, Math.max(minPx, pinchRef.current.startPx * scale));
       setPxPerPoint(newPx);
       e.preventDefault();
     }
@@ -848,6 +852,7 @@ function CumPnlCard() {
     borderRadius: '16px',
     padding: '14px 14px 10px',
     marginBottom: '10px',
+    marginTop: '12px',
     boxShadow: '0 4px 24px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.06) inset, 0 -1px 0 rgba(0,0,0,0.4) inset',
     backdropFilter: 'blur(16px)',
     position: 'relative',
@@ -868,6 +873,7 @@ function CumPnlCard() {
 
   const { Line } = Chart;
   const cumPnl = data?.cumPnl ?? [];
+  cumPnlLengthRef.current = cumPnl.length;
 
   return (
     <div className="mx-3 mb-1">
@@ -884,7 +890,7 @@ function CumPnlCard() {
         {/* 冻结Y轴 + 横向可滑动 + 双指缩放 */}
         <div style={{ position: 'relative', height: '160px' }}>
           {/* 冻结Y轴：固定左侧，不随横向滚动 */}
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '38px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, width: '52px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)' }}>
             <Line
               data={{
                 labels: cumPnl.map((d: any) => d.idx),
@@ -915,14 +921,14 @@ function CumPnlCard() {
           </div>
           {/* 横向可滑动区域（含X轴和曲线，左侧留出Y轴宽度） */}
           <div
-            ref={scrollContainerRef}
+            ref={(el) => { (scrollContainerRef as React.MutableRefObject<HTMLDivElement|null>).current = el; (containerRef as React.MutableRefObject<HTMLDivElement|null>).current = el; }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             style={{
               position: 'absolute',
               top: 0,
-              left: '38px',
+              left: '52px',
               right: 0,
               height: '160px',
               overflowX: 'auto',
@@ -932,7 +938,7 @@ function CumPnlCard() {
               msOverflowStyle: 'none',
             }}
           >
-            <div style={{ width: Math.max(cumPnl.length * pxPerPoint, 300) + 'px', height: '160px' }}>
+            <div style={{ width: Math.max(cumPnl.length * pxPerPoint, (containerRef.current?.offsetWidth ?? 300)) + 'px', height: '160px' }}>
               <Line
                 data={{
                   labels: cumPnl.map((d: any) => d.idx),
