@@ -307,10 +307,13 @@ export default function EquityWeightManage() {
   );
 
   // 设置权重
+  const utils = trpc.useUtils();
   const setWeight = trpc.equity.setMemberWeight.useMutation({
     onSuccess: () => {
       refetch();
       refetchLogs();
+      // 使 LedgerDetail 中的 getUserWeight 缓存失效，确保返回后立即显示最新权重
+      utils.equity.getUserWeight.invalidate();
       setMsg('保存成功');
       setTimeout(() => setMsg(''), 2500);
     },

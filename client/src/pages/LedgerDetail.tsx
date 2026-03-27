@@ -902,7 +902,7 @@ export default function LedgerDetail() {
   // 查询当前用户权重
   const { data: userWeight } = trpc.equity.getUserWeight.useQuery(
     { userId: effectiveShareUserId },
-    { enabled: isCustomAI && !!effectiveShareUserId, refetchOnWindowFocus: true, staleTime: 0 }
+    { enabled: isCustomAI && !!effectiveShareUserId, refetchOnWindowFocus: true, refetchOnMount: 'always', staleTime: 0 }
   );
   const totalWeight = userWeight?.totalWeight ?? 1.00;
   const resourceWeight = userWeight?.resourceWeight ?? 1.00;
