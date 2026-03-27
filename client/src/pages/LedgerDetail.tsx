@@ -3237,26 +3237,26 @@ export default function LedgerDetail() {
               ) : (
                 <div className="space-y-2">
                   {inviteTreeData.users.map((u: any) => (
-                    <div key={u.id} className="rounded-xl overflow-hidden" style={{ backgroundColor: '#F9F9F9' }}>
-                      {/* 主行：头像左侧占两行，右侧分上下两行 */}
-                      <div className="flex items-stretch gap-3 py-2.5 px-3">
-                        {/* 头像：垂直居中，占两行高度 */}
-                        <div className="flex-shrink-0 flex items-center">
+                    <div key={u.id} className="rounded-xl overflow-hidden" style={{ backgroundColor: '#F9F9F9', border: '1px solid #EEEEEE' }}>
+                      {/* 上层：头像 + 基本信息 */}
+                      <div className="flex items-start gap-3 pt-3 pb-2.5 px-3">
+                        {/* 头像 */}
+                        <div className="flex-shrink-0">
                           <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: u.layer === 1 ? '#D32F2F' : u.layer === 2 ? '#E57373' : '#EF9A9A' }}>
                             {u.name.charAt(0)}
                           </div>
                         </div>
-                        {/* 右侧内容：两行 */}
-                        <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                          {/* 第一行：姓名 + 层级标签 + 拨比标签 */}
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-medium text-gray-800 truncate">
-                              {u.name}
+                        {/* 右侧信息 */}
+                        <div className="flex-1 min-w-0">
+                          {/* 第一行：昵称 + 用户名 + 层级 + 拨比 + 备注按钮 */}
+                          <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-baseline gap-1 min-w-0">
+                              <span className="text-sm font-semibold text-gray-900 truncate">{u.name}</span>
                               {(u as any).username && (u as any).username !== u.name && (
-                                <span className="text-xs text-gray-400 font-normal ml-1">({(u as any).username})</span>
+                                <span className="text-xs text-gray-400 font-normal truncate">({(u as any).username})</span>
                               )}
-                            </span>
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
                               <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>
                                 第{u.layer}层
                               </span>
@@ -3271,23 +3271,49 @@ export default function LedgerDetail() {
                               >注</button>
                             </div>
                           </div>
-                          {/* 第二行：余额 + 备注 + 日期 + 推荐人 */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: (u.balance ?? 0) > 0 ? '#E8F5E9' : '#F5F5F5', color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>
-                              {Number(u.balance ?? 0).toFixed(2)} U
-                            </span>
+                          {/* 第二行：注册时间 + 推荐人 + 备注 */}
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {(u as any).registeredAt && <span className="text-xs text-gray-400">注册：{(u as any).registeredAt}</span>}
+                            {u.inviterName && <span className="text-xs text-gray-400">推荐人：{u.inviterName}</span>}
                             {(() => {
                               const displayNote = localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '');
-                              return (
-                                <>
-                                  {displayNote && <span className="text-xs text-amber-700 truncate max-w-[100px]">{displayNote}</span>}
-                                  {u.invitedAt && <span className="text-xs text-gray-400">{u.invitedAt}</span>}
-                                  {u.inviterName && <span className="text-xs text-gray-400">推荐人：{u.inviterName}</span>}
-                                </>
-                              );
+                              return displayNote ? <span className="text-xs text-amber-700 truncate max-w-[120px]">{displayNote}</span> : null;
                             })()}
                           </div>
                         </div>
+                      </div>
+                      {/* 分隔细线 */}
+                      <div style={{ height: 1, backgroundColor: '#E8E8E8', marginLeft: 12, marginRight: 12 }} />
+                      {/* 下层：持仓情况 */}
+                      <div className="flex items-center gap-3 px-3 py-2 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-400">余额</span>
+                          <span className="text-xs font-semibold" style={{ color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)} U</span>
+                        </div>
+                        {((u as any).holdingBTC > 0 || (u as any).holdingETH > 0 || (u as any).holdingSOL > 0) && (
+                          <div style={{ width: 1, height: 12, backgroundColor: '#DDDDDD' }} />
+                        )}
+                        {(u as any).holdingBTC > 0 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-400">BTC</span>
+                            <span className="text-xs font-semibold text-orange-700">{Number((u as any).holdingBTC).toFixed(4)}</span>
+                          </div>
+                        )}
+                        {(u as any).holdingETH > 0 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-400">ETH</span>
+                            <span className="text-xs font-semibold text-blue-700">{Number((u as any).holdingETH).toFixed(4)}</span>
+                          </div>
+                        )}
+                        {(u as any).holdingSOL > 0 && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-400">SOL</span>
+                            <span className="text-xs font-semibold text-purple-700">{Number((u as any).holdingSOL).toFixed(4)}</span>
+                          </div>
+                        )}
+                        {(u as any).holdingBTC === 0 && (u as any).holdingETH === 0 && (u as any).holdingSOL === 0 && (
+                          <span className="text-xs text-gray-300">暂无持仓</span>
+                        )}
                       </div>
                       {/* 备注编辑区 */}
                       {editingNoteUserId === u.id && (

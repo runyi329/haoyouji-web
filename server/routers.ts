@@ -9894,7 +9894,7 @@ export const appRouter = router({
           const rawDb = await getDbConnection();
           if (!rawDb) return { users: [] };
           // BFS 递归查询所有层级下线，记录层数
-          type InviteUser = { id: number; name: string; username: string; layer: number; invitedAt: string | null; inviterName: string | null };
+          type InviteUser = { id: number; name: string; username: string; layer: number; invitedAt: string | null; inviterName: string | null; registeredAt: string | null };
           const result: InviteUser[] = [];
           let queue: Array<{ id: number; layer: number; name: string }> = [{ id: YJH_USER_ID, layer: 0, name: 'YJH' }];
           const visited = new Set<number>([YJH_USER_ID]);
@@ -9905,7 +9905,7 @@ export const appRouter = router({
             const parentIds = batch.map(b => b.id);
             const layerMap = new Map(batch.map(b => [b.id, b.layer]));
             const [childRows] = await rawDb.execute(
-              `SELECT id, name, username, invited_by_user_id, invited_at FROM users WHERE invited_by_user_id IN (${placeholders})`,
+              `SELECT id, name, username, invited_by_user_id, invited_at, created_at FROM users WHERE invited_by_user_id IN (${placeholders})`,
               parentIds
             ) as any[];
             for (const child of (childRows as any[])) {
@@ -9921,7 +9921,8 @@ export const appRouter = router({
                   username: child.username || '',
                   layer,
                   invitedAt: child.invited_at ? new Date(child.invited_at).toLocaleDateString('zh-CN') : null,
-                  inviterName
+                  inviterName,
+                  registeredAt: child.created_at ? new Date(child.created_at).toLocaleDateString('zh-CN') : null
                 });
                 queue.push({ id: child.id, layer, name: child.name || child.username || '未知用户' });
               }
@@ -10015,7 +10016,46 @@ export const appRouter = router({
               console.error('[AF] 余额查询失败:', e);
             }
           }
-          return { users: result.map(u => ({ ...u, username: u.username, payoutRatio: payoutMap.get(u.id) ?? 0, note: noteMap.get(u.id) ?? '', inviterName: u.inviterName, balance: balanceMap.get(u.id) ?? 0 })) };
+          // 查询每个用户的 BTC/ETH/SOL 持仓数量
+          type HoldingMap = Map<number, { BTC: number; ETH: number; SOL: number }>;
+          let holdingMap: HoldingMap = new Map();
+          if (result.length > 0) {
+            try {
+              const userIds4 = result.map(u => u.id);
+              const placeholders5 = userIds4.map(() => '?').join(',');
+              const [holdingRows] = await rawDb.execute(
+                `SELECT user_id, coin, COALESCE(SUM(CAST(quantity AS DECIMAL(30,8))), 0) as qty
+                 FROM af_orders
+                 WHERE ledger_id = ? AND user_id IN (${placeholders5})
+                   AND status = 'completed' AND side = 'buy'
+                   AND (sell_status IS NULL OR sell_status = 'pending')
+                 GROUP BY user_id, coin`,
+                [input.ledgerId, ...userIds4]
+              ) as any[];
+              for (const row of (holdingRows as any[])) {
+                if (!holdingMap.has(row.user_id)) holdingMap.set(row.user_id, { BTC: 0, ETH: 0, SOL: 0 });
+                const h = holdingMap.get(row.user_id)!;
+                const coin = (row.coin as string).toUpperCase();
+                if (coin === 'BTC') h.BTC = parseFloat(row.qty?.toString() || '0');
+                else if (coin === 'ETH') h.ETH = parseFloat(row.qty?.toString() || '0');
+                else if (coin === 'SOL') h.SOL = parseFloat(row.qty?.toString() || '0');
+              }
+            } catch (e) {
+              console.error('[AF] 持仓查询失败:', e);
+            }
+          }
+          return { users: result.map(u => ({
+            ...u,
+            username: u.username,
+            registeredAt: u.registeredAt,
+            payoutRatio: payoutMap.get(u.id) ?? 0,
+            note: noteMap.get(u.id) ?? '',
+            inviterName: u.inviterName,
+            balance: balanceMap.get(u.id) ?? 0,
+            holdingBTC: holdingMap.get(u.id)?.BTC ?? 0,
+            holdingETH: holdingMap.get(u.id)?.ETH ?? 0,
+            holdingSOL: holdingMap.get(u.id)?.SOL ?? 0,
+          })) };
         } catch (e) {
           console.error('[AF] 邀请树查询失败:', e);
           return { users: [] };
