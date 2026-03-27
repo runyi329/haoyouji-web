@@ -892,36 +892,32 @@ function CumPnlCard() {
           {/* 冻结Y轴：纯HTML自绘，右对齐，紧贴曲线区域左边界 */}
           {(() => {
             const vals = cumPnl.map((d: any) => d.pnl as number);
-            // 强制包含0坐标：yMin取min和0中的较小值，yMax取max和0中的较大值
             const dataMin = vals.length ? Math.min(...vals) : 0;
             const dataMax = vals.length ? Math.max(...vals) : 0;
-            const yMin = Math.min(dataMin, 0);
-            const yMax = Math.max(dataMax, 0);
-            const range = yMax - yMin || 1;
-            const ticks = 5;
-            const step = range / (ticks - 1);
-            const tickVals = Array.from({ length: ticks }, (_, i) => yMax - i * step);
+            // 以0为锚点：正方向取dataMax，负方向取dataMin的绝对值，取两者较大值作为单侧range
+            const posMax = Math.max(dataMax, 0);
+            const negMax = Math.abs(Math.min(dataMin, 0));
+            // 单侧步长：上下各2格，共5个刻度（+2step, +1step, 0, -1step, -2step）
+            const sideSteps = 2;
+            const posStep = posMax > 0 ? posMax / sideSteps : (negMax / sideSteps || 1);
+            const negStep = negMax > 0 ? negMax / sideSteps : posStep;
+            // 取上下步长一致（取较大值），让刻度对称美观
+            const step = Math.max(posStep, negStep);
+            const yMax = step * sideSteps;
+            const yMin = -step * sideSteps;
+            // 5个刻度：从上到下 +2step, +1step, 0, -1step, -2step
+            const tickVals = [yMax, step, 0, -step, yMin];
             const fmt = (v: number) => {
+              if (v === 0) return '0';
               if (Math.abs(v) >= 10000) return (v / 10000).toFixed(1) + 'w';
               if (Math.abs(v) >= 1000) return (v / 1000).toFixed(1) + 'k';
               return Math.round(v).toString();
             };
-            // 计算0坐标在Y轴容器中的位置（用于零基准线）
-            const zeroRatio = yMax / range; // 0距顶部的比例
-            const chartH = 160;
-            const paddingTop = 4;
-            const paddingBottom = 18;
-            const drawH = chartH - paddingTop - paddingBottom;
-            const zeroPx = paddingTop + zeroRatio * drawH;
             return (
-              <div style={{ position: 'absolute', top: 0, left: 0, width: '46px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingTop: `${paddingTop}px`, paddingBottom: `${paddingBottom}px`, boxSizing: 'border-box' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '46px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingTop: '4px', paddingBottom: '18px', boxSizing: 'border-box' }}>
                 {tickVals.map((v, i) => (
                   <div key={i} style={{ width: '100%', textAlign: 'right', paddingRight: '4px', fontSize: '9px', color: v === 0 ? '#E8F0FE' : '#7A9BBF', fontWeight: v === 0 ? 'bold' : 'normal', lineHeight: '1', whiteSpace: 'nowrap' }}>{fmt(v)}</div>
                 ))}
-                {/* 零基准线延伸到Y轴右侧 */}
-                {yMin < 0 && yMax > 0 && (
-                  <div style={{ position: 'absolute', top: `${zeroPx}px`, left: 0, right: 0, height: '1px', background: 'rgba(232,240,254,0.35)' }} />
-                )}
               </div>
             );
           })()}
@@ -975,8 +971,28 @@ function CumPnlCard() {
                     x: { ticks: { color: '#7A9BBF', font: { size: 9 }, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
                     y: {
                       display: false,
-                      min: Math.min(Math.min(...cumPnl.map((d: any) => d.pnl as number)), 0),
-                      max: Math.max(Math.max(...cumPnl.map((d: any) => d.pnl as number)), 0),
+                      min: (() => {
+                        const vs = cumPnl.map((d: any) => d.pnl as number);
+                        const dMin = vs.length ? Math.min(...vs) : 0;
+                        const dMax = vs.length ? Math.max(...vs) : 0;
+                        const pMax = Math.max(dMax, 0);
+                        const nMax = Math.abs(Math.min(dMin, 0));
+                        const pStep = pMax > 0 ? pMax / 2 : (nMax / 2 || 1);
+                        const nStep = nMax > 0 ? nMax / 2 : pStep;
+                        const s = Math.max(pStep, nStep);
+                        return -s * 2;
+                      })(),
+                      max: (() => {
+                        const vs = cumPnl.map((d: any) => d.pnl as number);
+                        const dMin = vs.length ? Math.min(...vs) : 0;
+                        const dMax = vs.length ? Math.max(...vs) : 0;
+                        const pMax = Math.max(dMax, 0);
+                        const nMax = Math.abs(Math.min(dMin, 0));
+                        const pStep = pMax > 0 ? pMax / 2 : (nMax / 2 || 1);
+                        const nStep = nMax > 0 ? nMax / 2 : pStep;
+                        const s = Math.max(pStep, nStep);
+                        return s * 2;
+                      })(),
                     },
                   },
                 }}
