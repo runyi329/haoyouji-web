@@ -1775,7 +1775,23 @@ function MonteCarloCard() {
       ? Math.round(bankruptPaths.reduce((s, d) => s + d, 0) / bankruptPaths.length * 10) / 10
       : null;
 
-    return { dayLabels, p50, p25, p75, p5, p95, bankruptCumRate, stats, dailyWinRate, avgBankruptDay };
+    // 自动截断X轴：找到破产概率趋于稳定（连续5天变化<0.5%）的最后有效天，最少显示14天
+    let cutDay = days;
+    for (let d = 14; d <= days - 5; d++) {
+      const tail = bankruptCumRate.slice(d, d + 5);
+      const maxChange = Math.max(...tail) - Math.min(...tail);
+      if (maxChange < 0.5) { cutDay = d + 2; break; }
+    }
+    // 同时检查p95是否也趋于0（资金曲线无意义）
+    for (let d = 14; d <= days - 3; d++) {
+      if (p95[d] === 0 && p95[d + 1] === 0 && p95[d + 2] === 0) {
+        cutDay = Math.min(cutDay, d + 1);
+        break;
+      }
+    }
+    cutDay = Math.min(cutDay, days);
+    const sl = (arr: number[]) => arr.slice(0, cutDay + 1);
+    return { dayLabels: sl(dayLabels), p50: sl(p50), p25: sl(p25), p75: sl(p75), p5: sl(p5), p95: sl(p95), bankruptCumRate: sl(bankruptCumRate), stats, dailyWinRate, avgBankruptDay };
   }
 
   function handleSimulate() {
