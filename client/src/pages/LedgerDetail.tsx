@@ -1639,26 +1639,21 @@ export default function LedgerDetail() {
                     return uname ? <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{uname}）</span> : null;
                   })()}
                 </div>
-                <div className="grid grid-cols-4 gap-1 mt-1">
+                <div className="grid grid-cols-3 gap-1 mt-1">
                   <div>
                     <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.7)' }}>人脉</div>
                     <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>{memberStats ? memberStats.contactCount : '--'}</div>
                     <div className="text-[9px]" style={{ color: 'rgba(220,185,60,0.45)' }}>联系人</div>
                   </div>
                   <div style={{ borderLeft: '1px solid rgba(201,168,76,0.25)', paddingLeft: '4px' }}>
-                    <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.7)' }}>联络</div>
-                    <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>{memberStats ? memberStats.interactionCount : '--'}</div>
+                    <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.7)' }}>标签</div>
+                    <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>{memberStats ? memberStats.tagCount : '--'}</div>
                     <div className="text-[9px]" style={{ color: 'rgba(220,185,60,0.45)' }}>次</div>
                   </div>
                   <div style={{ borderLeft: '1px solid rgba(201,168,76,0.25)', paddingLeft: '4px' }}>
                     <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.7)' }}>推荐</div>
                     <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>{memberStats ? memberStats.referralCount : '--'}</div>
                     <div className="text-[9px]" style={{ color: 'rgba(220,185,60,0.45)' }}>直接</div>
-                  </div>
-                  <div style={{ borderLeft: '1px solid rgba(201,168,76,0.25)', paddingLeft: '4px' }}>
-                    <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.7)' }}>标签</div>
-                    <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>{memberStats ? memberStats.tagCount : '--'}</div>
-                    <div className="text-[9px]" style={{ color: 'rgba(220,185,60,0.45)' }}>次</div>
                   </div>
                 </div>
               </div>
