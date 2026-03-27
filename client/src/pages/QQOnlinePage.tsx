@@ -790,6 +790,97 @@ function AmountAnalysisPanel() {
   );
 }
 
+// ========== 累计盈亏曲线（单独卡片，放在投注统计下方）==========
+function CumPnlCard() {
+  const { data, isLoading } = trpc.getQQChartData.useQuery(undefined, {
+    refetchInterval: 5 * 60 * 1000,
+  });
+  const [Chart, setChart] = React.useState<any>(null);
+  useEffect(() => {
+    Promise.all([import('chart.js'), import('react-chartjs-2')]).then(([chartjs, rChartjs]) => {
+      const { Chart: ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } = chartjs;
+      ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+      setChart({ Line: rChartjs.Line });
+    });
+  }, []);
+
+  const cardStyle: React.CSSProperties = {
+    background: 'linear-gradient(145deg, rgba(18,42,68,0.95) 0%, rgba(11,28,48,0.98) 100%)',
+    border: '1px solid rgba(255,255,255,0.09)',
+    borderRadius: '16px',
+    padding: '14px 14px 10px',
+    marginBottom: '10px',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.06) inset, 0 -1px 0 rgba(0,0,0,0.4) inset',
+    backdropFilter: 'blur(16px)',
+    position: 'relative',
+    overflow: 'hidden',
+  };
+
+  if (isLoading || !Chart) {
+    return (
+      <div className="mx-3 mb-1">
+        <div style={cardStyle}>
+          <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(201,168,76,0.35), transparent)' }} />
+          <div className="text-[10px] font-bold tracking-widest" style={{ color: GOLD_COLOR }}>累计盈亏曲线</div>
+          <div className="text-[11px] mt-1" style={{ color: LABEL_COLOR }}>加载中...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const { Line } = Chart;
+  const cumPnl = data?.cumPnl ?? [];
+
+  return (
+    <div className="mx-3 mb-1">
+      <div style={cardStyle}>
+        <div style={{ position: 'absolute', top: 0, left: '10%', right: '10%', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(201,168,76,0.35), transparent)' }} />
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px]">◳</span>
+            <span className="text-[10px] font-bold tracking-wider" style={{ color: GOLD_COLOR }}>累计盈亏曲线</span>
+          </div>
+          <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: GOLD_COLOR, border: '1px solid rgba(201,168,76,0.25)' }}>资金轨迹</span>
+        </div>
+        <div className="text-[8px] mb-2" style={{ color: LABEL_COLOR, opacity: 0.65 }}>每50笔采样一次，共{cumPnl.length}个数据点</div>
+        <div style={{ height: '150px' }}>
+          <Line
+            data={{
+              labels: cumPnl.map((d: any) => d.idx),
+              datasets: [{
+                data: cumPnl.map((d: any) => d.pnl),
+                borderColor: '#3DD68C',
+                backgroundColor: (ctx: any) => {
+                  const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 150);
+                  gradient.addColorStop(0, 'rgba(61,214,140,0.18)');
+                  gradient.addColorStop(1, 'rgba(61,214,140,0.01)');
+                  return gradient;
+                },
+                borderWidth: 1.8,
+                pointRadius: 0,
+                fill: true,
+                tension: 0.35,
+              }],
+            }}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: { backgroundColor: 'rgba(13,27,42,0.95)', titleColor: '#E8F0FE', bodyColor: '#7A9BBF', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 },
+              },
+              scales: {
+                x: { ticks: { color: '#7A9BBF', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                y: { ticks: { color: '#7A9BBF', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+              },
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ========== 高阶图表分析面板 ==========
 function QQChartsPanel() {
   const { data, isLoading } = trpc.getQQChartData.useQuery(undefined, {
@@ -882,36 +973,7 @@ function QQChartsPanel() {
         <span className="text-[8px]" style={{ color: LABEL_COLOR, opacity: 0.6 }}>Las Vegas / Macau Professional View</span>
       </div>
 
-      {/* 1. 累计盈亏曲线 */}
-      <div style={chartCardStyle}>
-        <div style={chartCardGlow} />
-        {chartCardTitle('◳', '累计盈亏曲线', '资金轨迹')}
-        <div className="text-[8px] mb-2" style={{ color: LABEL_COLOR, opacity: 0.65 }}>每50笔采样一次，共{cumPnl.length}个数据点</div>
-        <div style={{ height: '150px' }}>
-          <Line
-            data={{
-              labels: cumPnl.map((d: any) => d.idx),
-              datasets: [{
-                data: cumPnl.map((d: any) => d.pnl),
-                borderColor: '#3DD68C',
-                backgroundColor: (ctx: any) => {
-                  const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 150);
-                  gradient.addColorStop(0, 'rgba(61,214,140,0.18)');
-                  gradient.addColorStop(1, 'rgba(61,214,140,0.01)');
-                  return gradient;
-                },
-                borderWidth: 1.8,
-                pointRadius: 0,
-                fill: true,
-                tension: 0.35,
-              }],
-            }}
-            options={chartOptions('累计盈亏')}
-          />
-        </div>
-      </div>
-
-      {/* 2. 每日盈亏柱状图 */}
+      {/* 2. 每日盈亏柱状图（累计盈亏曲线已移至投注统计下方）*/}
       <div style={chartCardStyle}>
         <div style={chartCardGlow} />
         {chartCardTitle('■', '每日投注 vs 中奖', '日度对比')}
@@ -1372,6 +1434,8 @@ export default function QQOnlinePage() {
         </div>
       </div>
 
+      {/* ── 累计盈亏曲线（投注统计下方）── */}
+      {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <CumPnlCard />}
       {/* ── AI监控 习惯（jiang和yjh可见）── */}
       {(currentUserId === JIANG_ID || currentUserId === YJH_ID) && <AIHabitsPanel />}
 
