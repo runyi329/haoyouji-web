@@ -892,22 +892,36 @@ function CumPnlCard() {
           {/* 冻结Y轴：纯HTML自绘，右对齐，紧贴曲线区域左边界 */}
           {(() => {
             const vals = cumPnl.map((d: any) => d.pnl as number);
-            const minV = vals.length ? Math.min(...vals) : 0;
-            const maxV = vals.length ? Math.max(...vals) : 0;
-            const range = maxV - minV || 1;
+            // 强制包含0坐标：yMin取min和0中的较小值，yMax取max和0中的较大值
+            const dataMin = vals.length ? Math.min(...vals) : 0;
+            const dataMax = vals.length ? Math.max(...vals) : 0;
+            const yMin = Math.min(dataMin, 0);
+            const yMax = Math.max(dataMax, 0);
+            const range = yMax - yMin || 1;
             const ticks = 5;
             const step = range / (ticks - 1);
-            const tickVals = Array.from({ length: ticks }, (_, i) => maxV - i * step);
+            const tickVals = Array.from({ length: ticks }, (_, i) => yMax - i * step);
             const fmt = (v: number) => {
               if (Math.abs(v) >= 10000) return (v / 10000).toFixed(1) + 'w';
               if (Math.abs(v) >= 1000) return (v / 1000).toFixed(1) + 'k';
               return Math.round(v).toString();
             };
+            // 计算0坐标在Y轴容器中的位置（用于零基准线）
+            const zeroRatio = yMax / range; // 0距顶部的比例
+            const chartH = 160;
+            const paddingTop = 4;
+            const paddingBottom = 18;
+            const drawH = chartH - paddingTop - paddingBottom;
+            const zeroPx = paddingTop + zeroRatio * drawH;
             return (
-              <div style={{ position: 'absolute', top: 0, left: 0, width: '46px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingTop: '4px', paddingBottom: '18px', boxSizing: 'border-box' }}>
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '46px', height: '160px', zIndex: 2, background: 'linear-gradient(145deg, rgba(18,42,68,0.98) 0%, rgba(11,28,48,0.99) 100%)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', paddingTop: `${paddingTop}px`, paddingBottom: `${paddingBottom}px`, boxSizing: 'border-box' }}>
                 {tickVals.map((v, i) => (
-                  <div key={i} style={{ width: '100%', textAlign: 'right', paddingRight: '4px', fontSize: '9px', color: '#7A9BBF', lineHeight: '1', whiteSpace: 'nowrap' }}>{fmt(v)}</div>
+                  <div key={i} style={{ width: '100%', textAlign: 'right', paddingRight: '4px', fontSize: '9px', color: v === 0 ? '#E8F0FE' : '#7A9BBF', fontWeight: v === 0 ? 'bold' : 'normal', lineHeight: '1', whiteSpace: 'nowrap' }}>{fmt(v)}</div>
                 ))}
+                {/* 零基准线延伸到Y轴右侧 */}
+                {yMin < 0 && yMax > 0 && (
+                  <div style={{ position: 'absolute', top: `${zeroPx}px`, left: 0, right: 0, height: '1px', background: 'rgba(232,240,254,0.35)' }} />
+                )}
               </div>
             );
           })()}
@@ -959,7 +973,11 @@ function CumPnlCard() {
                   },
                   scales: {
                     x: { ticks: { color: '#7A9BBF', font: { size: 9 }, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
-                    y: { display: false },
+                    y: {
+                      display: false,
+                      min: Math.min(Math.min(...cumPnl.map((d: any) => d.pnl as number)), 0),
+                      max: Math.max(Math.max(...cumPnl.map((d: any) => d.pnl as number)), 0),
+                    },
                   },
                 }}
               />
