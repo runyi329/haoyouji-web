@@ -10044,14 +10044,17 @@ export const appRouter = router({
               console.error('[AF] 持仓查询失败:', e);
             }
           }
-          // 查询每个用户的 BTC/ETH/SOL 挂单数量（pending buy）
+          // 查询每个用户的 BTC/ETH/SOL 挂单买数量（pending buy）
           type PendingMap = Map<number, { BTC: number; ETH: number; SOL: number }>;
-          let pendingMap: PendingMap = new Map();
+          let pendingBuyMap: PendingMap = new Map();
+          let pendingSellMap: PendingMap = new Map();
+          let soldMap: PendingMap = new Map();
           if (result.length > 0) {
             try {
               const userIds5 = result.map(u => u.id);
               const placeholders6 = userIds5.map(() => '?').join(',');
-              const [pendingRows] = await rawDb.execute(
+              // 挂单买
+              const [pendingBuyRows] = await rawDb.execute(
                 `SELECT user_id, coin, COALESCE(SUM(CAST(quantity AS DECIMAL(30,8))), 0) as qty
                  FROM af_orders
                  WHERE ledger_id = ? AND user_id IN (${placeholders6})
@@ -10059,9 +10062,43 @@ export const appRouter = router({
                  GROUP BY user_id, coin`,
                 [input.ledgerId, ...userIds5]
               ) as any[];
-              for (const row of (pendingRows as any[])) {
-                if (!pendingMap.has(row.user_id)) pendingMap.set(row.user_id, { BTC: 0, ETH: 0, SOL: 0 });
-                const p = pendingMap.get(row.user_id)!;
+              for (const row of (pendingBuyRows as any[])) {
+                if (!pendingBuyMap.has(row.user_id)) pendingBuyMap.set(row.user_id, { BTC: 0, ETH: 0, SOL: 0 });
+                const p = pendingBuyMap.get(row.user_id)!;
+                const coin = (row.coin as string).toUpperCase();
+                if (coin === 'BTC') p.BTC = parseFloat(row.qty?.toString() || '0');
+                else if (coin === 'ETH') p.ETH = parseFloat(row.qty?.toString() || '0');
+                else if (coin === 'SOL') p.SOL = parseFloat(row.qty?.toString() || '0');
+              }
+              // 挂单卖（sell_status = 'selling'）
+              const [pendingSellRows] = await rawDb.execute(
+                `SELECT user_id, coin, COALESCE(SUM(CAST(sell_quantity AS DECIMAL(30,8))), 0) as qty
+                 FROM af_orders
+                 WHERE ledger_id = ? AND user_id IN (${placeholders6})
+                   AND sell_status = 'selling'
+                 GROUP BY user_id, coin`,
+                [input.ledgerId, ...userIds5]
+              ) as any[];
+              for (const row of (pendingSellRows as any[])) {
+                if (!pendingSellMap.has(row.user_id)) pendingSellMap.set(row.user_id, { BTC: 0, ETH: 0, SOL: 0 });
+                const p = pendingSellMap.get(row.user_id)!;
+                const coin = (row.coin as string).toUpperCase();
+                if (coin === 'BTC') p.BTC = parseFloat(row.qty?.toString() || '0');
+                else if (coin === 'ETH') p.ETH = parseFloat(row.qty?.toString() || '0');
+                else if (coin === 'SOL') p.SOL = parseFloat(row.qty?.toString() || '0');
+              }
+              // 已成交（sell_status = 'sold'）
+              const [soldRows] = await rawDb.execute(
+                `SELECT user_id, coin, COALESCE(SUM(CAST(sell_quantity AS DECIMAL(30,8))), 0) as qty
+                 FROM af_orders
+                 WHERE ledger_id = ? AND user_id IN (${placeholders6})
+                   AND sell_status = 'sold'
+                 GROUP BY user_id, coin`,
+                [input.ledgerId, ...userIds5]
+              ) as any[];
+              for (const row of (soldRows as any[])) {
+                if (!soldMap.has(row.user_id)) soldMap.set(row.user_id, { BTC: 0, ETH: 0, SOL: 0 });
+                const p = soldMap.get(row.user_id)!;
                 const coin = (row.coin as string).toUpperCase();
                 if (coin === 'BTC') p.BTC = parseFloat(row.qty?.toString() || '0');
                 else if (coin === 'ETH') p.ETH = parseFloat(row.qty?.toString() || '0');
@@ -10094,9 +10131,15 @@ export const appRouter = router({
               holdingBTC,
               holdingETH,
               holdingSOL,
-              pendingBTC: pendingMap.get(u.id)?.BTC ?? 0,
-              pendingETH: pendingMap.get(u.id)?.ETH ?? 0,
-              pendingSOL: pendingMap.get(u.id)?.SOL ?? 0,
+              pendingBuyBTC: pendingBuyMap.get(u.id)?.BTC ?? 0,
+              pendingBuyETH: pendingBuyMap.get(u.id)?.ETH ?? 0,
+              pendingBuySOL: pendingBuyMap.get(u.id)?.SOL ?? 0,
+              pendingSellBTC: pendingSellMap.get(u.id)?.BTC ?? 0,
+              pendingSellETH: pendingSellMap.get(u.id)?.ETH ?? 0,
+              pendingSellSOL: pendingSellMap.get(u.id)?.SOL ?? 0,
+              soldBTC: soldMap.get(u.id)?.BTC ?? 0,
+              soldETH: soldMap.get(u.id)?.ETH ?? 0,
+              soldSOL: soldMap.get(u.id)?.SOL ?? 0,
               totalValue,
             };
           });

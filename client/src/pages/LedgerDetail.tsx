@@ -3298,12 +3298,26 @@ export default function LedgerDetail() {
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).holdingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).holdingETH ?? 0).toFixed(4)}</td>
                               <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).holdingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).holdingSOL ?? 0).toFixed(4)}</td>
                             </tr>
-                            {/* 挂单行 */}
+                            {/* 挂单买行 */}
                             <tr>
-                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>挂单</td>
-                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).pendingBTC ?? 0).toFixed(4)}</td>
-                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).pendingETH ?? 0).toFixed(4)}</td>
-                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).pendingSOL ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>挂单买</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingBuyBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).pendingBuyBTC ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingBuyETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).pendingBuyETH ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingBuySOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).pendingBuySOL ?? 0).toFixed(4)}</td>
+                            </tr>
+                            {/* 挂单卖行 */}
+                            <tr>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>挂单卖</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingSellBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).pendingSellBTC ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingSellETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).pendingSellETH ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingSellSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).pendingSellSOL ?? 0).toFixed(4)}</td>
+                            </tr>
+                            {/* 已成交行 */}
+                            <tr>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>已成交</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).soldBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).soldBTC ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).soldETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).soldETH ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).soldSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).soldSOL ?? 0).toFixed(4)}</td>
                             </tr>
                           </tbody>
                         </table>
