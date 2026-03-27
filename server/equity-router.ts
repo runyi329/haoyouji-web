@@ -571,6 +571,14 @@ export const equityRouter = router({
       if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
       }
+      // 读取旧权重（用于写入日志）
+      const [[oldRow]] = await (db as any).execute(
+        'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
+        [input.userId]
+      ) as any;
+      const oldRes = oldRow ? Number(oldRow.resource_weight) : 1.00;
+      const oldCap = oldRow ? Number(oldRow.capital_weight) : 1.00;
+
       await (db as any).execute(
         `INSERT INTO equity_weights (user_id, resource_weight, capital_weight)
          VALUES (?, ?, ?)
@@ -580,7 +588,57 @@ export const equityRouter = router({
            updated_at      = NOW()`,
         [input.userId, input.resourceWeight, input.capitalWeight]
       );
+
+      // 写入变更日志
+      await (db as any).execute(
+        `INSERT INTO equity_weight_logs
+           (ledger_id, user_id, operator_id, old_resource_weight, old_capital_weight, new_resource_weight, new_capital_weight)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [input.ledgerId, input.userId, ctx.user.id, oldRes, oldCap, input.resourceWeight, input.capitalWeight]
+      );
+
       return { success: true };
+    }),
+
+  // 查询某成员的权重变更日志（仅账本 owner/admin 可查）
+  getWeightLogs: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      userId: z.number(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, ctx.user.id]
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可查看' });
+      }
+      const [rows] = await (db as any).execute(
+        `SELECT wl.id, wl.old_resource_weight, wl.old_capital_weight,
+                wl.new_resource_weight, wl.new_capital_weight,
+                wl.remark, wl.created_at,
+                u.name AS operator_name
+         FROM equity_weight_logs wl
+         LEFT JOIN users u ON u.id = wl.operator_id
+         WHERE wl.user_id = ? AND wl.ledger_id = ?
+         ORDER BY wl.created_at DESC
+         LIMIT 50`,
+        [input.userId, input.ledgerId]
+      ) as any;
+      return (rows as any[]).map((r: any) => ({
+        id: Number(r.id),
+        oldResourceWeight: Number(r.old_resource_weight),
+        oldCapitalWeight: Number(r.old_capital_weight),
+        newResourceWeight: Number(r.new_resource_weight),
+        newCapitalWeight: Number(r.new_capital_weight),
+        remark: r.remark ?? '',
+        createdAt: r.created_at as Date,
+        operatorName: r.operator_name ?? '未知',
+      }));
     }),
 });
 // ===== 股权转让功能 =====

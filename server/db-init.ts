@@ -441,6 +441,29 @@ export async function initDatabase() {
       console.warn('[DB Init] ⚠️ equity_weights table skipped:', e instanceof Error ? e.message : e);
     }
 
+    // ===== 建立 equity_weight_logs 权重变更日志表 =====
+    try {
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS \`equity_weight_logs\` (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL COMMENT '账本ID',
+          user_id INT NOT NULL COMMENT '被修改权重的用户ID',
+          operator_id INT NOT NULL COMMENT '操作人用户ID',
+          old_resource_weight DECIMAL(5,2) NOT NULL DEFAULT 1.00 COMMENT '修改前资源权重',
+          old_capital_weight DECIMAL(5,2) NOT NULL DEFAULT 1.00 COMMENT '修改前资金权重',
+          new_resource_weight DECIMAL(5,2) NOT NULL COMMENT '修改后资源权重',
+          new_capital_weight DECIMAL(5,2) NOT NULL COMMENT '修改后资金权重',
+          remark VARCHAR(255) DEFAULT '' COMMENT '备注',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_user_ledger (user_id, ledger_id),
+          INDEX idx_created_at (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权重变更日志表'
+      `);
+      console.log('[DB Init] ✅ equity_weight_logs table ready');
+    } catch (e) {
+      console.warn('[DB Init] ⚠️ equity_weight_logs table skipped:', e instanceof Error ? e.message : e);
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
