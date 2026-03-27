@@ -1900,7 +1900,7 @@ function MonteCarloCard() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-              legend: { display: true, labels: { color: LABEL_COLOR, font: { size: 9 }, boxWidth: 10, padding: 6 } },
+              legend: { display: false },
               title: { display: true, text: title, color: GOLD_COLOR, font: { size: 9, weight: 'bold' as const }, padding: { bottom: 4 } },
               tooltip: { enabled: false },
             },
@@ -1920,25 +1920,33 @@ function MonteCarloCard() {
             },
           });
 
-          // 图1：实际胜率资金曲线
+          // 图1：实际胜率资金曲线（中位数=红，25-75%=绿，5-95%=蓝）
           const chart1Data = {
             labels: days.map((d: number) => d === 0 ? '0' : d % 10 === 0 ? `${d}天` : ''),
             datasets: [
-              { label: '中位数', data: actual.p50, borderColor: GREEN_COLOR, borderWidth: 1.5, pointRadius: 0, fill: false },
-              { label: '25-75%', data: actual.p75, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.15)', fill: '+1', pointRadius: 0, borderWidth: 0 },
-              { label: '', data: actual.p25, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.15)', fill: false, pointRadius: 0, borderWidth: 0 },
-              { label: '5-95%', data: actual.p95, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.07)', fill: '+1', pointRadius: 0, borderWidth: 0 },
-              { label: '', data: actual.p5, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.07)', fill: false, pointRadius: 0, borderWidth: 0 },
+              // 蓝色区域：5-95%（最外层，先渲染）
+              { label: '5-95%上', data: actual.p95, borderColor: 'transparent', backgroundColor: 'rgba(64,160,255,0.18)', fill: '+1', pointRadius: 0, borderWidth: 0 },
+              { label: '5-95%下', data: actual.p5, borderColor: 'transparent', backgroundColor: 'rgba(64,160,255,0.18)', fill: false, pointRadius: 0, borderWidth: 0 },
+              // 绿色区域：25-75%（中层）
+              { label: '25-75%上', data: actual.p75, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.30)', fill: '+1', pointRadius: 0, borderWidth: 0 },
+              { label: '25-75%下', data: actual.p25, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.30)', fill: false, pointRadius: 0, borderWidth: 0 },
+              // 红色线：中位数（最上层）
+              { label: '中位数', data: actual.p50, borderColor: '#FF6B6B', borderWidth: 2, pointRadius: 0, fill: false },
             ],
           };
 
-          // 图2：期望胜率资金曲线
+          // 图2：期望胜率资金曲线（中位数=红，25-75%=绿，5-95%=蓝）
           const chart2Data = {
             labels: days.map((d: number) => d === 0 ? '0' : d % 10 === 0 ? `${d}天` : ''),
             datasets: [
-              { label: '中位数', data: expected.p50, borderColor: LABEL_COLOR, borderWidth: 1.5, pointRadius: 0, fill: false },
-              { label: '25-75%', data: expected.p75, borderColor: 'transparent', backgroundColor: 'rgba(122,155,191,0.15)', fill: '+1', pointRadius: 0, borderWidth: 0 },
-              { label: '', data: expected.p25, borderColor: 'transparent', backgroundColor: 'rgba(122,155,191,0.15)', fill: false, pointRadius: 0, borderWidth: 0 },
+              // 蓝色区域：5-95%
+              { label: '5-95%上', data: expected.p95, borderColor: 'transparent', backgroundColor: 'rgba(64,160,255,0.18)', fill: '+1', pointRadius: 0, borderWidth: 0 },
+              { label: '5-95%下', data: expected.p5, borderColor: 'transparent', backgroundColor: 'rgba(64,160,255,0.18)', fill: false, pointRadius: 0, borderWidth: 0 },
+              // 绿色区域：25-75%
+              { label: '25-75%上', data: expected.p75, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.30)', fill: '+1', pointRadius: 0, borderWidth: 0 },
+              { label: '25-75%下', data: expected.p25, borderColor: 'transparent', backgroundColor: 'rgba(61,214,140,0.30)', fill: false, pointRadius: 0, borderWidth: 0 },
+              // 红色线：中位数
+              { label: '中位数', data: expected.p50, borderColor: '#FF6B6B', borderWidth: 2, pointRadius: 0, fill: false },
             ],
           };
 
@@ -1980,12 +1988,26 @@ function MonteCarloCard() {
               {/* 纵向单列布局：4个图全宽一列从上到下 */}
               <div className="flex flex-col gap-3 mb-2">
                 {/* 图1：实际胜率资金曲线 */}
-                <div style={{ height: '160px' }}>
-                  <Line data={chart1Data} options={commonOptions(`实际胜率 ${p.mcData.actualWinRate}% — 资金曲线（本金上限 15万，超出结算）`, '资产')} />
+                <div>
+                  <div style={{ height: '160px' }}>
+                    <Line data={chart1Data} options={commonOptions(`实际胜率 ${p.mcData.actualWinRate}% — 资金曲线（本金上限 15万，超出结算）`, '资产')} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '4px' }}>
+                    <span style={{ fontSize: '8px', color: '#FF6B6B', display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ display: 'inline-block', width: '16px', height: '2px', background: '#FF6B6B', borderRadius: '1px' }} />中位数</span>
+                    <span style={{ fontSize: '8px', color: '#3DD68C', display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ display: 'inline-block', width: '12px', height: '8px', background: 'rgba(61,214,140,0.30)', borderRadius: '2px' }} />25-75%</span>
+                    <span style={{ fontSize: '8px', color: '#40A0FF', display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ display: 'inline-block', width: '12px', height: '8px', background: 'rgba(64,160,255,0.18)', borderRadius: '2px' }} />5-95%</span>
+                  </div>
                 </div>
                 {/* 图2：期望胜率资金曲线 */}
-                <div style={{ height: '160px' }}>
-                  <Line data={chart2Data} options={commonOptions(`期望胜率 ${p.mcData.expectedWinRate}% — 资金曲线（本金上限 15万，超出结算）`, '资产')} />
+                <div>
+                  <div style={{ height: '160px' }}>
+                    <Line data={chart2Data} options={commonOptions(`期望胜率 ${p.mcData.expectedWinRate}% — 资金曲线（本金上限 15万，超出结算）`, '资产')} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '4px' }}>
+                    <span style={{ fontSize: '8px', color: '#FF6B6B', display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ display: 'inline-block', width: '16px', height: '2px', background: '#FF6B6B', borderRadius: '1px' }} />中位数</span>
+                    <span style={{ fontSize: '8px', color: '#3DD68C', display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ display: 'inline-block', width: '12px', height: '8px', background: 'rgba(61,214,140,0.30)', borderRadius: '2px' }} />25-75%</span>
+                    <span style={{ fontSize: '8px', color: '#40A0FF', display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ display: 'inline-block', width: '12px', height: '8px', background: 'rgba(64,160,255,0.18)', borderRadius: '2px' }} />5-95%</span>
+                  </div>
                 </div>
                 {/* 图3：破产累计概率 */}
                 <div style={{ height: '160px' }}>
