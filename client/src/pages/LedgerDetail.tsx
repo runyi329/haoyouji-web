@@ -96,11 +96,9 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
           {/* 左列：辅助标签 */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>股本</span>
-            <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>+股息</span>
+            <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>股息</span>
             <div className="flex items-center gap-0.5" style={{ lineHeight: '1.4rem' }}>
-              <span className="text-[10px]" style={{ color: dimColor }}>权重</span>
-              <span className="text-[10px] font-semibold" style={{ color: isMarket ? 'rgba(80,200,110,0.65)' : 'rgba(255,210,80,0.65)' }}>{w.toFixed(2)}</span>
-              <span className="text-[10px]" style={{ color: dimColor }}>×</span>
+              <span className="text-[10px]" style={{ color: labelColor }}>权重</span>
             </div>
           </div>
           {/* 右列：数字，右对齐，大小一致 */}
@@ -111,12 +109,16 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
             {/* 股息 */}
-            <div className="flex items-baseline gap-0.5" style={{ filter: isMarket ? 'drop-shadow(0 0 4px rgba(80,220,100,0.4))' : 'drop-shadow(0 0 4px rgba(255,210,60,0.4))' }}>
+            <div className="flex items-baseline gap-0.5">
               <span className="text-sm font-bold" style={{ background: numGradDim, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
-            {/* 加权总张数 */}
-            <div className="flex items-baseline gap-0.5" style={{ filter: isMarket ? 'drop-shadow(0 0 6px rgba(80,220,100,0.6))' : 'drop-shadow(0 0 6px rgba(255,210,60,0.6))' }}>
+            {/* 权重行：资源权重 × 资金权重 = 总权重 × 股本 = 加权后张数 */}
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-[10px]" style={{ color: labelColor }}>{(s.resourceWeight ?? 1.0).toFixed(2)}</span>
+              <span className="text-[10px]" style={{ color: labelColor }}>×</span>
+              <span className="text-[10px]" style={{ color: labelColor }}>{(s.capitalWeight ?? 1.0).toFixed(2)}</span>
+              <span className="text-[10px]" style={{ color: labelColor }}>=</span>
               <span className="text-sm font-bold" style={{ background: numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{weightedTotal.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>

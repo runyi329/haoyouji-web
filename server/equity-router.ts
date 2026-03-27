@@ -234,9 +234,12 @@ export const equityRouter = router({
         `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
                 COALESCE(es.annualRate, 6.00) as annualRate,
                 COALESCE(es.weight, 1.0000) as weight,
+                COALESCE(ew.resource_weight, 1.0000) as resourceWeight,
+                COALESCE(ew.capital_weight, 1.0000) as capitalWeight,
                 sn.shareNo
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
+         LEFT JOIN equity_weights ew ON ew.user_id=es.userId
          WHERE es.ledgerId=?
          ORDER BY COALESCE(sn.shareNo, '9999'), es.userId, es.grantDate DESC, es.id DESC`,
         [input.ledgerId]
@@ -254,9 +257,12 @@ export const equityRouter = router({
         `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
                 COALESCE(es.annualRate, 6.00) as annualRate,
                 COALESCE(es.weight, 1.0000) as weight,
+                COALESCE(ew.resource_weight, 1.0000) as resourceWeight,
+                COALESCE(ew.capital_weight, 1.0000) as capitalWeight,
                 sn.shareNo
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
+         LEFT JOIN equity_weights ew ON ew.user_id=es.userId
          WHERE es.ledgerId=? AND es.userId=? ORDER BY es.grantDate DESC, es.id DESC`,
         [input.ledgerId, input.userId]
       );
