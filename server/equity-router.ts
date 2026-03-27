@@ -233,6 +233,7 @@ export const equityRouter = router({
       const [rows] = await (conn as any).execute(
         `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
                 COALESCE(es.annualRate, 6.00) as annualRate,
+                COALESCE(es.weight, 1.0000) as weight,
                 sn.shareNo
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
@@ -252,6 +253,7 @@ export const equityRouter = router({
       const [rows] = await (conn as any).execute(
         `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
                 COALESCE(es.annualRate, 6.00) as annualRate,
+                COALESCE(es.weight, 1.0000) as weight,
                 sn.shareNo
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
@@ -291,10 +293,18 @@ export const equityRouter = router({
       const finalRegNo = input.regNo?.trim() || autoRegNo;
       // 确保regNo字段存在
       try { await (conn as any).execute(`ALTER TABLE equity_shares ADD COLUMN IF NOT EXISTS regNo VARCHAR(10) DEFAULT NULL`); } catch(e) {}
+      // 查询该用户当前权重（资源权重 × 资金权重），发放时快照
+      const [[weightRow]] = await (conn as any).execute(
+        'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
+        [input.userId]
+      ) as any;
+      const rw = weightRow ? Number(weightRow.resource_weight) : 1.0;
+      const cw = weightRow ? Number(weightRow.capital_weight) : 1.0;
+      const snapshotWeight = Math.round(rw * cw * 10000) / 10000;
       const [result] = await (conn as any).execute(
-        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, finalRegNo, ctx.user.id]
+        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy, weight)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, finalRegNo, ctx.user.id, snapshotWeight]
       );
       return { id: (result as any).insertId, regNo: finalRegNo };
     }),
@@ -611,13 +621,21 @@ export const equityTransferRouter = router({
         }
         // 获取转出人的annualRate（取第一条）
         const annualRate = fromShareList[0]?.annualRate ?? 6;
+        // 查询转入人当前权重，转让时快照
+        const [[toWeightRow]] = await (conn as any).execute(
+          'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
+          [transfer.toUserId]
+        ) as any;
+        const toRw = toWeightRow ? Number(toWeightRow.resource_weight) : 1.0;
+        const toCw = toWeightRow ? Number(toWeightRow.capital_weight) : 1.0;
+        const toSnapshotWeight = Math.round(toRw * toCw * 10000) / 10000;
         // 新增转入人的股权记录
         const today = new Date().toISOString().slice(0, 10);
         await (conn as any).execute(
-          `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy, annualRate)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy, annualRate, weight)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [transfer.ledgerId, transfer.toUserId, transfer.toNickname, transfer.fromShareCount, transfer.toShareType,
-           today, `股权转让（来自 ${transfer.fromNickname}）`, ctx.user.id, annualRate]
+           today, `股权转让（来自 ${transfer.fromNickname}）`, ctx.user.id, annualRate, toSnapshotWeight]
         );
       }
 

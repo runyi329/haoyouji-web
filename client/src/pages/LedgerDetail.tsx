@@ -22,7 +22,7 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
   return accrued;
 }
 
-// 汇总所有天使股记录的股本+实时股息总和
+// 汇总所有天使股记录的股本+实时股息总和（增量权重：每笔按发放时快照的weight加权）
 function useTotalSharesWithDividend(shares: any[], filterType?: string) {
   const computeTotal = useCallback(() => {
     if (!shares || shares.length === 0) return 0;
@@ -31,7 +31,10 @@ function useTotalSharesWithDividend(shares: any[], filterType?: string) {
     const filtered = filterType ? shares.filter((s: any) => s.shareType === filterType) : shares;
     for (const s of filtered) {
       const base = Number(s.shareCount) || 0;
-      total += base;
+      // 增量权重：每笔股票发放时快照的权重，默认1.0
+      const w = Number(s.weight ?? 1.0);
+      // 先计算这笔的股息
+      let dividend = 0;
       if (base > 0 && s.grantDate) {
         const d = new Date(s.grantDate);
         const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -40,9 +43,11 @@ function useTotalSharesWithDividend(shares: any[], filterType?: string) {
           const elapsedSeconds = Math.max(0, (now - startTs) / 1000);
           const rate = Number(s.annualRate ?? 6);
           const perSecond = (base * rate / 100) / (365 * 24 * 3600);
-          total += perSecond * elapsedSeconds;
+          dividend = perSecond * elapsedSeconds;
         }
       }
+      // 公式：（股本 + 股息）× 该笔权重
+      total += (base + dividend) * w;
     }
     return total;
   }, [shares, filterType]);
@@ -1577,20 +1582,18 @@ export default function LedgerDetail() {
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{(myShares[0] as any).shareNo}）</span>
                   )}
                 </div>
-                {/* 加权后总计股权（主数字） */}
+                {/* 加权后总计股权（主数字，已是增量权重后的结果） */}
                 <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
                   <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    {myShares && myShares.length > 0 ? weightedSharesTotal.toFixed(2) : '-'}
+                    {myShares && myShares.length > 0 ? totalAllSharesWithDividend.toFixed(2) : '-'}
                   </span>
                   {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
                 </div>
-                {/* 权重 × 原始股权 标注 */}
+                {/* 当前权重标注（仅显示最新权重，不再做全局乘法） */}
                 {myShares && myShares.length > 0 && (
                   <div className="flex items-center gap-0.5 mt-1 flex-wrap">
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>加权</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>当前权重</span>
                     <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.8)' }}>{totalWeight.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>×</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>{totalAllSharesWithDividend.toFixed(2)}张</span>
                   </div>
                 )}
                 {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
