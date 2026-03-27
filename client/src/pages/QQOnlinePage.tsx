@@ -1921,10 +1921,15 @@ function MonteCarloCard() {
             },
           });
 
-          // 计算关键边界天数：中位数归零天、p25归零天、p5归零天
+          // 计算关键边界天数：找第一个值接近0（≤初始值的1%）的位置
           const findZeroDay = (arr: number[]) => {
+            const threshold = (arr[0] || 0) * 0.01; // 初始值的1%
             for (let i = 1; i < arr.length; i++) {
-              if (arr[i] === 0 && arr[i - 1] > 0) return (days as number[])[i];
+              if (arr[i] <= threshold && arr[i - 1] > threshold) return (days as number[])[i];
+            }
+            // 如果没找到渐变，找严格等于0的第一个
+            for (let i = 1; i < arr.length; i++) {
+              if (arr[i] === 0) return (days as number[])[i];
             }
             return null;
           };
