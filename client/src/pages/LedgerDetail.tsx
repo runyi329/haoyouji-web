@@ -3285,35 +3285,43 @@ export default function LedgerDetail() {
                       {/* 分隔细线 */}
                       <div style={{ height: 1, backgroundColor: '#E8E8E8', marginLeft: 12, marginRight: 12 }} />
                       {/* 下层：持仓情况 */}
-                      <div className="flex items-center gap-3 px-3 py-2 flex-wrap">
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs text-gray-400">余额</span>
-                          <span className="text-xs font-semibold" style={{ color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)} U</span>
-                        </div>
-                        {((u as any).holdingBTC > 0 || (u as any).holdingETH > 0 || (u as any).holdingSOL > 0) && (
+                      <div className="px-3 py-2 space-y-1.5">
+                        {/* 第一行：余额 + 持仓数量 */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-400">余额</span>
+                            <span className="text-xs font-semibold" style={{ color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)} U</span>
+                          </div>
                           <div style={{ width: 1, height: 12, backgroundColor: '#DDDDDD' }} />
-                        )}
-                        {(u as any).holdingBTC > 0 && (
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-gray-400">BTC</span>
-                            <span className="text-xs font-semibold text-orange-700">{Number((u as any).holdingBTC).toFixed(4)}</span>
+                            <span className="text-xs font-semibold" style={{ color: (u as any).holdingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).holdingBTC ?? 0).toFixed(4)}</span>
                           </div>
-                        )}
-                        {(u as any).holdingETH > 0 && (
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-gray-400">ETH</span>
-                            <span className="text-xs font-semibold text-blue-700">{Number((u as any).holdingETH).toFixed(4)}</span>
+                            <span className="text-xs font-semibold" style={{ color: (u as any).holdingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).holdingETH ?? 0).toFixed(4)}</span>
                           </div>
-                        )}
-                        {(u as any).holdingSOL > 0 && (
                           <div className="flex items-center gap-1">
                             <span className="text-xs text-gray-400">SOL</span>
-                            <span className="text-xs font-semibold text-purple-700">{Number((u as any).holdingSOL).toFixed(4)}</span>
+                            <span className="text-xs font-semibold" style={{ color: (u as any).holdingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).holdingSOL ?? 0).toFixed(4)}</span>
                           </div>
-                        )}
-                        {(u as any).holdingBTC === 0 && (u as any).holdingETH === 0 && (u as any).holdingSOL === 0 && (
-                          <span className="text-xs text-gray-300">暂无持仓</span>
-                        )}
+                        </div>
+                        {/* 第二行：挂单数量 */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-xs text-gray-400">挂单</span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-400">BTC</span>
+                            <span className="text-xs font-semibold" style={{ color: (u as any).pendingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).pendingBTC ?? 0).toFixed(4)}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-400">ETH</span>
+                            <span className="text-xs font-semibold" style={{ color: (u as any).pendingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).pendingETH ?? 0).toFixed(4)}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-400">SOL</span>
+                            <span className="text-xs font-semibold" style={{ color: (u as any).pendingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).pendingSOL ?? 0).toFixed(4)}</span>
+                          </div>
+                        </div>
                       </div>
                       {/* 备注编辑区 */}
                       {editingNoteUserId === u.id && (
