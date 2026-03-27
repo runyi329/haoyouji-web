@@ -1597,6 +1597,7 @@ export default function LedgerDetail() {
                     <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.75)' }}>{capitalWeight.toFixed(2)}</span>
                     <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>=</span>
                     <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.95)' }}>{totalWeight.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>权重</span>
                   </div>
                 )}
                 {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
