@@ -809,9 +809,33 @@ function QQChartsPanel() {
     });
   }, []);
 
-  const cardStyle = { backgroundColor: CARD_BG, border: CARD_BORDER, backdropFilter: 'blur(12px)' };
-  const sectionTitle = (t: string) => (
-    <div className="text-[10px] font-bold tracking-widest mb-2" style={{ color: GOLD_COLOR }}>{t}</div>
+  // 独立图表卡片样式：具备立体感和阶层感
+  const chartCardStyle: React.CSSProperties = {
+    background: 'linear-gradient(145deg, rgba(18,42,68,0.95) 0%, rgba(11,28,48,0.98) 100%)',
+    border: '1px solid rgba(255,255,255,0.09)',
+    borderRadius: '16px',
+    padding: '14px 14px 10px',
+    marginBottom: '10px',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.06) inset, 0 -1px 0 rgba(0,0,0,0.4) inset',
+    backdropFilter: 'blur(16px)',
+    position: 'relative',
+    overflow: 'hidden',
+  };
+  // 卡片顶部光泽条
+  const chartCardGlow: React.CSSProperties = {
+    position: 'absolute',
+    top: 0, left: '10%', right: '10%',
+    height: '1px',
+    background: 'linear-gradient(90deg, transparent, rgba(201,168,76,0.35), transparent)',
+  };
+  const chartCardTitle = (icon: string, title: string, badge?: string) => (
+    <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px]">{icon}</span>
+        <span className="text-[10px] font-bold tracking-wider" style={{ color: GOLD_COLOR }}>{title}</span>
+      </div>
+      {badge && <span className="text-[8px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: GOLD_COLOR, border: '1px solid rgba(201,168,76,0.25)' }}>{badge}</span>}
+    </div>
   );
 
   const chartOptions = (title: string, yLabel = '') => ({
@@ -830,9 +854,12 @@ function QQChartsPanel() {
 
   if (isLoading || !Chart) {
     return (
-      <div className="mx-3 mb-3 rounded-2xl p-4" style={cardStyle}>
-        <div className="text-[10px] font-bold tracking-widest mb-2" style={{ color: GOLD_COLOR }}>高阶图表分析</div>
-        <div className="text-[11px]" style={{ color: LABEL_COLOR }}>加载中...</div>
+      <div className="mx-3 mb-1">
+        <div style={{ ...chartCardStyle }}>
+          <div style={chartCardGlow} />
+          <div className="text-[10px] font-bold tracking-widest" style={{ color: GOLD_COLOR }}>高阶图表分析</div>
+          <div className="text-[11px] mt-1" style={{ color: LABEL_COLOR }}>加载中...</div>
+        </div>
       </div>
     );
   }
@@ -846,105 +873,142 @@ function QQChartsPanel() {
   const houseEdge = data?.houseEdge ?? [];
 
   return (
-    <div className="mx-3 mb-3 rounded-2xl p-4" style={cardStyle}>
-      {sectionTitle('高阶图表分析 | 拉斯维加斯/澳门专业视角')}
+    <div className="mx-3">
+
+      {/* 模块标题 */}
+      <div className="flex items-center gap-2 mb-2 px-1">
+        <div style={{ width: '3px', height: '14px', background: 'linear-gradient(180deg, #C9A84C, #8B6914)', borderRadius: '2px' }} />
+        <span className="text-[10px] font-bold tracking-widest" style={{ color: GOLD_COLOR }}>高阶图表分析</span>
+        <span className="text-[8px]" style={{ color: LABEL_COLOR, opacity: 0.6 }}>Las Vegas / Macau Professional View</span>
+      </div>
 
       {/* 1. 累计盈亏曲线 */}
-      <div className="mb-4">
-        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>累计盈亏曲线（元）</div>
-        <div style={{ height: '140px' }}>
+      <div style={chartCardStyle}>
+        <div style={chartCardGlow} />
+        {chartCardTitle('◳', '累计盈亏曲线', '资金轨迹')}
+        <div className="text-[8px] mb-2" style={{ color: LABEL_COLOR, opacity: 0.65 }}>每50笔采样一次，共{cumPnl.length}个数据点</div>
+        <div style={{ height: '150px' }}>
           <Line
             data={{
               labels: cumPnl.map((d: any) => d.idx),
               datasets: [{
                 data: cumPnl.map((d: any) => d.pnl),
                 borderColor: '#3DD68C',
-                backgroundColor: 'rgba(61,214,140,0.08)',
-                borderWidth: 1.5,
+                backgroundColor: (ctx: any) => {
+                  const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 150);
+                  gradient.addColorStop(0, 'rgba(61,214,140,0.18)');
+                  gradient.addColorStop(1, 'rgba(61,214,140,0.01)');
+                  return gradient;
+                },
+                borderWidth: 1.8,
                 pointRadius: 0,
                 fill: true,
-                tension: 0.3,
+                tension: 0.35,
               }],
             }}
-            options={{
-              ...chartOptions('累计盈亏'),
-              plugins: { ...chartOptions('累计盈亏').plugins, annotation: undefined },
-            }}
+            options={chartOptions('累计盈亏')}
           />
         </div>
       </div>
 
       {/* 2. 每日盈亏柱状图 */}
-      <div className="mb-4">
-        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>每日盈亏（元）</div>
-        <div style={{ height: '120px' }}>
+      <div style={chartCardStyle}>
+        <div style={chartCardGlow} />
+        {chartCardTitle('■', '每日投注 vs 中奖', '日度对比')}
+        <div style={{ height: '130px' }}>
           <Bar
             data={{
               labels: dailyPnl.map((d: any) => d.day),
               datasets: [
-                { label: '投注', data: dailyPnl.map((d: any) => d.betSum), backgroundColor: 'rgba(122,155,191,0.5)', borderRadius: 3 },
-                { label: '中奖', data: dailyPnl.map((d: any) => d.winSum), backgroundColor: 'rgba(201,168,76,0.7)', borderRadius: 3 },
+                { label: '投注额', data: dailyPnl.map((d: any) => d.betSum), backgroundColor: 'rgba(122,155,191,0.55)', borderRadius: 4, borderSkipped: false as any },
+                { label: '中奖额', data: dailyPnl.map((d: any) => d.winSum), backgroundColor: 'rgba(201,168,76,0.72)', borderRadius: 4, borderSkipped: false as any },
               ],
             }}
             options={{
               ...chartOptions('每日盈亏'),
-              plugins: { ...chartOptions('每日盈亏').plugins, legend: { display: true, labels: { color: '#7A9BBF', font: { size: 9 } } } },
+              plugins: { ...chartOptions('每日盈亏').plugins, legend: { display: true, labels: { color: '#7A9BBF', font: { size: 9 }, boxWidth: 10, padding: 8 } } },
             }}
           />
+        </div>
+        <div className="flex gap-3 mt-1.5">
+          {dailyPnl.map((d: any) => (
+            <div key={d.day} className="flex-1 text-center">
+              <div className="text-[8px]" style={{ color: LABEL_COLOR, opacity: 0.6 }}>{d.day}</div>
+              <div className="text-[9px] font-mono font-bold" style={{ color: d.pnl >= 0 ? GREEN_COLOR : RED_COLOR }}>
+                {d.pnl >= 0 ? '+' : ''}{d.pnl.toFixed(0)}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* 3. 每小时胜率 */}
-      <div className="mb-4">
-        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>每小时胜率（%）</div>
-        <div style={{ height: '120px' }}>
+      <div style={chartCardStyle}>
+        <div style={chartCardGlow} />
+        {chartCardTitle('◔', '每小时胜率分布', '时段分析')}
+        <div style={{ height: '130px' }}>
           <Bar
             data={{
               labels: hourly.map((d: any) => `${d.hour}时`),
               datasets: [{
                 data: hourly.map((d: any) => d.winRate),
-                backgroundColor: hourly.map((d: any) => d.winRate > 40 ? 'rgba(244,112,104,0.7)' : 'rgba(122,155,191,0.5)'),
-                borderRadius: 3,
+                backgroundColor: hourly.map((d: any) =>
+                  d.winRate > 40 ? 'rgba(244,112,104,0.75)' : 'rgba(122,155,191,0.5)'
+                ),
+                borderRadius: 4,
+                borderSkipped: false as any,
               }],
             }}
             options={chartOptions('每小时胜率', '%')}
           />
         </div>
-        <div className="text-[8px] mt-1" style={{ color: LABEL_COLOR, opacity: 0.7 }}>* 红色柱表示胜率&gt;40%（应关注）</div>
+        <div className="text-[8px] mt-1.5 px-1" style={{ color: RED_COLOR, opacity: 0.85 }}>⚠ 红色柱表示胜率 &gt;40%，应重点关注该时段投注行为</div>
       </div>
 
       {/* 4. 倍投层级分布 */}
-      <div className="mb-4">
-        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>倍投层级分布（斯斐波那契序列）</div>
-        <div style={{ height: '120px' }}>
+      <div style={chartCardStyle}>
+        <div style={chartCardGlow} />
+        {chartCardTitle('▲', '倍投层级分布', '斯斐波那契体系')}
+        <div style={{ height: '130px' }}>
           <Bar
             data={{
               labels: multiplier.map((d: any) => d.label),
               datasets: [{
                 data: multiplier.map((d: any) => d.count),
                 backgroundColor: multiplier.map((_: any, i: number) =>
-                  i < 2 ? 'rgba(61,214,140,0.6)' : i < 5 ? 'rgba(201,168,76,0.6)' : 'rgba(244,112,104,0.7)'
+                  i < 2 ? 'rgba(61,214,140,0.65)' : i < 5 ? 'rgba(201,168,76,0.65)' : 'rgba(244,112,104,0.75)'
                 ),
-                borderRadius: 3,
+                borderRadius: 4,
+                borderSkipped: false as any,
               }],
             }}
             options={chartOptions('倍投层级', '笔数')}
           />
         </div>
-        <div className="text-[8px] mt-1" style={{ color: LABEL_COLOR, opacity: 0.7 }}>* 红色区域（x32+）为极端倍投，庄家需重点监控</div>
+        <div className="flex gap-2 mt-1.5">
+          <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(61,214,140,0.12)', color: GREEN_COLOR }}>x1–x3 正常区</span>
+          <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.12)', color: GOLD_COLOR }}>x4–x31 预警区</span>
+          <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(244,112,104,0.12)', color: RED_COLOR }}>x32+ 极限区</span>
+        </div>
       </div>
 
       {/* 5. 号码偏好 */}
-      <div className="mb-4">
-        <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>选号偏好（前10常用选号）</div>
-        <div style={{ height: '120px' }}>
+      <div style={chartCardStyle}>
+        <div style={chartCardGlow} />
+        {chartCardTitle('◆', '选号偏好分布', '行为分析')}
+        <div className="text-[8px] mb-1.5" style={{ color: LABEL_COLOR, opacity: 0.65 }}>前10常用选号投注次数排行</div>
+        <div style={{ height: '130px' }}>
           <Bar
             data={{
               labels: numberPref.map((d: any) => d.content),
               datasets: [{
                 data: numberPref.map((d: any) => d.cnt),
-                backgroundColor: 'rgba(201,168,76,0.65)',
-                borderRadius: 3,
+                backgroundColor: numberPref.map((_: any, i: number) => {
+                  const alpha = 0.85 - i * 0.06;
+                  return `rgba(201,168,76,${alpha.toFixed(2)})`;
+                }),
+                borderRadius: 4,
+                borderSkipped: false as any,
               }],
             }}
             options={chartOptions('号码偏好', '投注次数')}
@@ -952,24 +1016,32 @@ function QQChartsPanel() {
         </div>
       </div>
 
-      {/* 6. 庄家优势表 */}
+      {/* 6. 庄家优势 */}
       {houseEdge.length > 0 && (
-        <div className="mb-2">
-          <div className="text-[9px] mb-1" style={{ color: LABEL_COLOR }}>庄家优势（%）——各玩法实际庄家优势率</div>
-          <div style={{ height: '120px' }}>
+        <div style={{ ...chartCardStyle, marginBottom: '4px' }}>
+          <div style={chartCardGlow} />
+          {chartCardTitle('◉', '庄家优势率', '赔率校验')}
+          <div className="text-[8px] mb-1.5" style={{ color: LABEL_COLOR, opacity: 0.65 }}>各玩法实际庄家优势％（基于差值概率表精算）</div>
+          <div style={{ height: '130px' }}>
             <Bar
               data={{
                 labels: houseEdge.map((d: any) => d.content),
                 datasets: [{
                   data: houseEdge.map((d: any) => d.houseEdgePct),
-                  backgroundColor: houseEdge.map((d: any) => d.houseEdgePct > 0 ? 'rgba(61,214,140,0.65)' : 'rgba(244,112,104,0.65)'),
-                  borderRadius: 3,
+                  backgroundColor: houseEdge.map((d: any) =>
+                    d.houseEdgePct > 0 ? 'rgba(61,214,140,0.65)' : 'rgba(244,112,104,0.65)'
+                  ),
+                  borderRadius: 4,
+                  borderSkipped: false as any,
                 }],
               }}
               options={chartOptions('庄家优势', '%')}
             />
           </div>
-          <div className="text-[8px] mt-1" style={{ color: LABEL_COLOR, opacity: 0.7 }}>* 绿色为庄家正优势，红色为玩家正期望（赏率过高）</div>
+          <div className="flex gap-2 mt-1.5">
+            <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(61,214,140,0.12)', color: GREEN_COLOR }}>绿色 = 庄家正优势</span>
+            <span className="text-[8px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(244,112,104,0.12)', color: RED_COLOR }}>红色 = 赔率偏高需调整</span>
+          </div>
         </div>
       )}
     </div>
