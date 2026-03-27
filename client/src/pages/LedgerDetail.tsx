@@ -3285,33 +3285,37 @@ export default function LedgerDetail() {
                       {/* 分隔细线 */}
                       <div style={{ height: 1, backgroundColor: '#E8E8E8', marginLeft: 12, marginRight: 12 }} />
                       {/* 下层：持仓情况 */}
-                      <div className="px-3 py-2 space-y-1">
-                        {/* 第1行：余额（独占一行） */}
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs text-gray-400" style={{ width: 40 }}>余额</span>
+                      <div className="px-3 pt-2 pb-2">
+                        {/* 余额行：独占一行 */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-xs text-gray-400">余额</span>
                           <span className="text-xs font-semibold" style={{ color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)} U</span>
                         </div>
-                        {/* 第2行：列标题 BTC / ETH / SOL */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '0 4px', alignItems: 'center', marginTop: 4 }}>
-                          <span></span>
-                          <span className="text-xs text-gray-400 text-center">BTC</span>
-                          <span className="text-xs text-gray-400 text-center">ETH</span>
-                          <span className="text-xs text-gray-400 text-center">SOL</span>
-                        </div>
-                        {/* 第3行：持仓 */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '0 4px', alignItems: 'center' }}>
-                          <span className="text-xs text-gray-400">持仓</span>
-                          <span className="text-xs font-semibold text-center" style={{ color: (u as any).holdingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).holdingBTC ?? 0).toFixed(4)}</span>
-                          <span className="text-xs font-semibold text-center" style={{ color: (u as any).holdingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).holdingETH ?? 0).toFixed(4)}</span>
-                          <span className="text-xs font-semibold text-center" style={{ color: (u as any).holdingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).holdingSOL ?? 0).toFixed(4)}</span>
-                        </div>
-                        {/* 第4行：挂单 */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '0 4px', alignItems: 'center' }}>
-                          <span className="text-xs text-gray-400">挂单</span>
-                          <span className="text-xs font-semibold text-center" style={{ color: (u as any).pendingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).pendingBTC ?? 0).toFixed(4)}</span>
-                          <span className="text-xs font-semibold text-center" style={{ color: (u as any).pendingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).pendingETH ?? 0).toFixed(4)}</span>
-                          <span className="text-xs font-semibold text-center" style={{ color: (u as any).pendingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).pendingSOL ?? 0).toFixed(4)}</span>
-                        </div>
+                        {/* 持仓/挂单表格 */}
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                          <thead>
+                            <tr style={{ backgroundColor: '#F5F5F5' }}>
+                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'left', color: '#9E9E9E', fontWeight: 400, width: 36 }}></th>
+                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>BTC</th>
+                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>ETH</th>
+                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>SOL</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>持仓</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).holdingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).holdingBTC ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).holdingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).holdingETH ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).holdingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).holdingSOL ?? 0).toFixed(4)}</td>
+                            </tr>
+                            <tr>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', color: '#9E9E9E', backgroundColor: '#FAFAFA' }}>挂单</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).pendingBTC ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).pendingETH ?? 0).toFixed(4)}</td>
+                              <td style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', fontWeight: 600, color: (u as any).pendingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).pendingSOL ?? 0).toFixed(4)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
                       </div>
                       {/* 备注编辑区 */}
                       {editingNoteUserId === u.id && (
