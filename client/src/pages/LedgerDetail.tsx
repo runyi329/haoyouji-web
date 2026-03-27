@@ -766,6 +766,7 @@ export default function LedgerDetail() {
   const viewAsRole = viewAsUserId ? ((membersData as any[])?.find((m: any) => m.userId === viewAsUserId)?.role || 'member') : null;
   const effectiveIsOwner = viewAsUserId ? viewAsRole === 'owner' : isOwner;
   const effectiveIsAdmin = viewAsUserId ? viewAsRole === 'admin' : isAdmin;
+  const effectiveIsFunder = viewAsUserId ? viewAsRole === 'funder' : isFunder;
   const effectiveIsManager = effectiveIsOwner || effectiveIsAdmin;
   const isDietCoach = isDiet && (isOwner || isAdmin);
   const isDietStudent = isDiet && !isDietCoach;
@@ -792,13 +793,13 @@ export default function LedgerDetail() {
   // 资方专属：资产汇总（仅 funder 角色查询）
   const { data: funderAssetSummary } = trpc.ledger.funderGetAssetSummary.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && isFunder }
+    { enabled: isCustomAF && effectiveIsFunder }
   );
   // 资方专属：资产订单列表（仅 funder 角色查询）
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const { data: funderAssetData } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && isFunder, staleTime: 5 * 60 * 1000 }
+    { enabled: isCustomAF && effectiveIsFunder, staleTime: 5 * 60 * 1000 }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
   // livePrices：优先用接口返回的最新价格，若还未加载则从 localStorage 读取上次缓存
@@ -1234,7 +1235,7 @@ export default function LedgerDetail() {
               {isCustomAH && (
                 <span className="text-xs text-white/70 mr-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{ahRoleName}</span>
               )}
-              {isCustomAF && !isFunder && (
+              {isCustomAF && !effectiveIsFunder && (
                 <button
                   onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
@@ -1243,7 +1244,7 @@ export default function LedgerDetail() {
                   充值
                 </button>
               )}
-              {isCustomAF && !isFunder && (
+              {isCustomAF && !effectiveIsFunder && (
                 <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
@@ -1411,7 +1412,7 @@ export default function LedgerDetail() {
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
               {/* 卡片 1：资金方看“资产”，其他角色看“余额” */}
-              {isFunder ? (
+              {effectiveIsFunder ? (
                 <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-white/70">资产</span>
@@ -1475,7 +1476,7 @@ export default function LedgerDetail() {
                 </div>
               )}
               {/* 卡片 2：推荐人数（资金方不显示） */}
-              {!isFunder && (
+              {!effectiveIsFunder && (
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || (viewAsUserId === 4957151 && (isOwner || isAdmin))) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || (viewAsUserId === 4957151 && (isOwner || isAdmin))) setShowInviteTree(true); }}>
                 <div className="text-xs text-white/70 mb-1">推荐</div>
                 {((afTotalAsset as any)?.directReferralCount > 0 || (afTotalAsset as any)?.indirectReferralCount > 0) ? (
@@ -1500,7 +1501,7 @@ export default function LedgerDetail() {
               </div>
               )}
               {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行）——资金方不显示 */}
-              {!isFunder && (
+              {!effectiveIsFunder && (
               <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="flex items-baseline justify-between mb-2">
                   <span className="text-xs text-white/70">权益</span>
@@ -1557,7 +1558,7 @@ export default function LedgerDetail() {
               </div>
               )}
               {/* 管理员统计：累计订单（后端控制权限，代看模式下隐藏，资金方不显示） */}
-              {!isFunder && !viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).orders && (
+              {!effectiveIsFunder && !viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).orders && (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="text-xs text-white/70 mb-1">累计订单</div>
                   <div className="flex items-baseline gap-1">
@@ -1577,7 +1578,7 @@ export default function LedgerDetail() {
                 </div>
               )}
               {/* 管理员统计：管理费（后端控制权限，代看模式下隐藏） */}
-              {!isFunder && !viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).fees && (
+              {!effectiveIsFunder && !viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).fees && (
                 <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="text-xs text-white/70 mb-1">管理费</div>
                   <div className="flex items-baseline gap-1">
@@ -2266,7 +2267,7 @@ export default function LedgerDetail() {
       )}
 
       {/* AF账本非资方用户：三Tab切换（谷底增筹 / 融资付息 / 行情评估） */}
-      {isCustomAF && !isFunder && (
+      {isCustomAF && !effectiveIsFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="space-y-3 mt-2">
               <button
@@ -2313,7 +2314,7 @@ export default function LedgerDetail() {
       )}
 
       {/* 资金方专属：资产订单列表 */}
-      {isCustomAF && isFunder && (
+      {isCustomAF && effectiveIsFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4">
             <div className="flex items-center mb-3">
