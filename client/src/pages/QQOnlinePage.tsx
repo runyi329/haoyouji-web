@@ -1930,14 +1930,18 @@ function MonteCarloCard() {
           };
           const p50ZeroDay = findZeroDay(actual.p50);
           const p25ZeroDay = findZeroDay(actual.p25);
+          const p75ZeroDay = findZeroDay(actual.p75);
           const p5ZeroDay  = findZeroDay(actual.p5);
-          // 关键节点集合：始终显示第0天和最后一天，加上归零边界天
+          const p95ZeroDay = findZeroDay(actual.p95);
+          // 关键节点集合：始终显示第0天和最后一天，加上所有分位线归零边界天
           const keyDays = new Set<number>([0]);
           const lastDay = (days as number[])[(days as number[]).length - 1];
           keyDays.add(lastDay);
           if (p50ZeroDay != null) keyDays.add(p50ZeroDay);
           if (p25ZeroDay != null) keyDays.add(p25ZeroDay);
+          if (p75ZeroDay != null) keyDays.add(p75ZeroDay);
           if (p5ZeroDay  != null) keyDays.add(p5ZeroDay);
+          if (p95ZeroDay != null) keyDays.add(p95ZeroDay);
           // 如果关键节点少于3个，补充中间天数
           if (keyDays.size < 3) {
             const mid = Math.round(lastDay / 2);
