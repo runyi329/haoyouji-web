@@ -10080,15 +10080,23 @@ export const appRouter = router({
             targetUserId = input.viewAsUserId;
           }
         }
-        // 1. 充値订单（recharge_orders，仅 completed 状态，按 ledger_id 隔离）
+        // 1. 充値订单（recharge_orders，全状态显示，按 ledger_id 隔离）
         const rechargeRows = await db.execute(
-          sql`SELECT id, amount, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} AND status = 'completed' ORDER BY created_at DESC LIMIT 100`
+          sql`SELECT id, amount, status, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} ORDER BY created_at DESC LIMIT 100`
         ) as any;
+        const statusLabelMap: Record<string, string> = {
+          completed: '充值到账',
+          submitted: '确认中',
+          pending: '待支付',
+          expired: '已过期',
+          cancelled: '已取消',
+        };
         const rechargeList = ((rechargeRows[0] || rechargeRows) as any[]).map((r: any) => ({
           id: `r_${r.id}`,
           amount: parseFloat(r.amount),
           sourceType: 'recharge' as const,
-          note: '充値到账',
+          note: statusLabelMap[r.status] || r.status,
+          status: r.status,
           createdAt: r.created_at,
         }));
         // 2. 手动调账记录（af_manual_balances）
