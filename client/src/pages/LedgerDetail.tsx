@@ -3284,29 +3284,29 @@ export default function LedgerDetail() {
                       </div>
                       {/* 分隔细线 */}
                       <div style={{ height: 1, backgroundColor: '#E8E8E8', marginLeft: 12, marginRight: 12 }} />
-                      {/* 下层：持仓情况 - 三行固定网格对齐 */}
-                      <div className="px-3 py-2">
-                        {/* 表头行：空白 + BTC / ETH / SOL 列标题 */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '2px 4px', alignItems: 'center' }}>
+                      {/* 下层：持仓情况 */}
+                      <div className="px-3 py-2 space-y-1">
+                        {/* 第1行：余额（独占一行） */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-400" style={{ width: 40 }}>余额</span>
+                          <span className="text-xs font-semibold" style={{ color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)} U</span>
+                        </div>
+                        {/* 第2行：列标题 BTC / ETH / SOL */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '0 4px', alignItems: 'center', marginTop: 4 }}>
                           <span></span>
                           <span className="text-xs text-gray-400 text-center">BTC</span>
                           <span className="text-xs text-gray-400 text-center">ETH</span>
                           <span className="text-xs text-gray-400 text-center">SOL</span>
                         </div>
-                        {/* 余额行 */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '2px 4px', alignItems: 'center', marginTop: 2 }}>
-                          <span className="text-xs text-gray-400">余额</span>
-                          <span className="text-xs font-semibold text-center" style={{ color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E', gridColumn: '2 / 5' }}>{Number(u.balance ?? 0).toFixed(2)} U</span>
-                        </div>
-                        {/* 持仓行 */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '2px 4px', alignItems: 'center', marginTop: 3 }}>
+                        {/* 第3行：持仓 */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '0 4px', alignItems: 'center' }}>
                           <span className="text-xs text-gray-400">持仓</span>
                           <span className="text-xs font-semibold text-center" style={{ color: (u as any).holdingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).holdingBTC ?? 0).toFixed(4)}</span>
                           <span className="text-xs font-semibold text-center" style={{ color: (u as any).holdingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).holdingETH ?? 0).toFixed(4)}</span>
                           <span className="text-xs font-semibold text-center" style={{ color: (u as any).holdingSOL > 0 ? '#7C3AED' : '#9E9E9E' }}>{Number((u as any).holdingSOL ?? 0).toFixed(4)}</span>
                         </div>
-                        {/* 挂单行 */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '2px 4px', alignItems: 'center', marginTop: 3 }}>
+                        {/* 第4行：挂单 */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 1fr 1fr', gap: '0 4px', alignItems: 'center' }}>
                           <span className="text-xs text-gray-400">挂单</span>
                           <span className="text-xs font-semibold text-center" style={{ color: (u as any).pendingBTC > 0 ? '#B45309' : '#9E9E9E' }}>{Number((u as any).pendingBTC ?? 0).toFixed(4)}</span>
                           <span className="text-xs font-semibold text-center" style={{ color: (u as any).pendingETH > 0 ? '#1D4ED8' : '#9E9E9E' }}>{Number((u as any).pendingETH ?? 0).toFixed(4)}</span>
