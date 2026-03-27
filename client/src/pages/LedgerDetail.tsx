@@ -3262,19 +3262,31 @@ export default function LedgerDetail() {
                               <button onClick={() => { setEditingNoteUserId(u.id); setNoteInputValue(localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '')); }} className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400" style={{ backgroundColor: '#EEEEEE', fontSize: 12 }} title="添加备注">注</button>
                             </div>
                           </div>
-                          {/* 第二行：时间 + 推荐人 + 备注，固定间距对齐 */}
-                          <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-xs text-gray-400" style={{ minWidth: 76 }}>{(u as any).registeredAt || ''}</span>
-                            {u.inviterName ? <span className="text-xs text-gray-400">推荐人：<span className="text-gray-600">{u.inviterName}</span></span> : <span className="text-xs text-gray-300">无推荐人</span>}
-                            {(u as any).hasWallet
-                              ? <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>钱包已绑定</span>
-                              : <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>未绑定钱包</span>
-                            }
-                            {(() => {
-                              const displayNote = localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '');
-                              return displayNote ? <span className="text-xs text-amber-700 truncate">{displayNote}</span> : null;
-                            })()}
+                          {/* 第二行：左侧时间+推荐人，右侧钱包状态 */}
+                          <div className="flex items-center justify-between mt-1.5 gap-2">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="text-xs text-gray-400 flex-shrink-0">{(u as any).registeredAt || ''}</span>
+                              {u.inviterName
+                                ? <span className="text-xs text-gray-400 truncate">推荐人：<span className="text-gray-600">{u.inviterName}</span></span>
+                                : <span className="text-xs text-gray-300 flex-shrink-0">无推荐人</span>
+                              }
+                            </div>
+                            <div className="flex-shrink-0">
+                              {(u as any).hasWallet
+                                ? <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#DCFCE7', color: '#166534' }}>钱包已绑</span>
+                                : <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#FEE2E2', color: '#991B1B' }}>未绑钱包</span>
+                              }
+                            </div>
                           </div>
+                          {/* 第三行：备注（有才显示） */}
+                          {(() => {
+                            const displayNote = localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '');
+                            return displayNote ? (
+                              <div className="mt-1">
+                                <span className="text-xs text-amber-700 truncate block">{displayNote}</span>
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
                       {/* 分隔细线 */}
