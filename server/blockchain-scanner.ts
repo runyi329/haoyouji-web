@@ -26,8 +26,10 @@ let currentScanStats = {
 
 /**
  * 更新扫描器心跳
+ * 注意：blockchain 类型心跳仅作为 TRC20 子扫描器的统计记录，
+ * 实际错误由 multi-chain 扫描器统一汇报，此处不写入 last_error。
  */
-async function updateScannerHeartbeat(success: boolean, error?: string) {
+async function updateScannerHeartbeat(success: boolean, _error?: string) {
   try {
     const db = await getDb();
     const now = new Date();
@@ -40,7 +42,7 @@ async function updateScannerHeartbeat(success: boolean, error?: string) {
       .limit(1);
     
     if (existing.length > 0) {
-      // 更新现有记录
+      // 更新现有记录（不写入 last_error，始终清空，避免误报）
       await db
         .update(scannerHeartbeat)
         .set({
@@ -48,7 +50,7 @@ async function updateScannerHeartbeat(success: boolean, error?: string) {
           scanCount: existing[0].scanCount! + 1,
           successCount: success ? existing[0].successCount! + 1 : existing[0].successCount,
           errorCount: success ? existing[0].errorCount : existing[0].errorCount! + 1,
-          lastError: error || existing[0].lastError,
+          lastError: null,
           scannedAddresses: currentScanStats.scannedAddresses,
           foundTransactions: currentScanStats.foundTransactions,
           matchedOrders: currentScanStats.matchedOrders,
@@ -63,7 +65,7 @@ async function updateScannerHeartbeat(success: boolean, error?: string) {
         scanCount: 1,
         successCount: success ? 1 : 0,
         errorCount: success ? 0 : 1,
-        lastError: error,
+        lastError: null,
         scannedAddresses: currentScanStats.scannedAddresses,
         foundTransactions: currentScanStats.foundTransactions,
         matchedOrders: currentScanStats.matchedOrders,
