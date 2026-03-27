@@ -13982,7 +13982,7 @@ insights 数组每项包含：
         const COMBO_MAP: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
         // 1. 累计盈亏曲线（每50笔采样）
         const [allRows] = await (conn as any).execute(
-          `SELECT amount, win_amount FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' ORDER BY trade_time ASC, id ASC LIMIT 5252`
+          `SELECT amount, win_amount FROM qq_trade_records WHERE amount IS NOT NULL AND amount != '' ORDER BY trade_time ASC, id ASC`
         );
         const cumPnl: { idx: number; pnl: number }[] = [];
         let running = 0;
