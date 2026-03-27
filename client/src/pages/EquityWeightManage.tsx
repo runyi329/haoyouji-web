@@ -330,7 +330,12 @@ export default function EquityWeightManage() {
   const handleSelect = (m: Member) => {
     setSelected(m);
     setResInput(m.resourceWeight.toFixed(2));
-    setCapInput(m.capitalWeight.toFixed(2));
+    // 资金权重编辑框默认值：优先使用自动计算结果(1.0+autoBonus)，如果数据库已有手动保存过且与自动计算不同，则保留手动值
+    const computedCap = 1.0 + (m.autoBonus ?? 0);
+    // 如果数据库存储的值与自动计算值相同（或者数据库尚未写入过，即默认1.0），则使用自动计算值
+    const storedCap = m.capitalWeight;
+    const useComputed = Math.abs(storedCap - 1.0) < 0.0001; // 数据库是默认值时用自动计算
+    setCapInput((useComputed ? computedCap : storedCap).toFixed(2));
     setMsg('');
     setActiveTab('edit');
   };
