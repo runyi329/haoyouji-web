@@ -1203,7 +1203,7 @@ export default function LedgerDetail() {
                       刷新
                     </button>
                     <button
-                      onClick={() => { setEquityHistoryUserId(null); setShowEquityHistory(true); }}
+                      onClick={() => { setEquityHistoryUserId(viewAsUserId ?? null); setShowEquityHistory(true); }}
                       className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
                       style={{ background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)', border: '1px solid #C8A84B', color: '#F0D060', textShadow: '0 0 8px rgba(240,208,80,0.6)', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)' }}
                     >
