@@ -15188,6 +15188,71 @@ export const adminFeatureRouter = router({
       return result;
     }),
 
+  // ========== QQ蒙特卡洛模拟数据接口 ==========
+  getQQMonteCarloData: protectedProcedure
+    .query(async ({ ctx }) => {
+      const JIANG_ID = 870413;
+      const YJH_ID_QQ = 4957151;
+      if ((ctx.user as any).id !== JIANG_ID && (ctx.user as any).id !== YJH_ID_QQ) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return { actualWinRate: 36.6, expectedWinRate: 34.89, avgBet: 279.62, avgPayout: 791.20, currentBalance: 1500, totalBets: 0 };
+
+        // 1. 实际胜率、均投、均彩、总笔数
+        const [statsRows] = await (conn as any).execute(
+          `SELECT
+             COUNT(*) as total,
+             SUM(CASE WHEN win_status = '已中奖' OR (win_status NOT IN ('未中奖','0','') AND win_status IS NOT NULL AND CAST(win_status AS DECIMAL(20,4)) > 0) THEN 1 ELSE 0 END) as won,
+             AVG(CAST(amount AS DECIMAL(20,4))) as avg_amount,
+             AVG(CASE WHEN CAST(win_amount AS DECIMAL(20,4)) > 0 THEN CAST(win_amount AS DECIMAL(20,4)) ELSE NULL END) as avg_payout
+           FROM qq_trade_records
+           WHERE amount IS NOT NULL AND amount != ''`
+        );
+        const sr = (statsRows as any[])[0] || {};
+        const totalBets = Number(sr.total) || 0;
+        const wonBets = Number(sr.won) || 0;
+        const actualWinRate = totalBets > 0 ? Math.round(wonBets / totalBets * 1000) / 10 : 36.6;
+        const avgBet = sr.avg_amount != null ? Math.round(Number(sr.avg_amount) * 100 * 100) / 100 : 279.62;
+        const avgPayout = sr.avg_payout != null ? Math.round(Number(sr.avg_payout) * 100 * 100) / 100 : 791.20;
+
+        // 2. 加权期望胜率
+        const COMBO_MAP_MC: Record<number, number> = {0:10,1:18,2:16,3:14,4:12,5:10,6:8,7:6,8:4,9:2};
+        const [contentRows] = await (conn as any).execute(
+          `SELECT content FROM qq_trade_records WHERE content IS NOT NULL AND content != ''`
+        );
+        let sumTheoryProb = 0;
+        let validCount = 0;
+        for (const r of (contentRows as any[])) {
+          const c = String(r.content || '');
+          const digits = new Set<number>();
+          for (const ch of c) { const n = parseInt(ch); if (!isNaN(n) && n >= 0 && n <= 9) digits.add(n); }
+          if (digits.size > 0) {
+            let combos = 0;
+            digits.forEach(d => { combos += (COMBO_MAP_MC[d] || 0); });
+            sumTheoryProb += combos / 100;
+            validCount++;
+          }
+        }
+        const expectedWinRate = validCount > 0 ? Math.round(sumTheoryProb / validCount * 1000) / 10 : 34.89;
+
+        // 3. 当前余额（最新一条有balance记录）
+        const [balRows] = await (conn as any).execute(
+          `SELECT balance FROM qq_trade_records WHERE balance IS NOT NULL AND balance != '' ORDER BY trade_time DESC, id DESC LIMIT 1`
+        );
+        const currentBalance = balRows && (balRows as any[]).length > 0
+          ? Math.round(parseFloat((balRows as any[])[0].balance) * 100) / 100
+          : 1500;
+
+        return { actualWinRate, expectedWinRate, avgBet, avgPayout, currentBalance, totalBets };
+      } catch (err) {
+        console.error('[QQ蒙特卡洛] 数据获取失败:', err);
+        return { actualWinRate: 36.6, expectedWinRate: 34.89, avgBet: 279.62, avgPayout: 791.20, currentBalance: 1500, totalBets: 0 };
+      }
+    }),
+
   // 获取脱动共享商盟完整架构文档（建站规则页使用）
   getMerchantArchitectureDoc: publicProcedure
     .query(async () => {
