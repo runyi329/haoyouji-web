@@ -1933,22 +1933,25 @@ function MonteCarloCard() {
           const p75ZeroDay = findZeroDay(actual.p75);
           const p5ZeroDay  = findZeroDay(actual.p5);
           const p95ZeroDay = findZeroDay(actual.p95);
-          // 关键节点集合：始终显示第0天和最后一天，加上所有分位线归零边界天
-          const keyDays = new Set<number>([0]);
+          // 关键节点集合：始终等间距显示5个刻度（第0/1/4/1/2/3/4/末天），叠加所有分位线归零节点
           const lastDay = (days as number[])[(days as number[]).length - 1];
-          keyDays.add(lastDay);
+          const keyDays = new Set<number>([0, lastDay]);
+          // 等间距4等分
+          [1, 2, 3].forEach(i => keyDays.add(Math.round(lastDay * i / 4)));
+          // 叠加归零节点
           if (p50ZeroDay != null) keyDays.add(p50ZeroDay);
           if (p25ZeroDay != null) keyDays.add(p25ZeroDay);
           if (p75ZeroDay != null) keyDays.add(p75ZeroDay);
           if (p5ZeroDay  != null) keyDays.add(p5ZeroDay);
           if (p95ZeroDay != null) keyDays.add(p95ZeroDay);
-          // 如果关键节点少于3个，补充中间天数
-          if (keyDays.size < 3) {
-            const mid = Math.round(lastDay / 2);
-            keyDays.add(mid);
-          }
-          const dateLabels = (days as number[]).map((d: number) => {
-            if (keyDays.has(d)) return d === 0 ? '第0天' : `第${d}天`;
+          // 将keyDays中的天数映射到最近的实际days数组中的值
+          const daysArr = days as number[];
+          const snapToActual = (target: number) => daysArr.reduce((prev, cur) =>
+            Math.abs(cur - target) < Math.abs(prev - target) ? cur : prev
+          );
+          const snappedKeyDays = new Set<number>([...keyDays].map(snapToActual));
+          const dateLabels = daysArr.map((d: number) => {
+            if (snappedKeyDays.has(d)) return d === 0 ? '第0天' : `第${d}天`;
             return '';
           });
 
