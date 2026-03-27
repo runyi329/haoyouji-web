@@ -10044,6 +10044,33 @@ export const appRouter = router({
               console.error('[AF] 持仓查询失败:', e);
             }
           }
+          // 查询每个用户的 BTC/ETH/SOL 挂单数量（pending buy）
+          type PendingMap = Map<number, { BTC: number; ETH: number; SOL: number }>;
+          let pendingMap: PendingMap = new Map();
+          if (result.length > 0) {
+            try {
+              const userIds5 = result.map(u => u.id);
+              const placeholders6 = userIds5.map(() => '?').join(',');
+              const [pendingRows] = await rawDb.execute(
+                `SELECT user_id, coin, COALESCE(SUM(CAST(quantity AS DECIMAL(30,8))), 0) as qty
+                 FROM af_orders
+                 WHERE ledger_id = ? AND user_id IN (${placeholders6})
+                   AND status = 'pending' AND side = 'buy'
+                 GROUP BY user_id, coin`,
+                [input.ledgerId, ...userIds5]
+              ) as any[];
+              for (const row of (pendingRows as any[])) {
+                if (!pendingMap.has(row.user_id)) pendingMap.set(row.user_id, { BTC: 0, ETH: 0, SOL: 0 });
+                const p = pendingMap.get(row.user_id)!;
+                const coin = (row.coin as string).toUpperCase();
+                if (coin === 'BTC') p.BTC = parseFloat(row.qty?.toString() || '0');
+                else if (coin === 'ETH') p.ETH = parseFloat(row.qty?.toString() || '0');
+                else if (coin === 'SOL') p.SOL = parseFloat(row.qty?.toString() || '0');
+              }
+            } catch (e) {
+              console.error('[AF] 挂单查询失败:', e);
+            }
+          }
           return { users: result.map(u => ({
             ...u,
             username: u.username,
@@ -10055,6 +10082,9 @@ export const appRouter = router({
             holdingBTC: holdingMap.get(u.id)?.BTC ?? 0,
             holdingETH: holdingMap.get(u.id)?.ETH ?? 0,
             holdingSOL: holdingMap.get(u.id)?.SOL ?? 0,
+            pendingBTC: pendingMap.get(u.id)?.BTC ?? 0,
+            pendingETH: pendingMap.get(u.id)?.ETH ?? 0,
+            pendingSOL: pendingMap.get(u.id)?.SOL ?? 0,
           })) };
         } catch (e) {
           console.error('[AF] 邀请树查询失败:', e);
