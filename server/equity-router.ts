@@ -640,6 +640,167 @@ export const equityRouter = router({
         operatorName: r.operator_name ?? '未知',
       }));
     }),
+
+  // 预览自动权重计算结果（按股东编号早晚，资金股≥10万，66档等差2.0~1.0）
+  previewAutoWeight: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, ctx.user.id]
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
+      }
+      // 查该账本所有成员的资金股总额，按 shareholder_numbers.shareNo 排序
+      const [rows] = await (db as any).execute(
+        `SELECT
+           lm.userId,
+           COALESCE(u.name, u.username, '未知') AS name,
+           u.avatar,
+           COALESCE(sn.shareNo, '9999') AS shareNo,
+           COALESCE((
+             SELECT SUM(es2.shareCount)
+             FROM equity_shares es2
+             WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = 'capital'
+           ), 0) AS capitalTotal
+         FROM ledger_members lm
+         LEFT JOIN users u ON u.id = lm.userId
+         LEFT JOIN shareholder_numbers sn ON sn.ledgerId = lm.ledgerId AND sn.userId = lm.userId
+         WHERE lm.ledgerId = ? AND lm.userId > 0
+         ORDER BY COALESCE(sn.shareNo, '9999') ASC, lm.userId ASC`,
+        [input.ledgerId]
+      ) as any;
+
+      // 筛选资金股≥10万的成员，按 shareNo 顺序排列
+      const THRESHOLD = 100000;
+      const TIERS = 66;
+      const MAX_RANK = 660;
+      const MAX_W = 2.0;
+      const MIN_W = 1.0;
+      const step = (MAX_W - MIN_W) / (TIERS - 1); // ≈ 0.015385
+
+      const eligible = (rows as any[]).filter((r: any) => Number(r.capitalTotal) >= THRESHOLD);
+      const totalEligible = eligible.length;
+      // 下一位进来的权重
+      const nextRank = totalEligible + 1;
+      let nextWeight: number;
+      if (nextRank > MAX_RANK) {
+        nextWeight = MIN_W;
+      } else {
+        const tier = Math.ceil(nextRank / 10); // 1~66
+        nextWeight = Math.round((MAX_W - (tier - 1) * step) * 10000) / 10000;
+      }
+
+      // 计算每位符合条件成员的权重
+      const preview = eligible.map((r: any, idx: number) => {
+        const rank = idx + 1;
+        let capitalWeight: number;
+        if (rank > MAX_RANK) {
+          capitalWeight = MIN_W;
+        } else {
+          const tier = Math.ceil(rank / 10);
+          capitalWeight = Math.round((MAX_W - (tier - 1) * step) * 10000) / 10000;
+        }
+        return {
+          userId: Number(r.userId),
+          name: r.name as string,
+          avatar: r.avatar as string | null,
+          shareNo: r.shareNo as string,
+          capitalTotal: Number(r.capitalTotal),
+          rank,
+          tier: rank <= MAX_RANK ? Math.ceil(rank / 10) : null,
+          capitalWeight,
+        };
+      });
+
+      // 66档规则列表
+      const tiers = Array.from({ length: TIERS }, (_, i) => {
+        const tier = i + 1;
+        const w = Math.round((MAX_W - i * step) * 10000) / 10000;
+        return { tier, rankFrom: (tier - 1) * 10 + 1, rankTo: tier * 10, weight: w };
+      });
+
+      return { totalEligible, nextWeight, preview, tiers };
+    }),
+
+  // 一键应用自动权重（将预览结果写入equity_weights）
+  applyAutoWeight: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, ctx.user.id]
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
+      }
+      // 重新计算（与preview相同逻辑）
+      const [rows] = await (db as any).execute(
+        `SELECT
+           lm.userId,
+           COALESCE(sn.shareNo, '9999') AS shareNo,
+           COALESCE((
+             SELECT SUM(es2.shareCount)
+             FROM equity_shares es2
+             WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = 'capital'
+           ), 0) AS capitalTotal
+         FROM ledger_members lm
+         LEFT JOIN shareholder_numbers sn ON sn.ledgerId = lm.ledgerId AND sn.userId = lm.userId
+         WHERE lm.ledgerId = ? AND lm.userId > 0
+         ORDER BY COALESCE(sn.shareNo, '9999') ASC, lm.userId ASC`,
+        [input.ledgerId]
+      ) as any;
+      const THRESHOLD = 100000;
+      const TIERS = 66;
+      const MAX_RANK = 660;
+      const MAX_W = 2.0;
+      const MIN_W = 1.0;
+      const step = (MAX_W - MIN_W) / (TIERS - 1);
+      const eligible = (rows as any[]).filter((r: any) => Number(r.capitalTotal) >= THRESHOLD);
+      let updatedCount = 0;
+      for (let idx = 0; idx < eligible.length; idx++) {
+        const r = eligible[idx];
+        const rank = idx + 1;
+        let capitalWeight: number;
+        if (rank > MAX_RANK) {
+          capitalWeight = MIN_W;
+        } else {
+          const tier = Math.ceil(rank / 10);
+          capitalWeight = Math.round((MAX_W - (tier - 1) * step) * 10000) / 10000;
+        }
+        // 读取旧值
+        const [[oldRow]] = await (db as any).execute(
+          'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
+          [Number(r.userId)]
+        ) as any;
+        const oldRes = oldRow ? Number(oldRow.resource_weight) : 1.00;
+        const oldCap = oldRow ? Number(oldRow.capital_weight) : 1.00;
+        // 写入新资金权重，保留原资源权重
+        await (db as any).execute(
+          `INSERT INTO equity_weights (user_id, resource_weight, capital_weight)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             capital_weight  = VALUES(capital_weight),
+             updated_at = NOW()`,
+          [Number(r.userId), oldRes, capitalWeight]
+        );
+        // 写日志
+        await (db as any).execute(
+          `INSERT INTO equity_weight_logs (ledger_id, user_id, operator_id, old_resource_weight, old_capital_weight, new_resource_weight, new_capital_weight, remark)
+           VALUES (?, ?, ?, ?, ?, ?, ?, '自动权重规则应用')`,
+          [input.ledgerId, Number(r.userId), ctx.user.id, oldRes, oldCap, oldRes, capitalWeight]
+        );
+        updatedCount++;
+      }
+      return { updatedCount };
+    }),
 });
 // ===== 股权转让功能 =====
 export const equityTransferRouter = router({
