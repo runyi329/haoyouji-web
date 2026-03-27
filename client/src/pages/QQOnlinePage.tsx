@@ -1770,11 +1770,11 @@ function MonteCarloCard() {
     setSimRunning(true);
     // 使用setTimeout让UI先更新显示loading
     setTimeout(() => {
-      const capital = mcData.currentBalance > 0 ? mcData.currentBalance : 1500;
-      const dailyTarget = capital * 100; // 每日目标 = 本金 × 100
+      const capital = (mcData.currentBalance > 0 ? mcData.currentBalance : 1500) * 100; // 本金×100
+      const dailyTarget = 400 * 100; // 每日目标固定400×100=40000元
       const params = {
-        avgBet: mcData.avgBet,
-        avgPayout: mcData.avgPayout,
+        avgBet: mcData.avgBet * 100,       // 均投×100
+        avgPayout: mcData.avgPayout * 100, // 均彩×100
         initialCapital: capital,
         dailyTarget,
         days: 60,
@@ -1820,11 +1820,11 @@ function MonteCarloCard() {
             <div className="grid grid-cols-3 gap-1 mt-2">
               <div className="text-center">
                 <div className="text-[8px]" style={{ color: LABEL_COLOR }}>当前本金</div>
-                <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>¥{mcData.currentBalance.toFixed(0)}</div>
+                <div className="text-[11px] font-bold font-mono" style={{ color: DATA_COLOR }}>¥{(mcData.currentBalance * 100).toFixed(0)}</div>
               </div>
               <div className="text-center">
                 <div className="text-[8px]" style={{ color: LABEL_COLOR }}>每日目标</div>
-                <div className="text-[11px] font-bold font-mono" style={{ color: GREEN_COLOR }}>¥{(mcData.currentBalance * 100).toFixed(0)}</div>
+                <div className="text-[11px] font-bold font-mono" style={{ color: GREEN_COLOR }}>¥40,000</div>
               </div>
               <div className="text-center">
                 <div className="text-[8px]" style={{ color: LABEL_COLOR }}>倍数</div>
@@ -1863,8 +1863,8 @@ function MonteCarloCard() {
         {simResult && (() => {
           const { actual, expected, params: p, savedAt } = simResult;
           const days = actual.dayLabels;
-          const capital = p.mcData.currentBalance;
-          const dailyTarget = capital * 100;
+          const capital = (p.mcData.currentBalance > 0 ? p.mcData.currentBalance : 1500) * 100; // 本金×100
+          const dailyTarget = 400 * 100; // 每日目标固定400×100=40000元
 
           // 图表公共配置
           const commonOptions = (title: string, yLabel: string, isPercent = false) => ({
