@@ -13983,7 +13983,7 @@ insights 数组每项包含：
           const amt = Number(r.amount) * 100;
           const win = Number(r.win_amount) * 100;
           running += (win - amt);
-          if (i % 50 === 0 || i === (allRows as any[]).length - 1) {
+          if (i % 20 === 0 || i === (allRows as any[]).length - 1) {
             cumPnl.push({ idx: i + 1, pnl: Math.round(running * 100) / 100 });
           }
         });
