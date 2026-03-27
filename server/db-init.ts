@@ -375,7 +375,7 @@ export async function initDatabase() {
         const cnt = Array.isArray(existRows) ? (existRows[0] as any).cnt : 0;
         if (Number(cnt) === 0) {
           await (dbConnMkt as any).execute(
-            `INSERT INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`) VALUES (?, ?, ?, ?, '市场贡献股', ?, '市场推荐奖励（资源股30%）', ?, ?, 870413)`,
+            `INSERT INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`) VALUES (?, ?, ?, ?, '贡献股', ?, '市场推荐奖励（资源股30%）', ?, ?, 870413)`,
             [row.ledgerId, row.userId, row.memberNickname, row.shareCount, row.grantDate, row.regNo, row.annualRate]
           );
         }
@@ -383,16 +383,16 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ market contribution shares seed data checked');
     }
 
-    // ===== 一次性修复：将 shareType='市场贡献' 更正为 '市场贡献股' =====
+    // ===== 一次性修复：将 shareType='市场贡献' 更正为 '贡献股' =====
     try {
       const dbConn2 = await getDbConnection();
       if (dbConn2) {
         const [fixResult] = await (dbConn2 as any).execute(
-          `UPDATE \`equity_shares\` SET shareType='市场贡献股' WHERE shareType='市场贡献'`
+          `UPDATE \`equity_shares\` SET shareType='贡献股' WHERE shareType='市场贡献'`
         );
         const affected = (fixResult as any).affectedRows ?? 0;
         if (affected > 0) {
-          console.log(`[DB Init] ✅ Fixed ${affected} equity_shares records: '市场贡献' -> '市场贡献股'`);
+          console.log(`[DB Init] ✅ Fixed ${affected} equity_shares records: '市场贡献' -> '贡献股'`);
         }
       }
     } catch (fixErr) {

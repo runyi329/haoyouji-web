@@ -68,7 +68,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
     String(s.annualRate ?? 6),
     grantDateStr
   );
-  const isMarket = s.shareType === '市场贡献股';
+  const isMarket = s.shareType === '贡献股';
   // 该笔快照权重（增量设计，发放时锁定）
   const w = Number(s.weight ?? 1.0);
   const base = Number(s.shareCount) || 0;
@@ -154,7 +154,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
       <div className="flex items-center justify-between px-1 mb-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold" style={{ color: theme.labelColor }}>
-            {isMarket ? '贡献股' : '资金股'}
+            {isMarket ? '贡献股' : '资源股'}
           </span>
           <span style={{ color: theme.dimColor2, fontSize: '10px' }}>（{shares.length}份）</span>
         </div>
@@ -896,7 +896,7 @@ export default function LedgerDetail() {
   // 资源股总持股（股本+实时股息，仅统计资源股）
   const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '资源股');
   // 市场贡献股总持股（股本+实时股息）
-  const totalMarketSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '市场贡献股');
+  const totalMarketSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '贡献股');
   // 所有类型股权总和（用于顶部累计股权格子，未来新增类型自动包含）
   const totalAllSharesWithDividend = useTotalSharesWithDividend(myShares ?? []);
   // 查询当前用户权重
@@ -3038,10 +3038,10 @@ export default function LedgerDetail() {
                 </div>
               )}
               {/* 市场贡献股卡片（折叠式） */}
-              {myShares.some((s: any) => s.shareType === '市场贡献股') && (
+              {myShares.some((s: any) => s.shareType === '贡献股') && (
                 <div style={{ background: '#000000', border: '1px solid #C9A84C', borderRadius: '12px', padding: '12px 14px', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2)' }}>
                   <AngelShareCard
-                    shares={myShares.filter((s: any) => s.shareType === '市场贡献股')}
+                    shares={myShares.filter((s: any) => s.shareType === '贡献股')}
                     isMarket={true}
                     totalWithDividend={totalMarketSharesWithDividend}
                   />
