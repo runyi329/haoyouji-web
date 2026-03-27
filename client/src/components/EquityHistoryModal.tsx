@@ -124,7 +124,7 @@ function EditWeightModal({
 }
 
 export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClose, onViewUser, membersData }: Props) {
-  const [tab, setTab] = useState<'history' | 'pending'>('history');
+  const [tab, setTab] = useState<'history' | 'pending' | 'weights'>('history');
   const [searchUser, setSearchUser] = useState('');
   const [showUserPicker, setShowUserPicker] = useState(false);
   const [editingShare, setEditingShare] = useState<any | null>(null);
@@ -142,6 +142,13 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
   );
   const history = isAdmin && userId > 0 ? userHistory : myHistory;
   const historyLoading = isAdmin && userId > 0 ? userHistLoading : histLoading;
+
+  // 权重变更日志（所有人可见，查自己或被浏览用户）
+  const weightLogsUserId = isAdmin && userId > 0 ? userId : 0;
+  const { data: weightLogs, isLoading: weightLogsLoading } = trpc.equity.getWeightLogs.useQuery(
+    { ledgerId, userId: weightLogsUserId },
+    { enabled: tab === 'weights' && (isAdmin ? userId > 0 : true), retry: false }
+  );
 
   // 待审核转让（管理员）
   const { data: pendingList, isLoading: pendingLoading, refetch: refetchPending } = trpc.equityTransfer.getPendingTransfers.useQuery(
@@ -203,26 +210,24 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
           </div>
         </div>
 
-        {/* Tab */}
-        {isAdmin && (
-          <div
-            className="flex px-4 pt-3 pb-3 gap-3"
-            style={{ borderBottom: '1px solid rgba(201,168,76,0.2)', flexShrink: 0 }}
-          >
-            {(['history', 'pending'] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className="text-sm px-4 py-2 rounded-full font-medium"
-                style={tab === t
-                  ? { background: 'linear-gradient(135deg, #C9A84C, #F0D060)', color: '#0D0D00', flexShrink: 0 }
-                  : { background: 'rgba(201,168,76,0.1)', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.3)', flexShrink: 0 }}
-              >
-                {t === 'history' ? '流水记录' : `待审批${pendingList?.length ? ` (${pendingList.length})` : ''}`}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Tab - 所有人都能看到权重记录，管理员额外看到待审批 */}
+        <div
+          className="flex px-4 pt-3 pb-3 gap-2"
+          style={{ borderBottom: '1px solid rgba(201,168,76,0.2)', flexShrink: 0 }}
+        >
+          {(['history', 'weights', ...(isAdmin ? ['pending'] : [])] as const).map((t: any) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className="text-sm px-3 py-2 rounded-full font-medium"
+              style={tab === t
+                ? { background: 'linear-gradient(135deg, #C9A84C, #F0D060)', color: '#0D0D00', flexShrink: 0 }
+                : { background: 'rgba(201,168,76,0.1)', color: '#C9A84C', border: '1px solid rgba(201,168,76,0.3)', flexShrink: 0 }}
+            >
+              {t === 'history' ? '流水记录' : t === 'weights' ? '权重记录' : `待审批${pendingList?.length ? ` (${pendingList.length})` : ''}`}
+            </button>
+          ))}
+        </div>
 
         {/* 内容区 */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
@@ -279,6 +284,60 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
                     )}
                     {item.reason && (
                       <div className="text-xs mt-0.5 truncate" style={{ color: 'rgba(201,168,76,0.45)' }}>{item.reason}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {tab === 'weights' && (
+            <>
+              {weightLogsLoading && (
+                <div className="text-center py-8 text-sm" style={{ color: 'rgba(201,168,76,0.5)' }}>加载中...</div>
+              )}
+              {!weightLogsLoading && (!weightLogs || weightLogs.length === 0) && (
+                <div className="text-center py-8 text-sm" style={{ color: 'rgba(201,168,76,0.5)' }}>暂无权重变更记录</div>
+              )}
+              {weightLogs && weightLogs.length > 0 && (weightLogs as any[]).map((log: any, idx: number) => {
+                const oldTotal = (log.oldResourceWeight * log.oldCapitalWeight).toFixed(4);
+                const newTotal = (log.newResourceWeight * log.newCapitalWeight).toFixed(4);
+                const isFirst = idx === 0;
+                return (
+                  <div
+                    key={log.id}
+                    className="rounded-xl px-3 py-3"
+                    style={{
+                      background: isFirst ? 'rgba(201,168,76,0.1)' : 'rgba(201,168,76,0.06)',
+                      border: `1px solid ${isFirst ? 'rgba(201,168,76,0.4)' : 'rgba(201,168,76,0.15)'}`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.6)' }}>
+                        {new Date(log.createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                        {' '}{new Date(log.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className="text-[10px]" style={{ color: 'rgba(201,168,76,0.4)' }}>by {log.operatorName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 text-center rounded-lg py-1.5" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                        <div className="text-[10px] mb-0.5" style={{ color: 'rgba(201,168,76,0.4)' }}>变更前</div>
+                        <div className="text-xs" style={{ color: 'rgba(201,168,76,0.65)' }}>
+                          {log.oldResourceWeight.toFixed(2)} × {log.oldCapitalWeight.toFixed(2)}
+                        </div>
+                        <div className="text-sm font-bold mt-0.5" style={{ color: 'rgba(201,168,76,0.6)' }}>{oldTotal}</div>
+                      </div>
+                      <div style={{ color: '#C9A84C', fontSize: 14, flexShrink: 0 }}>→</div>
+                      <div className="flex-1 text-center rounded-lg py-1.5" style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.3)' }}>
+                        <div className="text-[10px] mb-0.5" style={{ color: 'rgba(201,168,76,0.6)' }}>变更后</div>
+                        <div className="text-xs" style={{ color: '#C9A84C' }}>
+                          {log.newResourceWeight.toFixed(2)} × {log.newCapitalWeight.toFixed(2)}
+                        </div>
+                        <div className="text-sm font-bold mt-0.5" style={{ color: '#F0D060' }}>{newTotal}</div>
+                      </div>
+                    </div>
+                    {log.remark && (
+                      <div className="mt-1.5 text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>备注：{log.remark}</div>
                     )}
                   </div>
                 );

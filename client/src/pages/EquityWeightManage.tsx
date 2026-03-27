@@ -134,14 +134,14 @@ function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () 
           <div className="px-4 pt-3 pb-2 flex gap-3" style={{ flexShrink: 0 }}>
             <div className="flex-1 rounded-xl px-3 py-2.5 text-center" style={{ background: 'rgba(201,168,76,0.1)', border: `1px solid rgba(201,168,76,0.25)` }}>
               <div className="text-xs mb-1" style={{ color: GOLD_DIM }}>当前已排名人数</div>
-              <div className="text-xl font-bold" style={{ color: GOLD }}>{data.totalEligible}</div>
+              <div className="text-xl font-bold" style={{ color: GOLD }}>{data.totalRanked}</div>
               <div className="text-[10px] mt-0.5" style={{ color: 'rgba(220,185,60,0.35)' }}>/ 660 名额</div>
             </div>
             <div className="flex-1 rounded-xl px-3 py-2.5 text-center" style={{ background: 'rgba(201,168,76,0.1)', border: `1px solid rgba(201,168,76,0.25)` }}>
               <div className="text-xs mb-1" style={{ color: GOLD_DIM }}>下一位进来的权重</div>
               <div className="text-xl font-bold" style={{ color: '#FFE566' }}>{data.nextWeight.toFixed(4)}</div>
               <div className="text-[10px] mt-0.5" style={{ color: 'rgba(220,185,60,0.35)' }}>
-                第 {data.totalEligible + 1} 名 / 第 {data.totalEligible < 660 ? Math.ceil((data.totalEligible + 1) / 10) : 66} 档
+                第 {data.totalRanked + 1} 名 / 第 {data.totalRanked < 660 ? Math.ceil((data.totalRanked + 1) / 10) : 66} 档
               </div>
             </div>
           </div>
@@ -217,14 +217,15 @@ function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () 
           {!isLoading && data && ruleTab === 'tiers' && (
             <div>
               <div className="text-xs mb-2" style={{ color: GOLD_DIM }}>
-                资金股 ≥ 10万 且 股东编号在前660名，按10人一档共66档，等差分布 2.0 → 1.0
+                资金股 ≥ 10万 且 股东编号在前660名，按10人一档共66档，入股早晚加成等差分布 1.0 → 0.0154（加在基础值1.0上）
               </div>
               <div className="rounded-xl overflow-hidden" style={{ border: `1px solid rgba(201,168,76,0.2)` }}>
                 {/* 表头 */}
                 <div className="flex px-3 py-2" style={{ background: 'rgba(201,168,76,0.15)', borderBottom: `1px solid rgba(201,168,76,0.2)` }}>
                   <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>档位</div>
                   <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>排名区间</div>
-                  <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>资金权重</div>
+                    <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>加成值</div>
+                    <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>资金权重(1+加成)</div>
                 </div>
                 {(data.tiers as TierRow[]).map((row, idx) => (
                   <div
@@ -238,13 +239,16 @@ function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () 
                     <div className="flex-1 text-xs text-center" style={{ color: GOLD_DIM }}>第 {row.tier} 档</div>
                     <div className="flex-1 text-xs text-center" style={{ color: GOLD_DIM }}>{row.rankFrom} ~ {row.rankTo} 名</div>
                     <div className="flex-1 text-xs text-center font-bold" style={{ color: row.tier === 1 ? '#FFE566' : GOLD_DIM }}>
+                      +{(row as any).bonus?.toFixed(4) ?? '—'}
+                    </div>
+                    <div className="flex-1 text-xs text-center font-bold" style={{ color: row.tier === 1 ? '#FFE566' : GOLD_DIM }}>
                       {row.weight.toFixed(4)}
                     </div>
                   </div>
                 ))}
               </div>
               <div className="text-[11px] mt-2" style={{ color: 'rgba(220,185,60,0.35)' }}>
-                第661名及以后：资金权重固定为 1.0000（无加成）
+                第661名及以后：加成值 = 0，资金权重固定为 1.0000
               </div>
             </div>
           )}
@@ -520,6 +524,40 @@ export default function EquityWeightManage() {
                 >
                   {setWeight.isPending ? '保存中...' : '确认保存'}
                 </button>
+
+                {/* 权重计算明细 */}
+                <div className="mt-4 rounded-xl px-3 py-3" style={{ background: 'rgba(0,0,0,0.4)', border: `1px solid rgba(201,168,76,0.2)` }}>
+                  <div className="text-xs font-semibold mb-2" style={{ color: GOLD_DIM }}>权重计算明细</div>
+                  {/* 资金权重拆解 */}
+                  <div className="mb-2">
+                    <div className="text-[11px] mb-1" style={{ color: 'rgba(220,185,60,0.5)' }}>资金权重（各因素相加）</div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.1)', color: GOLD_DIM }}>基础值 1.0</span>
+                      <span className="text-xs" style={{ color: 'rgba(220,185,60,0.4)' }}>+</span>
+                      <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.1)', color: GOLD_DIM }}>入股早晚 {(parseFloat(capInput) - 1.0 >= 0 ? '+' : '')}{(parseFloat(capInput) - 1.0).toFixed(4)}</span>
+                      <span className="text-xs" style={{ color: 'rgba(220,185,60,0.4)' }}>+ ...</span>
+                      <span className="text-xs" style={{ color: 'rgba(220,185,60,0.4)' }}>=</span>
+                      <span className="text-xs font-bold" style={{ color: '#FFE566' }}>{parseFloat(capInput).toFixed(4)}</span>
+                    </div>
+                  </div>
+                  {/* 资源权重 */}
+                  <div className="mb-2">
+                    <div className="text-[11px] mb-1" style={{ color: 'rgba(220,185,60,0.5)' }}>资源权重（各因素相加）</div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.1)', color: GOLD_DIM }}>手动设置 {parseFloat(resInput).toFixed(4)}</span>
+                      <span className="text-xs" style={{ color: 'rgba(220,185,60,0.4)' }}>+ ...</span>
+                      <span className="text-xs" style={{ color: 'rgba(220,185,60,0.4)' }}>=</span>
+                      <span className="text-xs font-bold" style={{ color: '#FFE566' }}>{parseFloat(resInput).toFixed(4)}</span>
+                    </div>
+                  </div>
+                  {/* 最终乘积 */}
+                  <div className="pt-2" style={{ borderTop: `1px solid rgba(201,168,76,0.15)` }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs" style={{ color: GOLD_DIM }}>总权重 = 资金权重 × 资源权重</span>
+                      <span className="text-sm font-bold" style={{ color: '#FFE566' }}>{previewTotal()}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

@@ -614,8 +614,11 @@ export const equityRouter = router({
         [input.ledgerId, ctx.user.id]
       ) as any;
       const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可查看' });
+      const isAdminOrOwner = isGlobal || myRow?.role === 'owner' || myRow?.role === 'admin';
+      // 普通成员只能查看自己的权重日志，管理员可查看任意成员
+      const targetUserId = isAdminOrOwner ? input.userId : ctx.user.id;
+      if (!isAdminOrOwner && input.userId !== 0 && input.userId !== ctx.user.id) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '只能查看自己的权重记录' });
       }
       const [rows] = await (db as any).execute(
         `SELECT wl.id, wl.old_resource_weight, wl.old_capital_weight,
@@ -627,7 +630,7 @@ export const equityRouter = router({
          WHERE wl.user_id = ? AND wl.ledger_id = ?
          ORDER BY wl.created_at DESC
          LIMIT 50`,
-        [input.userId, input.ledgerId]
+        [targetUserId, input.ledgerId]
       ) as any;
       return (rows as any[]).map((r: any) => ({
         id: Number(r.id),
@@ -675,36 +678,45 @@ export const equityRouter = router({
         [input.ledgerId]
       ) as any;
 
+      // 已排名人数：统计 shareholder_numbers 中有编号的成员数
+      const [[snCountRow]] = await (db as any).execute(
+        'SELECT COUNT(*) AS cnt FROM shareholder_numbers WHERE ledgerId = ?',
+        [input.ledgerId]
+      ) as any;
+      const totalRanked = Number(snCountRow?.cnt ?? 0);
+
       // 筛选资金股≥10万的成员，按 shareNo 顺序排列
       const THRESHOLD = 100000;
       const TIERS = 66;
       const MAX_RANK = 660;
-      const MAX_W = 2.0;
-      const MIN_W = 1.0;
-      const step = (MAX_W - MIN_W) / (TIERS - 1); // ≈ 0.015385
+      // 入股早晚因素：第1档加1.0，第66档加MIN_BONUS，第661名加0
+      const MAX_BONUS = 1.0;
+      const MIN_BONUS = Math.round(MAX_BONUS / (TIERS - 1) * 10000) / 10000; // ≈ 0.0154
+      const step = (MAX_BONUS - MIN_BONUS) / (TIERS - 1);
 
       const eligible = (rows as any[]).filter((r: any) => Number(r.capitalTotal) >= THRESHOLD);
-      const totalEligible = eligible.length;
-      // 下一位进来的权重
-      const nextRank = totalEligible + 1;
-      let nextWeight: number;
+      // 下一位进来的权重（基础1.0 + 入股早晚加成）
+      const nextRank = totalRanked + 1;
+      let nextBonus: number;
       if (nextRank > MAX_RANK) {
-        nextWeight = MIN_W;
+        nextBonus = 0;
       } else {
         const tier = Math.ceil(nextRank / 10); // 1~66
-        nextWeight = Math.round((MAX_W - (tier - 1) * step) * 10000) / 10000;
+        nextBonus = Math.round((MAX_BONUS - (tier - 1) * step) * 10000) / 10000;
       }
+      const nextWeight = Math.round((1.0 + nextBonus) * 10000) / 10000;
 
       // 计算每位符合条件成员的权重
       const preview = eligible.map((r: any, idx: number) => {
         const rank = idx + 1;
-        let capitalWeight: number;
+        let bonus: number;
         if (rank > MAX_RANK) {
-          capitalWeight = MIN_W;
+          bonus = 0;
         } else {
           const tier = Math.ceil(rank / 10);
-          capitalWeight = Math.round((MAX_W - (tier - 1) * step) * 10000) / 10000;
+          bonus = Math.round((MAX_BONUS - (tier - 1) * step) * 10000) / 10000;
         }
+        const capitalWeight = Math.round((1.0 + bonus) * 10000) / 10000;
         return {
           userId: Number(r.userId),
           name: r.name as string,
@@ -713,18 +725,20 @@ export const equityRouter = router({
           capitalTotal: Number(r.capitalTotal),
           rank,
           tier: rank <= MAX_RANK ? Math.ceil(rank / 10) : null,
+          bonus,
           capitalWeight,
         };
       });
 
-      // 66档规则列表
+      // 66档规则列表（展示加成值0~1.0）
       const tiers = Array.from({ length: TIERS }, (_, i) => {
         const tier = i + 1;
-        const w = Math.round((MAX_W - i * step) * 10000) / 10000;
-        return { tier, rankFrom: (tier - 1) * 10 + 1, rankTo: tier * 10, weight: w };
+        const bonus = Math.round((MAX_BONUS - i * step) * 10000) / 10000;
+        const totalW = Math.round((1.0 + bonus) * 10000) / 10000;
+        return { tier, rankFrom: (tier - 1) * 10 + 1, rankTo: tier * 10, bonus, weight: totalW };
       });
 
-      return { totalEligible, nextWeight, preview, tiers };
+      return { totalEligible: eligible.length, totalRanked, nextWeight, nextBonus, preview, tiers };
     }),
 
   // 一键应用自动权重（将预览结果写入equity_weights）
@@ -760,21 +774,22 @@ export const equityRouter = router({
       const THRESHOLD = 100000;
       const TIERS = 66;
       const MAX_RANK = 660;
-      const MAX_W = 2.0;
-      const MIN_W = 1.0;
-      const step = (MAX_W - MIN_W) / (TIERS - 1);
+      const MAX_BONUS = 1.0;
+      const MIN_BONUS = Math.round(MAX_BONUS / (TIERS - 1) * 10000) / 10000;
+      const step = (MAX_BONUS - MIN_BONUS) / (TIERS - 1);
       const eligible = (rows as any[]).filter((r: any) => Number(r.capitalTotal) >= THRESHOLD);
       let updatedCount = 0;
       for (let idx = 0; idx < eligible.length; idx++) {
         const r = eligible[idx];
         const rank = idx + 1;
-        let capitalWeight: number;
+        let bonus: number;
         if (rank > MAX_RANK) {
-          capitalWeight = MIN_W;
+          bonus = 0;
         } else {
           const tier = Math.ceil(rank / 10);
-          capitalWeight = Math.round((MAX_W - (tier - 1) * step) * 10000) / 10000;
+          bonus = Math.round((MAX_BONUS - (tier - 1) * step) * 10000) / 10000;
         }
+        const capitalWeight = Math.round((1.0 + bonus) * 10000) / 10000;
         // 读取旧值
         const [[oldRow]] = await (db as any).execute(
           'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
