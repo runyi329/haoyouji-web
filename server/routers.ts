@@ -13980,8 +13980,9 @@ insights 数组每项包含：
         const cumPnl: { idx: number; pnl: number }[] = [];
         let running = 0;
         (allRows as any[]).forEach((r: any, i: number) => {
-          const amt = Number(r.amount) * 100;
-          const win = Number(r.win_amount) * 100;
+          // amount/win_amount 字段单位就是「元」，直接使用无需×100
+          const amt = Number(r.amount) || 0;
+          const win = Number(r.win_amount) || 0;
           running += (win - amt);
           if (i % 50 === 0 || i === (allRows as any[]).length - 1) {
             cumPnl.push({ idx: i + 1, pnl: Math.round(running * 100) / 100 });
@@ -14023,8 +14024,8 @@ insights 数组每项包含：
         // 4. 每日盈亏
         const [dailyRows] = await (conn as any).execute(
           `SELECT DATE(trade_time) as day,
-                  SUM(CAST(amount AS DECIMAL(20,4)))*100 as bet_sum,
-                  SUM(CAST(win_amount AS DECIMAL(20,4)))*100 as win_sum,
+                  SUM(CAST(amount AS DECIMAL(20,4))) as bet_sum,
+                  SUM(CAST(win_amount AS DECIMAL(20,4))) as win_sum,
                   COUNT(*) as total
            FROM qq_trade_records WHERE amount IS NOT NULL AND amount != ''
            GROUP BY DATE(trade_time) ORDER BY day`
