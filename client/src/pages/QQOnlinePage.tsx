@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { History, Plus, RefreshCw, ClipboardList, X } from "lucide-react";
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } from 'chart.js';
+import { Line, Bar } from 'react-chartjs-2';
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
 
 // 管理员（jiang）每月20万，yjh为1/5即4万
 const PER_SECOND_FULL = 200000 / 30 / 24 / 3600;
@@ -1630,17 +1633,14 @@ function MonteCarloCard() {
   const { data: mcData, isLoading } = trpc.getQQMonteCarloData.useQuery(undefined, {
     refetchInterval: 10 * 60 * 1000,
   });
-  const [simResult, setSimResult] = React.useState<any>(null);
+  // 从localStorage恢复上次模拟结果
+  const [simResult, setSimResult] = React.useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('mc_sim_result_v1');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [simRunning, setSimRunning] = React.useState(false);
-  const [Chart, setChart] = React.useState<any>(null);
-
-  React.useEffect(() => {
-    Promise.all([import('chart.js'), import('react-chartjs-2')]).then(([chartjs, rChartjs]) => {
-      const { Chart: ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler } = chartjs;
-      ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend, Filler);
-      setChart({ Line: rChartjs.Line, Bar: rChartjs.Bar });
-    });
-  }, []);
 
   const cardStyle: React.CSSProperties = {
     background: 'linear-gradient(145deg, rgba(18,42,68,0.95) 0%, rgba(11,28,48,0.98) 100%)',
@@ -1782,7 +1782,10 @@ function MonteCarloCard() {
       };
       const actualResult = runSimulation({ ...params, winRate: mcData.actualWinRate / 100 });
       const expectedResult = runSimulation({ ...params, winRate: mcData.expectedWinRate / 100 });
-      setSimResult({ actual: actualResult, expected: expectedResult, params: { ...params, mcData } });
+      const result = { actual: actualResult, expected: expectedResult, params: { ...params, mcData }, savedAt: new Date().toLocaleString('zh-CN') };
+      setSimResult(result);
+      // 持久化到localStorage
+      try { localStorage.setItem('mc_sim_result_v1', JSON.stringify(result)); } catch {}
       setSimRunning(false);
     }, 50);
   }
@@ -1857,9 +1860,8 @@ function MonteCarloCard() {
         </button>
 
         {/* 模拟结果 */}
-        {simResult && Chart && (() => {
-          const { actual, expected, params: p } = simResult;
-          const { Line, Bar } = Chart;
+        {simResult && (() => {
+          const { actual, expected, params: p, savedAt } = simResult;
           const days = actual.dayLabels;
           const capital = p.mcData.currentBalance;
           const dailyTarget = capital * 100;
@@ -1940,6 +1942,12 @@ function MonteCarloCard() {
 
           return (
             <div>
+              {/* 上次模拟时间 */}
+              {savedAt && (
+                <div className="text-[7px] mb-2 text-right" style={{ color: 'rgba(122,155,191,0.6)' }}>
+                  上次模拟：{savedAt}
+                </div>
+              )}
               {/* 3图布局：左上+右上+左下，右下为柱状图 */}
               <div className="grid grid-cols-2 gap-2 mb-2">
                 {/* 图1：实际胜率资金曲线 */}

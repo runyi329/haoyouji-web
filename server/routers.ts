@@ -15130,64 +15130,6 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '删除失败' });
       }
     }),
-});
-// 管理员容器定义管理（独立 router，仅超级管理员可用）
-export const adminFeatureRouter = router({
-  // 获取所有容器定义
-  list: protectedProcedure
-    .query(async ({ ctx }) => {
-      if (ctx.user.role !== 'super_admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
-      }
-      return db.getAllFeatureDefinitions();
-    }),
-  
-  // 创建或更新容器定义
-  upsert: protectedProcedure
-    .input(z.object({
-      featureId: z.number(),
-      title: z.string(),
-      description: z.string().optional(),
-      isActive: z.boolean(),
-      defaultPosition: z.number(),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'super_admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
-      }
-      await db.upsertFeatureDefinition({
-        ...input,
-        createdBy: ctx.user.id,
-      });
-      return { success: true };
-    }),
-  
-  // 执行 pending_type 数据库迁移
-  migratePendingType: protectedProcedure
-    .mutation(async ({ ctx }) => {
-      if (ctx.user.role !== 'super_admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
-      }
-      
-      const { migratePendingType } = await import('./migrate-production');
-      const db = await import('./db').then(m => m.getDb());
-      
-      if (!db) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      }
-      
-      const result = await migratePendingType(db);
-      
-      if (!result.success) {
-        throw new TRPCError({ 
-          code: 'INTERNAL_SERVER_ERROR', 
-          message: `迁移失败: ${result.error}` 
-        });
-      }
-      
-      return result;
-    }),
-
   // ========== QQ蒙特卡洛模拟数据接口 ==========
   getQQMonteCarloData: protectedProcedure
     .query(async ({ ctx }) => {
@@ -15252,6 +15194,65 @@ export const adminFeatureRouter = router({
         return { actualWinRate: 36.6, expectedWinRate: 34.89, avgBet: 279.62, avgPayout: 791.20, currentBalance: 1500, totalBets: 0 };
       }
     }),
+
+});
+// 管理员容器定义管理（独立 router，仅超级管理员可用）
+export const adminFeatureRouter = router({
+  // 获取所有容器定义
+  list: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+      }
+      return db.getAllFeatureDefinitions();
+    }),
+  
+  // 创建或更新容器定义
+  upsert: protectedProcedure
+    .input(z.object({
+      featureId: z.number(),
+      title: z.string(),
+      description: z.string().optional(),
+      isActive: z.boolean(),
+      defaultPosition: z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+      }
+      await db.upsertFeatureDefinition({
+        ...input,
+        createdBy: ctx.user.id,
+      });
+      return { success: true };
+    }),
+  
+  // 执行 pending_type 数据库迁移
+  migratePendingType: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可访问' });
+      }
+      
+      const { migratePendingType } = await import('./migrate-production');
+      const db = await import('./db').then(m => m.getDb());
+      
+      if (!db) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      }
+      
+      const result = await migratePendingType(db);
+      
+      if (!result.success) {
+        throw new TRPCError({ 
+          code: 'INTERNAL_SERVER_ERROR', 
+          message: `迁移失败: ${result.error}` 
+        });
+      }
+      
+      return result;
+    }),
+
 
   // 获取脱动共享商盟完整架构文档（建站规则页使用）
   getMerchantArchitectureDoc: publicProcedure
