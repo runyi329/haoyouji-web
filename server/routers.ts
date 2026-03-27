@@ -9905,7 +9905,7 @@ export const appRouter = router({
             const parentIds = batch.map(b => b.id);
             const layerMap = new Map(batch.map(b => [b.id, b.layer]));
             const [childRows] = await rawDb.execute(
-              `SELECT id, name, username, invited_by_user_id, invited_at, created_at FROM users WHERE invited_by_user_id IN (${placeholders})`,
+              `SELECT id, name, username, invited_by_user_id, invited_at, createdAt FROM users WHERE invited_by_user_id IN (${placeholders})`,
               parentIds
             ) as any[];
             for (const child of (childRows as any[])) {
@@ -9922,7 +9922,7 @@ export const appRouter = router({
                   layer,
                   invitedAt: child.invited_at ? new Date(child.invited_at).toLocaleDateString('zh-CN') : null,
                   inviterName,
-                  registeredAt: child.created_at ? new Date(child.created_at).toLocaleDateString('zh-CN') : null
+                  registeredAt: child.createdAt ? new Date(child.createdAt).toLocaleDateString('zh-CN') : null
                 });
                 queue.push({ id: child.id, layer, name: child.name || child.username || '未知用户' });
               }
