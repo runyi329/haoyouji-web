@@ -1921,9 +1921,36 @@ function MonteCarloCard() {
             },
           });
 
+          // 计算关键边界天数：中位数归零天、p25归零天、p5归零天
+          const findZeroDay = (arr: number[]) => {
+            for (let i = 1; i < arr.length; i++) {
+              if (arr[i] === 0 && arr[i - 1] > 0) return (days as number[])[i];
+            }
+            return null;
+          };
+          const p50ZeroDay = findZeroDay(actual.p50);
+          const p25ZeroDay = findZeroDay(actual.p25);
+          const p5ZeroDay  = findZeroDay(actual.p5);
+          // 关键节点集合：始终显示第0天和最后一天，加上归零边界天
+          const keyDays = new Set<number>([0]);
+          const lastDay = (days as number[])[(days as number[]).length - 1];
+          keyDays.add(lastDay);
+          if (p50ZeroDay != null) keyDays.add(p50ZeroDay);
+          if (p25ZeroDay != null) keyDays.add(p25ZeroDay);
+          if (p5ZeroDay  != null) keyDays.add(p5ZeroDay);
+          // 如果关键节点少于3个，补充中间天数
+          if (keyDays.size < 3) {
+            const mid = Math.round(lastDay / 2);
+            keyDays.add(mid);
+          }
+          const dateLabels = (days as number[]).map((d: number) => {
+            if (keyDays.has(d)) return d === 0 ? '第0天' : `第${d}天`;
+            return '';
+          });
+
           // 图1：实际胜率资金曲线（中位数=红，25-75%=绿，5-95%=蓝）
           const chart1Data = {
-            labels: days.map((d: number) => d === 0 ? '0' : d % 10 === 0 ? `${d}天` : ''),
+            labels: dateLabels,
             datasets: [
               // 蓝色区域：5-95%（最外层，先渲染）
               { label: '5-95%上', data: actual.p95, borderColor: 'transparent', backgroundColor: 'rgba(64,160,255,0.18)', fill: '+1', pointRadius: 0, borderWidth: 0 },
@@ -1938,7 +1965,7 @@ function MonteCarloCard() {
 
           // 图2：期望胜率资金曲线（中位数=红，25-75%=绿，5-95%=蓝）
           const chart2Data = {
-            labels: days.map((d: number) => d === 0 ? '0' : d % 10 === 0 ? `${d}天` : ''),
+            labels: dateLabels,
             datasets: [
               // 蓝色区域：5-95%
               { label: '5-95%上', data: expected.p95, borderColor: 'transparent', backgroundColor: 'rgba(64,160,255,0.18)', fill: '+1', pointRadius: 0, borderWidth: 0 },
@@ -1953,7 +1980,7 @@ function MonteCarloCard() {
 
           // 图3：破产累计概率
           const chart3Data = {
-            labels: days.map((d: number) => d === 0 ? '0' : d % 10 === 0 ? `${d}天` : ''),
+            labels: dateLabels,
             datasets: [
               { label: `实际${p.mcData.actualWinRate}%`, data: actual.bankruptCumRate, borderColor: GREEN_COLOR, borderWidth: 1.5, pointRadius: 0, fill: false },
               { label: `期望${p.mcData.expectedWinRate}%`, data: expected.bankruptCumRate, borderColor: RED_COLOR, borderWidth: 1.5, pointRadius: 0, fill: false },
@@ -2048,6 +2075,16 @@ function MonteCarloCard() {
                   <div className="text-[8px] font-bold" style={{ color: LABEL_COLOR }}>期望盈利%</div>
                   <div className="text-[8px] font-bold" style={{ color: LABEL_COLOR }}>期望破产%</div>
                 </div>
+                {/* 归零边界说明行 */}
+                {(p50ZeroDay != null || p25ZeroDay != null || p5ZeroDay != null) && (
+                  <div className="px-2 py-1.5" style={{ background: 'rgba(255,107,107,0.06)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div className="text-[7px] leading-relaxed" style={{ color: 'rgba(255,107,107,0.8)' }}>
+                      {p50ZeroDay != null && <span>• 中位数第{p50ZeroDay}天归零（超过50%路径破产）　</span>}
+                      {p25ZeroDay != null && <span>• 25%分位第{p25ZeroDay}天归零（超过75%路径破产）　</span>}
+                      {p5ZeroDay  != null && <span>• 5%分位第{p5ZeroDay}天归零（超过95%路径破产）</span>}
+                    </div>
+                  </div>
+                )}
                 {actual.stats.map((s: any, i: number) => {
                   const es = expected.stats[i];
                   return (
