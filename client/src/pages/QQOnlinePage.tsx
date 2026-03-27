@@ -1671,30 +1671,27 @@ function MonteCarloCard() {
     // 每笔标准差
     const betStd = Math.sqrt(winRate * Math.pow(avgPayout - avgBet - betEV, 2) + (1 - winRate) * Math.pow(-avgBet - betEV, 2));
 
-    // 模拟单天：要么赢满target，要么输光capital
-    // 用正态近似：每笔均值betEV，标准差betStd，连续投注直到累计盈亏>=target或<=−capital
-    function simulateOneDay(capital: number, target: number): { won: boolean; pnl: number } {
-      let cumPnl = 0;
-      let bets = 0;
-      const maxBets = 2000; // 防止无限循环
-      while (bets < maxBets) {
-        // 单笔结果
-        const r = Math.random();
-        const pnl = r < winRate ? (avgPayout - avgBet) : -avgBet;
-        cumPnl += pnl;
-        bets++;
-        if (cumPnl >= target) return { won: true, pnl: target };
-        if (cumPnl <= -capital) return { won: false, pnl: -capital };
-      }
-      return { won: cumPnl > 0, pnl: cumPnl };
-    }
-
     // 按天统计：各天的资产中位数、25/75分位、5/95分位
     const capitalByDay: number[][] = Array.from({ length: days + 1 }, () => []);
     const bankruptByDay = new Array(days + 1).fill(0);
     const bankruptDay: number[] = []; // 每条路径的破产天（-1=未破产）
-
-    const CAP_LIMIT = 150000; // 本金上限 15万，超出部分每天结算取走
+    const CAP_LIMIT = 150000; // 本金上限 15万
+    const WIN_TARGET = CAP_LIMIT + dailyTarget; // 每天目标：赢到19万（15万+4万）
+    // 模拟单天：资产从capital开始，赢到WIN_TARGET收手，输光则破产
+    function simulateOneDay(capital: number): { won: boolean } {
+      let currentCapital = capital;
+      let bets = 0;
+      const maxBets = 5000; // 防止无限循环
+      while (bets < maxBets) {
+        const r = Math.random();
+        const pnl = r < winRate ? (avgPayout - avgBet) : -avgBet;
+        currentCapital += pnl;
+        bets++;
+        if (currentCapital >= WIN_TARGET) return { won: true };
+        if (currentCapital <= 0) return { won: false };
+      }
+      return { won: currentCapital >= WIN_TARGET };
+    }
     let totalWithdrawn = 0; // 记录各路径累计取走总额（用于展示）
     const withdrawnByDay: number[] = new Array(days + 1).fill(0); // 各天平均取走额
 
@@ -1710,18 +1707,15 @@ function MonteCarloCard() {
           bankruptByDay[d]++;
           continue;
         }
-        const { won, pnl } = simulateOneDay(capital, dailyTarget);
+        const { won } = simulateOneDay(capital);
         if (!won) {
           capital = 0;
           bankrupt = true;
           bankruptAt = d;
         } else {
-          capital = capital + pnl;
-          // 本金上限规则：超过 15 万的部分结算取走
-          if (capital > CAP_LIMIT) {
-            pathWithdrawn += (capital - CAP_LIMIT);
-            capital = CAP_LIMIT;
-          }
+          // 赢到19万，取走超出15万的部分（即4万），第二天从15万开始
+          pathWithdrawn += dailyTarget;
+          capital = CAP_LIMIT;
         }
         capitalByDay[d].push(capital);
         withdrawnByDay[d] += pathWithdrawn;
