@@ -599,14 +599,15 @@ export const equityRouter = router({
          ORDER BY lm.createdAt ASC`,
         [input.ledgerId]
       ) as any;
-      // 查所有权重记录
+      // 查资源权重（手动设置部分，仍从 equity_weights 读取）
       const [weights] = await (db as any).execute(
-        'SELECT user_id, resource_weight, capital_weight FROM equity_weights'
+        'SELECT user_id, resource_weight FROM equity_weights'
       ) as any;
-      const wMap = new Map<number, { r: number; c: number }>();
+      const rwMap = new Map<number, number>();
       for (const w of weights) {
-        wMap.set(Number(w.user_id), { r: Number(w.resource_weight), c: Number(w.capital_weight) });
+        rwMap.set(Number(w.user_id), Number(w.resource_weight));
       }
+      // 实时计算资金权重（66档等差规则）
       const THRESHOLD_W = 100000;
       const TIERS_W = 66;
       const MAX_RANK_W = 660;
@@ -615,27 +616,27 @@ export const equityRouter = router({
       const stepW = (MAX_BONUS_W - MIN_BONUS_W) / (TIERS_W - 1);
       return (members as any[]).map((m: any) => {
         const uid = Number(m.userId);
-        const r = wMap.get(uid)?.r ?? 1.00;
-        const c = wMap.get(uid)?.c ?? 1.00;
+        const r = rwMap.get(uid) ?? 1.00;
         const capitalAmount = Number(m.capitalAmount ?? 0);
         const capitalRatio = Math.min(capitalAmount / THRESHOLD_W, 1.0);
-        // 根据股东编号计算入股早晚加成
+        // 根据股东编号实时计算入股早晚加成
         const shareNo = m.shareNo ? String(m.shareNo) : null;
         let rawBonus = 0;
         if (shareNo) {
           const rank = parseInt(shareNo, 10);
-          if (!isNaN(rank) && rank <= MAX_RANK_W) {
+          if (!isNaN(rank) && rank >= 1 && rank <= MAX_RANK_W) {
             const tier = Math.ceil(rank / 10);
             rawBonus = Math.round((MAX_BONUS_W - (tier - 1) * stepW) * 10000) / 10000;
           }
         }
         const autoBonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
+        const c = Math.round((1.0 + autoBonus) * 10000) / 10000;
         return {
           userId: uid,
           name: m.name || m.username || '未知',
           avatar: m.avatar ?? null,
           resourceWeight: r,
-          capitalWeight: c,
+          capitalWeight: c,          // 实时计算，不再读静态表
           totalWeight: Math.round(r * c * 10000) / 10000,
           capitalAmount,
           capitalRatio: Math.round(capitalRatio * 10000) / 10000,
