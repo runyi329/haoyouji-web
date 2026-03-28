@@ -79,44 +79,50 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
   const labelColor = 'rgba(58,20,0,0.55)';
   const dimColor = 'rgba(58,20,0,0.35)';
   const unitColor = 'rgba(58,20,0,0.6)';
+  const total = base + accrued;
   return (
-    <div>
+    <div className="rounded-xl mx-1 mb-2.5" style={{
+      background: '#FFF8F0',
+      border: '1px solid rgba(58,20,0,0.12)',
+      boxShadow: '0 2px 8px rgba(58,20,0,0.08), 0 1px 2px rgba(58,20,0,0.06)'
+    }}>
       <div className="px-4 py-3">
         {/* 顶部：日期 + 股票类型 */}
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2.5">
           <span className="text-xs" style={{ color: labelColor }}>{dateStr}</span>
           {s.shareType && (
-            isMarket
-              ? <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(58,20,0,0.1)', color: '#1A0A00', border: '1px solid rgba(58,20,0,0.3)' }}>{s.shareType}</span>
-              : <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(58,20,0,0.1)', color: '#1A0A00', border: '1px solid rgba(58,20,0,0.3)' }}>{s.shareType}</span>
+            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(232,96,28,0.12)', color: '#3D1F0D', border: '1px solid rgba(232,96,28,0.3)' }}>{s.shareType}</span>
           )}
         </div>
-        {/* 三行数据：左列辅助标签，右列数字对齐，大小一致 */}
+        {/* 数据行：左列辅助标签，右列数字对齐 */}
         <div className="flex items-start justify-between">
           {/* 左列：辅助标签 */}
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>股本</span>
             <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>股息</span>
-
           </div>
-          {/* 右列：数字，右对齐，大小一致 */}
+          {/* 右列：数字，右对齐 */}
           <div className="flex flex-col gap-1.5 items-end">
-            {/* 股本 */}
             <div className="flex items-baseline gap-0.5">
               <span className="text-sm font-bold" style={{ color: '#1A0A00' }}>{base.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
-            {/* 股息 */}
             <div className="flex items-baseline gap-0.5">
               <span className="text-sm font-bold" style={{ color: '#3D1F0D' }}>{accrued.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
-
+          </div>
+        </div>
+        {/* 合计行 */}
+        <div className="flex items-center justify-between mt-2.5 pt-2" style={{ borderTop: '1px solid rgba(58,20,0,0.1)' }}>
+          <span className="text-[10px] font-semibold" style={{ color: 'rgba(58,20,0,0.5)' }}>股本 + 股息</span>
+          <div className="flex items-baseline gap-0.5">
+            <span className="text-base font-bold" style={{ color: '#E8601C' }}>{total.toFixed(2)}</span>
+            <span className="text-[10px]" style={{ color: unitColor }}>张</span>
           </div>
         </div>
         {s.reason && !isMarket && <div className="text-xs mt-1.5" style={{ color: 'rgba(58,20,0,0.55)' }}>{s.reason}</div>}
       </div>
-      {!isLast && <div style={{ borderTop: '1px solid rgba(58,20,0,0.15)' }} />}
     </div>
   );
 }
