@@ -337,7 +337,7 @@ export default function FinanceManagement() {
         className="sticky top-0 z-10 px-4 py-3 flex items-center gap-3"
         style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
       >
-        <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1 -ml-2">
+        <button onClick={() => setLocation(`/ledger/${ledgerId}/settings${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} className="p-1 -ml-2">
           <ChevronLeft className="w-6 h-6 text-white" />
         </button>
         <h1 className="text-lg font-semibold text-white">融资付息订单管理</h1>
