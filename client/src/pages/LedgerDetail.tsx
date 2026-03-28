@@ -1192,6 +1192,12 @@ export default function LedgerDetail() {
                             return <>@{uname}</>;
                           })()}
                         </span>
+                        {myShares && myShares.length > 0 && (myShares[0] as any).shareNo && (
+                          <>
+                            <span className="text-sm" style={{ color: 'rgba(255,248,240,0.4)' }}>·</span>
+                            <span className="text-sm font-bold tracking-widest" style={{ color: 'rgba(255,248,240,0.9)' }}>{(myShares[0] as any).shareNo}</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   ) : (
