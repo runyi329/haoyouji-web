@@ -1142,7 +1142,10 @@ export default function LedgerDetail() {
   ];
 
   return (
-    <div className="min-h-screen" style={isCustomAI ? { backgroundColor: '#E8601C' } : {}}>
+    <div className="min-h-screen" style={isCustomAI ? {
+      backgroundColor: '#E8601C',
+      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"), repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(58,20,0,0.018) 2px, rgba(58,20,0,0.018) 3px), repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(58,20,0,0.012) 4px, rgba(58,20,0,0.012) 5px)`,
+    } : {}}>
       {/* 顶部区域 */}
       <div className="pb-4" style={(isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAI ? { background: 'linear-gradient(160deg, #3D1F0D 0%, #5C2E10 30%, #3D1F0D 100%)', color: '#1A0A00', borderBottom: '1px solid rgba(58,20,0,0.4)' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* AF/AH 账本：顶部两行布局 */}
