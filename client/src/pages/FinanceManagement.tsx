@@ -657,32 +657,96 @@ export default function FinanceManagement() {
                 </div>
               </div>
 
-              {/* 融资金额 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">融资金额 (USDT) <span className="text-red-400 ml-0.5">*</span></label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.amount}
-                  onChange={e => setFormData(d => ({ ...d, amount: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：100000"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>
+              {/* 融资金额 / 买入价格 / 买入数量 三字段联动 */}
+              <div className="rounded-2xl border border-gray-200 overflow-hidden">
+                <div className="px-4 pt-3 pb-1">
+                  <span className="text-xs text-gray-400">输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数</span>
+                </div>
+                {/* 融资金额 */}
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 (USDT) <span className="text-red-400">*</span></label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.amount}
+                    onChange={e => {
+                      const amount = e.target.value;
+                      setFormData(d => {
+                        const price = parseFloat(d.buyPrice);
+                        const qty = parseFloat(d.buyQuantity);
+                        const amt = parseFloat(amount);
+                        // 如果买入价已有，自动计算币数
+                        if (amount && !isNaN(price) && price > 0) {
+                          return { ...d, amount, buyQuantity: (amt / price).toFixed(6) };
+                        }
+                        // 如果币数已有，自动计算买入价
+                        if (amount && !isNaN(qty) && qty > 0) {
+                          return { ...d, amount, buyPrice: (amt / qty).toFixed(2) };
+                        }
+                        return { ...d, amount };
+                      });
+                    }}
+                    className="w-full bg-transparent text-base focus:outline-none"
+                    placeholder="如：100000"
+                  />
+                </div>
+                {/* 买入价格 */}
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格 (USD/枚)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.buyPrice}
+                    onChange={e => {
+                      const price = e.target.value;
+                      setFormData(d => {
+                        const qty = parseFloat(d.buyQuantity);
+                        const amt = parseFloat(d.amount);
+                        const p = parseFloat(price);
+                        // 如果币数已有，自动计算融资金额
+                        if (price && !isNaN(qty) && qty > 0) {
+                          return { ...d, buyPrice: price, amount: (p * qty).toFixed(2) };
+                        }
+                        // 如果融资金额已有，自动计算币数
+                        if (price && !isNaN(amt) && amt > 0) {
+                          return { ...d, buyPrice: price, buyQuantity: (amt / p).toFixed(6) };
+                        }
+                        return { ...d, buyPrice: price };
+                      });
+                    }}
+                    className="w-full bg-transparent text-base focus:outline-none"
+                    placeholder="如：95000"
+                  />
+                </div>
 
-              {/* 买入价格 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">买入价格 (USD)</label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.buyPrice}
-                  onChange={e => setFormData(d => ({ ...d, buyPrice: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：95000"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
+                {/* 币数 */}
+                <div className="px-4 py-3">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">币数 ({formData.coin})</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.buyQuantity}
+                    onChange={e => {
+                      const qty = e.target.value;
+                      setFormData(d => {
+                        const price = parseFloat(d.buyPrice);
+                        const amt = parseFloat(d.amount);
+                        const q = parseFloat(qty);
+                        // 如果买入价已有，自动计算融资金额
+                        if (qty && !isNaN(price) && price > 0) {
+                          return { ...d, buyQuantity: qty, amount: (price * q).toFixed(2) };
+                        }
+                        // 如果融资金额已有，自动计算买入价
+                        if (qty && !isNaN(amt) && amt > 0) {
+                          return { ...d, buyQuantity: qty, buyPrice: (amt / q).toFixed(2) };
+                        }
+                        return { ...d, buyQuantity: qty };
+                      });
+                    }}
+                    className="w-full bg-transparent text-base focus:outline-none"
+                    placeholder="如：1.05"
+                  />
+                </div>
               </div>
 
               {/* 买入日期 */}
@@ -702,19 +766,7 @@ export default function FinanceManagement() {
                 )}
               </div>
 
-              {/* 买入数量 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">买入数量 ({formData.coin})</label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.buyQuantity}
-                  onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：1.05"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>
+
 
               {/* 存放账号 */}
               <div>
