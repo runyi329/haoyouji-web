@@ -1175,11 +1175,33 @@ export default function LedgerDetail() {
                   );
                 })()}
                 <div className="flex flex-col">
-                  <span className="text-base font-semibold">{ledgerData.name}</span>
-                  {viewAsUserId && (() => {
-                    const viewTarget = (membersData as any[])?.find((m: any) => m.userId === viewAsUserId);
-                    return viewTarget ? <span className="text-xs text-white/70">查看: {viewTarget.nickname || viewTarget.username}</span> : null;
-                  })()}
+                  {isCustomAI ? (
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base font-semibold" style={{ color: '#FFF8F0' }}>{ledgerData.name}</span>
+                        <span className="text-sm" style={{ color: 'rgba(255,248,240,0.5)' }}>·</span>
+                        <span className="text-sm" style={{ color: 'rgba(255,248,240,0.85)' }}>
+                          {(() => {
+                            const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
+                            const target = viewTarget || user;
+                            if (!target) return null;
+                            const nick = (target as any).nickname;
+                            const uname = (target as any).username;
+                            if (nick && nick !== uname) return <>{nick} <span style={{ color: 'rgba(255,248,240,0.5)', fontSize: '0.75rem' }}>@{uname}</span></>;
+                            return <>@{uname}</>;
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-base font-semibold">{ledgerData.name}</span>
+                      {viewAsUserId && (() => {
+                        const viewTarget = (membersData as any[])?.find((m: any) => m.userId === viewAsUserId);
+                        return viewTarget ? <span className="text-xs text-white/70">查看: {viewTarget.nickname || viewTarget.username}</span> : null;
+                      })()}
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1197,39 +1219,7 @@ export default function LedgerDetail() {
                     />
                   </div>
                 )}
-                {/* AI账本：刷新/返回/记录按钮放到右上角头像同一行 */}
-                {isCustomAI && (
-                  <>
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                      style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
-                    >
-                      刷新
-                    </button>
-                    <button
-                      onClick={() => { setShareholdingSnapshot({ angel: globalAngelTotal, market: globalMarketTotal }); setShowShareholdingModal(true); }}
-                      className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                      style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
-                    >
-                      结构
-                    </button>
-                    <button
-                      onClick={() => { setEquityHistoryUserId(viewAsUserId ?? null); setShowEquityHistory(true); }}
-                      className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                      style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
-                    >
-                      记录
-                    </button>
-                    <button
-                      onClick={() => setLocation('/ledger')}
-                      className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                      style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
-                    >
-                      返回
-                    </button>
-                  </>
-                )}
+                {/* AI账本：按钮移到第二行，此处不再渲染 */}
                 {effectiveIsManager && (
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
@@ -1243,6 +1233,39 @@ export default function LedgerDetail() {
             </div>
             {/* 第二行：操作按钮 */}
             <div className="flex items-center gap-2 mt-2">
+              {/* AI账本：第二行四个按钮 */}
+              {isCustomAI && (
+                <>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
+                    style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
+                  >
+                    刷新
+                  </button>
+                  <button
+                    onClick={() => { setShareholdingSnapshot({ angel: globalAngelTotal, market: globalMarketTotal }); setShowShareholdingModal(true); }}
+                    className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
+                    style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
+                  >
+                    结构
+                  </button>
+                  <button
+                    onClick={() => { setEquityHistoryUserId(viewAsUserId ?? null); setShowEquityHistory(true); }}
+                    className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
+                    style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
+                  >
+                    记录
+                  </button>
+                  <button
+                    onClick={() => setLocation('/ledger')}
+                    className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
+                    style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
+                  >
+                    返回
+                  </button>
+                </>
+              )}
               {isCustomAH && (
                 <span className="text-xs text-white/70 mr-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{ahRoleName}</span>
               )}
