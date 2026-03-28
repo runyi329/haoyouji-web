@@ -231,14 +231,17 @@ export const equityRouter = router({
       // 确保regNo字段存在（兼容旧表）
       try { await (conn as any).execute(`ALTER TABLE equity_shares ADD COLUMN IF NOT EXISTS regNo VARCHAR(10) DEFAULT NULL`); } catch(e) {}
       const [rows] = await (conn as any).execute(
-        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
+        `SELECT es.id, es.share_code, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
                 COALESCE(es.annualRate, 6.00) as annualRate,
                 COALESCE(es.weight, 1.0000) as weight,
                 COALESCE(es.resource_weight, 1.0000) as resourceWeight,
                 COALESCE(es.capital_weight, 1.0000) as capitalWeight,
-                sn.shareNo
+                es.source_user_id, es.source_amount,
+                sn.shareNo,
+                su.nickname as sourceNickname, su.username as sourceUsername
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
+         LEFT JOIN users su ON su.id=es.source_user_id
          WHERE es.ledgerId=?
          ORDER BY COALESCE(sn.shareNo, '9999'), es.userId, es.grantDate DESC, es.id DESC`,
         [input.ledgerId]
@@ -253,14 +256,17 @@ export const equityRouter = router({
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       const [rows] = await (conn as any).execute(
-        `SELECT es.id, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
+        `SELECT es.id, es.share_code, es.userId, es.memberNickname, es.shareCount, es.shareType, es.grantDate, es.reason, es.regNo, es.createdAt,
                 COALESCE(es.annualRate, 6.00) as annualRate,
                 COALESCE(es.weight, 1.0000) as weight,
                 COALESCE(es.resource_weight, 1.0000) as resourceWeight,
                 COALESCE(es.capital_weight, 1.0000) as capitalWeight,
-                sn.shareNo
+                es.source_user_id, es.source_amount,
+                sn.shareNo,
+                su.nickname as sourceNickname, su.username as sourceUsername
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
+         LEFT JOIN users su ON su.id=es.source_user_id
          WHERE es.ledgerId=? AND es.userId=? ORDER BY es.grantDate DESC, es.id DESC`,
         [input.ledgerId, input.userId]
       );
@@ -336,12 +342,16 @@ export const equityRouter = router({
       const autoBonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
       const cw = Math.round((1.0 + autoBonus) * 10000) / 10000;
       const snapshotWeight = Math.round(rw * cw * 10000) / 10000;
+      // 生成唯一股权编号 share_code（格式：ES-{ledgerId:02d}-{年份}-{6位随机数字}）
+      const year = new Date().getFullYear();
+      const randDigits = Math.floor(100000 + Math.random() * 900000).toString();
+      const shareCode = `ES-${String(input.ledgerId).padStart(2,'0')}-${year}-${randDigits}`;
       const [result] = await (conn as any).execute(
-        `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy, weight, resource_weight, capital_weight)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, finalRegNo, ctx.user.id, snapshotWeight, rw, cw]
+        `INSERT INTO equity_shares (share_code, ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy, weight, resource_weight, capital_weight)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [shareCode, input.ledgerId, input.userId, input.memberNickname, input.shareCount, input.shareType || '资金股', input.grantDate, input.reason, finalRegNo, ctx.user.id, snapshotWeight, rw, cw]
       );
-      return { id: (result as any).insertId, regNo: finalRegNo };
+      return { id: (result as any).insertId, regNo: finalRegNo, shareCode };
     }),
 
   // 删除股权记录（仅owner/admin可操作）
@@ -1024,10 +1034,13 @@ export const equityTransferRouter = router({
         const toSnapshotWeight = Math.round(toRw * toCw * 10000) / 10000;
         // 新增转入人的股权记录
         const today = new Date().toISOString().slice(0, 10);
+        const transferYear = new Date().getFullYear();
+        const transferRandDigits = Math.floor(100000 + Math.random() * 900000).toString();
+        const transferShareCode = `ES-${String(transfer.ledgerId).padStart(2,'0')}-${transferYear}-${transferRandDigits}`;
         await (conn as any).execute(
-          `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy, annualRate, weight, resource_weight, capital_weight)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [transfer.ledgerId, transfer.toUserId, transfer.toNickname, transfer.fromShareCount, transfer.toShareType,
+          `INSERT INTO equity_shares (share_code, ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, createdBy, annualRate, weight, resource_weight, capital_weight)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [transferShareCode, transfer.ledgerId, transfer.toUserId, transfer.toNickname, transfer.fromShareCount, transfer.toShareType,
            today, `股权转让（来自 ${transfer.fromNickname}）`, ctx.user.id, annualRate, toSnapshotWeight, toRw, toCw]
         );
       }
