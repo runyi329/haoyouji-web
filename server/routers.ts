@@ -12062,10 +12062,10 @@ export const appRouter = router({
             avgCost: totalQty > 0 ? totalCost / totalQty : 0,
           };
         }
-        // 附带实时价格（与资金方逻辑一致）
+        // 附带实时价格（全部10种币）
         const { getLatestPrice } = await import('./price-scanner');
         const livePrices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL']) {
+        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM']) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
@@ -12077,7 +12077,7 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM']),
         amount: z.string(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -12091,6 +12091,8 @@ export const appRouter = router({
         interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
         counterparty: z.string().optional(),
+        collateralCoin: z.string().optional(),
+        collateralQty: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -12099,6 +12101,20 @@ export const appRouter = router({
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        // 自动建表时添加 collateral_coin / collateral_qty 列（如果不存在）
+        try {
+          const mysql = await import('mysql2/promise');
+          const dbUrl = process.env.DATABASE_URL || '';
+          const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
+          const conn = await mysql.createConnection({
+            host: parsedUrl.hostname, port: parseInt(parsedUrl.port) || 3306,
+            user: decodeURIComponent(parsedUrl.username), password: decodeURIComponent(parsedUrl.password),
+            database: parsedUrl.pathname.slice(1),
+          });
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_coin VARCHAR(20) DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_qty DECIMAL(20,8) DEFAULT NULL`);
+          await conn.end();
+        } catch(e) {}
         // 生成唯一订单号
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const digits = '0123456789';
@@ -12113,8 +12129,8 @@ export const appRouter = router({
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, counterparty, created_by)
-              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.counterparty || null}, ${ctx.user.id})`
+          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, counterparty, collateral_coin, collateral_qty, created_by)
+              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.counterparty || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -12125,7 +12141,7 @@ export const appRouter = router({
         id: z.number(),
         ledgerId: z.number(),
         userId: z.number().optional(),
-        coin: z.enum(['BTC', 'ETH', 'SOL']).optional(),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM']).optional(),
         amount: z.string().optional(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -12140,6 +12156,8 @@ export const appRouter = router({
         interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
         counterparty: z.string().optional(),
+        collateralCoin: z.string().optional(),
+        collateralQty: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -12156,6 +12174,7 @@ export const appRouter = router({
           buyQuantity: 'buy_quantity', storageAccount: 'storage_account', status: 'status',
           adminNote: 'admin_note', publicNote: 'public_note', interestRateAnnual: 'interest_rate_annual',
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestBaseCurrency: 'interest_base_currency', interestStartDate: 'interest_start_date',
+          collateralCoin: 'collateral_coin', collateralQty: 'collateral_qty',
         };
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
         for (const [key, col] of Object.entries(fieldMap)) {
