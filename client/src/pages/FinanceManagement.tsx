@@ -793,6 +793,7 @@ export default function FinanceManagement() {
                     }}
                     className="w-full bg-transparent text-base focus:outline-none"
                     placeholder="如：95000"
+                    step="any"
                   />
                 </div>
 
@@ -815,9 +816,9 @@ export default function FinanceManagement() {
                         if (!isNaN(price) && price > 0 && !d.amount) {
                           return { ...d, amount: (price * q).toFixed(2) };
                         }
-                        // 如果融资金额已有，自动计算买入价
+                        // 如果融资金额已有，自动计算买入价（保留 6 位小数减少精度丢失）
                         if (!isNaN(amt) && amt > 0 && !d.buyPrice) {
-                          return { ...d, buyPrice: (amt / q).toFixed(2) };
+                          return { ...d, buyPrice: (amt / q).toFixed(6) };
                         }
                         return d;
                       });
