@@ -717,7 +717,7 @@ export default function CryptoPrediction() {
 
   // 融资付息：订单列表（仅非资方用户在融资付息Tab时加载）
   const { data: financeOrdersData, refetch: refetchFinanceOrders, isFetching: financeOrdersFetching } = trpc.ledger.financeGetOrders.useQuery(
-    { ledgerId },
+    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF && !isFunder && tab === 'finance' }
   );
   const financeOrders: any[] = (financeOrdersData as any)?.orders ?? [];
