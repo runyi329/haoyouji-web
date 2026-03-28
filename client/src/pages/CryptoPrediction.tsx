@@ -106,6 +106,15 @@ function KlineChart({ bars, coinColor }: { bars: KlineBar[]; coinColor: string }
 }
 
 // ─── 工具函数 ──────────────────────────────────────────────────
+// 整数型币种（单价较低，通常以整数计量）
+const INTEGER_COINS_FIN = new Set(['SUI', 'ONDO', 'LOD', 'ENA', 'ARKM', 'AAVE']);
+
+function formatCoinQty(qty: number, coin: string): string {
+  if (INTEGER_COINS_FIN.has(coin)) return Math.round(qty).toLocaleString('en-US');
+  if (coin === 'BTC') return parseFloat(qty.toFixed(6)).toString();
+  return parseFloat(qty.toFixed(4)).toString();
+}
+
 function formatPrice(p: string | number | undefined) {
   if (p === undefined || p === null) return "--";
   const n = typeof p === "string" ? parseFloat(p) : p;
@@ -1393,7 +1402,7 @@ export default function CryptoPrediction() {
                         <div key={coin} className={`${idx < 2 ? 'border-r border-white/20' : ''} px-2`}>
                           <div className="text-white font-bold text-sm mb-1">{coin}</div>
                           <div className="text-white/60 text-[10px]">持有数量</div>
-                          <div className="text-white text-xs font-medium">{coin === 'BTC' ? qty.toFixed(6) : qty.toFixed(4)}</div>
+                          <div className="text-white text-xs font-medium">{formatCoinQty(qty, coin)}</div>
                           <div className="text-white/60 text-[10px] mt-1">平均成本</div>
                           <div className="text-white text-xs">{info.avgCost ? info.avgCost.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '0 U'}</div>
                           <div className="text-white/60 text-[10px] mt-1">当前价格</div>
@@ -1482,7 +1491,7 @@ export default function CryptoPrediction() {
                           {/* 持币数量（大字突出） */}
                           <div className="flex items-baseline gap-1 mb-1">
                             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
-                              {coinQty > 0 ? (order.coin === 'BTC' ? coinQty.toFixed(6) : coinQty.toFixed(4)) : '—'}
+                              {coinQty > 0 ? formatCoinQty(coinQty, order.coin) : '—'}
                             </span>
                             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
                           </div>
