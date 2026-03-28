@@ -238,7 +238,7 @@ export const equityRouter = router({
                 COALESCE(es.capital_weight, 1.0000) as capitalWeight,
                 es.source_user_id, es.source_amount,
                 sn.shareNo,
-                su.nickname as sourceNickname, su.username as sourceUsername
+                su.name as sourceNickname, su.username as sourceUsername
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
          LEFT JOIN users su ON su.id=es.source_user_id
@@ -263,7 +263,7 @@ export const equityRouter = router({
                 COALESCE(es.capital_weight, 1.0000) as capitalWeight,
                 es.source_user_id, es.source_amount,
                 sn.shareNo,
-                su.nickname as sourceNickname, su.username as sourceUsername
+                su.name as sourceNickname, su.username as sourceUsername
          FROM equity_shares es
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId=es.ledgerId AND sn.userId=es.userId
          LEFT JOIN users su ON su.id=es.source_user_id
