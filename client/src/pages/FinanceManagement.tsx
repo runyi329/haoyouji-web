@@ -145,6 +145,9 @@ export default function FinanceManagement() {
   const [, params] = useRoute("/ledger/:id/finance-management");
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
+  // 观察视角：从 URL ?viewAs=xxx 读取
+  const urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const viewAsUserId = urlSearchParams.get('viewAs') ? parseInt(urlSearchParams.get('viewAs')!) : undefined;
 
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
@@ -166,7 +169,7 @@ export default function FinanceManagement() {
 
   // 查询
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
-    { ledgerId },
+    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: !!ledgerId }
   );
   const orders = Array.isArray((ordersData as any)?.orders) ? (ordersData as any).orders : (Array.isArray(ordersData) ? ordersData : []);
