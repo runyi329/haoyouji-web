@@ -1587,10 +1587,27 @@ export default function CryptoPrediction() {
                                 const hasCollateral = collCoin && collQty > 0;
                                 const collPrice = hasCollateral ? (financeLivePrices[collCoin] || 0) : 0;
                                 const collValue = collQty * collPrice;
-                                // 担保缺口 = 当前市値 + 担保价值 - 买入价値
-                                const gap = hasCollateral && collPrice > 0 && coinPrice > 0
-                                  ? marketValue + collValue - buyValue
-                                  : null;
+                                const financeType = order.finance_type || '保本分成';
+                                // 担保缺口计算：
+                                // 保本分成：净担保价值（担保价值 - 已产生利息）- 基数（买入价值 × 24%）
+                                //   净担保价值 >= 基数 → 超过100%；否则显示负缺口（红色）
+                                // 自负盈亏：当前市值 + 担保价值 - 买入价值（原逻辑）
+                                let gap: number | null = null;
+                                if (hasCollateral && collPrice > 0) {
+                                  if (financeType === '保本分成') {
+                                    // 基数 = 买入价值 × 24%
+                                    const base = buyValue * 0.24;
+                                    // 净担保价值 = 担保价值 - 已产生利息（累计付息）
+                                    const netCollValue = collValue - paidInterest;
+                                    // 缺口 = 净担保价值 - 基数（负数表示不足）
+                                    gap = netCollValue - base;
+                                  } else {
+                                    // 自负盈亏：当前市值 + 担保价值 - 买入价值
+                                    if (coinPrice > 0) {
+                                      gap = marketValue + collValue - buyValue;
+                                    }
+                                  }
+                                }
                                 return hasCollateral ? (
                                   <>
                                     <div className="flex items-center justify-between mt-0.5 text-xs">
