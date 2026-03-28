@@ -152,6 +152,7 @@ const emptyForm = {
   status: 'active',
   collateralCoin: 'BTC' as CoinType,
   collateralQty: '',
+  financeType: '保本分成' as '保本分成' | '自负盈亏',
 };
 
 export default function FinanceManagement() {
@@ -262,6 +263,7 @@ export default function FinanceManagement() {
       status: order.status || 'active',
       collateralCoin: (order.collateral_coin || 'BTC') as CoinType,
       collateralQty: order.collateral_qty ? String(parseFloat(order.collateral_qty)) : '',
+      financeType: (order.finance_type || '保本分成') as '保本分成' | '自负盈亏',
     });
     setSelectedUserId(order.user_id || null);
     const u = realMembers.find((m: any) => m.userId === order.user_id);
@@ -299,6 +301,7 @@ export default function FinanceManagement() {
         status: formData.status,
         collateralCoin: formData.collateralCoin || undefined,
         collateralQty: formData.collateralQty || undefined,
+        financeType: formData.financeType,
       });
     } else {
       createMutation.mutate({
@@ -320,6 +323,7 @@ export default function FinanceManagement() {
         adminNote: formData.adminNote,
         collateralCoin: formData.collateralCoin || undefined,
         collateralQty: formData.collateralQty || undefined,
+        financeType: formData.financeType,
       });
     }
   }
@@ -848,6 +852,29 @@ export default function FinanceManagement() {
                   placeholder="填写存放的交易所或钱包账号"
                   style={{ display: 'block', boxSizing: 'border-box' }}
                 />
+              </div>
+
+              {/* 融资类型 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">融资类型</label>
+                <div className="flex gap-3">
+                  {(['保本分成', '自负盈亏'] as const).map(type => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, financeType: type }))}
+                      className={`flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition-colors ${
+                        formData.financeType === type
+                          ? type === '保本分成'
+                            ? 'bg-blue-600 border-blue-600 text-white'
+                            : 'bg-orange-500 border-orange-500 text-white'
+                          : 'bg-white border-gray-200 text-gray-500'
+                      }`}
+                    >
+                      {type === '保本分成' ? '保本分成（50%）' : '自负盈亏（100%）'}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* 担保利息 */}
