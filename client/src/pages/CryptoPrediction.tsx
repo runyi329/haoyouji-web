@@ -1627,10 +1627,59 @@ export default function CryptoPrediction() {
                                     </div>
                                     <div className="flex items-center justify-between mt-0.5 text-xs">
                                       <span className="text-gray-400">担保缺口</span>
-                                      <span className="font-medium" style={{ color: gap === null ? '#4B5563' : gap < 0 ? '#EF4444' : '#4B5563' }}>
-                                        {gap === null ? '---' : gap >= 0 ? '超过100%' : `${gap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
-                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-medium" style={{ color: gap === null ? '#4B5563' : gap < 0 ? '#EF4444' : '#4B5563' }}>
+                                          {gap === null ? '---' : gap >= 0 ? '超过100%' : `${gap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
+                                        </span>
+                                        {gap !== null && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const key = `gap_detail_${order.id}`;
+                                              const el = document.getElementById(key);
+                                              if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                                            }}
+                                            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[9px] font-bold flex-shrink-0"
+                                            style={{ background: '#9CA3AF', lineHeight: 1 }}
+                                          >
+                                            ?
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
+                                    {gap !== null && (
+                                      <div
+                                        id={`gap_detail_${order.id}`}
+                                        style={{ display: 'none', background: '#F9FAFB', border: '1px solid #E5E7EB' }}
+                                        className="mt-1 p-2 rounded text-xs"
+                                      >
+                                        {financeType === '保本分成' ? (
+                                          <div className="space-y-0.5" style={{ color: '#6B7280' }}>
+                                            <div className="font-semibold mb-1" style={{ color: '#374151' }}>担保缺口计算过程</div>
+                                            <div>基数 = 买入价値 × 24%</div>
+                                            <div style={{ color: '#1F2937' }}>&nbsp;&nbsp;= {buyValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} × 24% = <span style={{ color: '#D97706', fontWeight: 600 }}>{(buyValue * 0.24).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                            <div className="mt-1">担保价値 = {collQty % 1 === 0 ? collQty.toFixed(0) : collQty.toFixed(4)}{collCoin} × {collPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                            <div style={{ color: '#1F2937' }}>&nbsp;&nbsp;= <span style={{ color: '#D97706', fontWeight: 600 }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                            <div className="mt-1">代付利息 = {isNegativeRate ? unpaidInterest.toFixed(2) : '0.00'} U</div>
+                                            <div className="mt-1">净担保价値 = 担保价値 - 代付利息</div>
+                                            <div style={{ color: '#1F2937' }}>&nbsp;&nbsp;= {collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {isNegativeRate ? unpaidInterest.toFixed(2) : '0.00'} = <span style={{ color: '#D97706', fontWeight: 600 }}>{(collValue - (isNegativeRate ? unpaidInterest : 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                            <div className="mt-1 pt-1" style={{ borderTop: '1px solid #E5E7EB' }}>担保缺口 = 净担保价値 - 基数</div>
+                                            <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 600 }}>&nbsp;&nbsp;= {(collValue - (isNegativeRate ? unpaidInterest : 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} - {(buyValue * 0.24).toLocaleString(undefined, { maximumFractionDigits: 2 })} = <span>{gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                          </div>
+                                        ) : (
+                                          <div className="space-y-0.5" style={{ color: '#6B7280' }}>
+                                            <div className="font-semibold mb-1" style={{ color: '#374151' }}>担保缺口计算过程</div>
+                                            <div>当前市値 = {coinQty % 1 === 0 ? coinQty.toFixed(0) : coinQty.toFixed(4)} × {coinPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                            <div style={{ color: '#1F2937' }}>&nbsp;&nbsp;= <span style={{ color: '#D97706', fontWeight: 600 }}>{marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                            <div className="mt-1">担保价値 = {collQty % 1 === 0 ? collQty.toFixed(0) : collQty.toFixed(4)}{collCoin} × {collPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                            <div style={{ color: '#1F2937' }}>&nbsp;&nbsp;= <span style={{ color: '#D97706', fontWeight: 600 }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                            <div className="mt-1">买入价値 = <span style={{ color: '#D97706', fontWeight: 600 }}>{buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                            <div className="mt-1 pt-1" style={{ borderTop: '1px solid #E5E7EB' }}>担保缺口 = 当前市値 + 担保价値 - 买入价値</div>
+                                            <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 600 }}>&nbsp;&nbsp;= {marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} + {collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} = <span>{gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </>
                                 ) : null;
                               })()}
