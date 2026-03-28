@@ -1597,8 +1597,11 @@ export default function CryptoPrediction() {
                                   if (financeType === '保本分成') {
                                     // 基数 = 买入价值 × 24%
                                     const base = buyValue * 0.24;
-                                    // 净担保价值 = 担保价值 - 已产生利息（累计付息）
-                                    const netCollValue = collValue - paidInterest;
+                                    // 代付利息 = 待付利息（负利率时为代垫金额，即 unpaidInterest 的绝对值）
+                                    // unpaidInterest 已是正数（isNegativeRate 时代表代付金额）
+                                    const advancedInterest = isNegativeRate ? unpaidInterest : 0;
+                                    // 净担保价值 = 担保价值 - 代付利息
+                                    const netCollValue = collValue - advancedInterest;
                                     // 缺口 = 净担保价值 - 基数（负数表示不足）
                                     gap = netCollValue - base;
                                   } else {
