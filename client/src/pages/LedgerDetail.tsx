@@ -1142,7 +1142,8 @@ export default function LedgerDetail() {
   ];
 
   return (
-    <div className="min-h-screen" style={isCustomAI ? {
+    <div className={isCustomAI ? "flex flex-col" : "min-h-screen"} style={isCustomAI ? {
+      height: '100dvh',
       backgroundColor: '#E8601C',
       backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"), repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(58,20,0,0.018) 2px, rgba(58,20,0,0.018) 3px), repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(58,20,0,0.012) 4px, rgba(58,20,0,0.012) 5px)`,
     } : {}}>
@@ -3050,7 +3051,7 @@ export default function LedgerDetail() {
       )}
       {/* AI 账本：股权卡片展示 */}
       {isCustomAI && !aiProducts && (
-        <div className="flex-1 px-4 pb-20 pt-4">
+        <div className="flex-1 px-4 pb-20 pt-4" style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {(!myShares || myShares.length === 0) ? (
             <div className="text-center text-gray-300 text-sm mt-16">
               <div className="text-gray-200 text-5xl mb-3 font-light">--</div>
