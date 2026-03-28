@@ -7,6 +7,19 @@ import { toast } from "sonner";
 const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
+// 整数型币种（单价较低，通常以整数计量）
+const INTEGER_COINS = new Set(['SUI', 'ONDO', 'LOD', 'ENA', 'ARKM', 'AAVE']);
+
+// 根据币种格式化数量：整数型去掉小数，BTC/ETH/SOL 保留最多6位有效小数
+function formatCoinQty(qty: string | number | null | undefined, coin: string): string {
+  if (!qty) return '';
+  const num = typeof qty === 'string' ? parseFloat(qty) : qty;
+  if (isNaN(num)) return String(qty);
+  if (INTEGER_COINS.has(coin)) return Math.round(num).toLocaleString('en-US');
+  // 去掉末尾多余的0，最多6位小数
+  return parseFloat(num.toFixed(6)).toString();
+}
+
 // 担保价值实时显示小组件
 function CollateralValueDisplay({ coin, qty, ledgerId }: { coin: string; qty: string; ledgerId: number }) {
   const { data: summary } = trpc.ledger.financeGetAssetSummary.useQuery(
@@ -441,7 +454,7 @@ export default function FinanceManagement() {
                         {order.buy_quantity && (
                           <div className="flex items-center gap-1">
                             <span className="text-gray-400">持币量</span>
-                            <span className="font-medium" style={{ color: '#1A2340' }}>{order.buy_quantity} {order.coin}</span>
+                            <span className="font-medium" style={{ color: '#1A2340' }}>{formatCoinQty(order.buy_quantity, order.coin)} {order.coin}</span>
                           </div>
                         )}
                         {order.buy_date && (
@@ -731,7 +744,8 @@ export default function FinanceManagement() {
                         const amt = parseFloat(amount);
                         // 如果买入价已有，自动计算币数
                         if (amount && !isNaN(price) && price > 0) {
-                          return { ...d, amount, buyQuantity: (amt / price).toFixed(6) };
+                          const calcQty = amt / price;
+                          return { ...d, amount, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                         }
                         // 如果币数已有，自动计算买入价
                         if (amount && !isNaN(qty) && qty > 0) {
@@ -763,7 +777,8 @@ export default function FinanceManagement() {
                         }
                         // 如果融资金额已有，自动计算币数
                         if (price && !isNaN(amt) && amt > 0) {
-                          return { ...d, buyPrice: price, buyQuantity: (amt / p).toFixed(6) };
+                          const calcQty = amt / p;
+                          return { ...d, buyPrice: price, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                         }
                         return { ...d, buyPrice: price };
                       });
