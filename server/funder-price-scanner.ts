@@ -3,8 +3,8 @@
  * 资金方订单收益权扫描服务
  *
  * 收益权规则：
- *   - 每降 1%，资金方获得 0.5% 的收益权
- *   - 例：买入价 2000，跌至 1800（跌 10%），收益权 = 5%
+ *   - 收益权 = floor(跌幅) / 2，无上限
+ *   - 例：跌1.x% → 收益权0.5%；跌2.x% → 1%；跌3.x% → 1.5%；跌10% → 5%
  *   - 收益权对应币数 = 买入数量 × 收益权比例
  *
  * 扫描内容：
@@ -160,18 +160,9 @@ export function calcFunderProfitRight(
   }
   // 跌幅（正数表示下跌）
   const dropPct = Math.max(0, (buyPrice - allTimeLow) / buyPrice * 100);
-  // 收益权比例规则：
-  // 跌幅 < 1%：收益分成 = 0%
-  // 跌幅 >= 1% 且 < 2%：收益分成 = 0.5%
-  // 跌幅 >= 2%：收益分成 = 1%
-  let profitRightPct: number;
-  if (dropPct < 1) {
-    profitRightPct = 0;
-  } else if (dropPct < 2) {
-    profitRightPct = 0.5;
-  } else {
-    profitRightPct = 1;
-  }
+  // 收益权比例规则：收益权 = floor(跌幅) / 2，无上限
+  // 跌1.x% → 0.5%；跌2.x% → 1%；跌3.x% → 1.5%；以此类推
+  const profitRightPct: number = Math.floor(dropPct) / 2;
   // 收益权对应币数
   const profitRightCoins = buyQuantity * (profitRightPct / 100);
   return {
