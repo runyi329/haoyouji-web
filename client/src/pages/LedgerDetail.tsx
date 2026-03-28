@@ -22,7 +22,7 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
   return accrued;
 }
 
-// 汇总所有资源股记录的股本+实时股息总和（增量权重：每笔按发放时快照的weight加权）
+// 汇总所有资金股记录的股本+实时股息总和（增量权重：每笔按发放时快照的weight加权）
 function useTotalSharesWithDividend(shares: any[], filterType?: string) {
   const computeTotal = useCallback(() => {
     if (!shares || shares.length === 0) return 0;
@@ -60,7 +60,7 @@ function useTotalSharesWithDividend(shares: any[], filterType?: string) {
   return total;
 }
 
-// 资源股/市场贡献股单条记录，带实时滚动股息
+// 资金股/市场资源股单条记录，带实时滚动股息
 function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast: boolean }) {
   const grantDateStr = dateStr; // yyyy-MM-dd
   const accrued = useAccruedInterest(
@@ -68,7 +68,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
     String(s.annualRate ?? 6),
     grantDateStr
   );
-  const isMarket = s.shareType === '贡献股';
+  const isMarket = s.shareType === '资源股';
   // 该笔快照权重（增量设计，发放时锁定）
   const w = Number(s.weight ?? 1.0);
   const base = Number(s.shareCount) || 0;
@@ -131,7 +131,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
   );
 }
 
-// 资源股/市场贡献股折叠式卡片（收起时显示汇总，展开显示明细）
+// 资金股/市场资源股折叠式卡片（收起时显示汇总，展开显示明细）
 function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]; isMarket: boolean; totalWithDividend: number }) {
   const [expanded, setExpanded] = useState(false);
   const shareNo = shares.find((s: any) => !isMarket)?.shareNo ?? shares[0]?.shareNo;
@@ -154,7 +154,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
       <div className="flex items-center justify-between px-1 mb-2">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold" style={{ color: theme.labelColor }}>
-            {isMarket ? '贡献股' : '资源股'}
+            {isMarket ? '资源股' : '资金股'}
           </span>
           <span style={{ color: theme.dimColor2, fontSize: '10px' }}>（{shares.length}份）</span>
         </div>
@@ -890,14 +890,14 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAI }
   );
-  // 全网资源股实时总张数（股本+实时股息）
+  // 全网资金股实时总张数（股本+实时股息）
   const globalAngelTotal = useTotalSharesWithDividend(globalShareStats?.angelShares ?? []);
-  // 全网市场贡献股实时总张数（股本+实时股息）
+  // 全网市场资源股实时总张数（股本+实时股息）
   const globalMarketTotal = useTotalSharesWithDividend(globalShareStats?.marketShares ?? []);
-  // 资源股总持股（股本+实时股息，仅统计资源股）
-  const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '资源股');
-  // 市场贡献股总持股（股本+实时股息）
-  const totalMarketSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '贡献股');
+  // 资金股总持股（股本+实时股息，仅统计资金股）
+  const totalSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '资金股');
+  // 市场资源股总持股（股本+实时股息）
+  const totalMarketSharesWithDividend = useTotalSharesWithDividend(myShares ?? [], '资源股');
   // 所有类型股权总和（用于顶部累计股权格子，未来新增类型自动包含）
   const totalAllSharesWithDividend = useTotalSharesWithDividend(myShares ?? []);
   // 查询当前用户权重
@@ -3065,21 +3065,21 @@ export default function LedgerDetail() {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* 贡献股卡片（最新在上）爱马仕橙棕配色 */}
-              {myShares.some((s: any) => s.shareType === '贡献股') && (
+              {/* 资源股卡片（最新在上）爱马仕橙棕配色 */}
+              {myShares.some((s: any) => s.shareType === '资源股') && (
                 <div style={{ background: '#FFF8F0', border: '1px solid rgba(58,20,0,0.25)', borderRadius: '14px', padding: '12px 14px', boxShadow: '0 2px 12px rgba(58,20,0,0.12)' }}>
                   <AngelShareCard
-                    shares={[...myShares.filter((s: any) => s.shareType === '贡献股')].sort((a: any, b: any) => new Date(b.grantDate).getTime() - new Date(a.grantDate).getTime())}
+                    shares={[...myShares.filter((s: any) => s.shareType === '资源股')].sort((a: any, b: any) => new Date(b.grantDate).getTime() - new Date(a.grantDate).getTime())}
                     isMarket={true}
                     totalWithDividend={totalMarketSharesWithDividend}
                   />
                 </div>
               )}
-              {/* 资源股卡片（最新在上）爱马仕金色配色 */}
-              {myShares.some((s: any) => s.shareType === '资源股') && (
+              {/* 资金股卡片（最新在上）爱马仕金色配色 */}
+              {myShares.some((s: any) => s.shareType === '资金股') && (
                 <div style={{ background: '#FFF8F0', border: '1px solid rgba(58,20,0,0.25)', borderRadius: '14px', padding: '12px 14px', boxShadow: '0 2px 12px rgba(58,20,0,0.12)' }}>
                   <AngelShareCard
-                    shares={[...myShares.filter((s: any) => s.shareType === '资源股')].sort((a: any, b: any) => new Date(b.grantDate).getTime() - new Date(a.grantDate).getTime())}
+                    shares={[...myShares.filter((s: any) => s.shareType === '资金股')].sort((a: any, b: any) => new Date(b.grantDate).getTime() - new Date(a.grantDate).getTime())}
                     isMarket={false}
                     totalWithDividend={totalSharesWithDividend}
                   />

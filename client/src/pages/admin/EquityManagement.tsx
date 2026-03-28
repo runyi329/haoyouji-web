@@ -141,7 +141,7 @@ const POOL_COLORS: Record<string, { bg: string; text: string }> = {
 
 const POOL_LABELS: Record<string, string> = {
   investment_pool_percentage: "投资股份池",
-  contribution_pool_percentage: "贡献股份池",
+  contribution_pool_percentage: "资源股份池",
   option_pool_percentage: "期权池",
   reserve_pool_percentage: "预留池",
   founder_pool_percentage: "创始人池",
@@ -557,7 +557,7 @@ export default function EquityManagement() {
         {/* 贡献规则 */}
         <Card className="p-6 rounded-2xl shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-900">贡献股份规则</h2>
+            <h2 className="text-lg font-bold text-gray-900">资源股份规则</h2>
             {!isEditingRules ? (
               <Button
                 variant="outline"

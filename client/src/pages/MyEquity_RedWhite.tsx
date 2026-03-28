@@ -57,7 +57,7 @@ export default function MyEquityRedWhite() {
   const leverageHelpRef = useRef<HTMLButtonElement>(null);
   const leverageTitleRef = useRef<HTMLSpanElement>(null);
   
-  // 资源股的帮助提示状态
+  // 资金股的帮助提示状态
   const [showResourceStockHelp, setShowResourceStockHelp] = useState(false);
   const resourceStockHelpRef = useRef<HTMLButtonElement>(null);
   const resourceStockTitleRef = useRef<HTMLSpanElement>(null);
@@ -269,7 +269,7 @@ export default function MyEquityRedWhite() {
                   <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">综合股权构成</div>
                   <div className="text-sm text-gray-800 leading-snug space-y-1">
                     <div className="py-1.5 border-b border-gray-100">
-                      <span className="font-semibold text-[#D32F2F]">资源股东池（30%）</span>
+                      <span className="font-semibold text-[#D32F2F]">资金股东池（30%）</span>
                       <span className="text-gray-700"> — 投资额度×入场系数，锁定终身，不与劳动挂钩</span>
                     </div>
                     <div className="py-1.5 border-b border-gray-100">
@@ -436,7 +436,7 @@ export default function MyEquityRedWhite() {
               triggerRef={capitalStockTitleRef}
               content={
                 <div className="space-y-1.5">
-                  <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">资源股东池（30%）</div>
+                  <div className="font-bold text-[#D32F2F] text-base pb-1.5 border-b border-gray-200">资金股东池（30%）</div>
                   <div className="text-sm text-gray-800 leading-snug space-y-1">
                     <div className="py-1.5 border-b border-gray-100">
                       <span className="font-semibold text-[#D32F2F]">分配逻辑</span>
@@ -538,7 +538,7 @@ export default function MyEquityRedWhite() {
         </div>
         {/* 第二部分结束 */}
 
-        {/* ============ 第三部分：资源股 ============ */}
+        {/* ============ 第三部分：资金股 ============ */}
         <div id="resource-equity-section">
           <DualEngineAccelerator
             // 红色区域相关
