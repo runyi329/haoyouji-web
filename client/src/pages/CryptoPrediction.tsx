@@ -1449,7 +1449,7 @@ export default function CryptoPrediction() {
                   const startDate = order.interest_start_date || order.startDate || null;
                   const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
                   const buyPrice = parseFloat(order.buy_price || '0');
-                  const buyValue = coinQty > 0 && buyPrice > 0 ? coinQty * buyPrice : parseFloat(order.amount || '0');
+                  const buyValue = parseFloat(order.amount || '0');
                   const coinPrice = financeLivePrices[order.coin] || 0;
                   const marketValue = coinQty * coinPrice;
                   const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消';
