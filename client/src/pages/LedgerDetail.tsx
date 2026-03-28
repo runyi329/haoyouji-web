@@ -97,9 +97,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>股本</span>
             <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>股息</span>
-            <div className="flex items-center gap-0.5" style={{ lineHeight: '1.4rem' }}>
-              <span className="text-[10px]" style={{ color: labelColor }}>权重</span>
-            </div>
+
           </div>
           {/* 右列：数字，右对齐，大小一致 */}
           <div className="flex flex-col gap-1.5 items-end">
@@ -113,15 +111,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
               <span className="text-sm font-bold" style={{ color: '#3D1F0D' }}>{accrued.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
-            {/* 权重行：资源权重 × 资金权重 = 总权重 × 股本 = 加权后张数 */}
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-[10px]" style={{ color: labelColor }}>{Number(s.resourceWeight ?? 1.0).toFixed(2)}</span>
-              <span className="text-[10px]" style={{ color: labelColor }}>×</span>
-              <span className="text-[10px]" style={{ color: labelColor }}>{Number(s.capitalWeight ?? 1.0).toFixed(2)}</span>
-              <span className="text-[10px]" style={{ color: labelColor }}>=</span>
-              <span className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightedTotal.toFixed(2)}</span>
-              <span className="text-[10px]" style={{ color: unitColor }}>张</span>
-            </div>
+
           </div>
         </div>
         {s.reason && !isMarket && <div className="text-xs mt-1.5" style={{ color: 'rgba(58,20,0,0.55)' }}>{s.reason}</div>}
