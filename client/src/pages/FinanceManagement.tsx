@@ -7,6 +7,37 @@ import { toast } from "sonner";
 const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
+// 担保价值实时显示小组件
+function CollateralValueDisplay({ coin, qty, ledgerId }: { coin: string; qty: string; ledgerId: number }) {
+  const { data: summary } = trpc.ledger.financeGetAssetSummary.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId && !!qty && parseFloat(qty) > 0, staleTime: 60000, refetchInterval: 60000 }
+  );
+  const livePrices: Record<string, number> = (summary as any)?.livePrices ?? {};
+  const price = livePrices[coin];
+  const qtyNum = parseFloat(qty);
+  if (!qty || isNaN(qtyNum) || qtyNum <= 0) return null;
+  return (
+    <div className="px-4 py-3 border-t border-gray-100 bg-blue-50">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-blue-500">实时担保价值</span>
+        {price ? (
+          <span className="text-sm font-bold text-blue-700">
+            ≈ ${(price * qtyNum).toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">获取中...</span>
+        )}
+      </div>
+      {price && (
+        <div className="text-xs text-blue-400 mt-0.5">
+          {coin} 单价 ${price.toLocaleString('en-US', { maximumFractionDigits: 2 })} × {qtyNum}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STATUS_OPTIONS = [
   { value: 'active', label: '持有中' },
   { value: 'settled', label: '已结算' },
@@ -106,6 +137,8 @@ const emptyForm = {
   publicNote: '',
   adminNote: '',
   status: 'active',
+  collateralCoin: 'BTC' as CoinType,
+  collateralQty: '',
 };
 
 export default function FinanceManagement() {
@@ -211,6 +244,8 @@ export default function FinanceManagement() {
       publicNote: order.public_note || '',
       adminNote: order.admin_note || '',
       status: order.status || 'active',
+      collateralCoin: (order.collateral_coin || 'BTC') as CoinType,
+      collateralQty: order.collateral_qty ? String(parseFloat(order.collateral_qty)) : '',
     });
     setSelectedUserId(order.user_id || null);
     const u = realMembers.find((m: any) => m.userId === order.user_id);
@@ -246,6 +281,8 @@ export default function FinanceManagement() {
         publicNote: formData.publicNote,
         adminNote: formData.adminNote,
         status: formData.status,
+        collateralCoin: formData.collateralCoin || undefined,
+        collateralQty: formData.collateralQty || undefined,
       });
     } else {
       createMutation.mutate({
@@ -265,6 +302,8 @@ export default function FinanceManagement() {
         interestPaymentType: formData.interestPaymentType,
         publicNote: formData.publicNote,
         adminNote: formData.adminNote,
+        collateralCoin: formData.collateralCoin || undefined,
+        collateralQty: formData.collateralQty || undefined,
       });
     }
   }
@@ -440,6 +479,18 @@ export default function FinanceManagement() {
                           </div>
                         )}
                       </div>
+
+                      {order.collateral_coin && order.collateral_qty && (
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-400">担保利息</span>
+                            <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
+                              {parseFloat(order.collateral_qty)} {order.collateral_coin}
+                            </span>
+                          </div>
+                          <CollateralValueDisplay coin={order.collateral_coin} qty={String(parseFloat(order.collateral_qty))} ledgerId={ledgerId} />
+                        </div>
+                      )}
 
                       {order.public_note && (
                         <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
@@ -779,6 +830,45 @@ export default function FinanceManagement() {
                   placeholder="填写存放的交易所或钱包账号"
                   style={{ display: 'block', boxSizing: 'border-box' }}
                 />
+              </div>
+
+              {/* 担保利息 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">担保利息</label>
+                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                  {/* 币种选择 */}
+                  <div className="px-4 pt-3 pb-2">
+                    <span className="text-xs text-gray-400 block mb-2">担保币种</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {COIN_OPTIONS.map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setFormData(d => ({ ...d, collateralCoin: c }))}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            formData.collateralCoin === c
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >{c}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 数量输入 */}
+                  <div className="px-4 py-3 border-t border-gray-100">
+                    <span className="text-xs text-gray-400 block mb-1.5">担保数量 ({formData.collateralCoin})</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.collateralQty}
+                      onChange={e => setFormData(d => ({ ...d, collateralQty: e.target.value }))}
+                      className="w-full bg-transparent text-base focus:outline-none"
+                      placeholder="如：12"
+                    />
+                  </div>
+                  {/* 实时担保价值显示 */}
+                  <CollateralValueDisplay coin={formData.collateralCoin} qty={formData.collateralQty} ledgerId={ledgerId} />
+                </div>
               </div>
 
               <div className="flex items-center gap-3">
