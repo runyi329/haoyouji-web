@@ -90,7 +90,20 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
         {/* 第一行：日期 + 股权编号 */}
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs" style={{ color: labelColor }}>{dateStr}</span>
-          <span className="text-[10px] font-mono font-semibold" style={{ color: 'rgba(58,20,0,0.45)', letterSpacing: '0.08em', background: 'rgba(58,20,0,0.06)', padding: '1px 6px', borderRadius: '4px' }}>
+          <span
+            className="text-[10px] font-mono font-semibold select-all"
+            style={{ color: 'rgba(58,20,0,0.45)', letterSpacing: '0.08em', background: 'rgba(58,20,0,0.06)', padding: '1px 6px', borderRadius: '4px', cursor: 'pointer', WebkitUserSelect: 'all', userSelect: 'all' }}
+            onClick={() => {
+              const code = s.share_code || s.regNo || '';
+              if (!code) return;
+              if (navigator.clipboard) {
+                navigator.clipboard.writeText(code).then(() => {
+                  const el = document.getElementById('share-code-toast');
+                  if (el) { el.textContent = '已复制 ' + code; el.style.opacity = '1'; setTimeout(() => { el.style.opacity = '0'; }, 1500); }
+                });
+              }
+            }}
+          >
             {s.share_code || s.regNo || ''}
           </span>
         </div>
@@ -3522,6 +3535,18 @@ export default function LedgerDetail() {
           </div>
         </div>
       )}
+      {/* 股权编号复制 Toast */}
+      <div
+        id="share-code-toast"
+        style={{
+          position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(58,20,0,0.85)', color: '#FFF8F0',
+          padding: '6px 16px', borderRadius: '20px', fontSize: '12px',
+          fontFamily: 'monospace', letterSpacing: '0.04em',
+          opacity: 0, transition: 'opacity 0.3s', zIndex: 9999,
+          pointerEvents: 'none', whiteSpace: 'nowrap',
+        }}
+      />
     </div>
   );
 }
