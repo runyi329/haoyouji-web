@@ -1587,6 +1587,10 @@ export default function CryptoPrediction() {
                                 const hasCollateral = collCoin && collQty > 0;
                                 const collPrice = hasCollateral ? (financeLivePrices[collCoin] || 0) : 0;
                                 const collValue = collQty * collPrice;
+                                // 担保缺口 = 当前市値 + 担保价值 - 买入价値
+                                const gap = hasCollateral && collPrice > 0 && coinPrice > 0
+                                  ? marketValue + collValue - buyValue
+                                  : null;
                                 return hasCollateral ? (
                                   <>
                                     <div className="flex items-center justify-between mt-0.5 text-xs">
@@ -1599,6 +1603,12 @@ export default function CryptoPrediction() {
                                       <span className="text-gray-400">担保价值</span>
                                       <span className="font-medium" style={{ color: '#4B5563' }}>
                                         {collPrice > 0 ? `${collValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '---'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-0.5 text-xs">
+                                      <span className="text-gray-400">担保缺口</span>
+                                      <span className="font-medium" style={{ color: gap === null ? '#4B5563' : gap < 0 ? '#EF4444' : '#4B5563' }}>
+                                        {gap === null ? '---' : gap >= 0 ? '超过100%' : `${gap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
                                       </span>
                                     </div>
                                   </>
