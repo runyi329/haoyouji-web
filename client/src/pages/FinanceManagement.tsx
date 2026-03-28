@@ -598,7 +598,7 @@ export default function FinanceManagement() {
           className="fixed inset-0 z-50 flex items-end justify-center"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
         >
-          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] overflow-y-auto overflow-x-hidden">
             <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
                 {editingOrder ? '编辑融资订单' : '添加融资订单'}
