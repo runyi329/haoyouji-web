@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronLeft, Plus, Trash2, Pencil, Users, ArrowLeftRight } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Pencil, Users, ArrowLeftRight, Search, X, Filter } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,53 @@ export default function LedgerEquityManage() {
   const genRegNo = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  };
+
+  // ── 筛选状态 ──
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterUser, setFilterUser] = useState('');       // 用户名/昵称关键字
+  const [filterCode, setFilterCode] = useState('');       // 股权编号关键字
+  const [filterType, setFilterType] = useState('');       // 股票类型：'' | '资金股' | '资源股'
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterAmountMin, setFilterAmountMin] = useState('');
+  const [filterAmountMax, setFilterAmountMax] = useState('');
+
+  // ── 筛选逻辑 ──
+  const filteredShares = useMemo(() => {
+    if (!shares) return [];
+    return (shares as any[]).filter(s => {
+      if (filterUser) {
+        const kw = filterUser.toLowerCase();
+        const name = (s.memberNickname || '').toLowerCase();
+        if (!name.includes(kw)) return false;
+      }
+      if (filterCode) {
+        const kw = filterCode.toLowerCase();
+        const code = (s.share_code || s.regNo || '').toLowerCase();
+        if (!code.includes(kw)) return false;
+      }
+      if (filterType && s.shareType !== filterType) return false;
+      if (filterDateFrom && s.grantDate) {
+        const d = formatDate(s.grantDate);
+        if (d < filterDateFrom) return false;
+      }
+      if (filterDateTo && s.grantDate) {
+        const d = formatDate(s.grantDate);
+        if (d > filterDateTo) return false;
+      }
+      if (filterAmountMin && Number(s.shareCount) < Number(filterAmountMin)) return false;
+      if (filterAmountMax && Number(s.shareCount) > Number(filterAmountMax)) return false;
+      return true;
+    });
+  }, [shares, filterUser, filterCode, filterType, filterDateFrom, filterDateTo, filterAmountMin, filterAmountMax]);
+
+  const hasFilter = filterUser || filterCode || filterType || filterDateFrom || filterDateTo || filterAmountMin || filterAmountMax;
+
+  const clearFilters = () => {
+    setFilterUser(''); setFilterCode(''); setFilterType('');
+    setFilterDateFrom(''); setFilterDateTo('');
+    setFilterAmountMin(''); setFilterAmountMax('');
   };
 
   // 添加股权弹窗状态
@@ -169,16 +216,6 @@ export default function LedgerEquityManage() {
     });
   };
 
-  // 按成员分组统计
-  const memberShareMap: Record<number, { nickname: string; total: number; records: any[] }> = {};
-  (shares || []).forEach((s: any) => {
-    if (!memberShareMap[s.userId]) {
-      memberShareMap[s.userId] = { nickname: s.memberNickname, total: 0, records: [] };
-    }
-    memberShareMap[s.userId].total += Number(s.shareCount);
-    memberShareMap[s.userId].records.push(s);
-  });
-
   const formatDate = (d: string | Date) => {
     const dt = new Date(d);
     return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
@@ -198,78 +235,214 @@ export default function LedgerEquityManage() {
           <h1 className="text-lg font-medium text-gray-900">股权管理</h1>
           <div className="flex items-center gap-1">
             <button onClick={() => setShowTransferDialog(true)} className="p-2" title="发起转让">
-              <ArrowLeftRight className="w-5 h-5 text-amber-500" />
+              <ArrowLeftRight className="w-5 h-5 text-gray-500" />
             </button>
-            <button onClick={() => setShowAddDialog(true)} className="p-2 -mr-2">
-              <Plus className="w-6 h-6 text-blue-600" />
+            <button onClick={() => setShowAddDialog(true)} className="p-2" title="添加股权">
+              <Plus className="w-5 h-5 text-gray-700" />
             </button>
           </div>
         </div>
-      </div>
 
-      {/* 内容区 */}
-      <div className="px-4 pt-4 space-y-4">
-        {Object.keys(memberShareMap).length === 0 ? (
-          <div className="text-center text-gray-400 text-sm mt-16">
-            <Users className="w-12 h-12 mx-auto mb-3 text-gray-200" />
-            <div>暂无股权记录</div>
-            <div className="mt-1 text-xs">点击右上角 + 为成员添加股权</div>
+        {/* 搜索栏 */}
+        <div className="px-4 pb-3 flex items-center gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜索用户名 / 股权编号..."
+              value={filterUser || filterCode}
+              onChange={(e) => {
+                const v = e.target.value;
+                // 如果像编号格式（含-或全大写）则走编号搜索，否则走用户名
+                if (v.includes('-') || /^[A-Z0-9]+$/.test(v)) {
+                  setFilterCode(v); setFilterUser('');
+                } else {
+                  setFilterUser(v); setFilterCode('');
+                }
+              }}
+              style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: '20px', padding: '7px 12px 7px 34px', fontSize: '13px', background: '#f9fafb', color: '#1f2937', outline: 'none', boxSizing: 'border-box' }}
+            />
+            {(filterUser || filterCode) && (
+              <button onClick={() => { setFilterUser(''); setFilterCode(''); }} className="absolute right-3 top-1/2 -translate-y-1/2">
+                <X className="w-3.5 h-3.5 text-gray-400" />
+              </button>
+            )}
           </div>
-        ) : (
-          Object.entries(memberShareMap).map(([uid, info]) => (
-            <div key={uid} className="bg-white rounded-xl overflow-hidden shadow-sm">
-              {/* 成员标题行 */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
-                    {info.nickname.charAt(0)}
-                  </div>
-                  <span className="font-semibold text-gray-800 text-sm">{info.nickname}</span>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-gray-400">累计持有</div>
-                  <div className="text-base font-bold text-blue-600">{info.total.toLocaleString()} 张</div>
+          <button
+            onClick={() => setFilterOpen(v => !v)}
+            style={{ flexShrink: 0, border: `1px solid ${hasFilter ? '#D32F2F' : '#e5e7eb'}`, borderRadius: '20px', padding: '7px 12px', fontSize: '12px', background: hasFilter ? '#fff0f0' : '#f9fafb', color: hasFilter ? '#D32F2F' : '#6b7280', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            筛选{hasFilter ? ' ·' : ''}
+          </button>
+        </div>
+
+        {/* 高级筛选展开区 */}
+        {filterOpen && (
+          <div className="px-4 pb-3 border-t border-gray-50 pt-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div style={labelStyle}>股票类型</div>
+                <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ ...inputStyle, padding: '6px 10px', fontSize: '13px' }}>
+                  <option value="">全部类型</option>
+                  <option value="资金股">资金股</option>
+                  <option value="资源股">资源股</option>
+                </select>
+              </div>
+              <div>
+                <div style={labelStyle}>张数范围（张）</div>
+                <div className="flex items-center gap-1">
+                  <input type="number" placeholder="最小" value={filterAmountMin} onChange={e => setFilterAmountMin(e.target.value)} style={{ ...inputStyle, padding: '6px 8px', fontSize: '12px' }} />
+                  <span style={{ color: '#9ca3af', fontSize: '12px' }}>-</span>
+                  <input type="number" placeholder="最大" value={filterAmountMax} onChange={e => setFilterAmountMax(e.target.value)} style={{ ...inputStyle, padding: '6px 8px', fontSize: '12px' }} />
                 </div>
               </div>
-              {/* 股权卡片列表 */}
-              <div className="divide-y divide-gray-50">
-                {info.records.map((record: any) => (
-                  <div key={record.id} className="px-4 py-3 flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-base font-bold text-gray-900">{Number(record.shareCount).toLocaleString()} 张</span>
-                        {record.shareType && (
-                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', background: '#dcfce7', color: '#15803d', fontWeight: 500 }}>{record.shareType}</span>
-                        )}
-                        <span className="text-xs text-gray-400">{formatDate(record.grantDate)}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {record.regNo && <div style={{ fontSize: '11px', color: '#9ca3af', fontFamily: 'monospace', letterSpacing: '1px' }}>编号: {record.regNo}</div>}
-                        <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 500 }}>年化 {record.annualRate ?? 6}%</div>
-                      </div>
-                      {record.reason && <div className="text-xs text-gray-500 leading-relaxed mt-0.5">{record.reason}</div>}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <div style={labelStyle}>开始日期</div>
+                <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} style={{ ...inputStyle, padding: '6px 10px', fontSize: '13px' }} />
+              </div>
+              <div>
+                <div style={labelStyle}>结束日期</div>
+                <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} style={{ ...inputStyle, padding: '6px 10px', fontSize: '13px' }} />
+              </div>
+            </div>
+            {hasFilter && (
+              <button onClick={clearFilters} style={{ fontSize: '12px', color: '#D32F2F', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0' }}>
+                清除所有筛选条件
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 结果统计 */}
+        <div className="px-4 pb-2 flex items-center justify-between">
+          <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+            共 {filteredShares.length} 条记录
+            {hasFilter && ` （已筛选，共 ${(shares || []).length} 条）`}
+          </span>
+          <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+            合计 {filteredShares.reduce((sum, s) => sum + Number(s.shareCount), 0).toLocaleString()} 张
+          </span>
+        </div>
+      </div>
+
+      {/* 股权卡片列表 */}
+      <div className="px-4 pt-3 space-y-3">
+        {filteredShares.length === 0 ? (
+          <div className="text-center text-gray-400 text-sm mt-16">
+            <Users className="w-12 h-12 mx-auto mb-3 text-gray-200" />
+            <div>{hasFilter ? '没有符合条件的记录' : '暂无股权记录'}</div>
+            {!hasFilter && <div className="mt-1 text-xs">点击右上角 + 为成员添加股权</div>}
+          </div>
+        ) : (
+          filteredShares.map((record: any) => (
+            <div key={record.id} style={{ background: '#fff', borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+              {/* 卡片顶部：用户信息 + 类型标签 */}
+              <div style={{ background: '#f9fafb', borderBottom: '1px solid #f3f4f6', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#2563eb', flexShrink: 0 }}>
+                    {(record.memberNickname || '?').charAt(0)}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{record.memberNickname}</div>
+                    {record.shareNo && <div style={{ fontSize: '10px', color: '#9ca3af' }}>股东编号 {record.shareNo}</div>}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: record.shareType === '资金股' ? '#dbeafe' : '#dcfce7', color: record.shareType === '资金股' ? '#1d4ed8' : '#15803d', fontWeight: 500 }}>
+                    {record.shareType}
+                  </span>
+                  <button onClick={() => openEdit(record)} style={{ padding: '4px', color: '#d1d5db', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    <Pencil style={{ width: '14px', height: '14px' }} />
+                  </button>
+                  <button onClick={() => setDeleteTarget({ id: record.id, name: `${record.memberNickname} ${Number(record.shareCount)}张` })} style={{ padding: '4px', color: '#d1d5db', background: 'none', border: 'none', cursor: 'pointer' }}>
+                    <Trash2 style={{ width: '14px', height: '14px' }} />
+                  </button>
+                </div>
+              </div>
+
+              {/* 卡片主体：核心数据 */}
+              <div style={{ padding: '12px 14px' }}>
+                {/* 张数 + 日期 */}
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <span style={{ fontSize: '22px', fontWeight: 700, color: '#111827' }}>{Number(record.shareCount).toLocaleString()}</span>
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>张</span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>{formatDate(record.grantDate)}</span>
+                </div>
+
+                {/* 编号行 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+                  {record.share_code && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '10px', color: '#9ca3af' }}>股权编号</span>
+                      <span style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: 600, color: '#374151', letterSpacing: '0.05em', background: '#f3f4f6', padding: '1px 6px', borderRadius: '4px' }}>{record.share_code}</span>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
-                      <button
-                        onClick={() => openEdit(record)}
-                        className="p-1.5 text-gray-300 hover:text-blue-400"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget({ id: record.id, name: `${info.nickname} ${Number(record.shareCount)}张` })}
-                        className="p-1.5 text-gray-300 hover:text-red-400"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  )}
+                  {record.regNo && !record.share_code && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span style={{ fontSize: '10px', color: '#9ca3af' }}>登记编号</span>
+                      <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#9ca3af', letterSpacing: '1px' }}>{record.regNo}</span>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{ fontSize: '10px', color: '#9ca3af' }}>年化</span>
+                    <span style={{ fontSize: '11px', fontWeight: 500, color: '#f59e0b' }}>{record.annualRate ?? 6}%</span>
+                  </div>
+                </div>
+
+                {/* 来源信息（资源股专属） */}
+                {record.shareType === '资源股' && (record.sourceNickname || record.source_user_id) && (
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#15803d', fontWeight: 600, marginBottom: '3px' }}>市场贡献来源</div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', color: '#166534' }}>
+                        {record.sourceNickname || `用户#${record.source_user_id}`} 购入资金股
+                      </span>
+                      {record.source_amount && (
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#15803d' }}>
+                          {Number(record.source_amount).toLocaleString()} 张 × 30%
+                        </span>
+                      )}
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* 备注 */}
+                {record.reason && (
+                  <div style={{ fontSize: '11px', color: '#6b7280', lineHeight: '1.5', background: '#fafafa', borderRadius: '6px', padding: '5px 8px' }}>
+                    {record.reason}
+                  </div>
+                )}
               </div>
             </div>
           ))
         )}
       </div>
+
+      {/* 删除确认 */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              将删除 <strong>{deleteTarget?.name}</strong> 的股权记录，此操作不可撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteMutation.mutate({ id: deleteTarget.id, ledgerId })}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 添加股权弹窗 */}
       {showAddDialog && (
@@ -346,7 +519,9 @@ export default function LedgerEquityManage() {
         >
           <div style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '400px', padding: '20px', boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ fontSize: '16px', fontWeight: 600, color: '#111', marginBottom: '4px' }}>编辑股权记录</div>
-            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>登记编号: {editTarget.regNo}</div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>
+              {editTarget.share_code ? `股权编号: ${editTarget.share_code}` : `登记编号: ${editTarget.regNo}`}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <div style={labelStyle}>股票张数</div>
@@ -364,7 +539,6 @@ export default function LedgerEquityManage() {
                 <div style={labelStyle}>年化股息率（%）</div>
                 <input type="number" step="0.01" min="0" max="100" value={editForm.annualRate}
                   onChange={(e) => setEditForm(f => ({ ...f, annualRate: e.target.value }))} style={inputStyle} />
-                <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>每秒增加：{((Number(editForm.shareCount || 0) * Number(editForm.annualRate || 0) / 100) / 31536000).toFixed(8)} 张</div>
               </div>
               <div>
                 <div style={labelStyle}>获得日期</div>
@@ -382,7 +556,7 @@ export default function LedgerEquityManage() {
               <button onClick={() => setEditTarget(null)}
                 style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#fff', color: '#374151', cursor: 'pointer' }}>取消</button>
               <button onClick={handleUpdate} disabled={updateMutation.isPending}
-                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#1d4ed8', color: '#fff', cursor: 'pointer', opacity: updateMutation.isPending ? 0.7 : 1 }}>
+                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#D32F2F', color: '#fff', cursor: 'pointer', opacity: updateMutation.isPending ? 0.7 : 1 }}>
                 {updateMutation.isPending ? "保存中..." : "保存修改"}
               </button>
             </div>
@@ -397,16 +571,15 @@ export default function LedgerEquityManage() {
           onClick={(e) => { if (e.target === e.currentTarget) setShowTransferDialog(false); }}
         >
           <div style={{ background: '#fff', borderRadius: '16px', width: '100%', maxWidth: '400px', padding: '20px', boxSizing: 'border-box', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ fontSize: '16px', fontWeight: 600, color: '#111', marginBottom: '4px' }}>股权转让申请</div>
-            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>提交后由管理员审批后生效</div>
+            <div style={{ fontSize: '16px', fontWeight: 600, color: '#111', marginBottom: '16px' }}>股权转让</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
-                <div style={labelStyle}>转出方（选择股权记录）</div>
+                <div style={labelStyle}>转出股权记录</div>
                 <select style={inputStyle} value={transferForm.fromShareId} onChange={(e) => setTransferForm(f => ({ ...f, fromShareId: Number(e.target.value) }))}>
-                  <option value={0}>请选择要转出的股权</option>
+                  <option value={0}>请选择转出记录</option>
                   {(shares || []).map((s: any) => (
                     <option key={s.id} value={s.id}>
-                      {s.memberNickname} - {Number(s.shareCount).toLocaleString()}张 {s.shareType}
+                      {s.memberNickname} - {Number(s.shareCount).toLocaleString()}张 ({s.shareType}) {s.share_code || s.regNo || ''}
                     </option>
                   ))}
                 </select>
@@ -430,15 +603,15 @@ export default function LedgerEquityManage() {
                   onChange={(e) => setTransferForm(f => ({ ...f, shareCount: e.target.value }))} style={inputStyle} />
               </div>
               <div>
-                <div style={labelStyle}>转入后股权类型</div>
+                <div style={labelStyle}>转入股权类型</div>
                 <select value={transferForm.toShareType} onChange={(e) => setTransferForm(f => ({ ...f, toShareType: e.target.value }))} style={inputStyle}>
                   <option value="资金股">资金股</option>
                   <option value="资源股">资源股</option>
                 </select>
               </div>
               <div>
-                <div style={labelStyle}>转让原因（可不填）</div>
-                <textarea rows={2} placeholder="备注" value={transferForm.reason}
+                <div style={labelStyle}>转让原因</div>
+                <textarea rows={2} placeholder="转让原因（可不填）" value={transferForm.reason}
                   onChange={(e) => setTransferForm(f => ({ ...f, reason: e.target.value }))}
                   style={{ ...inputStyle, resize: 'none' }} />
               </div>
@@ -447,34 +620,13 @@ export default function LedgerEquityManage() {
               <button onClick={() => setShowTransferDialog(false)}
                 style={{ flex: 1, border: '1px solid #e5e7eb', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#fff', color: '#374151', cursor: 'pointer' }}>取消</button>
               <button onClick={handleTransfer} disabled={transferMutation.isPending}
-                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#D97706', color: '#fff', cursor: 'pointer', opacity: transferMutation.isPending ? 0.7 : 1 }}>
-                {transferMutation.isPending ? '提交中...' : '提交转让申请'}
+                style={{ flex: 1, border: 'none', borderRadius: '8px', padding: '10px', fontSize: '14px', background: '#D32F2F', color: '#fff', cursor: 'pointer', opacity: transferMutation.isPending ? 0.7 : 1 }}>
+                {transferMutation.isPending ? "提交中..." : "提交转让"}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* 删除确认弹窗 */}
-      <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
-        <AlertDialogContent className="mx-4 rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>
-              确定要删除「{deleteTarget?.name}」的股权记录吗？此操作不可撤销。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-500 hover:bg-red-600 text-white"
-              onClick={() => deleteTarget && deleteMutation.mutate({ id: deleteTarget.id, ledgerId })}
-            >
-              删除
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
