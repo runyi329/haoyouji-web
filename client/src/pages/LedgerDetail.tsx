@@ -74,11 +74,11 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
   const base = Number(s.shareCount) || 0;
   // 加权后总张数：（股本 + 股息）× 权重
   const weightedTotal = (base + accrued) * w;
-  const numGrad = isMarket ? 'linear-gradient(90deg, #6EE88A 0%, #3CB85A 100%)' : 'linear-gradient(90deg, #FFE566 0%, #C8920A 100%)';
-  const numGradDim = isMarket ? 'linear-gradient(90deg, #6EE88A 0%, #3CB85A 100%)' : 'linear-gradient(90deg, #FFE566 0%, #F0C830 50%, #D4A020 100%)';
-  const labelColor = isMarket ? 'rgba(80,180,100,0.55)' : 'rgba(212,175,55,0.55)';
-  const dimColor = isMarket ? 'rgba(80,180,100,0.35)' : 'rgba(212,175,55,0.35)';
-  const unitColor = isMarket ? 'rgba(100,220,120,0.65)' : 'rgba(220,185,60,0.65)';
+  const numGrad = isMarket ? 'none' : 'none';
+  const numGradDim = isMarket ? 'none' : 'none';
+  const labelColor = 'rgba(58,20,0,0.55)';
+  const dimColor = 'rgba(58,20,0,0.35)';
+  const unitColor = 'rgba(58,20,0,0.6)';
   return (
     <div>
       <div className="px-4 py-3">
@@ -87,8 +87,8 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
           <span className="text-xs" style={{ color: labelColor }}>{dateStr}</span>
           {s.shareType && (
             isMarket
-              ? <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'linear-gradient(135deg, rgba(60,180,80,0.2) 0%, rgba(60,180,80,0.12) 100%)', color: '#6EE88A', border: '1px solid rgba(60,180,80,0.5)', textShadow: '0 0 4px rgba(80,220,100,0.4)' }}>{s.shareType}</span>
-              : <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'linear-gradient(135deg, rgba(201,168,76,0.2) 0%, rgba(201,168,76,0.12) 100%)', color: '#F0D060', border: '1px solid rgba(201,168,76,0.5)', textShadow: '0 0 4px rgba(255,210,60,0.4)' }}>{s.shareType}</span>
+              ? <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(58,20,0,0.1)', color: '#1A0A00', border: '1px solid rgba(58,20,0,0.3)' }}>{s.shareType}</span>
+              : <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(58,20,0,0.1)', color: '#1A0A00', border: '1px solid rgba(58,20,0,0.3)' }}>{s.shareType}</span>
           )}
         </div>
         {/* 三行数据：左列辅助标签，右列数字对齐，大小一致 */}
@@ -105,12 +105,12 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
           <div className="flex flex-col gap-1.5 items-end">
             {/* 股本 */}
             <div className="flex items-baseline gap-0.5">
-              <span className="text-sm font-bold" style={{ background: numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{base.toFixed(2)}</span>
+              <span className="text-sm font-bold" style={{ color: '#1A0A00' }}>{base.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
             {/* 股息 */}
             <div className="flex items-baseline gap-0.5">
-              <span className="text-sm font-bold" style={{ background: numGradDim, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{accrued.toFixed(2)}</span>
+              <span className="text-sm font-bold" style={{ color: '#3D1F0D' }}>{accrued.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
             {/* 权重行：资源权重 × 资金权重 = 总权重 × 股本 = 加权后张数 */}
@@ -119,14 +119,14 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
               <span className="text-[10px]" style={{ color: labelColor }}>×</span>
               <span className="text-[10px]" style={{ color: labelColor }}>{Number(s.capitalWeight ?? 1.0).toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: labelColor }}>=</span>
-              <span className="text-sm font-bold" style={{ background: numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{weightedTotal.toFixed(2)}</span>
+              <span className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightedTotal.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
           </div>
         </div>
-        {s.reason && !isMarket && <div className="text-xs mt-1.5" style={{ color: 'rgba(220,185,60,0.55)' }}>{s.reason}</div>}
+        {s.reason && !isMarket && <div className="text-xs mt-1.5" style={{ color: 'rgba(58,20,0,0.55)' }}>{s.reason}</div>}
       </div>
-      {!isLast && <div style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }} />}
+      {!isLast && <div style={{ borderTop: '1px solid rgba(58,20,0,0.15)' }} />}
     </div>
   );
 }
@@ -145,7 +145,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
   const totalBase = shares.reduce((sum: number, s: any) => sum + Number(s.shareCount), 0);
   const accrued = totalWithDividend - totalBase;
 
-  const gold = { border: '1px solid #C9A84C', shadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 12px rgba(201,168,76,0.2), inset 0 1px 0 rgba(255,230,100,0.12)', divider: 'rgba(201,168,76,0.35)', labelColor: '#D4A830', numGrad: 'linear-gradient(180deg, #FFE566 0%, #D4A020 50%, #C8920A 100%)', dimColor: 'rgba(220,185,60,0.7)', dimColor2: 'rgba(212,175,55,0.6)', chevronColor: 'rgba(212,175,55,0.7)', shareNoGrad: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', shareNoShadow: 'drop-shadow(0 0 4px rgba(255,210,60,0.6))' };
+  const gold = { border: '1px solid rgba(58,20,0,0.3)', shadow: '0 2px 12px rgba(58,20,0,0.15)', divider: 'rgba(58,20,0,0.15)', labelColor: '#3D1F0D', numGrad: 'none', dimColor: 'rgba(58,20,0,0.7)', dimColor2: 'rgba(58,20,0,0.5)', chevronColor: 'rgba(58,20,0,0.6)', shareNoGrad: 'none', shareNoShadow: 'none' };
   const theme = gold;
 
   return (
@@ -161,7 +161,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
         {angelShareNo && (
           <div className="flex items-center gap-1">
             <span className="text-[10px]" style={{ color: theme.dimColor2 }}>股东编号</span>
-            <span className="text-sm font-bold tracking-widest" style={{ background: theme.shareNoGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: theme.shareNoShadow }}>{angelShareNo}</span>
+            <span className="text-sm font-bold tracking-widest" style={{ color: '#1A0A00' }}>{angelShareNo}</span>
           </div>
         )}
       </div>
@@ -173,8 +173,8 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
       >
         <div className="flex flex-col gap-0.5">
           {/* 第一行：总张数大数字 */}
-          <div className="flex items-baseline gap-1" style={{ filter: 'drop-shadow(0 0 6px rgba(255,210,60,0.5))' }}>
-            <span className="text-xl font-bold" style={{ background: theme.numGrad, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <div className="flex items-baseline gap-1">
+            <span className="text-xl font-bold" style={{ color: '#1A0A00' }}>
               {totalWithDividend.toFixed(2)}
             </span>
             <span className="text-xs font-normal" style={{ color: theme.dimColor }}>张</span>
@@ -1142,9 +1142,9 @@ export default function LedgerDetail() {
   ];
 
   return (
-    <div className="min-h-screen" style={isCustomAI ? { backgroundColor: '#000000' } : {}}>
+    <div className="min-h-screen" style={isCustomAI ? { backgroundColor: '#E8601C' } : {}}>
       {/* 顶部区域 */}
-      <div className="pb-4" style={(isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAI ? { background: 'linear-gradient(160deg, #0A0600 0%, #180E00 30%, #1A0A00 60%, #0A0600 100%)', color: '#FFFFFF', borderBottom: '1px solid rgba(212,80,10,0.5)' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
+      <div className="pb-4" style={(isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAI ? { background: 'linear-gradient(160deg, #3D1F0D 0%, #5C2E10 30%, #3D1F0D 100%)', color: '#1A0A00', borderBottom: '1px solid rgba(58,20,0,0.4)' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* AF/AH 账本：顶部两行布局 */}
         {(isCustomAF || isCustomAH || isCustomAI) ? (
           <div className="px-4 pt-3 pb-2">
@@ -1200,28 +1200,28 @@ export default function LedgerDetail() {
                     <button
                       onClick={() => window.location.reload()}
                       className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)', border: '1px solid #C8A84B', color: '#F0D060', textShadow: '0 0 8px rgba(240,208,80,0.6)', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)' }}
+                      style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                     >
                       刷新
                     </button>
                     <button
                       onClick={() => { setShareholdingSnapshot({ angel: globalAngelTotal, market: globalMarketTotal }); setShowShareholdingModal(true); }}
                       className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #2A1800 0%, #1A0E00 50%, #2A1800 100%)', border: '1px solid #D4500A', color: '#E8601C', textShadow: '0 0 8px rgba(232,96,28,0.6)', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(232,96,28,0.12)' }}
+                      style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                     >
                       结构
                     </button>
                     <button
                       onClick={() => { setEquityHistoryUserId(viewAsUserId ?? null); setShowEquityHistory(true); }}
                       className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)', border: '1px solid #C8A84B', color: '#F0D060', textShadow: '0 0 8px rgba(240,208,80,0.6)', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)' }}
+                      style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                     >
                       记录
                     </button>
                     <button
                       onClick={() => setLocation('/ledger')}
                       className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg, #1A1200 0%, #0D0A00 50%, #1A1200 100%)', border: '1px solid #C8A84B', color: '#F0D060', textShadow: '0 0 8px rgba(240,208,80,0.6)', boxShadow: '0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,220,80,0.12)' }}
+                      style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                     >
                       返回
                     </button>
@@ -1612,57 +1612,57 @@ export default function LedgerDetail() {
         {isCustomAI && (
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'linear-gradient(160deg, #0D0D00 0%, #1A1600 100%)', border: '1px solid rgba(201,168,76,0.5)', boxShadow: 'inset 0 1px 0 rgba(255,230,100,0.1), 0 4px 16px rgba(0,0,0,0.8), 0 0 8px rgba(201,168,76,0.08)' }}>
-                <div className="text-xs mb-1 flex items-baseline gap-1" style={{ color: '#D4A830' }}>
+              <div className="rounded-2xl px-4 py-3" style={{ background: '#FFF8F0', border: '1px solid rgba(58,20,0,0.25)', boxShadow: '0 2px 12px rgba(58,20,0,0.15)' }}>
+                <div className="text-xs mb-1 flex items-baseline gap-1" style={{ color: 'rgba(58,20,0,0.6)' }}>
                   <span>总计股权</span>
                   {myShares && myShares.length > 0 && (myShares[0] as any).shareNo && (
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{(myShares[0] as any).shareNo}）</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.4)' }}>（{(myShares[0] as any).shareNo}）</span>
                   )}
                 </div>
                 {/* 加权后总计股权（主数字，已是增量权重后的结果） */}
-                <div className="flex items-baseline gap-0.5" style={{ filter: 'drop-shadow(0 0 4px rgba(255,210,60,0.5))' }}>
-                  <span className="text-lg font-bold" style={{ background: 'linear-gradient(180deg, #FFE566 0%, #C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-lg font-bold" style={{ color: '#1A0A00' }}>
                     {myShares && myShares.length > 0 ? totalAllSharesWithDividend.toFixed(2) : '-'}
                   </span>
-                  {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(220,185,60,0.7)' }}>张</span>}
+                  {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(58,20,0,0.6)' }}>张</span>}
                 </div>
                 {/* 当前权重标注：资源权重 × 资金权重 = 总权重 */}
                 {myShares && myShares.length > 0 && (
                   <div className="flex items-center gap-0.5 mt-1 flex-wrap">
-                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.75)' }}>{resourceWeight.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>×</span>
-                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.75)' }}>{capitalWeight.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.45)' }}>=</span>
-                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(255,210,80,0.95)' }}>{totalWeight.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>权重</span>
+                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(58,20,0,0.7)' }}>{resourceWeight.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.4)' }}>×</span>
+                    <span className="text-[10px] font-semibold" style={{ color: 'rgba(58,20,0,0.7)' }}>{capitalWeight.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.4)' }}>=</span>
+                    <span className="text-[10px] font-semibold" style={{ color: '#1A0A00' }}>{totalWeight.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>权重</span>
                   </div>
                 )}
-                {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.55)' }}>暂无记录</div>}
+                {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(58,20,0,0.5)' }}>暂无记录</div>}
               </div>
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'linear-gradient(160deg, #0D0800 0%, #1A0E00 100%)', border: '1px solid rgba(212,80,10,0.45)', boxShadow: 'inset 0 1px 0 rgba(232,96,28,0.1), 0 4px 16px rgba(0,0,0,0.8), 0 0 8px rgba(212,80,10,0.08)' }}>
-                <div className="text-xs mb-1 flex items-baseline gap-1" style={{ color: '#E8601C' }}>
+              <div className="rounded-2xl px-4 py-3" style={{ background: '#FFF8F0', border: '1px solid rgba(58,20,0,0.25)', boxShadow: '0 2px 12px rgba(58,20,0,0.15)' }}>
+                <div className="text-xs mb-1 flex items-baseline gap-1" style={{ color: 'rgba(58,20,0,0.6)' }}>
                   <span>脉动数据</span>
                   {(() => {
                     const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
                     const uname = viewTarget ? (viewTarget.username || viewTarget.nickname) : (user?.username || user?.nickname);
-                    return uname ? <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.55)' }}>（{uname}）</span> : null;
+                    return uname ? <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.4)' }}>（{uname}）</span> : null;
                   })()}
                 </div>
                 <div className="grid grid-cols-3 gap-1 mt-1">
                   <div>
-                    <div className="text-[10px]" style={{ color: 'rgba(232,96,28,0.7)' }}>人脉</div>
-                    <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg, #E8601C 0%, #D4500A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(232,96,28,0.5))' }}>{memberStats ? memberStats.contactCount : '--'}</div>
-                    <div className="text-[9px]" style={{ color: 'rgba(212,80,10,0.5)' }}>联系人</div>
+                    <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.55)' }}>人脉</div>
+                    <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{memberStats ? memberStats.contactCount : '--'}</div>
+                    <div className="text-[9px]" style={{ color: 'rgba(58,20,0,0.4)' }}>联系人</div>
                   </div>
-                  <div style={{ borderLeft: '1px solid rgba(212,80,10,0.25)', paddingLeft: '4px' }}>
-                    <div className="text-[10px]" style={{ color: 'rgba(232,96,28,0.7)' }}>标签</div>
-                    <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg, #E8601C 0%, #D4500A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(232,96,28,0.5))' }}>{memberStats ? memberStats.tagCount : '--'}</div>
-                    <div className="text-[9px]" style={{ color: 'rgba(212,80,10,0.5)' }}>次</div>
+                  <div style={{ borderLeft: '1px solid rgba(58,20,0,0.15)', paddingLeft: '4px' }}>
+                    <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.55)' }}>标签</div>
+                    <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{memberStats ? memberStats.tagCount : '--'}</div>
+                    <div className="text-[9px]" style={{ color: 'rgba(58,20,0,0.4)' }}>次</div>
                   </div>
-                  <div style={{ borderLeft: '1px solid rgba(212,80,10,0.25)', paddingLeft: '4px' }}>
-                    <div className="text-[10px]" style={{ color: 'rgba(232,96,28,0.7)' }}>推荐</div>
-                    <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg, #E8601C 0%, #D4500A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', filter: 'drop-shadow(0 0 4px rgba(232,96,28,0.5))' }}>{memberStats ? memberStats.referralCount : '--'}</div>
-                    <div className="text-[9px]" style={{ color: 'rgba(212,80,10,0.5)' }}>直接</div>
+                  <div style={{ borderLeft: '1px solid rgba(58,20,0,0.15)', paddingLeft: '4px' }}>
+                    <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.55)' }}>推荐</div>
+                    <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{memberStats ? memberStats.referralCount : '--'}</div>
+                    <div className="text-[9px]" style={{ color: 'rgba(58,20,0,0.4)' }}>直接</div>
                   </div>
                 </div>
               </div>
@@ -1679,16 +1679,16 @@ export default function LedgerDetail() {
           >
             <div
               className="w-full mx-4 rounded-2xl overflow-hidden"
-              style={{ background: 'linear-gradient(160deg, #0D0D00 0%, #1A1600 40%, #0D0D00 100%)', border: '1px solid rgba(212,80,10,0.6)', boxShadow: '0 8px 40px rgba(0,0,0,0.9), 0 0 20px rgba(212,80,10,0.2)', maxWidth: '420px' }}
+              style={{ background: '#FFF8F0', border: '1px solid rgba(58,20,0,0.3)', boxShadow: '0 8px 40px rgba(58,20,0,0.3)', maxWidth: '420px' }}
               onClick={(e) => e.stopPropagation()}
             >
               {/* 弹窗标题 */}
-              <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(212,80,10,0.3)' }}>
-                <span className="text-sm font-semibold" style={{ color: '#E8601C', textShadow: '0 0 8px rgba(232,96,28,0.5)', letterSpacing: '0.05em' }}>脉动网持股结构</span>
+              <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid rgba(58,20,0,0.15)' }}>
+                <span className="text-sm font-semibold" style={{ color: '#1A0A00', letterSpacing: '0.05em' }}>脉动网持股结构</span>
                 <button
                   onClick={() => setShowShareholdingModal(false)}
                   className="w-7 h-7 rounded-full flex items-center justify-center"
-                  style={{ background: 'rgba(212,80,10,0.15)', border: '1px solid rgba(212,80,10,0.4)', color: '#E8601C' }}
+                  style={{ background: 'rgba(58,20,0,0.08)', border: '1px solid rgba(58,20,0,0.25)', color: '#3D1F0D' }}
                 >
                   ×
                 </button>
@@ -1712,30 +1712,30 @@ export default function LedgerDetail() {
                     { name: '联合创始人', pct: '2.5%', issued: 0, unissued: cofounderUnissued, singleRow: false },
                   ];
                   return categories.map((cat: any, idx: number) => (
-                    <div key={idx} style={{ borderBottom: '1px solid rgba(212,80,10,0.15)', marginBottom: '6px', paddingBottom: '6px' }}>
+                    <div key={idx} style={{ borderBottom: '1px solid rgba(58,20,0,0.1)', marginBottom: '6px', paddingBottom: '6px' }}>
                       <div className="flex items-center justify-between py-1">
                         <div className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg, #E8601C, #D4500A)' }} />
-                          <span className="text-xs font-semibold" style={{ color: 'rgba(232,96,28,0.95)' }}>{cat.name}</span>
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#3D1F0D' }} />
+                          <span className="text-xs font-semibold" style={{ color: '#1A0A00' }}>{cat.name}</span>
                         </div>
-                        <span className="text-xs font-bold" style={{ background: 'linear-gradient(180deg, #E8601C 0%, #D4500A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{cat.pct}</span>
+                        <span className="text-xs font-bold" style={{ color: '#3D1F0D' }}>{cat.pct}</span>
                       </div>
                       {cat.singleRow ? (
                         <div className="flex items-center justify-between pl-4 py-0.5">
-                          <span className="text-[11px]" style={{ color: 'rgba(232,96,28,0.7)' }}>已发行</span>
-                          <span className="text-[11px] font-mono" style={{ color: 'rgba(232,96,28,0.9)' }}>{cat.issued.toFixed(2)} 张</span>
+                          <span className="text-[11px]" style={{ color: 'rgba(58,20,0,0.6)' }}>已发行</span>
+                          <span className="text-[11px] font-mono" style={{ color: '#1A0A00' }}>{cat.issued.toFixed(2)} 张</span>
                         </div>
                       ) : (
                         <>
                           {cat.issued > 0 && (
                             <div className="flex items-center justify-between pl-4 py-0.5">
-                              <span className="text-[11px]" style={{ color: 'rgba(232,96,28,0.7)' }}>已发行</span>
-                              <span className="text-[11px] font-mono" style={{ color: 'rgba(232,96,28,0.9)' }}>{cat.issued.toFixed(2)} 张</span>
+                              <span className="text-[11px]" style={{ color: 'rgba(58,20,0,0.6)' }}>已发行</span>
+                              <span className="text-[11px] font-mono" style={{ color: '#1A0A00' }}>{cat.issued.toFixed(2)} 张</span>
                             </div>
                           )}
                           <div className="flex items-center justify-between pl-4 py-0.5">
-                            <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(212,80,10,0.12)', color: 'rgba(212,80,10,0.85)' }}>未发行</span>
-                            <span className="text-[11px] font-mono" style={{ color: 'rgba(212,80,10,0.9)' }}>{cat.unissued.toFixed(2)} 张</span>
+                            <span className="text-[11px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(58,20,0,0.08)', color: 'rgba(58,20,0,0.7)' }}>未发行</span>
+                            <span className="text-[11px] font-mono" style={{ color: 'rgba(58,20,0,0.7)' }}>{cat.unissued.toFixed(2)} 张</span>
                           </div>
                         </>
                       )}
@@ -1746,11 +1746,11 @@ export default function LedgerDetail() {
                 {(() => {
                   const totalShares = shareholdingSnapshot ? shareholdingSnapshot.angel / 0.30 : (globalAngelTotal > 0 ? globalAngelTotal / 0.30 : 0);
                   return totalShares > 0 ? (
-                    <div className="flex items-center justify-between pt-3 mt-1" style={{ borderTop: '1px solid rgba(212,80,10,0.4)' }}>
-                      <span className="text-xs font-bold" style={{ color: 'rgba(232,96,28,0.95)' }}>总计</span>
+                    <div className="flex items-center justify-between pt-3 mt-1" style={{ borderTop: '1px solid rgba(58,20,0,0.2)' }}>
+                      <span className="text-xs font-bold" style={{ color: '#1A0A00' }}>总计</span>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-mono font-bold" style={{ color: 'rgba(232,96,28,0.95)' }}>{totalShares.toFixed(2)} 张</span>
-                        <span className="text-xs font-bold" style={{ background: 'linear-gradient(180deg, #E8601C 0%, #D4500A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>100%</span>
+                        <span className="text-xs font-mono font-bold" style={{ color: '#1A0A00' }}>{totalShares.toFixed(2)} 张</span>
+                        <span className="text-xs font-bold" style={{ color: '#3D1F0D' }}>100%</span>
                       </div>
                     </div>
                   ) : null;
@@ -3034,7 +3034,7 @@ export default function LedgerDetail() {
             <div className="space-y-4">
               {/* 贡献股卡片（最新在上）爱马仕橙棕配色 */}
               {myShares.some((s: any) => s.shareType === '贡献股') && (
-                <div style={{ background: 'linear-gradient(160deg, #0D0800 0%, #1A0E00 50%, #0D0800 100%)', border: '1px solid rgba(212,80,10,0.55)', borderRadius: '14px', padding: '12px 14px', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 16px rgba(212,80,10,0.15), inset 0 1px 0 rgba(232,96,28,0.1)' }}>
+                <div style={{ background: '#FFF8F0', border: '1px solid rgba(58,20,0,0.25)', borderRadius: '14px', padding: '12px 14px', boxShadow: '0 2px 12px rgba(58,20,0,0.12)' }}>
                   <AngelShareCard
                     shares={[...myShares.filter((s: any) => s.shareType === '贡献股')].sort((a: any, b: any) => new Date(b.grantDate).getTime() - new Date(a.grantDate).getTime())}
                     isMarket={true}
@@ -3044,7 +3044,7 @@ export default function LedgerDetail() {
               )}
               {/* 资源股卡片（最新在上）爱马仕金色配色 */}
               {myShares.some((s: any) => s.shareType === '资源股') && (
-                <div style={{ background: 'linear-gradient(160deg, #0D0D00 0%, #1A1600 50%, #0D0D00 100%)', border: '1px solid rgba(201,168,76,0.55)', borderRadius: '14px', padding: '12px 14px', boxShadow: '0 4px 24px rgba(0,0,0,0.8), 0 0 16px rgba(201,168,76,0.15), inset 0 1px 0 rgba(255,230,100,0.1)' }}>
+                <div style={{ background: '#FFF8F0', border: '1px solid rgba(58,20,0,0.25)', borderRadius: '14px', padding: '12px 14px', boxShadow: '0 2px 12px rgba(58,20,0,0.12)' }}>
                   <AngelShareCard
                     shares={[...myShares.filter((s: any) => s.shareType === '资源股')].sort((a: any, b: any) => new Date(b.grantDate).getTime() - new Date(a.grantDate).getTime())}
                     isMarket={false}
