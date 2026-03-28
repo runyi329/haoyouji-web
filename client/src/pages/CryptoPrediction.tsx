@@ -1581,26 +1581,29 @@ export default function CryptoPrediction() {
                                   <span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span>
                                 </div>
                               )}
-                              <div className="flex items-center justify-between mt-0.5 text-xs">
-                                <span className="text-gray-400">担保利息</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {isNegativeRate ? '12ETH' : `${accruedInterest.toFixed(2)} USDT`}
-                                </span>
-                              </div>
-                              {isNegativeRate && (
-                                <>
-                                  <div className="flex items-center justify-between mt-0.5 text-xs">
-                                    <span className="text-gray-400">担保价値</span>
-                                    <span className="font-medium" style={{ color: '#4B5563' }}>
-                                      {financeLivePrices['ETH'] ? `${(12 * financeLivePrices['ETH']).toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '---'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center justify-between mt-0.5 text-xs">
-                                    <span className="text-gray-400">付息方式</span>
-                                    <span className="font-medium" style={{ color: '#4B5563' }}>年付先付</span>
-                                  </div>
-                                </>
-                              )}
+                              {(() => {
+                                const collCoin = order.collateral_coin;
+                                const collQty = parseFloat(order.collateral_qty || '0');
+                                const hasCollateral = collCoin && collQty > 0;
+                                const collPrice = hasCollateral ? (financeLivePrices[collCoin] || 0) : 0;
+                                const collValue = collQty * collPrice;
+                                return hasCollateral ? (
+                                  <>
+                                    <div className="flex items-center justify-between mt-0.5 text-xs">
+                                      <span className="text-gray-400">担保利息</span>
+                                      <span className="font-medium" style={{ color: '#4B5563' }}>
+                                        {collQty % 1 === 0 ? collQty.toFixed(0) : collQty}{collCoin}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-0.5 text-xs">
+                                      <span className="text-gray-400">担保价值</span>
+                                      <span className="font-medium" style={{ color: '#4B5563' }}>
+                                        {collPrice > 0 ? `${collValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '---'}
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : null;
+                              })()}
                               {order.counterparty && (
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-gray-400">对手方</span>
