@@ -23,6 +23,10 @@ export default function LedgerSettings() {
  const params = useParams();
  const [, setLocation] = useLocation();
  const ledgerId = params?.id ? parseInt(params.id) : 1;
+ // 观察视角：保留 viewAs 参数
+ const _urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+ const _viewAsParam = _urlSearchParams.get('viewAs');
+ const _viewAsSuffix = _viewAsParam ? `?viewAs=${_viewAsParam}` : '';
  // 
  const { data: user } = trpc.auth.me.useQuery();
 
@@ -628,7 +632,7 @@ export default function LedgerSettings() {
    <SettingItem label="资方管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/funder-management`)} />
  )}
  {ledgerData?.type === 'custom_af' && (
-   <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-management`)} />
+   <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-management${_viewAsSuffix}`)} />
  )}
  {/* - */}
  {(() => {
