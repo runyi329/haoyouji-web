@@ -91,20 +91,10 @@ function formatCapital(n: number) {
 // 权重规则弹窗
 function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () => void }) {
   const [ruleTab, setRuleTab] = useState<'preview' | 'tiers'>('preview');
-  const [applyMsg, setApplyMsg] = useState('');
-
   const { data, isLoading } = trpc.equity.previewAutoWeight.useQuery(
     { ledgerId },
     { retry: false }
   );
-
-  const applyMutation = trpc.equity.applyAutoWeight.useMutation({
-    onSuccess: (res) => {
-      setApplyMsg(`已成功更新 ${res.updatedCount} 位成员的资金权重`);
-      setTimeout(() => setApplyMsg(''), 4000);
-    },
-    onError: (e) => setApplyMsg('应用失败：' + e.message),
-  });
 
   return (
     <div
@@ -259,26 +249,7 @@ function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () 
           )}
         </div>
 
-        {/* 底部应用按钮 */}
-        <div className="px-4 pb-6 pt-3" style={{ borderTop: `1px solid ${GOLD_BORDER}`, flexShrink: 0 }}>
-          {applyMsg && (
-            <div className="text-xs text-center mb-2" style={{ color: applyMsg.includes('成功') ? '#4ade80' : '#ff6b6b' }}>
-              {applyMsg}
-            </div>
-          )}
-          <button
-            onClick={() => applyMutation.mutate({ ledgerId })}
-            disabled={applyMutation.isPending || isLoading || !data || data.preview.length === 0}
-            className="w-full py-3 rounded-full text-sm font-semibold"
-            style={{
-              background: 'linear-gradient(135deg,#C8920A 0%,#FFE566 100%)',
-              color: '#000',
-              opacity: (applyMutation.isPending || isLoading || !data || data.preview.length === 0) ? 0.5 : 1,
-            }}
-          >
-            {applyMutation.isPending ? '应用中...' : `一键应用自动权重（${data?.preview.length ?? 0} 人）`}
-          </button>
-        </div>
+
       </div>
     </div>
   );
