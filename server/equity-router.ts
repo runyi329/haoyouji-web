@@ -593,7 +593,7 @@ export const equityRouter = router({
       if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
       }
-      // 查该账本所有成员，并联查资金股本金和股东编号
+      // 查该账本所有成员，并联查资金股本金和股东编号，以及资源参考数据
       const [members] = await (db as any).execute(
         `SELECT lm.userId, u.name, u.username, u.avatar,
                 COALESCE(sn.shareNo, NULL) AS shareNo,
@@ -601,7 +601,20 @@ export const equityRouter = router({
                   SELECT SUM(es2.shareCount)
                   FROM equity_shares es2
                   WHERE es2.ledgerId = lm.ledgerId AND es2.userId = lm.userId AND es2.shareType = '资金股'
-                ), 0) AS capitalAmount
+                ), 0) AS capitalAmount,
+                COALESCE((
+                  SELECT COUNT(*) FROM contacts c
+                  WHERE c.parentUserId = lm.userId AND c.ledgerId = lm.ledgerId
+                ), 0) AS networkCount,
+                COALESCE((
+                  SELECT COUNT(*) FROM contact_tags ct
+                  INNER JOIN contacts c2 ON c2.id = ct.contactId
+                  WHERE c2.parentUserId = lm.userId AND c2.ledgerId = lm.ledgerId
+                ), 0) AS tagCount,
+                COALESCE((
+                  SELECT COUNT(*) FROM contacts c3
+                  WHERE c3.parentUserId = lm.userId AND c3.ledgerId = lm.ledgerId AND c3.referrerId IS NOT NULL
+                ), 0) AS directReferrals
          FROM ledger_members lm
          LEFT JOIN users u ON u.id = lm.userId
          LEFT JOIN shareholder_numbers sn ON sn.ledgerId = lm.ledgerId AND sn.userId = lm.userId
@@ -653,6 +666,9 @@ export const equityRouter = router({
           shareNo,
           rawBonus,
           autoBonus,
+          networkCount: Number(m.networkCount ?? 0),
+          tagCount: Number(m.tagCount ?? 0),
+          directReferrals: Number(m.directReferrals ?? 0),
         };
       });
     }),

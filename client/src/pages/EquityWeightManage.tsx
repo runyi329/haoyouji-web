@@ -23,6 +23,9 @@ interface Member {
   shareNo?: string | null;
   rawBonus?: number;
   autoBonus?: number;
+  networkCount?: number;
+  tagCount?: number;
+  directReferrals?: number;
 }
 
 interface WeightLog {
@@ -89,7 +92,8 @@ function formatCapital(n: number) {
 }
 
 // 权重规则弹窗
-function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () => void }) {
+function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; members: Member[]; onClose: () => void }) {
+  const [mainTab, setMainTab] = useState<'capital' | 'resource'>('capital');
   const [ruleTab, setRuleTab] = useState<'preview' | 'tiers'>('preview');
   const { data, isLoading } = trpc.equity.previewAutoWeight.useQuery(
     { ledgerId },
@@ -118,10 +122,28 @@ function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () 
         {/* 弹窗头部 */}
         <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${GOLD_BORDER}`, flexShrink: 0 }}>
           <div>
-            <div className="text-base font-semibold" style={{ color: GOLD }}>资金股权重规则</div>
-            <div className="text-xs mt-0.5" style={{ color: GOLD_DIM }}>资金股 ≥ 10万，按股东编号早晚分66档</div>
+            <div className="text-base font-semibold" style={{ color: GOLD }}>权重规则</div>
+            <div className="text-xs mt-0.5" style={{ color: GOLD_DIM }}>资金权重与资源权重规则说明</div>
           </div>
           <button onClick={onClose} className="text-xs px-3 py-1 rounded-full" style={{ border: `1px solid ${GOLD_BORDER}`, color: GOLD_DIM }}>关闭</button>
+        </div>
+
+        {/* 主 Tab切换：资金权重 / 资源权重 */}
+        <div className="flex px-4 pt-3 pb-2 gap-2" style={{ flexShrink: 0 }}>
+          {(['capital', 'resource'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setMainTab(tab)}
+              className="flex-1 py-2 rounded-full text-sm font-medium"
+              style={{
+                background: mainTab === tab ? 'rgba(201,168,76,0.2)' : 'transparent',
+                border: `1px solid ${mainTab === tab ? GOLD_BORDER_SEL : GOLD_BORDER}`,
+                color: mainTab === tab ? GOLD : GOLD_DIM,
+              }}
+            >
+              {tab === 'capital' ? '资金权重规则' : '资源权重规则'}
+            </button>
+          ))}
         </div>
 
         {/* 实时统计条 */}
@@ -162,12 +184,80 @@ function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () 
 
         {/* 内容区 */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
-          {isLoading && (
-            <div className="text-center py-10 text-sm" style={{ color: GOLD_DIM }}>计算中...</div>
+
+          {/* 资金权重规则内容 */}
+          {mainTab === 'capital' && (
+            <>
+              {isLoading && (
+                <div className="text-center py-10 text-sm" style={{ color: GOLD_DIM }}>计算中...</div>
+              )}
+
+              {/* 资金权重子Tab切换 */}
+              {!isLoading && data && (
+                <div className="flex pb-2 gap-2" style={{ flexShrink: 0 }}>
+                  {(['preview', 'tiers'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setRuleTab(tab)}
+                      className="flex-1 py-1.5 rounded-full text-xs font-medium"
+                      style={{
+                        background: ruleTab === tab ? 'rgba(201,168,76,0.15)' : 'transparent',
+                        border: `1px solid ${ruleTab === tab ? GOLD_BORDER_SEL : GOLD_BORDER}`,
+                        color: ruleTab === tab ? GOLD : GOLD_DIM,
+                      }}
+                    >
+                      {tab === 'preview' ? '成员预览' : '66档规则'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
-          {/* 成员预览 Tab */}
-          {!isLoading && data && ruleTab === 'preview' && (
+          {/* 资源权重规则内容 */}
+          {mainTab === 'resource' && (
+            <div>
+              <div className="text-xs mb-3 pt-1" style={{ color: GOLD_DIM }}>
+                资源权重参考指标：人脉数、标签数、直接推荐人数。具体权重规则将在后续设置。
+              </div>
+              {/* 表头 */}
+              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid rgba(201,168,76,0.2)` }}>
+                <div className="flex px-3 py-2" style={{ background: 'rgba(201,168,76,0.15)', borderBottom: `1px solid rgba(201,168,76,0.2)` }}>
+                  <div className="flex-1 text-xs font-semibold" style={{ color: GOLD }}>成员</div>
+                  <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>人脉</div>
+                  <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>标签</div>
+                  <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>推荐</div>
+                  <div style={{ width: 52, textAlign: 'right' }} className="text-xs font-semibold" style={{ color: GOLD }}>资源权重</div>
+                </div>
+                {members.length === 0 ? (
+                  <div className="text-center py-8 text-sm" style={{ color: 'rgba(220,185,60,0.4)' }}>暂无成员</div>
+                ) : (
+                  members.map((m, idx) => (
+                    <div
+                      key={m.userId}
+                      className="flex items-center px-3 py-2.5"
+                      style={{
+                        background: idx % 2 === 0 ? 'rgba(201,168,76,0.04)' : '#0A0A00',
+                        borderBottom: idx < members.length - 1 ? `1px solid rgba(201,168,76,0.1)` : 'none',
+                      }}
+                    >
+                      <div className="flex-1 flex items-center gap-2 min-w-0">
+                        <Avatar name={m.name} avatar={m.avatar} size={26} />
+                        <span className="text-xs truncate" style={{ color: GOLD_DIM }}>{m.name}</span>
+                      </div>
+                      <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-medium" style={{ color: GOLD_DIM }}>{m.networkCount ?? 0}</div>
+                      <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-medium" style={{ color: GOLD_DIM }}>{m.tagCount ?? 0}</div>
+                      <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-medium" style={{ color: GOLD_DIM }}>{m.directReferrals ?? 0}</div>
+                      <div style={{ width: 52, textAlign: 'right' }} className="text-xs font-bold" style={{ color: '#FFE566' }}>{m.resourceWeight.toFixed(2)}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 资金权重内容：成员预览 Tab */}
+          {mainTab === 'capital' && !isLoading && data && ruleTab === 'preview' && (
             <div>
               {data.preview.length === 0 ? (
                 <div className="text-center py-8 text-sm" style={{ color: 'rgba(220,185,60,0.4)' }}>
@@ -209,7 +299,7 @@ function WeightRuleModal({ ledgerId, onClose }: { ledgerId: number; onClose: () 
           )}
 
           {/* 66档规则 Tab */}
-          {!isLoading && data && ruleTab === 'tiers' && (
+          {mainTab === 'capital' && !isLoading && data && ruleTab === 'tiers' && (
             <div>
               <div className="text-xs mb-2" style={{ color: GOLD_DIM }}>
                 资金股 ≥ 10万 且 股东编号在前660名，按10人一档共66档，入股早晚加成等差分布 1.0 → 0.0154（加在基础值1.0上）
@@ -584,6 +674,22 @@ export default function EquityWeightManage() {
                       <span className="text-[11px] font-semibold" style={{ color: GOLD }}>资源权重</span>
                       <span className="text-sm font-bold" style={{ color: '#FFE566' }}>{parseFloat(resInput).toFixed(4)}</span>
                     </div>
+                    {/* 资源参考指标 */}
+                    <div className="mt-2 text-[10px] mb-1" style={{ color: 'rgba(220,185,60,0.4)' }}>资源参考指标</div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 text-center rounded-lg px-2 py-1.5" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                        <div className="text-[10px] mb-0.5" style={{ color: 'rgba(220,185,60,0.4)' }}>人脉数</div>
+                        <div className="text-sm font-bold" style={{ color: GOLD_DIM }}>{selected.networkCount ?? 0}</div>
+                      </div>
+                      <div className="flex-1 text-center rounded-lg px-2 py-1.5" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                        <div className="text-[10px] mb-0.5" style={{ color: 'rgba(220,185,60,0.4)' }}>标签数</div>
+                        <div className="text-sm font-bold" style={{ color: GOLD_DIM }}>{selected.tagCount ?? 0}</div>
+                      </div>
+                      <div className="flex-1 text-center rounded-lg px-2 py-1.5" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                        <div className="text-[10px] mb-0.5" style={{ color: 'rgba(220,185,60,0.4)' }}>直接推荐</div>
+                        <div className="text-sm font-bold" style={{ color: GOLD_DIM }}>{selected.directReferrals ?? 0}</div>
+                      </div>
+                    </div>
                   </div>
 
                   {/* 最终乘积 */}
@@ -669,7 +775,7 @@ export default function EquityWeightManage() {
 
       {/* 权重规则弹窗 */}
       {showRuleModal && (
-        <WeightRuleModal ledgerId={LEDGER_ID} onClose={() => setShowRuleModal(false)} />
+        <WeightRuleModal ledgerId={LEDGER_ID} members={list} onClose={() => setShowRuleModal(false)} />
       )}
     </div>
   );
