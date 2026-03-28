@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 const STATUS_OPTIONS = [
@@ -27,6 +27,13 @@ const COIN_COLORS: Record<CoinType, string> = {
   BTC: '#F7931A',
   ETH: '#627EEA',
   SOL: '#9945FF',
+  AAVE: '#B6509E',
+  SUI: '#4DA2FF',
+  ONDO: '#1A1A2E',
+  ASTER: '#E84142',
+  LOD: '#00C896',
+  ENA: '#1A1A1A',
+  ARKM: '#FF6B35',
 };
 
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -649,12 +656,12 @@ export default function FinanceManagement() {
               {/* 币种 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种 <span className="text-red-400 ml-0.5">*</span></label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {COIN_OPTIONS.map(c => (
                     <button
                       key={c}
                       onClick={() => setFormData(d => ({ ...d, coin: c }))}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
+                      className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
                       style={
                         formData.coin === c
                           ? { backgroundColor: COIN_COLORS[c], color: '#fff' }
