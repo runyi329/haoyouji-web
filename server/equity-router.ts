@@ -297,13 +297,44 @@ export const equityRouter = router({
       const finalRegNo = input.regNo?.trim() || autoRegNo;
       // 确保regNo字段存在
       try { await (conn as any).execute(`ALTER TABLE equity_shares ADD COLUMN IF NOT EXISTS regNo VARCHAR(10) DEFAULT NULL`); } catch(e) {}
-      // 查询该用户当前权重（资源权重 × 资金权重），发放时快照
+      // 实时计算该用户的资金权重（不依赖 equity_weights 静态表，始终基于当前数据）
+      // 1. 读取资源权重（手动设置的部分，仍从 equity_weights 读取）
       const [[weightRow]] = await (conn as any).execute(
-        'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
+        'SELECT resource_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
         [input.userId]
       ) as any;
       const rw = weightRow ? Number(weightRow.resource_weight) : 1.0;
-      const cw = weightRow ? Number(weightRow.capital_weight) : 1.0;
+
+      // 2. 实时计算资金权重：查该用户在本账本的资金股累计 + 股东编号排名
+      const [[capRow]] = await (conn as any).execute(
+        `SELECT COALESCE(SUM(es2.shareCount), 0) AS capitalTotal
+         FROM equity_shares es2
+         WHERE es2.ledgerId = ? AND es2.userId = ? AND es2.shareType = '资源股'`,
+        [input.ledgerId, input.userId]
+      ) as any;
+      const [[snRow]] = await (conn as any).execute(
+        'SELECT shareNo FROM shareholder_numbers WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, input.userId]
+      ) as any;
+      // 66档等差规则：资金股≥10万 且 股东编号在前660名
+      const THRESHOLD_W = 100000;
+      const TIERS_W = 66;
+      const MAX_RANK_W = 660;
+      const MAX_BONUS_W = 1.0;
+      const MIN_BONUS_W = Math.round(MAX_BONUS_W / (TIERS_W - 1) * 10000) / 10000;
+      const stepW = (MAX_BONUS_W - MIN_BONUS_W) / (TIERS_W - 1);
+      const capitalTotal = Number(capRow?.capitalTotal ?? 0);
+      const capitalRatio = Math.min(capitalTotal / THRESHOLD_W, 1.0);
+      let rawBonus = 0;
+      if (snRow?.shareNo) {
+        const rank = parseInt(String(snRow.shareNo), 10);
+        if (!isNaN(rank) && rank >= 1 && rank <= MAX_RANK_W) {
+          const tier = Math.ceil(rank / 10);
+          rawBonus = Math.round((MAX_BONUS_W - (tier - 1) * stepW) * 10000) / 10000;
+        }
+      }
+      const autoBonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
+      const cw = Math.round((1.0 + autoBonus) * 10000) / 10000;
       const snapshotWeight = Math.round(rw * cw * 10000) / 10000;
       const [result] = await (conn as any).execute(
         `INSERT INTO equity_shares (ledgerId, userId, memberNickname, shareCount, shareType, grantDate, reason, regNo, createdBy, weight, resource_weight, capital_weight)
