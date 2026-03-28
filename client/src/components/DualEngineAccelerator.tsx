@@ -146,7 +146,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
         <div className="flex items-center justify-between mb-3">
           <div>
             <span ref={multiplierTitleRef} className="text-sm font-medium opacity-90">
-              资源股
+              资金股
             </span>
             <div className="text-xs opacity-60 mt-0.5">贡献加速驱动</div>
           </div>
@@ -160,7 +160,7 @@ export default function DualEngineAccelerator(props: DualEngineAcceleratorProps)
           </button>
         </div>
         
-        {/* 资源股帮助弹窗 */}
+        {/* 资金股帮助弹窗 */}
         <Tooltip
           isOpen={showMultiplierHelp}
           onClose={() => setShowMultiplierHelp(false)}

@@ -27,7 +27,7 @@ interface NodeAchievementBadgeProps {
   totalEquity?: number;        // 总权重（与第一层相同）
   investmentEquity?: number;   // 基础权证（资本部分）
   contribEquity?: number;      // 贡献加成（市场贡献部分）
-  inviteEquity?: number;       // 邀请贡献股权
+  inviteEquity?: number;       // 邀请资源股权
   referralNetworkEquity?: number; // 人脉网络股权
   inviteCount?: number;        // 邀请人数
   referralNetworkCount?: number; // 人脉网络人数

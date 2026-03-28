@@ -375,14 +375,14 @@ export async function calculateUserEquity(userId: number) {
   }
   
   // 3. 计算邀请贡献和人脉贡献
-  // 核心逻辑：只有有投资记录的用户（股东）才计算市场贡献股份
+  // 核心逻辑：只有有投资记录的用户（股东）才计算市场资源股份
   let inviteCount = 0;
   let inviteEquity = 0;
   let referralNetworkCount = 0;
   let referralNetworkEquity = 0;
   
   if (userInvestment > 0) {
-    // 用户有投资记录，才计算贡献股份
+    // 用户有投资记录，才计算资源股份
     const [user] = await db
       .select({ inviteCount: users.inviteCount })
       .from(users)
