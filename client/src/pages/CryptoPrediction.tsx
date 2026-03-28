@@ -743,13 +743,14 @@ export default function CryptoPrediction() {
   // 融资付息：实时价格（与资金方共用同一个 localStorage key）
   const FINANCE_PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const freshFinancePrices: Record<string, number> = (financeAssetSummary as any)?.livePrices ?? {};
-  const hasFreshFinancePrices = Object.keys(freshFinancePrices).length > 0;
-  if (hasFreshFinancePrices) {
-    try { localStorage.setItem(FINANCE_PRICE_CACHE_KEY, JSON.stringify(freshFinancePrices)); } catch {}
-  }
+  // 先读缓存，再用新鲜价格覆盖（保证某个币种价格获取失败时仍显示上次的值）
   let cachedFinancePrices: Record<string, number> = {};
   try { cachedFinancePrices = JSON.parse(localStorage.getItem(FINANCE_PRICE_CACHE_KEY) || '{}'); } catch {}
-  const financeLivePrices: Record<string, number> = hasFreshFinancePrices ? freshFinancePrices : cachedFinancePrices;
+  const financeLivePrices: Record<string, number> = { ...cachedFinancePrices, ...freshFinancePrices };
+  // 有新鲜价格时更新缓存（合并写入，保留未刷新到的币种旧价格）
+  if (Object.keys(freshFinancePrices).length > 0) {
+    try { localStorage.setItem(FINANCE_PRICE_CACHE_KEY, JSON.stringify(financeLivePrices)); } catch {}
+  }
 
   // 当前登录用户（用于权限判断）
   const { data: meData } = trpc.auth.me.useQuery();
