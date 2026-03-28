@@ -12197,8 +12197,15 @@ export const appRouter = router({
           financeType: 'finance_type',
         };
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
+        // DECIMAL/数字列：空字符串需转为 null，否则 MySQL 报 Incorrect decimal value
+        const decimalCols = new Set(['amount', 'buy_price', 'buy_quantity', 'interest_rate_annual', 'interest_base', 'collateral_qty']);
         for (const [key, col] of Object.entries(fieldMap)) {
-          if ((input as any)[key] !== undefined) { updateCols.push(`${col} = ?`); updateVals.push((input as any)[key]); }
+          if ((input as any)[key] !== undefined) {
+            let val = (input as any)[key];
+            if (decimalCols.has(col) && (val === '' || val === null)) val = null;
+            updateCols.push(`${col} = ?`);
+            updateVals.push(val);
+          }
         }
         if (updateCols.length === 0) return { success: true };
         updateVals.push(input.id, input.ledgerId);
