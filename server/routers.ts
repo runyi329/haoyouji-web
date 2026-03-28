@@ -12109,6 +12109,7 @@ export const appRouter = router({
         counterparty: z.string().optional(),
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
+        financeType: z.enum(['保本分成', '自负盈亏']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -12117,7 +12118,7 @@ export const appRouter = router({
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        // 自动建表时添加 collateral_coin / collateral_qty 列（如果不存在）
+        // 自动建表时添加 collateral_coin / collateral_qty / finance_type 列（如果不存在）
         try {
           const mysql = await import('mysql2/promise');
           const dbUrl = process.env.DATABASE_URL || '';
@@ -12129,6 +12130,7 @@ export const appRouter = router({
           });
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_coin VARCHAR(20) DEFAULT NULL`);
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_qty DECIMAL(20,8) DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS finance_type VARCHAR(20) DEFAULT '保本分成'`);
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -12145,8 +12147,8 @@ export const appRouter = router({
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, collateral_coin, collateral_qty, created_by)
-              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${ctx.user.id})`
+          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, created_by)
+              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -12174,6 +12176,7 @@ export const appRouter = router({
         counterparty: z.string().optional(),
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
+        financeType: z.enum(['保本分成', '自负盈亏']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -12191,6 +12194,7 @@ export const appRouter = router({
           adminNote: 'admin_note', publicNote: 'public_note', interestRateAnnual: 'interest_rate_annual',
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestBaseCurrency: 'interest_base_currency', interestStartDate: 'interest_start_date',
           collateralCoin: 'collateral_coin', collateralQty: 'collateral_qty',
+          financeType: 'finance_type',
         };
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
         for (const [key, col] of Object.entries(fieldMap)) {
