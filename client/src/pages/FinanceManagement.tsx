@@ -386,12 +386,7 @@ export default function FinanceManagement() {
                       <div className="flex items-baseline gap-1 mb-2">
                         <span className="text-xs text-gray-400">归属用户：</span>
                         <span className="text-xs font-medium" style={{ color: '#1A2340' }}>{displayName}</span>
-                        {order.counterparty && (
-                          <>
-                            <span className="text-xs text-gray-300 mx-1">·</span>
-                            <span className="text-xs text-gray-400">对手方：{order.counterparty}</span>
-                          </>
-                        )}
+
                       </div>
 
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
@@ -641,18 +636,6 @@ export default function FinanceManagement() {
               </div>
 
               {/* 对手方 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">对手方名称</label>
-                <input
-                  type="text"
-                  value={formData.counterparty}
-                  onChange={e => setFormData(d => ({ ...d, counterparty: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="融资对手方名称"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>
-
               {/* 币种 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种 <span className="text-red-400 ml-0.5">*</span></label>
