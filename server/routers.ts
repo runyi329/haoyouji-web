@@ -11998,19 +11998,35 @@ export const appRouter = router({
     // ========== 融资付息订单 API ==========
     // 查询融资付息订单列表
     financeGetOrders: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 验证权限（owner/admin/funder都可以看）
-        const roleRows = await db.execute(
+        // 验证当前登录用户的权限
+        const myRoleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
-        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
-        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const myRole = (myRoleRows[0]?.[0] ?? myRoleRows[0])?.role;
+        if (!myRole) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const amIManager = myRole === 'owner' || myRole === 'admin';
+        // 观察视角：只有 owner/admin 才能使用 viewAsUserId
+        if (input.viewAsUserId && !amIManager) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限使用观察视角' });
+        }
+        // 确定实际查询的目标用户角色
+        // 若有 viewAsUserId，以被观察用户的角色决定数据范围（模拟该用户视角）
+        let targetUserId = ctx.user.id;
+        let targetIsManager = amIManager;
+        if (input.viewAsUserId) {
+          targetUserId = input.viewAsUserId;
+          const targetRoleRows = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${input.viewAsUserId} LIMIT 1`
+          ) as any;
+          const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
+          targetIsManager = targetRole === 'owner' || targetRole === 'admin';
+        }
         // 管理员看所有，普通用户只看自己的
-        const isManager = role === 'owner' || role === 'admin';
         const rows = await db.execute(
-          isManager
+          targetIsManager
             ? sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
                   FROM finance_interest_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
@@ -12019,7 +12035,7 @@ export const appRouter = router({
             : sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
                   FROM finance_interest_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.user_id = ${ctx.user.id} AND fo.status = 'active'
+                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.user_id = ${targetUserId} AND fo.status = 'active'
                   ORDER BY fo.created_at DESC`
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
