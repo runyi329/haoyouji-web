@@ -87,9 +87,14 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
       boxShadow: '0 2px 8px rgba(58,20,0,0.08), 0 1px 2px rgba(58,20,0,0.06)'
     }}>
       <div className="px-4 py-3">
-        {/* 第一行：日期 + 股权编号 */}
+        {/* 第一行：日期 + 类型标签 + 股权编号 */}
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs" style={{ color: labelColor }}>{dateStr}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs" style={{ color: labelColor }}>{dateStr}</span>
+            {s.shareType && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(232,96,28,0.12)', color: '#3D1F0D', border: '1px solid rgba(232,96,28,0.3)' }}>{s.shareType}</span>
+            )}
+          </div>
           <span
             className="text-[10px] font-mono font-semibold select-all"
             style={{ color: 'rgba(58,20,0,0.45)', letterSpacing: '0.08em', background: 'rgba(58,20,0,0.06)', padding: '1px 6px', borderRadius: '4px', cursor: 'pointer', WebkitUserSelect: 'all', userSelect: 'all' }}
@@ -107,12 +112,6 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
             {s.share_code || s.regNo || ''}
           </span>
         </div>
-        {/* 第二行：股权类型标签 */}
-        {s.shareType && (
-          <div className="mb-2">
-            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(232,96,28,0.12)', color: '#3D1F0D', border: '1px solid rgba(232,96,28,0.3)' }}>{s.shareType}</span>
-          </div>
-        )}
         {/* 数据行：股本 + 贡献 */}
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-1.5">
