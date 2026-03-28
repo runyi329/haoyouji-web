@@ -735,27 +735,29 @@ export default function FinanceManagement() {
                 </div>
                 {/* 融资金额 */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 (USDT) <span className="text-red-400">*</span></label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 (USDT)</label>
                   <input
                     type="number"
                     inputMode="decimal"
                     value={formData.amount}
-                    onChange={e => {
+                    onChange={e => setFormData(d => ({ ...d, amount: e.target.value }))}
+                    onBlur={e => {
                       const amount = e.target.value;
                       setFormData(d => {
                         const price = parseFloat(d.buyPrice);
                         const qty = parseFloat(d.buyQuantity);
                         const amt = parseFloat(amount);
+                        if (!amount || isNaN(amt) || amt <= 0) return d;
                         // 如果买入价已有，自动计算币数
-                        if (amount && !isNaN(price) && price > 0) {
+                        if (!isNaN(price) && price > 0 && !d.buyQuantity) {
                           const calcQty = amt / price;
-                          return { ...d, amount, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
+                          return { ...d, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                         }
                         // 如果币数已有，自动计算买入价
-                        if (amount && !isNaN(qty) && qty > 0) {
-                          return { ...d, amount, buyPrice: (amt / qty).toFixed(2) };
+                        if (!isNaN(qty) && qty > 0 && !d.buyPrice) {
+                          return { ...d, buyPrice: (amt / qty).toFixed(2) };
                         }
-                        return { ...d, amount };
+                        return d;
                       });
                     }}
                     className="w-full bg-transparent text-base focus:outline-none"
@@ -769,22 +771,24 @@ export default function FinanceManagement() {
                     type="number"
                     inputMode="decimal"
                     value={formData.buyPrice}
-                    onChange={e => {
+                    onChange={e => setFormData(d => ({ ...d, buyPrice: e.target.value }))}
+                    onBlur={e => {
                       const price = e.target.value;
                       setFormData(d => {
                         const qty = parseFloat(d.buyQuantity);
                         const amt = parseFloat(d.amount);
                         const p = parseFloat(price);
+                        if (!price || isNaN(p) || p <= 0) return d;
                         // 如果币数已有，自动计算融资金额
-                        if (price && !isNaN(qty) && qty > 0) {
-                          return { ...d, buyPrice: price, amount: (p * qty).toFixed(2) };
+                        if (!isNaN(qty) && qty > 0 && !d.amount) {
+                          return { ...d, amount: (p * qty).toFixed(2) };
                         }
                         // 如果融资金额已有，自动计算币数
-                        if (price && !isNaN(amt) && amt > 0) {
+                        if (!isNaN(amt) && amt > 0 && !d.buyQuantity) {
                           const calcQty = amt / p;
-                          return { ...d, buyPrice: price, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
+                          return { ...d, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                         }
-                        return { ...d, buyPrice: price };
+                        return d;
                       });
                     }}
                     className="w-full bg-transparent text-base focus:outline-none"
@@ -799,21 +803,23 @@ export default function FinanceManagement() {
                     type="number"
                     inputMode="decimal"
                     value={formData.buyQuantity}
-                    onChange={e => {
+                    onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
+                    onBlur={e => {
                       const qty = e.target.value;
                       setFormData(d => {
                         const price = parseFloat(d.buyPrice);
                         const amt = parseFloat(d.amount);
                         const q = parseFloat(qty);
+                        if (!qty || isNaN(q) || q <= 0) return d;
                         // 如果买入价已有，自动计算融资金额
-                        if (qty && !isNaN(price) && price > 0) {
-                          return { ...d, buyQuantity: qty, amount: (price * q).toFixed(2) };
+                        if (!isNaN(price) && price > 0 && !d.amount) {
+                          return { ...d, amount: (price * q).toFixed(2) };
                         }
                         // 如果融资金额已有，自动计算买入价
-                        if (qty && !isNaN(amt) && amt > 0) {
-                          return { ...d, buyQuantity: qty, buyPrice: (amt / q).toFixed(2) };
+                        if (!isNaN(amt) && amt > 0 && !d.buyPrice) {
+                          return { ...d, buyPrice: (amt / q).toFixed(2) };
                         }
-                        return { ...d, buyQuantity: qty };
+                        return d;
                       });
                     }}
                     className="w-full bg-transparent text-base focus:outline-none"
