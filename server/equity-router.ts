@@ -612,8 +612,8 @@ export const equityRouter = router({
                   WHERE c2.parentUserId = lm.userId
                 ), 0) AS tagCount,
                 COALESCE((
-                  SELECT COUNT(*) FROM contacts c3
-                  WHERE c3.parentUserId = lm.userId AND c3.referrerId IS NOT NULL
+                  SELECT COUNT(*) FROM referral_approvals ra
+                  WHERE ra.ledger_id = lm.ledgerId AND ra.member_user_id = lm.userId AND ra.status = 'approved'
                 ), 0) AS directReferrals
          FROM ledger_members lm
          LEFT JOIN users u ON u.id = lm.userId
@@ -1143,6 +1143,104 @@ export const equityRouter = router({
         [input.ledgerId, input.memberUserId]
       ) as any;
       return { count: Number(row?.cnt ?? 0) };
+    }),
+
+  // 查询某成员的所有被推荐人列表（含计数状态），供管理员展开查看
+  getMemberReferrals: protectedProcedure
+    .input(z.object({ ledgerId: z.number(), memberUserId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, ctx.user.id]
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
+      }
+      // 查该成员作为推荐人（referrerId=memberUserId）推荐的所有联系人，并 LEFT JOIN referral_approvals 获取计数状态
+      // contacts.referrerId 存储的是推荐人的 userId，即该成员把这些人引进来的
+      const [rows] = await (db as any).execute(
+        `SELECT c.id AS contactId, c.name AS referredName, c.linkedUserId AS referredUserId,
+                COALESCE(ra.id, NULL) AS approvalId,
+                COALESCE(ra.status, 'none') AS approvalStatus,
+                ra.created_at AS submittedAt,
+                ra.reviewed_at AS reviewedAt,
+                u.avatar AS referredAvatar
+         FROM contacts c
+         LEFT JOIN referral_approvals ra
+           ON ra.ledger_id = ? AND ra.member_user_id = ? AND ra.referred_contact_id = c.id
+         LEFT JOIN users u ON u.id = c.linkedUserId
+         WHERE c.referrerId = ?
+         ORDER BY c.createdAt DESC`,
+        [input.ledgerId, input.memberUserId, input.memberUserId]
+      ) as any;
+      return (rows as any[]).map((r: any) => ({
+        contactId: Number(r.contactId),
+        referredName: r.referredName ?? '未知',
+        referredUserId: r.referredUserId ? Number(r.referredUserId) : null,
+        referredAvatar: r.referredAvatar ?? null,
+        approvalId: r.approvalId ? Number(r.approvalId) : null,
+        approvalStatus: (r.approvalStatus ?? 'none') as 'none' | 'pending' | 'approved' | 'rejected',
+        submittedAt: r.submittedAt as Date | null,
+        reviewedAt: r.reviewedAt as Date | null,
+      }));
+    }),
+
+  // 管理员直接切换某条推荐关系的计数状态（approved <-> rejected，或从 none 直接设置）
+  // 使用 contactId 作为唯一标识（被推荐人可能没有 userId）
+  toggleReferralCount: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      memberUserId: z.number(),
+      contactId: z.number(),
+      referredName: z.string().optional(),
+      action: z.enum(['approved', 'rejected']),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, ctx.user.id]
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
+      }
+      // 确保表存在（使用 referred_contact_id 作为唯一标识）
+      await (db as any).execute(
+        `CREATE TABLE IF NOT EXISTS referral_approvals (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          member_user_id INT NOT NULL,
+          referred_contact_id INT NOT NULL,
+          referred_name VARCHAR(100),
+          status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+          remark TEXT,
+          reviewer_user_id INT,
+          reviewed_at DATETIME,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_referral (ledger_id, member_user_id, referred_contact_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+      );
+      const [[existing]] = await (db as any).execute(
+        'SELECT id FROM referral_approvals WHERE ledger_id = ? AND member_user_id = ? AND referred_contact_id = ? LIMIT 1',
+        [input.ledgerId, input.memberUserId, input.contactId]
+      ) as any;
+      if (existing) {
+        await (db as any).execute(
+          'UPDATE referral_approvals SET status = ?, reviewer_user_id = ?, reviewed_at = NOW() WHERE id = ?',
+          [input.action, ctx.user.id, existing.id]
+        );
+      } else {
+        await (db as any).execute(
+          'INSERT INTO referral_approvals (ledger_id, member_user_id, referred_contact_id, referred_name, status, reviewer_user_id, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+          [input.ledgerId, input.memberUserId, input.contactId, input.referredName ?? null, input.action, ctx.user.id]
+        );
+      }
+      return { success: true, action: input.action };
     }),
 });
 // ===== 股权转让功能 =====
