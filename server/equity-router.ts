@@ -1493,4 +1493,45 @@ export const equityTransferRouter = router({
       ].sort((a, b) => new Date(b.eventDate || b.createdAt).getTime() - new Date(a.eventDate || a.createdAt).getTime());
       return all;
     }),
+  // 调试接口：查询指定userId的推荐关系原始数据
+  debugReferrals: protectedProcedure
+    .input(z.object({ memberUserId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 1. 查该userId对应的所有contact记录
+      const [selfContacts] = await (db as any).execute(
+        `SELECT id, parentUserId, name, linkedUserId FROM contacts WHERE linkedUserId = ? LIMIT 20`,
+        [input.memberUserId]
+      ) as any;
+      // 2. 查referrerId指向这些contact.id的所有记录
+      const selfContactIds = (selfContacts as any[]).map((c: any) => c.id);
+      let referredByMe: any[] = [];
+      if (selfContactIds.length > 0) {
+        const ph = selfContactIds.map(() => '?').join(',');
+        const [r] = await (db as any).execute(
+          `SELECT c.id, c.parentUserId, c.name, c.referrerId, c.linkedUserId FROM contacts c WHERE c.referrerId IN (${ph}) LIMIT 50`,
+          selfContactIds
+        ) as any;
+        referredByMe = r as any[];
+      }
+      // 3. 直接查referrerId=memberUserId的记录（旧逻辑）
+      const [directMatch] = await (db as any).execute(
+        `SELECT id, parentUserId, name, referrerId, linkedUserId FROM contacts WHERE referrerId = ? LIMIT 20`,
+        [input.memberUserId]
+      ) as any;
+      return {
+        memberUserId: input.memberUserId,
+        selfContactsCount: (selfContacts as any[]).length,
+        selfContactIds,
+        selfContacts: (selfContacts as any[]).map((c: any) => ({ id: c.id, parentUserId: c.parentUserId, name: c.name })),
+        referredByMeCount: referredByMe.length,
+        referredByMe: referredByMe.map((c: any) => ({ id: c.id, parentUserId: c.parentUserId, name: c.name, referrerId: c.referrerId })),
+        directMatchCount: (directMatch as any[]).length,
+        directMatch: (directMatch as any[]).map((c: any) => ({ id: c.id, parentUserId: c.parentUserId, name: c.name, referrerId: c.referrerId })),
+      };
+    }),
 });
