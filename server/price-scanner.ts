@@ -113,6 +113,8 @@ async function scanPrices() {
 }
 
 export function getLatestPrice(coin: string): number | null {
+  // USDT 是稳定币，固定价格为 1 美元
+  if (coin.toUpperCase() === 'USDT') return 1.0;
   const entry = latestPrices[coin.toUpperCase()];
   if (!entry) return null;
   // 如果价格超过4小时未更新，视为过期
