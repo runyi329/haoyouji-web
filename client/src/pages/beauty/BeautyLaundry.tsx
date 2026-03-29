@@ -11,7 +11,7 @@ const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CG
 const DETAIL_IMAGES = [
   `${CDN}/detail1_youliangxiyi_cb5004c1.png`,
   `${CDN}/jd_detail_2_features_77cf36f8.jpg`,
-  `${CDN}/jd_detail_3_4_merged_ed1a3f26.jpg`,
+  `${CDN}/jd_detail_3_4_merged_v2_7d2f2174.jpg`,
   `${CDN}/jd_detail_5_clean_7ef1e52a.jpg`,
   `${CDN}/jd_detail_6_size_879b8fc1.jpg`,
   `${CDN}/jd_detail_7_tracking_73e2020c.jpg`,
@@ -195,10 +195,6 @@ export default function BeautyLaundry() {
 
         {activeTab === "detail" && (
           <div>
-            <div className="bg-gradient-to-br from-red-500 to-pink-600 text-white text-center py-8 px-4">
-              <div className="text-2xl font-bold mb-2">尤亮洗衣</div>
-              <div className="text-sm opacity-90">洗衣用尤亮，方便又轻松</div>
-            </div>
             {DETAIL_IMAGES.slice(0, 9).map((src, i) => (
               <img key={i} src={src} alt={`详情图${i + 1}`} className="w-full block" loading="lazy" />
             ))}
