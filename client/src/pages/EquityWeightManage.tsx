@@ -243,17 +243,14 @@ function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; mem
                   </div>
                 </div>
                 <div className="text-[11px] mt-2 pt-2" style={{ color: 'rgba(220,185,60,0.4)', borderTop: `1px solid rgba(201,168,76,0.15)` }}>
-                  资源权重 = 1.0（基础）+ 人脉加成 + 标签加成 + 推荐加成，最高可达 3.0+
+                  资源权重 = 人脉加成 + 标签加成 + 推荐加成，三项满分各 1.0，最高 3.0
                 </div>
               </div>
               {/* 成员资源权重明细表 */}
               <div className="rounded-xl overflow-hidden" style={{ border: `1px solid rgba(201,168,76,0.2)` }}>
                 <div className="flex px-3 py-2" style={{ background: 'rgba(201,168,76,0.15)', borderBottom: `1px solid rgba(201,168,76,0.2)` }}>
                   <div className="flex-1 text-xs font-semibold" style={{ color: GOLD }}>成员</div>
-                  <div style={{ width: 36, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>人脉</div>
-                  <div style={{ width: 36, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>标签</div>
-                  <div style={{ width: 36, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>推荐</div>
-                  <div style={{ width: 52, textAlign: 'right' }} className="text-xs font-semibold" style={{ color: GOLD }}>资源权重</div>
+                  <div className="text-xs font-semibold text-right" style={{ color: GOLD, minWidth: 160 }}>人脉加成 / 标签加成 / 推荐加成 = 合计</div>
                 </div>
                 {members.length === 0 ? (
                   <div className="text-center py-8 text-sm" style={{ color: 'rgba(220,185,60,0.4)' }}>暂无成员</div>
@@ -264,8 +261,8 @@ function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; mem
                     const referral = m.directReferrals ?? 0;
                     const networkBonus = Math.min(network * 0.01, 1.0);
                     const tagBonus = Math.min((tag / 10) * 0.01, 1.0);
-                    const referralBonus = referral * 0.1;
-                    const autoResourceWeight = 1.0 + networkBonus + tagBonus + referralBonus;
+                    const referralBonus = Math.min(referral * 0.1, 1.0);
+                    const autoResourceWeight = networkBonus + tagBonus + referralBonus;
                     return (
                       <div
                         key={m.userId}
@@ -277,12 +274,14 @@ function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; mem
                       >
                         <div className="flex-1 flex items-center gap-2 min-w-0">
                           <Avatar name={m.name} avatar={m.avatar} size={26} />
-                          <span className="text-xs truncate" style={{ color: GOLD_DIM }}>{m.name}</span>
+                          <div className="min-w-0">
+                            <div className="text-xs truncate" style={{ color: GOLD_DIM }}>{m.name}</div>
+                            <div className="text-[10px] mt-0.5" style={{ color: 'rgba(220,185,60,0.45)' }}>
+                              人脉 {networkBonus.toFixed(2)} / 标签 {tagBonus.toFixed(2)} / 推荐 {referralBonus.toFixed(2)}
+                            </div>
+                          </div>
                         </div>
-                        <div style={{ width: 36, textAlign: 'center' }} className="text-xs" style={{ color: GOLD_DIM }}>{network}</div>
-                        <div style={{ width: 36, textAlign: 'center' }} className="text-xs" style={{ color: GOLD_DIM }}>{tag}</div>
-                        <div style={{ width: 36, textAlign: 'center' }} className="text-xs" style={{ color: GOLD_DIM }}>{referral}</div>
-                        <div style={{ width: 52, textAlign: 'right' }} className="text-xs font-bold" style={{ color: '#FFE566' }}>{autoResourceWeight.toFixed(2)}</div>
+                        <div className="text-xs font-bold" style={{ color: '#FFE566', minWidth: 40, textAlign: 'right' }}>{autoResourceWeight.toFixed(2)}</div>
                       </div>
                     );
                   })
