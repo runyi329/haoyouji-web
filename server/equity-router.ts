@@ -604,16 +604,16 @@ export const equityRouter = router({
                 ), 0) AS capitalAmount,
                 COALESCE((
                   SELECT COUNT(*) FROM contacts c
-                  WHERE c.parentUserId = lm.userId AND c.ledgerId = lm.ledgerId
+                  WHERE c.parentUserId = lm.userId
                 ), 0) AS networkCount,
                 COALESCE((
-                  SELECT COUNT(*) FROM contact_tags ct
-                  INNER JOIN contacts c2 ON c2.id = ct.contactId
-                  WHERE c2.parentUserId = lm.userId AND c2.ledgerId = lm.ledgerId
+                  SELECT COUNT(*) FROM contact_tag_relations ctr
+                  INNER JOIN contacts c2 ON c2.id = ctr.contactId
+                  WHERE c2.parentUserId = lm.userId
                 ), 0) AS tagCount,
                 COALESCE((
                   SELECT COUNT(*) FROM contacts c3
-                  WHERE c3.parentUserId = lm.userId AND c3.ledgerId = lm.ledgerId AND c3.referrerId IS NOT NULL
+                  WHERE c3.parentUserId = lm.userId AND c3.referrerId IS NOT NULL
                 ), 0) AS directReferrals
          FROM ledger_members lm
          LEFT JOIN users u ON u.id = lm.userId
