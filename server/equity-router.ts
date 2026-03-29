@@ -606,11 +606,18 @@ export const equityRouter = router({
                   SELECT COUNT(*) FROM contacts c
                   WHERE c.parentUserId = lm.userId
                 ), 0) AS networkCount,
-                COALESCE((
-                  SELECT COUNT(*) FROM contact_tag_relations ctr
-                  INNER JOIN contacts c2 ON c2.id = ctr.contactId
-                  WHERE c2.parentUserId = lm.userId
-                ), 0) AS tagCount,
+                (
+                  COALESCE((
+                    SELECT COUNT(*) FROM contact_tag_relations ctr
+                    INNER JOIN contacts c2 ON c2.id = ctr.contactId
+                    WHERE c2.parentUserId = lm.userId
+                  ), 0)
+                  +
+                  COALESCE((
+                    SELECT COUNT(*) FROM personal_contact_tags pct
+                    WHERE pct.parentUserId = lm.userId
+                  ), 0)
+                ) AS tagCount,
                 COALESCE((
                   SELECT COUNT(*) FROM referral_approvals ra
                   WHERE ra.ledger_id = lm.ledgerId AND ra.member_user_id = lm.userId AND ra.status = 'approved'
