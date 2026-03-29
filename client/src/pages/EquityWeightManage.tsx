@@ -169,7 +169,7 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
                 const isRejected = ref.approvalStatus === 'rejected';
                 return (
                   <div
-                    key={ref.contactId}
+                    key={ref.referredUserId}
                     className="flex items-center justify-between rounded-lg px-2.5 py-2"
                     style={{
                       background: isApproved ? 'rgba(100,200,100,0.08)' : isRejected ? 'rgba(200,80,80,0.06)' : 'rgba(201,168,76,0.06)',
@@ -187,7 +187,7 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
                     </div>
                     <div className="flex gap-1.5">
                       <button
-                        onClick={() => toggleMutation.mutate({ ledgerId, memberUserId: m.userId, contactId: ref.contactId, referredName: ref.referredName, action: 'approved' })}
+                        onClick={() => toggleMutation.mutate({ ledgerId, memberUserId: m.userId, referredUserId: ref.referredUserId, referredName: ref.referredName, action: 'approved' })}
                         disabled={toggleMutation.isPending || isApproved}
                         className="text-[10px] px-2.5 py-1 rounded-lg font-medium"
                         style={{
@@ -200,7 +200,7 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
                         计数
                       </button>
                       <button
-                        onClick={() => toggleMutation.mutate({ ledgerId, memberUserId: m.userId, contactId: ref.contactId, referredName: ref.referredName, action: 'rejected' })}
+                        onClick={() => toggleMutation.mutate({ ledgerId, memberUserId: m.userId, referredUserId: ref.referredUserId, referredName: ref.referredName, action: 'rejected' })}
                         disabled={toggleMutation.isPending || isRejected}
                         className="text-[10px] px-2.5 py-1 rounded-lg font-medium"
                         style={{
