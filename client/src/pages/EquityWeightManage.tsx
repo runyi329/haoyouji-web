@@ -500,10 +500,16 @@ export default function EquityWeightManage() {
   // 设置权重
   const utils = trpc.useUtils();
   const setWeight = trpc.equity.setMemberWeight.useMutation({
-    onSuccess: () => {
-      refetch();
+    onSuccess: async (_result, variables) => {
+      // 刷新成员列表
+      const { data: freshData } = await refetch();
       refetchLogs();
-      // 使 LedgerDetail 中的 getUserWeight 缓存失效，确保返回后立即显示最新权重
+      // 同步更新 selected 状态，使编辑区立即显示新权重
+      if (freshData && selected) {
+        const freshMember = (freshData as Member[]).find(m => m.userId === variables.userId);
+        if (freshMember) setSelected(freshMember);
+      }
+      // 使所有成员的 getUserWeight 缓存失效，确保每个成员返回账本首页后立即看到最新权重
       utils.equity.getUserWeight.invalidate();
       setMsg('保存成功');
       setTimeout(() => setMsg(''), 2500);
