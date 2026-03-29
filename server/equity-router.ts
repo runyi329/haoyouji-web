@@ -1166,81 +1166,40 @@ export const equityRouter = router({
       if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
       }
-      // 推荐关系有两种来源，需要合并统计：
-      // 1. 手动补录：contacts.referrerId = 该成员的 contact.id（即在某人通讯录里把该成员设为介绍人）
-      // 2. 邀请注册：users.invited_by_user_id = memberUserId（该成员用邀请码招来的人）
-      // 两种视为同一件事，合并后去重展示
-
-      // 来源1：手动补录 - 查contacts.referrerId指向该成员的contact.id的所有联系人
-      const [manualRows] = await (db as any).execute(
-        `SELECT c.id AS contactId, c.name AS referredName, c.linkedUserId AS referredUserId,
-                c.parentUserId AS ownerUserId,
+      // 推荐关系完全基于 users 表的 invited_by_user_id 字段
+      // 无论是管理员后台手动设置还是注册时填写邀请码，最终都写入这个字段
+      const [rows] = await (db as any).execute(
+        `SELECT u.id AS referredUserId,
+                u.name AS referredName,
+                u.avatar AS referredAvatar,
                 COALESCE(ra.id, NULL) AS approvalId,
                 COALESCE(ra.status, 'none') AS approvalStatus,
-                ra.created_at AS submittedAt,
-                ra.reviewed_at AS reviewedAt,
-                u.avatar AS referredAvatar,
-                'manual' AS source
-         FROM contacts c
-         LEFT JOIN referral_approvals ra
-           ON ra.ledger_id = ? AND ra.member_user_id = ? AND ra.referred_contact_id = c.id
-         LEFT JOIN users u ON u.id = c.linkedUserId
-         WHERE c.referrerId IN (
-           SELECT id FROM contacts WHERE linkedUserId = ?
-         )
-         ORDER BY c.createdAt DESC`,
-        [input.ledgerId, input.memberUserId, input.memberUserId]
-      ) as any;
-
-      // 来源2：邀请注册 - 查users.invited_by_user_id = memberUserId的用户，再关联到contacts表
-      const [inviteRows] = await (db as any).execute(
-        `SELECT c.id AS contactId, c.name AS referredName, c.linkedUserId AS referredUserId,
-                c.parentUserId AS ownerUserId,
-                COALESCE(ra.id, NULL) AS approvalId,
-                COALESCE(ra.status, 'none') AS approvalStatus,
-                ra.created_at AS submittedAt,
-                ra.reviewed_at AS reviewedAt,
-                u.avatar AS referredAvatar,
-                'invite' AS source
+                ra.reviewed_at AS reviewedAt
          FROM users u
-         INNER JOIN contacts c ON c.linkedUserId = u.id
          LEFT JOIN referral_approvals ra
-           ON ra.ledger_id = ? AND ra.member_user_id = ? AND ra.referred_contact_id = c.id
+           ON ra.ledger_id = ? AND ra.member_user_id = ? AND ra.referred_user_id = u.id
          WHERE u.invited_by_user_id = ?
-         ORDER BY c.createdAt DESC`,
+         ORDER BY u.createdAt ASC`,
         [input.ledgerId, input.memberUserId, input.memberUserId]
       ) as any;
 
-      // 合并两种来源，按 contactId 去重（手动补录优先）
-      const seenContactIds = new Set<number>();
-      const allRows: any[] = [];
-      for (const r of [...(manualRows as any[]), ...(inviteRows as any[])]) {
-        const cid = Number(r.contactId);
-        if (!seenContactIds.has(cid)) {
-          seenContactIds.add(cid);
-          allRows.push(r);
-        }
-      }
-
-      return allRows.map((r: any) => ({
-        contactId: Number(r.contactId),
+      return (rows as any[]).map((r: any) => ({
+        referredUserId: Number(r.referredUserId),
         referredName: r.referredName ?? '未知',
-        referredUserId: r.referredUserId ? Number(r.referredUserId) : null,
         referredAvatar: r.referredAvatar ?? null,
         approvalId: r.approvalId ? Number(r.approvalId) : null,
         approvalStatus: (r.approvalStatus ?? 'none') as 'none' | 'pending' | 'approved' | 'rejected',
-        submittedAt: r.submittedAt as Date | null,
         reviewedAt: r.reviewedAt as Date | null,
       }));
     }),
 
-  // 管理员直接切换某条推荐关系的计数状态（approved <-> rejected，或从 none 直接设置）
-  // 使用 contactId 作为唯一标识（被推荐人可能没有 userId）
+  // 管理员直接切换某条推荐关系的计数状态
+  // 使用 referred_user_id 作为唯一标识（推荐关系完全基于 users 表）
   toggleReferralCount: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
       memberUserId: z.number(),
-      contactId: z.number(),
+      referredUserId: z.number(),
       referredName: z.string().optional(),
       action: z.enum(['approved', 'rejected']),
     }))
@@ -1255,25 +1214,25 @@ export const equityRouter = router({
       if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
       }
-      // 确保表存在（使用 referred_contact_id 作为唯一标识）
+      // 确保表存在（referred_user_id 作为唯一标识）
       await (db as any).execute(
         `CREATE TABLE IF NOT EXISTS referral_approvals (
           id INT AUTO_INCREMENT PRIMARY KEY,
           ledger_id INT NOT NULL,
           member_user_id INT NOT NULL,
-          referred_contact_id INT NOT NULL,
+          referred_user_id INT,
+          referred_contact_id INT,
           referred_name VARCHAR(100),
           status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
           remark TEXT,
           reviewer_user_id INT,
           reviewed_at DATETIME,
-          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE KEY uq_referral (ledger_id, member_user_id, referred_contact_id)
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
       );
       const [[existing]] = await (db as any).execute(
-        'SELECT id FROM referral_approvals WHERE ledger_id = ? AND member_user_id = ? AND referred_contact_id = ? LIMIT 1',
-        [input.ledgerId, input.memberUserId, input.contactId]
+        'SELECT id FROM referral_approvals WHERE ledger_id = ? AND member_user_id = ? AND referred_user_id = ? LIMIT 1',
+        [input.ledgerId, input.memberUserId, input.referredUserId]
       ) as any;
       if (existing) {
         await (db as any).execute(
@@ -1282,8 +1241,8 @@ export const equityRouter = router({
         );
       } else {
         await (db as any).execute(
-          'INSERT INTO referral_approvals (ledger_id, member_user_id, referred_contact_id, referred_name, status, reviewer_user_id, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
-          [input.ledgerId, input.memberUserId, input.contactId, input.referredName ?? null, input.action, ctx.user.id]
+          'INSERT INTO referral_approvals (ledger_id, member_user_id, referred_user_id, referred_name, status, reviewer_user_id, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, NOW())',
+          [input.ledgerId, input.memberUserId, input.referredUserId, input.referredName ?? null, input.action, ctx.user.id]
         );
       }
       return { success: true, action: input.action };
