@@ -287,7 +287,23 @@ async function startServer() {
       }
       // 查users.invited_by_user_id = userId的用户
       const [invitedUsers] = await (db as any).execute('SELECT id, name, username, invited_by_user_id FROM users WHERE invited_by_user_id = ? LIMIT 30', [userId]) as any;
-      res.json({ userId, userRow, selfContacts, selfIds, byReferrerId, invitedUsers });
+      // 全局统计：查看推荐关系数据到底存在哪里
+      const [[globalStats]] = await (db as any).execute(
+        `SELECT 
+          (SELECT COUNT(*) FROM contacts WHERE referrerId IS NOT NULL AND referrerId != 0) AS contactsWithReferrer,
+          (SELECT COUNT(*) FROM users WHERE invited_by_user_id IS NOT NULL AND invited_by_user_id != 0) AS usersWithInviter,
+          (SELECT COUNT(*) FROM referral_approvals) AS referralApprovalsTotal
+        `
+      ) as any;
+      // 查contacts表中referrerId不为空的前5条样本
+      const [sampleReferrers] = await (db as any).execute(
+        'SELECT id, parentUserId, name, referrerId, linkedUserId FROM contacts WHERE referrerId IS NOT NULL AND referrerId != 0 LIMIT 5'
+      ) as any;
+      // 查users表中invited_by_user_id不为空的前5条样本
+      const [sampleInvited] = await (db as any).execute(
+        'SELECT id, name, username, invited_by_user_id FROM users WHERE invited_by_user_id IS NOT NULL AND invited_by_user_id != 0 LIMIT 5'
+      ) as any;
+      res.json({ userId, userRow, selfContacts, selfIds, byReferrerId, invitedUsers, globalStats, sampleReferrers, sampleInvited });
     } catch (e: any) {
       res.json({ error: e.message });
     }
