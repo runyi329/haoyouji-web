@@ -11,8 +11,7 @@ const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CG
 const DETAIL_IMAGES = [
   `${CDN}/detail1_youliangxiyi_cb5004c1.png`,
   `${CDN}/jd_detail_2_features_77cf36f8.jpg`,
-  `${CDN}/jd_detail_3_delivery_76b7077e.jpg`,
-  `${CDN}/jd_detail_4_crosscity_9db9a477.jpg`,
+  `${CDN}/jd_detail_3_4_merged_ed1a3f26.jpg`,
   `${CDN}/jd_detail_5_clean_7ef1e52a.jpg`,
   `${CDN}/jd_detail_6_size_879b8fc1.jpg`,
   `${CDN}/jd_detail_7_tracking_73e2020c.jpg`,
