@@ -12081,7 +12081,7 @@ export const appRouter = router({
         // 附带实时价格（全部10种币）
         const { getLatestPrice } = await import('./price-scanner');
         const livePrices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM']) {
+        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM', 'USDT']) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
@@ -12093,7 +12093,7 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM', 'USDT']),
         amount: z.string(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -12159,7 +12159,7 @@ export const appRouter = router({
         id: z.number(),
         ledgerId: z.number(),
         userId: z.number().optional(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM']).optional(),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM', 'USDT']).optional(),
         amount: z.string().optional(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
