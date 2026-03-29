@@ -303,7 +303,17 @@ async function startServer() {
       const [sampleInvited] = await (db as any).execute(
         'SELECT id, name, username, invited_by_user_id FROM users WHERE invited_by_user_id IS NOT NULL AND invited_by_user_id != 0 LIMIT 5'
       ) as any;
-      res.json({ userId, userRow, selfContacts, selfIds, byReferrerId, invitedUsers, globalStats, sampleReferrers, sampleInvited });
+      // 直接用getMemberStats同款SQL查询，对比两个接口的差异
+      const [[memberStatsDirect]] = await (db as any).execute(
+        'SELECT COUNT(*) as cnt FROM users WHERE invited_by_user_id = ?',
+        [userId]
+      ) as any;
+      // 查询这些被邀请的用户的完整信息
+      const [invitedByDirect] = await (db as any).execute(
+        'SELECT id, name, username, avatar, invited_by_user_id FROM users WHERE invited_by_user_id = ? LIMIT 20',
+        [userId]
+      ) as any;
+      res.json({ userId, userRow, selfContacts, selfIds, byReferrerId, invitedUsers, globalStats, sampleReferrers, sampleInvited, memberStatsDirect, invitedByDirect });
     } catch (e: any) {
       res.json({ error: e.message });
     }
