@@ -922,6 +922,8 @@ export default function LedgerDetail() {
   const capitalWeight = userWeight?.capitalWeight ?? 1.00;
   // 加权股权 = 原始张数 × 权重
   const weightedSharesTotal = totalAllSharesWithDividend * totalWeight;
+  // 权重详情弹窗状态（必须在useQuery之前声明，避免初始化前访问）
+  const [showWeightDetail, setShowWeightDetail] = useState(false);
   // 权重详情（仅弹窗打开时加载）
   const { data: weightDetail, isLoading: weightDetailLoading } = trpc.equity.getWeightDetail.useQuery(
     { userId: effectiveShareUserId },
@@ -945,7 +947,6 @@ export default function LedgerDetail() {
   const [shareholdingSnapshot, setShareholdingSnapshot] = useState<{ angel: number; market: number } | null>(null);
   const [showShareholdingModal, setShowShareholdingModal] = useState(false); // 持股结构弹窗
   const [showEquityHistory, setShowEquityHistory] = useState(false); // 股权流水弹窗
-  const [showWeightDetail, setShowWeightDetail] = useState(false); // 权重详情弹窗
   const [equityHistoryUserId, setEquityHistoryUserId] = useState<number | null>(null); // 查看哪个用户的流水（null=自己）
   const foodFileInputRef = useRef<HTMLInputElement>(null); // 文件选择器
   const foodCameraInputRef = useRef<HTMLInputElement>(null); // 摄像头输入
