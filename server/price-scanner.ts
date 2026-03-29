@@ -15,7 +15,7 @@ const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 // 内存价格缓存
 const latestPrices: Record<string, { price: number; updatedAt: string }> = {};
 
-const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM'];
+const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM'];
 
 // 从文件恢复缓存（服务启动时调用）
 function loadCacheFromFile() {
@@ -138,5 +138,5 @@ export function startPriceScanner() {
   setInterval(() => {
     scanPrices().catch(err => console.error('[价格扫描] 定时扫描失败:', err));
   }, 60 * 1000);
-  console.log('[价格扫描] 已启动，每60秒刷新 BTC/ETH/SOL/AAVE/SUI/ONDO/ASTER/LOD/ENA/ARKM 价格（含文件持久化）');
+  console.log('[价格扫描] 已启动，每60秒刷新 BTC/ETH/SOL/AAVE/SUI/ONDO/ASTER/LDO/ENA/ARKM 价格（含文件持久化）');
 }
