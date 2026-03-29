@@ -111,15 +111,17 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
   const referralBonus = approvedCount * 0.1;
   const autoResourceWeight = networkBonus + tagBonus + referralBonus;
 
-  const [saveMsg, setSaveMsg] = useState('');
+  // savedWeight: 记录上次成功保存到数据库的资源权重值（初始为数据库中的值）
+  const [savedWeight, setSavedWeight] = useState<number | null>(m.resourceWeight);
+  const isSaved = savedWeight !== null && Math.abs(savedWeight - autoResourceWeight) < 0.0001;
+
   const saveMutation = trpc.equity.setMemberWeight.useMutation({
     onSuccess: () => {
       utils.equity.getWeightMembers.invalidate({ ledgerId });
       utils.equity.getUserWeight.invalidate();
-      setSaveMsg('已保存');
-      setTimeout(() => setSaveMsg(''), 2000);
+      setSavedWeight(autoResourceWeight);
     },
-    onError: (e) => { setSaveMsg('失败:' + e.message); setTimeout(() => setSaveMsg(''), 3000); },
+    onError: (e) => { alert('保存失败：' + e.message); },
   });
 
   const toggleMutation = trpc.equity.toggleReferralCount.useMutation({
@@ -149,20 +151,21 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
         </div>
         <div className="flex items-center gap-1.5">
           <div className="text-xs font-bold" style={{ color: '#FFE566', minWidth: 36, textAlign: 'right' }}>{autoResourceWeight.toFixed(2)}</div>
-          {/* 保存按钮 */}
+          {/* 保存按钮：已保存时禁用显示绿色，有变化时高亮可点击 */}
           <button
-            onClick={() => saveMutation.mutate({ ledgerId, userId: m.userId, resourceWeight: autoResourceWeight, capitalWeight: m.capitalWeight })}
-            disabled={saveMutation.isPending}
+            onClick={() => !isSaved && !saveMutation.isPending && saveMutation.mutate({ ledgerId, userId: m.userId, resourceWeight: autoResourceWeight, capitalWeight: m.capitalWeight })}
+            disabled={isSaved || saveMutation.isPending}
             className="text-[10px] px-2 py-0.5 rounded-full"
             style={{
-              background: saveMsg === '已保存' ? 'rgba(100,200,100,0.2)' : 'rgba(201,168,76,0.15)',
-              border: `1px solid ${saveMsg === '已保存' ? 'rgba(100,200,100,0.5)' : GOLD_BORDER_SEL}`,
-              color: saveMsg === '已保存' ? '#6DC86D' : GOLD,
+              background: isSaved ? 'rgba(100,200,100,0.15)' : 'rgba(201,168,76,0.2)',
+              border: `1px solid ${isSaved ? 'rgba(100,200,100,0.45)' : GOLD_BORDER_SEL}`,
+              color: isSaved ? '#6DC86D' : GOLD,
               flexShrink: 0,
               opacity: saveMutation.isPending ? 0.5 : 1,
+              cursor: isSaved ? 'default' : 'pointer',
             }}
           >
-            {saveMutation.isPending ? '...' : saveMsg === '已保存' ? '已保存' : '保存'}
+            {saveMutation.isPending ? '保存中...' : isSaved ? '已保存' : '保存'}
           </button>
           {/* 推荐展开按钮 */}
           <button
