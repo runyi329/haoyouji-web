@@ -977,6 +977,70 @@ export const equityRouter = router({
       return { success: true };
     }),
 
+  // 批量导入现有推荐关系到待审核队列（管理员一次性操作）
+  importExistingReferrals: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal) throw new TRPCError({ code: 'FORBIDDEN' });
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 先确保表存在
+      await (db as any).execute(`
+        CREATE TABLE IF NOT EXISTS referral_approvals (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          member_user_id INT NOT NULL,
+          referred_user_id INT NOT NULL,
+          referred_name VARCHAR(100) DEFAULT NULL,
+          status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+          remark VARCHAR(255) DEFAULT NULL,
+          reviewer_user_id INT DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          reviewed_at DATETIME DEFAULT NULL,
+          INDEX idx_ledger_member (ledger_id, member_user_id),
+          INDEX idx_status (status)
+        )
+      `);
+      // 查询该账本所有成员
+      const [members] = await (db as any).execute(
+        'SELECT user_id FROM ledger_members WHERE ledger_id = ?',
+        [input.ledgerId]
+      ) as any;
+      const memberIds = (members as any[]).map((m: any) => Number(m.user_id));
+      if (memberIds.length === 0) return { imported: 0, skipped: 0 };
+      // 查询这些成员在 contacts 表中的推荐关系（referrer_id 不为空）
+      const placeholders = memberIds.map(() => '?').join(',');
+      const [contacts] = await (db as any).execute(
+        `SELECT c.parent_user_id AS memberUserId, c.user_id AS referredUserId, u.name AS referredName
+         FROM contacts c
+         LEFT JOIN users u ON u.id = c.user_id
+         WHERE c.parent_user_id IN (${placeholders})
+           AND c.referrer_id IS NOT NULL
+           AND c.referrer_id != 0`,
+        memberIds
+      ) as any;
+      let imported = 0;
+      let skipped = 0;
+      for (const row of contacts as any[]) {
+        const memberUserId = Number(row.memberUserId);
+        const referredUserId = Number(row.referredUserId);
+        if (!memberIds.includes(memberUserId)) { skipped++; continue; }
+        // 检查是否已存在（避免重复）
+        const [[existing]] = await (db as any).execute(
+          'SELECT id FROM referral_approvals WHERE ledger_id = ? AND member_user_id = ? AND referred_user_id = ? LIMIT 1',
+          [input.ledgerId, memberUserId, referredUserId]
+        ) as any;
+        if (existing) { skipped++; continue; }
+        await (db as any).execute(
+          'INSERT INTO referral_approvals (ledger_id, member_user_id, referred_user_id, referred_name) VALUES (?, ?, ?, ?)',
+          [input.ledgerId, memberUserId, referredUserId, row.referredName ?? null]
+        );
+        imported++;
+      }
+      return { imported, skipped };
+    }),
+
   // 提交推荐人审核申请
   submitReferralApproval: protectedProcedure
     .input(z.object({
