@@ -1605,9 +1605,13 @@ export default function CryptoPrediction() {
                                     // 缺口 = 净担保价值 - 基数（负数表示不足）
                                     gap = netCollValue - base;
                                   } else {
-                                    // 自负盈亏：当前市值 + 担保价值 - 买入价值
-                                    if (coinPrice > 0) {
-                                      gap = marketValue + collValue - buyValue;
+                                    // 自负盈亏：
+                                    // USDT（稳定币）：担保价值 - 买入价值 - 待收利息
+                                    // 其他币种：当前市值 + 担保价值 - 买入价值 - 待收利息
+                                    if (order.coin === 'USDT') {
+                                      gap = collValue - buyValue - unpaidInterest;
+                                    } else if (coinPrice > 0) {
+                                      gap = marketValue + collValue - buyValue - unpaidInterest;
                                     }
                                   }
                                 }
@@ -1705,8 +1709,17 @@ export default function CryptoPrediction() {
                                                 <div style={{ color: '#1F2937' }}><span style={{ color: '#D97706', fontWeight: 600 }}>{buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
                                               </div>
                                               <div className="p-3 rounded-lg" style={{ background: gap < 0 ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${gap < 0 ? '#FECACA' : '#BBF7D0'}` }}>
-                                                <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 当前市値 + 担保价値 - 买入价値</div>
-                                                <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} + {collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                                {order.coin === 'USDT' ? (
+                                                  <>
+                                                    <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 担保价値 - 买入价値 - 待收利息</div>
+                                                    <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {unpaidInterest.toFixed(2)} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                                  </>
+                                                ) : (
+                                                  <>
+                                                    <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 当前市値 + 担保价値 - 买入价値 - 待收利息</div>
+                                                    <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} + {collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {unpaidInterest.toFixed(2)} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                                  </>
+                                                )}
                                               </div>
                                             </div>
                                           )}
