@@ -1166,19 +1166,21 @@ export const equityRouter = router({
       if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
       }
-      // contacts.referrerId 存的是介绍人的 contact.id（不是 userId）
-      // 需要先找到该成员（memberUserId）在当前登录用户的通讯录中对应的 contact.id（即 linkedUserId=memberUserId 的联系人）
-      // 然后查所有 referrerId = 该 contactId 的联系人（即被该成员介绍进来的人）
-      // 注意：contacts 表没有 parentUserId 限制，同一个人可能在多个用户的通讯录里都有记录
-      // 所以这里查的是所有人的通讯录中、以该成员作为介绍人的联系人列表
-      const [rows] = await (db as any).execute(
+      // 推荐关系有两种来源，需要合并统计：
+      // 1. 手动补录：contacts.referrerId = 该成员的 contact.id（即在某人通讯录里把该成员设为介绍人）
+      // 2. 邀请注册：users.invited_by_user_id = memberUserId（该成员用邀请码招来的人）
+      // 两种视为同一件事，合并后去重展示
+
+      // 来源1：手动补录 - 查contacts.referrerId指向该成员的contact.id的所有联系人
+      const [manualRows] = await (db as any).execute(
         `SELECT c.id AS contactId, c.name AS referredName, c.linkedUserId AS referredUserId,
                 c.parentUserId AS ownerUserId,
                 COALESCE(ra.id, NULL) AS approvalId,
                 COALESCE(ra.status, 'none') AS approvalStatus,
                 ra.created_at AS submittedAt,
                 ra.reviewed_at AS reviewedAt,
-                u.avatar AS referredAvatar
+                u.avatar AS referredAvatar,
+                'manual' AS source
          FROM contacts c
          LEFT JOIN referral_approvals ra
            ON ra.ledger_id = ? AND ra.member_user_id = ? AND ra.referred_contact_id = c.id
@@ -1189,7 +1191,38 @@ export const equityRouter = router({
          ORDER BY c.createdAt DESC`,
         [input.ledgerId, input.memberUserId, input.memberUserId]
       ) as any;
-      return (rows as any[]).map((r: any) => ({
+
+      // 来源2：邀请注册 - 查users.invited_by_user_id = memberUserId的用户，再关联到contacts表
+      const [inviteRows] = await (db as any).execute(
+        `SELECT c.id AS contactId, c.name AS referredName, c.linkedUserId AS referredUserId,
+                c.parentUserId AS ownerUserId,
+                COALESCE(ra.id, NULL) AS approvalId,
+                COALESCE(ra.status, 'none') AS approvalStatus,
+                ra.created_at AS submittedAt,
+                ra.reviewed_at AS reviewedAt,
+                u.avatar AS referredAvatar,
+                'invite' AS source
+         FROM users u
+         INNER JOIN contacts c ON c.linkedUserId = u.id
+         LEFT JOIN referral_approvals ra
+           ON ra.ledger_id = ? AND ra.member_user_id = ? AND ra.referred_contact_id = c.id
+         WHERE u.invited_by_user_id = ?
+         ORDER BY c.createdAt DESC`,
+        [input.ledgerId, input.memberUserId, input.memberUserId]
+      ) as any;
+
+      // 合并两种来源，按 contactId 去重（手动补录优先）
+      const seenContactIds = new Set<number>();
+      const allRows: any[] = [];
+      for (const r of [...(manualRows as any[]), ...(inviteRows as any[])]) {
+        const cid = Number(r.contactId);
+        if (!seenContactIds.has(cid)) {
+          seenContactIds.add(cid);
+          allRows.push(r);
+        }
+      }
+
+      return allRows.map((r: any) => ({
         contactId: Number(r.contactId),
         referredName: r.referredName ?? '未知',
         referredUserId: r.referredUserId ? Number(r.referredUserId) : null,
