@@ -922,6 +922,11 @@ export default function LedgerDetail() {
   const capitalWeight = userWeight?.capitalWeight ?? 1.00;
   // 加权股权 = 原始张数 × 权重
   const weightedSharesTotal = totalAllSharesWithDividend * totalWeight;
+  // 权重详情（仅弹窗打开时加载）
+  const { data: weightDetail, isLoading: weightDetailLoading } = trpc.equity.getWeightDetail.useQuery(
+    { userId: effectiveShareUserId },
+    { enabled: isCustomAI && !!effectiveShareUserId && showWeightDetail, staleTime: 0 }
+  );
 
   // 当前选中商品的快捷引用
   const aiProduct = aiSelectedProduct && aiProducts ? aiProducts[aiSelectedProduct] : null;
@@ -3451,36 +3456,150 @@ export default function LedgerDetail() {
 
       {/* 权重详情弹窗 */}
       {showWeightDetail && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center" onClick={() => setShowWeightDetail(false)}>
-          <div className="absolute inset-0 bg-black/50" />
+        <div className="fixed inset-0 z-[80] flex items-end justify-center" onClick={() => setShowWeightDetail(false)}>
+          <div className="absolute inset-0 bg-black/60" />
           <div
-            className="relative mx-4 rounded-2xl px-6 py-5 w-full max-w-xs"
-            style={{ background: '#FFF8F0', border: '1px solid rgba(201,168,76,0.4)', boxShadow: '0 8px 32px rgba(58,20,0,0.25)' }}
+            className="relative w-full rounded-t-3xl px-5 pt-5 pb-8"
+            style={{ background: '#FFF8F0', boxShadow: '0 -4px 32px rgba(58,20,0,0.25)', maxHeight: '85vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="text-sm font-bold mb-3" style={{ color: '#1A0A00' }}>权重说明</div>
-            <div className="text-xs mb-3" style={{ color: 'rgba(58,20,0,0.65)', lineHeight: '1.6' }}>
-              总权重 = 资源权重 × 资金权重，实际股权数 = 原始张数 × 总权重
-            </div>
-            <div className="rounded-xl px-4 py-3 mb-3" style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.25)' }}>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs" style={{ color: 'rgba(58,20,0,0.6)' }}>资源权重</span>
-                <span className="text-sm font-bold" style={{ color: '#1A0A00' }}>{resourceWeight.toFixed(2)}</span>
+            {/* 标题行 */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <div className="text-base font-bold" style={{ color: '#1A0A00' }}>权重详情</div>
+                <div className="text-[11px] mt-0.5" style={{ color: 'rgba(58,20,0,0.5)' }}>实际股权数 = 原始张数 × 资源权重 × 资金权重</div>
               </div>
-              <div className="text-[10px] mb-2" style={{ color: 'rgba(58,20,0,0.5)', lineHeight: '1.5' }}>人脉数（最高+1.0）+ 标签数（最高+1.0）+ 推荐人数（每人+0.1）</div>
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs" style={{ color: 'rgba(58,20,0,0.6)' }}>资金权重</span>
-                <span className="text-sm font-bold" style={{ color: '#1A0A00' }}>{capitalWeight.toFixed(2)}</span>
-              </div>
-              <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)', lineHeight: '1.5' }}>根据股东编号排名和资金达标系数自动计算</div>
+              <button onClick={() => setShowWeightDetail(false)} style={{ background: 'rgba(58,20,0,0.08)', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: 'rgba(58,20,0,0.6)', fontSize: 14 }}>×</button>
             </div>
-            <div className="flex justify-between items-center rounded-xl px-4 py-2.5" style={{ background: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.35)' }}>
-              <span className="text-xs font-semibold" style={{ color: '#1A0A00' }}>总权重</span>
-              <span className="text-base font-bold" style={{ color: '#C9A84C' }}>{totalWeight.toFixed(2)}</span>
-            </div>
+
+            {weightDetailLoading ? (
+              <div className="text-center py-8 text-sm" style={{ color: 'rgba(58,20,0,0.4)' }}>加载中...</div>
+            ) : weightDetail ? (
+              <>
+                {/* 资源权重区块 */}
+                <div className="rounded-2xl p-4 mb-3" style={{ background: 'rgba(201,168,76,0.07)', border: '1px solid rgba(201,168,76,0.2)' }}>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold" style={{ color: '#1A0A00' }}>资源权重</span>
+                    <span className="text-base font-bold" style={{ color: '#C9A84C' }}>{weightDetail.resourceWeight.toFixed(2)}</span>
+                  </div>
+                  {/* 人脉 */}
+                  <div className="flex justify-between items-start mb-2 pb-2" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>人脉数</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>每 1 人 +0.01，最高 +1.0（100 人封顶）</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightDetail.contactCount} 人</div>
+                      <div className="text-[10px]" style={{ color: '#C9A84C' }}>+{weightDetail.networkBonus.toFixed(2)}</div>
+                    </div>
+                  </div>
+                  {/* 标签 */}
+                  <div className="flex justify-between items-start mb-2 pb-2" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>标签数</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>每 10 个 +0.01，最高 +1.0（1000 个封顶）</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightDetail.tagCount} 个</div>
+                      <div className="text-[10px]" style={{ color: '#C9A84C' }}>+{weightDetail.tagBonus.toFixed(2)}</div>
+                    </div>
+                  </div>
+                  {/* 推荐人 */}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>推荐人数</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>每人 +0.1（已审核通过）</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightDetail.referrals.length} 人</div>
+                      <div className="text-[10px]" style={{ color: '#C9A84C' }}>+{weightDetail.referralBonus.toFixed(2)}</div>
+                    </div>
+                  </div>
+                  {/* 推荐人名单 */}
+                  {weightDetail.referrals.length > 0 && (
+                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="text-[10px] mb-1" style={{ color: 'rgba(58,20,0,0.5)' }}>推荐名单：</div>
+                      <div className="flex flex-wrap gap-1">
+                        {weightDetail.referrals.map(r => (
+                          <span key={r.id} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: 'rgba(58,20,0,0.7)' }}>{r.name}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* 资源权重公式 */}
+                  <div className="mt-3 pt-2 flex items-center gap-1 flex-wrap" style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }}>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>公式：</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.networkBonus.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>+</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.tagBonus.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>+</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.referralBonus.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>=</span>
+                    <span className="text-[10px] font-bold" style={{ color: '#C9A84C' }}>{weightDetail.resourceWeight.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* 资金权重区块 */}
+                <div className="rounded-2xl p-4 mb-3" style={{ background: 'rgba(201,168,76,0.07)', border: '1px solid rgba(201,168,76,0.2)' }}>
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-xs font-bold" style={{ color: '#1A0A00' }}>资金权重</span>
+                    <span className="text-base font-bold" style={{ color: '#C9A84C' }}>{weightDetail.capitalWeight.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-start mb-2 pb-2" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>股东编号</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>入股早晚排名，第 1~660 名有加成</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightDetail.shareNo ? `No.${weightDetail.shareNo}` : '未分配'}</div>
+                      {weightDetail.tier && <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>第 {weightDetail.tier} 档，入股加成 +{weightDetail.rawBonus.toFixed(4)}</div>}
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-start mb-2 pb-2" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>资金股本金</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>达标 10 万元系数 1.0，未达标按比例折算</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{(weightDetail.capitalAmount / 10000).toFixed(1)} 万元</div>
+                      <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>达标系数 {(weightDetail.capitalRatio * 100).toFixed(0)}%</div>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>实际加成</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>入股加成 × 达标系数</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>{weightDetail.rawBonus.toFixed(4)} × {(weightDetail.capitalRatio * 100).toFixed(0)}%</div>
+                      <div className="text-sm font-bold" style={{ color: '#C9A84C' }}>+{weightDetail.capitalBonus.toFixed(4)}</div>
+                    </div>
+                  </div>
+                  {/* 资金权重公式 */}
+                  <div className="mt-3 pt-2 flex items-center gap-1 flex-wrap" style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }}>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>公式：1.0 +</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.capitalBonus.toFixed(4)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>=</span>
+                    <span className="text-[10px] font-bold" style={{ color: '#C9A84C' }}>{weightDetail.capitalWeight.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* 总权重 */}
+                <div className="rounded-2xl px-4 py-3 flex justify-between items-center" style={{ background: 'rgba(201,168,76,0.18)', border: '1px solid rgba(201,168,76,0.4)' }}>
+                  <div>
+                    <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>总权重</div>
+                    <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.55)' }}>{weightDetail.resourceWeight.toFixed(2)} × {weightDetail.capitalWeight.toFixed(2)}</div>
+                  </div>
+                  <span className="text-xl font-bold" style={{ color: '#C9A84C' }}>{weightDetail.totalWeight.toFixed(2)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8 text-sm" style={{ color: 'rgba(58,20,0,0.4)' }}>暂无权重数据</div>
+            )}
+
             <button
               onClick={() => setShowWeightDetail(false)}
-              className="mt-4 w-full py-2 rounded-xl text-sm font-semibold"
+              className="mt-4 w-full py-2.5 rounded-xl text-sm font-semibold"
               style={{ background: 'rgba(58,20,0,0.08)', color: 'rgba(58,20,0,0.7)', border: 'none', cursor: 'pointer' }}
             >关闭</button>
           </div>
