@@ -17,8 +17,8 @@ const DETAIL_IMAGES = [
   `${CDN}/jd_detail_7_tracking_73e2020c.jpg`,
   `${CDN}/jd_detail_8_guarantee_ab80401b.jpg`,
   `${CDN}/jd_detail_9_promise_75154a34.jpg`,
-  `${CDN}/jd_detail_10_process_09618528.jpg`,
-  `${CDN}/jd_detail_11_scope_6ee8ef43.jpg`,
+  `${CDN}/detail10_final_0a18931d.png`,
+  `${CDN}/detail11_final_6f9d6b8d.png`,
   `${CDN}/jd_detail_12_scope2_4ebeb1f3.jpg`,
 ];
 
