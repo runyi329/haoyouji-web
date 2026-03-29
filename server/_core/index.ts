@@ -266,6 +266,33 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  // 临时调试端点：查询推荐关系原始数据（排查完成后删除）
+  app.get('/api/debug/referrals/:userId', async (req, res) => {
+    try {
+      const { getDbConnection } = await import('../db.js');
+      const db = await getDbConnection();
+      if (!db) return res.json({ error: 'DB连接失败' });
+      const userId = Number(req.params.userId);
+      // 查该userId在users表的信息
+      const [[userRow]] = await (db as any).execute('SELECT id, name, username, invited_by_user_id FROM users WHERE id = ? LIMIT 1', [userId]) as any;
+      // 查该userId对应的contacts记录（linkedUserId字段）
+      const [selfContacts] = await (db as any).execute('SELECT id, parentUserId, name, linkedUserId, referrerId FROM contacts WHERE linkedUserId = ? LIMIT 20', [userId]) as any;
+      const selfIds = (selfContacts as any[]).map((c: any) => c.id);
+      // 查referrerId指向这些contactId的记录
+      let byReferrerId: any[] = [];
+      if (selfIds.length > 0) {
+        const ph = selfIds.map(() => '?').join(',');
+        const [r] = await (db as any).execute(`SELECT id, parentUserId, name, referrerId, linkedUserId FROM contacts WHERE referrerId IN (${ph}) LIMIT 30`, selfIds) as any;
+        byReferrerId = r as any[];
+      }
+      // 查users.invited_by_user_id = userId的用户
+      const [invitedUsers] = await (db as any).execute('SELECT id, name, username, invited_by_user_id FROM users WHERE invited_by_user_id = ? LIMIT 30', [userId]) as any;
+      res.json({ userId, userRow, selfContacts, selfIds, byReferrerId, invitedUsers });
+    } catch (e: any) {
+      res.json({ error: e.message });
+    }
+  });
+
   // AI search router
   const aiSearchModule = await import('../ai-search.js');
   app.use(aiSearchModule.default);
