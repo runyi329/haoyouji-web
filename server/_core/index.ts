@@ -266,6 +266,24 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  // 临时调试端点：查询equity_weights表数据
+  app.get('/api/debug/equity-weights', async (_req: any, res: any) => {
+    try {
+      const { getDbConnection } = await import('../db.js');
+      const db = await getDbConnection();
+      if (!db) return res.json({ error: 'DB连接失败' });
+      const [weights] = await (db as any).execute(
+        'SELECT ew.user_id, ew.resource_weight, ew.capital_weight, u.name FROM equity_weights ew LEFT JOIN users u ON u.id = ew.user_id ORDER BY ew.user_id'
+      ) as any;
+      const [allUsers] = await (db as any).execute(
+        'SELECT id, name FROM users ORDER BY id LIMIT 50'
+      ) as any;
+      res.json({ weights, allUsers, weightsCount: (weights as any[]).length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // 临时调试端点：查询推荐关系原始数据（排查完成后删除）
   app.get('/api/debug/referrals/:userId', async (req, res) => {
     try {
