@@ -1671,16 +1671,15 @@ export default function LedgerDetail() {
                   </span>
                   {myShares && myShares.length > 0 && <span className="text-[10px] font-normal" style={{ color: 'rgba(58,20,0,0.6)' }}>张</span>}
                 </div>
-                {/* 权重公式标注：原始张数 × 资源权重 × 资金权重 = 加权张数 */}
+                {/* 权重标注：资源权重 × 资金权重 = 总权重 */}
                 {myShares && myShares.length > 0 && (
                   <div className="flex items-center gap-0.5 mt-1 flex-wrap">
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.45)' }}>{totalAllSharesWithDividend.toFixed(2)}张</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>×</span>
                     <span className="text-[10px] font-semibold" style={{ color: 'rgba(58,20,0,0.7)' }}>{resourceWeight.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>×</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.4)' }}>×</span>
                     <span className="text-[10px] font-semibold" style={{ color: 'rgba(58,20,0,0.7)' }}>{capitalWeight.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>=</span>
-                    <span className="text-[10px] font-semibold" style={{ color: '#C9A84C' }}>{weightedSharesTotal.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.4)' }}>=</span>
+                    <span className="text-[10px] font-semibold" style={{ color: '#1A0A00' }}>{totalWeight.toFixed(2)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>权重</span>
                   </div>
                 )}
                 {(!myShares || myShares.length === 0) && <div className="text-[10px] mt-1" style={{ color: 'rgba(58,20,0,0.5)' }}>暂无记录</div>}
