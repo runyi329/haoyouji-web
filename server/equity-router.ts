@@ -949,6 +949,137 @@ export const equityRouter = router({
       }
       return { updatedCount };
     }),
+
+  // ===== 推荐人审核功能 =====
+  // 初始化推荐审核表（服务器首次调用时自动建表）
+  initReferralTable: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal) throw new TRPCError({ code: 'FORBIDDEN' });
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      await (db as any).execute(`
+        CREATE TABLE IF NOT EXISTS referral_approvals (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL COMMENT '账本ID',
+          member_user_id INT NOT NULL COMMENT '推荐者（申请人）',
+          referred_user_id INT NOT NULL COMMENT '被推荐人',
+          referred_name VARCHAR(100) DEFAULT NULL COMMENT '被推荐人姓名',
+          status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+          remark VARCHAR(255) DEFAULT NULL COMMENT '审核备注',
+          reviewer_user_id INT DEFAULT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          reviewed_at DATETIME DEFAULT NULL,
+          INDEX idx_ledger_member (ledger_id, member_user_id),
+          INDEX idx_status (status)
+        ) COMMENT='资源权重推荐人审核表'
+      `);
+      return { success: true };
+    }),
+
+  // 提交推荐人审核申请
+  submitReferralApproval: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      referredUserId: z.number(),
+      referredName: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 检查是否已存在相同申请
+      const [[existing]] = await (db as any).execute(
+        'SELECT id FROM referral_approvals WHERE ledger_id = ? AND member_user_id = ? AND referred_user_id = ? AND status = \'pending\' LIMIT 1',
+        [input.ledgerId, ctx.user.id, input.referredUserId]
+      ) as any;
+      if (existing) throw new TRPCError({ code: 'BAD_REQUEST', message: '已提交过该推荐人的审核申请' });
+      await (db as any).execute(
+        'INSERT INTO referral_approvals (ledger_id, member_user_id, referred_user_id, referred_name) VALUES (?, ?, ?, ?)',
+        [input.ledgerId, ctx.user.id, input.referredUserId, input.referredName ?? null]
+      );
+      return { success: true };
+    }),
+
+  // 查询待审核推荐列表（管理员）
+  getReferralApprovals: protectedProcedure
+    .input(z.object({ ledgerId: z.number(), status: z.enum(['pending', 'approved', 'rejected', 'all']).default('pending') }))
+    .query(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, ctx.user.id]
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可查看' });
+      }
+      const whereStatus = input.status === 'all' ? '' : 'AND ra.status = ?';
+      const params: any[] = input.status === 'all' ? [input.ledgerId] : [input.ledgerId, input.status];
+      const [rows] = await (db as any).execute(
+        `SELECT ra.id, ra.member_user_id, ra.referred_user_id, ra.referred_name,
+                ra.status, ra.remark, ra.created_at, ra.reviewed_at,
+                u1.name AS memberName, u1.avatar AS memberAvatar,
+                u2.name AS referredUserName
+         FROM referral_approvals ra
+         LEFT JOIN users u1 ON u1.id = ra.member_user_id
+         LEFT JOIN users u2 ON u2.id = ra.referred_user_id
+         WHERE ra.ledger_id = ? ${whereStatus}
+         ORDER BY ra.created_at DESC`,
+        params
+      ) as any;
+      return (rows as any[]).map((r: any) => ({
+        id: Number(r.id),
+        memberUserId: Number(r.member_user_id),
+        memberName: r.memberName ?? '未知',
+        memberAvatar: r.memberAvatar ?? null,
+        referredUserId: Number(r.referred_user_id),
+        referredName: r.referred_name ?? r.referredUserName ?? '未知',
+        status: r.status as 'pending' | 'approved' | 'rejected',
+        remark: r.remark ?? '',
+        createdAt: r.created_at as Date,
+        reviewedAt: r.reviewed_at as Date | null,
+      }));
+    }),
+
+  // 审核推荐申请（通过/拒绝）
+  reviewReferralApproval: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      approvalId: z.number(),
+      action: z.enum(['approved', 'rejected']),
+      remark: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[myRow]] = await (db as any).execute(
+        'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, ctx.user.id]
+      ) as any;
+      const isGlobal = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可审核' });
+      }
+      await (db as any).execute(
+        'UPDATE referral_approvals SET status = ?, remark = ?, reviewer_user_id = ?, reviewed_at = NOW() WHERE id = ? AND ledger_id = ?',
+        [input.action, input.remark ?? null, ctx.user.id, input.approvalId, input.ledgerId]
+      );
+      return { success: true };
+    }),
+
+  // 查询某成员已审核通过的推荐人数（用于计算资源权重）
+  getApprovedReferralCount: protectedProcedure
+    .input(z.object({ ledgerId: z.number(), memberUserId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const [[row]] = await (db as any).execute(
+        'SELECT COUNT(*) AS cnt FROM referral_approvals WHERE ledger_id = ? AND member_user_id = ? AND status = \'approved\'',
+        [input.ledgerId, input.memberUserId]
+      ) as any;
+      return { count: Number(row?.cnt ?? 0) };
+    }),
 });
 // ===== 股权转让功能 =====
 export const equityTransferRouter = router({
