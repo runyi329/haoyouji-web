@@ -111,6 +111,17 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
   const referralBonus = approvedCount * 0.1;
   const autoResourceWeight = networkBonus + tagBonus + referralBonus;
 
+  const [saveMsg, setSaveMsg] = useState('');
+  const saveMutation = trpc.equity.setMemberWeight.useMutation({
+    onSuccess: () => {
+      utils.equity.getWeightMembers.invalidate({ ledgerId });
+      utils.equity.getUserWeight.invalidate();
+      setSaveMsg('已保存');
+      setTimeout(() => setSaveMsg(''), 2000);
+    },
+    onError: (e) => { setSaveMsg('失败:' + e.message); setTimeout(() => setSaveMsg(''), 3000); },
+  });
+
   const toggleMutation = trpc.equity.toggleReferralCount.useMutation({
     onSuccess: () => {
       utils.equity.getMemberReferrals.invalidate({ ledgerId, memberUserId: m.userId });
@@ -136,8 +147,23 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <div className="text-xs font-bold" style={{ color: '#FFE566', minWidth: 36, textAlign: 'right' }}>{autoResourceWeight.toFixed(2)}</div>
+          {/* 保存按钮 */}
+          <button
+            onClick={() => saveMutation.mutate({ ledgerId, userId: m.userId, resourceWeight: autoResourceWeight, capitalWeight: m.capitalWeight })}
+            disabled={saveMutation.isPending}
+            className="text-[10px] px-2 py-0.5 rounded-full"
+            style={{
+              background: saveMsg === '已保存' ? 'rgba(100,200,100,0.2)' : 'rgba(201,168,76,0.15)',
+              border: `1px solid ${saveMsg === '已保存' ? 'rgba(100,200,100,0.5)' : GOLD_BORDER_SEL}`,
+              color: saveMsg === '已保存' ? '#6DC86D' : GOLD,
+              flexShrink: 0,
+              opacity: saveMutation.isPending ? 0.5 : 1,
+            }}
+          >
+            {saveMutation.isPending ? '...' : saveMsg === '已保存' ? '已保存' : '保存'}
+          </button>
           {/* 推荐展开按钮 */}
           <button
             onClick={() => setExpanded(v => !v)}
