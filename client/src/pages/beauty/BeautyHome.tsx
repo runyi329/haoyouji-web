@@ -9,7 +9,7 @@ import { useState, useRef, useEffect } from "react";
 import SplashScreen from "@/components/SplashScreen";
 import { useMerchantOG } from "@/hooks/useMerchantOG";
 import {
-  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut, Share2, BarChart3
+  Sparkles, MapPin, Clock, Train, Car, ChevronRight, Brain, ExternalLink, Loader2, Heart, Gift, User, LogOut, Share2, BarChart3, WashingMachine
 } from "lucide-react";
 import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
 
@@ -172,6 +172,14 @@ export default function BeautyHome() {
               >
                 <Share2 className="w-4 h-4 text-white/80" />
               </button>
+              {/* 洗衣服务按钮 */}
+              <Link href="/beauty/laundry">
+                <button
+                  className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
+                >
+                  <WashingMachine className="w-4 h-4 text-white/80" />
+                </button>
+              </Link>
             </div>
             <div className="flex flex-col items-center gap-1 relative" ref={menuRef}>
               {/* 头像区域 */}
