@@ -578,6 +578,95 @@ export const equityRouter = router({
       };
     }),
 
+  // 获取当前用户权重详情（包含资源权重和资金权重的完整计算过程）
+  getWeightDetail: protectedProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 1. 资源权重原始数据
+      const [contactRows] = await (db as any).execute(
+        'SELECT COUNT(*) as cnt FROM contacts WHERE parentUserId=?', [input.userId]
+      ) as any;
+      const contactCount = Number((contactRows as any[])[0]?.cnt ?? 0);
+      const [normalTagRows] = await (db as any).execute(
+        `SELECT COUNT(ctr.id) as cnt FROM contact_tag_relations ctr JOIN contacts c ON ctr.contactId = c.id WHERE c.parentUserId=?`,
+        [input.userId]
+      ) as any;
+      const [personalTagRows] = await (db as any).execute(
+        'SELECT COUNT(*) as cnt FROM personal_contact_tags WHERE parentUserId=?', [input.userId]
+      ) as any;
+      const tagCount = Number((normalTagRows as any[])[0]?.cnt ?? 0) + Number((personalTagRows as any[])[0]?.cnt ?? 0);
+      const [referralRows] = await (db as any).execute(
+        `SELECT u.id, COALESCE(u.name, u.username, '未知') AS name, u.avatar FROM users u WHERE u.invited_by_user_id=?`,
+        [input.userId]
+      ) as any;
+      const referrals = (referralRows as any[]).map((r: any) => ({ id: Number(r.id), name: String(r.name), avatar: r.avatar as string | null }));
+      // 2. 资源权重计算
+      const networkBonus = Math.min(contactCount * 0.01, 1.0);
+      const tagBonus = Math.min(Math.floor(tagCount / 10) * 0.01, 1.0);
+      const referralBonus = referrals.length * 0.1;
+      const resourceWeight = Math.round((networkBonus + tagBonus + referralBonus) * 10000) / 10000;
+      // 3. 资金权重原始数据
+      const [[snRow]] = await (db as any).execute(
+        'SELECT shareNo FROM shareholder_numbers WHERE userId = ? LIMIT 1', [input.userId]
+      ) as any;
+      const [[capRow]] = await (db as any).execute(
+        `SELECT COALESCE(SUM(shareCount), 0) AS capitalAmount FROM equity_shares WHERE userId = ? AND shareType = '资金股'`,
+        [input.userId]
+      ) as any;
+      const capitalAmount = Number(capRow?.capitalAmount ?? 0);
+      const shareNo = snRow?.shareNo ? String(snRow.shareNo) : null;
+      // 4. 资金权重计算
+      const THRESHOLD = 100000;
+      const TIERS = 66;
+      const MAX_RANK = 660;
+      const MAX_BONUS = 1.0;
+      const MIN_BONUS = Math.round(MAX_BONUS / (TIERS - 1) * 10000) / 10000;
+      const step = (MAX_BONUS - MIN_BONUS) / (TIERS - 1);
+      const capitalRatio = Math.min(capitalAmount / THRESHOLD, 1.0);
+      let rawBonus = 0;
+      let tier: number | null = null;
+      if (shareNo) {
+        const rank = parseInt(shareNo, 10);
+        if (!isNaN(rank) && rank <= MAX_RANK) {
+          tier = Math.ceil(rank / 10);
+          rawBonus = Math.round((MAX_BONUS - (tier - 1) * step) * 10000) / 10000;
+        }
+      }
+      const capitalBonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
+      const capitalWeight = Math.round((1.0 + capitalBonus) * 10000) / 10000;
+      // 5. 从数据库读取已保存的资金权重（如果有手动保存则使用）
+      const [[weightRow]] = await (db as any).execute(
+        'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1', [input.userId]
+      ) as any;
+      const savedResourceWeight = weightRow ? Number(weightRow.resource_weight) : null;
+      const savedCapitalWeight = weightRow ? Number(weightRow.capital_weight) : null;
+      const finalCapitalWeight = savedCapitalWeight ?? capitalWeight;
+      const finalResourceWeight = savedResourceWeight ?? resourceWeight;
+      const totalWeight = Math.round(finalResourceWeight * finalCapitalWeight * 10000) / 10000;
+      return {
+        // 资源权重详情
+        contactCount,
+        tagCount,
+        referrals,
+        networkBonus: Math.round(networkBonus * 10000) / 10000,
+        tagBonus: Math.round(tagBonus * 10000) / 10000,
+        referralBonus: Math.round(referralBonus * 10000) / 10000,
+        resourceWeight: finalResourceWeight,
+        // 资金权重详情
+        shareNo,
+        capitalAmount,
+        capitalRatio: Math.round(capitalRatio * 10000) / 10000,
+        tier,
+        rawBonus: Math.round(rawBonus * 10000) / 10000,
+        capitalBonus: Math.round(capitalBonus * 10000) / 10000,
+        capitalWeight: finalCapitalWeight,
+        // 总权重
+        totalWeight,
+      };
+    }),
+
   // 获取账本所有成员及其权重（仅账本 owner/admin 可访问）
   getWeightMembers: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
