@@ -4,11 +4,11 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM', 'USDT'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 // 整数型币种（单价较低，通常以整数计量）
-const INTEGER_COINS = new Set(['SUI', 'ONDO', 'LOD', 'ENA', 'ARKM', 'AAVE']);
+const INTEGER_COINS = new Set(['SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'AAVE']);
 
 // 根据币种格式化数量：整数型去掉小数，BTC/ETH/SOL 保留最多6位有效小数
 function formatCoinQty(qty: string | number | null | undefined, coin: string): string {
@@ -75,7 +75,7 @@ const COIN_COLORS: Record<CoinType, string> = {
   SUI: '#4DA2FF',
   ONDO: '#1A1A2E',
   ASTER: '#E84142',
-  LOD: '#00C896',
+  LDO: '#00C896',
   ENA: '#1A1A1A',
   ARKM: '#FF6B35',
   USDT: '#26A17B',
