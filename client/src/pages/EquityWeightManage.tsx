@@ -95,10 +95,25 @@ function formatCapital(n: number) {
 function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; members: Member[]; onClose: () => void }) {
   const [mainTab, setMainTab] = useState<'capital' | 'resource'>('capital');
   const [ruleTab, setRuleTab] = useState<'preview' | 'tiers'>('preview');
+  const [referralTab, setReferralTab] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const { data, isLoading } = trpc.equity.previewAutoWeight.useQuery(
     { ledgerId },
     { retry: false }
   );
+  const utils = trpc.useUtils();
+  const initTable = trpc.equity.initReferralTable.useMutation();
+  const { data: referralList, isLoading: referralLoading } = trpc.equity.getReferralApprovals.useQuery(
+    { ledgerId, status: referralTab },
+    { retry: false, onError: (err: any) => {
+      // 如果表不存在，自动初始化
+      if (err?.message?.includes('referral_approvals') || err?.message?.includes("doesn't exist")) {
+        initTable.mutate(undefined, { onSuccess: () => utils.equity.getReferralApprovals.invalidate() });
+      }
+    }}
+  );
+  const reviewMutation = trpc.equity.reviewReferralApproval.useMutation({
+    onSuccess: () => utils.equity.getReferralApprovals.invalidate(),
+  });
 
   return (
     <div
@@ -164,23 +179,7 @@ function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; mem
           </div>
         )}
 
-        {/* Tab切换 */}
-        <div className="flex px-4 pb-2 gap-2" style={{ flexShrink: 0 }}>
-          {(['preview', 'tiers'] as const).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setRuleTab(tab)}
-              className="flex-1 py-2 rounded-full text-sm font-medium"
-              style={{
-                background: ruleTab === tab ? 'rgba(201,168,76,0.2)' : 'transparent',
-                border: `1px solid ${ruleTab === tab ? GOLD_BORDER_SEL : GOLD_BORDER}`,
-                color: ruleTab === tab ? GOLD : GOLD_DIM,
-              }}
-            >
-              {tab === 'preview' ? '成员预览' : '66档规则'}
-            </button>
-          ))}
-        </div>
+
 
         {/* 内容区 */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
@@ -217,40 +216,148 @@ function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; mem
           {/* 资源权重规则内容 */}
           {mainTab === 'resource' && (
             <div>
-              <div className="text-xs mb-3 pt-1" style={{ color: GOLD_DIM }}>
-                资源权重参考指标：人脉数、标签数、直接推荐人数。具体权重规则将在后续设置。
+              {/* 规则说明卡片 */}
+              <div className="mb-3 pt-1 rounded-xl px-3 py-3" style={{ background: 'rgba(201,168,76,0.06)', border: `1px solid rgba(201,168,76,0.2)` }}>
+                <div className="text-xs font-semibold mb-2" style={{ color: GOLD }}>资源权重计算规则</div>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="text-xs font-bold mt-0.5" style={{ color: GOLD, minWidth: 16 }}>①</div>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: GOLD_DIM }}>人脉数（最高 +1.0）</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: 'rgba(220,185,60,0.5)' }}>每 1 位人脉 +0.01，100 人封顶</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="text-xs font-bold mt-0.5" style={{ color: GOLD, minWidth: 16 }}>②</div>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: GOLD_DIM }}>标签数（最高 +1.0）</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: 'rgba(220,185,60,0.5)' }}>每 10 个标签 +0.01，1000 个封顶</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="text-xs font-bold mt-0.5" style={{ color: GOLD, minWidth: 16 }}>③</div>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: GOLD_DIM }}>审核推荐人（每人 +0.1）</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: 'rgba(220,185,60,0.5)' }}>管理员审核通过后计入，待审核不计入</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[11px] mt-2 pt-2" style={{ color: 'rgba(220,185,60,0.4)', borderTop: `1px solid rgba(201,168,76,0.15)` }}>
+                  资源权重 = 1.0（基础）+ 人脉加成 + 标签加成 + 推荐加成，最高可达 3.0+
+                </div>
               </div>
-              {/* 表头 */}
+              {/* 成员资源权重明细表 */}
               <div className="rounded-xl overflow-hidden" style={{ border: `1px solid rgba(201,168,76,0.2)` }}>
                 <div className="flex px-3 py-2" style={{ background: 'rgba(201,168,76,0.15)', borderBottom: `1px solid rgba(201,168,76,0.2)` }}>
                   <div className="flex-1 text-xs font-semibold" style={{ color: GOLD }}>成员</div>
-                  <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>人脉</div>
-                  <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>标签</div>
-                  <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>推荐</div>
+                  <div style={{ width: 36, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>人脉</div>
+                  <div style={{ width: 36, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>标签</div>
+                  <div style={{ width: 36, textAlign: 'center' }} className="text-xs font-semibold" style={{ color: GOLD }}>推荐</div>
                   <div style={{ width: 52, textAlign: 'right' }} className="text-xs font-semibold" style={{ color: GOLD }}>资源权重</div>
                 </div>
                 {members.length === 0 ? (
                   <div className="text-center py-8 text-sm" style={{ color: 'rgba(220,185,60,0.4)' }}>暂无成员</div>
                 ) : (
-                  members.map((m, idx) => (
-                    <div
-                      key={m.userId}
-                      className="flex items-center px-3 py-2.5"
+                  members.map((m, idx) => {
+                    const network = m.networkCount ?? 0;
+                    const tag = m.tagCount ?? 0;
+                    const referral = m.directReferrals ?? 0;
+                    const networkBonus = Math.min(network * 0.01, 1.0);
+                    const tagBonus = Math.min((tag / 10) * 0.01, 1.0);
+                    const referralBonus = referral * 0.1;
+                    const autoResourceWeight = 1.0 + networkBonus + tagBonus + referralBonus;
+                    return (
+                      <div
+                        key={m.userId}
+                        className="flex items-center px-3 py-2.5"
+                        style={{
+                          background: idx % 2 === 0 ? 'rgba(201,168,76,0.04)' : '#0A0A00',
+                          borderBottom: idx < members.length - 1 ? `1px solid rgba(201,168,76,0.1)` : 'none',
+                        }}
+                      >
+                        <div className="flex-1 flex items-center gap-2 min-w-0">
+                          <Avatar name={m.name} avatar={m.avatar} size={26} />
+                          <span className="text-xs truncate" style={{ color: GOLD_DIM }}>{m.name}</span>
+                        </div>
+                        <div style={{ width: 36, textAlign: 'center' }} className="text-xs" style={{ color: GOLD_DIM }}>{network}</div>
+                        <div style={{ width: 36, textAlign: 'center' }} className="text-xs" style={{ color: GOLD_DIM }}>{tag}</div>
+                        <div style={{ width: 36, textAlign: 'center' }} className="text-xs" style={{ color: GOLD_DIM }}>{referral}</div>
+                        <div style={{ width: 52, textAlign: 'right' }} className="text-xs font-bold" style={{ color: '#FFE566' }}>{autoResourceWeight.toFixed(2)}</div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {/* 推荐人审核区域 */}
+              <div className="mt-4">
+                <div className="text-xs font-semibold mb-2" style={{ color: GOLD }}>推荐人审核</div>
+                {/* 审核状态 Tab */}
+                <div className="flex gap-2 mb-3">
+                  {(['pending', 'approved', 'rejected'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setReferralTab(tab)}
+                      className="flex-1 py-1.5 rounded-full text-xs"
                       style={{
-                        background: idx % 2 === 0 ? 'rgba(201,168,76,0.04)' : '#0A0A00',
-                        borderBottom: idx < members.length - 1 ? `1px solid rgba(201,168,76,0.1)` : 'none',
+                        background: referralTab === tab ? 'rgba(201,168,76,0.2)' : 'transparent',
+                        border: `1px solid ${referralTab === tab ? GOLD_BORDER_SEL : GOLD_BORDER}`,
+                        color: referralTab === tab ? GOLD : GOLD_DIM,
                       }}
                     >
-                      <div className="flex-1 flex items-center gap-2 min-w-0">
-                        <Avatar name={m.name} avatar={m.avatar} size={26} />
-                        <span className="text-xs truncate" style={{ color: GOLD_DIM }}>{m.name}</span>
+                      {tab === 'pending' ? '待审核' : tab === 'approved' ? '已通过' : '已拒绝'}
+                    </button>
+                  ))}
+                </div>
+                {referralLoading ? (
+                  <div className="text-center py-4 text-xs" style={{ color: GOLD_DIM }}>加载中...</div>
+                ) : !referralList || referralList.length === 0 ? (
+                  <div className="text-center py-4 text-xs" style={{ color: 'rgba(220,185,60,0.35)' }}>
+                    {referralTab === 'pending' ? '暂无待审核的推荐人申请' : referralTab === 'approved' ? '暂无已通过的申请' : '暂无已拒绝的申请'}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {referralList.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-xl px-3 py-2.5"
+                        style={{ background: 'rgba(201,168,76,0.06)', border: `1px solid rgba(201,168,76,0.15)` }}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <Avatar name={item.memberName} avatar={item.memberAvatar} size={24} />
+                            <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>{item.memberName}</span>
+                          </div>
+                          <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.4)' }}>{formatDate(item.createdAt)}</span>
+                        </div>
+                        <div className="text-[11px] mb-2" style={{ color: 'rgba(220,185,60,0.5)' }}>
+                          推荐人：<span style={{ color: GOLD_DIM }}>{item.referredName}</span>
+                        </div>
+                        {referralTab === 'pending' && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => reviewMutation.mutate({ ledgerId, approvalId: item.id, action: 'approved' })}
+                              disabled={reviewMutation.isPending}
+                              className="flex-1 py-1 rounded-lg text-xs font-medium"
+                              style={{ background: 'rgba(100,200,100,0.15)', border: '1px solid rgba(100,200,100,0.4)', color: '#6DC86D' }}
+                            >
+                              通过
+                            </button>
+                            <button
+                              onClick={() => reviewMutation.mutate({ ledgerId, approvalId: item.id, action: 'rejected' })}
+                              disabled={reviewMutation.isPending}
+                              className="flex-1 py-1 rounded-lg text-xs font-medium"
+                              style={{ background: 'rgba(200,80,80,0.15)', border: '1px solid rgba(200,80,80,0.4)', color: '#E07070' }}
+                            >
+                              拒绝
+                            </button>
+                          </div>
+                        )}
+                        {referralTab !== 'pending' && item.remark && (
+                          <div className="text-[10px] mt-1" style={{ color: 'rgba(220,185,60,0.4)' }}>备注：{item.remark}</div>
+                        )}
                       </div>
-                      <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-medium" style={{ color: GOLD_DIM }}>{m.networkCount ?? 0}</div>
-                      <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-medium" style={{ color: GOLD_DIM }}>{m.tagCount ?? 0}</div>
-                      <div style={{ width: 44, textAlign: 'center' }} className="text-xs font-medium" style={{ color: GOLD_DIM }}>{m.directReferrals ?? 0}</div>
-                      <div style={{ width: 52, textAlign: 'right' }} className="text-xs font-bold" style={{ color: '#FFE566' }}>{m.resourceWeight.toFixed(2)}</div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
