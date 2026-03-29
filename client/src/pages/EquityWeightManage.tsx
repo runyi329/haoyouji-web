@@ -114,6 +114,13 @@ function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; mem
   const reviewMutation = trpc.equity.reviewReferralApproval.useMutation({
     onSuccess: () => utils.equity.getReferralApprovals.invalidate(),
   });
+  const importMutation = trpc.equity.importExistingReferrals.useMutation({
+    onSuccess: (res) => {
+      utils.equity.getReferralApprovals.invalidate();
+      alert(`导入完成：新增 ${res.imported} 条，跳过 ${res.skipped} 条（已存在）`);
+    },
+    onError: (err: any) => alert('导入失败：' + err.message),
+  });
 
   return (
     <div
@@ -289,7 +296,26 @@ function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; mem
               </div>
               {/* 推荐人审核区域 */}
               <div className="mt-4">
-                <div className="text-xs font-semibold mb-2" style={{ color: GOLD }}>推荐人审核</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-semibold" style={{ color: GOLD }}>推荐人审核</div>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('将该账本现有推荐关系全部导入为待审核，确认操作？')) {
+                        importMutation.mutate({ ledgerId });
+                      }
+                    }}
+                    disabled={importMutation.isPending}
+                    className="text-[11px] px-3 py-1 rounded-full"
+                    style={{
+                      background: 'rgba(201,168,76,0.12)',
+                      border: `1px solid ${GOLD_BORDER}`,
+                      color: GOLD_DIM,
+                      opacity: importMutation.isPending ? 0.5 : 1,
+                    }}
+                  >
+                    {importMutation.isPending ? '导入中...' : '导入现有推荐关系'}
+                  </button>
+                </div>
                 {/* 审核状态 Tab */}
                 <div className="flex gap-2 mb-3">
                   {(['pending', 'approved', 'rejected'] as const).map(tab => (
