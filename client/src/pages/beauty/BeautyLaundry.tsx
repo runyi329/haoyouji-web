@@ -9,7 +9,7 @@ import { ChevronLeft, Star, Shield, Truck, Clock, Award } from "lucide-react";
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
 
 const DETAIL_IMAGES = [
-  `${CDN}/jd_detail_1_services_2c171bdd.jpg`,
+  `${CDN}/detail1_youliangxiyi_cb5004c1.png`,
   `${CDN}/jd_detail_2_features_77cf36f8.jpg`,
   `${CDN}/jd_detail_3_delivery_76b7077e.jpg`,
   `${CDN}/jd_detail_4_crosscity_9db9a477.jpg`,
@@ -24,26 +24,15 @@ const DETAIL_IMAGES = [
 ];
 
 const BANNER_IMAGES = [
-  `${CDN}/jd_3piece_banner_c235005f.jpg`,
-  `${CDN}/jd_laundry_banner_29949ed8.jpg`,
+  `${CDN}/banner1_3d_c91a06c5.png`,
 ];
 
 const PACKAGES = [
-  { id: "1", label: "衣鞋任洗1件", price: 29 },
-  { id: "2", label: "衣鞋任洗2件", price: 49 },
   { id: "3", label: "衣鞋任洗3件", price: 66, hot: true },
-  { id: "4", label: "衣鞋任洗4件", price: 85 },
-  { id: "5", label: "衣鞋任洗5件", price: 99 },
-  { id: "6", label: "衣鞋任洗6件", price: 106 },
-  { id: "shoe1", label: "运动鞋清洗1双", price: 25 },
-  { id: "shoe2", label: "运动鞋清洗2双", price: 45 },
-  { id: "shoe3", label: "运动鞋清洗3双", price: 60 },
 ];
 
 const CARDS = [
   { id: "single", label: "单次卡" },
-  { id: "3x", label: "3次卡" },
-  { id: "6x", label: "6次卡" },
 ];
 
 export default function BeautyLaundry() {
