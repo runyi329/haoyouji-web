@@ -9,11 +9,11 @@ import { ChevronLeft, Star, Shield, Truck, Clock, Award } from "lucide-react";
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
 
 const DETAIL_IMAGES = [
-  `${CDN}/detail1_youliangxiyi_cb5004c1.png`,
+  `${CDN}/detail1_faceswap_917d2ee3.png`,
   `${CDN}/jd_detail_2_features_77cf36f8.jpg`,
   `${CDN}/jd_detail_4_crosscity_adb34c82.jpg`,
+  `${CDN}/detail6_faceswap_v2_5bc63264.png`,
   `${CDN}/jd_detail_5_clean_7ef1e52a.jpg`,
-  `${CDN}/jd_detail_6_size_879b8fc1.jpg`,
   `${CDN}/jd_detail_7_tracking_73e2020c.jpg`,
   `${CDN}/jd_detail_8_guarantee_ab80401b.jpg`,
   `${CDN}/jd_detail_9_promise_75154a34.jpg`,
