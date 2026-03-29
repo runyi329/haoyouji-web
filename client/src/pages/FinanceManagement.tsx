@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LOD', 'ENA', 'ARKM', 'USDT'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 // 整数型币种（单价较低，通常以整数计量）
@@ -78,6 +78,7 @@ const COIN_COLORS: Record<CoinType, string> = {
   LOD: '#00C896',
   ENA: '#1A1A1A',
   ARKM: '#FF6B35',
+  USDT: '#26A17B',
 };
 
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
