@@ -1166,10 +1166,14 @@ export const equityRouter = router({
       if (!isGlobal && myRow?.role !== 'owner' && myRow?.role !== 'admin') {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
       }
-      // 查该成员作为推荐人（referrerId=memberUserId）推荐的所有联系人，并 LEFT JOIN referral_approvals 获取计数状态
-      // contacts.referrerId 存储的是推荐人的 userId，即该成员把这些人引进来的
+      // contacts.referrerId 存的是介绍人的 contact.id（不是 userId）
+      // 需要先找到该成员（memberUserId）在当前登录用户的通讯录中对应的 contact.id（即 linkedUserId=memberUserId 的联系人）
+      // 然后查所有 referrerId = 该 contactId 的联系人（即被该成员介绍进来的人）
+      // 注意：contacts 表没有 parentUserId 限制，同一个人可能在多个用户的通讯录里都有记录
+      // 所以这里查的是所有人的通讯录中、以该成员作为介绍人的联系人列表
       const [rows] = await (db as any).execute(
         `SELECT c.id AS contactId, c.name AS referredName, c.linkedUserId AS referredUserId,
+                c.parentUserId AS ownerUserId,
                 COALESCE(ra.id, NULL) AS approvalId,
                 COALESCE(ra.status, 'none') AS approvalStatus,
                 ra.created_at AS submittedAt,
@@ -1179,7 +1183,9 @@ export const equityRouter = router({
          LEFT JOIN referral_approvals ra
            ON ra.ledger_id = ? AND ra.member_user_id = ? AND ra.referred_contact_id = c.id
          LEFT JOIN users u ON u.id = c.linkedUserId
-         WHERE c.referrerId = ?
+         WHERE c.referrerId IN (
+           SELECT id FROM contacts WHERE linkedUserId = ?
+         )
          ORDER BY c.createdAt DESC`,
         [input.ledgerId, input.memberUserId, input.memberUserId]
       ) as any;
