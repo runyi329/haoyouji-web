@@ -1458,7 +1458,15 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
     }
   }
   
-  return sortedMembers;
+  // 最终去重保险：按 userId 去重，保留第一条（防止数据库异常导致重复）
+  const seenUserIds = new Set<number>();
+  const deduped = sortedMembers.filter(m => {
+    if (seenUserIds.has(m.userId)) return false;
+    seenUserIds.add(m.userId);
+    return true;
+  });
+
+  return deduped;
 }
 
 /**
