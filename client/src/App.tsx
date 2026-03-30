@@ -108,6 +108,7 @@ const PptPromptLibrary = lazy(() => import("./pages/PptPromptLibrary"));
 const AgDataSources = lazy(() => import("./pages/AgDataSources"));
 const AfRechargeManage = lazy(() => import("./pages/AfRechargeManage"));
 const AfOrderManage = lazy(() => import("./pages/AfOrderManage"));
+const AfFeeDetail = lazy(() => import("./pages/AfFeeDetail"));
 const AfPayoutManage = lazy(() => import("./pages/AfPayoutManage"));
 const LedgerEquityManage = lazy(() => import("./pages/LedgerEquityManage"));
 const LedgerMemberManage = lazy(() => import("./pages/LedgerMemberManage"));
@@ -388,6 +389,7 @@ function Router() {
         <Route path="/ledger/:id/member-manage">{(params) => <LedgerMemberManage ledgerId={Number(params.id)} />}</Route>
         <Route path="/ledger/:id/af-recharge-manage" component={AfRechargeManage} />
         <Route path="/ledger/:id/af-order-manage" component={AfOrderManage} />
+        <Route path="/ledger/:id/af-fee-detail" component={AfFeeDetail} />
         <Route path="/ledger/:id/af-payout-manage" component={AfPayoutManage} />
         <Route path="/ledger/:id/funder-management" component={FunderManagement} />
         <Route path="/ledger/:id/finance-management" component={FinanceManagement} />

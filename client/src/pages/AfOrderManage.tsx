@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, Pencil, Check, X, ChevronRight } from "lucide-react";
+// AfFeeDetail 页面通过路由跳转，已删除内嵌 FeeDetailModal
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -161,8 +162,7 @@ export default function AfOrderManage() {
   const [editState, setEditState] = useState<EditState | null>(null);
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
-  // 管理费明细弹窗
-  const [showFeeDetail, setShowFeeDetail] = useState(false);
+  // 管理费明细：跳转到独立页面
 
   const utils = trpc.useUtils();
   const { data: stats } = trpc.ledger.afAdminGetStats.useQuery(
@@ -328,7 +328,7 @@ export default function AfOrderManage() {
             </div>
             <button
               className="bg-white rounded-xl p-4 shadow-sm border border-purple-100 text-left w-full"
-              onClick={() => setShowFeeDetail(true)}
+              onClick={() => setLocation(`/ledger/${ledgerId}/af-fee-detail`)}
             >
               <div className="flex items-center justify-between">
                 <p className="text-xs text-gray-400 mb-2">管理费</p>
@@ -718,11 +718,6 @@ export default function AfOrderManage() {
           </div>
         )}
       </div>
-
-    {/* 管理费明细弹窗 */}
-    {showFeeDetail && orders && (
-      <FeeDetailModal orders={orders as any[]} onClose={() => setShowFeeDetail(false)} />
-    )}
     </div>
   );
 }
