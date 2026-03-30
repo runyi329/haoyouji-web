@@ -9928,7 +9928,28 @@ export const appRouter = router({
               }
             }
           }
-          // 按层数排序
+          // 在最前插入YJH本人（第0层）
+          try {
+            const [yjhRows] = await rawDb.execute(
+              `SELECT id, name, username, invited_by_user_id, invited_at, createdAt FROM users WHERE id = ?`,
+              [YJH_USER_ID]
+            ) as any[];
+            const yjhRow = (yjhRows as any[])[0];
+            if (yjhRow) {
+              result.unshift({
+                id: yjhRow.id,
+                name: yjhRow.name || 'YJH',
+                username: yjhRow.username || 'YJH',
+                layer: 0,
+                invitedAt: null,
+                inviterName: null,
+                registeredAt: yjhRow.createdAt ? new Date(yjhRow.createdAt).toLocaleDateString('zh-CN') : null
+              });
+            }
+          } catch (e) {
+            console.error('[AF] YJH本人信息查询失败:', e);
+          }
+          // 按层数排序（YJH本人已在最前，层数为0）
           result.sort((a, b) => a.layer - b.layer || a.name.localeCompare(b.name));
           // 查询每个用户作为下单人、自己作为受益人的拨比（source_user_id=beneficiary_user_id=该用户）
           let payoutMap = new Map<number, number>();
