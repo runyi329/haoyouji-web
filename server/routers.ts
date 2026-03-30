@@ -12398,7 +12398,14 @@ export const appRouter = router({
               WHERE lm.ledgerId = ${input.ledgerId} AND lm.userId > 0
               ORDER BY lm.createdAt ASC`
         ) as any;
-        const memberList = ((rows[0] || rows) as any[]).filter((r: any) => r && r.userId);
+        const rawList = ((rows[0] || rows) as any[]).filter((r: any) => r && r.userId);
+        // 按 userId 去重，避免 ledger_members 中存在重复行
+        const seenIds = new Set<number>();
+        const memberList = rawList.filter((r: any) => {
+          if (seenIds.has(r.userId)) return false;
+          seenIds.add(r.userId);
+          return true;
+        });
         
         // YJH是第1代，账本owner不标代数（generation=null）
         const YJH_USER_ID = 4957151;
