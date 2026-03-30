@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Pencil, Check, X } from "lucide-react";
+import { ArrowLeft, Pencil, Check, X, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 
@@ -53,6 +53,105 @@ interface ProfitCalculation {
   dailyFee: number;
 }
 
+// 管理费明细弹窗组件
+function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => void }) {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const feeItems = orders
+    .filter((o: any) => o.side === 'buy' && o.status === 'completed')
+    .map((o: any) => {
+      const amount = parseFloat(o.amount || '0');
+      const tradeValue = o.isGift ? amount : amount * 5.25;
+      const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+      const confirmedDate = new Date(o.updatedAt || o.createdAt);
+      const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+      let holdDays: number;
+      let feeType: string;
+      if (o.sellStatus === 'sold' && o.sellConfirmedAt) {
+        const sellDate = new Date(o.sellConfirmedAt);
+        const sellDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
+        holdDays = Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
+        feeType = '已结清';
+      } else {
+        holdDays = Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
+        feeType = '进行中';
+      }
+      const totalFee = dailyFee * holdDays;
+      const orderDate = new Date(o.createdAt);
+      const yy = String(orderDate.getFullYear()).slice(2);
+      const mm = String(orderDate.getMonth()+1).padStart(2,'0');
+      const dd = String(orderDate.getDate()).padStart(2,'0');
+      const orderNo = `AF${yy}${mm}${dd}${String(o.id).padStart(6,'0')}`;
+      return { ...o, orderNo, holdDays, dailyFee, totalFee, feeType, tradeValue };
+    })
+    .sort((a: any, b: any) => b.totalFee - a.totalFee);
+
+  const totalOngoing = feeItems.filter((f: any) => f.feeType === '进行中').reduce((s: number, f: any) => s + f.totalFee, 0);
+  const totalSettled = feeItems.filter((f: any) => f.feeType === '已结清').reduce((s: number, f: any) => s + f.totalFee, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-end">
+      <div className="bg-white w-full rounded-t-2xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <h2 className="text-base font-semibold">管理费明细</h2>
+          <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+        </div>
+        <div className="grid grid-cols-3 gap-2 px-4 py-3 bg-purple-50 border-b">
+          <div className="text-center">
+            <p className="text-xs text-gray-400">合计</p>
+            <p className="text-sm font-bold text-purple-700">{(totalOngoing + totalSettled).toFixed(2)} U</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-gray-400">进行中</p>
+            <p className="text-sm font-bold text-orange-500">{totalOngoing.toFixed(2)} U</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-gray-400">已结清</p>
+            <p className="text-sm font-bold text-green-600">{totalSettled.toFixed(2)} U</p>
+          </div>
+        </div>
+        <div className="overflow-y-auto flex-1 px-4 py-2 space-y-2">
+          {feeItems.map((item: any) => (
+            <div key={item.id} className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[11px] font-mono text-gray-400">{item.orderNo}</span>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  item.feeType === '已结清' ? 'bg-gray-100 text-gray-500' : 'bg-orange-50 text-orange-500'
+                }`}>{item.feeType}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-gray-600 font-medium">{item.nickname || item.username}</span>
+                  {item.isGift && <span className="ml-1 text-[10px] text-red-400">赠</span>}
+                </div>
+                <span className="text-base font-bold text-purple-700">{item.totalFee.toFixed(4)} U</span>
+              </div>
+              <div className="grid grid-cols-3 gap-1 mt-2">
+                <div className="text-center bg-white rounded-lg py-1">
+                  <p className="text-[10px] text-gray-400">订单价值</p>
+                  <p className="text-xs font-medium">{item.tradeValue.toFixed(2)}</p>
+                </div>
+                <div className="text-center bg-white rounded-lg py-1">
+                  <p className="text-[10px] text-gray-400">持有天数</p>
+                  <p className="text-xs font-medium">{item.holdDays} 天</p>
+                </div>
+                <div className="text-center bg-white rounded-lg py-1">
+                  <p className="text-[10px] text-gray-400">日费率</p>
+                  <p className="text-xs font-medium">{item.dailyFee.toFixed(4)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+          {feeItems.length === 0 && (
+            <div className="text-center py-12 text-gray-400 text-sm">暂无管理费记录</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AfOrderManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -60,6 +159,10 @@ export default function AfOrderManage() {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
+  // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
+  // 管理费明细弹窗
+  const [showFeeDetail, setShowFeeDetail] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: stats } = trpc.ledger.afAdminGetStats.useQuery(
@@ -177,6 +280,16 @@ export default function AfOrderManage() {
     });
   };
 
+  // 根据筛选条件过滤订单
+  const filteredOrders = (orders as any[] | undefined)?.filter((order: any) => {
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'pending') return order.status === 'pending';
+    if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus;
+    if (statusFilter === 'selling') return order.sellStatus === 'selling';
+    if (statusFilter === 'sold') return order.sellStatus === 'sold';
+    return true;
+  }) ?? [];
+
   const formatDate = (d: any) => {
     if (!d) return "-";
     const dt = new Date(d);
@@ -213,8 +326,14 @@ export default function AfOrderManage() {
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-purple-100">
-              <p className="text-xs text-gray-400 mb-2">管理费</p>
+            <button
+              className="bg-white rounded-xl p-4 shadow-sm border border-purple-100 text-left w-full"
+              onClick={() => setShowFeeDetail(true)}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-400 mb-2">管理费</p>
+                <ChevronRight className="w-4 h-4 text-purple-300 -mt-2" />
+              </div>
               <p className="text-2xl font-bold text-purple-700">{stats.fees.totalFee.toFixed(2)}</p>
               <div className="mt-2 space-y-1">
                 <div className="flex justify-between text-xs">
@@ -226,17 +345,42 @@ export default function AfOrderManage() {
                   <span className="font-medium text-green-600">{stats.fees.settledFee.toFixed(2)} U</span>
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         )}
+
+        {/* 状态筛选Tab */}
+        <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
+          {([
+            { key: 'all' as const, label: '全部', count: orders?.length ?? 0 },
+            { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending').length ?? 0 },
+            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
+            { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
+            { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
+          ]).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                statusFilter === tab.key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-500 border border-gray-200'
+              }`}
+            >
+              {tab.label}{tab.count > 0 && <span className="ml-1 opacity-70">{tab.count}</span>}
+            </button>
+          ))}
+        </div>
 
         {isLoading ? (
           <div className="text-center py-12 text-gray-400">加载中...</div>
         ) : !orders || orders.length === 0 ? (
           <div className="text-center py-12 text-gray-400">暂无订单记录</div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">该状态下暂无订单</div>
         ) : (
           <div className="space-y-3">
-            {(orders as any[]).map((order) => {
+            {filteredOrders.map((order: any) => {
               const isEditing = editingId === order.id;
               const statusDisplay = getStatusDisplay(order);
               // 计算编辑时的实时数量
@@ -574,6 +718,11 @@ export default function AfOrderManage() {
           </div>
         )}
       </div>
+
+    {/* 管理费明细弹窗 */}
+    {showFeeDetail && orders && (
+      <FeeDetailModal orders={orders as any[]} onClose={() => setShowFeeDetail(false)} />
+    )}
     </div>
   );
 }
