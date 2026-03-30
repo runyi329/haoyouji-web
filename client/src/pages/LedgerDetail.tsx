@@ -831,8 +831,11 @@ export default function LedgerDetail() {
     { enabled: isCustomAF && funderOrderIds.length > 0 }
   );
   // AF 账本：YJH邀请树（仅当弹窗打开时才加载）
+  // 管理员/创建人点推荐时，强制以YJH(4957151)视角查询，无需切换视角
+  const YJH_USER_ID = 4957151;
+  const inviteTreeViewAsId = (isOwner || isAdmin) && (user as any)?.id !== YJH_USER_ID ? YJH_USER_ID : (viewAsUserId || undefined);
   const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId), ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
     { enabled: isCustomAF && showInviteTree }
   );
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
@@ -1537,7 +1540,7 @@ export default function LedgerDetail() {
               )}
               {/* 卡片 2：推荐人数（资金方不显示） */}
               {!effectiveIsFunder && (
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || (viewAsUserId === 4957151 && (isOwner || isAdmin))) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || (viewAsUserId === 4957151 && (isOwner || isAdmin))) setShowInviteTree(true); }}>
+              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || isOwner || isAdmin) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setShowInviteTree(true); }}>
                 <div className="text-xs text-white/70 mb-1">推荐</div>
                 {((afTotalAsset as any)?.directReferralCount > 0 || (afTotalAsset as any)?.indirectReferralCount > 0) ? (
                   <div className="space-y-0.5">
