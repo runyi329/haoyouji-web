@@ -136,15 +136,10 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
           </div>
         </div>
         {(s.reason || (s.shareType === '资源股' && (s.sourceNickname || s.source_user_id))) && (
-          <div className="flex items-start justify-between mt-1.5">
-            <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>备注</span>
-            <span className="text-[10px] text-right" style={{ color: '#1A0A00', lineHeight: '1.4rem', maxWidth: '75%', wordBreak: 'break-all' }}>
-              {s.reason}
-              {s.shareType === '资源股' && (s.sourceNickname || s.source_user_id) && (
-                <span style={{ color: '#15803d' }}>
-                  {s.reason ? '　·　' : ''}来源：{s.sourceNickname || `用户#${s.source_user_id}`}{s.source_amount ? ` 购入 ${Number(s.source_amount).toLocaleString()} 张` : ''}
-                </span>
-              )}
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-[10px] shrink-0" style={{ color: labelColor }}>备注</span>
+            <span className="text-[10px] text-right truncate ml-2" style={{ color: '#1A0A00' }}>
+              {s.reason}{s.shareType === '资源股' && (s.sourceNickname || s.source_user_id) ? <span style={{ color: '#15803d' }}>{s.reason ? ' · ' : ''}来源:{s.sourceNickname || `用户#${s.source_user_id}`}{s.source_amount ? `(${Number(s.source_amount).toLocaleString()}张)` : ''}</span> : null}
             </span>
           </div>
         )}
