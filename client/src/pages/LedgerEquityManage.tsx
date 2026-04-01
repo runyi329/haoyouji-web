@@ -78,6 +78,7 @@ export default function LedgerEquityManage() {
   };
 
   // 添加股权弹窗状态
+  const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [addForm, setAddForm] = useState({
     userId: 0,
@@ -328,7 +329,7 @@ export default function LedgerEquityManage() {
         </div>
       </div>
 
-      {/* 股权卡片列表 */}
+      {/* 股权卡片列表（按用户分组） */}
       <div className="px-4 pt-3 space-y-3">
         {filteredShares.length === 0 ? (
           <div className="text-center text-gray-400 text-sm mt-16">
@@ -336,79 +337,118 @@ export default function LedgerEquityManage() {
             <div>{hasFilter ? '没有符合条件的记录' : '暂无股权记录'}</div>
             {!hasFilter && <div className="mt-1 text-xs">点击右上角 + 为成员添加股权</div>}
           </div>
-        ) : (
-          filteredShares.map((record: any) => (
-            <div key={record.id} style={{ background: '#fff', borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-              {/* 卡片顶部：用户信息 + 类型标签 */}
-              <div style={{ background: '#f9fafb', borderBottom: '1px solid #f3f4f6', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, color: '#2563eb', flexShrink: 0 }}>
-                    {(record.memberNickname || '?').charAt(0)}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{record.memberNickname}</div>
-                    {record.shareNo && <div style={{ fontSize: '10px', color: '#9ca3af' }}>股东编号 {record.shareNo}</div>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: record.shareType === '资金股' ? '#dbeafe' : '#dcfce7', color: record.shareType === '资金股' ? '#1d4ed8' : '#15803d', fontWeight: 500 }}>
-                    {record.shareType}
-                  </span>
-                  <button onClick={() => openEdit(record)} style={{ padding: '4px', color: '#d1d5db', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    <Pencil style={{ width: '14px', height: '14px' }} />
-                  </button>
-                  <button onClick={() => setDeleteTarget({ id: record.id, name: `${record.memberNickname} ${Number(record.shareCount)}张` })} style={{ padding: '4px', color: '#d1d5db', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    <Trash2 style={{ width: '14px', height: '14px' }} />
-                  </button>
-                </div>
-              </div>
-
-              {/* 卡片主体：核心数据 */}
-              <div style={{ padding: '12px 14px' }}>
-                {/* 张数 + 日期 */}
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                    <span style={{ fontSize: '22px', fontWeight: 700, color: '#111827' }}>{Number(record.shareCount).toLocaleString()}</span>
-                    <span style={{ fontSize: '12px', color: '#6b7280' }}>张</span>
-                  </div>
-                  <span style={{ fontSize: '12px', color: '#9ca3af' }}>{formatDate(record.grantDate)}</span>
-                </div>
-
-                {/* 编号行 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-                  {record.share_code && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '10px', color: '#9ca3af' }}>股权编号</span>
-                      <span style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: 600, color: '#374151', letterSpacing: '0.05em', background: '#f3f4f6', padding: '1px 6px', borderRadius: '4px' }}>{record.share_code}</span>
+        ) : (() => {
+          // 按用户分组
+          const grouped: Record<string, any[]> = {};
+          filteredShares.forEach((r: any) => {
+            const key = String(r.userId);
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(r);
+          });
+          return Object.entries(grouped).map(([uid, records]) => {
+            const first = records[0];
+            const totalShares = records.reduce((s, r) => s + Number(r.shareCount), 0);
+            const capitalCount = records.filter(r => r.shareType === '资金股').length;
+            const resourceCount = records.filter(r => r.shareType === '资源股').length;
+            const isExpanded = expandedUsers.has(uid);
+            return (
+              <div key={uid} style={{ background: '#fff', borderRadius: '12px', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                {/* 用户汇总行（点击展开/收起） */}
+                <button
+                  onClick={() => setExpandedUsers(prev => {
+                    const next = new Set(prev);
+                    if (next.has(uid)) next.delete(uid); else next.add(uid);
+                    return next;
+                  })}
+                  style={{ width: '100%', background: '#f9fafb', borderBottom: isExpanded ? '1px solid #f3f4f6' : 'none', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: '#2563eb', flexShrink: 0 }}>
+                      {(first.memberNickname || '?').charAt(0)}
                     </div>
-                  )}
-                  {record.regNo && !record.share_code && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span style={{ fontSize: '10px', color: '#9ca3af' }}>登记编号</span>
-                      <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#9ca3af', letterSpacing: '1px' }}>{record.regNo}</span>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>{first.memberNickname}</div>
+                      <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '1px' }}>
+                        {first.shareNo && <span>股东编号 {first.shareNo}　</span>}
+                        {capitalCount > 0 && <span>资金股 {capitalCount} 份　</span>}
+                        {resourceCount > 0 && <span>资源股 {resourceCount} 份</span>}
+                      </div>
                     </div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span style={{ fontSize: '10px', color: '#9ca3af' }}>年化</span>
-                    <span style={{ fontSize: '11px', fontWeight: 500, color: '#f59e0b' }}>{record.annualRate ?? 6}%</span>
                   </div>
-                </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#111827' }}>{totalShares.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                      <div style={{ fontSize: '10px', color: '#9ca3af' }}>张</div>
+                    </div>
+                    <span style={{ color: '#9ca3af', fontSize: '12px' }}>{isExpanded ? '▲' : '▼'}</span>
+                  </div>
+                </button>
 
-                {/* 备注（含来源信息整合） */}
-                {(record.reason || (record.shareType === '资源股' && (record.sourceNickname || record.source_user_id))) && (
-                  <div style={{ fontSize: '11px', color: '#6b7280', lineHeight: '1.5', background: '#fafafa', borderRadius: '6px', padding: '5px 8px' }}>
-                    {record.reason}
-                    {record.shareType === '资源股' && (record.sourceNickname || record.source_user_id) && (
-                      <span style={{ color: '#15803d' }}>
-                        {record.reason ? '　·　' : ''}来源：{record.sourceNickname || `用户#${record.source_user_id}`}{record.source_amount ? ` 购入 ${Number(record.source_amount).toLocaleString()} 张` : ''}
-                      </span>
-                    )}
+                {/* 展开的订单明细 */}
+                {isExpanded && (
+                  <div style={{ padding: '8px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {records.map((record: any) => (
+                      <div key={record.id} style={{ background: '#fafafa', borderRadius: '8px', border: '1px solid #f3f4f6', padding: '10px 12px' }}>
+                        {/* 订单头：类型 + 日期 + 操作按钮 */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '10px', background: record.shareType === '资金股' ? '#dbeafe' : '#dcfce7', color: record.shareType === '资金股' ? '#1d4ed8' : '#15803d', fontWeight: 500 }}>
+                              {record.shareType}
+                            </span>
+                            <span style={{ fontSize: '11px', color: '#9ca3af' }}>{formatDate(record.grantDate)}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <button onClick={() => openEdit(record)} style={{ padding: '4px', color: '#d1d5db', background: 'none', border: 'none', cursor: 'pointer' }}>
+                              <Pencil style={{ width: '13px', height: '13px' }} />
+                            </button>
+                            <button onClick={() => setDeleteTarget({ id: record.id, name: `${record.memberNickname} ${Number(record.shareCount)}张` })} style={{ padding: '4px', color: '#d1d5db', background: 'none', border: 'none', cursor: 'pointer' }}>
+                              <Trash2 style={{ width: '13px', height: '13px' }} />
+                            </button>
+                          </div>
+                        </div>
+                        {/* 张数 */}
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '20px', fontWeight: 700, color: '#111827' }}>{Number(record.shareCount).toLocaleString()}</span>
+                          <span style={{ fontSize: '12px', color: '#6b7280' }}>张</span>
+                        </div>
+                        {/* 编号行 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
+                          {record.share_code && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ fontSize: '10px', color: '#9ca3af' }}>股权编号</span>
+                              <span style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: 600, color: '#374151', letterSpacing: '0.05em', background: '#f3f4f6', padding: '1px 6px', borderRadius: '4px' }}>{record.share_code}</span>
+                            </div>
+                          )}
+                          {record.regNo && !record.share_code && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ fontSize: '10px', color: '#9ca3af' }}>登记编号</span>
+                              <span style={{ fontSize: '11px', fontFamily: 'monospace', color: '#9ca3af' }}>{record.regNo}</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ fontSize: '10px', color: '#9ca3af' }}>年化</span>
+                            <span style={{ fontSize: '11px', fontWeight: 500, color: '#f59e0b' }}>{record.annualRate ?? 6}%</span>
+                          </div>
+                        </div>
+                        {/* 备注 */}
+                        {(record.reason || (record.shareType === '资源股' && (record.sourceNickname || record.source_user_id))) && (
+                          <div style={{ fontSize: '11px', color: '#6b7280', lineHeight: '1.5', background: '#fff', borderRadius: '6px', padding: '4px 8px', marginTop: '2px' }}>
+                            {record.reason}
+                            {record.shareType === '资源股' && (record.sourceNickname || record.source_user_id) && (
+                              <span style={{ color: '#15803d' }}>
+                                {record.reason ? '　·　' : ''}来源：{record.sourceNickname || `用户#${record.source_user_id}`}{record.source_amount ? ` 购入 ${Number(record.source_amount).toLocaleString()} 张` : ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
-            </div>
-          ))
-        )}
+            );
+          });
+        })()}
       </div>
 
       {/* 删除确认 */}
