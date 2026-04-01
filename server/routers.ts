@@ -12098,7 +12098,7 @@ export const appRouter = router({
           [input.orderId]
         ) as any[];
         const stats = (statsRows as any[])?.[0] || null;
-        if (!stats) return { scanCount: 0, lastScanAt: null, allTimeLow: null, allTimeLowAt: null, dropPct: 0, profitRightPct: 0, profitRightCoins: 0 };
+        if (!stats) return { scanCount: 0, lastScanAt: null, allTimeLow: null, allTimeLowAt: null, lastScanPrice: null, dropPct: 0, profitRightPct: 0, profitRightCoins: 0 };
         const buyPrice = parseFloat(order.buy_price) || 0;
         const buyQuantity = parseFloat(order.buy_quantity) || 0;
         const allTimeLow = parseFloat(stats.all_time_low_price) || 0;
@@ -12108,6 +12108,7 @@ export const appRouter = router({
           lastScanAt: stats.last_scan_at,
           allTimeLow: stats.all_time_low_price,
           allTimeLowAt: stats.all_time_low_at,
+          lastScanPrice: stats.last_low_price ? String(stats.last_low_price) : null,
           dropPct,
           profitRightPct,
           profitRightCoins,
