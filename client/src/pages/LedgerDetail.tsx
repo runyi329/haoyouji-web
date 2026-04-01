@@ -279,14 +279,16 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { 
           const profitU = isProfit ? (lastScanPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
           if (isProfit) {
             return (
-              <div className="flex items-baseline gap-1">
-                <span
-                  className="text-xl font-bold tabular-nums leading-tight"
-                  style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-                >
-                  +{profitU.toFixed(2)}
-                </span>
-                <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+              <div className="flex items-baseline justify-between w-full">
+                <div className="flex items-baseline gap-0.5">
+                  <span
+                    className="text-xl font-bold tabular-nums leading-tight"
+                    style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                  >
+                    +{profitU.toFixed(2)}
+                  </span>
+                  <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                </div>
                 <span className="font-medium" style={{ color: '#4B5563', fontSize: '12px' }}>{profitPct.toFixed(2)}%</span>
               </div>
             );
