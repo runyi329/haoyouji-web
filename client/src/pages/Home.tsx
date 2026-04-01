@@ -157,7 +157,7 @@ function FlipCounterCard({ total }: { total: number }) {
         <div className="flex items-center mb-3">
           <span className="text-xs text-gray-400 tracking-wide">全网人脉总数</span>
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center justify-end">
           <div className="flex items-center" style={{ gap: '2px' }}>
             {cur.map((digit, i) => (
               digit === ',' || digit === '\uff0c' ? (
