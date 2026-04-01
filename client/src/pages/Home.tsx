@@ -35,44 +35,71 @@ import BottomNav from "@/components/BottomNav";
 
 // 翻牌卡片单个数字组件
 function FlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDigit: string; flip: boolean; size: number }) {
+  const w = Math.round(size * 0.62);
+  const h = size;
+  const fs = Math.round(size * 0.78);
+  const bg = '#fff';
+  const bgLower = '#f5f5f5';
+  const lineColor = 'rgba(0,0,0,0.08)';
+
   return (
-    <div className="relative inline-flex flex-col items-center justify-center" style={{ width: size * 0.65 + 'px', height: size + 'px', perspective: '600px' }}>
+    <div style={{ position: 'relative', display: 'inline-block', width: w + 'px', height: h + 'px', perspective: '600px', borderRadius: '6px', overflow: 'hidden' }}>
       <style>{`
-        @keyframes flipTop {
-          0% { transform: rotateX(0deg); }
+        @keyframes fd-flipTop {
+          0%   { transform: rotateX(0deg); }
           100% { transform: rotateX(-90deg); }
         }
-        @keyframes flipBottom {
-          0% { transform: rotateX(90deg); }
+        @keyframes fd-flipBottom {
+          0%   { transform: rotateX(90deg); }
           100% { transform: rotateX(0deg); }
         }
-        .flip-anim-top { animation: flipTop 0.25s ease-in forwards; }
-        .flip-anim-bottom { animation: flipBottom 0.25s ease-out 0.25s forwards; }
+        .fd-anim-top    { animation: fd-flipTop    0.22s ease-in  forwards; }
+        .fd-anim-bottom { animation: fd-flipBottom 0.22s ease-out 0.22s forwards; }
       `}</style>
-      {/* 静态上半 - 当前数字 */}
-      <div className="absolute top-0 left-0 right-0 overflow-hidden rounded-t-md" style={{ height: '50%', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-        <div className="flex items-end justify-center" style={{ height: size + 'px', fontSize: size * 0.72 + 'px', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px' }}>
+
+      {/* ── 静态上半：当前数字上半部分 ── */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
+        background: bg, borderRadius: '6px 6px 0 0', overflow: 'hidden',
+        boxShadow: `inset 0 -1px 0 ${lineColor}` }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          height: h + 'px', fontSize: fs + 'px', fontWeight: 900, color: '#D32F2F',
+          lineHeight: 1, paddingBottom: '2px' }}>
           {digit}
         </div>
       </div>
-      {/* 静态下半 - 当前数字 */}
-      <div className="absolute bottom-0 left-0 right-0 overflow-hidden rounded-b-md" style={{ height: '50%', background: '#f9fafb' }}>
-        <div className="flex items-start justify-center" style={{ height: size + 'px', fontSize: size * 0.72 + 'px', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px', marginTop: -(size / 2) + 'px' }}>
+
+      {/* ── 静态下半：当前数字下半部分 ── */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%',
+        background: bgLower, borderRadius: '0 0 6px 6px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+          height: h + 'px', fontSize: fs + 'px', fontWeight: 900, color: '#D32F2F',
+          lineHeight: 1, marginTop: -(h / 2) + 'px', paddingTop: '2px' }}>
           {digit}
         </div>
       </div>
-      {/* 翻牌动画 - 上半翻下（旧数字翻走） */}
+
+      {/* ── 动画上半：旧数字翻走 ── */}
       {flip && (
-        <div className="absolute top-0 left-0 right-0 overflow-hidden rounded-t-md flip-anim-top" style={{ height: '50%', background: '#fff', transformOrigin: 'bottom', zIndex: 10, borderBottom: '1px solid #e5e7eb' }}>
-          <div className="flex items-end justify-center" style={{ height: size + 'px', fontSize: size * 0.72 + 'px', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px' }}>
+        <div className="fd-anim-top" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
+          background: bg, borderRadius: '6px 6px 0 0', overflow: 'hidden',
+          transformOrigin: 'bottom center', zIndex: 10,
+          boxShadow: `inset 0 -1px 0 ${lineColor}` }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            height: h + 'px', fontSize: fs + 'px', fontWeight: 900, color: '#D32F2F',
+            lineHeight: 1, paddingBottom: '2px' }}>
             {prevDigit}
           </div>
         </div>
       )}
-      {/* 翻牌动画 - 下半翻上（新数字翻入） */}
+
+      {/* ── 动画下半：新数字翻入 ── */}
       {flip && (
-        <div className="absolute bottom-0 left-0 right-0 overflow-hidden rounded-b-md flip-anim-bottom" style={{ height: '50%', background: '#f9fafb', transformOrigin: 'top', zIndex: 10 }}>
-          <div className="flex items-start justify-center" style={{ height: size + 'px', fontSize: size * 0.72 + 'px', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px', marginTop: -(size / 2) + 'px' }}>
+        <div className="fd-anim-bottom" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%',
+          background: bgLower, borderRadius: '0 0 6px 6px', overflow: 'hidden',
+          transformOrigin: 'top center', zIndex: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            height: h + 'px', fontSize: fs + 'px', fontWeight: 900, color: '#D32F2F',
+            lineHeight: 1, marginTop: -(h / 2) + 'px', paddingTop: '2px' }}>
             {digit}
           </div>
         </div>
