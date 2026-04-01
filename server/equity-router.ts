@@ -602,11 +602,11 @@ export const equityRouter = router({
         [input.userId]
       ) as any;
       const referrals = (referralRows as any[]).map((r: any) => ({ id: Number(r.id), name: String(r.name), avatar: r.avatar as string | null }));
-      // 2. 资源权重计算
+      // 2. 资源权重计算（基数为 1.0，在此基础上加各项加成）
       const networkBonus = Math.min(contactCount * 0.01, 1.0);
       const tagBonus = Math.min(Math.floor(tagCount / 10) * 0.01, 1.0);
       const referralBonus = referrals.length * 0.1;
-      const resourceWeight = Math.round((networkBonus + tagBonus + referralBonus) * 10000) / 10000;
+      const resourceWeight = Math.round((1.0 + networkBonus + tagBonus + referralBonus) * 10000) / 10000;
       // 3. 资金权重原始数据
       const [[snRow]] = await (db as any).execute(
         'SELECT shareNo FROM shareholder_numbers WHERE userId = ? LIMIT 1', [input.userId]
