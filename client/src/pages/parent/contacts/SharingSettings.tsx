@@ -61,6 +61,8 @@ export default function SharingSettings() {
   // 授权确认弹窗状态
   const [showAuthorizeDialog, setShowAuthorizeDialog] = useState(false);
   const [pendingAuthorize, setPendingAuthorize] = useState<{ connectionId: number; receiverId: number; receiverName: string; isCurrentlyAuthorized: boolean } | null>(null);
+  // 聚合介绍二维码弹窗状态
+  const [showAggregateQrDialog, setShowAggregateQrDialog] = useState(false);
   
   // 无限加载状态
   const [myVisibleCount, setMyVisibleCount] = useState(BATCH_SIZE);
@@ -90,6 +92,11 @@ export default function SharingSettings() {
   const { data: introduceQrData } = trpc.sharing.getIntroduceQrCode.useQuery(
     { connectionId: introduceConnectionId! },
     { enabled: showIntroduceQrDialog && introduceConnectionId !== null }
+  );
+  // 获取聚合介绍二维码
+  const { data: aggregateQrData } = trpc.sharing.getAggregateIntroduceQrCode.useQuery(
+    undefined,
+    { enabled: showAggregateQrDialog }
   );
 
   // 标记共享通知为已读
@@ -128,6 +135,21 @@ export default function SharingSettings() {
     },
   });
 
+  // 扫聚合介绍二维码
+  const addByAggregateIntroduceQrCode = trpc.sharing.addByAggregateIntroduceQrCode.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message || '添加成功！');
+      setShowScanDialog(false);
+      utils.sharing.listMyConnections.invalidate();
+      utils.sharing.listSharedToMe.invalidate();
+      stopScanner();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+      stopScanner();
+      setShowScanDialog(false);
+    },
+  });
   // 通过扫码添加介绍连接（介绍二维码）
   const addByIntroduceQrCode = trpc.sharing.addByIntroduceQrCode.useMutation({
     onSuccess: (data) => {
@@ -181,7 +203,9 @@ export default function SharingSettings() {
           // 判断二维码类型
           try {
             const parsed = JSON.parse(decodedText);
-            if (parsed.type === 'sharing_introduce') {
+            if (parsed.type === 'sharing_introduce_all') {
+              addByAggregateIntroduceQrCode.mutate({ qrContent: decodedText });
+            } else if (parsed.type === 'sharing_introduce') {
               addByIntroduceQrCode.mutate({ qrContent: decodedText });
             } else {
               addByQrCode.mutate({ qrContent: decodedText });
@@ -389,6 +413,16 @@ export default function SharingSettings() {
           </div>
           {activeTab === 'my' && (
             <div className="flex items-center gap-2">
+              {/* 聚合介绍二维码 */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-purple-600"
+                onClick={() => setShowAggregateQrDialog(true)}
+                title="聚合介绍二维码"
+              >
+                <Users className="h-5 w-5" />
+              </Button>
               {/* 我的二维码 */}
               <Button
                 variant="ghost"
@@ -1104,6 +1138,55 @@ export default function SharingSettings() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowIntroduceQrDialog(false)} className="w-full">
+              关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 聚合介绍二维码弹窗 */}
+      <Dialog open={showAggregateQrDialog} onOpenChange={setShowAggregateQrDialog}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-purple-600" />
+              聚合介绍二维码
+            </DialogTitle>
+            <DialogDescription>
+              对方扫码后，自动添加所有已授权给你的人，并订阅未来新增自动同步
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-2">
+            {aggregateQrData ? (
+              <>
+                <div className="w-full flex items-center justify-center gap-2 py-1">
+                  <span className="text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-700">
+                    已授权 {aggregateQrData.authorizedCount} 人可介绍
+                  </span>
+                </div>
+                <div className="p-3 bg-white rounded-xl shadow-sm border border-gray-100">
+                  <QRCodeSVG
+                    value={aggregateQrData.qrContent}
+                    size={200}
+                    bgColor="#ffffff"
+                    fgColor="#222222"
+                    level="M"
+                    includeMargin={false}
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-gray-800">{aggregateQrData.introducerName} 的人脉圈</p>
+                  <p className="text-sm text-gray-500">扫码后自动添加并订阅后续新增</p>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-[200px]">
+                <p className="text-sm text-gray-400">加载中...</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAggregateQrDialog(false)} className="w-full">
               关闭
             </Button>
           </DialogFooter>
