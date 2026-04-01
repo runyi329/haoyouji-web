@@ -544,7 +544,7 @@ export const equityRouter = router({
         'SELECT COUNT(*) as cnt FROM personal_contact_tags WHERE parentUserId=?', [input.userId]
       ) as any;
       const [referralRows2] = await (db as any).execute(
-        `SELECT COUNT(*) as cnt FROM referral_records WHERE referrerId=? AND status='approved'`, [input.userId]
+        `SELECT COUNT(*) as cnt FROM users WHERE invited_by_user_id=?`, [input.userId]
       ) as any;
       const contactCount2 = Number((contactRows2 as any[])[0]?.cnt ?? 0);
       const tagCount2 = Number((normalTagRows2 as any[])[0]?.cnt ?? 0) + Number((personalTagRows2 as any[])[0]?.cnt ?? 0);
