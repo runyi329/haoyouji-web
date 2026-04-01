@@ -222,6 +222,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { 
   );
   const profitPct = stats?.profitRightPct ?? 0;
   const rawLowest = stats?.allTimeLow ? Number(stats.allTimeLow) : null;
+  const lastScanPrice = stats?.lastScanPrice ? Number(stats.lastScanPrice) : null;
   const buyPrice = order.buy_price ? Number(order.buy_price) : null;
   // 最低价：如果扫描到的最低价比买入价更低，就显示最低价；否则显示买入价
   const displayLowest = rawLowest && buyPrice && rawLowest < buyPrice ? rawLowest : buyPrice;
@@ -272,15 +273,37 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { 
       {/* 下半：收益分成 */}
       <div className="flex-1 flex flex-col justify-start pt-2">
         <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>收益分成</div>
-        <div className="flex items-baseline gap-0.5">
-          <span
-            className="text-2xl font-bold tabular-nums leading-tight"
-            style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-          >
-            {profitPct.toFixed(2)}
-          </span>
-          <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
-        </div>
+        {(() => {
+          // 当扫描价 > 买入价时，计算盈利金额并突出显示
+          const isProfit = lastScanPrice && buyPrice && lastScanPrice > buyPrice && profitPct > 0;
+          const profitU = isProfit ? (lastScanPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
+          if (isProfit) {
+            return (
+              <div className="flex items-baseline gap-1 flex-wrap">
+                <span
+                  className="text-xl font-bold tabular-nums leading-tight"
+                  style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                >
+                  +{profitU.toFixed(2)}
+                </span>
+                <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                <span className="text-[11px] font-medium" style={{ color: '#9CA3AF' }}>{profitPct.toFixed(2)}%</span>
+              </div>
+            );
+          }
+          return (
+            <div className="flex items-baseline gap-0.5">
+              <span
+                className="text-2xl font-bold tabular-nums leading-tight"
+                style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+              >
+                {profitPct.toFixed(2)}
+              </span>
+              <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
+            </div>
+          );
+        })()}
+        
         <div className="flex items-center justify-between mt-0.5 text-xs">
           <span className="text-gray-400">最低价格</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>
