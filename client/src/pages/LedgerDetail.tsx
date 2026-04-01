@@ -31,9 +31,7 @@ function useTotalSharesWithDividend(shares: any[], filterType?: string) {
     const filtered = filterType ? shares.filter((s: any) => s.shareType === filterType) : shares;
     for (const s of filtered) {
       const base = Number(s.shareCount) || 0;
-      // 增量权重：每笔股票发放时快照的权重，默认1.0
-      const w = Number(s.weight ?? 1.0);
-      // 先计算这笔的股息
+      // 先计算这笔的股息（不乘快照权重，卡片只显示原始股本+股息）
       let dividend = 0;
       if (base > 0 && s.grantDate) {
         const d = new Date(s.grantDate);
@@ -46,8 +44,8 @@ function useTotalSharesWithDividend(shares: any[], filterType?: string) {
           dividend = perSecond * elapsedSeconds;
         }
       }
-      // 公式：（股本 + 股息）× 该笔权重
-      total += (base + dividend) * w;
+      // 公式：股本 + 股息（权重只在顶部总计股权处统一乘）
+      total += base + dividend;
     }
     return total;
   }, [shares, filterType]);
