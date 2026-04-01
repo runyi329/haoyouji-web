@@ -279,23 +279,16 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { 
           const profitU = isProfit ? (lastScanPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
           if (isProfit) {
             return (
-              <>
-                {/* 盈利金额：红色大字 */}
-                <div className="flex items-baseline gap-0.5 mb-0.5">
-                  <span
-                    className="text-xl font-bold tabular-nums leading-tight"
-                    style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-                  >
-                    +{profitU.toFixed(2)}
-                  </span>
-                  <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
-                </div>
-                {/* 收益分成百分比：与最低价格同格式 */}
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400">收益分成比</span>
-                  <span className="font-medium" style={{ color: '#4B5563' }}>{profitPct.toFixed(2)}%</span>
-                </div>
-              </>
+              <div className="flex items-baseline gap-1">
+                <span
+                  className="text-xl font-bold tabular-nums leading-tight"
+                  style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                >
+                  +{profitU.toFixed(2)}
+                </span>
+                <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                <span className="font-medium" style={{ color: '#4B5563', fontSize: '12px' }}>{profitPct.toFixed(2)}%</span>
+              </div>
             );
           }
           return (
