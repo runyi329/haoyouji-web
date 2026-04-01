@@ -536,14 +536,18 @@ export const equityRouter = router({
       const [contactRows2] = await (db as any).execute(
         'SELECT COUNT(*) as cnt FROM contacts WHERE parentUserId=?', [input.userId]
       ) as any;
-      const [tagRows2] = await (db as any).execute(
-        'SELECT COUNT(*) as cnt FROM contact_tags WHERE userId=?', [input.userId]
+      const [normalTagRows2] = await (db as any).execute(
+        `SELECT COUNT(ctr.id) as cnt FROM contact_tag_relations ctr JOIN contacts c ON ctr.contactId = c.id WHERE c.parentUserId=?`,
+        [input.userId]
+      ) as any;
+      const [personalTagRows2] = await (db as any).execute(
+        'SELECT COUNT(*) as cnt FROM personal_contact_tags WHERE parentUserId=?', [input.userId]
       ) as any;
       const [referralRows2] = await (db as any).execute(
         `SELECT COUNT(*) as cnt FROM referral_records WHERE referrerId=? AND status='approved'`, [input.userId]
       ) as any;
       const contactCount2 = Number((contactRows2 as any[])[0]?.cnt ?? 0);
-      const tagCount2 = Number((tagRows2 as any[])[0]?.cnt ?? 0);
+      const tagCount2 = Number((normalTagRows2 as any[])[0]?.cnt ?? 0) + Number((personalTagRows2 as any[])[0]?.cnt ?? 0);
       const referralCount2 = Number((referralRows2 as any[])[0]?.cnt ?? 0);
       const networkBonus2 = Math.min(contactCount2 * 0.01, 1.0);
       const tagBonus2 = Math.min(Math.floor(tagCount2 / 10) * 0.01, 1.0);
