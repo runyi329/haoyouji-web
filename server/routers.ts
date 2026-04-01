@@ -1478,6 +1478,46 @@ export const appRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "无权使用一键登录功能" });
       }),
     
+    // 超级视角返回：允许当前用户切换回指定的超管账户
+    // 通过 originalUserId + 验证目标用户是 super_admin 来保证安全
+    superViewReturn: protectedProcedure
+      .input(z.object({
+        originalUserId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const targetUser = await db.getUserById(input.originalUserId);
+        if (!targetUser) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+        }
+        // 只允许返回到超管账户
+        if (targetUser.role !== "super_admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "目标账户不是超级管理员" });
+        }
+        
+        const { sdk } = await import("./_core/sdk");
+        const sessionToken = await sdk.createSessionToken(targetUser.id.toString(), {
+          name: targetUser.name || targetUser.username || "",
+          expiresInMs: 24 * 60 * 60 * 1000,
+        });
+        
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+          ...cookieOptions,
+          maxAge: 24 * 60 * 60 * 1000,
+        });
+        
+        return { 
+          success: true,
+          sessionToken,
+          user: {
+            id: targetUser.id,
+            username: targetUser.username,
+            name: targetUser.name,
+            role: targetUser.role,
+          },
+        };
+      }),
+
     // 获取当前用户的功能权限
     getMyFeaturePermissions: protectedProcedure.query(async ({ ctx }) => {
       const userId = ctx.user.id;

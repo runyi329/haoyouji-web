@@ -19,9 +19,13 @@ export function SuperViewBanner() {
 
   if (!originalUser) return null;
 
-  const switchBackMutation = trpc.auth.quickLogin.useMutation({
-    onSuccess: () => {
+  // 使用专门的 superViewReturn 接口，不受角色限制，只验证目标是超管
+  const switchBackMutation = trpc.auth.superViewReturn.useMutation({
+    onSuccess: (data) => {
       try {
+        if (data.sessionToken) {
+          localStorage.setItem("auth-token", data.sessionToken);
+        }
         localStorage.removeItem("super_admin_original_user");
         localStorage.removeItem("manus-runtime-user-info");
       } catch {}
@@ -35,7 +39,7 @@ export function SuperViewBanner() {
 
   const handleReturn = () => {
     if (!originalUser) return;
-    switchBackMutation.mutate({ targetUserId: originalUser.id });
+    switchBackMutation.mutate({ originalUserId: originalUser.id });
   };
 
   return (
