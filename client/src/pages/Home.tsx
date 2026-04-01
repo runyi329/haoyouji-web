@@ -34,16 +34,33 @@ import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
 
 // 翻牌卡片单个数字组件
+// 原理：数字元素高度固定为 h，用 overflow:hidden 裁切上半 / 下半
+// 上半容器：高度 h/2，数字元素绝对定位 top:0，显示上半
+// 下半容器：高度 h/2，数字元素绝对定位 top:-(h/2)，显示下半
 function FlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDigit: string; flip: boolean; size: number }) {
   const w = Math.round(size * 0.62);
   const h = size;
-  const fs = Math.round(size * 0.78);
-  const bg = '#fff';
-  const bgLower = '#f5f5f5';
-  const lineColor = 'rgba(0,0,0,0.08)';
+  const fs = Math.round(size * 0.82);
+
+  // 数字元素：完整高度 h，居中显示
+  const numStyle = (top: number): React.CSSProperties => ({
+    position: 'absolute',
+    top: top + 'px',
+    left: 0,
+    right: 0,
+    height: h + 'px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: fs + 'px',
+    fontWeight: 900,
+    color: '#D32F2F',
+    lineHeight: 1,
+    userSelect: 'none',
+  });
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block', width: w + 'px', height: h + 'px', perspective: '600px', borderRadius: '6px', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', display: 'inline-block', width: w + 'px', height: h + 'px', perspective: '600px' }}>
       <style>{`
         @keyframes fd-flipTop {
           0%   { transform: rotateX(0deg); }
@@ -57,51 +74,35 @@ function FlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDigit:
         .fd-anim-bottom { animation: fd-flipBottom 0.22s ease-out 0.22s forwards; }
       `}</style>
 
-      {/* ── 静态上半：当前数字上半部分 ── */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
-        background: bg, borderRadius: '6px 6px 0 0', overflow: 'hidden',
-        boxShadow: `inset 0 -1px 0 ${lineColor}` }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-          height: h + 'px', fontSize: fs + 'px', fontWeight: 900, color: '#D32F2F',
-          lineHeight: 1, paddingBottom: '2px' }}>
-          {digit}
-        </div>
+      {/* 静态上半：当前数字 */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
+        background: '#fff', borderRadius: '6px 6px 0 0', overflow: 'hidden',
+        boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.07)' }}>
+        <div style={numStyle(0)}>{digit}</div>
       </div>
 
-      {/* ── 静态下半：当前数字下半部分 ── */}
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%',
-        background: bgLower, borderRadius: '0 0 6px 6px', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-          height: h + 'px', fontSize: fs + 'px', fontWeight: 900, color: '#D32F2F',
-          lineHeight: 1, marginTop: -(h / 2) + 'px', paddingTop: '2px' }}>
-          {digit}
-        </div>
+      {/* 静态下半：当前数字 */}
+      <div style={{ position: 'absolute', top: h / 2 + 'px', left: 0, right: 0, height: h / 2 + 'px',
+        background: '#f4f4f4', borderRadius: '0 0 6px 6px', overflow: 'hidden' }}>
+        <div style={numStyle(-(h / 2))}>{digit}</div>
       </div>
 
-      {/* ── 动画上半：旧数字翻走 ── */}
+      {/* 动画上半：旧数字翻走 */}
       {flip && (
-        <div className="fd-anim-top" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
-          background: bg, borderRadius: '6px 6px 0 0', overflow: 'hidden',
+        <div className="fd-anim-top" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
+          background: '#fff', borderRadius: '6px 6px 0 0', overflow: 'hidden',
           transformOrigin: 'bottom center', zIndex: 10,
-          boxShadow: `inset 0 -1px 0 ${lineColor}` }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-            height: h + 'px', fontSize: fs + 'px', fontWeight: 900, color: '#D32F2F',
-            lineHeight: 1, paddingBottom: '2px' }}>
-            {prevDigit}
-          </div>
+          boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.07)' }}>
+          <div style={numStyle(0)}>{prevDigit}</div>
         </div>
       )}
 
-      {/* ── 动画下半：新数字翻入 ── */}
+      {/* 动画下半：新数字翻入 */}
       {flip && (
-        <div className="fd-anim-bottom" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%',
-          background: bgLower, borderRadius: '0 0 6px 6px', overflow: 'hidden',
+        <div className="fd-anim-bottom" style={{ position: 'absolute', top: h / 2 + 'px', left: 0, right: 0, height: h / 2 + 'px',
+          background: '#f4f4f4', borderRadius: '0 0 6px 6px', overflow: 'hidden',
           transformOrigin: 'top center', zIndex: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-            height: h + 'px', fontSize: fs + 'px', fontWeight: 900, color: '#D32F2F',
-            lineHeight: 1, marginTop: -(h / 2) + 'px', paddingTop: '2px' }}>
-            {digit}
-          </div>
+          <div style={numStyle(-(h / 2))}>{digit}</div>
         </div>
       )}
     </div>
