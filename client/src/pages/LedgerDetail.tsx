@@ -3474,7 +3474,7 @@ export default function LedgerDetail() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="text-base font-bold" style={{ color: '#1A0A00' }}>权重详情</div>
-                <div className="text-[11px] mt-0.5" style={{ color: 'rgba(58,20,0,0.5)' }}>实际股权数 = 原始张数 × 资源权重 × 资金权重</div>
+                  <div className="text-[11px] mt-0.5" style={{ color: 'rgba(58,20,0,0.5)' }}>实际股权数 = 原始张数 × 总权重</div>
               </div>
               <button onClick={() => setShowWeightDetail(false)} style={{ background: 'rgba(58,20,0,0.08)', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: 'rgba(58,20,0,0.6)', fontSize: 14 }}>×</button>
             </div>
@@ -3595,7 +3595,7 @@ export default function LedgerDetail() {
                 <div className="rounded-2xl px-4 py-3 flex justify-between items-center" style={{ background: 'rgba(201,168,76,0.18)', border: '1px solid rgba(201,168,76,0.4)' }}>
                   <div>
                     <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>总权重</div>
-                    <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.55)' }}>{weightDetail.resourceWeight.toFixed(2)} × {weightDetail.capitalWeight.toFixed(2)}</div>
+                    <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.55)' }}>{weightDetail.resourceWeight.toFixed(2)} + {weightDetail.capitalWeight.toFixed(2)} - 1.0</div>
                   </div>
                   <span className="text-xl font-bold" style={{ color: '#C9A84C' }}>{weightDetail.totalWeight.toFixed(2)}</span>
                 </div>

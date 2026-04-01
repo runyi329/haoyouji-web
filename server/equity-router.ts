@@ -341,7 +341,7 @@ export const equityRouter = router({
       }
       const autoBonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
       const cw = Math.round((1.0 + autoBonus) * 10000) / 10000;
-      const snapshotWeight = Math.round(rw * cw * 10000) / 10000;
+      const snapshotWeight = Math.round((rw + cw - 1.0) * 10000) / 10000;
       // 生成唯一股权编号 share_code（格式：ES-{ledgerId:02d}-{年份}-{6位随机数字}）
       const year = new Date().getFullYear();
       const randDigits = Math.floor(100000 + Math.random() * 900000).toString();
@@ -420,7 +420,7 @@ export const equityRouter = router({
       if (!member || !['owner','admin'].includes(member.role)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可操作' });
       }
-      const newWeight = Math.round(input.resourceWeight * input.capitalWeight * 10000) / 10000;
+      const newWeight = Math.round((input.resourceWeight + input.capitalWeight - 1.0) * 10000) / 10000;
       await (conn as any).execute(
         `UPDATE equity_shares SET resource_weight=?, capital_weight=?, weight=? WHERE id=? AND ledgerId=?`,
         [input.resourceWeight, input.capitalWeight, newWeight, input.id, input.ledgerId]
@@ -574,7 +574,7 @@ export const equityRouter = router({
       return {
         resourceWeight: r,
         capitalWeight: c,
-        totalWeight: Math.round(r * c * 10000) / 10000,
+        totalWeight: Math.round((r + c - 1.0) * 10000) / 10000,
       };
     }),
 
@@ -644,7 +644,7 @@ export const equityRouter = router({
       const savedCapitalWeight = weightRow ? Number(weightRow.capital_weight) : null;
       const finalCapitalWeight = savedCapitalWeight ?? capitalWeight;
       const finalResourceWeight = savedResourceWeight ?? resourceWeight;
-      const totalWeight = Math.round(finalResourceWeight * finalCapitalWeight * 10000) / 10000;
+      const totalWeight = Math.round((finalResourceWeight + finalCapitalWeight - 1.0) * 10000) / 10000;
       return {
         // 资源权重详情
         contactCount,
@@ -756,7 +756,7 @@ export const equityRouter = router({
           avatar: m.avatar ?? null,
           resourceWeight: r,
           capitalWeight: c,          // 实时计算，不再读静态表
-          totalWeight: Math.round(r * c * 10000) / 10000,
+          totalWeight: Math.round((r + c - 1.0) * 10000) / 10000,
           capitalAmount,
           capitalRatio: Math.round(capitalRatio * 10000) / 10000,
           shareNo,
