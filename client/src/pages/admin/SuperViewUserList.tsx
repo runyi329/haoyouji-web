@@ -1,12 +1,18 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Search, User, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 
 export default function SuperViewUserList() {
   const [, navigate] = useLocation();
   const [keyword, setKeyword] = useState("");
+  const [switching, setSwitching] = useState<number | null>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data: users, isLoading } = trpc.admin.getUsers.useQuery();
 
@@ -19,6 +25,39 @@ export default function SuperViewUserList() {
     );
   });
 
+  const switchUserMutation = trpc.auth.quickLogin.useMutation({
+    onSuccess: (data) => {
+      try {
+        if (data.sessionToken) {
+          localStorage.setItem("auth-token", data.sessionToken);
+        }
+        localStorage.removeItem("manus-runtime-user-info");
+      } catch {}
+      queryClient.clear();
+      // 跳转到首页
+      window.location.href = "/";
+    },
+    onError: (error) => {
+      setSwitching(null);
+      toast.error(error.message || "切换失败");
+    },
+  });
+
+  const handleSwitchUser = (targetUser: any) => {
+    if (!user) return;
+    setSwitching(targetUser.id);
+
+    // 保存当前超管信息到 localStorage，供 SuperViewBanner 使用
+    try {
+      localStorage.setItem(
+        "super_admin_original_user",
+        JSON.stringify({ id: user.id, name: user.name, username: user.username })
+      );
+    } catch {}
+
+    switchUserMutation.mutate({ targetUserId: targetUser.id });
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-[#F5F5F5]">
       {/* 顶部导航 */}
@@ -28,7 +67,7 @@ export default function SuperViewUserList() {
         </button>
         <div className="flex-1">
           <div className="text-base font-bold">超级视角</div>
-          <div className="text-xs text-red-200">选择用户查看其人脉</div>
+          <div className="text-xs text-red-200">选择用户，以其身份进入账户</div>
         </div>
       </div>
 
@@ -60,11 +99,16 @@ export default function SuperViewUserList() {
           filtered.map((u: any) => (
             <div
               key={u.id}
-              onClick={() => navigate(`/admin/super-view/contacts?userId=${u.id}`)}
+              onClick={() => !switching && handleSwitchUser(u)}
               className="bg-white rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm cursor-pointer active:bg-gray-50"
+              style={{ opacity: switching && switching !== u.id ? 0.5 : 1 }}
             >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center flex-shrink-0">
-                <User className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                {u.avatar ? (
+                  <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-5 h-5 text-white" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-sm text-gray-900">{u.name || u.username}</div>
@@ -77,7 +121,11 @@ export default function SuperViewUserList() {
                 }`}>
                   {u.role === 'super_admin' ? '超管' : u.role === 'parent' ? '家长' : '宝宝'}
                 </span>
-                <ChevronRight className="w-4 h-4 text-gray-300" />
+                {switching === u.id ? (
+                  <div className="w-4 h-4 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                )}
               </div>
             </div>
           ))
