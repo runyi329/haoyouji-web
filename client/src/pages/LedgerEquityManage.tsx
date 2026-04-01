@@ -394,27 +394,15 @@ export default function LedgerEquityManage() {
                   </div>
                 </div>
 
-                {/* 来源信息（资源股专属） */}
-                {record.shareType === '资源股' && (record.sourceNickname || record.source_user_id) && (
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '8px 10px', marginBottom: '6px' }}>
-                    <div style={{ fontSize: '10px', color: '#15803d', fontWeight: 600, marginBottom: '3px' }}>市场贡献来源</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '12px', color: '#166534' }}>
-                        {record.sourceNickname || `用户#${record.source_user_id}`} 购入资金股
-                      </span>
-                      {record.source_amount && (
-                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#15803d' }}>
-                          {Number(record.source_amount).toLocaleString()} 张 × 30%
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 备注 */}
-                {record.reason && (
+                {/* 备注（含来源信息整合） */}
+                {(record.reason || (record.shareType === '资源股' && (record.sourceNickname || record.source_user_id))) && (
                   <div style={{ fontSize: '11px', color: '#6b7280', lineHeight: '1.5', background: '#fafafa', borderRadius: '6px', padding: '5px 8px' }}>
                     {record.reason}
+                    {record.shareType === '资源股' && (record.sourceNickname || record.source_user_id) && (
+                      <span style={{ color: '#15803d' }}>
+                        {record.reason ? '　·　' : ''}来源：{record.sourceNickname || `用户#${record.source_user_id}`}{record.source_amount ? ` 购入 ${Number(record.source_amount).toLocaleString()} 张` : ''}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
