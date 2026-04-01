@@ -555,6 +555,15 @@ export default function Home() {
                 <UserCircle className="w-4 h-4 mr-2" />
                 <span>个人中心</span>
               </DropdownMenuItem>
+              {user?.role === 'super_admin' && (
+                <DropdownMenuItem
+                  onClick={() => { setProfileMenuOpen(false); navigate("/admin/super-view"); }}
+                  className="flex items-center cursor-pointer text-[#D32F2F]"
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  <span>超级视角</span>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-[#D32F2F]">
                 <LogOut className="w-4 h-4 mr-2" />
                 <span>退出登录</span>

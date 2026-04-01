@@ -1901,6 +1901,38 @@ export const appRouter = router({
         await dbPermissions.setUserPermissions(input.userId, input.permissions);
         return { success: true };
       }),
+
+    // 超级视角：查看指定用户的人脉列表
+    getUserContacts: protectedProcedure
+      .input(z.object({
+        targetUserId: z.number(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(50),
+        searchQuery: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只有超级管理员可以访问' });
+        }
+        const targetUser = await db.getUserById(input.targetUserId);
+        if (!targetUser) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '用户不存在' });
+        }
+        const paginatedResult = await dbContacts.getContactsByParentPaginated(
+          input.targetUserId,
+          input.searchQuery,
+          input.page,
+          input.pageSize
+        );
+        return {
+          targetUser: { id: targetUser.id, name: targetUser.name, username: targetUser.username, avatar: (targetUser as any).avatar },
+          total: paginatedResult.total,
+          contacts: paginatedResult.contacts,
+          hasMore: paginatedResult.hasMore ?? false,
+          page: paginatedResult.page,
+          pageSize: paginatedResult.pageSize,
+        };
+      }),
   }),
 
   // ==================== 功能权限检查 ====================
