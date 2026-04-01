@@ -177,7 +177,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                   <Wine className="w-7 h-7 text-[#C9A84C]" />
                 ) : isJiang ? (
                   <>
-                    <Cpu className="w-5 h-5 text-white" />
+                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/idealight_icon.png" className="w-8 h-8 object-contain" alt="润仪" />
                     <span className="text-[10px] font-bold leading-none mt-0.5 text-white">润仪</span>
                   </>
                 ) : (
