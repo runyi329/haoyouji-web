@@ -162,6 +162,8 @@ const WalletAddressManager = lazy(() => import("./pages/admin/WalletAddressManag
 const RechargeManualConfirm = lazy(() => import("./pages/admin/RechargeManualConfirm"));
 const RechargeUnmatched = lazy(() => import("./pages/admin/RechargeUnmatched"));
 const RechargeOrders = lazy(() => import("./pages/admin/RechargeOrders"));
+const SuperViewUserList = lazy(() => import("./pages/admin/SuperViewUserList"));
+const SuperViewContacts = lazy(() => import("./pages/admin/SuperViewContacts"));
 const AssetReport = lazy(() => import("./pages/AssetReport"));
 const ArticleDetail = lazy(() => import("./pages/ArticleDetail"));
 const PromotionRules = lazy(() => import("./pages/PromotionRules"));
@@ -311,6 +313,8 @@ function Router() {
         <Route path="/admin/recharge/unmatched" component={RechargeUnmatched} />
         <Route path="/admin/recharge/orders" component={RechargeOrders} />
         <Route path="/admin/migration" component={lazy(() => import("./pages/AdminMigration"))} />
+        <Route path="/admin/super-view" component={SuperViewUserList} />
+        <Route path="/admin/super-view/contacts" component={SuperViewContacts} />
 
         {/* 商品商店 */}
         <Route path="/products" component={ProductStore} />
