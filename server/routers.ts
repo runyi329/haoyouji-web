@@ -6958,6 +6958,47 @@ export const appRouter = router({
         }));
       }),
   }),
+  // 全网统计
+  stats: router({
+    // 全网人脉总数（所有用户的人脉不去重加总）
+    getNetworkTotal: publicProcedure
+      .query(async () => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return { total: 0, userCount: 0, contactCount: 0, sharingCount: 0 };
+        try {
+          // 所有用户自己的联系人总数
+          const [ownRows] = await dbConn.execute(
+            `SELECT COUNT(*) AS cnt FROM contacts`
+          ) as any;
+          const contactCount = Number((ownRows as any[])[0]?.cnt || 0);
+          // 所有用户通过共享获得的人脉总数（每条共享连接对应的联系人数之和）
+          const [sharedRows] = await dbConn.execute(
+            `SELECT IFNULL(SUM(cnt), 0) AS total FROM (
+              SELECT csc.receiverId, COUNT(DISTINCT c.id) AS cnt
+              FROM contact_sharing_connections csc
+              JOIN contacts c ON c.parentUserId = csc.sharerId
+              WHERE csc.status = 'active'
+              GROUP BY csc.receiverId
+            ) t`
+          ) as any;
+          const sharingCount = Number((sharedRows as any[])[0]?.total || 0);
+          // 用户总数
+          const [userRows] = await dbConn.execute(
+            `SELECT COUNT(*) AS cnt FROM users`
+          ) as any;
+          const userCount = Number((userRows as any[])[0]?.cnt || 0);
+          return {
+            total: contactCount + sharingCount,
+            userCount,
+            contactCount,
+            sharingCount,
+          };
+        } catch (e) {
+          console.error('[stats.getNetworkTotal] error:', e);
+          return { total: 0, userCount: 0, contactCount: 0, sharingCount: 0 };
+        }
+      }),
+  }),
   // 锦炼计数系统
   exercise: router({
     // 获取锻炼项目列表

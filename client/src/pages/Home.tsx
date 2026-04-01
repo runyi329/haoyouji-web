@@ -113,6 +113,12 @@ export default function Home() {
   
   // 获取邀请统计
   const { data: inviteInfo } = trpc.invite.getMyInviteInfo.useQuery();
+
+  // 获取全网人脉总数
+  const { data: networkTotal } = trpc.stats.getNetworkTotal.useQuery(undefined, {
+    staleTime: 60000,
+    refetchInterval: 120000,
+  });
   
   // 获取未读共享通知数量
   const { data: unreadSharingData } = trpc.sharing.getUnreadCount.useQuery(undefined, {
@@ -477,6 +483,101 @@ export default function Home() {
 
 
 
+
+      {/* 全网人脉总数 - 三种风格展示 */}
+      <div className="px-4 mt-4 space-y-3">
+
+        {/* 风格A：数字大屏风格 */}
+        <div className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}>
+          <div className="px-5 pt-4 pb-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs tracking-widest uppercase" style={{ color: '#a0a8c0' }}>NETWORK TOTAL</span>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.08)', color: '#7eb8f7' }}>实时</span>
+            </div>
+          </div>
+          <div className="px-5 pb-2">
+            <div className="flex items-end gap-2">
+              <span className="font-bold tabular-nums" style={{ fontSize: 'clamp(2rem, 10vw, 3rem)', color: '#ffffff', letterSpacing: '-1px', textShadow: '0 0 20px rgba(126,184,247,0.6)' }}>
+                {(networkTotal?.total ?? 0).toLocaleString('zh-CN')}
+              </span>
+              <span className="mb-2 text-sm" style={{ color: '#7eb8f7' }}>人次</span>
+            </div>
+            <div className="text-xs mb-3" style={{ color: '#6b7a99' }}>全网人脉总数（含共享）</div>
+            <div className="flex gap-4 pt-3 border-t" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
+              <div>
+                <div className="text-xs" style={{ color: '#6b7a99' }}>自有人脉</div>
+                <div className="text-sm font-semibold" style={{ color: '#a0c4ff' }}>{(networkTotal?.contactCount ?? 0).toLocaleString('zh-CN')}</div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: '#6b7a99' }}>共享人脉</div>
+                <div className="text-sm font-semibold" style={{ color: '#a0c4ff' }}>{(networkTotal?.sharingCount ?? 0).toLocaleString('zh-CN')}</div>
+              </div>
+              <div>
+                <div className="text-xs" style={{ color: '#6b7a99' }}>用户数</div>
+                <div className="text-sm font-semibold" style={{ color: '#a0c4ff' }}>{networkTotal?.userCount ?? 0}</div>
+              </div>
+            </div>
+          </div>
+          <div className="h-1" style={{ background: 'linear-gradient(90deg, #7eb8f7, #a78bfa, #7eb8f7)', opacity: 0.6 }} />
+        </div>
+
+        {/* 风格B：简约高端金融面板风格 */}
+        <div className="bg-white rounded-2xl px-5 py-4" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-gray-400 tracking-wide">全网人脉总数</span>
+            <span className="text-xs text-gray-300">含共享</span>
+          </div>
+          <div className="flex items-baseline gap-1 mb-3">
+            <span className="font-black tabular-nums" style={{ fontSize: 'clamp(2rem, 10vw, 2.8rem)', color: '#D32F2F', letterSpacing: '-1px' }}>
+              {(networkTotal?.total ?? 0).toLocaleString('zh-CN')}
+            </span>
+            <span className="text-base font-medium text-gray-400">人次</span>
+          </div>
+          <div className="flex gap-0 divide-x divide-gray-100">
+            <div className="flex-1 pr-3">
+              <div className="text-xs text-gray-400 mb-0.5">自有人脉</div>
+              <div className="text-sm font-bold text-gray-800">{(networkTotal?.contactCount ?? 0).toLocaleString('zh-CN')}</div>
+            </div>
+            <div className="flex-1 px-3">
+              <div className="text-xs text-gray-400 mb-0.5">共享人脉</div>
+              <div className="text-sm font-bold text-gray-800">{(networkTotal?.sharingCount ?? 0).toLocaleString('zh-CN')}</div>
+            </div>
+            <div className="flex-1 pl-3">
+              <div className="text-xs text-gray-400 mb-0.5">平台用户</div>
+              <div className="text-sm font-bold text-gray-800">{networkTotal?.userCount ?? 0}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* 风格C：渐变卡片风格 */}
+        <div className="rounded-2xl px-5 py-4" style={{ background: 'linear-gradient(135deg, #D32F2F 0%, #E64A19 60%, #FF8F00 100%)', boxShadow: '0 4px 16px rgba(211,47,47,0.3)' }}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium tracking-wide" style={{ color: 'rgba(255,255,255,0.75)' }}>全网人脉总数</span>
+            <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(255,255,255,0.2)', color: 'white' }}>含共享</span>
+          </div>
+          <div className="flex items-baseline gap-1 mb-3">
+            <span className="font-black tabular-nums text-white" style={{ fontSize: 'clamp(2rem, 10vw, 2.8rem)', letterSpacing: '-1px' }}>
+              {(networkTotal?.total ?? 0).toLocaleString('zh-CN')}
+            </span>
+            <span className="text-base font-medium" style={{ color: 'rgba(255,255,255,0.8)' }}>人次</span>
+          </div>
+          <div className="flex gap-0 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+            <div className="flex-1">
+              <div className="text-xs" style={{ color: 'rgba(255,255,255,0.65)' }}>自有人脉</div>
+              <div className="text-sm font-bold text-white">{(networkTotal?.contactCount ?? 0).toLocaleString('zh-CN')}</div>
+            </div>
+            <div className="flex-1">
+              <div className="text-xs" style={{ color: 'rgba(255,255,255,0.65)' }}>共享人脉</div>
+              <div className="text-sm font-bold text-white">{(networkTotal?.sharingCount ?? 0).toLocaleString('zh-CN')}</div>
+            </div>
+            <div className="flex-1">
+              <div className="text-xs" style={{ color: 'rgba(255,255,255,0.65)' }}>平台用户</div>
+              <div className="text-sm font-bold text-white">{networkTotal?.userCount ?? 0}</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
 
       {/* Bottom Navigation */}
       <BottomNav />
