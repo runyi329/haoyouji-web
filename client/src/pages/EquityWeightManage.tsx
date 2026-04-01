@@ -109,7 +109,8 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
   // 计算已审核通过的推荐数
   const approvedCount = referrals ? referrals.filter(r => r.approvalStatus === 'approved').length : (m.directReferrals ?? 0);
   const referralBonus = approvedCount * 0.1;
-  const autoResourceWeight = networkBonus + tagBonus + referralBonus;
+  // 资源权重基数为 1.0，在此基础上加各项加成
+  const autoResourceWeight = 1.0 + networkBonus + tagBonus + referralBonus;
 
   // savedWeight: 记录上次成功保存到数据库的资源权重值（初始为数据库中的值）
   const [savedWeight, setSavedWeight] = useState<number | null>(m.resourceWeight);

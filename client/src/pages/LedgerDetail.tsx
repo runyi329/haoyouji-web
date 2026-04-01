@@ -3532,7 +3532,7 @@ export default function LedgerDetail() {
                   )}
                   {/* 资源权重公式 */}
                   <div className="mt-3 pt-2 flex items-center gap-1 flex-wrap" style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }}>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>公式：</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>公式：1.0 +</span>
                     <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.networkBonus.toFixed(2)}</span>
                     <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>+</span>
                     <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.tagBonus.toFixed(2)}</span>
