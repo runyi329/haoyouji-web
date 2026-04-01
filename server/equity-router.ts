@@ -532,45 +532,51 @@ export const equityRouter = router({
     .query(async ({ input }) => {
       const db = await (await import('./db')).getDbConnection();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      const [[row]] = await (db as any).execute(
-        'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
+      // 始终实时计算资源权重（加法公式：1.0 + 人脉加成 + 标签加成 + 推荐加成）
+      const [contactRows2] = await (db as any).execute(
+        'SELECT COUNT(*) as cnt FROM contacts WHERE parentUserId=?', [input.userId]
+      ) as any;
+      const [tagRows2] = await (db as any).execute(
+        'SELECT COUNT(*) as cnt FROM contact_tags WHERE userId=?', [input.userId]
+      ) as any;
+      const [referralRows2] = await (db as any).execute(
+        `SELECT COUNT(*) as cnt FROM referral_records WHERE referrerId=? AND status='approved'`, [input.userId]
+      ) as any;
+      const contactCount2 = Number((contactRows2 as any[])[0]?.cnt ?? 0);
+      const tagCount2 = Number((tagRows2 as any[])[0]?.cnt ?? 0);
+      const referralCount2 = Number((referralRows2 as any[])[0]?.cnt ?? 0);
+      const networkBonus2 = Math.min(contactCount2 * 0.01, 1.0);
+      const tagBonus2 = Math.min(Math.floor(tagCount2 / 10) * 0.01, 1.0);
+      const referralBonus2 = Math.min(referralCount2 * 0.1, 1.0);
+      const r = Math.round((1.0 + networkBonus2 + tagBonus2 + referralBonus2) * 10000) / 10000;
+      // 实时计算资金权重
+      const [[snRow]] = await (db as any).execute(
+        'SELECT shareNo FROM shareholder_numbers WHERE userId = ? LIMIT 1',
         [input.userId]
       ) as any;
-      const r = row ? Number(row.resource_weight) : 1.00;
-      // 如果数据库有手动保存的资金权重，直接使用；否则自动计算
-      let c: number;
-      if (row) {
-        c = Number(row.capital_weight);
-      } else {
-        // 没有手动记录，根据股东编号和资金达标系数自动计算资金权重
-        const [[snRow]] = await (db as any).execute(
-          'SELECT shareNo FROM shareholder_numbers WHERE userId = ? LIMIT 1',
-          [input.userId]
-        ) as any;
-        const [[capRow]] = await (db as any).execute(
-          `SELECT COALESCE(SUM(shareCount), 0) AS capitalAmount
-           FROM equity_shares WHERE userId = ? AND shareType = '资金股'`,
-          [input.userId]
-        ) as any;
-        const THRESHOLD_W = 100000;
-        const TIERS_W = 66;
-        const MAX_RANK_W = 660;
-        const MAX_BONUS_W = 1.0;
-        const MIN_BONUS_W = Math.round(MAX_BONUS_W / (TIERS_W - 1) * 10000) / 10000;
-        const stepW = (MAX_BONUS_W - MIN_BONUS_W) / (TIERS_W - 1);
-        const capitalAmount = Number(capRow?.capitalAmount ?? 0);
-        const capitalRatio = Math.min(capitalAmount / THRESHOLD_W, 1.0);
-        let rawBonus = 0;
-        if (snRow?.shareNo) {
-          const rank = parseInt(String(snRow.shareNo), 10);
-          if (!isNaN(rank) && rank <= MAX_RANK_W) {
-            const tier = Math.ceil(rank / 10);
-            rawBonus = Math.round((MAX_BONUS_W - (tier - 1) * stepW) * 10000) / 10000;
-          }
+      const [[capRow]] = await (db as any).execute(
+        `SELECT COALESCE(SUM(shareCount), 0) AS capitalAmount
+         FROM equity_shares WHERE userId = ? AND shareType = '资金股'`,
+        [input.userId]
+      ) as any;
+      const THRESHOLD_W = 100000;
+      const TIERS_W = 66;
+      const MAX_RANK_W = 660;
+      const MAX_BONUS_W = 1.0;
+      const MIN_BONUS_W = Math.round(MAX_BONUS_W / (TIERS_W - 1) * 10000) / 10000;
+      const stepW = (MAX_BONUS_W - MIN_BONUS_W) / (TIERS_W - 1);
+      const capitalAmount2 = Number(capRow?.capitalAmount ?? 0);
+      const capitalRatio2 = Math.min(capitalAmount2 / THRESHOLD_W, 1.0);
+      let rawBonus2 = 0;
+      if (snRow?.shareNo) {
+        const rank = parseInt(String(snRow.shareNo), 10);
+        if (!isNaN(rank) && rank <= MAX_RANK_W) {
+          const tier = Math.ceil(rank / 10);
+          rawBonus2 = Math.round((MAX_BONUS_W - (tier - 1) * stepW) * 10000) / 10000;
         }
-        const autoBonus = Math.round(rawBonus * capitalRatio * 10000) / 10000;
-        c = Math.round((1.0 + autoBonus) * 10000) / 10000;
       }
+      const autoBonus2 = Math.round(rawBonus2 * capitalRatio2 * 10000) / 10000;
+      const c = Math.round((1.0 + autoBonus2) * 10000) / 10000;
       return {
         resourceWeight: r,
         capitalWeight: c,
@@ -718,14 +724,6 @@ export const equityRouter = router({
          ORDER BY lm.createdAt ASC`,
         [input.ledgerId]
       ) as any;
-      // 查资源权重（手动设置部分，仍从 equity_weights 读取）
-      const [weights] = await (db as any).execute(
-        'SELECT user_id, resource_weight FROM equity_weights'
-      ) as any;
-      const rwMap = new Map<number, number>();
-      for (const w of weights) {
-        rwMap.set(Number(w.user_id), Number(w.resource_weight));
-      }
       // 实时计算资金权重（66档等差规则）
       const THRESHOLD_W = 100000;
       const TIERS_W = 66;
@@ -735,7 +733,11 @@ export const equityRouter = router({
       const stepW = (MAX_BONUS_W - MIN_BONUS_W) / (TIERS_W - 1);
       return (members as any[]).map((m: any) => {
         const uid = Number(m.userId);
-        const r = rwMap.get(uid) ?? 1.00;
+        // 实时计算资源权重（加法公式：1.0 + 人脉加成 + 标签加成 + 推荐加成）
+        const networkBonus = Math.min(Number(m.networkCount ?? 0) * 0.01, 1.0);
+        const tagBonus = Math.min(Math.floor(Number(m.tagCount ?? 0) / 10) * 0.01, 1.0);
+        const referralBonus = Math.min(Number(m.directReferrals ?? 0) * 0.1, 1.0);
+        const r = Math.round((1.0 + networkBonus + tagBonus + referralBonus) * 10000) / 10000;
         const capitalAmount = Number(m.capitalAmount ?? 0);
         const capitalRatio = Math.min(capitalAmount / THRESHOLD_W, 1.0);
         // 根据股东编号实时计算入股早晚加成
