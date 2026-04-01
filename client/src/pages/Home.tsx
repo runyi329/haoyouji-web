@@ -34,9 +34,9 @@ import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
 
 // 翻牌卡片单个数字组件
-function FlipDigit({ digit, prevDigit, flip }: { digit: string; prevDigit: string; flip: boolean }) {
+function FlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDigit: string; flip: boolean; size: number }) {
   return (
-    <div className="relative inline-flex flex-col items-center justify-center" style={{ width: '2.2rem', height: '3rem', perspective: '400px' }}>
+    <div className="relative inline-flex flex-col items-center justify-center" style={{ width: size * 0.65 + 'px', height: size + 'px', perspective: '600px' }}>
       <style>{`
         @keyframes flipTop {
           0% { transform: rotateX(0deg); }
@@ -51,20 +51,20 @@ function FlipDigit({ digit, prevDigit, flip }: { digit: string; prevDigit: strin
       `}</style>
       {/* 静态上半 - 当前数字 */}
       <div className="absolute top-0 left-0 right-0 overflow-hidden rounded-t-md" style={{ height: '50%', background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
-        <div className="flex items-end justify-center" style={{ height: '3rem', fontSize: '2rem', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px' }}>
+        <div className="flex items-end justify-center" style={{ height: size + 'px', fontSize: size * 0.72 + 'px', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px' }}>
           {digit}
         </div>
       </div>
       {/* 静态下半 - 当前数字 */}
       <div className="absolute bottom-0 left-0 right-0 overflow-hidden rounded-b-md" style={{ height: '50%', background: '#f9fafb' }}>
-        <div className="flex items-start justify-center" style={{ height: '3rem', fontSize: '2rem', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px', marginTop: '-1.5rem' }}>
+        <div className="flex items-start justify-center" style={{ height: size + 'px', fontSize: size * 0.72 + 'px', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px', marginTop: -(size / 2) + 'px' }}>
           {digit}
         </div>
       </div>
       {/* 翻牌动画 - 上半翻下（旧数字翻走） */}
       {flip && (
         <div className="absolute top-0 left-0 right-0 overflow-hidden rounded-t-md flip-anim-top" style={{ height: '50%', background: '#fff', transformOrigin: 'bottom', zIndex: 10, borderBottom: '1px solid #e5e7eb' }}>
-          <div className="flex items-end justify-center" style={{ height: '3rem', fontSize: '2rem', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px' }}>
+          <div className="flex items-end justify-center" style={{ height: size + 'px', fontSize: size * 0.72 + 'px', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px' }}>
             {prevDigit}
           </div>
         </div>
@@ -72,7 +72,7 @@ function FlipDigit({ digit, prevDigit, flip }: { digit: string; prevDigit: strin
       {/* 翻牌动画 - 下半翻上（新数字翻入） */}
       {flip && (
         <div className="absolute bottom-0 left-0 right-0 overflow-hidden rounded-b-md flip-anim-bottom" style={{ height: '50%', background: '#f9fafb', transformOrigin: 'top', zIndex: 10 }}>
-          <div className="flex items-start justify-center" style={{ height: '3rem', fontSize: '2rem', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px', marginTop: '-1.5rem' }}>
+          <div className="flex items-start justify-center" style={{ height: size + 'px', fontSize: size * 0.72 + 'px', fontWeight: 900, color: '#D32F2F', letterSpacing: '-1px', marginTop: -(size / 2) + 'px' }}>
             {digit}
           </div>
         </div>
@@ -85,6 +85,8 @@ function FlipCounterCard({ total }: { total: number }) {
   const [displayTotal, setDisplayTotal] = useState(0);
   const [prevTotal, setPrevTotal] = useState(0);
   const [flipKey, setFlipKey] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [digitSize, setDigitSize] = useState(64);
 
   useEffect(() => {
     if (total > 0 && total !== displayTotal) {
@@ -93,6 +95,25 @@ function FlipCounterCard({ total }: { total: number }) {
       setFlipKey(k => k + 1);
     }
   }, [total]);
+
+  // 根据容器宽度和数字个数动态计算单个翻牌大小
+  useEffect(() => {
+    const calcSize = () => {
+      if (!containerRef.current) return;
+      const containerW = containerRef.current.clientWidth - 40; // 减去 padding
+      const digits = displayTotal.toLocaleString('zh-CN').split('');
+      const numDigits = digits.filter(d => d !== ',' && d !== '\uff0c').length;
+      const numCommas = digits.length - numDigits;
+      // 每个数字占 0.65 * size，逗号占 0.3 * size，单位占 1.5 * size，间距 2px
+      // containerW = numDigits * 0.65 * size + numCommas * 0.3 * size + 1.5 * size + (digits.length) * 2
+      const totalUnits = numDigits * 0.65 + numCommas * 0.3 + 1.5;
+      const s = Math.min(80, Math.floor((containerW - digits.length * 2) / totalUnits));
+      setDigitSize(Math.max(48, s));
+    };
+    calcSize();
+    window.addEventListener('resize', calcSize);
+    return () => window.removeEventListener('resize', calcSize);
+  }, [displayTotal]);
 
   const toDigits = (num: number) => num.toLocaleString('zh-CN').split('');
   const curDigits = toDigits(displayTotal);
@@ -103,28 +124,28 @@ function FlipCounterCard({ total }: { total: number }) {
   const prev = pad(prevDigits);
 
   return (
-    <div className="px-4 mt-4">
+    <div className="px-4 mt-4" ref={containerRef}>
       <div className="bg-white rounded-2xl px-5 py-4" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center mb-3">
           <span className="text-xs text-gray-400 tracking-wide">全网人脉总数</span>
-          <span className="text-xs text-gray-300">含共享</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="flex items-center gap-0.5">
+        <div className="flex items-center">
+          <div className="flex items-center" style={{ gap: '2px' }}>
             {cur.map((digit, i) => (
               digit === ',' || digit === '\uff0c' ? (
-                <span key={i} className="text-gray-300 font-bold" style={{ fontSize: '1.5rem', alignSelf: 'center', lineHeight: '3rem' }}>,</span>
+                <span key={i} className="text-gray-300 font-bold" style={{ fontSize: digitSize * 0.5 + 'px', alignSelf: 'center', lineHeight: digitSize + 'px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>,</span>
               ) : (
                 <FlipDigit
                   key={`${i}-${flipKey}`}
-                  digit={digit}
-                  prevDigit={prev[i] ?? '\u00a0'}
+                  digit={digit === '\u00a0' ? '' : digit}
+                  prevDigit={prev[i] === '\u00a0' ? '' : (prev[i] ?? '')}
                   flip={digit !== prev[i] && flipKey > 0}
+                  size={digitSize}
                 />
               )
             ))}
           </div>
-          <span className="text-base font-medium text-gray-400 ml-1">人次</span>
+          <span className="font-medium text-gray-400 ml-2" style={{ fontSize: digitSize * 0.35 + 'px' }}>人</span>
         </div>
       </div>
     </div>
