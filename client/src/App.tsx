@@ -10,6 +10,7 @@ import { ColorThemeProvider } from "./contexts/ColorThemeContext";
 import { Loader2 } from "lucide-react";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useTokenPersistence } from "@/hooks/useTokenPersistence";
+import { SuperViewBanner } from "@/components/SuperViewBanner";
 
 
 // HMR 热更新提示音模块
@@ -586,6 +587,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <Router />
+            <SuperViewBanner />
 
           </TooltipProvider>
         </ColorThemeProvider>
