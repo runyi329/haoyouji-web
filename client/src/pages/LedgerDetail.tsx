@@ -135,7 +135,7 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
             <span className="text-[10px]" style={{ color: unitColor }}>张</span>
           </div>
         </div>
-        {s.reason && !isMarket && <div className="text-xs mt-1.5" style={{ color: 'rgba(58,20,0,0.55)' }}>{s.reason}</div>}
+        {s.reason && <div className="text-xs mt-1.5 px-1 py-0.5 rounded" style={{ color: 'rgba(58,20,0,0.6)', background: 'rgba(58,20,0,0.05)' }}>备注：{s.reason}</div>}
       </div>
     </div>
   );
