@@ -156,8 +156,8 @@ function MemoCard({ item, onEdit, onDelete }: {
     copyText(text, item.title);
   };
 
-  // 欧易多账户：按分隔符分组
-  const isOuyi = item.title === '欧易';
+  // 账号密码分类：按分隔符分组展示多账户
+  const isOuyi = item.category === 'account';
   const ouyiAccounts: MemoField[][] = [];
   if (isOuyi) {
     let cur: MemoField[] = [];
@@ -188,7 +188,7 @@ function MemoCard({ item, onEdit, onDelete }: {
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs mr-1" style={{ backgroundColor: cat.color + "18", color: cat.color }}>
               {cat.label}
             </span>
-            {isOuyi ? `${filledCount} 个账户` : `${filledCount} 个字段`}
+            {isOuyi ? `${filledCount} 个账号` : `${filledCount} 个字段`}
           </p>
         </div>
         <div className="flex items-center gap-1 ml-2">
@@ -312,17 +312,30 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   const [fields, setFields] = useState<MemoField[]>([]);
   const [note, setNote] = useState("");
 
-  // 欧易多账户模式：每个账户是一个数组，包含手机号/邮箱/UID/密码
+  // 多账户模式：账号密码分类下所有子类都支持多账户
   const [ouyiAccounts, setOuyiAccounts] = useState<MemoField[][]>([]);
-  const isOuyiMode = subLabel === '欧易';
+  const isOuyiMode = category === 'account'; // 所有账号密码子类都用多账户模式
 
-  const newOuyiAccount = (): MemoField[] => [
-    { label: '手机号', value: '' },
-    { label: '邮箱', value: '' },
-    { label: 'UID', value: '' },
-    { label: '密码', value: '', sensitive: true },
-    { label: '__NOTE__', value: '' },
-  ];
+  // 根据子类生成对应的账户字段模板
+  const newOuyiAccount = (): MemoField[] => {
+    if (subLabel === '欧易') {
+      return [
+        { label: '手机号', value: '' },
+        { label: '邮箱', value: '' },
+        { label: 'UID', value: '' },
+        { label: '密码', value: '', sensitive: true },
+        { label: '__NOTE__', value: '' },
+      ];
+    }
+    // 通用账号密码模板
+    return [
+      { label: '账号/用户名', value: '' },
+      { label: '密码', value: '', sensitive: true },
+      { label: '备用邮箱', value: '' },
+      { label: '手机号', value: '' },
+      { label: '__NOTE__', value: '' },
+    ];
+  };
 
   const addOuyiAccount = () => setOuyiAccounts(prev => [...prev, newOuyiAccount()]);
   const removeOuyiAccount = (idx: number) => setOuyiAccounts(prev => prev.filter((_, i) => i !== idx));
@@ -369,8 +382,8 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
       setCustomSub(isCustomSub ? sub : "");
       setIsCustom(false);
       setNote(editItem.note || "");
-      if (sub === '欧易') {
-        // 欧易多账户模式：反序列化
+      if (cat === 'account') {
+        // 账号密码分类：反序列化为多账户
         setOuyiAccounts(deserializeOuyiFields(editItem.fields || []));
         setFields([]);
       } else {
@@ -409,8 +422,8 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     } else {
       setIsCustom(false);
       setSubLabel(sub);
-      if (sub === '欧易') {
-        // 欧易初始化一个空账户
+      if (category === 'account') {
+        // 账号密码分类下所有子类都初始化一个空账户
         setOuyiAccounts([newOuyiAccount()]);
         setFields([]);
       } else {
@@ -424,6 +437,10 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   const handleConfirmCustom = () => {
     if (!customSub.trim()) { toast.error("请输入名称"); return; }
     setSubLabel(customSub.trim());
+    if (category === 'account') {
+      setOuyiAccounts([newOuyiAccount()]);
+      setFields([]);
+    }
     setStep("fields");
   };
 
@@ -620,7 +637,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
                     className="flex items-center gap-1.5 text-sm text-[#D32F2F] hover:bg-red-50 px-3 py-2 rounded-lg w-full justify-center border border-dashed border-red-200"
                   >
                     <Plus className="w-4 h-4" />
-                    添加账户
+                    {subLabel === '欧易' ? '添加欧易账户' : '添加账号'}
                   </button>
                 </div>
               </div>
