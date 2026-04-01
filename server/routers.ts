@@ -6663,6 +6663,47 @@ export const appRouter = router({
           authorizedTo: input.authorizedToUserId,
           isActive: 1,
         });
+        // 触发订阅者自动同步：查询所有订阅了 authorizedToUserId 的人，自动帮他们建立连接
+        try {
+          const newSharerId = ctx.user.id; // 新授权的人（A）
+          const introducerId = input.authorizedToUserId; // 介绍人
+          const introducerUser = await db.getUserById(introducerId);
+          const introducerName = introducerUser?.name || introducerUser?.username || `用户${introducerId}`;
+          const defaultFields = ['name', 'title', 'gender', 'occupation', 'address', 'region', 'wechat', 'phone', 'tags'];
+          // 查询所有订阅者
+          const subscribers = await dbConn.execute(
+            sql`SELECT subscriber_id FROM sharing_subscriptions WHERE introducer_id = ${introducerId} AND is_active = 1`
+          ) as any;
+          const subList = Array.isArray(subscribers[0]) ? subscribers[0] : [];
+          for (const sub of subList) {
+            const subscriberId = sub.subscriber_id;
+            if (subscriberId === newSharerId) continue;
+            // 建立双向连接
+            const createConn = async (sharerId: number, receiverId: number) => {
+              const existing2 = await db.getSharingConnection(sharerId, receiverId);
+              if (existing2) return;
+              const connId2 = await db.createSharingConnection({
+                sharerId, receiverId, status: 'active',
+                note: `由${introducerName}介绍`,
+              });
+              await dbConn.update(contactSharingConnections)
+                .set({ introducerId, introducerName })
+                .where(eq(contactSharingConnections.id, connId2));
+              for (const fieldName of defaultFields) {
+                await db.createSharingPermission({ connectionId: connId2, fieldName, isShared: true });
+              }
+              await dbConn.insert(sharingNotifications).values({
+                receiverId, actorId: sharerId,
+                actorName: (await db.getUserById(sharerId))?.name || `用户${sharerId}`,
+                type: 'added',
+              });
+            };
+            await createConn(newSharerId, subscriberId);
+            await createConn(subscriberId, newSharerId);
+          }
+        } catch (e) {
+          console.error('[authorizeIntroduce] 订阅者同步失败:', e);
+        }
         return { success: true, isActive: true };
       }),
 
@@ -6792,6 +6833,129 @@ export const appRouter = router({
         await createIntroducedConnection(scanner.id, targetUser.id);
         const targetName = targetUser.name || targetUser.username;
         return { success: true, message: `已与 ${targetName} 建立双向共享（由${parsed.introducerName}介绍）` };
+      }),
+
+    // 生成聚合介绍二维码（我把所有授权给我的人一次性介绍给别人）
+    getAggregateIntroduceQrCode: protectedProcedure
+      .query(async ({ ctx }) => {
+        const meUser = await db.getUserById(ctx.user.id);
+        if (!meUser) throw new TRPCError({ code: 'NOT_FOUND', message: '用户不存在' });
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 查询有多少人已授权给我
+        const authorizedList = await dbConn.select({
+          sharerId: sharingAuthorizations.authorizedBy,
+        }).from(sharingAuthorizations)
+          .where(and(
+            eq(sharingAuthorizations.authorizedTo, ctx.user.id),
+            eq(sharingAuthorizations.isActive, 1),
+          ));
+        const qrContent = JSON.stringify({
+          type: 'sharing_introduce_all',
+          introducerUsername: meUser.username,
+          introducerName: meUser.name || meUser.username,
+        });
+        return {
+          qrContent,
+          introducerName: meUser.name || meUser.username,
+          authorizedCount: authorizedList.length,
+        };
+      }),
+
+    // 扫聚合介绍二维码：批量添加介绍人所有已授权的人，并订阅未来新增
+    addByAggregateIntroduceQrCode: protectedProcedure
+      .input(z.object({
+        qrContent: z.string().min(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        let parsed: { type: string; introducerUsername: string; introducerName: string };
+        try {
+          parsed = JSON.parse(input.qrContent);
+        } catch {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的二维码' });
+        }
+        if (parsed.type !== 'sharing_introduce_all' || !parsed.introducerUsername) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '无效的聚合介绍二维码' });
+        }
+        const introducerUser = await db.getUserByUsername(parsed.introducerUsername);
+        if (!introducerUser) throw new TRPCError({ code: 'NOT_FOUND', message: '找不到介绍人' });
+        const scanner = ctx.user;
+        if (scanner.id === introducerUser.id) throw new TRPCError({ code: 'BAD_REQUEST', message: '不能扫自己的二维码' });
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const defaultFields = ['name', 'title', 'gender', 'occupation', 'address', 'region', 'wechat', 'phone', 'tags'];
+        // 辅助函数：建立由介绍人介绍的双向连接
+        const createIntroducedConn = async (sharerId: number, receiverId: number) => {
+          const existing = await db.getSharingConnection(sharerId, receiverId);
+          if (existing) return null;
+          const connId = await db.createSharingConnection({
+            sharerId,
+            receiverId,
+            status: 'active',
+            note: `由${parsed.introducerName}介绍`,
+          });
+          await dbConn.update(contactSharingConnections)
+            .set({ introducerId: introducerUser.id, introducerName: parsed.introducerName })
+            .where(eq(contactSharingConnections.id, connId));
+          for (const fieldName of defaultFields) {
+            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: true });
+          }
+          await addPointsForAction(sharerId, 'share_contact', connId);
+          await dbConn.insert(sharingNotifications).values({
+            receiverId,
+            actorId: sharerId,
+            actorName: (await db.getUserById(sharerId))?.name || `用户${sharerId}`,
+            type: 'added',
+          });
+          return connId;
+        };
+        // 查询介绍人所有已授权给他的人
+        const authorizedList = await dbConn.select({
+          authorizedBy: sharingAuthorizations.authorizedBy,
+        }).from(sharingAuthorizations)
+          .where(and(
+            eq(sharingAuthorizations.authorizedTo, introducerUser.id),
+            eq(sharingAuthorizations.isActive, 1),
+          ));
+        let addedCount = 0;
+        for (const auth of authorizedList) {
+          const targetId = auth.authorizedBy;
+          if (targetId === scanner.id) continue;
+          const r1 = await createIntroducedConn(targetId, scanner.id);
+          const r2 = await createIntroducedConn(scanner.id, targetId);
+          if (r1 || r2) addedCount++;
+        }
+        // 写入订阅关系（如果已存在则忽略）
+        await dbConn.execute(
+          sql`INSERT IGNORE INTO sharing_subscriptions (subscriber_id, introducer_id) VALUES (${scanner.id}, ${introducerUser.id})`
+        );
+        return {
+          success: true,
+          addedCount,
+          message: addedCount > 0
+            ? `已通过${parsed.introducerName}介绍，添加了 ${addedCount} 位联系人，并订阅后续新增`
+            : `已订阅${parsed.introducerName}的人脉圈，后续新增联系人将自动同步`,
+        };
+      }),
+
+    // 查询我的聚合订阅者（谁订阅了我的聚合二维码）
+    getAggregateSubscribers: protectedProcedure
+      .query(async ({ ctx }) => {
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const rows = await dbConn.execute(
+          sql`SELECT ss.subscriber_id, ss.created_at, u.name, u.username
+              FROM sharing_subscriptions ss
+              JOIN users u ON u.id = ss.subscriber_id
+              WHERE ss.introducer_id = ${ctx.user.id} AND ss.is_active = 1`
+        ) as any;
+        const list = Array.isArray(rows[0]) ? rows[0] : [];
+        return list.map((r: any) => ({
+          subscriberId: r.subscriber_id,
+          name: r.name || r.username,
+          username: r.username,
+          subscribedAt: r.created_at,
+        }));
       }),
   }),
   // 锦炼计数系统
