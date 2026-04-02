@@ -562,11 +562,7 @@ export default function Home() {
                   onClick={() => { setProfileMenuOpen(false); navigate("/admin/super-view"); }}
                   className="flex items-center cursor-pointer"
                 >
-                  <img
-                    src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/idealight_icon.png"
-                    alt="全局视角"
-                    className="w-4 h-4 mr-2 object-contain"
-                  />
+                  <span className="w-4 h-4 mr-2 flex items-center justify-center text-xs font-bold text-[#D32F2F] bg-red-50 rounded-sm">润</span>
                   <span>全局视角</span>
                 </DropdownMenuItem>
               )}
