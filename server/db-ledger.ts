@@ -2927,7 +2927,17 @@ export async function getTransactionsList(
     conditions.push(eq(ledgerRecords.type, options.type));
   }
   if (options?.categoryId) {
-    conditions.push(eq(ledgerRecords.categoryId, options.categoryId));
+    // 先查出该分类下所有子分类ID（支持一级分类筛选出所有二级分类记录）
+    const childCats = await db
+      .select({ id: ledgerCategories.id })
+      .from(ledgerCategories)
+      .where(eq(ledgerCategories.parentId, options.categoryId));
+    const allCategoryIds = [options.categoryId, ...childCats.map((c: any) => c.id)];
+    if (allCategoryIds.length === 1) {
+      conditions.push(eq(ledgerRecords.categoryId, options.categoryId));
+    } else {
+      conditions.push(sql`${ledgerRecords.categoryId} IN (${sql.join(allCategoryIds.map((id: number) => sql`${id}`), sql`, `)})`);
+    }
   }
   if (options?.amountMin) {
     conditions.push(sql`${ledgerRecords.amount} >= ${options.amountMin}`);
