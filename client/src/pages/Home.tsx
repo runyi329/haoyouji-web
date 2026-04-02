@@ -557,29 +557,26 @@ export default function Home() {
                 <span>个人中心</span>
               </DropdownMenuItem>
 
+              {isJiang && (
+                <DropdownMenuItem
+                  onClick={() => { setProfileMenuOpen(false); navigate("/admin/super-view"); }}
+                  className="flex items-center cursor-pointer"
+                >
+                  <img
+                    src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/idealight_icon.png"
+                    alt="全局视角"
+                    className="w-4 h-4 mr-2 object-contain"
+                  />
+                  <span>全局视角</span>
+                </DropdownMenuItem>
+              )}
+
               <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-[#D32F2F]">
                 <LogOut className="w-4 h-4 mr-2" />
                 <span>退出登录</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* IDEALIGHT超级视角按钮 - 仅jiang用户可见 */}
-          {isJiang && (
-            <div
-              className="flex flex-col items-center space-y-2 cursor-pointer"
-              onClick={() => navigate("/admin/super-view")}
-            >
-              <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm border border-gray-100">
-                <img
-                  src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/idealight_icon.png"
-                  alt="超级视角"
-                  className="w-7 h-7 object-contain"
-                />
-              </div>
-              <span className="text-xs font-medium text-gray-500">视角</span>
-            </div>
-          )}
 
           {features.map((feature) => {
             const Icon = feature.icon;
