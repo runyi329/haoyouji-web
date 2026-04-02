@@ -3551,19 +3551,19 @@ export default function LedgerDetail() {
                     </td>
                   </tr>
                   <tr>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>自建人脉</td>
+                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>自有人脉</td>
                     <td className="text-center px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>50%</td>
                     <td className="text-center px-2 py-1.5 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.50</td>
                     <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每1人得1分，≥100人满分</td>
                   </tr>
                   <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>直接共享人脉</td>
+                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>共享人脉</td>
                     <td className="text-center px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>30%</td>
                     <td className="text-center px-2 py-1.5 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.30</td>
                     <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每8人得1分，≥800人满分</td>
                   </tr>
                   <tr>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>拓扑转介绍人脉</td>
+                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>拓扑人脉</td>
                     <td className="text-center px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>20%</td>
                     <td className="text-center px-2 py-1.5 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.20</td>
                     <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每20人得1分，≥2000人满分</td>
