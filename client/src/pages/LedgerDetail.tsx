@@ -3580,7 +3580,7 @@ export default function LedgerDetail() {
                   </tr>
                   <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
                     <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '6px 8px', fontSize: '9px', color: 'rgba(58,20,0,0.6)', lineHeight: '1.6' }}>
-                      1个→+0.20 &nbsp;|&nbsp; 3个→+0.37 &nbsp;|&nbsp; 5个→+0.45 &nbsp;|&nbsp; 10个→+0.57 &nbsp;|&nbsp; ≥15个→+0.60
+                      人均1个→+0.20 &nbsp;|&nbsp; 人均3个→+0.37 &nbsp;|&nbsp; 人均5个→+0.45 &nbsp;|&nbsp; 人均10个→+0.57 &nbsp;|&nbsp; 人均≥15个→+0.60
                     </td>
                   </tr>
                   <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
