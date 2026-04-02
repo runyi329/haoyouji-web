@@ -15910,63 +15910,68 @@ export const adminFeatureRouter = router({
         { userId: 4957293, name: '袁贇',      shareNo: '0014' },
       ];
 
-      const results = [];
-      for (const sh of shareholders) {
-        const uid = sh.userId;
+      const uids = shareholders.map(s => s.userId);
+      const uidList = uids.join(',');
 
-        // 1. 直接手动添加的好友
-        const [directRows] = await (dbConn as any).execute(
-          `SELECT COUNT(*) as cnt FROM contacts WHERE parentUserId = ?`,
-          [uid]
-        );
-        const directCount = Number((directRows as any[])[0]?.cnt ?? 0);
-
-        // 2. 面对面扫码/用户名共享来的好友（无介绍人）
-        const [scanShareRows] = await (dbConn as any).execute(
-          `SELECT COUNT(DISTINCT c.id) as cnt
+      // 一次性批量查询，4条SQL替代56条串行查询
+      const [[directRows], [scanRows], [introRows], [myIntroRows]] = await Promise.all([
+        // 1. 直接手动添加
+        (dbConn as any).execute(
+          `SELECT parentUserId as uid, COUNT(*) as cnt FROM contacts WHERE parentUserId IN (${uidList}) GROUP BY parentUserId`
+        ),
+        // 2. 扫码共享（无介绍人）
+        (dbConn as any).execute(
+          `SELECT csc.receiverId as uid, COUNT(DISTINCT c.id) as cnt
            FROM contact_sharing_connections csc
            JOIN contacts c ON c.parentUserId = csc.sharerId
-           WHERE csc.receiverId = ?
+           WHERE csc.receiverId IN (${uidList})
              AND csc.status = 'active'
-             AND (csc.introducer_id IS NULL OR csc.introducer_id = 0)`,
-          [uid]
-        );
-        const scanShareCount = Number((scanShareRows as any[])[0]?.cnt ?? 0);
-
-        // 3. 通过聚合码/介绍码间接介绍来的好友（有介绍人）
-        const [introRows] = await (dbConn as any).execute(
-          `SELECT COUNT(DISTINCT c.id) as cnt
+             AND (csc.introducer_id IS NULL OR csc.introducer_id = 0)
+           GROUP BY csc.receiverId`
+        ),
+        // 3. 聚合码间接介绍（有介绍人）
+        (dbConn as any).execute(
+          `SELECT csc.receiverId as uid, COUNT(DISTINCT c.id) as cnt
            FROM contact_sharing_connections csc
            JOIN contacts c ON c.parentUserId = csc.sharerId
-           WHERE csc.receiverId = ?
+           WHERE csc.receiverId IN (${uidList})
              AND csc.status = 'active'
              AND csc.introducer_id IS NOT NULL
-             AND csc.introducer_id != 0`,
-          [uid]
-        );
-        const introCount = Number((introRows as any[])[0]?.cnt ?? 0);
-
-        // 4. 我作为介绍人帮助他人建立的共享连接数
-        const [myIntroRows] = await (dbConn as any).execute(
-          `SELECT COUNT(*) as cnt
+             AND csc.introducer_id != 0
+           GROUP BY csc.receiverId`
+        ),
+        // 4. 我作为介绍人
+        (dbConn as any).execute(
+          `SELECT introducer_id as uid, COUNT(*) as cnt
            FROM contact_sharing_connections
-           WHERE introducer_id = ?
-             AND status = 'active'`,
-          [uid]
-        );
-        const myIntroCount = Number((myIntroRows as any[])[0]?.cnt ?? 0);
+           WHERE introducer_id IN (${uidList})
+             AND status = 'active'
+           GROUP BY introducer_id`
+        ),
+      ]);
 
-        results.push({
+      // 将结果转为Map方便查找
+      const directMap = new Map((directRows as any[]).map((r: any) => [Number(r.uid), Number(r.cnt)]));
+      const scanMap = new Map((scanRows as any[]).map((r: any) => [Number(r.uid), Number(r.cnt)]));
+      const introMap = new Map((introRows as any[]).map((r: any) => [Number(r.uid), Number(r.cnt)]));
+      const myIntroMap = new Map((myIntroRows as any[]).map((r: any) => [Number(r.uid), Number(r.cnt)]));
+
+      const results = shareholders.map(sh => {
+        const directCount = directMap.get(sh.userId) ?? 0;
+        const scanShareCount = scanMap.get(sh.userId) ?? 0;
+        const introCount = introMap.get(sh.userId) ?? 0;
+        const myIntroCount = myIntroMap.get(sh.userId) ?? 0;
+        return {
           shareNo: sh.shareNo,
           name: sh.name,
-          userId: uid,
+          userId: sh.userId,
           directCount,
           scanShareCount,
           introCount,
           total: directCount + scanShareCount + introCount,
           myIntroCount,
-        });
-      }
+        };
+      });
 
       return results;
     }),
