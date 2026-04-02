@@ -3579,23 +3579,31 @@ export default function LedgerDetail() {
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '4px 6px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '3px 4px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '15%' }} />
+                          <col style={{ width: '18.33%' }} />
+                          <col style={{ width: '15%' }} />
+                          <col style={{ width: '18.33%' }} />
+                          <col style={{ width: '15%' }} />
+                          <col style={{ width: '18.33%' }} />
+                        </colgroup>
                         <thead>
                           <tr style={{ background: 'rgba(201,168,76,0.12)' }}>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
                           </tr>
                         </thead>
                         <tbody>
                           {([['1个','+0.15倍','2个','+0.24倍','3个','+0.30倍'],['4个','+0.35倍','5个','+0.39倍','6个','+0.42倍'],['7个','+0.45倍','8个','+0.48倍','9个','+0.50倍'],['10个','+0.52倍','11个','+0.54倍','12个','+0.56倍'],['13个','+0.57倍','14个','+0.59倍','≥15个','+0.60倍']] as string[][]).map((row, i) => (
                             <tr key={i} style={{ background: i % 2 === 1 ? 'rgba(201,168,76,0.04)' : 'transparent' }}>
                               {row.map((cell, j) => (
-                                <td key={j} style={{ border: '1px solid rgba(201,168,76,0.12)', padding: '3px 4px', textAlign: 'center', color: j % 2 === 0 ? 'rgba(58,20,0,0.75)' : '#C9A84C', fontWeight: j % 2 === 1 ? 700 : 400 }}>{cell}</td>
+                                <td key={j} style={{ border: '1px solid rgba(201,168,76,0.12)', padding: '2px 1px', textAlign: 'center', color: j % 2 === 0 ? 'rgba(58,20,0,0.75)' : '#C9A84C', fontWeight: j % 2 === 1 ? 700 : 400, whiteSpace: 'nowrap' }}>{cell}</td>
                               ))}
                             </tr>
                           ))}
