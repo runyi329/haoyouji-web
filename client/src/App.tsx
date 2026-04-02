@@ -351,6 +351,7 @@ function Router() {
         <Route path="/parent/init-categories" component={lazy(() => import("./pages/InitCategories"))} />
         <Route path="/parent/profile" component={Profile} />
         <Route path="/parent/profile/edit" component={ProfileEdit} />
+        <Route path="/parent/topology" component={lazy(() => import("./pages/TopologyStats"))} />
         <Route path="/parent/theme-settings" component={ThemeSettings} />
         <Route path="/parent/academy" component={Academy} />
         <Route path="/tools" component={Tools} />
