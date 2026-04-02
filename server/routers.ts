@@ -15728,6 +15728,84 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       }
     }),
 
+  // ==================== 拓扑人脉统计（超级管理员专用）====================
+  topology: router({
+    getShareholderContactStats: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限访问' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+      const shareholders = [
+        { userId: 870413,  name: '胡永煜',    shareNo: '0001' },
+        { userId: 510025,  name: 'Julie',      shareNo: '0002' },
+        { userId: 4957147, name: '陈奇戌',    shareNo: '0003' },
+        { userId: 4957151, name: '大饼江湖',  shareNo: '0004' },
+        { userId: 4957141, name: 'vesen',      shareNo: '0005' },
+        { userId: 4957213, name: 'cyndi2109', shareNo: '0006' },
+        { userId: 4957217, name: '李斌Luby',  shareNo: '0007' },
+        { userId: 4680302, name: '张慧',      shareNo: '0008' },
+        { userId: 4957155, name: 'Johnson',   shareNo: '0009' },
+        { userId: 4952766, name: '刘力凡',   shareNo: '0010' },
+        { userId: 3060001, name: '阿潇',      shareNo: '0011' },
+        { userId: 4957222, name: 'LK070865', shareNo: '0012' },
+        { userId: 4957247, name: 'Mychael',  shareNo: '0013' },
+        { userId: 4957293, name: '袁贇',      shareNo: '0014' },
+      ];
+
+      const uidList = shareholders.map(s => s.userId).join(',');
+
+      const [[directRows], [scanRows], [introRows], [myIntroRows]] = await Promise.all([
+        (dbConn as any).execute(
+          `SELECT parentUserId as uid, COUNT(*) as cnt FROM contacts WHERE parentUserId IN (${uidList}) GROUP BY parentUserId`
+        ),
+        (dbConn as any).execute(
+          `SELECT csc.receiverId as uid, COUNT(DISTINCT c.id) as cnt
+           FROM contact_sharing_connections csc
+           JOIN contacts c ON c.parentUserId = csc.sharerId
+           WHERE csc.receiverId IN (${uidList})
+             AND csc.status = 'active'
+             AND (csc.introducer_id IS NULL OR csc.introducer_id = 0)
+           GROUP BY csc.receiverId`
+        ),
+        (dbConn as any).execute(
+          `SELECT csc.receiverId as uid, COUNT(DISTINCT c.id) as cnt
+           FROM contact_sharing_connections csc
+           JOIN contacts c ON c.parentUserId = csc.sharerId
+           WHERE csc.receiverId IN (${uidList})
+             AND csc.status = 'active'
+             AND csc.introducer_id IS NOT NULL
+             AND csc.introducer_id != 0
+           GROUP BY csc.receiverId`
+        ),
+        (dbConn as any).execute(
+          `SELECT introducer_id as uid, COUNT(*) as cnt
+           FROM contact_sharing_connections
+           WHERE introducer_id IN (${uidList})
+             AND status = 'active'
+           GROUP BY introducer_id`
+        ),
+      ]);
+
+      const directMap = new Map((directRows as any[]).map((r: any) => [Number(r.uid), Number(r.cnt)]));
+      const scanMap = new Map((scanRows as any[]).map((r: any) => [Number(r.uid), Number(r.cnt)]));
+      const introMap = new Map((introRows as any[]).map((r: any) => [Number(r.uid), Number(r.cnt)]));
+      const myIntroMap = new Map((myIntroRows as any[]).map((r: any) => [Number(r.uid), Number(r.cnt)]));
+
+      return shareholders.map(sh => ({
+        shareNo: sh.shareNo,
+        name: sh.name,
+        userId: sh.userId,
+        directCount: directMap.get(sh.userId) ?? 0,
+        scanShareCount: scanMap.get(sh.userId) ?? 0,
+        introCount: introMap.get(sh.userId) ?? 0,
+        total: (directMap.get(sh.userId) ?? 0) + (scanMap.get(sh.userId) ?? 0) + (introMap.get(sh.userId) ?? 0),
+        myIntroCount: myIntroMap.get(sh.userId) ?? 0,
+      }));
+    }),
+  }),
+
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
