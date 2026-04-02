@@ -15882,5 +15882,95 @@ export const adminFeatureRouter = router({
     }),
 
 
+  // ==================== 拓扑人脉统计（超级管理员专用）====================
+  topology: router({
+    // 获取59号账本股东三种来源人脉统计
+    getShareholderContactStats: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限访问' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+      // 59号账本的14位股东
+      const shareholders = [
+        { userId: 870413,  name: '胡永煜',    shareNo: '0001' },
+        { userId: 510025,  name: 'Julie',      shareNo: '0002' },
+        { userId: 4957147, name: '陈奇戌',    shareNo: '0003' },
+        { userId: 4957151, name: '大饼江湖',  shareNo: '0004' },
+        { userId: 4957141, name: 'vesen',      shareNo: '0005' },
+        { userId: 4957213, name: 'cyndi2109', shareNo: '0006' },
+        { userId: 4957217, name: '李斌Luby',  shareNo: '0007' },
+        { userId: 4680302, name: '张慧',      shareNo: '0008' },
+        { userId: 4957155, name: 'Johnson',   shareNo: '0009' },
+        { userId: 4952766, name: '刘力凡',   shareNo: '0010' },
+        { userId: 3060001, name: '阿潇',      shareNo: '0011' },
+        { userId: 4957222, name: 'LK070865', shareNo: '0012' },
+        { userId: 4957247, name: 'Mychael',  shareNo: '0013' },
+        { userId: 4957293, name: '袁贇',      shareNo: '0014' },
+      ];
+
+      const results = [];
+      for (const sh of shareholders) {
+        const uid = sh.userId;
+
+        // 1. 直接手动添加的好友
+        const [directRows] = await (dbConn as any).execute(
+          `SELECT COUNT(*) as cnt FROM contacts WHERE parentUserId = ?`,
+          [uid]
+        );
+        const directCount = Number((directRows as any[])[0]?.cnt ?? 0);
+
+        // 2. 面对面扫码/用户名共享来的好友（无介绍人）
+        const [scanShareRows] = await (dbConn as any).execute(
+          `SELECT COUNT(DISTINCT c.id) as cnt
+           FROM contact_sharing_connections csc
+           JOIN contacts c ON c.parentUserId = csc.sharerId
+           WHERE csc.receiverId = ?
+             AND csc.status = 'active'
+             AND (csc.introducer_id IS NULL OR csc.introducer_id = 0)`,
+          [uid]
+        );
+        const scanShareCount = Number((scanShareRows as any[])[0]?.cnt ?? 0);
+
+        // 3. 通过聚合码/介绍码间接介绍来的好友（有介绍人）
+        const [introRows] = await (dbConn as any).execute(
+          `SELECT COUNT(DISTINCT c.id) as cnt
+           FROM contact_sharing_connections csc
+           JOIN contacts c ON c.parentUserId = csc.sharerId
+           WHERE csc.receiverId = ?
+             AND csc.status = 'active'
+             AND csc.introducer_id IS NOT NULL
+             AND csc.introducer_id != 0`,
+          [uid]
+        );
+        const introCount = Number((introRows as any[])[0]?.cnt ?? 0);
+
+        // 4. 我作为介绍人帮助他人建立的共享连接数
+        const [myIntroRows] = await (dbConn as any).execute(
+          `SELECT COUNT(*) as cnt
+           FROM contact_sharing_connections
+           WHERE introducer_id = ?
+             AND status = 'active'`,
+          [uid]
+        );
+        const myIntroCount = Number((myIntroRows as any[])[0]?.cnt ?? 0);
+
+        results.push({
+          shareNo: sh.shareNo,
+          name: sh.name,
+          userId: uid,
+          directCount,
+          scanShareCount,
+          introCount,
+          total: directCount + scanShareCount + introCount,
+          myIntroCount,
+        });
+      }
+
+      return results;
+    }),
+  }),
+
 });
 export type AppRouter = typeof appRouter;
