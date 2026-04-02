@@ -95,7 +95,7 @@ export default function TopologyStats() {
             <div className="text-[10px] font-semibold text-[#E65100] text-center">②扫码</div>
             <div className="text-[10px] font-semibold text-[#5E35B1] text-center">③聚合</div>
             <div className="text-[10px] font-semibold text-[#2E7D32] text-center">合计</div>
-            <div className="text-[10px] font-semibold text-[#CBA471] text-center">介绍</div>
+            <div className="text-[10px] font-semibold text-[#CBA471] text-center">链接</div>
           </div>
 
           {isLoading && (
@@ -149,11 +149,18 @@ export default function TopologyStats() {
                   {row.total > 0 ? row.total.toLocaleString() : "—"}
                 </span>
               </div>
-              {/* 我介绍他人 */}
+              {/* 链接（可点击跳转详情） */}
               <div className="text-center">
-                <span className={`text-xs font-bold ${row.myIntroCount > 0 ? "text-[#CBA471]" : "text-gray-300"}`}>
-                  {row.myIntroCount > 0 ? row.myIntroCount : "—"}
-                </span>
+                {row.myIntroCount > 0 ? (
+                  <button
+                    onClick={() => navigate(`/parent/topology/links?userId=${row.userId}&name=${encodeURIComponent(row.name)}`)}
+                    className="text-xs font-bold text-[#CBA471] underline underline-offset-2 active:opacity-60"
+                  >
+                    {row.myIntroCount}
+                  </button>
+                ) : (
+                  <span className="text-xs font-bold text-gray-300">—</span>
+                )}
               </div>
             </div>
           ))}
@@ -192,7 +199,7 @@ export default function TopologyStats() {
             <p className="text-[10px] text-gray-500"><span className="text-[#E65100] font-semibold">②扫码</span> 对方直接扫码/用户名共享（无介绍人）</p>
             <p className="text-[10px] text-gray-500"><span className="text-[#5E35B1] font-semibold">③聚合</span> 通过聚合码/介绍码间接建立的共享</p>
             <p className="text-[10px] text-gray-500"><span className="text-[#2E7D32] font-semibold">合计</span> 三种来源之和</p>
-            <p className="text-[10px] text-gray-500"><span className="text-[#CBA471] font-semibold">介绍</span> 我作为介绍人帮他人建立的共享连接数</p>
+            <p className="text-[10px] text-gray-500"><span className="text-[#CBA471] font-semibold">链接</span> 我作为介绍人促成的共享连接数</p>
           </div>
         </div>
       </div>

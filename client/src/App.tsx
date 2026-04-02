@@ -352,6 +352,7 @@ function Router() {
         <Route path="/parent/profile" component={Profile} />
         <Route path="/parent/profile/edit" component={ProfileEdit} />
         <Route path="/parent/topology" component={lazy(() => import("./pages/TopologyStats"))} />
+        <Route path="/parent/topology/links" component={lazy(() => import("./pages/TopologyLinkDetail"))} />
         <Route path="/parent/theme-settings" component={ThemeSettings} />
         <Route path="/parent/academy" component={Academy} />
         <Route path="/tools" component={Tools} />
