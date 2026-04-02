@@ -3559,19 +3559,19 @@ export default function LedgerDetail() {
                     <td style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>自有人脉</td>
                     <td style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>50%</td>
                     <td style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>+0.50倍</td>
-                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px' }}>每1人得1分，≥100人满分</td>
+                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px', whiteSpace: 'nowrap' }}>每1人得1分，≥100人满</td>
                   </tr>
                   <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
                     <td style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>共享人脉</td>
                     <td style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>30%</td>
                     <td style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>+0.30倍</td>
-                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px' }}>每8人得1分，≥800人满分</td>
+                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px', whiteSpace: 'nowrap' }}>每8人得1分，≥800人满</td>
                   </tr>
                   <tr>
                     <td style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>拓扑人脉</td>
                     <td style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>20%</td>
                     <td style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>+0.20倍</td>
-                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px' }}>每20人得1分，≥2000人满分</td>
+                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px', whiteSpace: 'nowrap' }}>每20人得1分，≥2000人满</td>
                   </tr>
                   <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
                     <td colSpan={4} style={{ color: 'rgba(58,20,0,0.85)', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '5px 8px', background: 'rgba(201,168,76,0.1)' }}>
@@ -3624,16 +3624,35 @@ export default function LedgerDetail() {
 
                   {/* 资金乘数 */}
                   <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
-                    <td rowSpan={4} style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '8px 4px', textAlign: 'center', verticalAlign: 'middle', lineHeight: '1.6' }}>
+                    <td rowSpan={6} style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '8px 4px', textAlign: 'center', verticalAlign: 'middle', lineHeight: '1.6' }}>
                       资金<br/>乘数<br/><span style={{ fontSize: '9px', fontWeight: 400, color: 'rgba(58,20,0,0.55)' }}>满分<br/>+2.0倍</span>
                     </td>
                     <td colSpan={4} style={{ color: 'rgba(58,20,0,0.85)', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '5px 8px', background: 'rgba(201,168,76,0.1)' }}>
                       一、时间乘数（满分+1.0倍）
                     </td>
                   </tr>
-                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
-                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '6px 8px', fontSize: '9px', color: 'rgba(58,20,0,0.6)', lineHeight: '1.6' }}>
-                      按入场先后排名，第1名+1.0倍，第666名得0倍，中间线性递减；第667名起为0倍
+                  <tr>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '3px 4px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', tableLayout: 'fixed' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(201,168,76,0.12)' }}>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 2px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>入场排名</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 2px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>时间加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 2px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>入场排名</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 2px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>时间加成</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {([['#1名','+1.00倍','#100名','+0.85倍'],['#200名','+0.70倍','#333名','+0.50倍'],['#500名','+0.25倍','#666名','+0.00倍']] as string[][]).map((row, i) => (
+                            <tr key={i} style={{ background: i % 2 === 1 ? 'rgba(201,168,76,0.04)' : 'transparent' }}>
+                              {row.map((cell, j) => (
+                                <td key={j} style={{ border: '1px solid rgba(201,168,76,0.12)', padding: '2px 2px', textAlign: 'center', color: j % 2 === 0 ? 'rgba(58,20,0,0.75)' : '#C9A84C', fontWeight: j % 2 === 1 ? 700 : 400, whiteSpace: 'nowrap' }}>{cell}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{ fontSize: '8px', color: 'rgba(58,20,0,0.45)', padding: '2px 2px', textAlign: 'center' }}>第667名及以后时间加成为0倍</div>
                     </td>
                   </tr>
                   <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
@@ -3641,9 +3660,28 @@ export default function LedgerDetail() {
                       二、资金量乘数（满分+1.0倍）
                     </td>
                   </tr>
-                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
-                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '6px 8px', fontSize: '9px', color: 'rgba(58,20,0,0.6)', lineHeight: '1.6' }}>
-                      以10万元为基准，出资金额÷10万=乘数；5万→0.5倍，≥10万→1.0倍（满分）
+                  <tr>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '3px 4px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '8px', tableLayout: 'fixed' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(201,168,76,0.12)' }}>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 2px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>出资金额</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 2px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>资金加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 2px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>出资金额</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 2px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>资金加成</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {([['1万1元','+0.10倍','2万1元','+0.20倍'],['5万1元','+0.50倍','8万1元','+0.80倍'],['10万+','+1.00倍','—','—']] as string[][]).map((row, i) => (
+                            <tr key={i} style={{ background: i % 2 === 1 ? 'rgba(201,168,76,0.04)' : 'transparent' }}>
+                              {row.map((cell, j) => (
+                                <td key={j} style={{ border: '1px solid rgba(201,168,76,0.12)', padding: '2px 2px', textAlign: 'center', color: j % 2 === 0 ? 'rgba(58,20,0,0.75)' : '#C9A84C', fontWeight: j % 2 === 1 ? 700 : 400, whiteSpace: 'nowrap' }}>{cell}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{ fontSize: '8px', color: 'rgba(58,20,0,0.45)', padding: '2px 2px', textAlign: 'center' }}>以10万元为基准，出资金额÷10万=加成倍数</div>
                     </td>
                   </tr>
                 </tbody>
