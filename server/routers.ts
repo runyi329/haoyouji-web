@@ -15804,6 +15804,41 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         myIntroCount: myIntroMap.get(sh.userId) ?? 0,
       }));
     }),
+
+    // 查询某用户作为介绍人促成的具体连接对
+    getIntroducerLinks: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限访问' });
+        }
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+        const [rows] = await (dbConn as any).execute(`
+          SELECT
+            csc.id,
+            csc.created_at,
+            csc.note,
+            sharer.nickname AS sharer_name,
+            sharer.username AS sharer_username,
+            receiver.nickname AS receiver_name,
+            receiver.username AS receiver_username
+          FROM contact_sharing_connections csc
+          LEFT JOIN users sharer ON csc.sharer_id = sharer.id
+          LEFT JOIN users receiver ON csc.receiver_id = receiver.id
+          WHERE csc.introducer_id = ? AND csc.status = 'active'
+          ORDER BY csc.created_at DESC
+        `, [input.userId]);
+
+        return (rows as any[]).map(r => ({
+          id: r.id,
+          sharerName: r.sharer_name || r.sharer_username || '未知',
+          receiverName: r.receiver_name || r.receiver_username || '未知',
+          createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString('zh-CN') : '未知',
+          note: r.note || '',
+        }));
+      }),
   }),
 
 });
