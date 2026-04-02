@@ -15815,21 +15815,29 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
 
-        const [rows] = await (dbConn as any).execute(`
-          SELECT
-            csc.id,
-            csc.createdAt,
-            csc.note,
-            sharer.nickname AS sharer_name,
-            sharer.username AS sharer_username,
-            receiver.nickname AS receiver_name,
-            receiver.username AS receiver_username
-          FROM contact_sharing_connections csc
-          LEFT JOIN users sharer ON csc.sharerId = sharer.id
-          LEFT JOIN users receiver ON csc.receiverId = receiver.id
-          WHERE csc.introducer_id = ? AND csc.status = 'active'
-          ORDER BY csc.createdAt DESC
-        `, [input.userId]);
+        let rows: any[];
+        try {
+          const [result] = await (dbConn as any).execute(`
+            SELECT
+              csc.id,
+              csc.createdAt,
+              csc.note,
+              sharer.nickname AS sharer_name,
+              sharer.username AS sharer_username,
+              receiver.nickname AS receiver_name,
+              receiver.username AS receiver_username
+            FROM contact_sharing_connections csc
+            LEFT JOIN users sharer ON csc.sharerId = sharer.id
+            LEFT JOIN users receiver ON csc.receiverId = receiver.id
+            WHERE csc.introducer_id = ? AND csc.status = 'active'
+            ORDER BY csc.createdAt DESC
+          `, [input.userId]);
+          rows = result as any[];
+          console.log('[getIntroducerLinks] userId:', input.userId, 'rows:', rows.length);
+        } catch (err: any) {
+          console.error('[getIntroducerLinks] SQL ERROR:', err.message, err.sqlMessage, err.sql);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'SQL错误: ' + (err.sqlMessage || err.message) });
+        }
 
         return (rows as any[]).map(r => ({
           id: r.id,
