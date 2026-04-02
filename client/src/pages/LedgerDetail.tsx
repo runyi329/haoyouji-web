@@ -3516,60 +3516,85 @@ export default function LedgerDetail() {
                     <span className="text-xs font-bold" style={{ color: '#1A0A00' }}>资源权重</span>
                     <span className="text-base font-bold" style={{ color: '#C9A84C' }}>{weightDetail.resourceWeight.toFixed(2)}</span>
                   </div>
-                  {/* 人脉 */}
-                  <div className="flex justify-between items-start mb-2 pb-2" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
-                    <div>
-                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>人脉数</div>
-                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>每 1 人 +0.01，最高 +1.0（100 人封顶）</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightDetail.contactCount} 人</div>
-                      <div className="text-[10px]" style={{ color: '#C9A84C' }}>+{weightDetail.networkBonus.toFixed(2)}</div>
-                    </div>
+                  {/* 资源权重规则说明 */}
+                  <div className="text-[10px] mb-3" style={{ color: 'rgba(58,20,0,0.5)' }}>资源乘数满分 +2.0，由以下三大贡献维度组成</div>
+
+                  {/* 一、人脉贡献 */}
+                  <div className="mb-3">
+                    <div className="text-[10px] font-bold mb-1.5" style={{ color: '#C9A84C' }}>一、人脉贡献（权重50%，满分 +1.0）</div>
+                    <table className="w-full text-[10px]" style={{ borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(201,168,76,0.12)' }}>
+                          <th className="text-left px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', fontWeight: 600, border: '1px solid rgba(201,168,76,0.2)' }}>子维度</th>
+                          <th className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', fontWeight: 600, border: '1px solid rgba(201,168,76,0.2)' }}>权重</th>
+                          <th className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', fontWeight: 600, border: '1px solid rgba(201,168,76,0.2)' }}>满分</th>
+                          <th className="text-left px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', fontWeight: 600, border: '1px solid rgba(201,168,76,0.2)' }}>计分规则</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="px-2 py-1" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>自建人脉</td>
+                          <td className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>50%</td>
+                          <td className="text-center px-2 py-1 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.50</td>
+                          <td className="px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每1人得1分，≥100人满分</td>
+                        </tr>
+                        <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
+                          <td className="px-2 py-1" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>直接共享人脉</td>
+                          <td className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>30%</td>
+                          <td className="text-center px-2 py-1 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.30</td>
+                          <td className="px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每8人得1分，≥800人满分</td>
+                        </tr>
+                        <tr>
+                          <td className="px-2 py-1" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>拓扑转介绍人脉</td>
+                          <td className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>20%</td>
+                          <td className="text-center px-2 py-1 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.20</td>
+                          <td className="px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每20人得1分，≥2000人满分</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
-                  {/* 标签 */}
-                  <div className="flex justify-between items-start mb-2 pb-2" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
-                    <div>
-                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>标签数</div>
-                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>每 10 个 +0.01，最高 +1.0（1000 个封顶）</div>
+
+                  {/* 二、标签贡献 */}
+                  <div className="mb-3">
+                    <div className="text-[10px] font-bold mb-1.5" style={{ color: '#C9A84C' }}>二、标签贡献（权重30%，满分 +0.6）</div>
+                    <div className="rounded-xl px-3 py-2 mb-1.5" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="text-[10px] mb-1" style={{ color: 'rgba(58,20,0,0.7)' }}>统计范围：仅限自建人脉的标签（共享人脉标签不计入）</div>
+                      <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.7)' }}>计分方式：对数曲线，人均标签越多得分越高，15个封顶满分</div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightDetail.tagCount} 个</div>
-                      <div className="text-[10px]" style={{ color: '#C9A84C' }}>+{weightDetail.tagBonus.toFixed(2)}</div>
-                    </div>
-                  </div>
-                  {/* 推荐人 */}
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-xs font-medium" style={{ color: 'rgba(58,20,0,0.75)' }}>推荐人数</div>
-                      <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.45)' }}>每人 +0.1（已审核通过）</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold" style={{ color: '#1A0A00' }}>{weightDetail.referrals.length} 人</div>
-                      <div className="text-[10px]" style={{ color: '#C9A84C' }}>+{weightDetail.referralBonus.toFixed(2)}</div>
-                    </div>
-                  </div>
-                  {/* 推荐人名单 */}
-                  {weightDetail.referrals.length > 0 && (
-                    <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(201,168,76,0.15)' }}>
-                      <div className="text-[10px] mb-1" style={{ color: 'rgba(58,20,0,0.5)' }}>推荐名单：</div>
-                      <div className="flex flex-wrap gap-1">
-                        {weightDetail.referrals.map(r => (
-                          <span key={r.id} className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: 'rgba(58,20,0,0.7)' }}>{r.name}</span>
+                    <table className="w-full text-[10px]" style={{ borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(201,168,76,0.12)' }}>
+                          <th className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', fontWeight: 600, border: '1px solid rgba(201,168,76,0.2)' }}>人均标签数</th>
+                          <th className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', fontWeight: 600, border: '1px solid rgba(201,168,76,0.2)' }}>得分</th>
+                          <th className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.6)', fontWeight: 600, border: '1px solid rgba(201,168,76,0.2)' }}>贡献值</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {([{label:'1个',score:'33分',contrib:'+0.20'},{label:'3个',score:'61分',contrib:'+0.37'},{label:'5个',score:'75分',contrib:'+0.45'},{label:'10个',score:'95分',contrib:'+0.57'},{label:'≥15个',score:'100分',contrib:'+0.60'}] as {label:string;score:string;contrib:string}[]).map((row, i) => (
+                          <tr key={i} style={{ background: i % 2 === 1 ? 'rgba(201,168,76,0.04)' : 'transparent' }}>
+                            <td className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>{row.label}</td>
+                            <td className="text-center px-2 py-1" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>{row.score}</td>
+                            <td className="text-center px-2 py-1 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>{row.contrib}</td>
+                          </tr>
                         ))}
-                      </div>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* 三、邀请贡献 */}
+                  <div className="mb-3">
+                    <div className="text-[10px] font-bold mb-1.5" style={{ color: '#C9A84C' }}>三、邀请贡献（权重20%，满分 +0.4）</div>
+                    <div className="rounded-xl px-3 py-2" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.75)' }}>每邀请1位用户注册得1分，≥100人满分（100分）</div>
+                      <div className="text-[10px] mt-1" style={{ color: 'rgba(58,20,0,0.5)' }}>满分贡献：+0.4</div>
                     </div>
-                  )}
-                  {/* 资源权重公式 */}
-                  <div className="mt-3 pt-2 flex items-center gap-1 flex-wrap" style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }}>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>公式：1.0 +</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.networkBonus.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>+</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.tagBonus.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>+</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.6)' }}>{weightDetail.referralBonus.toFixed(2)}</span>
-                    <span className="text-[10px]" style={{ color: 'rgba(58,20,0,0.35)' }}>=</span>
-                    <span className="text-[10px] font-bold" style={{ color: '#C9A84C' }}>{weightDetail.resourceWeight.toFixed(2)}</span>
+                  </div>
+
+                  {/* 当前实际值 */}
+                  <div className="mt-2 pt-2" style={{ borderTop: '1px solid rgba(201,168,76,0.2)' }}>
+                    <div className="text-[10px] font-bold mb-1" style={{ color: 'rgba(58,20,0,0.6)' }}>当前实际值</div>
+                    <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.5)' }}>资源权重 = 1.0 + 人脉贡献 + 标签贡献 + 邀请贡献 = <span style={{ color: '#C9A84C', fontWeight: 700 }}>{weightDetail.resourceWeight.toFixed(2)}</span></div>
+                    <div className="text-[10px] mt-0.5" style={{ color: 'rgba(58,20,0,0.4)' }}>（注：计算逻辑更新中，当前显示值为过渡期数据）</div>
                   </div>
                 </div>
 
