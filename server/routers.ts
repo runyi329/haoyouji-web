@@ -15825,9 +15825,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             receiver.nickname AS receiver_name,
             receiver.username AS receiver_username
           FROM contact_sharing_connections csc
-          LEFT JOIN users sharer ON csc.sharer_id = sharer.id
-          LEFT JOIN users receiver ON csc.receiver_id = receiver.id
-          WHERE csc.introducer_id = ? AND csc.status = 'active'
+          LEFT JOIN users sharer ON csc.sharerId = sharer.id
+          LEFT JOIN users receiver ON csc.receiverId = receiver.id
+          WHERE csc.introducerId = ? AND csc.status = 'active'
           ORDER BY csc.created_at DESC
         `, [input.userId]);
 
