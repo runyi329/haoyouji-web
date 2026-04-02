@@ -3634,13 +3634,21 @@ export default function LedgerDetail() {
                   <tr>
                     <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '3px 4px' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '7.5px', tableLayout: 'fixed' }}>
+                        <colgroup>
+                          <col style={{ width: '20%' }} />
+                          <col style={{ width: '13.33%' }} />
+                          <col style={{ width: '20%' }} />
+                          <col style={{ width: '13.33%' }} />
+                          <col style={{ width: '20%' }} />
+                          <col style={{ width: '13.33%' }} />
+                        </colgroup>
                         <thead>
                           <tr style={{ background: 'rgba(201,168,76,0.12)' }}>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>排名</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>排名区间</th>
                             <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>加成</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>排名</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>排名区间</th>
                             <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>加成</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>排名</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>排名区间</th>
                             <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '2px 1px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>加成</th>
                           </tr>
                         </thead>
@@ -3662,7 +3670,7 @@ export default function LedgerDetail() {
                           ] as string[][]).map((row, i) => (
                             <tr key={i} style={{ background: i % 2 === 1 ? 'rgba(201,168,76,0.04)' : 'transparent' }}>
                               {row.map((cell, j) => (
-                                <td key={j} style={{ border: '1px solid rgba(201,168,76,0.12)', padding: '1.5px 1px', textAlign: 'center', color: j % 2 === 0 ? 'rgba(58,20,0,0.75)' : '#C9A84C', fontWeight: j % 2 === 1 ? 700 : 400, whiteSpace: 'nowrap' }}>{cell}</td>
+                                <td key={j} style={{ border: '1px solid rgba(201,168,76,0.12)', padding: '1.5px 0px', textAlign: 'center', color: j % 2 === 0 ? 'rgba(58,20,0,0.75)' : '#C9A84C', fontWeight: j % 2 === 1 ? 700 : 400, whiteSpace: 'nowrap' }}>{cell}</td>
                               ))}
                             </tr>
                           ))}
