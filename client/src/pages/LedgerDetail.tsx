@@ -3518,96 +3518,104 @@ export default function LedgerDetail() {
               <div className="text-xs font-bold mb-1" style={{ color: '#1A0A00' }}>权重计算规则</div>
               <div className="text-[10px] mb-4" style={{ color: 'rgba(58,20,0,0.5)' }}>最终股票数 = 资金股 × 综合乘数，综合乘数满分 <span style={{ color: '#C9A84C', fontWeight: 700 }}>5.0</span>（基础1.0 + 资金乘数2.0 + 资源乘数2.0）</div>
 
-              {/* ===== 合并的权重规则表格 ===== */}
-              <table className="w-full text-[10px]" style={{ borderCollapse: 'collapse' }}>
+              {/* ===== 合并的权重规则表格（固定列宽，防止换行） ===== */}
+              <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', fontSize: '10px' }}>
+                <colgroup>
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '16%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '44%' }} />
+                </colgroup>
                 <thead>
                   <tr style={{ background: 'rgba(201,168,76,0.15)' }}>
-                    <th className="text-center px-2 py-2" style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)' }}>乘数类型</th>
-                    <th className="text-left px-2 py-2" style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)' }}>维度</th>
-                    <th className="text-center px-2 py-2" style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)' }}>权重</th>
-                    <th className="text-center px-2 py-2" style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)' }}>满分</th>
-                    <th className="text-left px-2 py-2" style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)' }}>计分规则</th>
+                    <th style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)', padding: '6px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>乘数类型</th>
+                    <th style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)', padding: '6px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>维度</th>
+                    <th style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>权重</th>
+                    <th style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>满分</th>
+                    <th style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.25)', padding: '6px 4px', textAlign: 'center' }}>计分规则</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {/* ===== 基础权重 ===== */}
+                  {/* 基础权重 */}
                   <tr style={{ background: 'rgba(58,20,0,0.06)' }}>
-                    <td className="text-center px-2 py-2 font-bold" style={{ color: '#1A0A00', border: '1px solid rgba(201,168,76,0.2)' }}>
-                      基础权重
-                    </td>
-                    <td colSpan={4} className="px-3 py-2" style={{ color: 'rgba(58,20,0,0.75)', border: '1px solid rgba(201,168,76,0.2)' }}>
-                      <span className="font-bold" style={{ color: '#C9A84C' }}>固定 +1.0</span>
-                      <span className="ml-2 text-[9px]" style={{ color: 'rgba(58,20,0,0.5)' }}>每位合伙人均享有的基础乘数，无需额外条件</span>
-                    </td>
-                  </tr>
-                  {/* ===== 资源乘数部分 ===== */}
-                  <tr style={{ background: 'rgba(201,168,76,0.08)' }}>
-                    <td rowSpan={7} className="text-center px-2 py-2 font-bold align-top" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.2)', verticalAlign: 'top', paddingTop: '12px' }}>
-                      资源乘数<br/>
-                      <span className="text-[9px] font-normal" style={{ color: 'rgba(58,20,0,0.6)' }}>(满分+2.0)</span>
-                    </td>
-                    <td colSpan={4} className="px-2 py-1.5 font-bold" style={{ color: 'rgba(58,20,0,0.85)', border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.1)' }}>
-                      一、人脉贡献（权重50%，满分 +1.0）
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>自有人脉</td>
-                    <td className="text-center px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>50%</td>
-                    <td className="text-center px-2 py-1.5 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.50</td>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每1人得1分，≥100人满分</td>
-                  </tr>
-                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>共享人脉</td>
-                    <td className="text-center px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>30%</td>
-                    <td className="text-center px-2 py-1.5 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.30</td>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每8人得1分，≥800人满分</td>
-                  </tr>
-                  <tr>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)' }}>拓扑人脉</td>
-                    <td className="text-center px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)' }}>20%</td>
-                    <td className="text-center px-2 py-1.5 font-bold" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.15)' }}>+0.20</td>
-                    <td className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>每20人得1分，≥2000人满分</td>
-                  </tr>
-                  <tr style={{ background: 'rgba(201,168,76,0.08)' }}>
-                    <td colSpan={4} className="px-2 py-1.5 font-bold" style={{ color: 'rgba(58,20,0,0.85)', border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.1)' }}>
-                      二、标签贡献（权重30%，满分 +0.6）<span className="text-[9px] font-normal ml-1" style={{ color: 'rgba(58,20,0,0.5)' }}>人均标签数对数曲线</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colSpan={4} className="px-3 py-2" style={{ border: '1px solid rgba(201,168,76,0.15)' }}>
-                      <div className="text-[9px]" style={{ color: 'rgba(58,20,0,0.6)', lineHeight: '1.4' }}>
-                        1个标签→33分(+0.20) | 3个→61分(+0.37) | 5个→75分(+0.45) | 10个→95分(+0.57) | ≥15个→100分(+0.60)
-                      </div>
-                    </td>
-                  </tr>
-                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
-                    <td colSpan={4} className="px-2 py-1.5" style={{ color: 'rgba(58,20,0,0.75)', border: '1px solid rgba(201,168,76,0.15)' }}>
-                      <span className="font-bold">三、邀请贡献（权重20%，满分 +0.4）</span>
-                      <span className="ml-2 text-[9px]" style={{ color: 'rgba(58,20,0,0.6)' }}>每邀请1位用户得1分，≥100人满分</span>
+                    <td style={{ color: '#1A0A00', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '7px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>基础权重</td>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '7px 8px' }}>
+                      <span style={{ color: '#C9A84C', fontWeight: 700 }}>固定 +1.0</span>
+                      <span style={{ color: 'rgba(58,20,0,0.5)', fontSize: '9px', marginLeft: '6px' }}>所有合伙人均享有，无需额外条件</span>
                     </td>
                   </tr>
 
-                  {/* ===== 资金乘数部分 ===== */}
-                  <tr style={{ background: 'rgba(201,168,76,0.08)' }}>
-                    <td rowSpan={3} className="text-center px-2 py-2 font-bold align-top" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.2)', verticalAlign: 'top', paddingTop: '12px' }}>
-                      资金乘数<br/>
-                      <span className="text-[9px] font-normal" style={{ color: 'rgba(58,20,0,0.6)' }}>(满分+2.0)</span>
+                  {/* 资源乘数 */}
+                  <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
+                    <td rowSpan={8} style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '8px 4px', textAlign: 'center', verticalAlign: 'middle', lineHeight: '1.6' }}>
+                      资源<br/>乘数<br/><span style={{ fontSize: '9px', fontWeight: 400, color: 'rgba(58,20,0,0.55)' }}>满分<br/>+2.0</span>
                     </td>
-                    <td colSpan={4} className="px-2 py-1.5 font-bold" style={{ color: 'rgba(58,20,0,0.85)', border: '1px solid rgba(201,168,76,0.2)', background: 'rgba(201,168,76,0.1)' }}>
-                      一、时间乘数（满分 +1.0）
+                    <td colSpan={4} style={{ color: 'rgba(58,20,0,0.85)', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '5px 8px', background: 'rgba(201,168,76,0.1)' }}>
+                      一、人脉贡献（50%，满分+1.0）
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={4} className="px-3 py-2" style={{ border: '1px solid rgba(201,168,76,0.15)' }}>
-                      <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.75)' }}>按入场先后排名，第1名得满分 +1.0，第666名得 0，中间线性递减</div>
-                      <div className="text-[9px] mt-0.5" style={{ color: 'rgba(58,20,0,0.5)' }}>第667名及以后：时间乘数为 0</div>
+                    <td style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>自有人脉</td>
+                    <td style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>50%</td>
+                    <td style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>+0.50</td>
+                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px' }}>每1人得1分，≥100人满分</td>
+                  </tr>
+                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
+                    <td style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>共享人脉</td>
+                    <td style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>30%</td>
+                    <td style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>+0.30</td>
+                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px' }}>每8人得1分，≥800人满分</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: 'rgba(58,20,0,0.8)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', textAlign: 'center', whiteSpace: 'nowrap' }}>拓扑人脉</td>
+                    <td style={{ color: 'rgba(58,20,0,0.7)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>20%</td>
+                    <td style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.15)', padding: '6px 2px', textAlign: 'center', whiteSpace: 'nowrap' }}>+0.20</td>
+                    <td style={{ color: 'rgba(58,20,0,0.6)', border: '1px solid rgba(201,168,76,0.15)', padding: '6px 4px', fontSize: '9px' }}>每20人得1分，≥2000人满分</td>
+                  </tr>
+                  <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
+                    <td colSpan={4} style={{ color: 'rgba(58,20,0,0.85)', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '5px 8px', background: 'rgba(201,168,76,0.1)' }}>
+                      二、标签贡献（30%，满分+0.6）
                     </td>
                   </tr>
                   <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
-                    <td colSpan={4} className="px-3 py-2" style={{ border: '1px solid rgba(201,168,76,0.15)' }}>
-                      <div className="font-bold text-[10px] mb-0.5" style={{ color: 'rgba(58,20,0,0.85)' }}>二、资金量乘数（满分 +1.0）</div>
-                      <div className="text-[10px]" style={{ color: 'rgba(58,20,0,0.75)' }}>以10万元为基准，出资金额 ÷ 10万 = 资金量乘数</div>
-                      <div className="text-[9px] mt-0.5" style={{ color: 'rgba(58,20,0,0.5)' }}>示例：出资5万 → 乘数0.5；出资10万及以上 → 乘数1.0（满分）</div>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '6px 8px', fontSize: '9px', color: 'rgba(58,20,0,0.6)', lineHeight: '1.6' }}>
+                      1个→+0.20 &nbsp;|&nbsp; 3个→+0.37 &nbsp;|&nbsp; 5个→+0.45 &nbsp;|&nbsp; 10个→+0.57 &nbsp;|&nbsp; ≥15个→+0.60
+                    </td>
+                  </tr>
+                  <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
+                    <td colSpan={4} style={{ color: 'rgba(58,20,0,0.85)', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '5px 8px', background: 'rgba(201,168,76,0.1)' }}>
+                      三、邀请贡献（20%，满分+0.4）
+                    </td>
+                  </tr>
+                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '6px 8px', fontSize: '9px', color: 'rgba(58,20,0,0.6)', lineHeight: '1.6' }}>
+                      每邀请1位用户得1分，≥100人得满分（+0.4）
+                    </td>
+                  </tr>
+
+                  {/* 资金乘数 */}
+                  <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
+                    <td rowSpan={4} style={{ color: '#C9A84C', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '8px 4px', textAlign: 'center', verticalAlign: 'middle', lineHeight: '1.6' }}>
+                      资金<br/>乘数<br/><span style={{ fontSize: '9px', fontWeight: 400, color: 'rgba(58,20,0,0.55)' }}>满分<br/>+2.0</span>
+                    </td>
+                    <td colSpan={4} style={{ color: 'rgba(58,20,0,0.85)', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '5px 8px', background: 'rgba(201,168,76,0.1)' }}>
+                      一、时间乘数（满分+1.0）
+                    </td>
+                  </tr>
+                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '6px 8px', fontSize: '9px', color: 'rgba(58,20,0,0.6)', lineHeight: '1.6' }}>
+                      按入场先后排名，第1名+1.0，第666名得0，中间线性递减；第667名起为0
+                    </td>
+                  </tr>
+                  <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
+                    <td colSpan={4} style={{ color: 'rgba(58,20,0,0.85)', fontWeight: 700, border: '1px solid rgba(201,168,76,0.2)', padding: '5px 8px', background: 'rgba(201,168,76,0.1)' }}>
+                      二、资金量乘数（满分+1.0）
+                    </td>
+                  </tr>
+                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '6px 8px', fontSize: '9px', color: 'rgba(58,20,0,0.6)', lineHeight: '1.6' }}>
+                      以10万元为基准，出资金额÷10万=乘数；5万→0.5，≥10万→1.0（满分）
                     </td>
                   </tr>
                 </tbody>
