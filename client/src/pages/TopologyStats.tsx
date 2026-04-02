@@ -1,4 +1,4 @@
-import { useNavigate } from "wouter";
+import { useLocation } from "wouter";
 import { ArrowLeft, Users, UserCheck, Network, Share2, TrendingUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -15,7 +15,7 @@ interface StatRow {
 }
 
 export default function TopologyStats() {
-  const navigate = useNavigate();
+  const [, navigate] = useLocation();
   const { user } = useAuth();
 
   const { data: stats, isLoading, error } = trpc.topology.getShareholderContactStats.useQuery(undefined, {
