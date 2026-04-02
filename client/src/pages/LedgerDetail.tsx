@@ -3516,7 +3516,7 @@ export default function LedgerDetail() {
 
               {/* 总览说明 */}
               <div className="text-xs font-bold mb-1" style={{ color: '#1A0A00' }}>权重计算规则</div>
-              <div className="text-[10px] mb-4" style={{ color: 'rgba(58,20,0,0.5)' }}>最终股票数 = 资金股 × (1 + 资金乘数 + 资源乘数)，资金乘数满分 +2.0，资源乘数满分 +2.0</div>
+              <div className="text-[10px] mb-4" style={{ color: 'rgba(58,20,0,0.5)' }}>最终股票数 = 资金股 × 综合乘数，综合乘数满分 <span style={{ color: '#C9A84C', fontWeight: 700 }}>5.0</span>（基础1.0 + 资金乘数2.0 + 资源乘数2.0）</div>
 
               {/* ===== 合并的权重规则表格 ===== */}
               <table className="w-full text-[10px]" style={{ borderCollapse: 'collapse' }}>
@@ -3530,6 +3530,16 @@ export default function LedgerDetail() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* ===== 基础权重 ===== */}
+                  <tr style={{ background: 'rgba(58,20,0,0.06)' }}>
+                    <td className="text-center px-2 py-2 font-bold" style={{ color: '#1A0A00', border: '1px solid rgba(201,168,76,0.2)' }}>
+                      基础权重
+                    </td>
+                    <td colSpan={4} className="px-3 py-2" style={{ color: 'rgba(58,20,0,0.75)', border: '1px solid rgba(201,168,76,0.2)' }}>
+                      <span className="font-bold" style={{ color: '#C9A84C' }}>固定 +1.0</span>
+                      <span className="ml-2 text-[9px]" style={{ color: 'rgba(58,20,0,0.5)' }}>每位合伙人均享有的基础乘数，无需额外条件</span>
+                    </td>
+                  </tr>
                   {/* ===== 资源乘数部分 ===== */}
                   <tr style={{ background: 'rgba(201,168,76,0.08)' }}>
                     <td rowSpan={7} className="text-center px-2 py-2 font-bold align-top" style={{ color: '#C9A84C', border: '1px solid rgba(201,168,76,0.2)', verticalAlign: 'top', paddingTop: '12px' }}>
