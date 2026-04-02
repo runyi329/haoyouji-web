@@ -177,10 +177,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                 ) : isCx8618 ? (
                   <Wine className="w-7 h-7 text-[#C9A84C]" />
                 ) : isJiang ? (
-                  <>
-                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/idealight_icon.png" className="w-8 h-8 object-contain" alt="润仪" />
-                    <span className="text-[10px] font-bold leading-none mt-0.5 text-white">润仪</span>
-                  </>
+                  <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/ba9a86df64fd3309eeb754e6b875940a_c32624a6.jpg" className="w-10 h-10 object-cover rounded-full" alt="R1" />
                 ) : isStevenHuang ? (
                   <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp" className="w-9 h-9 object-contain" alt="脉动" />
                 ) : (
