@@ -21,6 +21,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const isCx8618 = user?.username === 'cx8618';
   const isJiang = user?.username === 'jiang';
   const isYJH = user?.username === 'YJH';
+  const isStevenHuang = user?.username === 'STEVEN_HUANG';
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
@@ -180,6 +181,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                     <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/idealight_icon.png" className="w-8 h-8 object-contain" alt="润仪" />
                     <span className="text-[10px] font-bold leading-none mt-0.5 text-white">润仪</span>
                   </>
+                ) : isStevenHuang ? (
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp" className="w-9 h-9 object-contain" alt="脉动" />
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}
