@@ -54,8 +54,9 @@ export default function TopologyLinkDetail() {
 
         {/* 错误 */}
         {error && (
-          <div className="text-center py-16 text-red-500 text-sm">
-            加载失败，请重试
+          <div className="py-8 px-4 text-red-500 text-sm">
+            <div className="font-semibold mb-1">加载失败</div>
+            <div className="text-xs text-red-400 break-all">{error.message}</div>
           </div>
         )}
 
