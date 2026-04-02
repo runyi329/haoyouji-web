@@ -660,6 +660,124 @@ function getNextTaxDeadlineInfo(): { deadline: Date; originalDate: Date; postpon
   }
 }
 
+// ===== 实时权重展示子组件 =====
+function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
+  const { data: ws, isLoading } = (trpc as any).equity.getMemberWeightScore.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
+
+  const gold = '#C9A84C';
+  const darkBrown = '#1A0A00';
+  const dimBrown = 'rgba(58,20,0,0.5)';
+  const bg = 'rgba(201,168,76,0.07)';
+  const border = '1px solid rgba(201,168,76,0.2)';
+
+  if (isLoading) {
+    return (
+      <div className="rounded-2xl p-4 mb-4 flex items-center justify-center" style={{ background: bg, border, minHeight: 80 }}>
+        <span className="text-xs" style={{ color: dimBrown }}>计算中...</span>
+      </div>
+    );
+  }
+
+  if (!ws) {
+    return (
+      <div className="rounded-2xl p-4 mb-4 flex items-center justify-center" style={{ background: bg, border, minHeight: 80 }}>
+        <span className="text-xs" style={{ color: dimBrown }}>暂无权重数据</span>
+      </div>
+    );
+  }
+
+  const total = ws.totalMultiplier ?? 1.0;
+  const capital = ws.capitalMultiplier ?? 0;
+  const resource = ws.resourceMultiplier ?? 1.0;
+
+  // 进度条百分比
+  const totalPct = Math.min((total / 5.0) * 100, 100);
+  const capitalPct = Math.min((capital / 2.0) * 100, 100);
+  const resourcePct = Math.min(((resource - 1.0) / 2.0) * 100, 100);
+
+  return (
+    <div className="rounded-2xl p-4 mb-4" style={{ background: bg, border }}>
+      {/* 标题 */}
+      <div className="text-xs font-bold mb-3" style={{ color: darkBrown }}>我的实时权重</div>
+
+      {/* 综合乘数大字展示 */}
+      <div className="flex items-end gap-2 mb-3">
+        <span className="text-3xl font-bold" style={{ color: gold, lineHeight: 1 }}>{total.toFixed(2)}</span>
+        <span className="text-xs mb-1" style={{ color: dimBrown }}>倍（满分5.0倍）</span>
+        <div className="flex-1" />
+        <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: gold, fontWeight: 600 }}>第{ws.shareNo ?? '--'}号入场</span>
+      </div>
+
+      {/* 总进度条 */}
+      <div className="mb-3">
+        <div className="flex justify-between text-[10px] mb-1" style={{ color: dimBrown }}>
+          <span>综合乘数</span>
+          <span>{total.toFixed(2)} / 5.00</span>
+        </div>
+        <div className="rounded-full overflow-hidden" style={{ height: 6, background: 'rgba(201,168,76,0.15)' }}>
+          <div className="h-full rounded-full" style={{ width: `${totalPct}%`, background: gold, transition: 'width 0.6s ease' }} />
+        </div>
+      </div>
+
+      {/* 两大乘数分列 */}
+      <div className="grid grid-cols-2 gap-2">
+        {/* 资金乘数 */}
+        <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>
+          <div className="text-[10px] mb-1" style={{ color: dimBrown }}>资金乘数</div>
+          <div className="text-lg font-bold" style={{ color: gold }}>{capital.toFixed(2)}<span className="text-[10px] font-normal ml-0.5">倍</span></div>
+          <div className="rounded-full overflow-hidden mt-1.5" style={{ height: 3, background: 'rgba(201,168,76,0.15)' }}>
+            <div className="h-full rounded-full" style={{ width: `${capitalPct}%`, background: gold }} />
+          </div>
+          <div className="mt-1.5 space-y-0.5">
+            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
+              <span>时间乘数</span>
+              <span style={{ color: gold }}>+{ws.timeBonus?.toFixed(2) ?? '0.00'}</span>
+            </div>
+            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
+              <span>资金量乘数</span>
+              <span style={{ color: gold }}>+{ws.capitalBonus?.toFixed(2) ?? '0.00'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 资源乘数 */}
+        <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>
+          <div className="text-[10px] mb-1" style={{ color: dimBrown }}>资源乘数</div>
+          <div className="text-lg font-bold" style={{ color: gold }}>{(resource - 1.0).toFixed(2)}<span className="text-[10px] font-normal ml-0.5">倍</span></div>
+          <div className="rounded-full overflow-hidden mt-1.5" style={{ height: 3, background: 'rgba(201,168,76,0.15)' }}>
+            <div className="h-full rounded-full" style={{ width: `${resourcePct}%`, background: gold }} />
+          </div>
+          <div className="mt-1.5 space-y-0.5">
+            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
+              <span>人脉贡献</span>
+              <span style={{ color: gold }}>+{ws.networkBonus?.toFixed(2) ?? '0.00'}</span>
+            </div>
+            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
+              <span>标签贡献</span>
+              <span style={{ color: gold }}>+{ws.tagBonus?.toFixed(2) ?? '0.00'}</span>
+            </div>
+            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
+              <span>邀请贡献</span>
+              <span style={{ color: gold }}>+{ws.inviteBonus?.toFixed(2) ?? '0.00'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 底部详情行 */}
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
+        <span className="text-[9px]" style={{ color: dimBrown }}>出资：{ws.capitalAmount ? (ws.capitalAmount / 10000).toFixed(1) + '万元' : '--'}</span>
+        <span className="text-[9px]" style={{ color: dimBrown }}>邀请：{ws.inviteCount ?? 0}人</span>
+        <span className="text-[9px]" style={{ color: dimBrown }}>人均标签：{ws.avgTags ?? 0}个</span>
+        <span className="text-[9px]" style={{ color: dimBrown }}>自有人脉：{ws.ownContacts ?? 0}人</span>
+      </div>
+    </div>
+  );
+}
+
 export default function LedgerDetail() {
   const [, params] = useRoute("/ledger/:id");
   const [, setLocation] = useLocation();
@@ -3506,10 +3624,8 @@ export default function LedgerDetail() {
               <button onClick={() => setShowWeightDetail(false)} style={{ background: 'rgba(58,20,0,0.08)', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: 'rgba(58,20,0,0.6)', fontSize: 14 }}>×</button>
             </div>
 
-            {/* ===== 上半部分：用户实际数据（占位） ===== */}
-            <div className="rounded-2xl p-6 mb-4" style={{ background: 'rgba(201,168,76,0.05)', border: '1px dashed rgba(201,168,76,0.3)', minHeight: '120px' }}>
-              <div className="text-center text-xs" style={{ color: 'rgba(58,20,0,0.4)' }}>用户实际权重数据区域（即将上线）</div>
-            </div>
+            {/* ===== 上半部分：用户实际数据 ===== */}
+            <WeightScoreDisplay ledgerId={ledgerId} />
 
             {/* ===== 下半部分：权重规则说明 ===== */}
             <div className="rounded-2xl p-4" style={{ background: 'rgba(201,168,76,0.07)', border: '1px solid rgba(201,168,76,0.2)' }}>
