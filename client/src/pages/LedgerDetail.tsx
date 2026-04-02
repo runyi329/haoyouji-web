@@ -3501,9 +3501,14 @@ export default function LedgerDetail() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="text-base font-bold" style={{ color: '#1A0A00' }}>权重详情</div>
-                  <div className="text-[11px] mt-0.5" style={{ color: 'rgba(58,20,0,0.5)' }}>实际股权数 = 原始张数 × 总权重</div>
+                <div className="text-[11px] mt-0.5" style={{ color: 'rgba(58,20,0,0.5)' }}>最终股票数 = 资金股 × (1 + 资金乘数 + 资源乘数)</div>
               </div>
               <button onClick={() => setShowWeightDetail(false)} style={{ background: 'rgba(58,20,0,0.08)', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', color: 'rgba(58,20,0,0.6)', fontSize: 14 }}>×</button>
+            </div>
+
+            {/* ===== 上半部分：用户实际数据（占位） ===== */}
+            <div className="rounded-2xl p-6 mb-4" style={{ background: 'rgba(201,168,76,0.05)', border: '1px dashed rgba(201,168,76,0.3)', minHeight: '120px' }}>
+              <div className="text-center text-xs" style={{ color: 'rgba(58,20,0,0.4)' }}>用户实际权重数据区域（即将上线）</div>
             </div>
 
             {/* ===== 下半部分：权重规则说明 ===== */}
