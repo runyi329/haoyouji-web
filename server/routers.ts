@@ -15818,7 +15818,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const [rows] = await (dbConn as any).execute(`
           SELECT
             csc.id,
-            csc.created_at,
+            csc.createdAt,
             csc.note,
             sharer.nickname AS sharer_name,
             sharer.username AS sharer_username,
@@ -15827,15 +15827,15 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           FROM contact_sharing_connections csc
           LEFT JOIN users sharer ON csc.sharerId = sharer.id
           LEFT JOIN users receiver ON csc.receiverId = receiver.id
-          WHERE csc.introducerId = ? AND csc.status = 'active'
-          ORDER BY csc.created_at DESC
+          WHERE csc.introducer_id = ? AND csc.status = 'active'
+          ORDER BY csc.createdAt DESC
         `, [input.userId]);
 
         return (rows as any[]).map(r => ({
           id: r.id,
           sharerName: r.sharer_name || r.sharer_username || '未知',
           receiverName: r.receiver_name || r.receiver_username || '未知',
-          createdAt: r.created_at ? new Date(r.created_at).toLocaleDateString('zh-CN') : '未知',
+          createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString('zh-CN') : '未知',
           note: r.note || '',
         }));
       }),
