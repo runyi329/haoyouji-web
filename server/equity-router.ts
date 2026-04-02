@@ -1342,6 +1342,79 @@ export const equityRouter = router({
       }
       return { success: true, action: input.action };
     }),
+
+  // 获取当前用户在指定账本的实时综合权重（新规则：基础1.0 + 资源乘数2.0 + 资金乘数2.0）
+  getMemberWeightScore: protectedProcedure
+    .input(z.object({ ledgerId: z.number(), userId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      const targetUserId = input.userId ?? ctx.user.id;
+      // ===== 1. 入场排名（时间乘数）=====
+      const [[snRow]] = await (db as any).execute(
+        'SELECT shareNo FROM shareholder_numbers WHERE ledgerId = ? AND userId = ? LIMIT 1',
+        [input.ledgerId, targetUserId]
+      ) as any;
+      const shareNo = snRow?.shareNo ? String(snRow.shareNo) : null;
+      const rank = shareNo ? parseInt(shareNo, 10) : null;
+      let timeBonus = 0;
+      let timeTier: number | null = null;
+      if (rank !== null && !isNaN(rank) && rank >= 1 && rank <= 666) {
+        timeTier = Math.ceil(rank / 10);
+        const MAX_BONUS = 1.0;
+        const TIERS = 66;
+        const step = MAX_BONUS / (TIERS - 1);
+        timeBonus = Math.round((MAX_BONUS - (timeTier - 1) * step) * 10000) / 10000;
+      }
+      // ===== 2. 出资金额（资金量乘数）=====
+      const [[capRow]] = await (db as any).execute(
+        `SELECT COALESCE(SUM(shareCount), 0) AS capitalAmount FROM equity_shares WHERE ledgerId = ? AND userId = ? AND shareType = '资金股'`,
+        [input.ledgerId, targetUserId]
+      ) as any;
+      const capitalAmount = Number(capRow?.capitalAmount ?? 0);
+      const capitalBonus = Math.min(Math.round((capitalAmount / 100000) * 10000) / 10000, 1.0);
+      // ===== 3. 资金乘数 =====
+      const capitalMultiplier = Math.min(Math.round((timeBonus + capitalBonus) * 10000) / 10000, 2.0);
+      // ===== 4. 人脉贡献 =====
+      const [[ewRow]] = await (db as any).execute(
+        'SELECT own_contacts, shared_contacts, topo_contacts, avg_tags FROM equity_weights WHERE user_id = ? LIMIT 1',
+        [targetUserId]
+      ) as any;
+      const ownContacts = Number(ewRow?.own_contacts ?? 0);
+      const sharedContacts = Number(ewRow?.shared_contacts ?? 0);
+      const topoContacts = Number(ewRow?.topo_contacts ?? 0);
+      const avgTags = Number(ewRow?.avg_tags ?? 0);
+      const ownBonus = Math.round(Math.min(ownContacts / 100, 1.0) * 0.5 * 10000) / 10000;
+      const sharedBonus = Math.round(Math.min(sharedContacts / 800, 1.0) * 0.3 * 10000) / 10000;
+      const topoBonus = Math.round(Math.min(topoContacts / 2000, 1.0) * 0.2 * 10000) / 10000;
+      const networkBonus = Math.min(Math.round((ownBonus + sharedBonus + topoBonus) * 10000) / 10000, 1.0);
+      // ===== 5. 标签贡献 =====
+      let tagBonus = 0;
+      if (avgTags > 0) {
+        const t = Math.min(avgTags, 15);
+        tagBonus = Math.round((0.60 * Math.log(1 + t) / Math.log(16)) * 10000) / 10000;
+      }
+      // ===== 6. 邀请贡献 =====
+      const [[invRow]] = await (db as any).execute(
+        'SELECT invite_count FROM users WHERE id = ? LIMIT 1',
+        [targetUserId]
+      ) as any;
+      const inviteCount = Number(invRow?.invite_count ?? 0);
+      const inviteBonus = Math.min(Math.round((inviteCount / 100) * 0.4 * 10000) / 10000, 0.4);
+      // ===== 7. 资源乘数 =====
+      const resourceMultiplier = Math.min(Math.round((1.0 + networkBonus + tagBonus + inviteBonus) * 10000) / 10000, 2.0);
+      // ===== 8. 综合乘数 =====
+      const totalMultiplier = Math.round((1.0 + capitalMultiplier + resourceMultiplier) * 10000) / 10000;
+      return {
+        shareNo, rank, timeTier, timeBonus,
+        capitalAmount, capitalBonus, capitalMultiplier,
+        ownContacts, sharedContacts, topoContacts, ownBonus, sharedBonus, topoBonus, networkBonus,
+        avgTags, tagBonus,
+        inviteCount, inviteBonus,
+        resourceMultiplier,
+        totalMultiplier,
+      };
+    }),
 });
 // ===== 股权转让功能 =====
 export const equityTransferRouter = router({
@@ -1580,121 +1653,6 @@ export const equityTransferRouter = router({
       ].sort((a, b) => new Date(b.eventDate || b.createdAt).getTime() - new Date(a.eventDate || a.createdAt).getTime());
       return all;
     }),
-  // 获取当前用户在指定账本的实时综合权重（新规则：基础1.0 + 资源乘数2.0 + 资金乘数2.0）
-  getMemberWeightScore: protectedProcedure
-    .input(z.object({ ledgerId: z.number(), userId: z.number().optional() }))
-    .query(async ({ ctx, input }) => {
-      const db = await (await import('./db')).getDbConnection();
-      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
-      const targetUserId = input.userId ?? ctx.user.id;
-
-      // ===== 1. 入场排名（时间乘数）=====
-      const [[snRow]] = await (db as any).execute(
-        'SELECT shareNo FROM shareholder_numbers WHERE ledgerId = ? AND userId = ? LIMIT 1',
-        [input.ledgerId, targetUserId]
-      ) as any;
-      const shareNo = snRow?.shareNo ? String(snRow.shareNo) : null;
-      const rank = shareNo ? parseInt(shareNo, 10) : null;
-      // 66档，每10名一档，线性递减，第1-10名=1.0，第661-666名=0.0，第667+名=0
-      let timeBonus = 0;
-      let timeTier: number | null = null;
-      if (rank !== null && !isNaN(rank) && rank >= 1 && rank <= 666) {
-        timeTier = Math.ceil(rank / 10); // 1~66
-        const MAX_BONUS = 1.0;
-        const TIERS = 66;
-        const step = MAX_BONUS / (TIERS - 1);
-        timeBonus = Math.round((MAX_BONUS - (timeTier - 1) * step) * 10000) / 10000;
-      }
-
-      // ===== 2. 出资金额（资金量乘数）=====
-      const [[capRow]] = await (db as any).execute(
-        `SELECT COALESCE(SUM(shareCount), 0) AS capitalAmount FROM equity_shares WHERE ledgerId = ? AND userId = ? AND shareType = '资金股'`,
-        [input.ledgerId, targetUserId]
-      ) as any;
-      const capitalAmount = Number(capRow?.capitalAmount ?? 0);
-      // 以10万为基准，出资金额÷10万=乘数，最高1.0
-      const capitalBonus = Math.min(Math.round((capitalAmount / 100000) * 10000) / 10000, 1.0);
-
-      // ===== 3. 资金乘数 = 时间乘数 + 资金量乘数（满分2.0）=====
-      const capitalMultiplier = Math.min(Math.round((timeBonus + capitalBonus) * 10000) / 10000, 2.0);
-
-      // ===== 4. 人脉贡献（资源乘数部分，满分1.0）=====
-      // 从equity_weights读取手动录入的人脉数据
-      const [[ewRow]] = await (db as any).execute(
-        'SELECT own_contacts, shared_contacts, topo_contacts, avg_tags FROM equity_weights WHERE user_id = ? LIMIT 1',
-        [targetUserId]
-      ) as any;
-      const ownContacts = Number(ewRow?.own_contacts ?? 0);
-      const sharedContacts = Number(ewRow?.shared_contacts ?? 0);
-      const topoContacts = Number(ewRow?.topo_contacts ?? 0);
-      const avgTags = Number(ewRow?.avg_tags ?? 0);
-
-      // 自有人脉：满分0.50，每1人得1分，≥100人满分
-      const ownScore = Math.min(ownContacts / 100, 1.0);
-      const ownBonus = Math.round(ownScore * 0.5 * 10000) / 10000;
-      // 共享人脉：满分0.30，每8人得1分，≥800人满分
-      const sharedScore = Math.min(sharedContacts / 800, 1.0);
-      const sharedBonus = Math.round(sharedScore * 0.3 * 10000) / 10000;
-      // 拓扑人脉：满分0.20，每20人得1分，≥2000人满分
-      const topoScore = Math.min(topoContacts / 2000, 1.0);
-      const topoBonus = Math.round(topoScore * 0.2 * 10000) / 10000;
-      const networkBonus = Math.min(Math.round((ownBonus + sharedBonus + topoBonus) * 10000) / 10000, 1.0);
-
-      // ===== 5. 标签贡献（满分0.60）对数曲线 =====
-      let tagBonus = 0;
-      if (avgTags > 0) {
-        const MAX_TAGS = 15;
-        const MAX_SCORE = 0.60;
-        const t = Math.min(avgTags, MAX_TAGS);
-        tagBonus = Math.round((MAX_SCORE * Math.log(1 + t) / Math.log(1 + MAX_TAGS)) * 10000) / 10000;
-      }
-
-      // ===== 6. 邀请贡献（满分0.40）=====
-      const [[invRow]] = await (db as any).execute(
-        'SELECT invite_count FROM users WHERE id = ? LIMIT 1',
-        [targetUserId]
-      ) as any;
-      const inviteCount = Number(invRow?.invite_count ?? 0);
-      const inviteBonus = Math.min(Math.round((inviteCount / 100) * 0.4 * 10000) / 10000, 0.4);
-
-      // ===== 7. 资源乘数 = 人脉贡献 + 标签贡献 + 邀请贡献（满分2.0）=====
-      const resourceMultiplier = Math.min(Math.round((1.0 + networkBonus + tagBonus + inviteBonus) * 10000) / 10000, 2.0);
-
-      // ===== 8. 综合乘数 = 基础1.0 + 资金乘数 + 资源乘数（满分5.0）=====
-      const totalMultiplier = Math.round((1.0 + capitalMultiplier + resourceMultiplier) * 10000) / 10000;
-
-      return {
-        // 入场排名
-        shareNo,
-        rank,
-        timeTier,
-        timeBonus,
-        // 出资金额
-        capitalAmount,
-        capitalBonus,
-        // 资金乘数
-        capitalMultiplier,
-        // 人脉
-        ownContacts,
-        sharedContacts,
-        topoContacts,
-        ownBonus,
-        sharedBonus,
-        topoBonus,
-        networkBonus,
-        // 标签
-        avgTags,
-        tagBonus,
-        // 邀请
-        inviteCount,
-        inviteBonus,
-        // 资源乘数
-        resourceMultiplier,
-        // 综合乘数
-        totalMultiplier,
-      };
-    }),
-
   // 调试接口：查询指定userId的推荐关系原始数据
   debugReferrals: protectedProcedure
     .input(z.object({ memberUserId: z.number() }))
