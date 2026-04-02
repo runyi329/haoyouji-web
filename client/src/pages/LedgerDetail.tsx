@@ -3578,9 +3578,29 @@ export default function LedgerDetail() {
                       二、标签贡献（30%，满分+0.6）
                     </td>
                   </tr>
-                  <tr style={{ background: 'rgba(201,168,76,0.04)' }}>
-                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '6px 8px', fontSize: '9px', color: 'rgba(58,20,0,0.6)', lineHeight: '1.6' }}>
-                      人均1个→+0.20 &nbsp;|&nbsp; 人均3个→+0.37 &nbsp;|&nbsp; 人均5个→+0.45 &nbsp;|&nbsp; 人均10个→+0.57 &nbsp;|&nbsp; 人均≥15个→+0.60
+                  <tr>
+                    <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '4px 6px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(201,168,76,0.12)' }}>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>权重加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>权重加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>权重加成</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {([['1个','+0.15','2个','+0.24','3个','+0.30'],['4个','+0.35','5个','+0.39','6个','+0.42'],['7个','+0.45','8个','+0.48','9个','+0.50'],['10个','+0.52','11个','+0.54','12个','+0.56'],['13个','+0.57','14个','+0.59','≥15个','+0.60']] as string[][]).map((row, i) => (
+                            <tr key={i} style={{ background: i % 2 === 1 ? 'rgba(201,168,76,0.04)' : 'transparent' }}>
+                              {row.map((cell, j) => (
+                                <td key={j} style={{ border: '1px solid rgba(201,168,76,0.12)', padding: '3px 4px', textAlign: 'center', color: j % 2 === 0 ? 'rgba(58,20,0,0.75)' : '#C9A84C', fontWeight: j % 2 === 1 ? 700 : 400 }}>{cell}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </td>
                   </tr>
                   <tr style={{ background: 'rgba(201,168,76,0.1)' }}>
