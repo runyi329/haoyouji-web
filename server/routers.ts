@@ -15822,9 +15822,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
               csc.id,
               csc.createdAt,
               csc.note,
-              sharer.nickname AS sharer_name,
+              sharer.name AS sharer_name,
               sharer.username AS sharer_username,
-              receiver.nickname AS receiver_name,
+              receiver.name AS receiver_name,
               receiver.username AS receiver_username
             FROM contact_sharing_connections csc
             LEFT JOIN users sharer ON csc.sharerId = sharer.id
