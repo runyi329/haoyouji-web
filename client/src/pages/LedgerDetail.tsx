@@ -3580,15 +3580,15 @@ export default function LedgerDetail() {
                   </tr>
                   <tr>
                     <td colSpan={4} style={{ border: '1px solid rgba(201,168,76,0.15)', padding: '4px 6px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '9px', tableLayout: 'fixed' }}>
                         <thead>
                           <tr style={{ background: 'rgba(201,168,76,0.12)' }}>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>人均标签</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>权重加成</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>人均标签</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>权重加成</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>人均标签</th>
-                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600 }}>权重加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>人均标签</th>
+                            <th style={{ border: '1px solid rgba(201,168,76,0.2)', padding: '3px 4px', textAlign: 'center', color: 'rgba(58,20,0,0.6)', fontWeight: 600, whiteSpace: 'nowrap' }}>权重加成</th>
                           </tr>
                         </thead>
                         <tbody>
