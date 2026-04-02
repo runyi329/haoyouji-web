@@ -6220,7 +6220,7 @@ export const appRouter = router({
           await db.createSharingPermission({
             connectionId,
             fieldName,
-            isShared: true,
+            isShared: false,
           });
         }
         
@@ -6539,43 +6539,11 @@ export const appRouter = router({
               updatedAt: contact.updatedAt,
             };
             
-            // 根据权限配置过滤字段
-            // 姓名始终显示（必须的）
-            if (sharedFieldsSet.has('name') || sharedFieldsSet.size === 0) {
-              result.name = contact.name;
-            }
-            
-            // 其他基本字段根据权限配置
-            if (sharedFieldsSet.has('title')) result.title = contact.title;
-            if (sharedFieldsSet.has('phone')) result.phone = contact.phone;
-            if (sharedFieldsSet.has('occupation')) result.occupation = contact.occupation;
-            if (sharedFieldsSet.has('avatar')) result.avatar = contact.avatar;
-            if (sharedFieldsSet.has('notes')) result.notes = contact.notes;
-            if (sharedFieldsSet.has('isBlacklisted')) result.isBlacklisted = contact.isBlacklisted;
-            
-            // 标签始终显示（重要信息）
+            // 共享人脉只允许看名字和标签，所有详情字段一律不开放
+            result.name = contact.name;
             result.tags = tags;
             result.personalTags = personalTags;
-            
-            // 字段值（公司、职位等）始终显示
-            result.fieldValues = fieldValues;
-            
-            // 联络信息始终显示（让接收方知道分享者的联络情况）
-            result.lastInteractionDate = interactionInfo.lastInteraction;
-            result.daysSinceLastInteraction = interactionInfo.lastInteraction 
-              ? Math.floor((Date.now() - new Date(interactionInfo.lastInteraction).getTime()) / (1000 * 60 * 60 * 24))
-              : null;
-            result.hasTodayInteraction = interactionInfo.hasTodayInteraction;
-            result.hasInteractionToday = interactionInfo.hasInteractionToday || false;
-            result.hasInteractionThisWeek = interactionInfo.hasInteractionThisWeek || false;
-            result.hasInteractionThisMonth = interactionInfo.hasInteractionThisMonth || false;
-            result.hasInteractionThisYear = interactionInfo.hasInteractionThisYear || false;
-            result.totalInteractions = interactionStats?.totalInteractions || 0;
-            
-            // 推荐人信息
-            result.hasReferrer = contact.referrerId !== null && contact.referrerId !== undefined;
-            result.directReferrals = referrerStats?.directReferrals || 0;
-            result.indirectReferrals = referrerStats?.indirectReferrals || 0;
+            // 其他所有字段（phone/title/occupation/avatar/notes/fieldValues/互动信息等）均不返回
             
             return result;
           });
@@ -6663,7 +6631,7 @@ export const appRouter = router({
             note: noteText,
           });
           for (const fieldName of defaultFields) {
-            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: true });
+            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: false });
           }
           await addPointsForAction(sharerId, 'share_contact', connId);
           if (dbConn) {
@@ -6762,7 +6730,7 @@ export const appRouter = router({
                 .set({ introducerId, introducerName })
                 .where(eq(contactSharingConnections.id, connId2));
               for (const fieldName of defaultFields) {
-                await db.createSharingPermission({ connectionId: connId2, fieldName, isShared: true });
+                await db.createSharingPermission({ connectionId: connId2, fieldName, isShared: false });
               }
               await dbConn.insert(sharingNotifications).values({
                 receiverId, actorId: sharerId,
@@ -6889,7 +6857,7 @@ export const appRouter = router({
             })
             .where(eq(contactSharingConnections.id, connId));
           for (const fieldName of defaultFields) {
-            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: true });
+            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: false });
           }
           await addPointsForAction(sharerId, 'share_contact', connId);
           await dbConn.insert(sharingNotifications).values({
@@ -6970,7 +6938,7 @@ export const appRouter = router({
             .set({ introducerId: introducerUser.id, introducerName: parsed.introducerName })
             .where(eq(contactSharingConnections.id, connId));
           for (const fieldName of defaultFields) {
-            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: true });
+            await db.createSharingPermission({ connectionId: connId, fieldName, isShared: false });
           }
           await addPointsForAction(sharerId, 'share_contact', connId);
           await dbConn.insert(sharingNotifications).values({
