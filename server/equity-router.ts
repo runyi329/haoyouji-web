@@ -1419,12 +1419,13 @@ export const equityRouter = router({
       const sharedBonus = Math.round(Math.min(sharedContacts / 800, 1.0) * 0.3 * 10000) / 10000;
       const topoBonus = Math.round(Math.min(topoContacts / 2000, 1.0) * 0.2 * 10000) / 10000;
       const networkBonus = Math.min(Math.round((ownBonus + sharedBonus + topoBonus) * 10000) / 10000, 1.0);
-      // ===== 5. 标签贡献 =====
-      let tagBonus = 0;
-      if (avgTags > 0) {
-        const t = Math.min(avgTags, 15);
-        tagBonus = Math.round((0.60 * Math.log(1 + t) / Math.log(16)) * 10000) / 10000;
-      }
+      // ===== 5. 标签贡献（分档查表，与前端规则表一致）=====
+      // 规则表：1个→+0.15, 2→+0.24, 3→+0.30, 4→+0.35, 5→+0.39,
+      //          6→+0.42, 7→+0.45, 8→+0.48, 9→+0.50, 10→+0.52,
+      //          11→+0.54, 12→+0.56, 13→+0.57, 14→+0.59, ≥15→+0.60
+      const TAG_TIER_TABLE = [0, 0.15, 0.24, 0.30, 0.35, 0.39, 0.42, 0.45, 0.48, 0.50, 0.52, 0.54, 0.56, 0.57, 0.59, 0.60];
+      const tagTier = Math.min(Math.floor(avgTags), 15); // 下取整，最大取15
+      const tagBonus = tagTier > 0 ? TAG_TIER_TABLE[tagTier] : 0;
       // ===== 6. 邀请贡献 =====
       const [[invRow]] = await (db as any).execute(
         'SELECT invite_count FROM users WHERE id = ? LIMIT 1',
@@ -1440,7 +1441,7 @@ export const equityRouter = router({
         shareNo, rank, timeTier, timeBonus,
         capitalAmount, capitalBonus, capitalMultiplier,
         ownContacts, sharedContacts, topoContacts, ownBonus, sharedBonus, topoBonus, networkBonus,
-        avgTags, tagBonus,
+        avgTags, tagTier, tagBonus,
         inviteCount, inviteBonus,
         resourceMultiplier,
         totalMultiplier,
