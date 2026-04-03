@@ -7659,7 +7659,7 @@ export const appRouter = router({
         ledgerId: z.number(),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
+        return await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id, ctx.user.role);
       }),
 
     // 获取账本金额范围

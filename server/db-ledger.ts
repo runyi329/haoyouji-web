@@ -1355,7 +1355,7 @@ export async function updateLedgerCategory(
 /**
  * 获取账本成员列表
  */
-export async function getLedgerMembers(ledgerId: number, userId: number) {
+export async function getLedgerMembers(ledgerId: number, userId: number, userRole?: string) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -1373,7 +1373,9 @@ export async function getLedgerMembers(ledgerId: number, userId: number) {
     )
     .limit(1);
   
-  if (membership.length === 0) {
+  // 系统级 admin/super_admin 直接跳过成员检查（与 getLedgerById 逻辑一致）
+  const isSysAdmin = userRole === 'admin' || userRole === 'super_admin';
+  if (membership.length === 0 && !isSysAdmin) {
     throw new Error("您不是此账本的成员");
   }
   
