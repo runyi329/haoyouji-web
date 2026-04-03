@@ -97,6 +97,71 @@ export function cookieClearToken(): void {
   } catch {}
 }
 
+// ─── 登录凭据持久化（用于"保存登录信息"功能）────────────────────────
+
+const CRED_KEY = 'saved_credentials';
+
+/**
+ * 保存用户名和密码到 IndexedDB（用于自动登录）
+ * 密码以 base64 简单混淆存储（非加密，仅防止肉眼直读）
+ */
+export async function saveCredentials(username: string, password: string): Promise<void> {
+  try {
+    const db = await openDB();
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify({ username, password }))));
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+      tx.objectStore(IDB_STORE_NAME).put(encoded, CRED_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // 静默失败
+  }
+}
+
+/**
+ * 读取保存的登录凭据
+ */
+export async function getSavedCredentials(): Promise<{ username: string; password: string } | null> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE_NAME, 'readonly');
+      const req = tx.objectStore(IDB_STORE_NAME).get(CRED_KEY);
+      req.onsuccess = () => {
+        if (!req.result) { resolve(null); return; }
+        try {
+          const decoded = JSON.parse(decodeURIComponent(escape(atob(req.result))));
+          resolve(decoded);
+        } catch {
+          resolve(null);
+        }
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 清除保存的登录凭据（用户手动退出时调用）
+ */
+export async function clearCredentials(): Promise<void> {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+      tx.objectStore(IDB_STORE_NAME).delete(CRED_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // 静默失败
+  }
+}
+
 // ─── 统一接口 ─────────────────────────────────────────────────────
 
 /**

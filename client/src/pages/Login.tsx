@@ -1,28 +1,30 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { ArrowLeft, User, Lock, Eye, EyeOff } from "lucide-react";
+import { User, Lock, Eye, EyeOff } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { saveToken } from "@/lib/tokenStorage";
+import { saveToken, saveCredentials, getSavedCredentials, clearCredentials } from "@/lib/tokenStorage";
 
 export default function Login() {
   const [, setLocation] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  
+  const [rememberMe, setRememberMe] = useState(false);
+  const [autoLoggingIn, setAutoLoggingIn] = useState(false);
+
   // 登录表单
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  
+
   // 注册表单
   const [regUsername, setRegUsername] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [regName, setRegName] = useState("");
   const [regInviteCode, setRegInviteCode] = useState("");
-  
+
   // 从 URL 参数读取邀请码
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -32,7 +34,7 @@ export default function Login() {
       setActiveTab("register");
     }
   }, []);
-  
+
   // 长按计时器
   const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
 
@@ -42,17 +44,47 @@ export default function Login() {
   // 切换用户时清空所有缓存，防止旧用户数据残留
   const clearAllCacheAndNavigate = (token?: string) => {
     if (token) {
-      // 同步写入三层存储（localStorage + Cookie + IndexedDB）
-      // 解决微信安卓 WebView 上滑关闭后 localStorage 被清空的问题
       saveToken(token);
     }
-    // 清空所有 tRPC/React Query 缓存，防止旧用户数据残留
     queryClient.clear();
     setTimeout(() => {
-      // 使用 SPA 导航而不是 window.location.href，避免 Safari PWA 创建新视图层
       setLocation("/");
     }, 200);
   };
+
+  const loginMutation = trpc.auth.loginWithPassword.useMutation({
+    onSuccess: async (data) => {
+      if (rememberMe) {
+        await saveCredentials(loginUsername, loginPassword);
+      } else {
+        await clearCredentials();
+      }
+      toast.success("登录成功！");
+      clearAllCacheAndNavigate(data.token);
+    },
+    onError: (error) => {
+      setAutoLoggingIn(false);
+      toast.error(error.message);
+    },
+  });
+
+  // 自动登录：页面加载时检查是否有保存的凭据
+  const autoLoginAttempted = useRef(false);
+  useEffect(() => {
+    if (autoLoginAttempted.current) return;
+    autoLoginAttempted.current = true;
+
+    getSavedCredentials().then((creds) => {
+      if (creds && creds.username && creds.password) {
+        setLoginUsername(creds.username);
+        setLoginPassword(creds.password);
+        setRememberMe(true);
+        setAgreedToTerms(true);
+        setAutoLoggingIn(true);
+        loginMutation.mutate({ username: creds.username, password: creds.password });
+      }
+    });
+  }, []);
 
   // 游客模式：自动登录到游客账户
   const guestLoginMutation = trpc.auth.loginWithPassword.useMutation({
@@ -71,14 +103,14 @@ export default function Login() {
       password: "guest123",
     });
   };
-  
+
   const handlePressStart = () => {
     const timer = setTimeout(() => {
       handleGuestLogin();
     }, 2000);
     setPressTimer(timer);
   };
-  
+
   const handlePressEnd = () => {
     if (pressTimer) {
       clearTimeout(pressTimer);
@@ -86,15 +118,6 @@ export default function Login() {
     }
   };
 
-  const loginMutation = trpc.auth.loginWithPassword.useMutation({
-    onSuccess: (data) => {
-      toast.success("登录成功！");
-      clearAllCacheAndNavigate(data.token);
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
   const registerMutation = trpc.auth.registerWithPassword.useMutation({
     onSuccess: (data) => {
       toast.success("注册成功！");
@@ -103,7 +126,7 @@ export default function Login() {
     onError: (error) => {
       toast.error(error.message);
     },
-  });;
+  });
 
   // 登录处理 - 只通过按钮点击触发
   const handleLogin = () => {
@@ -121,16 +144,11 @@ export default function Login() {
     });
   };
 
-  // 注册提交锁（useRef确保同步更新，不受React批量更新影响）
+  // 注册提交锁
   const registerSubmittingRef = useRef(false);
 
-  // 注册处理 - 只通过按钮点击触发
   const handleRegister = () => {
-    // 双重防护：useRef锁 + isPending
-    if (registerSubmittingRef.current || registerMutation.isPending) {
-      console.log('[Register] 阻止重复提交');
-      return;
-    }
+    if (registerSubmittingRef.current || registerMutation.isPending) return;
     if (!regUsername || !regPassword) {
       toast.error("请填写用户名和密码");
       return;
@@ -151,7 +169,6 @@ export default function Login() {
       toast.error("请先阅读并同意隐私条款和用户协议");
       return;
     }
-    // 立即加锁，防止快速双击
     registerSubmittingRef.current = true;
     registerMutation.mutate({
       username: regUsername,
@@ -160,7 +177,6 @@ export default function Login() {
       inviteCode: regInviteCode || undefined,
     }, {
       onSettled: () => {
-        // 无论成功失败，3秒后解锁（防止网络错误后永久锁死）
         setTimeout(() => {
           registerSubmittingRef.current = false;
         }, 3000);
@@ -168,13 +184,24 @@ export default function Login() {
     });
   };
 
-  // 阻止所有输入框的回车键提交行为
   const preventEnterSubmit = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
     }
   };
+
+  // 自动登录中，显示加载状态
+  if (autoLoggingIn) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center" style={{ backgroundColor: '#A80000' }}>
+        <div className="text-white text-center">
+          <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-base">正在自动登录...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 flex flex-col" style={{ backgroundColor: '#A80000' }}>
@@ -211,7 +238,7 @@ export default function Login() {
               </button>
             </div>
 
-            {/* 登录区域 - 使用div而非form，防止自动提交 */}
+            {/* 登录区域 */}
             {activeTab === "login" && (
               <div className="space-y-4">
                 {/* 用户名输入框 */}
@@ -293,10 +320,28 @@ export default function Login() {
                     </Link>
                   </p>
                 </div>
+
+                {/* 保存登录信息勾选 */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRememberMe(!rememberMe)}
+                    className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+                      rememberMe ? "bg-[#D32F2F] border-[#D32F2F]" : "border-gray-300"
+                    }`}
+                  >
+                    {rememberMe && (
+                      <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                  <p className="text-xs text-gray-500">保存登录信息，下次直接登录</p>
+                </div>
               </div>
             )}
 
-            {/* 注册区域 - 使用div而非form，彻底防止自动提交 */}
+            {/* 注册区域 */}
             {activeTab === "register" && (
               <div className="space-y-4">
                 {/* 用户名输入框 */}
@@ -381,7 +426,7 @@ export default function Login() {
                   />
                 </div>
 
-                {/* 注册按钮 - 使用type="button"，只通过onClick触发 */}
+                {/* 注册按钮 */}
                 <button
                   type="button"
                   onClick={handleRegister}
@@ -424,8 +469,6 @@ export default function Login() {
               </div>
             )}
           </div>
-
-
         </div>
       </main>
     </div>
