@@ -15997,23 +15997,25 @@ export const adminFeatureRouter = router({
         if (memberUserIds.length > 0) {
           const placeholders = memberUserIds.map(() => '?').join(',');
           const [rows] = await (conn as any).execute(
-            `SELECT ro.id, ro.amount, ro.currency, ro.completed_at as eventTime,
+            `SELECT ro.id, ro.amount, ro.currency,
+                    COALESCE(ro.completed_at, ro.updated_at, ro.created_at) as eventTime,
                     u.name as userName, u.username
              FROM recharge_orders ro
              LEFT JOIN users u ON u.id = ro.user_id
              WHERE ro.user_id IN (${placeholders}) AND ro.status='completed'
-             ORDER BY ro.completed_at DESC LIMIT 2`,
+             ORDER BY COALESCE(ro.completed_at, ro.updated_at, ro.created_at) DESC LIMIT 3`,
             memberUserIds
           );
           rechargeRows = rows as any[];
         }
         const [orderRows] = await (conn as any).execute(
-          `SELECT o.id, o.coin, o.side, o.amount, o.status, o.sell_status, o.updated_at as eventTime,
+          `SELECT o.id, o.coin, o.side, o.amount, o.status, o.sell_status,
+                  COALESCE(o.updated_at, o.created_at) as eventTime,
                   u.name as userName, u.username
            FROM af_orders o
            LEFT JOIN users u ON u.id = o.user_id
            WHERE o.ledger_id=?
-           ORDER BY o.updated_at DESC LIMIT 2`,
+           ORDER BY COALESCE(o.updated_at, o.created_at) DESC LIMIT 3`,
           [input.ledgerId]
         );
         // 合并并格式化为消息文本
@@ -16021,16 +16023,17 @@ export const adminFeatureRouter = router({
         for (const r of (rechargeRows as any[])) {
           const name = r.userName || r.username || '新用户';
           const amt = parseFloat(r.amount).toFixed(0);
-          messages.push({ text: `${name} 充值 ${amt} ${r.currency || 'USDT'}`, time: r.eventTime || '' });
+          messages.push({ text: `${name} 充値 ${amt}${r.currency || 'USDT'}`, time: r.eventTime ? String(r.eventTime) : '' });
         }
         for (const o of (orderRows as any[])) {
           const name = o.userName || o.username || '用户';
-          const side = o.side === 'buy' ? '开单' : '卖单';
           let statusText = '';
           if (o.status === 'cancelled') statusText = '撤单';
-          else if (o.status === 'completed') statusText = o.sell_status === 'sold' ? '已卖出' : '成交';
-          else statusText = side;
-          messages.push({ text: `${name} ${statusText} ${o.coin} ${parseFloat(o.amount).toFixed(0)}U`, time: o.eventTime || '' });
+          else if (o.status === 'completed' && o.sell_status === 'sold') statusText = '卖出';
+          else if (o.status === 'completed') statusText = '开单';
+          else if (o.side === 'buy') statusText = '开单';
+          else statusText = '卖单';
+          messages.push({ text: `${name} ${statusText} ${o.coin} ${parseFloat(o.amount).toFixed(0)}U`, time: o.eventTime ? String(o.eventTime) : '' });
         }
         // 按时间排序取最新2条
         messages.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
