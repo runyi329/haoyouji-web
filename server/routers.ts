@@ -16214,8 +16214,7 @@ export const adminFeatureRouter = router({
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           const YJH_USER_IDS = [4957151, 870413];
-          const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-          if (!YJH_USER_IDS.includes(ctx.user.id) && !isSysAdmin) return [];
+          if (!YJH_USER_IDS.includes(ctx.user.id)) return [];
           const [rows] = await (conn as any).execute(
             `SELECT ro.id, ro.order_no, ro.amount, ro.currency,
                     COALESCE(ro.completed_at, ro.created_at) as eventTime,
@@ -16240,8 +16239,7 @@ export const adminFeatureRouter = router({
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           const YJH_USER_IDS = [4957151, 870413];
-          const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-          if (!YJH_USER_IDS.includes(ctx.user.id) && !isSysAdmin) return [];
+          if (!YJH_USER_IDS.includes(ctx.user.id)) return [];
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.order_type,
                     o.created_at as eventTime, u.name as userName, u.username
@@ -16266,8 +16264,7 @@ export const adminFeatureRouter = router({
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           const YJH_USER_IDS = [4957151, 870413];
-          const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-          if (!YJH_USER_IDS.includes(ctx.user.id) && !isSysAdmin) return [];
+          if (!YJH_USER_IDS.includes(ctx.user.id)) return [];
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
                     COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
@@ -16294,8 +16291,7 @@ export const adminFeatureRouter = router({
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           const YJH_USER_IDS = [4957151, 870413];
-          const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-          if (!YJH_USER_IDS.includes(ctx.user.id) && !isSysAdmin) return [];
+          if (!YJH_USER_IDS.includes(ctx.user.id)) return [];
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.gift_multiplier, o.source_order_id,
                     COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
