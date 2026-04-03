@@ -773,6 +773,8 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
         <span className="text-[9px]" style={{ color: dimBrown }}>邀请：{ws.inviteCount ?? 0}人</span>
         <span className="text-[9px]" style={{ color: dimBrown }}>人均标签：{ws.avgTags ?? 0}个</span>
         <span className="text-[9px]" style={{ color: dimBrown }}>自有人脉：{ws.ownContacts ?? 0}人</span>
+        <span className="text-[9px]" style={{ color: dimBrown }}>共享人脉：{ws.sharedContacts ?? 0}人</span>
+        <span className="text-[9px]" style={{ color: dimBrown }}>拓扑人脉：{ws.topoContacts ?? 0}人</span>
       </div>
     </div>
   );

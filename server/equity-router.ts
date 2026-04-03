@@ -1375,14 +1375,29 @@ export const equityRouter = router({
       const capitalBonus = Math.min(Math.round((capitalAmount / 100000) * 10000) / 10000, 1.0);
       // ===== 3. 资金乘数 =====
       const capitalMultiplier = Math.min(Math.round((timeBonus + capitalBonus) * 10000) / 10000, 2.0);
-      // ===== 4. 人脉贡献 =====
-      const [[ewRow]] = await (db as any).execute(
-        'SELECT own_contacts, shared_contacts, topo_contacts, avg_tags FROM equity_weights WHERE user_id = ? LIMIT 1',
+      // ===== 4. 人脉贡献（从数据库自动统计三类人脉）=====
+      // 自有人脉：contacts.parentUserId = userId
+      const [[ownRow]] = await (db as any).execute(
+        'SELECT COUNT(*) AS cnt FROM contacts WHERE parentUserId = ? AND isBlacklisted = 0',
         [targetUserId]
       ) as any;
-      const ownContacts = Number(ewRow?.own_contacts ?? 0);
-      const sharedContacts = Number(ewRow?.shared_contacts ?? 0);
-      const topoContacts = Number(ewRow?.topo_contacts ?? 0);
+      const ownContacts = Number(ownRow?.cnt ?? 0);
+      // 共享人脉：通过contact_sharing_connections，sharerId是别人，receiverId是我，统计那些sharerId的contacts数量
+      const [[sharedRow]] = await (db as any).execute(
+        `SELECT COUNT(*) AS cnt FROM contacts c
+         INNER JOIN contact_sharing_connections csc ON csc.sharerId = c.parentUserId AND csc.receiverId = ? AND csc.status = 'active'
+         WHERE c.isBlacklisted = 0`,
+        [targetUserId]
+      ) as any;
+      const sharedContacts = Number(sharedRow?.cnt ?? 0);
+      // 拓扑人脉：contacts.referrerId指向我的contacts中的某个id
+      const [[topoRow]] = await (db as any).execute(
+        `SELECT COUNT(*) AS cnt FROM contacts c
+         WHERE c.referrerId IN (SELECT id FROM contacts WHERE parentUserId = ? AND isBlacklisted = 0)
+         AND c.parentUserId != ? AND c.isBlacklisted = 0`,
+        [targetUserId, targetUserId]
+      ) as any;
+      const topoContacts = Number(topoRow?.cnt ?? 0);
       // 人均标签数：从contact_tag_relations + personal_contact_tags自动统计
       const [[tagStatRow]] = await (db as any).execute(
         `SELECT
