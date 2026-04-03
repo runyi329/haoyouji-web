@@ -3626,9 +3626,9 @@ export default function LedgerDetail() {
                   <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#B8860B' }}>最新充值</span>
                   {/* 收起时显示最新一笔 */}
                   {!rechargeExpanded && recentRecharges.length > 0 && (
-                    <div className="flex items-center gap-2 ml-3 flex-1 min-w-0">
-                      <span className="text-xs text-gray-600 truncate" style={{ maxWidth: '5em' }}>{recentRecharges[0].userName}({recentRecharges[0].username})</span>
-                      <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{parseFloat(recentRecharges[0].amount).toFixed(0)}{recentRecharges[0].currency}</span>
+                    <div className="flex items-center gap-1 ml-2 flex-1 min-w-0" style={{ overflow: 'hidden' }}>
+                      <span className="text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{(recentRecharges[0].userName || '').slice(0,2)}</span>
+                      <span className="text-xs font-semibold whitespace-nowrap flex-shrink-0" style={{ color: '#B8860B' }}>{parseFloat(recentRecharges[0].amount).toFixed(0)}{recentRecharges[0].currency}</span>
                       <span className="text-xs text-gray-400 ml-auto whitespace-nowrap flex-shrink-0">{recentRecharges[0].eventTime ? new Date(recentRecharges[0].eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                     </div>
                   )}
@@ -3667,9 +3667,9 @@ export default function LedgerDetail() {
                 >
                   <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#1D4ED8' }}>最新委托</span>
                   {!pendingExpanded && recentPendingOrders.length > 0 && (
-                    <div className="flex items-center gap-2 ml-3 flex-1 min-w-0">
-                      <span className="text-xs text-gray-600 truncate" style={{ maxWidth: '5em' }}>{recentPendingOrders[0].userName}({recentPendingOrders[0].username})</span>
-                      <span className="text-xs font-semibold" style={{ color: '#1D4ED8' }}>{recentPendingOrders[0].coin} {recentPendingOrders[0].side === 'buy' ? '买' : '卖'} {recentPendingOrders[0].amount}U</span>
+                    <div className="flex items-center gap-1 ml-2 flex-1 min-w-0" style={{ overflow: 'hidden' }}>
+                      <span className="text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{(recentPendingOrders[0].userName || '').slice(0,2)}</span>
+                      <span className="text-xs font-semibold whitespace-nowrap flex-shrink-0" style={{ color: '#1D4ED8' }}>{recentPendingOrders[0].coin} {recentPendingOrders[0].side === 'buy' ? '买' : '卖'} {recentPendingOrders[0].amount}U</span>
                       <span className="text-xs text-gray-400 ml-auto whitespace-nowrap flex-shrink-0">{recentPendingOrders[0].eventTime ? new Date(recentPendingOrders[0].eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                     </div>
                   )}
@@ -3708,9 +3708,9 @@ export default function LedgerDetail() {
                 >
                   <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#15803D' }}>最新成交</span>
                   {!completedExpanded && recentCompletedOrders.length > 0 && (
-                    <div className="flex items-center gap-2 ml-3 flex-1 min-w-0">
-                      <span className="text-xs text-gray-600 truncate" style={{ maxWidth: '5em' }}>{recentCompletedOrders[0].userName}({recentCompletedOrders[0].username})</span>
-                      <span className="text-xs font-semibold" style={{ color: '#15803D' }}>{recentCompletedOrders[0].coin} {recentCompletedOrders[0].side === 'buy' ? '买' : '卖'} {recentCompletedOrders[0].amount}U</span>
+                    <div className="flex items-center gap-1 ml-2 flex-1 min-w-0" style={{ overflow: 'hidden' }}>
+                      <span className="text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{(recentCompletedOrders[0].userName || '').slice(0,2)}</span>
+                      <span className="text-xs font-semibold whitespace-nowrap flex-shrink-0" style={{ color: '#15803D' }}>{recentCompletedOrders[0].coin} {recentCompletedOrders[0].side === 'buy' ? '买' : '卖'} {recentCompletedOrders[0].amount}U</span>
                       <span className="text-xs text-gray-400 ml-auto whitespace-nowrap flex-shrink-0">{recentCompletedOrders[0].eventTime ? new Date(recentCompletedOrders[0].eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                     </div>
                   )}
@@ -3749,10 +3749,10 @@ export default function LedgerDetail() {
                 >
                   <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#B91C1C' }}>最新赠单</span>
                   {!giftExpanded && recentGiftOrders.length > 0 && (
-                    <div className="flex items-center gap-2 ml-3 flex-1 min-w-0">
-                      <span className="text-xs text-gray-600 truncate" style={{ maxWidth: '5em' }}>{recentGiftOrders[0].userName}({recentGiftOrders[0].username})</span>
-                      <span className="text-xs font-semibold" style={{ color: '#B91C1C' }}>{recentGiftOrders[0].coin} {recentGiftOrders[0].amount}U</span>
-                      <span className="text-xs text-gray-400 truncate">来自{recentGiftOrders[0].fromName}({recentGiftOrders[0].fromUsername})</span>
+                    <div className="flex items-center gap-1 ml-2 flex-1 min-w-0" style={{ overflow: 'hidden' }}>
+                      <span className="text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{(recentGiftOrders[0].userName || '').slice(0,2)}</span>
+                      <span className="text-xs font-semibold whitespace-nowrap flex-shrink-0" style={{ color: '#B91C1C' }}>{recentGiftOrders[0].coin} {recentGiftOrders[0].amount}U</span>
+                      <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">←{(recentGiftOrders[0].fromName || '').slice(0,2)}</span>
                       <span className="text-xs text-gray-400 ml-auto whitespace-nowrap flex-shrink-0">{recentGiftOrders[0].eventTime ? new Date(recentGiftOrders[0].eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                     </div>
                   )}
