@@ -1743,4 +1743,44 @@ export const equityTransferRouter = router({
         directMatch: (directMatch as any[]).map((c: any) => ({ id: c.id, parentUserId: c.parentUserId, name: c.name, referrerId: c.referrerId })),
       };
     }),
+
+  // 临时调试：查询59号账本原始数据（仅admin可用）
+  debugLedger59: protectedProcedure
+    .input(z.object({ nickname: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
+      const db = await (await import('./db')).getDbConnection();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
+      // 查59号账本成员
+      const [members] = await (db as any).execute(
+        `SELECT lm.userId, lm.role, lm.nickname as lmNickname, u.name as userName, u.username
+         FROM ledger_members lm LEFT JOIN users u ON u.id = lm.userId
+         WHERE lm.ledgerId=59 ORDER BY lm.id`
+      ) as any;
+      // 查59号账本equity_shares
+      const [shares] = await (db as any).execute(
+        `SELECT es.id, es.userId, es.shareType, es.shareCount, es.grantDate, es.memberNickname,
+                u.name as userName, u.username
+         FROM equity_shares es LEFT JOIN users u ON u.id = es.userId
+         WHERE es.ledgerId=59 ORDER BY es.id`
+      ) as any;
+      // 如果传了nickname，额外查该用户
+      let targetUser: any[] = [];
+      if (input.nickname) {
+        const [ur] = await (db as any).execute(
+          `SELECT id, name, username FROM users WHERE name LIKE ? OR username LIKE ? LIMIT 5`,
+          [`%${input.nickname}%`, `%${input.nickname}%`]
+        ) as any;
+        targetUser = ur as any[];
+      }
+      return {
+        membersCount: (members as any[]).length,
+        members: members as any[],
+        sharesCount: (shares as any[]).length,
+        shares: shares as any[],
+        targetUser,
+      };
+    }),
 });
