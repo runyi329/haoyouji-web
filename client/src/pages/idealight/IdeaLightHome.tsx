@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
-const ICON_URL = `${CDN}/idealight_icon_transparent_da0e38f1.png`;
+const ICON_URL = `${CDN}/idealight_icon_white_ca457943.png`;
 
 const PRODUCT_PAGES = [
   `${CDN}/page01_hero_a4d6eb0c.png`,
