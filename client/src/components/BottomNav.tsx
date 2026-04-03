@@ -183,7 +183,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                 ) : isJiang ? (
                   <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/ba9a86df64fd3309eeb754e6b875940a_c32624a6.jpg" className="w-10 h-10 object-cover rounded-full" alt="R1" />
                 ) : isStevenHuang ? (
-                  <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/idealight_icon_clean_5d85e631.png" className="w-9 h-9 object-contain" alt="IDEALIGHT" />
+                  <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/idealight_icon_transparent_da0e38f1.png" className="w-9 h-9 object-contain" alt="IDEALIGHT" />
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}
