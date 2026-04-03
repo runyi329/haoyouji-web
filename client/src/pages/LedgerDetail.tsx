@@ -1118,19 +1118,21 @@ export default function LedgerDetail() {
   );
   // 4个Tab详细动态（合并为单一接口，减少数据库查询次数）
   const [dynamicsActiveTab, setDynamicsActiveTab] = useState<'recharge' | 'pending' | 'completed' | 'gift'>('recharge');
-  const { data: dynamicsDetailResult, isLoading: dynamicsDetailLoading } = trpc.topology.afGetRecentDynamicsDetail.useQuery(
-    { ledgerId: Number(ledgerId), type: dynamicsActiveTab },
-    { enabled: canSeeRecentDynamics && showInviteTree, refetchInterval: 60000 }
+  // 4个独立查询，互不影响，各自缓存（staleTime=5min，切换Tab不重新请求）
+  const [dynamicsRefreshKey, setDynamicsRefreshKey] = useState(0);
+  const dynamicsQueryOpts = { enabled: canSeeRecentDynamics && showInviteTree, staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false };
+  const { data: detailRecharges = [], isLoading: detailRechargesLoading } = trpc.topology.afGetRecentRechargesDetail.useQuery(
+    { ledgerId: Number(ledgerId) }, { ...dynamicsQueryOpts, queryKey: ['rechargesDetail', ledgerId, dynamicsRefreshKey] as any }
   );
-  const dynamicsDetailRows = dynamicsDetailResult?.rows ?? [];
-  const detailRecharges = dynamicsActiveTab === 'recharge' ? dynamicsDetailRows : [];
-  const detailPending = dynamicsActiveTab === 'pending' ? dynamicsDetailRows : [];
-  const detailCompleted = dynamicsActiveTab === 'completed' ? dynamicsDetailRows : [];
-  const detailGifts = dynamicsActiveTab === 'gift' ? dynamicsDetailRows : [];
-  const detailRechargesLoading = dynamicsDetailLoading && dynamicsActiveTab === 'recharge';
-  const detailPendingLoading = dynamicsDetailLoading && dynamicsActiveTab === 'pending';
-  const detailCompletedLoading = dynamicsDetailLoading && dynamicsActiveTab === 'completed';
-  const detailGiftsLoading = dynamicsDetailLoading && dynamicsActiveTab === 'gift';
+  const { data: detailPending = [], isLoading: detailPendingLoading } = trpc.topology.afGetRecentPendingOrders.useQuery(
+    { ledgerId: Number(ledgerId) }, { ...dynamicsQueryOpts, queryKey: ['pendingOrders', ledgerId, dynamicsRefreshKey] as any }
+  );
+  const { data: detailCompleted = [], isLoading: detailCompletedLoading } = trpc.topology.afGetRecentCompletedOrders.useQuery(
+    { ledgerId: Number(ledgerId) }, { ...dynamicsQueryOpts, queryKey: ['completedOrders', ledgerId, dynamicsRefreshKey] as any }
+  );
+  const { data: detailGifts = [], isLoading: detailGiftsLoading } = trpc.topology.afGetRecentGiftOrders.useQuery(
+    { ledgerId: Number(ledgerId) }, { ...dynamicsQueryOpts, queryKey: ['giftOrders', ledgerId, dynamicsRefreshKey] as any }
+  );
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
     onSuccess: (_data, variables) => {
       // 立即更新本地显示
@@ -3610,8 +3612,8 @@ export default function LedgerDetail() {
             {/* 最新动态区 - 4个Tab按钮 */}
             {canSeeRecentDynamics && (
               <div className="border-b border-gray-100" style={{ backgroundColor: '#FFFBF0' }}>
-                {/* Tab按钮行 */}
-                <div className="flex border-b border-amber-100">
+                {/* Tab按钮行 + 刷新按钮 */}
+                <div className="flex border-b border-amber-100 items-center">
                   {(['recharge', 'pending', 'completed', 'gift'] as const).map((tab) => {
                     const labels = { recharge: '最新充值', pending: '最新委托', completed: '最新成交', gift: '最新赠与' };
                     const isActive = dynamicsActiveTab === tab;
@@ -3631,6 +3633,12 @@ export default function LedgerDetail() {
                       </button>
                     );
                   })}
+                  <button
+                    onClick={() => setDynamicsRefreshKey(k => k + 1)}
+                    className="px-2 py-2 text-xs text-gray-400 hover:text-amber-600 flex-shrink-0"
+                    title="刷新"
+                    style={{ marginBottom: '-1px' }}
+                  >↻</button>
                 </div>
                 {/* Tab内容区 */}
                 <div className="px-3 py-2" style={{ maxHeight: '220px', overflowY: 'auto' }}>
