@@ -282,10 +282,11 @@ jobs:
             cp -r /root/haoyouji-web/dist/. /home/ubuntu/haoyouji-web/dist/
             cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
             cp /root/haoyouji-web/pnpm-lock.yaml /home/ubuntu/haoyouji-web/pnpm-lock.yaml
+            chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
             echo "🔄 安装缺少的依赖..."
-            cd /home/ubuntu/haoyouji-web && pnpm install --prod --frozen-lockfile 2>&1 | tail -5
-            echo "🔄 重启实际服务进程（kill旧进程，PM2自动重启）..."
-            kill $(pgrep -f '/home/ubuntu/haoyouji-web/dist/index.js') 2>/dev/null || true
+            cd /home/ubuntu/haoyouji-web && sudo -u ubuntu pnpm install --prod 2>&1 | tail -5
+            echo "🔄 重启实际服务进程..."
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart haoyouji-web' 2>&1
             sleep 5
             echo "当前监听端口："
             ss -tlnp | grep node || echo '暂无node监听'
