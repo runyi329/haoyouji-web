@@ -1654,13 +1654,17 @@ export const equityTransferRouter = router({
       const conn = await (await import('./db')).getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       // 验证账本级别管理员权限
-      const [lmRows] = await (conn as any).execute(
-        `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
-        [input.ledgerId, ctx.user.id]
-      );
-      const lmRole = (lmRows as any[])[0]?.role;
-      if (!lmRole || !['owner','admin'].includes(lmRole)) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
+      // 先检查系统级角色（admin/super_admin 直接放行，与 getLedgerById 逻辑一致）
+      const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+      if (!isSysAdmin) {
+        const [lmRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const lmRole = (lmRows as any[])[0]?.role;
+        if (!lmRole || !['owner','admin'].includes(lmRole)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
+        }
       }
       const [grantRows] = await (conn as any).execute(
         `SELECT es.id as shareId, es.shareType, es.shareCount, es.grantDate as eventDate, es.reason, es.createdAt,
