@@ -1,0 +1,27 @@
+name: 查询刘丽凡59号账本数据
+
+on:
+  workflow_dispatch:
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 查询数据
+        run: |
+          mysql -h 124.223.54.69 -u root -pMiao@20190603 crm_db --default-character-set=utf8mb4 -e "
+          SELECT id, username, nickname FROM users WHERE nickname LIKE '%刘丽凡%' OR username LIKE '%刘丽凡%' LIMIT 5;
+          " 2>&1
+          
+          echo '=== 获取刘丽凡userId ==='
+          UID=$(mysql -h 124.223.54.69 -u root -pMiao@20190603 crm_db --default-character-set=utf8mb4 -sN -e "SELECT id FROM users WHERE nickname LIKE '%刘丽凡%' LIMIT 1;" 2>/dev/null)
+          echo "刘丽凡 userId = $UID"
+          
+          echo '=== ledger_members记录 ==='
+          mysql -h 124.223.54.69 -u root -pMiao@20190603 crm_db --default-character-set=utf8mb4 -e "SELECT * FROM ledger_members WHERE ledgerId=59 AND userId=$UID;" 2>&1
+          
+          echo '=== equity_shares记录 ==='
+          mysql -h 124.223.54.69 -u root -pMiao@20190603 crm_db --default-character-set=utf8mb4 -e "SELECT id, ledgerId, userId, shareType, shareCount, resourceWeight, capitalWeight, eventType, eventDate, createdAt FROM equity_shares WHERE ledgerId=59 AND userId=$UID ORDER BY createdAt DESC;" 2>&1
+          
+          echo '=== equity_transfers记录 ==='
+          mysql -h 124.223.54.69 -u root -pMiao@20190603 crm_db --default-character-set=utf8mb4 -e "SELECT id, ledgerId, fromUserId, toUserId, fromShareCount, toShareCount, status, createdAt FROM equity_transfers WHERE ledgerId=59 AND (fromUserId=$UID OR toUserId=$UID) ORDER BY createdAt DESC;" 2>&1
