@@ -3784,7 +3784,7 @@ export default function LedgerDetail() {
                                     <div className="flex-1 min-w-0">
                                       <span className="text-sm text-gray-700 font-medium">{r.name}</span>
                                       {r.username ? <span className="text-xs text-gray-400 ml-1">({r.username})</span> : null}
-                                      {r.layer ? <span className="text-xs text-gray-300 ml-1">第{r.layer}层</span> : null}
+
                                     </div>
                                     {editingBeneficiaryId === r.beneficiaryUserId ? (
                                       <div className="flex items-center gap-1.5 flex-shrink-0">
