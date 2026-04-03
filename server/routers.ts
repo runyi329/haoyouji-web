@@ -15974,10 +15974,10 @@ export const adminFeatureRouter = router({
     afGetRecentDynamics: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
+        console.log('[afGetRecentDynamics] called ledgerId=' + input.ledgerId + ' userId=' + ctx.user.id + ' role=' + ctx.user.role);
         const conn = await (await import('./db')).getDbConnection();
-        if (!conn) return [];
+        if (!conn) { console.log('[afGetRecentDynamics] no db conn'); return []; }
         const YJH_USER_ID = 4957151;
-        // 权限检查：仅yjh或账本owner/admin可访问
         const [memberRows] = await (conn as any).execute(
           `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
           [input.ledgerId, ctx.user.id]
@@ -15985,6 +15985,7 @@ export const adminFeatureRouter = router({
         const memberRole = (memberRows as any[])[0]?.role;
         const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
         const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        console.log('[afGetRecentDynamics] memberRole=' + memberRole + ' isSysAdmin=' + isSysAdmin + ' isAllowed=' + isAllowed);
         if (!isAllowed) return [];
         // 查最近2条：新人充值（recharge_orders completed，按账本成员查）+ 订单变动（af_orders）
         // recharge_orders.ledger_id 可能为NULL（通用充值），改为查账本成员的充值记录
@@ -16018,6 +16019,7 @@ export const adminFeatureRouter = router({
            ORDER BY COALESCE(o.updated_at, o.created_at) DESC LIMIT 3`,
           [input.ledgerId]
         );
+        console.log('[afGetRecentDynamics] orderRows count=' + (orderRows as any[]).length + ' rechargeRows count=' + rechargeRows.length);
         // 合并并格式化为消息文本
         const messages: { text: string; time: string }[] = [];
         for (const r of (rechargeRows as any[])) {
