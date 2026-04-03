@@ -1116,23 +1116,8 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: canSeeRecentDynamics && showInviteTree, refetchInterval: 30000 }
   );
-  // 4个Tab详细动态（合并为单一接口，减少数据库查询次数）
-  const [dynamicsActiveTab, setDynamicsActiveTab] = useState<'recharge' | 'pending' | 'completed' | 'gift'>('recharge');
-  // 4个独立查询，互不影响，各自缓存（staleTime=5min，切换Tab不重新请求）
+  // 动态Tab刷新key
   const [dynamicsRefreshKey, setDynamicsRefreshKey] = useState(0);
-  const dynamicsQueryOpts = { enabled: canSeeRecentDynamics && showInviteTree, staleTime: 5 * 60 * 1000, refetchOnWindowFocus: false };
-  const { data: detailRecharges = [], isLoading: detailRechargesLoading } = trpc.topology.afGetRecentRechargesDetail.useQuery(
-    { ledgerId: Number(ledgerId) }, { ...dynamicsQueryOpts, queryKey: ['rechargesDetail', ledgerId, dynamicsRefreshKey] as any }
-  );
-  const { data: detailPending = [], isLoading: detailPendingLoading } = trpc.topology.afGetRecentPendingOrders.useQuery(
-    { ledgerId: Number(ledgerId) }, { ...dynamicsQueryOpts, queryKey: ['pendingOrders', ledgerId, dynamicsRefreshKey] as any }
-  );
-  const { data: detailCompleted = [], isLoading: detailCompletedLoading } = trpc.topology.afGetRecentCompletedOrders.useQuery(
-    { ledgerId: Number(ledgerId) }, { ...dynamicsQueryOpts, queryKey: ['completedOrders', ledgerId, dynamicsRefreshKey] as any }
-  );
-  const { data: detailGifts = [], isLoading: detailGiftsLoading } = trpc.topology.afGetRecentGiftOrders.useQuery(
-    { ledgerId: Number(ledgerId) }, { ...dynamicsQueryOpts, queryKey: ['giftOrders', ledgerId, dynamicsRefreshKey] as any }
-  );
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
     onSuccess: (_data, variables) => {
       // 立即更新本地显示
@@ -3609,114 +3594,29 @@ export default function LedgerDetail() {
               </div>
               <button onClick={() => setShowInviteTree(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
             </div>
-            {/* 最新动态区 - 4个Tab按钮 */}
+            {/* 最新动态区 - 最新充值 */}
             {canSeeRecentDynamics && (
               <div className="border-b border-gray-100" style={{ backgroundColor: '#FFFBF0' }}>
-                {/* Tab按钮行 + 刷新按钮 */}
-                <div className="flex border-b border-amber-100 items-center">
-                  {(['recharge', 'pending', 'completed', 'gift'] as const).map((tab) => {
-                    const labels = { recharge: '最新充值', pending: '最新委托', completed: '最新成交', gift: '最新赠与' };
-                    const isActive = dynamicsActiveTab === tab;
-                    return (
-                      <button
-                        key={tab}
-                        onClick={() => setDynamicsActiveTab(tab)}
-                        className="flex-1 py-2 text-xs font-semibold"
-                        style={{
-                          color: isActive ? '#B8860B' : '#9E9E9E',
-                          borderBottom: isActive ? '2px solid #B8860B' : '2px solid transparent',
-                          backgroundColor: 'transparent',
-                          marginBottom: '-1px',
-                        }}
-                      >
-                        {labels[tab]}
-                      </button>
-                    );
-                  })}
-                  <button
-                    onClick={() => setDynamicsRefreshKey(k => k + 1)}
-                    className="px-2 py-2 text-xs text-gray-400 hover:text-amber-600 flex-shrink-0"
-                    title="刷新"
-                    style={{ marginBottom: '-1px' }}
-                  >↻</button>
+                {/* 标题行 */}
+                <div className="flex border-b border-amber-100 items-center px-3 py-1.5">
+                  <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>最新充值</span>
                 </div>
-                {/* Tab内容区 */}
+                {/* 内容区 */}
                 <div className="px-3 py-2" style={{ maxHeight: '220px', overflowY: 'auto' }}>
-                  {/* 最新充值 */}
-                  {dynamicsActiveTab === 'recharge' && (
-                    detailRechargesLoading ? (
-                      <div className="text-xs text-gray-400 py-2 text-center">加载中...</div>
-                    ) : detailRecharges.length === 0 ? (
-                      <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
-                    ) : (
-                      <div className="space-y-1">
-                        {detailRecharges.map((r: any) => (
-                          <div key={r.id} className="flex items-center gap-2 py-1" style={{ borderBottom: '1px solid rgba(184,134,11,0.08)' }}>
-                            <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{r.userName}({r.username})</span>
-                            <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{parseFloat(r.amount).toFixed(0)}{r.currency}</span>
-                            <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )
+                  {recentRecharges.length === 0 ? (
+                    <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
+                  ) : (
+                    <div className="space-y-1">
+                      {recentRecharges.map((r: any) => (
+                        <div key={r.id} className="flex items-center gap-2 py-1" style={{ borderBottom: '1px solid rgba(184,134,11,0.08)' }}>
+                          <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{r.userName}({r.username})</span>
+                          <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{parseFloat(r.amount).toFixed(0)}{r.currency}</span>
+                          <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                  {/* 最新委托 */}
-                  {dynamicsActiveTab === 'pending' && (
-                    detailPendingLoading ? (
-                      <div className="text-xs text-gray-400 py-2 text-center">加载中...</div>
-                    ) : detailPending.length === 0 ? (
-                      <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
-                    ) : (
-                      <div className="space-y-1">
-                        {detailPending.map((o: any) => (
-                          <div key={o.id} className="flex items-center gap-2 py-1" style={{ borderBottom: '1px solid rgba(184,134,11,0.08)' }}>
-                            <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{o.userName}({o.username})</span>
-                            <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{o.coin} {parseFloat(o.amount).toFixed(0)}U</span>
-                            <span className="text-xs text-gray-400 ml-1">#{o.orderNo}</span>
-                            <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{o.eventTime ? new Date(o.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  )}
-                  {/* 最新成交 */}
-                  {dynamicsActiveTab === 'completed' && (
-                    detailCompletedLoading ? (
-                      <div className="text-xs text-gray-400 py-2 text-center">加载中...</div>
-                    ) : detailCompleted.length === 0 ? (
-                      <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
-                    ) : (
-                      <div className="space-y-1">
-                        {detailCompleted.map((o: any) => (
-                          <div key={o.id} className="flex items-center gap-2 py-1" style={{ borderBottom: '1px solid rgba(184,134,11,0.08)' }}>
-                            <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{o.userName}({o.username})</span>
-                            <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{o.coin} {parseFloat(o.amount).toFixed(0)}U</span>
-                            <span className="text-xs text-gray-400 ml-1">#{o.orderNo}</span>
-                            <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{o.eventTime ? new Date(o.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  )}
-                  {/* 最新赠与 */}
-                  {dynamicsActiveTab === 'gift' && (
-                    detailGiftsLoading ? (
-                      <div className="text-xs text-gray-400 py-2 text-center">加载中...</div>
-                    ) : detailGifts.length === 0 ? (
-                      <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
-                    ) : (
-                      <div className="space-y-1">
-                        {detailGifts.map((o: any) => (
-                          <div key={o.id} className="flex items-center gap-2 py-1" style={{ borderBottom: '1px solid rgba(184,134,11,0.08)' }}>
-                            <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{o.userName}({o.username})</span>
-                            <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{o.coin} {parseFloat(o.amount).toFixed(0)}U</span>
-                            {o.sourceUserName && <span className="text-xs text-gray-400">来自{o.sourceUserName}</span>}
-                            <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{o.eventTime ? new Date(o.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  )}
+
                 </div>
               </div>
             )}
