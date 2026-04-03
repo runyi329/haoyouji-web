@@ -1120,6 +1120,12 @@ export default function LedgerDetail() {
   const [dynamicsRefreshKey, setDynamicsRefreshKey] = useState(0);
   // 最新充值抽屉展开状态
   const [rechargeExpanded, setRechargeExpanded] = useState(false);
+  // 最新委托抽屉展开状态
+  const [pendingExpanded, setPendingExpanded] = useState(false);
+  const { data: recentPendingOrders = [] } = trpc.ledger.afGetRecentPendingOrders.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: canSeeRecentDynamics && showInviteTree, staleTime: 5 * 60 * 1000 }
+  );
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
     onSuccess: (_data, variables) => {
       // 立即更新本地显示
@@ -3630,6 +3636,47 @@ export default function LedgerDetail() {
                           <div key={r.id} className="flex items-center gap-2 py-1.5" style={{ borderBottom: '1px solid rgba(184,134,11,0.08)' }}>
                             <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{r.userName}({r.username})</span>
                             <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{parseFloat(r.amount).toFixed(0)}{r.currency}</span>
+                            <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* 最新委托抽屉 */}
+            {canSeeRecentDynamics && (
+              <div className="border-b border-gray-100" style={{ backgroundColor: '#F0F4FF' }}>
+                <div
+                  className="flex items-center px-3 py-2 cursor-pointer select-none"
+                  style={{ borderBottom: pendingExpanded ? '1px solid rgba(59,130,246,0.15)' : 'none' }}
+                  onClick={() => setPendingExpanded(v => !v)}
+                >
+                  <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#1D4ED8' }}>最新委托</span>
+                  {!pendingExpanded && recentPendingOrders.length > 0 && (
+                    <div className="flex items-center gap-2 ml-3 flex-1 min-w-0">
+                      <span className="text-xs text-gray-600 truncate" style={{ maxWidth: '5em' }}>{recentPendingOrders[0].userName}({recentPendingOrders[0].username})</span>
+                      <span className="text-xs font-semibold" style={{ color: '#1D4ED8' }}>{recentPendingOrders[0].coin} {recentPendingOrders[0].side === 'buy' ? '买' : '卖'} {recentPendingOrders[0].amount}U</span>
+                      <span className="text-xs text-gray-400 ml-auto whitespace-nowrap flex-shrink-0">{recentPendingOrders[0].eventTime ? new Date(recentPendingOrders[0].eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                    </div>
+                  )}
+                  {!pendingExpanded && recentPendingOrders.length === 0 && (
+                    <span className="text-xs text-gray-300 ml-3">暂无记录</span>
+                  )}
+                  <span className="ml-2 flex-shrink-0 text-gray-400 text-xs">{pendingExpanded ? '▲' : '▼'}</span>
+                </div>
+                {pendingExpanded && (
+                  <div className="px-3 py-2" style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                    {recentPendingOrders.length === 0 ? (
+                      <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {recentPendingOrders.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 py-1.5" style={{ borderBottom: '1px solid rgba(59,130,246,0.08)' }}>
+                            <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{r.userName}({r.username})</span>
+                            <span className="text-xs font-semibold" style={{ color: '#1D4ED8' }}>{r.coin} {r.side === 'buy' ? '买' : '卖'} {r.amount}U</span>
+                            {r.limitPrice && <span className="text-xs text-gray-400">@{r.limitPrice}</span>}
                             <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                           </div>
                         ))}
