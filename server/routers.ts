@@ -12989,20 +12989,27 @@ export const appRouter = router({
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
         const [rows] = await (conn as any).execute(
-          `SELECT r.id, r.beneficiary_user_id, r.ratio, u.name, u.username
+          `SELECT r.id, r.beneficiary_user_id, r.ratio, u.name, u.username,
+                  COALESCE(t.layer, 999) as layer
            FROM af_payout_ratios r
            LEFT JOIN users u ON u.id = r.beneficiary_user_id
+           LEFT JOIN topology t ON t.user_id = r.beneficiary_user_id AND t.ledger_id = r.ledger_id
            WHERE r.ledger_id=? AND r.source_user_id=?
-           ORDER BY r.ratio DESC`,
-          [input.ledgerId, input.sourceUserId]
+           ORDER BY 
+             CASE WHEN r.beneficiary_user_id = ? THEN 0 ELSE 1 END ASC,
+             COALESCE(t.layer, 999) ASC,
+             r.ratio DESC`,
+          [input.ledgerId, input.sourceUserId, YJH_USER_ID]
         );
-        const list = (rows as any[]).map((r: any) => ({
+        const mapRow = (r: any) => ({
           id: r.id,
           beneficiaryUserId: r.beneficiary_user_id,
           ratio: parseFloat(r.ratio),
           name: r.name || r.username || '未知',
           username: r.username || '',
-        }));
+          layer: r.layer === 999 ? null : r.layer,
+        });
+        const list = (rows as any[]).map(mapRow);
         // 如果该成员还没有任何拨比配置，自动初始化默认值（YJH=33.4，自己=66.6）
         if (list.length === 0) {
           await (conn as any).execute(
@@ -13012,20 +13019,19 @@ export const appRouter = router({
              input.ledgerId, input.sourceUserId, input.sourceUserId]
           );
           const [rows2] = await (conn as any).execute(
-            `SELECT r.id, r.beneficiary_user_id, r.ratio, u.name, u.username
+            `SELECT r.id, r.beneficiary_user_id, r.ratio, u.name, u.username,
+                    COALESCE(t.layer, 999) as layer
              FROM af_payout_ratios r
              LEFT JOIN users u ON u.id = r.beneficiary_user_id
+             LEFT JOIN topology t ON t.user_id = r.beneficiary_user_id AND t.ledger_id = r.ledger_id
              WHERE r.ledger_id=? AND r.source_user_id=?
-             ORDER BY r.ratio DESC`,
-            [input.ledgerId, input.sourceUserId]
+             ORDER BY 
+               CASE WHEN r.beneficiary_user_id = ? THEN 0 ELSE 1 END ASC,
+               COALESCE(t.layer, 999) ASC,
+               r.ratio DESC`,
+            [input.ledgerId, input.sourceUserId, YJH_USER_ID]
           );
-          return (rows2 as any[]).map((r: any) => ({
-            id: r.id,
-            beneficiaryUserId: r.beneficiary_user_id,
-            ratio: parseFloat(r.ratio),
-            name: r.name || r.username || '未知',
-            username: r.username || '',
-          }));
+          return (rows2 as any[]).map(mapRow);
         }
         return list;
       }),
