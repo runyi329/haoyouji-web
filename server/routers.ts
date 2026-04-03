@@ -16231,12 +16231,12 @@ export const adminFeatureRouter = router({
         if (input.type === 'recharge') {
           const [rows] = await (conn as any).execute(
             `SELECT ro.id, ro.order_no, ro.amount, ro.currency,
-                    COALESCE(ro.completed_at, ro.updated_at, ro.created_at) as eventTime,
+                    COALESCE(ro.completed_at, ro.created_at) as eventTime,
                     u.name as userName, u.username
              FROM recharge_orders ro
              LEFT JOIN users u ON u.id = ro.user_id
              WHERE ro.ledger_id=? AND ro.status='completed'
-             ORDER BY COALESCE(ro.completed_at, ro.updated_at, ro.created_at) DESC LIMIT 10`,
+             ORDER BY COALESCE(ro.completed_at, ro.created_at) DESC LIMIT 10`,
             [input.ledgerId]
           );
           return { allowed: true, rows: (rows as any[]).map((r: any) => ({
