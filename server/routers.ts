@@ -12925,17 +12925,18 @@ export const appRouter = router({
         const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
         const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
         if (!isAllowed) return [];
-        // 直接用 ledger_id 查询，排除 jiang 账号(870413)，只显示 YJH 下线的充值
+        // 只显示账本成员的充值，排除 jiang 账号(870413)
         const JIANG_USER_ID = 870413;
         const [rows] = await (conn as any).execute(
           `SELECT ro.id, ro.amount, ro.currency,
                   ro.created_at as eventTime,
                   u.name as userName, u.username
            FROM recharge_orders ro
+           INNER JOIN ledger_members lm ON lm.userId = ro.user_id AND lm.ledgerId = ?
            LEFT JOIN users u ON u.id = ro.user_id
            WHERE ro.status='completed' AND ro.ledger_id=? AND ro.user_id != ?
            ORDER BY ro.created_at DESC LIMIT 10`,
-          [input.ledgerId, JIANG_USER_ID]
+          [input.ledgerId, input.ledgerId, JIANG_USER_ID]
         );
         return (rows as any[]).map((r: any) => ({
           id: r.id,
