@@ -1095,6 +1095,14 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
     { enabled: isCustomAF && showInviteTree }
   );
+  // AF账本推荐页动态消息（仅yjh和管理员可见）
+  const YJH_USER_ID_CONST = 4957151;
+  const canSeeRecentDynamics = isCustomAF && ((user as any)?.id === YJH_USER_ID_CONST || isOwner || isAdmin);
+  const { data: recentDynamics = [] } = trpc.ledger.afGetRecentDynamics.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: canSeeRecentDynamics, refetchInterval: 30000 }
+  );
+
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
     onSuccess: (_data, variables) => {
       // 立即更新本地显示
@@ -1805,7 +1813,28 @@ export default function LedgerDetail() {
               {/* 卡片 2：推荐人数（资金方不显示） */}
               {!effectiveIsFunder && (
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || isOwner || isAdmin) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setShowInviteTree(true); }}>
-                <div className="text-xs text-white/70 mb-1">推荐</div>
+                <div className="text-xs text-white/70 mb-1 flex items-center gap-1.5">
+                  <span>推荐</span>
+                  {canSeeRecentDynamics && recentDynamics.length > 0 && (
+                    <span style={{ overflow: 'hidden', maxWidth: '120px', display: 'inline-block', verticalAlign: 'middle' }}>
+                      <span
+                        key={recentDynamics.join('|')}
+                        style={{
+                          display: 'inline-block',
+                          color: '#FFD700',
+                          fontSize: '10px',
+                          fontWeight: 500,
+                          whiteSpace: 'nowrap',
+                          animation: 'marquee-scroll 8s linear infinite',
+                          animationDelay: '0s',
+                        }}
+                      >
+                        {recentDynamics.join('　•　')}
+                      </span>
+                    </span>
+                  )}
+                </div>
+                <style>{`@keyframes marquee-scroll { 0% { transform: translateX(120px); } 100% { transform: translateX(-100%); } }`}</style>
                 {((afTotalAsset as any)?.directReferralCount > 0 || (afTotalAsset as any)?.indirectReferralCount > 0) ? (
                   <div className="space-y-0.5">
                     <div className="flex items-baseline gap-1">
