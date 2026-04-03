@@ -702,90 +702,71 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
   const capitalPct = Math.min((capital / 2.0) * 100, 100);
   const resourcePct = Math.min((resourceBonus / 2.0) * 100, 100);
 
+  // 计算各项说明文字
+  const timeTierLabel = ws.rank ? `第${ws.rank}号入场，第${ws.timeTier}档` : '未入场';
+  const capitalLabel = ws.capitalAmount ? `出资${(ws.capitalAmount/10000).toFixed(1)}万元` : '未出资';
+  const ownLabel = `自有${ws.ownContacts ?? 0}人，满分100人`;
+  const sharedLabel = `共享${ws.sharedContacts ?? 0}人，满分800人`;
+  const topoLabel = `拓扑${ws.topoContacts ?? 0}人，满分2000人`;
+  const tagLabel = `人均${ws.avgTags ?? 0}个标签`;
+  const inviteLabel = `邀请${ws.inviteCount ?? 0}人，满分100人`;
+
+  // 行组件
+  const Row = ({ label, sub, value, indent = 0, isHeader = false }: { label: string; sub?: string; value: string; indent?: number; isHeader?: boolean }) => (
+    <div className="flex items-center py-1.5" style={{ paddingLeft: indent * 12, borderBottom: '1px solid rgba(201,168,76,0.08)' }}>
+      {indent > 0 && <span className="mr-1" style={{ color: 'rgba(201,168,76,0.3)', fontSize: 8 }}>└</span>}
+      <div className="flex-1 min-w-0">
+        <span className={isHeader ? 'font-semibold' : ''} style={{ fontSize: isHeader ? 11 : 10, color: isHeader ? darkBrown : 'rgba(58,20,0,0.65)' }}>{label}</span>
+        {sub && <span className="ml-1.5" style={{ fontSize: 8.5, color: 'rgba(58,20,0,0.38)' }}>{sub}</span>}
+      </div>
+      <span className="font-bold ml-2" style={{ fontSize: isHeader ? 13 : 11, color: gold, whiteSpace: 'nowrap' }}>{value}</span>
+    </div>
+  );
+
   return (
     <div className="rounded-2xl p-4 mb-4" style={{ background: bg, border }}>
-      {/* 标题 */}
-      <div className="text-xs font-bold mb-3" style={{ color: darkBrown }}>我的实时权重</div>
-
-      {/* 综合乘数大字展示 */}
-      <div className="flex items-end gap-2 mb-3">
-        <span className="text-3xl font-bold" style={{ color: gold, lineHeight: 1 }}>{total.toFixed(2)}</span>
-        <span className="text-xs mb-1" style={{ color: dimBrown }}>倍（满分5.0倍）</span>
-        <div className="flex-1" />
+      {/* 标题行 */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-bold" style={{ color: darkBrown }}>我的实时权重</span>
         <span className="text-[10px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(201,168,76,0.15)', color: gold, fontWeight: 600 }}>第{ws.shareNo ?? '--'}号入场</span>
       </div>
 
-      {/* 总进度条 */}
+      {/* 综合乘数大字 + 进度条 */}
+      <div className="flex items-end gap-2 mb-2">
+        <span className="text-3xl font-bold" style={{ color: gold, lineHeight: 1 }}>{total.toFixed(2)}</span>
+        <span className="text-xs mb-1" style={{ color: dimBrown }}>倍（满分5.0倍）</span>
+      </div>
       <div className="mb-3">
-        <div className="flex justify-between text-[10px] mb-1" style={{ color: dimBrown }}>
-          <span>综合乘数</span>
-          <span>{total.toFixed(2)} / 5.00</span>
-        </div>
-        <div className="rounded-full overflow-hidden" style={{ height: 6, background: 'rgba(201,168,76,0.15)' }}>
-          <div className="h-full rounded-full" style={{ width: `${totalPct}%`, background: gold, transition: 'width 0.6s ease' }} />
+        <div className="rounded-full overflow-hidden" style={{ height: 5, background: 'rgba(201,168,76,0.15)' }}>
+          <div className="h-full rounded-full" style={{ width: `${totalPct}%`, background: gold }} />
         </div>
       </div>
 
-      {/* 两大乘数分列 */}
-      <div className="grid grid-cols-2 gap-2">
-        {/* 资金乘数 */}
-        <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>
-          <div className="text-[10px] mb-1" style={{ color: dimBrown }}>资金乘数</div>
-          <div className="text-lg font-bold" style={{ color: gold }}>{capital.toFixed(2)}<span className="text-[10px] font-normal ml-0.5">倍</span></div>
-          <div className="rounded-full overflow-hidden mt-1.5" style={{ height: 3, background: 'rgba(201,168,76,0.15)' }}>
-            <div className="h-full rounded-full" style={{ width: `${capitalPct}%`, background: gold }} />
-          </div>
-          <div className="mt-1.5 space-y-0.5">
-            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
-              <span>时间乘数</span>
-              <span style={{ color: gold }}>+{ws.timeBonus?.toFixed(2) ?? '0.00'}</span>
-            </div>
-            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
-              <span>资金量乘数</span>
-              <span style={{ color: gold }}>+{ws.capitalBonus?.toFixed(2) ?? '0.00'}</span>
-            </div>
-          </div>
-        </div>
+      {/* 计分明细展开 */}
+      <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(201,168,76,0.15)' }}>
+        <div className="px-3 pt-2 pb-0">
+          {/* 基础权重 */}
+          <Row label="基础权重" sub="所有合伙人固定享有" value="+1.00倍" isHeader />
 
-        {/* 资源乘数 */}
-        <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>
-          <div className="text-[10px] mb-1" style={{ color: dimBrown }}>资源乘数</div>
-          <div className="text-lg font-bold" style={{ color: gold }}>{resourceBonus.toFixed(2)}<span className="text-[10px] font-normal ml-0.5">倍</span></div>
-          <div className="rounded-full overflow-hidden mt-1.5" style={{ height: 3, background: 'rgba(201,168,76,0.15)' }}>
-            <div className="h-full rounded-full" style={{ width: `${resourcePct}%`, background: gold }} />
-          </div>
-          <div className="mt-1.5 space-y-0.5">
-            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
-              <span>人脉贡献</span>
-              <span style={{ color: gold }}>+{ws.networkBonus?.toFixed(2) ?? '0.00'}</span>
-            </div>
-            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
-              <span>标签贡献</span>
-              <span style={{ color: gold }}>+{ws.tagBonus?.toFixed(2) ?? '0.00'}</span>
-            </div>
-            <div className="flex justify-between text-[9px]" style={{ color: dimBrown }}>
-              <span>邀请贡献</span>
-              <span style={{ color: gold }}>+{ws.inviteBonus?.toFixed(2) ?? '0.00'}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+          {/* 资金乘数 */}
+          <Row label="资金乘数" sub={`满分2.0倍`} value={`+${capital.toFixed(2)}倍`} isHeader />
+          <Row label="时间乘数" sub={timeTierLabel} value={`+${ws.timeBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+          <Row label="资金量乘数" sub={capitalLabel} value={`+${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
 
-      {/* 底部数据大盘：3列×2行小卡片 */}
-      <div className="mt-3 grid grid-cols-3 gap-1.5">
-        {[
-          { label: '出资金额', value: ws.capitalAmount ? (ws.capitalAmount / 10000).toFixed(1) + '万' : '--' },
-          { label: '邀请人数', value: (ws.inviteCount ?? 0) + '人' },
-          { label: '人均标签', value: (ws.avgTags ?? 0) + '个' },
-          { label: '自有人脉', value: (ws.ownContacts ?? 0) + '人' },
-          { label: '共享人脉', value: (ws.sharedContacts ?? 0) + '人' },
-          { label: '拓扑人脉', value: (ws.topoContacts ?? 0) + '人' },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-lg p-2 text-center" style={{ background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(201,168,76,0.12)' }}>
-            <div className="text-[8px] mb-0.5" style={{ color: dimBrown }}>{label}</div>
-            <div className="text-[11px] font-bold" style={{ color: darkBrown }}>{value}</div>
-          </div>
-        ))}
+          {/* 资源乘数 */}
+          <Row label="资源乘数" sub={`满分2.0倍`} value={`+${resourceBonus.toFixed(2)}倍`} isHeader />
+          <Row label="人脉贡献" sub={`满分1.0倍`} value={`+${ws.networkBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+          <Row label="自有人脉" sub={ownLabel} value={`+${ws.ownBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
+          <Row label="共享人脉" sub={sharedLabel} value={`+${ws.sharedBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
+          <Row label="拓扑人脉" sub={topoLabel} value={`+${ws.topoBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
+          <Row label="标签贡献" sub={tagLabel} value={`+${ws.tagBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+          <Row label="邀请贡献" sub={inviteLabel} value={`+${ws.inviteBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+        </div>
+        {/* 合计行 */}
+        <div className="flex items-center justify-between px-3 py-2 mt-1" style={{ background: 'rgba(201,168,76,0.1)', borderTop: '1px solid rgba(201,168,76,0.2)' }}>
+          <span className="text-[10px] font-semibold" style={{ color: darkBrown }}>综合乘数（满分5.0倍）</span>
+          <span className="text-sm font-bold" style={{ color: gold }}>{total.toFixed(2)}倍</span>
+        </div>
       </div>
     </div>
   );
