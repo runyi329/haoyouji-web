@@ -1116,24 +1116,21 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: canSeeRecentDynamics && showInviteTree, refetchInterval: 30000 }
   );
-  // 4个Tab详细动态
+  // 4个Tab详细动态（合并为单一接口，减少数据库查询次数）
   const [dynamicsActiveTab, setDynamicsActiveTab] = useState<'recharge' | 'pending' | 'completed' | 'gift'>('recharge');
-  const { data: detailRecharges = [], isLoading: detailRechargesLoading } = trpc.topology.afGetRecentRechargesDetail.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: canSeeRecentDynamics && showInviteTree && dynamicsActiveTab === 'recharge', refetchInterval: 60000 }
+  const { data: dynamicsDetailResult, isLoading: dynamicsDetailLoading } = trpc.topology.afGetRecentDynamicsDetail.useQuery(
+    { ledgerId: Number(ledgerId), type: dynamicsActiveTab },
+    { enabled: canSeeRecentDynamics && showInviteTree, refetchInterval: 60000 }
   );
-  const { data: detailPending = [], isLoading: detailPendingLoading } = trpc.topology.afGetRecentPendingOrders.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: canSeeRecentDynamics && showInviteTree && dynamicsActiveTab === 'pending', refetchInterval: 60000 }
-  );
-  const { data: detailCompleted = [], isLoading: detailCompletedLoading } = trpc.topology.afGetRecentCompletedOrders.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: canSeeRecentDynamics && showInviteTree && dynamicsActiveTab === 'completed', refetchInterval: 60000 }
-  );
-  const { data: detailGifts = [], isLoading: detailGiftsLoading } = trpc.topology.afGetRecentGiftOrders.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: canSeeRecentDynamics && showInviteTree && dynamicsActiveTab === 'gift', refetchInterval: 60000 }
-  );
+  const dynamicsDetailRows = dynamicsDetailResult?.rows ?? [];
+  const detailRecharges = dynamicsActiveTab === 'recharge' ? dynamicsDetailRows : [];
+  const detailPending = dynamicsActiveTab === 'pending' ? dynamicsDetailRows : [];
+  const detailCompleted = dynamicsActiveTab === 'completed' ? dynamicsDetailRows : [];
+  const detailGifts = dynamicsActiveTab === 'gift' ? dynamicsDetailRows : [];
+  const detailRechargesLoading = dynamicsDetailLoading && dynamicsActiveTab === 'recharge';
+  const detailPendingLoading = dynamicsDetailLoading && dynamicsActiveTab === 'pending';
+  const detailCompletedLoading = dynamicsDetailLoading && dynamicsActiveTab === 'completed';
+  const detailGiftsLoading = dynamicsDetailLoading && dynamicsActiveTab === 'gift';
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
     onSuccess: (_data, variables) => {
       // 立即更新本地显示
