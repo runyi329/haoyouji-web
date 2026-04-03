@@ -3826,7 +3826,7 @@ export default function LedgerDetail() {
                                     setBeneficiaryRatioInput('');
                                   }
                                 }}
-                              >{u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}{isYJH && <span style={{ fontSize: 9, marginLeft: 2 }}>✒</span>}</span>
+                              >{u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}{isYJH && <svg style={{ display: 'inline-block', marginLeft: 3, verticalAlign: 'middle' }} width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="2" y1="4" x2="14" y2="4"/><circle cx="5" cy="4" r="1.5" fill="currentColor" stroke="none"/><line x1="2" y1="9" x2="14" y2="9"/><circle cx="11" cy="9" r="1.5" fill="currentColor" stroke="none"/><line x1="2" y1="14" x2="14" y2="14"/><circle cx="7" cy="14" r="1.5" fill="currentColor" stroke="none"/></svg>}</span>
                               <button onClick={() => { setEditingNoteUserId(u.id); setNoteInputValue(localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '')); }} className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400" style={{ backgroundColor: '#EEEEEE', fontSize: 12 }} title="添加备注">注</button>
                             </div>
                           </div>
