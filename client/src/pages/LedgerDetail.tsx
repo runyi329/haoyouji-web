@@ -661,9 +661,9 @@ function getNextTaxDeadlineInfo(): { deadline: Date; originalDate: Date; postpon
 }
 
 // ===== 实时权重展示子组件 =====
-function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
+function WeightScoreDisplay({ ledgerId, userId }: { ledgerId: number; userId?: number | null }) {
   const { data: ws, isLoading } = (trpc as any).equity.getMemberWeightScore.useQuery(
-    { ledgerId },
+    { ledgerId, ...(userId ? { userId } : {}) },
     { enabled: !!ledgerId }
   );
 
@@ -3684,7 +3684,7 @@ export default function LedgerDetail() {
             </div>
 
             {/* ===== 上半部分：用户实际数据 ===== */}
-            <WeightScoreDisplay ledgerId={ledgerId} />
+            <WeightScoreDisplay ledgerId={ledgerId} userId={viewAsUserId} />
 
             {/* ===== 下半部分：权重规则说明 ===== */}
             <div className="rounded-2xl p-4" style={{ background: 'rgba(201,168,76,0.07)', border: '1px solid rgba(201,168,76,0.2)' }}>
