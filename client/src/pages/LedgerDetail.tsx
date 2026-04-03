@@ -1122,7 +1122,7 @@ export default function LedgerDetail() {
     }
   });
   // YJH专属：拨比查询（只在点击编辑时才加载）
-  const isYJH = user?.id === YJH_USER_ID_CONST || Number((user as any)?.id) === YJH_USER_ID_CONST;
+  const isYJH = user?.id === YJH_USER_ID_CONST || user?.id === 870413;
   const { data: editingMemberRatios = [], refetch: refetchMemberRatios } = trpc.ledger.afGetMemberPayoutRatios.useQuery(
     { ledgerId: Number(ledgerId), sourceUserId: editingRatioUserId ?? 0 },
     { enabled: isYJH && editingRatioUserId !== null }
@@ -3586,7 +3586,7 @@ export default function LedgerDetail() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
                 <div className="text-base font-bold text-gray-900">邀请名单</div>
-                <div className="text-xs text-gray-400 mt-0.5">共 {inviteTreeData?.users?.length ?? 0} 人 [uid:{user?.id} yjh:{isYJH?'Y':'N'}]</div>
+                <div className="text-xs text-gray-400 mt-0.5">共 {inviteTreeData?.users?.length ?? 0} 人</div>
               </div>
               <button onClick={() => setShowInviteTree(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
             </div>
