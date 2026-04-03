@@ -338,31 +338,31 @@ export async function initDatabase() {
     // 使用 regNo 作为唯一标识（格式：MKT-{资金股equity_id}），防止重复插入
     const marketShareData = [
       // equity_id=4, Julie(510025) 推荐人 胡永煜(870413), 资金股100000, 授予2026-02-08
-      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-08', annualRate: 6.00, regNo: 'MKT-4' },
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-08', annualRate: 6.00, regNo: 'MKT-4', sourceUserId: 510025, sourceAmount: 100000 },
       // equity_id=5, 陈奇戌(4957147) 推荐人 vesen(4957141), 资金股100000, 授予2026-02-09
-      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-02-09', annualRate: 6.00, regNo: 'MKT-5' },
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-02-09', annualRate: 6.00, regNo: 'MKT-5', sourceUserId: 4957147, sourceAmount: 100000 },
       // equity_id=6, 大饼江湖(4957151) 推荐人 胡永煜(870413), 资金股100000, 授予2026-02-09
-      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-09', annualRate: 6.00, regNo: 'MKT-6' },
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-09', annualRate: 6.00, regNo: 'MKT-6', sourceUserId: 4957151, sourceAmount: 100000 },
       // equity_id=7, vesen(4957141) 推荐人 胡永煜(870413), 资金股100000, 授予2026-02-11
-      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-11', annualRate: 6.00, regNo: 'MKT-7' },
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 30000.00, grantDate: '2026-02-11', annualRate: 6.00, regNo: 'MKT-7', sourceUserId: 4957141, sourceAmount: 100000 },
       // equity_id=8, cyndi2109(4957213) 推荐人 vesen(4957141), 资金股200000, 授予2026-02-11
-      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 60000.00, grantDate: '2026-02-11', annualRate: 6.00, regNo: 'MKT-8' },
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 60000.00, grantDate: '2026-02-11', annualRate: 6.00, regNo: 'MKT-8', sourceUserId: 4957213, sourceAmount: 200000 },
       // equity_id=9, 李斌Luby(4957217) 推荐人 vesen(4957141), 资金股10000, 授予2026-02-19
-      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 3000.00, grantDate: '2026-02-19', annualRate: 6.00, regNo: 'MKT-9' },
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 3000.00, grantDate: '2026-02-19', annualRate: 6.00, regNo: 'MKT-9', sourceUserId: 4957217, sourceAmount: 10000 },
       // equity_id=10, 张慧(4680302) 推荐人 胡永煜(870413), 资金股10000, 授予2026-02-26
-      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 3000.00, grantDate: '2026-02-26', annualRate: 6.00, regNo: 'MKT-10' },
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 3000.00, grantDate: '2026-02-26', annualRate: 6.00, regNo: 'MKT-10', sourceUserId: 4680302, sourceAmount: 10000 },
       // equity_id=11, Johnson(4957155) 推荐人 vesen(4957141), 资金股100000, 授予2026-02-28
-      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-02-28', annualRate: 6.00, regNo: 'MKT-11' },
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-02-28', annualRate: 6.00, regNo: 'MKT-11', sourceUserId: 4957155, sourceAmount: 100000 },
       // equity_id=12, 刘力凡(4952766) 推荐人 胡永煜(870413), 资金股598, 授予2026-03-02
-      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 179.40, grantDate: '2026-03-02', annualRate: 6.00, regNo: 'MKT-12' },
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 179.40, grantDate: '2026-03-02', annualRate: 6.00, regNo: 'MKT-12', sourceUserId: 4952766, sourceAmount: 598 },
       // equity_id=13, 阿潇(3060001) 推荐人 胡永煜(870413), 资金股700, 授予2026-03-06
-      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 210.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-13' },
+      { ledgerId: 59, userId: 870413, memberNickname: '胡永煜', shareCount: 210.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-13', sourceUserId: 3060001, sourceAmount: 700 },
       // equity_id=14, LK070865(4957222) 推荐人 阿潇(3060001), 资金股700, 授予2026-03-06
-      { ledgerId: 59, userId: 3060001, memberNickname: '阿潇', shareCount: 210.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-14' },
+      { ledgerId: 59, userId: 3060001, memberNickname: '阿潇', shareCount: 210.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-14', sourceUserId: 4957222, sourceAmount: 700 },
       // equity_id=15, Mychael(4957247) 推荐人 vesen(4957141), 资金股10000, 授予2026-03-06
-      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 3000.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-15' },
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 3000.00, grantDate: '2026-03-06', annualRate: 6.00, regNo: 'MKT-15', sourceUserId: 4957247, sourceAmount: 10000 },
       // equity_id=16, 袁贇(4957293) 推荐人 vesen(4957141), 资金股100000, 授予2026-03-19
-      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-03-19', annualRate: 6.00, regNo: 'MKT-16' },
+      { ledgerId: 59, userId: 4957141, memberNickname: 'vesen', shareCount: 30000.00, grantDate: '2026-03-19', annualRate: 6.00, regNo: 'MKT-16', sourceUserId: 4957293, sourceAmount: 100000 },
     ];
     const dbConnMkt = await getDbConnection();
     if (dbConnMkt) {
@@ -375,8 +375,14 @@ export async function initDatabase() {
         const cnt = Array.isArray(existRows) ? (existRows[0] as any).cnt : 0;
         if (Number(cnt) === 0) {
           await (dbConnMkt as any).execute(
-            `INSERT INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`) VALUES (?, ?, ?, ?, '资源股', ?, '市场推荐奖励（资金股30%）', ?, ?, 870413)`,
-            [row.ledgerId, row.userId, row.memberNickname, row.shareCount, row.grantDate, row.regNo, row.annualRate]
+            `INSERT INTO \`equity_shares\` (\`ledgerId\`, \`userId\`, \`memberNickname\`, \`shareCount\`, \`shareType\`, \`grantDate\`, \`reason\`, \`regNo\`, \`annualRate\`, \`createdBy\`, \`source_user_id\`, \`source_amount\`) VALUES (?, ?, ?, ?, '资源股', ?, '市场推荐奖励（资金股30%）', ?, ?, 870413, ?, ?)`,
+            [row.ledgerId, row.userId, row.memberNickname, row.shareCount, row.grantDate, row.regNo, row.annualRate, (row as any).sourceUserId ?? null, (row as any).sourceAmount ?? null]
+          );
+        } else {
+          // 历史记录补录 source_user_id 和 source_amount（如果为空）
+          await (dbConnMkt as any).execute(
+            `UPDATE \`equity_shares\` SET source_user_id = COALESCE(source_user_id, ?), source_amount = COALESCE(source_amount, ?) WHERE \`regNo\` = ?`,
+            [(row as any).sourceUserId ?? null, (row as any).sourceAmount ?? null, row.regNo]
           );
         }
       }
