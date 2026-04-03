@@ -300,14 +300,23 @@ export function EquityHistoryModal({ ledgerId, userId, nickname, isAdmin, onClos
                       </div>
                     )}
 
-                    {/* 来源信息（资源股授予时显示来自哪个用户的资金股） */}
-                    {item.eventType === 'grant' && item.shareType === '资源股' && item.sourceNickname && (
+                    {/* 来源信息：资源股显示来自哪个用户的资金股，资金股显示授予人 */}
+                    {item.eventType === 'grant' && (
                       <div className="flex items-center gap-1 mt-1 pt-1" style={{ borderTop: `1px solid rgba(58,20,0,0.07)` }}>
-                        <span className="text-[10px]" style={{ color: TEXT_FAINT }}>来源：</span>
-                        <span className="text-[10px] font-medium" style={{ color: TEXT_DIM }}>{item.sourceNickname}</span>
-                        {item.sourceAmount && (
-                          <span className="text-[10px]" style={{ color: TEXT_FAINT }}>（{Number(item.sourceAmount).toLocaleString()} 张资金股）</span>
-                        )}
+                        {item.shareType === '资源股' && item.sourceNickname ? (
+                          <>
+                            <span className="text-[10px]" style={{ color: TEXT_FAINT }}>来源：</span>
+                            <span className="text-[10px] font-medium" style={{ color: TEXT_DIM }}>{item.sourceNickname}</span>
+                            {item.sourceAmount && (
+                              <span className="text-[10px]" style={{ color: TEXT_FAINT }}>（{Number(item.sourceAmount).toLocaleString()} 张资金股）</span>
+                            )}
+                          </>
+                        ) : item.createdByNickname ? (
+                          <>
+                            <span className="text-[10px]" style={{ color: TEXT_FAINT }}>授予人：</span>
+                            <span className="text-[10px] font-medium" style={{ color: TEXT_DIM }}>{item.createdByNickname}</span>
+                          </>
+                        ) : null}
                       </div>
                     )}
 
