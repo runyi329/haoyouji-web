@@ -702,26 +702,40 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
   const capitalPct = Math.min((capital / 2.0) * 100, 100);
   const resourcePct = Math.min((resourceBonus / 2.0) * 100, 100);
 
-  // 计算各项说明文字
-  const timeTierLabel = ws.rank ? `第${ws.rank}号入场，第${ws.timeTier}档` : '未入场';
-  const capitalLabel = ws.capitalAmount ? `出资${(ws.capitalAmount/10000).toFixed(1)}万元` : '未出资';
-  const ownLabel = `自有${ws.ownContacts ?? 0}人，满分100人`;
-  const sharedLabel = `共享${ws.sharedContacts ?? 0}人，满分800人`;
-  const topoLabel = `拓扑${ws.topoContacts ?? 0}人，满分2000人`;
-  const tagLabel = `人均${ws.avgTags ?? 0}个标签`;
-  const inviteLabel = `邀请${ws.inviteCount ?? 0}人，满分100人`;
-
-  // 行组件
-  const Row = ({ label, sub, value, indent = 0, isHeader = false }: { label: string; sub?: string; value: string; indent?: number; isHeader?: boolean }) => (
-    <div className="flex items-center py-1.5" style={{ paddingLeft: indent * 12, borderBottom: '1px solid rgba(201,168,76,0.08)' }}>
-      {indent > 0 && <span className="mr-1" style={{ color: 'rgba(201,168,76,0.3)', fontSize: 8 }}>└</span>}
-      <div className="flex-1 min-w-0">
-        <span className={isHeader ? 'font-semibold' : ''} style={{ fontSize: isHeader ? 11 : 10, color: isHeader ? darkBrown : 'rgba(58,20,0,0.65)' }}>{label}</span>
-        {sub && <span className="ml-1.5" style={{ fontSize: 8.5, color: 'rgba(58,20,0,0.38)' }}>{sub}</span>}
+  // 行组件：支持两行展示（标题+计算过程说明）
+  const Row = ({ label, cap, formula, value, indent = 0, isHeader = false }: {
+    label: string;
+    cap?: string;     // 满分说明，如“满分0.50倍”
+    formula?: string; // 计算过程，如“106人 ÷ 100 = 1.06”
+    value: string;
+    indent?: number;
+    isHeader?: boolean;
+  }) => (
+    <div style={{ paddingLeft: indent * 14, borderBottom: '1px solid rgba(201,168,76,0.08)' }}>
+      <div className="flex items-center py-1.5">
+        {indent > 0 && <span className="mr-1 flex-shrink-0" style={{ color: 'rgba(201,168,76,0.3)', fontSize: 8 }}>└</span>}
+        <div className="flex-1 min-w-0">
+          <span className={isHeader ? 'font-semibold' : ''} style={{ fontSize: isHeader ? 11 : 10, color: isHeader ? darkBrown : 'rgba(58,20,0,0.65)' }}>{label}</span>
+          {cap && <span className="ml-1.5" style={{ fontSize: 8, color: 'rgba(58,20,0,0.32)' }}>{cap}</span>}
+        </div>
+        <span className="font-bold ml-2 flex-shrink-0" style={{ fontSize: isHeader ? 13 : 11, color: gold, whiteSpace: 'nowrap' }}>{value}</span>
       </div>
-      <span className="font-bold ml-2" style={{ fontSize: isHeader ? 13 : 11, color: gold, whiteSpace: 'nowrap' }}>{value}</span>
+      {formula && (
+        <div className="pb-1.5" style={{ paddingLeft: indent > 0 ? 10 : 0 }}>
+          <span style={{ fontSize: 8, color: 'rgba(58,20,0,0.38)', fontFamily: 'monospace' }}>{formula}</span>
+        </div>
+      )}
     </div>
   );
+
+  // 计算过程文字
+  const ownFormula = `${ws.ownContacts ?? 0}人 ÷ 100人 × 0.50倍 = +${ws.ownBonus?.toFixed(2) ?? '0.00'}倍`;
+  const sharedFormula = `${ws.sharedContacts ?? 0}人 ÷ 800人 × 0.30倍 = +${ws.sharedBonus?.toFixed(2) ?? '0.00'}倍`;
+  const topoFormula = `${ws.topoContacts ?? 0}人 ÷ 2000人 × 0.20倍 = +${ws.topoBonus?.toFixed(2) ?? '0.00'}倍`;
+  const tagFormula = `人均${ws.avgTags ?? 0}个 → 对数曲线 = +${ws.tagBonus?.toFixed(2) ?? '0.00'}倍`;
+  const inviteFormula = `${ws.inviteCount ?? 0}人 ÷ 100人 × 0.40倍 = +${ws.inviteBonus?.toFixed(2) ?? '0.00'}倍`;
+  const timeFormula = ws.rank ? `第${ws.rank}号入场 → 第${ws.timeTier}档 = +${ws.timeBonus?.toFixed(2) ?? '0.00'}倍` : '未入场';
+  const capitalFormula = ws.capitalAmount ? `${(ws.capitalAmount/10000).toFixed(1)}万元 ÷ 10万元 = +${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍` : '未出资';
 
   return (
     <div className="rounded-2xl p-4 mb-4" style={{ background: bg, border }}>
@@ -789,17 +803,17 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
       {/* 计分明细展开列表 */}
       <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(255,255,255,0.55)', border: '1px solid rgba(201,168,76,0.15)' }}>
         <div className="px-3 pt-2 pb-0">
-          <Row label="基础权重" sub="所有合伙人固定享有" value="+1.00倍" isHeader />
-          <Row label="资金乘数" sub="满分2.0倍" value={`+${capital.toFixed(2)}倍`} isHeader />
-          <Row label="时间乘数" sub={timeTierLabel} value={`+${ws.timeBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
-          <Row label="资金量乘数" sub={capitalLabel} value={`+${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
-          <Row label="资源乘数" sub="满分2.0倍" value={`+${resourceBonus.toFixed(2)}倍`} isHeader />
-          <Row label="人脉贡献" sub="满分1.0倍" value={`+${ws.networkBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
-          <Row label="自有人脉" sub={ownLabel} value={`+${ws.ownBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
-          <Row label="共享人脉" sub={sharedLabel} value={`+${ws.sharedBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
-          <Row label="拓扑人脉" sub={topoLabel} value={`+${ws.topoBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
-          <Row label="标签贡献" sub={tagLabel} value={`+${ws.tagBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
-          <Row label="邀请贡献" sub={inviteLabel} value={`+${ws.inviteBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+          <Row label="基础权重" cap="所有合伙人固定享有" value="+1.00倍" isHeader />
+          <Row label="资金乘数" cap="满分2.0倍" value={`+${capital.toFixed(2)}倍`} isHeader />
+          <Row label="时间乘数" cap="满分1.0倍" formula={timeFormula} value={`+${ws.timeBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+          <Row label="资金量乘数" cap="满分1.0倍" formula={capitalFormula} value={`+${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+          <Row label="资源乘数" cap="满分2.0倍" value={`+${resourceBonus.toFixed(2)}倍`} isHeader />
+          <Row label="人脉贡献" cap="满分1.0倍（50%自有+30%共享+20%拓扑）" value={`+${ws.networkBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+          <Row label="自有人脉" cap="满分0.50倍" formula={ownFormula} value={`+${ws.ownBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
+          <Row label="共享人脉" cap="满分0.30倍" formula={sharedFormula} value={`+${ws.sharedBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
+          <Row label="拓扑人脉" cap="满分0.20倍" formula={topoFormula} value={`+${ws.topoBonus?.toFixed(2) ?? '0.00'}倍`} indent={2} />
+          <Row label="标签贡献" cap="满分0.60倍" formula={tagFormula} value={`+${ws.tagBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
+          <Row label="邀请贡献" cap="满分0.40倍" formula={inviteFormula} value={`+${ws.inviteBonus?.toFixed(2) ?? '0.00'}倍`} indent={1} />
         </div>
         <div className="flex items-center justify-between px-3 py-2 mt-1" style={{ background: 'rgba(201,168,76,0.1)', borderTop: '1px solid rgba(201,168,76,0.2)' }}>
           <span className="text-[10px] font-semibold" style={{ color: darkBrown }}>综合乘数（满分5.0倍）</span>
