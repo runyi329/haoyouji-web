@@ -1383,7 +1383,23 @@ export const equityRouter = router({
       const ownContacts = Number(ewRow?.own_contacts ?? 0);
       const sharedContacts = Number(ewRow?.shared_contacts ?? 0);
       const topoContacts = Number(ewRow?.topo_contacts ?? 0);
-      const avgTags = Number(ewRow?.avg_tags ?? 0);
+      // 人均标签数：从contact_tag_relations + personal_contact_tags自动统计
+      const [[tagStatRow]] = await (db as any).execute(
+        `SELECT
+          COUNT(DISTINCT c.id) AS contact_count,
+          (SELECT COUNT(*) FROM contact_tag_relations ctr2
+           INNER JOIN contacts c2 ON c2.id = ctr2.contactId
+           WHERE c2.parentUserId = ? AND c2.isBlacklisted = 0) +
+          (SELECT COUNT(*) FROM personal_contact_tags pct2
+           INNER JOIN contacts c3 ON c3.id = pct2.contactId
+           WHERE c3.parentUserId = ? AND c3.isBlacklisted = 0) AS total_tags
+        FROM contacts c
+        WHERE c.parentUserId = ? AND c.isBlacklisted = 0`,
+        [targetUserId, targetUserId, targetUserId]
+      ) as any;
+      const contactCountForTags = Number(tagStatRow?.contact_count ?? 0);
+      const totalTagCount = Number(tagStatRow?.total_tags ?? 0);
+      const avgTags = contactCountForTags > 0 ? Math.round((totalTagCount / contactCountForTags) * 100) / 100 : 0;
       const ownBonus = Math.round(Math.min(ownContacts / 100, 1.0) * 0.5 * 10000) / 10000;
       const sharedBonus = Math.round(Math.min(sharedContacts / 800, 1.0) * 0.3 * 10000) / 10000;
       const topoBonus = Math.round(Math.min(topoContacts / 2000, 1.0) * 0.2 * 10000) / 10000;
