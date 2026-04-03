@@ -16037,7 +16037,14 @@ export const adminFeatureRouter = router({
         }
         // 按时间排序取最新2条
         messages.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-        return messages.slice(0, 2).map(m => m.text);
+        // DEBUG: 临时返回调试信息
+        const debugInfo = [
+          `[DEBUG] memberCount=${memberUserIds.length}`,
+          `[DEBUG] rechargeCount=${rechargeRows.length}`,
+          `[DEBUG] orderCount=${(orderRows as any[]).length}`,
+          `[DEBUG] messages=${messages.map(m=>m.text+'|'+m.time).join(';')}`,
+        ];
+        return debugInfo;
       }),
 });
 export type AppRouter = typeof appRouter;
