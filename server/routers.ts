@@ -13044,6 +13044,37 @@ export const appRouter = router({
           eventTime: r.eventTime ? String(r.eventTime) : '',
         }));
       }),
+    // 最新赠单（status=completed，is_gift=1，只显示账本成员）
+    afGetRecentGiftOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const [rows] = await (conn as any).execute(
+          `SELECT o.id, o.coin, o.side, o.amount,
+                  o.created_at as eventTime,
+                  u.name as userName, u.username,
+                  u2.name as fromName, u2.username as fromUsername
+           FROM af_orders o
+           INNER JOIN ledger_members lm ON lm.userId = o.user_id AND lm.ledgerId = ?
+           LEFT JOIN users u ON u.id = o.user_id
+           LEFT JOIN users u2 ON u2.id = o.source_user_id
+           WHERE o.ledger_id=? AND o.status='completed' AND o.is_gift=1
+           ORDER BY o.created_at DESC LIMIT 10`,
+          [input.ledgerId, input.ledgerId]
+        );
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          userName: r.userName || r.username || '新用户',
+          username: r.username || '',
+          fromName: r.fromName || r.fromUsername || '',
+          fromUsername: r.fromUsername || '',
+          coin: r.coin || '',
+          side: r.side || '',
+          amount: parseFloat(r.amount || 0).toFixed(0),
+          eventTime: r.eventTime ? String(r.eventTime) : '',
+        }));
+      }),
     // YJH专属：查询某个成员（source_user_id）的所有拨比配置
     afGetMemberPayoutRatios: protectedProcedure
       .input(z.object({ ledgerId: z.number(), sourceUserId: z.number() }))

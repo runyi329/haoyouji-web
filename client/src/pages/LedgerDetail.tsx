@@ -1132,6 +1132,12 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: canSeeRecentDynamics && showInviteTree, staleTime: 5 * 60 * 1000 }
   );
+  // 最新赠单抽屉展开状态
+  const [giftExpanded, setGiftExpanded] = useState(false);
+  const { data: recentGiftOrders = [] } = trpc.ledger.afGetRecentGiftOrders.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: canSeeRecentDynamics && showInviteTree, staleTime: 5 * 60 * 1000 }
+  );
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
     onSuccess: (_data, variables) => {
       // 立即更新本地显示
@@ -3724,6 +3730,48 @@ export default function LedgerDetail() {
                             <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{r.userName}({r.username})</span>
                             <span className="text-xs font-semibold" style={{ color: '#15803D' }}>{r.coin} {r.side === 'buy' ? '买' : '卖'} {r.amount}U</span>
                             {r.limitPrice && <span className="text-xs text-gray-400">@{r.limitPrice}</span>}
+                            <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* 最新赠单抽屉 */}
+            {canSeeRecentDynamics && (
+              <div className="border-b border-gray-100" style={{ backgroundColor: '#FFF5F5' }}>
+                <div
+                  className="flex items-center px-3 py-2 cursor-pointer select-none"
+                  style={{ borderBottom: giftExpanded ? '1px solid rgba(220,38,38,0.15)' : 'none' }}
+                  onClick={() => setGiftExpanded(v => !v)}
+                >
+                  <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#B91C1C' }}>最新赠单</span>
+                  {!giftExpanded && recentGiftOrders.length > 0 && (
+                    <div className="flex items-center gap-2 ml-3 flex-1 min-w-0">
+                      <span className="text-xs text-gray-600 truncate" style={{ maxWidth: '5em' }}>{recentGiftOrders[0].userName}({recentGiftOrders[0].username})</span>
+                      <span className="text-xs font-semibold" style={{ color: '#B91C1C' }}>{recentGiftOrders[0].coin} {recentGiftOrders[0].amount}U</span>
+                      <span className="text-xs text-gray-400 truncate">来自{recentGiftOrders[0].fromName}({recentGiftOrders[0].fromUsername})</span>
+                      <span className="text-xs text-gray-400 ml-auto whitespace-nowrap flex-shrink-0">{recentGiftOrders[0].eventTime ? new Date(recentGiftOrders[0].eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                    </div>
+                  )}
+                  {!giftExpanded && recentGiftOrders.length === 0 && (
+                    <span className="text-xs text-gray-300 ml-3">暂无记录</span>
+                  )}
+                  <span className="ml-2 flex-shrink-0 text-gray-400 text-xs">{giftExpanded ? '▲' : '▼'}</span>
+                </div>
+                {giftExpanded && (
+                  <div className="px-3 py-2" style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                    {recentGiftOrders.length === 0 ? (
+                      <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {recentGiftOrders.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 py-1.5" style={{ borderBottom: '1px solid rgba(220,38,38,0.08)' }}>
+                            <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '5em' }}>{r.userName}({r.username})</span>
+                            <span className="text-xs font-semibold" style={{ color: '#B91C1C' }}>{r.coin} {r.amount}U</span>
+                            <span className="text-xs text-gray-400 truncate">←{r.fromName}({r.fromUsername})</span>
                             <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                           </div>
                         ))}
