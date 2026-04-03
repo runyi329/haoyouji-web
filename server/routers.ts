@@ -16205,7 +16205,168 @@ export const adminFeatureRouter = router({
       };
     }),
 
-    // 52号账本推荐页动态消息：最近2条（新人充值 + 订单变动），仅yjh和管理员可见
+    // 52号账本顶部动态Tab：最新充値（10笔详细）
+    afGetRecentRechargesDetail: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const YJH_USER_ID = 4957151;
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        if (!isAllowed) return [];
+        const [memberUserRows] = await (conn as any).execute(
+          `SELECT userId FROM ledger_members WHERE ledgerId=?`,
+          [input.ledgerId]
+        );
+        const memberUserIds = (memberUserRows as any[]).map((r: any) => r.userId);
+        if (memberUserIds.length === 0) return [];
+        const placeholders = memberUserIds.map(() => '?').join(',');
+        const [rows] = await (conn as any).execute(
+          `SELECT ro.id, ro.order_no, ro.amount, ro.currency,
+                  COALESCE(ro.completed_at, ro.updated_at, ro.created_at) as eventTime,
+                  u.name as userName, u.username
+           FROM recharge_orders ro
+           LEFT JOIN users u ON u.id = ro.user_id
+           WHERE ro.user_id IN (${placeholders}) AND ro.status='completed'
+           ORDER BY COALESCE(ro.completed_at, ro.updated_at, ro.created_at) DESC LIMIT 10`,
+          memberUserIds
+        );
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          orderNo: String(r.order_no || ''),
+          amount: String(r.amount || '0'),
+          currency: String(r.currency || 'USDT'),
+          eventTime: r.eventTime ? String(r.eventTime) : '',
+          userName: String(r.userName || r.username || '未知用户'),
+          username: String(r.username || ''),
+        }));
+      }),
+    // 最新委托（pending，非赠与）
+    afGetRecentPendingOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const YJH_USER_ID = 4957151;
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        if (!isAllowed) return [];
+        const [rows] = await (conn as any).execute(
+          `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.order_type,
+                  o.created_at as eventTime,
+                  u.name as userName, u.username
+           FROM af_orders o
+           LEFT JOIN users u ON u.id = o.user_id
+           WHERE o.ledger_id=? AND o.status='pending' AND o.is_gift=0
+           ORDER BY o.created_at DESC LIMIT 10`,
+          [input.ledgerId]
+        );
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          orderNo: String(r.id),
+          coin: String(r.coin || ''),
+          side: String(r.side || ''),
+          amount: String(r.amount || '0'),
+          limitPrice: String(r.limit_price || ''),
+          orderType: String(r.order_type || ''),
+          eventTime: r.eventTime ? String(r.eventTime) : '',
+          userName: String(r.userName || r.username || '未知用户'),
+          username: String(r.username || ''),
+        }));
+      }),
+    // 最新成交（completed，非赠与）
+    afGetRecentCompletedOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const YJH_USER_ID = 4957151;
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        if (!isAllowed) return [];
+        const [rows] = await (conn as any).execute(
+          `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
+                  COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
+                  u.name as userName, u.username
+           FROM af_orders o
+           LEFT JOIN users u ON u.id = o.user_id
+           WHERE o.ledger_id=? AND o.status='completed' AND o.is_gift=0
+           ORDER BY COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
+          [input.ledgerId]
+        );
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          orderNo: String(r.id),
+          coin: String(r.coin || ''),
+          side: String(r.side || ''),
+          amount: String(r.amount || '0'),
+          limitPrice: String(r.limit_price || ''),
+          sellPrice: String(r.sell_price || ''),
+          orderType: String(r.order_type || ''),
+          eventTime: r.eventTime ? String(r.eventTime) : '',
+          userName: String(r.userName || r.username || '未知用户'),
+          username: String(r.username || ''),
+        }));
+      }),
+    // 最新赠与（is_gift=1，status=completed）
+    afGetRecentGiftOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const YJH_USER_ID = 4957151;
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        if (!isAllowed) return [];
+        const [rows] = await (conn as any).execute(
+          `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.gift_multiplier, o.source_order_id,
+                  COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
+                  u.name as userName, u.username,
+                  su.name as sourceUserName, su.username as sourceUsername
+           FROM af_orders o
+           LEFT JOIN users u ON u.id = o.user_id
+           LEFT JOIN users su ON su.id = o.source_user_id
+           WHERE o.ledger_id=? AND o.is_gift=1 AND o.status='completed'
+           ORDER BY COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
+          [input.ledgerId]
+        );
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          orderNo: String(r.id),
+          coin: String(r.coin || ''),
+          amount: String(r.amount || '0'),
+          limitPrice: String(r.limit_price || ''),
+          giftMultiplier: String(r.gift_multiplier || ''),
+          sourceOrderId: r.source_order_id ? String(r.source_order_id) : '',
+          eventTime: r.eventTime ? String(r.eventTime) : '',
+          userName: String(r.userName || r.username || '未知用户'),
+          username: String(r.username || ''),
+          sourceUserName: String(r.sourceUserName || r.sourceUsername || ''),
+          sourceUsername: String(r.sourceUsername || ''),
+        }));
+      }),
+    // 52号账本推荐页动态消息：最近2条（新人充値 + 订单变动），仅yjh和管理员可见
     afGetRecentDynamics: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
