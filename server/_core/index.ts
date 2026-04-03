@@ -266,6 +266,23 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  // 临时调试端点：查询59号账本equity_shares和ledger_members数据
+  app.get('/api/debug/ledger59', async (_req: any, res: any) => {
+    try {
+      const { getDbConnection } = await import('../db.js');
+      const db = await getDbConnection();
+      if (!db) return res.json({ error: 'DB连接失败' });
+      const [shares] = await (db as any).execute(
+        'SELECT es.id, es.userId, es.shareType, es.shareCount, es.grantDate, u.name as userName FROM equity_shares es LEFT JOIN users u ON u.id = es.userId WHERE es.ledgerId=59 ORDER BY es.id'
+      ) as any;
+      const [members] = await (db as any).execute(
+        'SELECT lm.userId, lm.role, u.name as userName FROM ledger_members lm LEFT JOIN users u ON u.id = lm.userId WHERE lm.ledgerId=59'
+      ) as any;
+      res.json({ shares, members, sharesCount: (shares as any[]).length, membersCount: (members as any[]).length });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   // 临时调试端点：查询equity_weights表数据
   app.get('/api/debug/equity-weights', async (_req: any, res: any) => {
     try {
