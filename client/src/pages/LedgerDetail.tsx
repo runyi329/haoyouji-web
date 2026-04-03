@@ -732,7 +732,10 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
   const ownFormula = `${ws.ownContacts ?? 0}人 ÷ 100人 × 0.50倍 = +${ws.ownBonus?.toFixed(2) ?? '0.00'}倍`;
   const sharedFormula = `${ws.sharedContacts ?? 0}人 ÷ 800人 × 0.30倍 = +${ws.sharedBonus?.toFixed(2) ?? '0.00'}倍`;
   const topoFormula = `${ws.topoContacts ?? 0}人 ÷ 2000人 × 0.20倍 = +${ws.topoBonus?.toFixed(2) ?? '0.00'}倍`;
-  const tagFormula = `人均${ws.avgTags ?? 0}个 → 对数曲线 = +${ws.tagBonus?.toFixed(2) ?? '0.00'}倍`;
+  const tagTier = ws.tagTier ?? Math.min(Math.floor(ws.avgTags ?? 0), 15);
+  const tagFormula = tagTier > 0
+    ? `人均${ws.avgTags ?? 0}个 → 取整第${tagTier}档 = +${ws.tagBonus?.toFixed(2) ?? '0.00'}倍`
+    : `人均${ws.avgTags ?? 0}个 → 未达第1档 = +0.00倍`;
   const inviteFormula = `${ws.inviteCount ?? 0}人 ÷ 100人 × 0.40倍 = +${ws.inviteBonus?.toFixed(2) ?? '0.00'}倍`;
   const timeFormula = ws.rank ? `第${ws.rank}号入场 → 第${ws.timeTier}档 = +${ws.timeBonus?.toFixed(2) ?? '0.00'}倍` : '未入场';
   const capitalFormula = ws.capitalAmount ? `${(ws.capitalAmount/10000).toFixed(1)}万元 ÷ 10万元 = +${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍` : '未出资';
