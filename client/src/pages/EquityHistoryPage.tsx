@@ -230,7 +230,12 @@ export default function EquityHistoryPage() {
               <div className="text-center py-12 text-sm" style={{ color: TEXT_FAINT }}>加载中...</div>
             )}
             {!historyLoading && (!history || history.length === 0) && (
-              <div className="text-center py-12 text-sm" style={{ color: TEXT_FAINT }}>暂无股权流水记录</div>
+              <div className="text-center py-8 text-sm" style={{ color: TEXT_FAINT }}>
+                <div>暂无股权流水记录</div>
+                <div className="mt-2 text-xs" style={{ color: TEXT_FAINT, opacity: 0.6 }}>
+                  账本ID: {ledgerId} | 用户ID: {viewUserId} | 管理员: {isAdmin ? '是' : '否'}
+                </div>
+              </div>
             )}
             {history?.map((item: any, idx: number) => {
               const evInfo = EVENT_LABELS[item.eventType] || { label: item.eventType, color: TEXT_DIM, bg: CARD_BG };
