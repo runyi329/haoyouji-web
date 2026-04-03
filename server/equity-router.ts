@@ -1608,11 +1608,17 @@ export const equityTransferRouter = router({
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB连接失败' });
       // 授予记录（equity_shares）
       const [grantRows] = await (conn as any).execute(
-        `SELECT id as shareId, shareType, shareCount, grantDate as eventDate, reason, createdAt,
+        `SELECT es.id as shareId, es.shareType, es.shareCount, es.grantDate as eventDate, es.reason, es.createdAt,
                 'grant' as eventType, NULL as counterparty,
-                COALESCE(resource_weight, 1.0) as resourceWeight,
-                COALESCE(capital_weight, 1.0) as capitalWeight
-         FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
+                COALESCE(es.resource_weight, 1.0) as resourceWeight,
+                COALESCE(es.capital_weight, 1.0) as capitalWeight,
+                es.source_user_id, es.source_amount,
+                su.nickname as sourceNickname,
+                cb.nickname as createdByNickname
+         FROM equity_shares es
+         LEFT JOIN users su ON su.userId = es.source_user_id
+         LEFT JOIN users cb ON cb.userId = es.createdBy
+         WHERE es.ledgerId=? AND es.userId=? ORDER BY es.grantDate DESC, es.id DESC`,
         [input.ledgerId, ctx.user.id]
       );
       // 转入记录（equity_transfers，approved，toUserId=我）
@@ -1657,11 +1663,17 @@ export const equityTransferRouter = router({
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本管理员可访问' });
       }
       const [grantRows] = await (conn as any).execute(
-        `SELECT id as shareId, shareType, shareCount, grantDate as eventDate, reason, createdAt,
+        `SELECT es.id as shareId, es.shareType, es.shareCount, es.grantDate as eventDate, es.reason, es.createdAt,
                 'grant' as eventType, NULL as counterparty,
-                COALESCE(resource_weight, 1.0) as resourceWeight,
-                COALESCE(capital_weight, 1.0) as capitalWeight
-         FROM equity_shares WHERE ledgerId=? AND userId=? ORDER BY grantDate DESC, id DESC`,
+                COALESCE(es.resource_weight, 1.0) as resourceWeight,
+                COALESCE(es.capital_weight, 1.0) as capitalWeight,
+                es.source_user_id, es.source_amount,
+                su.nickname as sourceNickname,
+                cb.nickname as createdByNickname
+         FROM equity_shares es
+         LEFT JOIN users su ON su.userId = es.source_user_id
+         LEFT JOIN users cb ON cb.userId = es.createdBy
+         WHERE es.ledgerId=? AND es.userId=? ORDER BY es.grantDate DESC, es.id DESC`,
         [input.ledgerId, input.userId]
       );
       const [inRows] = await (conn as any).execute(
