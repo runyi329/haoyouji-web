@@ -691,12 +691,16 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
 
   const total = ws.totalMultiplier ?? 1.0;
   const capital = ws.capitalMultiplier ?? 0;
-  const resource = ws.resourceMultiplier ?? 1.0;
+  // 资源乘数加成 = 人脉+标签+邀请三项直接加总（不含基础1.0），最大2.0
+  const resourceBonus = Math.min(
+    (ws.networkBonus ?? 0) + (ws.tagBonus ?? 0) + (ws.inviteBonus ?? 0),
+    2.0
+  );
 
   // 进度条百分比
   const totalPct = Math.min((total / 5.0) * 100, 100);
   const capitalPct = Math.min((capital / 2.0) * 100, 100);
-  const resourcePct = Math.min(((resource - 1.0) / 2.0) * 100, 100);
+  const resourcePct = Math.min((resourceBonus / 2.0) * 100, 100);
 
   return (
     <div className="rounded-2xl p-4 mb-4" style={{ background: bg, border }}>
@@ -746,7 +750,7 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
         {/* 资源乘数 */}
         <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.6)', border: '1px solid rgba(201,168,76,0.15)' }}>
           <div className="text-[10px] mb-1" style={{ color: dimBrown }}>资源乘数</div>
-          <div className="text-lg font-bold" style={{ color: gold }}>{(resource - 1.0).toFixed(2)}<span className="text-[10px] font-normal ml-0.5">倍</span></div>
+          <div className="text-lg font-bold" style={{ color: gold }}>{resourceBonus.toFixed(2)}<span className="text-[10px] font-normal ml-0.5">倍</span></div>
           <div className="rounded-full overflow-hidden mt-1.5" style={{ height: 3, background: 'rgba(201,168,76,0.15)' }}>
             <div className="h-full rounded-full" style={{ width: `${resourcePct}%`, background: gold }} />
           </div>
@@ -767,14 +771,21 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
         </div>
       </div>
 
-      {/* 底部详情行 */}
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
-        <span className="text-[9px]" style={{ color: dimBrown }}>出资：{ws.capitalAmount ? (ws.capitalAmount / 10000).toFixed(1) + '万元' : '--'}</span>
-        <span className="text-[9px]" style={{ color: dimBrown }}>邀请：{ws.inviteCount ?? 0}人</span>
-        <span className="text-[9px]" style={{ color: dimBrown }}>人均标签：{ws.avgTags ?? 0}个</span>
-        <span className="text-[9px]" style={{ color: dimBrown }}>自有人脉：{ws.ownContacts ?? 0}人</span>
-        <span className="text-[9px]" style={{ color: dimBrown }}>共享人脉：{ws.sharedContacts ?? 0}人</span>
-        <span className="text-[9px]" style={{ color: dimBrown }}>拓扑人脉：{ws.topoContacts ?? 0}人</span>
+      {/* 底部数据大盘：3列×2行小卡片 */}
+      <div className="mt-3 grid grid-cols-3 gap-1.5">
+        {[
+          { label: '出资金额', value: ws.capitalAmount ? (ws.capitalAmount / 10000).toFixed(1) + '万' : '--' },
+          { label: '邀请人数', value: (ws.inviteCount ?? 0) + '人' },
+          { label: '人均标签', value: (ws.avgTags ?? 0) + '个' },
+          { label: '自有人脉', value: (ws.ownContacts ?? 0) + '人' },
+          { label: '共享人脉', value: (ws.sharedContacts ?? 0) + '人' },
+          { label: '拓扑人脉', value: (ws.topoContacts ?? 0) + '人' },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-lg p-2 text-center" style={{ background: 'rgba(255,255,255,0.5)', border: '1px solid rgba(201,168,76,0.12)' }}>
+            <div className="text-[8px] mb-0.5" style={{ color: dimBrown }}>{label}</div>
+            <div className="text-[11px] font-bold" style={{ color: darkBrown }}>{value}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
