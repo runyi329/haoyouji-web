@@ -1,0 +1,50 @@
+name: 排查AI分身定时任务
+on:
+  push:
+    branches:
+      - check-ai-tasks
+jobs:
+  check:
+    name: 查询活跃AI分身任务
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查询AI分身任务状态
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "===== 所有活跃(running)的AI分身任务 ====="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT id, user_id, ledger_id, 
+                     LEFT(task_description, 50) as task_desc,
+                     schedule_type, status, 
+                     execution_count, 
+                     last_executed_at
+              FROM ai_employee_tasks
+              WHERE status = 'running'
+              ORDER BY execution_count DESC;
+            " 2>&1
+
+            echo ""
+            echo "===== 按schedule_type统计 ====="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT schedule_type, status, COUNT(*) as count, SUM(execution_count) as total_executions
+              FROM ai_employee_tasks
+              GROUP BY schedule_type, status
+              ORDER BY total_executions DESC;
+            " 2>&1
+
+            echo ""
+            echo "===== 执行次数最多的前10个任务 ====="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              SELECT id, user_id, schedule_type, status, execution_count, last_executed_at,
+                     LEFT(task_description, 60) as task_desc
+              FROM ai_employee_tasks
+              ORDER BY execution_count DESC
+              LIMIT 10;
+            " 2>&1
+          ENDSSH
