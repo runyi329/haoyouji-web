@@ -1613,8 +1613,8 @@ export const equityTransferRouter = router({
                 COALESCE(es.resource_weight, 1.0) as resourceWeight,
                 COALESCE(es.capital_weight, 1.0) as capitalWeight,
                 es.source_user_id, es.source_amount,
-                su.nickname as sourceNickname,
-                cb.nickname as createdByNickname
+                su.name as sourceNickname,
+                cb.name as createdByNickname
          FROM equity_shares es
          LEFT JOIN users su ON su.id = es.source_user_id
          LEFT JOIN users cb ON cb.id = es.createdBy
@@ -1672,8 +1672,8 @@ export const equityTransferRouter = router({
                 COALESCE(es.resource_weight, 1.0) as resourceWeight,
                 COALESCE(es.capital_weight, 1.0) as capitalWeight,
                 es.source_user_id, es.source_amount,
-                su.nickname as sourceNickname,
-                cb.nickname as createdByNickname
+                su.name as sourceNickname,
+                cb.name as createdByNickname
          FROM equity_shares es
          LEFT JOIN users su ON su.id = es.source_user_id
          LEFT JOIN users cb ON cb.id = es.createdBy
