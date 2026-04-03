@@ -3657,7 +3657,7 @@ export default function LedgerDetail() {
                           <div className="flex items-center justify-between gap-1">
                             <div className="flex items-baseline gap-1.5 min-w-0 flex-1">
                               <span className="text-sm font-semibold text-gray-900 truncate">{u.name}</span>
-                              {(u as any).username && (u as any).username !== u.name && (
+                              {(u as any).username && (
                                 <span className="text-xs text-gray-400 font-normal truncate">({(u as any).username})</span>
                               )}
                             </div>
@@ -3773,7 +3773,7 @@ export default function LedgerDetail() {
                               <div className="space-y-1 mb-2">
                                 {editingMemberRatios.map((r: any) => (
                                   <div key={r.beneficiaryUserId} className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-600">{r.name}</span>
+                                    <span className="text-gray-600">{r.name}{r.username ? <span className="text-gray-400 ml-0.5">({r.username})</span> : null}</span>
                                     <span className="font-semibold" style={{ color: '#B8860B' }}>{r.ratio}%</span>
                                   </div>
                                 ))}
