@@ -1102,6 +1102,10 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: canSeeRecentDynamics, refetchInterval: 30000 }
   );
+  const { data: recentRecharges = [] } = trpc.ledger.afGetRecentRecharges.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: canSeeRecentDynamics && showInviteTree, refetchInterval: 30000 }
+  );
 
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
     onSuccess: (_data, variables) => {
@@ -3563,14 +3567,26 @@ export default function LedgerDetail() {
               </div>
               <button onClick={() => setShowInviteTree(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
             </div>
-            {/* 最新动态占位区 */}
+            {/* 最新动态区 */}
             {canSeeRecentDynamics && (
               <div className="px-4 py-2.5 border-b border-gray-100" style={{ backgroundColor: '#FFFBF0' }}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>最新动态</span>
-                  <span className="text-xs text-gray-400">（即将上线）</span>
+                  <span className="text-xs" style={{ color: '#B8860B', opacity: 0.6 }}>最近3笔充值</span>
                 </div>
-                <div className="mt-1 text-xs text-gray-300">最新充値、开单记录将在此展示...</div>
+                {recentRecharges.length === 0 ? (
+                  <div className="text-xs text-gray-300">暂无充值记录</div>
+                ) : (
+                  <div className="space-y-1">
+                    {recentRecharges.map((r: any) => (
+                      <div key={r.id} className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-700">{r.userName}</span>
+                        <span className="text-xs" style={{ color: '#B8860B', fontWeight: 600 }}>充值 {r.amount} {r.currency}</span>
+                        <span className="text-xs text-gray-400">{r.eventTime ? new Date(r.eventTime).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }) : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {/* 内容区 */}
