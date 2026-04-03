@@ -14,9 +14,9 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-      - name: 查询AI分身任务状态
+      - name: 查询AI分身任务状态并保存结果
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH' > /tmp/ai_tasks_result.txt 2>&1
             echo "===== 所有活跃(running)的AI分身任务 ====="
             mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
               SELECT id, user_id, ledger_id, 
@@ -48,3 +48,10 @@ jobs:
               LIMIT 10;
             " 2>&1
           ENDSSH
+          cat /tmp/ai_tasks_result.txt
+      - name: 上传查询结果
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-tasks-report
+          path: /tmp/ai_tasks_result.txt
+          retention-days: 1
