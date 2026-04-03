@@ -15970,5 +15970,29 @@ export const adminFeatureRouter = router({
       };
     }),
 
+  // ===== 临时接口：一次性清空所有QQ彩票相关数据 =====
+  // 用法：管理员调用后自动删除该接口
+  clearAllQQData: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      // 仅允许 super_admin 调用
+      if ((ctx.user as any).role !== 'super_admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅超级管理员可操作' });
+      }
+      const { getDbConnection } = await import('./db');
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const tables = ['qq_trade_records', 'qq_online_records', 'qq_risk_alerts', 'qq_ai_analysis_cache', 'qq_bet_odds'];
+      const results: Record<string, number> = {};
+      for (const table of tables) {
+        try {
+          const [res] = await (conn as any).execute(`DELETE FROM \`${table}\``);
+          results[table] = (res as any).affectedRows ?? 0;
+        } catch (e: any) {
+          results[table] = -1; // 表不存在或其他错误
+        }
+      }
+      return { success: true, results };
+    }),
+
 });
 export type AppRouter = typeof appRouter;
