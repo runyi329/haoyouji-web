@@ -1616,8 +1616,8 @@ export const equityTransferRouter = router({
                 su.nickname as sourceNickname,
                 cb.nickname as createdByNickname
          FROM equity_shares es
-         LEFT JOIN users su ON su.userId = es.source_user_id
-         LEFT JOIN users cb ON cb.userId = es.createdBy
+         LEFT JOIN users su ON su.id = es.source_user_id
+         LEFT JOIN users cb ON cb.id = es.createdBy
          WHERE es.ledgerId=? AND es.userId=? ORDER BY es.grantDate DESC, es.id DESC`,
         [input.ledgerId, ctx.user.id]
       );
@@ -1671,8 +1671,8 @@ export const equityTransferRouter = router({
                 su.nickname as sourceNickname,
                 cb.nickname as createdByNickname
          FROM equity_shares es
-         LEFT JOIN users su ON su.userId = es.source_user_id
-         LEFT JOIN users cb ON cb.userId = es.createdBy
+         LEFT JOIN users su ON su.id = es.source_user_id
+         LEFT JOIN users cb ON cb.id = es.createdBy
          WHERE es.ledgerId=? AND es.userId=? ORDER BY es.grantDate DESC, es.id DESC`,
         [input.ledgerId, input.userId]
       );
