@@ -689,12 +689,15 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
     );
   }
 
-  const total = ws.totalMultiplier ?? 1.0;
-  const capital = ws.capitalMultiplier ?? 0;
-  // 资源乘数加成 = 人脉+标签+邀请三项直接加总（不含基础1.0），最大2.0
+  // 前端自己加总，确保与明细列表完全一致
+  const capital = Math.min((ws.timeBonus ?? 0) + (ws.capitalBonus ?? 0), 2.0);
   const resourceBonus = Math.min(
     (ws.networkBonus ?? 0) + (ws.tagBonus ?? 0) + (ws.inviteBonus ?? 0),
     2.0
+  );
+  const total = Math.min(
+    Math.round((1.0 + capital + resourceBonus) * 10000) / 10000,
+    5.0
   );
 
   // 进度条百分比
