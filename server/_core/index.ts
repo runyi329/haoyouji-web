@@ -283,6 +283,36 @@ async function startServer() {
       res.status(500).json({ error: e.message });
     }
   });
+  // 临时调试端点：查询刘丽凡在59号账本的股权数据
+  app.get('/api/debug/lilifan59', async (_req: any, res: any) => {
+    try {
+      const { getDbConnection } = await import('../db.js');
+      const db = await getDbConnection();
+      if (!db) return res.json({ error: 'DB连接失败' });
+      // 找刘丽凡userId
+      const [userRows] = await (db as any).execute(
+        "SELECT id, username, nickname FROM users WHERE nickname LIKE '%刘丽凡%' OR username LIKE '%刘丽凡%' LIMIT 5"
+      ) as any;
+      const uid = userRows?.[0]?.id;
+      if (!uid) return res.json({ error: '未找到刘丽凡用户', userRows });
+      // ledger_members
+      const [members] = await (db as any).execute(
+        'SELECT * FROM ledger_members WHERE ledgerId=59 AND userId=?', [uid]
+      ) as any;
+      // equity_shares
+      const [shares] = await (db as any).execute(
+        'SELECT id, ledgerId, userId, shareType, shareCount, resourceWeight, capitalWeight, eventType, eventDate, createdAt FROM equity_shares WHERE ledgerId=59 AND userId=? ORDER BY createdAt DESC', [uid]
+      ) as any;
+      // equity_transfers
+      const [transfers] = await (db as any).execute(
+        'SELECT id, ledgerId, fromUserId, toUserId, fromShareCount, toShareCount, status, createdAt FROM equity_transfers WHERE ledgerId=59 AND (fromUserId=? OR toUserId=?) ORDER BY createdAt DESC', [uid, uid]
+      ) as any;
+      res.json({ uid, userInfo: userRows[0], members, shares, transfers });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // 临时调试端点：查询equity_weights表数据
   app.get('/api/debug/equity-weights', async (_req: any, res: any) => {
     try {
