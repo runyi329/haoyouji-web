@@ -1098,7 +1098,7 @@ export default function LedgerDetail() {
   // AF账本推荐页动态消息（仅yjh和管理员可见）
   const YJH_USER_ID_CONST = 4957151;
   const canSeeRecentDynamics = isCustomAF && ((user as any)?.id === YJH_USER_ID_CONST || isOwner || isAdmin);
-  const { data: recentDynamics = [] } = trpc.topology.afGetRecentDynamics.useQuery(
+  const { data: recentDynamics = [] } = trpc.ledger.afGetRecentDynamics.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: canSeeRecentDynamics, refetchInterval: 30000 }
   );
@@ -1815,7 +1815,6 @@ export default function LedgerDetail() {
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || isOwner || isAdmin) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setShowInviteTree(true); }}>
                 <div className="text-xs text-white/70 mb-1 flex items-center gap-1.5">
                   <span>推荐</span>
-                  {canSeeRecentDynamics && <span style={{color:'#FFD700',fontSize:'9px'}}>[{recentDynamics.length}]</span>}
                   {canSeeRecentDynamics && recentDynamics.length > 0 && (
                     <span style={{ overflow: 'hidden', maxWidth: '140px', display: 'inline-block', verticalAlign: 'middle' }}>
                       <span
