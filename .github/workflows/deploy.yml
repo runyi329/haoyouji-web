@@ -278,6 +278,12 @@ jobs:
               pm2 start /root/haoyouji-web/ecosystem.config.cjs --env production
             fi
             pm2 save
+            echo "🔄 同步新代码到实际服务目录..."
+            cp -r /root/haoyouji-web/dist/. /home/ubuntu/haoyouji-web/dist/
+            echo "🔄 重启实际服务进程..."
+            kill -SIGUSR2 $(cat /home/ubuntu/.pm2/pids/haoyouji-web-0.pid 2>/dev/null) 2>/dev/null || true
+            sudo -u ubuntu pm2 restart haoyouji-web 2>/dev/null || kill -9 $(pgrep -f '/home/ubuntu/haoyouji-web/dist/index.js') 2>/dev/null && sudo -u ubuntu bash -c 'cd /home/ubuntu/haoyouji-web && pm2 start dist/index.js --name haoyouji-web' 2>/dev/null || true
+            sleep 3
             echo "✅ 部署完成！"
             echo "=== 🔍 临时调试：win_status差异查询 ==="
             bash /root/haoyouji-web/scripts/debug-win-status.sh || true
