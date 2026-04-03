@@ -1433,10 +1433,11 @@ export const equityRouter = router({
       ) as any;
       const inviteCount = Number(invRow?.invite_count ?? 0);
       const inviteBonus = Math.min(Math.round((inviteCount / 100) * 0.4 * 10000) / 10000, 0.4);
-      // ===== 7. 资源乘数 =====
-      const resourceMultiplier = Math.min(Math.round((1.0 + networkBonus + tagBonus + inviteBonus) * 10000) / 10000, 2.0);
-      // ===== 8. 综合乘数 =====
-      const totalMultiplier = Math.round((1.0 + capitalMultiplier + resourceMultiplier) * 10000) / 10000;
+      // ===== 7. 资源乘数（不含基础1.0，最大2.0）=====
+      // 公式：资源乘数 = 人脉贡献 + 标签贡献 + 邀请贡献（不含基础1.0）
+      const resourceMultiplier = Math.min(Math.round((networkBonus + tagBonus + inviteBonus) * 10000) / 10000, 2.0);
+      // ===== 8. 综合乘数 = 基础1.0 + 资金乘数 + 资源乘数，满分5.0 =====
+      const totalMultiplier = Math.min(Math.round((1.0 + capitalMultiplier + resourceMultiplier) * 10000) / 10000, 5.0);
       return {
         shareNo, rank, timeTier, timeBonus,
         capitalAmount, capitalBonus, capitalMultiplier,
