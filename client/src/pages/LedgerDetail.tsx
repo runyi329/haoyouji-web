@@ -1537,7 +1537,14 @@ export default function LedgerDetail() {
                     结构
                   </button>
                   <button
-                    onClick={() => { setEquityHistoryUserId(viewAsUserId ?? null); setShowEquityHistory(true); }}
+                    onClick={() => {
+                      const targetUserId = viewAsUserId ?? user?.id ?? 0;
+                      const isAdminFlag = !viewAsUserId && (isOwner || isAdmin);
+                      const memberNickname = viewAsUserId
+                        ? ((membersData as any[])?.find((m: any) => m.userId === viewAsUserId)?.nickname || '成员')
+                        : (user?.nickname || user?.username || '我');
+                      setLocation(`/ledger/${ledgerId}/equity-history?userId=${targetUserId}&isAdmin=${isAdminFlag ? 1 : 0}&nickname=${encodeURIComponent(memberNickname)}`);
+                    }}
                     className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
                     style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                   >

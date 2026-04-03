@@ -155,6 +155,7 @@ const PointRulesManagement = lazy(() => import("./pages/PointRulesManagement"));
 const MyEquity = lazy(() => import("./pages/MyEquity"));
 const MyEquityRedWhite = lazy(() => import("./pages/MyEquity_RedWhite"));
 const EquityHistoryArchive = lazy(() => import("./pages/EquityHistoryArchive"));
+const EquityHistoryPage = lazy(() => import("./pages/EquityHistoryPage"));
 const WeeklyReportDetail = lazy(() => import("./pages/WeeklyReportDetail"));
 const EquityManagement = lazy(() => import("./pages/admin/EquityManagement"));
 const ValuationManagement = lazy(() => import("./pages/admin/ValuationManagement"));
@@ -393,6 +394,7 @@ function Router() {
         <Route path="/ledger/join/:token" component={JoinLedger} />
         <Route path="/ledger/:id/settings" component={LedgerSettings} />
         <Route path="/ledger/:id/ag-data-sources" component={AgDataSources} />
+        <Route path="/ledger/:ledgerId/equity-history" component={EquityHistoryPage} />
         <Route path="/ledger/:id/equity-manage" component={LedgerEquityManage} />
         <Route path="/ledger/:id/equity-weight-manage" component={EquityWeightManage} />
         <Route path="/ledger/:id/member-manage">{(params) => <LedgerMemberManage ledgerId={Number(params.id)} />}</Route>
