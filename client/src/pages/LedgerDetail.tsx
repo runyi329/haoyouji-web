@@ -741,7 +741,14 @@ function WeightScoreDisplay({ ledgerId }: { ledgerId: number }) {
     : `人均${ws.avgTags ?? 0}个 → 未达第1档 = +0.00倍`;
   const inviteFormula = `${ws.inviteCount ?? 0}人 ÷ 100人 × 0.40倍 = +${ws.inviteBonus?.toFixed(2) ?? '0.00'}倍`;
   const timeFormula = ws.rank ? `第${ws.rank}号入场 → 第${ws.timeTier}档 = +${ws.timeBonus?.toFixed(2) ?? '0.00'}倍` : '未入场';
-  const capitalFormula = ws.capitalAmount ? `${(ws.capitalAmount/10000).toFixed(1)}万元 ÷ 10万元 = +${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍` : '未出资';
+  // capitalAmount 单位是元（1张资金股=1元），满分门槛10万元（100000元）
+  const capitalAmountYuan = ws.capitalAmount ?? 0;
+  const capitalAmountDisplay = capitalAmountYuan >= 10000
+    ? `${(capitalAmountYuan / 10000).toFixed(1)}万元`
+    : `${capitalAmountYuan}元`;
+  const capitalFormula = capitalAmountYuan > 0
+    ? `${capitalAmountDisplay} ÷ 10万元 = +${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍`
+    : '未出资';
 
   return (
     <div className="rounded-2xl p-4 mb-4" style={{ background: bg, border }}>
