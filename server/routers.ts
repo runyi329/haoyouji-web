@@ -12897,6 +12897,50 @@ export const appRouter = router({
         messages.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
         return messages.slice(0, 2).map(m => m.text);
       }),
+
+    // 获取账本下所有成员最近3笔充值记录（仅owner/admin可见）
+    afGetRecentRecharges: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const YJH_USER_ID = 4957151;
+        // 权限检查
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        if (!isAllowed) return [];
+        // 获取账本所有成员userId（无限代，通过ledger_members表）
+        const [memberUserRows] = await (conn as any).execute(
+          `SELECT userId FROM ledger_members WHERE ledgerId=?`,
+          [input.ledgerId]
+        );
+        const memberUserIds = (memberUserRows as any[]).map((r: any) => r.userId);
+        if (memberUserIds.length === 0) return [];
+        // 查询最近3笔completed充值记录
+        const placeholders = memberUserIds.map(() => '?').join(',');
+        const [rows] = await (conn as any).execute(
+          `SELECT ro.id, ro.amount, ro.currency,
+                  ro.created_at as eventTime,
+                  u.name as userName, u.username
+           FROM recharge_orders ro
+           LEFT JOIN users u ON u.id = ro.user_id
+           WHERE ro.user_id IN (${placeholders}) AND ro.status='completed' AND ro.ledger_id=?
+           ORDER BY ro.created_at DESC LIMIT 3`,
+          [...memberUserIds, input.ledgerId]
+        );
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          userName: r.userName || r.username || '新用户',
+          amount: parseFloat(r.amount).toFixed(0),
+          currency: r.currency || 'USDT',
+          eventTime: r.eventTime ? String(r.eventTime) : '',
+        }));
+      }),
   }),
   
   // 銀行列表管理
