@@ -13001,6 +13001,7 @@ export const appRouter = router({
           beneficiaryUserId: r.beneficiary_user_id,
           ratio: parseFloat(r.ratio),
           name: r.name || r.username || '未知',
+          username: r.username || '',
         }));
         // 如果该成员还没有任何拨比配置，自动初始化默认值（YJH=33.4，自己=66.6）
         if (list.length === 0) {
@@ -13023,6 +13024,7 @@ export const appRouter = router({
             beneficiaryUserId: r.beneficiary_user_id,
             ratio: parseFloat(r.ratio),
             name: r.name || r.username || '未知',
+            username: r.username || '',
           }));
         }
         return list;
