@@ -1118,6 +1118,8 @@ export default function LedgerDetail() {
   );
   // 动态Tab刷新key
   const [dynamicsRefreshKey, setDynamicsRefreshKey] = useState(0);
+  // 最新充值抽屉展开状态
+  const [rechargeExpanded, setRechargeExpanded] = useState(false);
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
     onSuccess: (_data, variables) => {
       // 立即更新本地显示
@@ -3594,30 +3596,47 @@ export default function LedgerDetail() {
               </div>
               <button onClick={() => setShowInviteTree(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
             </div>
-            {/* 最新动态区 - 最新充值 */}
+             {/* 最新动态区 - 下拉抄屉式 */}
             {canSeeRecentDynamics && (
               <div className="border-b border-gray-100" style={{ backgroundColor: '#FFFBF0' }}>
-                {/* 标题行 */}
-                <div className="flex border-b border-amber-100 items-center px-3 py-1.5">
-                  <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>最新充值</span>
-                </div>
-                {/* 内容区 */}
-                <div className="px-3 py-2" style={{ maxHeight: '220px', overflowY: 'auto' }}>
-                  {recentRecharges.length === 0 ? (
-                    <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
-                  ) : (
-                    <div className="space-y-1">
-                      {recentRecharges.map((r: any) => (
-                        <div key={r.id} className="flex items-center gap-2 py-1" style={{ borderBottom: '1px solid rgba(184,134,11,0.08)' }}>
-                          <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{r.userName}({r.username})</span>
-                          <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{parseFloat(r.amount).toFixed(0)}{r.currency}</span>
-                          <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                        </div>
-                      ))}
+                {/* 标题行：点击展开/收起 */}
+                <div
+                  className="flex items-center px-3 py-2 cursor-pointer select-none"
+                  style={{ borderBottom: rechargeExpanded ? '1px solid rgba(184,134,11,0.15)' : 'none' }}
+                  onClick={() => setRechargeExpanded(v => !v)}
+                >
+                  <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#B8860B' }}>最新充值</span>
+                  {/* 收起时显示最新一笔 */}
+                  {!rechargeExpanded && recentRecharges.length > 0 && (
+                    <div className="flex items-center gap-2 ml-3 flex-1 min-w-0">
+                      <span className="text-xs text-gray-600 truncate" style={{ maxWidth: '5em' }}>{recentRecharges[0].userName}({recentRecharges[0].username})</span>
+                      <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{parseFloat(recentRecharges[0].amount).toFixed(0)}{recentRecharges[0].currency}</span>
+                      <span className="text-xs text-gray-400 ml-auto whitespace-nowrap flex-shrink-0">{recentRecharges[0].eventTime ? new Date(recentRecharges[0].eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
                     </div>
                   )}
-
+                  {!rechargeExpanded && recentRecharges.length === 0 && (
+                    <span className="text-xs text-gray-300 ml-3">暂无记录</span>
+                  )}
+                  <span className="ml-2 flex-shrink-0 text-gray-400 text-xs">{rechargeExpanded ? '▲' : '▼'}</span>
                 </div>
+                {/* 展开内容：最近10条 */}
+                {rechargeExpanded && (
+                  <div className="px-3 py-2" style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                    {recentRecharges.length === 0 ? (
+                      <div className="text-xs text-gray-300 py-2 text-center">暂无记录</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {recentRecharges.map((r: any) => (
+                          <div key={r.id} className="flex items-center gap-2 py-1.5" style={{ borderBottom: '1px solid rgba(184,134,11,0.08)' }}>
+                            <span className="text-xs text-gray-600 truncate" style={{ minWidth: '4em', maxWidth: '6em' }}>{r.userName}({r.username})</span>
+                            <span className="text-xs font-semibold" style={{ color: '#B8860B' }}>{parseFloat(r.amount).toFixed(0)}{r.currency}</span>
+                            <span className="text-xs text-gray-400 ml-auto whitespace-nowrap">{r.eventTime ? new Date(r.eventTime).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {/* 内容区 */}
