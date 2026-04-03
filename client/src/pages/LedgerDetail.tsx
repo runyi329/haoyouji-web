@@ -1098,7 +1098,7 @@ export default function LedgerDetail() {
   // AF账本推荐页动态消息（仅yjh和管理员可见）
   const YJH_USER_ID_CONST = 4957151;
   const canSeeRecentDynamics = isCustomAF && ((user as any)?.id === YJH_USER_ID_CONST || isOwner || isAdmin);
-  const { data: recentDynamics = [] } = trpc.ledger.afGetRecentDynamics.useQuery(
+  const { data: recentDynamics = [] } = trpc.topology.afGetRecentDynamics.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: canSeeRecentDynamics, refetchInterval: 30000 }
   );
