@@ -16211,31 +16211,24 @@ export const adminFeatureRouter = router({
       .query(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
-        const YJH_USER_ID = 4957151;
+        const YJH_USER_IDS = [4957151, 870413];
         const [memberRows] = await (conn as any).execute(
           `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
           [input.ledgerId, ctx.user.id]
         );
         const memberRole = (memberRows as any[])[0]?.role;
         const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        const isAllowed = YJH_USER_IDS.includes(ctx.user.id) || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
         if (!isAllowed) return [];
-        const [memberUserRows] = await (conn as any).execute(
-          `SELECT userId FROM ledger_members WHERE ledgerId=?`,
-          [input.ledgerId]
-        );
-        const memberUserIds = (memberUserRows as any[]).map((r: any) => r.userId);
-        if (memberUserIds.length === 0) return [];
-        const placeholders = memberUserIds.map(() => '?').join(',');
         const [rows] = await (conn as any).execute(
           `SELECT ro.id, ro.order_no, ro.amount, ro.currency,
                   COALESCE(ro.completed_at, ro.updated_at, ro.created_at) as eventTime,
                   u.name as userName, u.username
            FROM recharge_orders ro
            LEFT JOIN users u ON u.id = ro.user_id
-           WHERE ro.user_id IN (${placeholders}) AND ro.status='completed'
+           WHERE ro.ledger_id=? AND ro.status='completed'
            ORDER BY COALESCE(ro.completed_at, ro.updated_at, ro.created_at) DESC LIMIT 10`,
-          memberUserIds
+          [input.ledgerId]
         );
         return (rows as any[]).map((r: any) => ({
           id: r.id,
@@ -16253,14 +16246,14 @@ export const adminFeatureRouter = router({
       .query(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
-        const YJH_USER_ID = 4957151;
+        const YJH_USER_IDS = [4957151, 870413];
         const [memberRows] = await (conn as any).execute(
           `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
           [input.ledgerId, ctx.user.id]
         );
         const memberRole = (memberRows as any[])[0]?.role;
         const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        const isAllowed = YJH_USER_IDS.includes(ctx.user.id) || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
         if (!isAllowed) return [];
         const [rows] = await (conn as any).execute(
           `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.order_type,
@@ -16291,14 +16284,14 @@ export const adminFeatureRouter = router({
       .query(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
-        const YJH_USER_ID = 4957151;
+        const YJH_USER_IDS = [4957151, 870413];
         const [memberRows] = await (conn as any).execute(
           `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
           [input.ledgerId, ctx.user.id]
         );
         const memberRole = (memberRows as any[])[0]?.role;
         const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        const isAllowed = YJH_USER_IDS.includes(ctx.user.id) || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
         if (!isAllowed) return [];
         const [rows] = await (conn as any).execute(
           `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
@@ -16330,14 +16323,14 @@ export const adminFeatureRouter = router({
       .query(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
-        const YJH_USER_ID = 4957151;
+        const YJH_USER_IDS = [4957151, 870413];
         const [memberRows] = await (conn as any).execute(
           `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
           [input.ledgerId, ctx.user.id]
         );
         const memberRole = (memberRows as any[])[0]?.role;
         const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        const isAllowed = YJH_USER_IDS.includes(ctx.user.id) || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
         if (!isAllowed) return [];
         const [rows] = await (conn as any).execute(
           `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.gift_multiplier, o.source_order_id,
