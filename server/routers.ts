@@ -12977,6 +12977,93 @@ export const appRouter = router({
           eventTime: r.eventTime ? String(r.eventTime) : '',
         }));
       }),
+
+    // YJH专属：查询某个成员（source_user_id）的所有拨比配置
+    afGetMemberPayoutRatios: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), sourceUserId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        // 只有YJH或super_admin可用
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const [rows] = await (conn as any).execute(
+          `SELECT r.id, r.beneficiary_user_id, r.ratio, u.name, u.username
+           FROM af_payout_ratios r
+           LEFT JOIN users u ON u.id = r.beneficiary_user_id
+           WHERE r.ledger_id=? AND r.source_user_id=?
+           ORDER BY r.ratio DESC`,
+          [input.ledgerId, input.sourceUserId]
+        );
+        const list = (rows as any[]).map((r: any) => ({
+          id: r.id,
+          beneficiaryUserId: r.beneficiary_user_id,
+          ratio: parseFloat(r.ratio),
+          name: r.name || r.username || '未知',
+        }));
+        // 如果该成员还没有任何拨比配置，自动初始化默认值（YJH=33.4，自己=66.6）
+        if (list.length === 0) {
+          await (conn as any).execute(
+            `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+             VALUES (?, ?, ?, 33.40), (?, ?, ?, 66.60)`,
+            [input.ledgerId, input.sourceUserId, YJH_USER_ID,
+             input.ledgerId, input.sourceUserId, input.sourceUserId]
+          );
+          const [rows2] = await (conn as any).execute(
+            `SELECT r.id, r.beneficiary_user_id, r.ratio, u.name, u.username
+             FROM af_payout_ratios r
+             LEFT JOIN users u ON u.id = r.beneficiary_user_id
+             WHERE r.ledger_id=? AND r.source_user_id=?
+             ORDER BY r.ratio DESC`,
+            [input.ledgerId, input.sourceUserId]
+          );
+          return (rows2 as any[]).map((r: any) => ({
+            id: r.id,
+            beneficiaryUserId: r.beneficiary_user_id,
+            ratio: parseFloat(r.ratio),
+            name: r.name || r.username || '未知',
+          }));
+        }
+        return list;
+      }),
+
+    // YJH专属：修改自己对某个成员的拨比（只能改自己那一行）
+    afSetYjhPayoutRatio: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        sourceUserId: z.number(),
+        newRatio: z.number().min(0).max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 查询当前所有受益人的拨比
+        const [rows] = await (conn as any).execute(
+          `SELECT beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id=? AND source_user_id=?`,
+          [input.ledgerId, input.sourceUserId]
+        );
+        const currentList = rows as any[];
+        // 计算其他受益人的总比例（不含YJH自己）
+        const othersTotal = currentList
+          .filter((r: any) => r.beneficiary_user_id !== YJH_USER_ID)
+          .reduce((sum: number, r: any) => sum + parseFloat(r.ratio), 0);
+        // 校验：YJH新比例 + 其他人总比例 不能超过100
+        if (Math.round((input.newRatio + othersTotal) * 100) > 10000) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `其他受益人已占 ${othersTotal.toFixed(1)}%，YJH最多可设 ${(100 - othersTotal).toFixed(1)}%` });
+        }
+        // 更新YJH的拨比
+        await (conn as any).execute(
+          `INSERT INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE ratio=?, updated_at=NOW()`,
+          [input.ledgerId, input.sourceUserId, YJH_USER_ID, input.newRatio, input.newRatio]
+        );
+        return { success: true, yjhRatio: input.newRatio, othersTotal, remaining: 100 - input.newRatio - othersTotal };
+      }),
   }),
   
   // 銀行列表管理
