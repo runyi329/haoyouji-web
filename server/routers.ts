@@ -15986,16 +15986,27 @@ export const adminFeatureRouter = router({
         const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
         const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
         if (!isAllowed) return [];
-        // 查最近2条：新人充值（recharge_orders completed）+ 订单变动（af_orders）
-        const [rechargeRows] = await (conn as any).execute(
-          `SELECT ro.id, ro.amount, ro.currency, ro.completed_at as eventTime,
-                  u.name as userName, u.username
-           FROM recharge_orders ro
-           LEFT JOIN users u ON u.id = ro.user_id
-           WHERE ro.ledger_id=? AND ro.status='completed'
-           ORDER BY ro.completed_at DESC LIMIT 2`,
+        // 查最近2条：新人充值（recharge_orders completed，按账本成员查）+ 订单变动（af_orders）
+        // recharge_orders.ledger_id 可能为NULL（通用充值），改为查账本成员的充值记录
+        const [memberUserRows] = await (conn as any).execute(
+          `SELECT userId FROM ledger_members WHERE ledgerId=?`,
           [input.ledgerId]
         );
+        const memberUserIds = (memberUserRows as any[]).map((r: any) => r.userId);
+        let rechargeRows: any[] = [];
+        if (memberUserIds.length > 0) {
+          const placeholders = memberUserIds.map(() => '?').join(',');
+          const [rows] = await (conn as any).execute(
+            `SELECT ro.id, ro.amount, ro.currency, ro.completed_at as eventTime,
+                    u.name as userName, u.username
+             FROM recharge_orders ro
+             LEFT JOIN users u ON u.id = ro.user_id
+             WHERE ro.user_id IN (${placeholders}) AND ro.status='completed'
+             ORDER BY ro.completed_at DESC LIMIT 2`,
+            memberUserIds
+          );
+          rechargeRows = rows as any[];
+        }
         const [orderRows] = await (conn as any).execute(
           `SELECT o.id, o.coin, o.side, o.amount, o.status, o.sell_status, o.updated_at as eventTime,
                   u.name as userName, u.username
