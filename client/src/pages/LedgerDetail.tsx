@@ -958,6 +958,9 @@ export default function LedgerDetail() {
   // 拨比编辑状态（YJH专属）
   const [editingRatioUserId, setEditingRatioUserId] = useState<number | null>(null);
   const [ratioInputValue, setRatioInputValue] = useState<string>('');
+  // 行内编辑某个受益人的拨比
+  const [editingBeneficiaryId, setEditingBeneficiaryId] = useState<number | null>(null);
+  const [beneficiaryRatioInput, setBeneficiaryRatioInput] = useState<string>('');
   // 视角切换（AF 账本管理员专属）
   // viewAsUserId 从 URL 参数读取，确保刷新和子页面跳转后保持视角
   const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
@@ -1130,8 +1133,8 @@ export default function LedgerDetail() {
   const setYjhRatioMutation = trpc.ledger.afSetYjhPayoutRatio.useMutation({
     onSuccess: () => {
       refetchMemberRatios();
-      setEditingRatioUserId(null);
-      setRatioInputValue('');
+      setEditingBeneficiaryId(null);
+      setBeneficiaryRatioInput('');
     },
     onError: (err) => {
       alert('保存失败：' + err.message);
@@ -3670,10 +3673,12 @@ export default function LedgerDetail() {
                                   if (!isYJH) return;
                                   if (editingRatioUserId === u.id) {
                                     setEditingRatioUserId(null);
-                                    setRatioInputValue('');
+                                    setEditingBeneficiaryId(null);
+                                    setBeneficiaryRatioInput('');
                                   } else {
                                     setEditingRatioUserId(u.id);
-                                    setRatioInputValue(String(u.payoutRatio ?? 33.4));
+                                    setEditingBeneficiaryId(null);
+                                    setBeneficiaryRatioInput('');
                                   }
                                 }}
                               >{u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}{isYJH && <span style={{ fontSize: 9, marginLeft: 2 }}>✒</span>}</span>
@@ -3770,45 +3775,61 @@ export default function LedgerDetail() {
                             <div className="text-xs text-gray-400">加载中...</div>
                           ) : (
                             <>
-                              <div className="space-y-1 mb-2">
+                              <div className="space-y-1.5 mb-2">
                                 {editingMemberRatios.map((r: any) => (
-                                  <div key={r.beneficiaryUserId} className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-600">{r.name}{r.username ? <span className="text-gray-400 ml-0.5">({r.username})</span> : null}</span>
-                                    <span className="font-semibold" style={{ color: '#B8860B' }}>{r.ratio}%</span>
+                                  <div key={r.beneficiaryUserId} className="flex items-center justify-between text-xs gap-2">
+                                    <span className="text-gray-600 flex-1 min-w-0 truncate">{r.name}{r.username ? <span className="text-gray-400 ml-0.5">({r.username})</span> : null}</span>
+                                    {editingBeneficiaryId === r.beneficiaryUserId ? (
+                                      <div className="flex items-center gap-1 flex-shrink-0">
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={100}
+                                          step={0.1}
+                                          value={beneficiaryRatioInput}
+                                          onChange={e => setBeneficiaryRatioInput(e.target.value)}
+                                          className="w-16 text-xs px-1.5 py-0.5 rounded border border-amber-300 outline-none text-center"
+                                          style={{ backgroundColor: '#fff' }}
+                                          autoFocus
+                                        />
+                                        <span className="text-gray-400">%</span>
+                                        <button
+                                          onClick={() => setYjhRatioMutation.mutate({
+                                            ledgerId: Number(ledgerId),
+                                            sourceUserId: u.id,
+                                            beneficiaryUserId: r.beneficiaryUserId,
+                                            newRatio: parseFloat(beneficiaryRatioInput) || 0,
+                                          })}
+                                          disabled={setYjhRatioMutation.isPending}
+                                          className="text-xs px-2 py-0.5 rounded text-white font-medium"
+                                          style={{ backgroundColor: '#B8860B' }}
+                                        >存</button>
+                                        <button
+                                          onClick={() => { setEditingBeneficiaryId(null); setBeneficiaryRatioInput(''); }}
+                                          className="text-xs px-1.5 py-0.5 rounded text-gray-400"
+                                          style={{ backgroundColor: '#EEEEEE' }}
+                                        >取</button>
+                                      </div>
+                                    ) : (
+                                      <span
+                                        className="font-semibold cursor-pointer flex-shrink-0"
+                                        style={{ color: '#B8860B' }}
+                                        onClick={() => { setEditingBeneficiaryId(r.beneficiaryUserId); setBeneficiaryRatioInput(String(r.ratio)); }}
+                                        title="点击编辑"
+                                      >{r.ratio}% ✎</span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
-                              <div className="text-xs text-gray-500 mb-2">
+                              <div className="text-xs text-gray-400">
                                 已分配：{editingMemberRatios.reduce((s: number, r: any) => s + r.ratio, 0).toFixed(1)}%　剩余：{(100 - editingMemberRatios.reduce((s: number, r: any) => s + r.ratio, 0)).toFixed(1)}%
                               </div>
-                              <div className="flex gap-2 items-center">
-                                <span className="text-xs text-gray-500">YJH分成：</span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={100}
-                                  step={0.1}
-                                  value={ratioInputValue}
-                                  onChange={e => setRatioInputValue(e.target.value)}
-                                  className="w-20 text-sm px-2 py-1 rounded border border-amber-200 outline-none text-center"
-                                  style={{ backgroundColor: '#fff' }}
-                                />
-                                <span className="text-xs text-gray-500">%</span>
+                              <div className="mt-2">
                                 <button
-                                  onClick={() => setYjhRatioMutation.mutate({
-                                    ledgerId: Number(ledgerId),
-                                    sourceUserId: u.id,
-                                    newRatio: parseFloat(ratioInputValue) || 0,
-                                  })}
-                                  disabled={setYjhRatioMutation.isPending}
-                                  className="text-xs px-3 py-1 rounded text-white font-medium"
-                                  style={{ backgroundColor: '#B8860B' }}
-                                >保存</button>
-                                <button
-                                  onClick={() => { setEditingRatioUserId(null); setRatioInputValue(''); }}
-                                  className="text-xs px-2 py-1 rounded text-gray-500"
+                                  onClick={() => { setEditingRatioUserId(null); setEditingBeneficiaryId(null); setBeneficiaryRatioInput(''); }}
+                                  className="text-xs px-3 py-1 rounded text-gray-500"
                                   style={{ backgroundColor: '#EEEEEE' }}
-                                >取消</button>
+                                >关闭</button>
                               </div>
                             </>
                           )}

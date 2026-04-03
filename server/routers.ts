@@ -13030,11 +13030,12 @@ export const appRouter = router({
         return list;
       }),
 
-    // YJH专属：修改自己对某个成员的拨比（只能改自己那一行）
+    // YJH专属：修改某个受益人的拨比（可修改任意受益人，总和不超过100%）
     afSetYjhPayoutRatio: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
         sourceUserId: z.number(),
+        beneficiaryUserId: z.number(), // 要修改的受益人ID
         newRatio: z.number().min(0).max(100),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -13049,22 +13050,22 @@ export const appRouter = router({
           [input.ledgerId, input.sourceUserId]
         );
         const currentList = rows as any[];
-        // 计算其他受益人的总比例（不含YJH自己）
+        // 计算其他受益人的总比例（不含要修改的那个人）
         const othersTotal = currentList
-          .filter((r: any) => r.beneficiary_user_id !== YJH_USER_ID)
+          .filter((r: any) => r.beneficiary_user_id !== input.beneficiaryUserId)
           .reduce((sum: number, r: any) => sum + parseFloat(r.ratio), 0);
-        // 校验：YJH新比例 + 其他人总比例 不能超过100
+        // 校验：新比例 + 其他人总比例 不能超过100
         if (Math.round((input.newRatio + othersTotal) * 100) > 10000) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: `其他受益人已占 ${othersTotal.toFixed(1)}%，YJH最多可设 ${(100 - othersTotal).toFixed(1)}%` });
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `其他受益人已占 ${othersTotal.toFixed(1)}%，此项最多可设 ${(100 - othersTotal).toFixed(1)}%` });
         }
-        // 更新YJH的拨比
+        // 更新指定受益人的拨比
         await (conn as any).execute(
           `INSERT INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
            VALUES (?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE ratio=?, updated_at=NOW()`,
-          [input.ledgerId, input.sourceUserId, YJH_USER_ID, input.newRatio, input.newRatio]
+          [input.ledgerId, input.sourceUserId, input.beneficiaryUserId, input.newRatio, input.newRatio]
         );
-        return { success: true, yjhRatio: input.newRatio, othersTotal, remaining: 100 - input.newRatio - othersTotal };
+        return { success: true, newRatio: input.newRatio, othersTotal, remaining: 100 - input.newRatio - othersTotal };
       }),
   }),
   
