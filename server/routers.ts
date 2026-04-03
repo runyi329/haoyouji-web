@@ -7523,6 +7523,17 @@ export const appRouter = router({
                      VALUES (52, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, NOW(), NOW())`,
                     [ctx.user.id]
                   );
+                  // 自动初始化默认拨比：YJH 33.4%，自己 66.6%
+                  try {
+                    const YJH_USER_ID_AF = 4957151;
+                    await db52.execute(
+                      `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+                       VALUES (52, ?, ?, 33.40), (52, ?, ?, 66.60)`,
+                      [ctx.user.id, YJH_USER_ID_AF, ctx.user.id, ctx.user.id]
+                    );
+                  } catch (e2) {
+                    console.error('[52号账本自动准入] 初始化默认拨比失败:', e2);
+                  }
                   console.log('[52号账本自动准入] 用户', ctx.user.id, '已自动加入52号账本');
                 }
               }
