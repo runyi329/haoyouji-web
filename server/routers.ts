@@ -12984,6 +12984,36 @@ export const appRouter = router({
         }));
       }),
 
+    // 最新委托（status=pending，is_gift=0，只显示账本成员，排除jiang）
+    afGetRecentPendingOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const JIANG_USER_ID = 870413;
+        const [rows] = await (conn as any).execute(
+          `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.order_type,
+                  o.created_at as eventTime,
+                  u.name as userName, u.username
+           FROM af_orders o
+           INNER JOIN ledger_members lm ON lm.userId = o.user_id AND lm.ledgerId = ?
+           LEFT JOIN users u ON u.id = o.user_id
+           WHERE o.ledger_id=? AND o.status='pending' AND o.is_gift=0 AND o.user_id != ?
+           ORDER BY o.created_at DESC LIMIT 10`,
+          [input.ledgerId, input.ledgerId, JIANG_USER_ID]
+        );
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          userName: r.userName || r.username || '新用户',
+          username: r.username || '',
+          coin: r.coin || '',
+          side: r.side || '',
+          amount: parseFloat(r.amount || 0).toFixed(0),
+          limitPrice: r.limit_price ? String(r.limit_price) : '',
+          orderType: r.order_type || '',
+          eventTime: r.eventTime ? String(r.eventTime) : '',
+        }));
+      }),
     // YJH专属：查询某个成员（source_user_id）的所有拨比配置
     afGetMemberPayoutRatios: protectedProcedure
       .input(z.object({ ledgerId: z.number(), sourceUserId: z.number() }))
