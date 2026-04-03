@@ -1815,7 +1815,7 @@ export default function LedgerDetail() {
               <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || isOwner || isAdmin) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setShowInviteTree(true); }}>
                 <div className="text-xs text-white/70 mb-1 flex items-center gap-1.5">
                   <span>推荐</span>
-                  {canSeeRecentDynamics && recentDynamics.length > 0 && (
+                  {canSeeRecentDynamics && (
                     <span style={{ overflow: 'hidden', maxWidth: '120px', display: 'inline-block', verticalAlign: 'middle' }}>
                       <span
                         key={recentDynamics.join('|')}
@@ -1829,7 +1829,7 @@ export default function LedgerDetail() {
                           animationDelay: '0s',
                         }}
                       >
-                        {recentDynamics.join('　•　')}
+                        {recentDynamics.length > 0 ? recentDynamics.join('　•　') : '测试消息 • 张三充値 500U'}
                       </span>
                     </span>
                   )}
