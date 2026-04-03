@@ -283,8 +283,9 @@ jobs:
             cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
             cp /root/haoyouji-web/pnpm-lock.yaml /home/ubuntu/haoyouji-web/pnpm-lock.yaml
             chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
-            echo "🔄 安装缺少的依赖..."
-            cd /home/ubuntu/haoyouji-web && sudo -u ubuntu pnpm install --prod 2>&1 | tail -5
+            echo "🔄 同步node_modules..."
+            rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
+            chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
             echo "🔄 重启实际服务进程..."
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart haoyouji-web' 2>&1
             sleep 5
