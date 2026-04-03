@@ -313,6 +313,37 @@ async function startServer() {
     }
   });
 
+  // 临时调试端点：查询52号账本动态消息数据
+  app.get('/api/debug/ledger52', async (_req: any, res: any) => {
+    try {
+      const { getDbConnection } = await import('../db.js');
+      const db = await getDbConnection();
+      if (!db) return res.json({ error: 'DB连接失败' });
+      // 查52号账本成员
+      const [memberRows] = await (db as any).execute(
+        'SELECT lm.userId, u.name, u.username FROM ledger_members lm LEFT JOIN users u ON u.id=lm.userId WHERE lm.ledgerId=52'
+      ) as any;
+      const memberIds = (memberRows as any[]).map((r: any) => r.userId);
+      // 查充值记录
+      let rechargeRows: any[] = [];
+      if (memberIds.length > 0) {
+        const ph = memberIds.map(() => '?').join(',');
+        const [rows] = await (db as any).execute(
+          `SELECT ro.id, ro.user_id, ro.amount, ro.currency, ro.status, ro.completed_at, ro.ledger_id, u.name, u.username FROM recharge_orders ro LEFT JOIN users u ON u.id=ro.user_id WHERE ro.user_id IN (${ph}) ORDER BY ro.completed_at DESC LIMIT 5`,
+          memberIds
+        ) as any;
+        rechargeRows = rows;
+      }
+      // 查af_orders
+      const [orderRows] = await (db as any).execute(
+        'SELECT o.id, o.user_id, o.coin, o.side, o.amount, o.status, o.updated_at, u.name, u.username FROM af_orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.ledger_id=52 ORDER BY o.updated_at DESC LIMIT 5'
+      ) as any;
+      res.json({ members: memberRows, memberCount: memberIds.length, memberIds, rechargeRows, orderRows });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // 临时调试端点：查询equity_weights表数据
   app.get('/api/debug/equity-weights', async (_req: any, res: any) => {
     try {
