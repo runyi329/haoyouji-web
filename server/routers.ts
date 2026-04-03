@@ -12941,6 +12941,42 @@ export const appRouter = router({
           eventTime: r.eventTime ? String(r.eventTime) : '',
         }));
       }),
+
+    afGetRecentOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const YJH_USER_ID = 4957151;
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        const isAllowed = ctx.user.id === YJH_USER_ID || isSysAdmin || memberRole === 'owner' || memberRole === 'admin';
+        if (!isAllowed) return [];
+        // 查询最近3笔委托订单
+        const [rows] = await (conn as any).execute(
+          `SELECT o.id, o.coin, o.side, o.amount, o.status, o.sell_status,
+                  o.created_at as eventTime,
+                  u.name as userName, u.username
+           FROM af_orders o
+           LEFT JOIN users u ON u.id = o.user_id
+           WHERE o.ledger_id=?
+           ORDER BY o.created_at DESC LIMIT 3`,
+          [input.ledgerId]
+        );
+        return (rows as any[]).map((r: any) => ({
+          id: r.id,
+          userName: r.userName || r.username || '新用户',
+          coin: r.coin || '',
+          side: r.side || '',
+          amount: parseFloat(r.amount).toFixed(0),
+          status: r.status || '',
+          eventTime: r.eventTime ? String(r.eventTime) : '',
+        }));
+      }),
   }),
   
   // 銀行列表管理
