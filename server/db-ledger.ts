@@ -1557,6 +1557,21 @@ export async function joinLedgerByToken(token: string, userId: number) {
     permissionDelete: "own",
   });
 
+  // 自动初始化默认拨比：YJH 33.4%，自己 66.6%
+  try {
+    const YJH_USER_ID = 4957151;
+    const rawConn = await getDbConnection();
+    if (rawConn) {
+      await (rawConn as any).execute(
+        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES (?, ?, ?, 33.40), (?, ?, ?, 66.60)`,
+        [ledgerId, userId, YJH_USER_ID, ledgerId, userId, userId]
+      );
+    }
+  } catch (e) {
+    console.error('[joinLedgerByToken] 初始化默认拨比失败:', e);
+  }
+
   return ledger[0];
 }
 
@@ -4797,7 +4812,22 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
     permissionDelete: "own",
   });
 
-  console.log('[joinLedgerBySecretKey] 用户通过密钥加入账本:', { userId, ledgerId });
+  // 自动初始化默认拨比：YJH 33.4%，自己 66.6%
+  try {
+    const YJH_USER_ID = 4957151;
+    const rawConn = await getDbConnection();
+    if (rawConn) {
+      await (rawConn as any).execute(
+        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES (?, ?, ?, 33.40), (?, ?, ?, 66.60)`,
+        [ledgerId, userId, YJH_USER_ID, ledgerId, userId, userId]
+      );
+    }
+  } catch (e) {
+    console.error('[joinLedgerBySecretKey] 初始化默认拨比失败:', e);
+  }
+
+  console.log('[joinLedgerBySecretKey] 用户通过密鑰加入账本:', { userId, ledgerId });
   return { ledgerId, ledgerName: ledgerRow.name };
 }
 
