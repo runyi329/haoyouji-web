@@ -709,12 +709,13 @@ function WeightScoreDisplay({ ledgerId, userId }: { ledgerId: number; userId?: n
   // level=0: 顶级汇总行（基础权重/资金乘数/资源乘数）- 深色背景+粗字
   // level=1: 二级子项（时间乘数/资金量乘数/人脉贡献/标签贡献/邀请贡献）- 白色背景+左侧金色细线
   // level=2: 三级子项（自有/共享/拓扑人脉）- 极浅灰背景+左侧更细线+更小字
-  const Row = ({ label, cap, formula, value, level = 0 }: {
+  const Row = ({ label, cap, formula, value, level = 0, max }: {
     label: string;
     cap?: string;
     formula?: string;
     value: string;
     level?: 0 | 1 | 2;
+    max?: number;  // 满分数値，用于进度条计算
   }) => {
     if (level === 0) {
       // 顶级汇总行：深金色背景，字体较大，无缩进
@@ -732,8 +733,10 @@ function WeightScoreDisplay({ ledgerId, userId }: { ledgerId: number; userId?: n
     }
     if (level === 1) {
       // 二级子项：白色背景，左侧金色竖线，轻微缩进
+      const rawVal1 = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
+      const pct1 = max ? Math.min((rawVal1 / max) * 100, 100) : 0;
       return (
-        <div style={{ background: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(201,168,76,0.07)', margin: '0 -12px', padding: '5px 12px 5px 20px', borderLeft: '3px solid rgba(201,168,76,0.45)' }}>
+        <div style={{ background: 'rgba(255,255,255,0.7)', borderBottom: '1px solid rgba(201,168,76,0.07)', margin: '0 -12px', padding: '4px 12px 4px 20px', borderLeft: '3px solid rgba(201,168,76,0.45)' }}>
           <div className="flex items-center">
             <div className="flex-1 min-w-0">
               <span style={{ fontSize: 10, color: 'rgba(58,20,0,0.75)', fontWeight: 500 }}>{label}</span>
@@ -741,8 +744,12 @@ function WeightScoreDisplay({ ledgerId, userId }: { ledgerId: number; userId?: n
             </div>
             <span className="font-semibold ml-2 flex-shrink-0" style={{ fontSize: 11, color: gold, whiteSpace: 'nowrap' }}>{value}</span>
           </div>
+          {/* 进度条 */}
+          <div className="mt-1 mb-0.5" style={{ height: 3, background: 'rgba(201,168,76,0.12)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ width: `${pct1}%`, height: '100%', background: gold, borderRadius: 2 }} />
+          </div>
           {formula && (
-            <div className="mt-0.5">
+            <div className="mb-0.5">
               <span style={{ fontSize: 8, color: 'rgba(58,20,0,0.35)', fontFamily: 'monospace' }}>{formula}</span>
             </div>
           )}
@@ -750,8 +757,10 @@ function WeightScoreDisplay({ ledgerId, userId }: { ledgerId: number; userId?: n
       );
     }
     // level === 2: 三级子项：极浅灰背景，左侧更细线，更深缩进，更小字
+    const rawVal2 = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
+    const pct2 = max ? Math.min((rawVal2 / max) * 100, 100) : 0;
     return (
-      <div style={{ background: 'rgba(248,245,238,0.9)', borderBottom: '1px solid rgba(201,168,76,0.05)', margin: '0 -12px', padding: '4px 12px 4px 32px', borderLeft: '2px solid rgba(201,168,76,0.22)' }}>
+      <div style={{ background: 'rgba(248,245,238,0.9)', borderBottom: '1px solid rgba(201,168,76,0.05)', margin: '0 -12px', padding: '3px 12px 3px 32px', borderLeft: '2px solid rgba(201,168,76,0.22)' }}>
         <div className="flex items-center">
           <div className="flex-1 min-w-0">
             <span style={{ fontSize: 9, color: 'rgba(58,20,0,0.55)' }}>{label}</span>
@@ -759,8 +768,12 @@ function WeightScoreDisplay({ ledgerId, userId }: { ledgerId: number; userId?: n
           </div>
           <span className="ml-2 flex-shrink-0" style={{ fontSize: 10, color: 'rgba(201,168,76,0.8)', fontWeight: 600, whiteSpace: 'nowrap' }}>{value}</span>
         </div>
+        {/* 进度条 */}
+        <div className="mt-0.5" style={{ height: 2, background: 'rgba(201,168,76,0.10)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ width: `${pct2}%`, height: '100%', background: 'rgba(201,168,76,0.65)', borderRadius: 2 }} />
+        </div>
         {formula && (
-          <div className="mt-0.5">
+          <div className="mt-0.5 mb-0.5">
             <span style={{ fontSize: 7.5, color: 'rgba(58,20,0,0.30)', fontFamily: 'monospace' }}>{formula}</span>
           </div>
         )}
@@ -855,15 +868,15 @@ function WeightScoreDisplay({ ledgerId, userId }: { ledgerId: number; userId?: n
         <div className="px-3 pt-2 pb-0" style={{ overflow: 'hidden' }}>
           <Row label="基础权重" cap="所有合伙人固定享有" value="+1.00倍" level={0} />
           <Row label="资金乘数" cap="满分2.0倍" value={`+${capital.toFixed(2)}倍`} level={0} />
-          <Row label="时间乘数" cap="满分1.0倍" formula={timeFormula} value={`+${ws.timeBonus?.toFixed(2) ?? '0.00'}倍`} level={1} />
-          <Row label="资金量乘数" cap="满分1.0倍" formula={capitalFormula} value={`+${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍`} level={1} />
+          <Row label="时间乘数" cap="满分1.0倍" formula={timeFormula} value={`+${ws.timeBonus?.toFixed(2) ?? '0.00'}倍`} level={1} max={1.0} />
+          <Row label="资金量乘数" cap="满分1.0倍" formula={capitalFormula} value={`+${ws.capitalBonus?.toFixed(2) ?? '0.00'}倍`} level={1} max={1.0} />
           <Row label="资源乘数" cap="满分2.0倍" value={`+${resourceBonus.toFixed(2)}倍`} level={0} />
-          <Row label="人脉贡献" cap="满分1.0倍（50%自有+30%共享+20%拓扑）" value={`+${ws.networkBonus?.toFixed(2) ?? '0.00'}倍`} level={1} />
-          <Row label="自有人脉" cap="满分0.50倍" formula={ownFormula} value={`+${ws.ownBonus?.toFixed(2) ?? '0.00'}倍`} level={2} />
-          <Row label="共享人脉" cap="满分0.30倍" formula={sharedFormula} value={`+${ws.sharedBonus?.toFixed(2) ?? '0.00'}倍`} level={2} />
-          <Row label="拓扑人脉" cap="满分0.20倍" formula={topoFormula} value={`+${ws.topoBonus?.toFixed(2) ?? '0.00'}倍`} level={2} />
-          <Row label="标签贡献" cap="满分0.60倍" formula={tagFormula} value={`+${ws.tagBonus?.toFixed(2) ?? '0.00'}倍`} level={1} />
-          <Row label="邀请贡献" cap="满分0.40倍" formula={inviteFormula} value={`+${ws.inviteBonus?.toFixed(2) ?? '0.00'}倍`} level={1} />
+          <Row label="人脉贡献" cap="满分1.0倍（50%自有+30%共享+20%拓扑）" value={`+${ws.networkBonus?.toFixed(2) ?? '0.00'}倍`} level={1} max={1.0} />
+          <Row label="自有人脉" cap="满分0.50倍" formula={ownFormula} value={`+${ws.ownBonus?.toFixed(2) ?? '0.00'}倍`} level={2} max={0.5} />
+          <Row label="共享人脉" cap="满分0.30倍" formula={sharedFormula} value={`+${ws.sharedBonus?.toFixed(2) ?? '0.00'}倍`} level={2} max={0.3} />
+          <Row label="拓扑人脉" cap="满分0.20倍" formula={topoFormula} value={`+${ws.topoBonus?.toFixed(2) ?? '0.00'}倍`} level={2} max={0.2} />
+          <Row label="标签贡献" cap="满分0.60倍" formula={tagFormula} value={`+${ws.tagBonus?.toFixed(2) ?? '0.00'}倍`} level={1} max={0.6} />
+          <Row label="邀请贡献" cap="满分0.40倍" formula={inviteFormula} value={`+${ws.inviteBonus?.toFixed(2) ?? '0.00'}倍`} level={1} max={0.4} />
         </div>
         <div className="flex items-center justify-between px-3 py-2 mt-1" style={{ background: 'rgba(201,168,76,0.1)', borderTop: '1px solid rgba(201,168,76,0.2)' }}>
           <span className="text-[10px] font-semibold" style={{ color: darkBrown }}>综合乘数（满分5.0倍）</span>
