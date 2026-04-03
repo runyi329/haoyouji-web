@@ -955,6 +955,9 @@ export default function LedgerDetail() {
   const [editingNoteUserId, setEditingNoteUserId] = useState<number | null>(null);
   const [noteInputValue, setNoteInputValue] = useState('');
   const [localNotes, setLocalNotes] = useState<Record<number, string>>({});
+  // 拨比编辑状态（YJH专属）
+  const [editingRatioUserId, setEditingRatioUserId] = useState<number | null>(null);
+  const [ratioInputValue, setRatioInputValue] = useState<string>('');
   // 视角切换（AF 账本管理员专属）
   // viewAsUserId 从 URL 参数读取，确保刷新和子页面跳转后保持视角
   const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
@@ -1116,6 +1119,22 @@ export default function LedgerDetail() {
       // 立即更新本地显示
       setLocalNotes(prev => ({ ...prev, [variables.targetUserId]: variables.note.trim() }));
       setEditingNoteUserId(null);
+    }
+  });
+  // YJH专属：拨比查询（只在点击编辑时才加载）
+  const isYJH = (user as any)?.id === YJH_USER_ID_CONST;
+  const { data: editingMemberRatios = [], refetch: refetchMemberRatios } = trpc.ledger.afGetMemberPayoutRatios.useQuery(
+    { ledgerId: Number(ledgerId), sourceUserId: editingRatioUserId ?? 0 },
+    { enabled: isYJH && editingRatioUserId !== null }
+  );
+  const setYjhRatioMutation = trpc.ledger.afSetYjhPayoutRatio.useMutation({
+    onSuccess: () => {
+      refetchMemberRatios();
+      setEditingRatioUserId(null);
+      setRatioInputValue('');
+    },
+    onError: (err) => {
+      alert('保存失败：' + err.message);
     }
   });
   // AH 账本：公司列表和报税授权
@@ -3644,7 +3663,20 @@ export default function LedgerDetail() {
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
                               <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.layer === 1 ? '#FFEBEE' : '#FFF3E0', color: u.layer === 1 ? '#D32F2F' : '#E65100' }}>第{u.layer}层</span>
-                              <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: u.payoutRatio > 0 ? '#FFF8E1' : '#F5F5F5', color: u.payoutRatio > 0 ? '#B8860B' : '#9E9E9E' }}>{u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}</span>
+                              <span
+                                className="text-xs px-1.5 py-0.5 rounded-full font-medium cursor-pointer"
+                                style={{ backgroundColor: u.payoutRatio > 0 ? '#FFF8E1' : '#F5F5F5', color: u.payoutRatio > 0 ? '#B8860B' : '#9E9E9E' }}
+                                onClick={() => {
+                                  if (!isYJH) return;
+                                  if (editingRatioUserId === u.id) {
+                                    setEditingRatioUserId(null);
+                                    setRatioInputValue('');
+                                  } else {
+                                    setEditingRatioUserId(u.id);
+                                    setRatioInputValue(String(u.payoutRatio ?? 33.4));
+                                  }
+                                }}
+                              >{u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}{isYJH && <span style={{ fontSize: 9, marginLeft: 2 }}>✒</span>}</span>
                               <button onClick={() => { setEditingNoteUserId(u.id); setNoteInputValue(localNotes[u.id] !== undefined ? localNotes[u.id] : (u.note || '')); }} className="w-6 h-6 flex items-center justify-center rounded-full text-gray-400" style={{ backgroundColor: '#EEEEEE', fontSize: 12 }} title="添加备注">注</button>
                             </div>
                           </div>
@@ -3730,6 +3762,58 @@ export default function LedgerDetail() {
                           </tbody>
                         </table>
                       </div>
+                      {/* YJH专属：拨比编辑面板 */}
+                      {isYJH && editingRatioUserId === u.id && (
+                        <div className="px-3 pb-3 pt-2" style={{ backgroundColor: '#FFFBF0', borderTop: '1px solid #F5E6C8' }}>
+                          <div className="text-xs font-semibold mb-2" style={{ color: '#B8860B' }}>拨比配置（来源：{u.name}）</div>
+                          {editingMemberRatios.length === 0 ? (
+                            <div className="text-xs text-gray-400">加载中...</div>
+                          ) : (
+                            <>
+                              <div className="space-y-1 mb-2">
+                                {editingMemberRatios.map((r: any) => (
+                                  <div key={r.beneficiaryUserId} className="flex items-center justify-between text-xs">
+                                    <span className="text-gray-600">{r.name}</span>
+                                    <span className="font-semibold" style={{ color: '#B8860B' }}>{r.ratio}%</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="text-xs text-gray-500 mb-2">
+                                已分配：{editingMemberRatios.reduce((s: number, r: any) => s + r.ratio, 0).toFixed(1)}%　剩余：{(100 - editingMemberRatios.reduce((s: number, r: any) => s + r.ratio, 0)).toFixed(1)}%
+                              </div>
+                              <div className="flex gap-2 items-center">
+                                <span className="text-xs text-gray-500">YJH分成：</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  step={0.1}
+                                  value={ratioInputValue}
+                                  onChange={e => setRatioInputValue(e.target.value)}
+                                  className="w-20 text-sm px-2 py-1 rounded border border-amber-200 outline-none text-center"
+                                  style={{ backgroundColor: '#fff' }}
+                                />
+                                <span className="text-xs text-gray-500">%</span>
+                                <button
+                                  onClick={() => setYjhRatioMutation.mutate({
+                                    ledgerId: Number(ledgerId),
+                                    sourceUserId: u.id,
+                                    newRatio: parseFloat(ratioInputValue) || 0,
+                                  })}
+                                  disabled={setYjhRatioMutation.isPending}
+                                  className="text-xs px-3 py-1 rounded text-white font-medium"
+                                  style={{ backgroundColor: '#B8860B' }}
+                                >保存</button>
+                                <button
+                                  onClick={() => { setEditingRatioUserId(null); setRatioInputValue(''); }}
+                                  className="text-xs px-2 py-1 rounded text-gray-500"
+                                  style={{ backgroundColor: '#EEEEEE' }}
+                                >取消</button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
                       {/* 备注编辑区 */}
                       {editingNoteUserId === u.id && (
                         <div className="px-3 pb-3 flex gap-2">
