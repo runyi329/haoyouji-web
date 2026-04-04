@@ -4,9 +4,8 @@ set -e
 
 echo "📂 进入项目目录..."
 cd /root/haoyouji-web
+# 代码已由 GitHub Actions 在 SSH 命令中拉取
 
-echo "📥 拉取最新代码..."
-git fetch origin && git reset --hard origin/main && git clean -fd
 
 echo "🧹 清除 Vite 缓存（保留旧 dist 继续服务）..."
 rm -rf node_modules/.vite client/.vite
