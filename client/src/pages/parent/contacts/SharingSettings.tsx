@@ -177,6 +177,38 @@ export default function SharingSettings() {
     },
   });
 
+  // 从相册选图扫码
+  const handleScanFromGallery = useCallback(async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const scanner = new Html5Qrcode('qr-reader-gallery');
+        const result = await scanner.scanFile(file, true);
+        scanner.clear();
+        // 智能识别二维码类型
+        try {
+          const parsed = JSON.parse(result);
+          if (parsed.type === 'sharing_introduce_all') {
+            addByAggregateIntroduceQrCode.mutate({ qrContent: result });
+          } else if (parsed.type === 'sharing_introduce') {
+            addByIntroduceQrCode.mutate({ qrContent: result });
+          } else {
+            addByQrCode.mutate({ qrContent: result });
+          }
+        } catch {
+          addByQrCode.mutate({ qrContent: result });
+        }
+      } catch {
+        toast.error('未能识别图片中的二维码，请确认图片清晰且包含二维码');
+      }
+    };
+    input.click();
+  }, [addByQrCode, addByIntroduceQrCode, addByAggregateIntroduceQrCode]);
+
   // 停止扫码器
   const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
@@ -1214,6 +1246,8 @@ export default function SharingSettings() {
               className="w-full rounded-xl overflow-hidden bg-black"
               style={{ minHeight: '260px' }}
             />
+            {/* 相册扫码用的隐藏容器 */}
+            <div id="qr-reader-gallery" style={{ display: 'none' }} />
             {!isScanning && (
               <Button
                 onClick={startScanner}
@@ -1223,10 +1257,23 @@ export default function SharingSettings() {
                 启动摄像头
               </Button>
             )}
+            {/* 从相册选图按钟 */}
+            <Button
+              variant="outline"
+              onClick={handleScanFromGallery}
+              className="w-full border-gray-200 text-gray-600"
+            >
+              <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+              从相册选图
+            </Button>
             {(addByQrCode.isPending || addByIntroduceQrCode.isPending) && (
               <p className="text-sm text-gray-500">正在添加...</p>
             )}
-            <p className="text-xs text-gray-400 text-center">将对方的二维码对准扫描框</p>
+            <p className="text-xs text-gray-400 text-center">将对方的二维码对准扫描框，或从相册选择二维码图片</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowScanDialog(false)} className="w-full">
