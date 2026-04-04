@@ -279,7 +279,7 @@ export const equityRouter = router({
       ledgerId: z.number(),
       userId: z.number(),
       memberNickname: z.string(),
-      shareCount: z.number().positive(),
+      shareCount: z.number().refine(v => v !== 0, { message: '张数不能为0' }),
       shareType: z.string().default('资金股'),
       grantDate: z.string(), // YYYY-MM-DD
       reason: z.string(),

@@ -170,15 +170,24 @@ export default function LedgerEquityManage() {
 
   const handleAdd = () => {
     if (!addForm.userId) { toast.error("请选择成员"); return; }
-    if (!addForm.shareCount || isNaN(Number(addForm.shareCount)) || Number(addForm.shareCount) <= 0) {
-      toast.error("请输入有效的股票张数"); return;
+    const shareCountNum = Number(addForm.shareCount);
+    if (!addForm.shareCount || isNaN(shareCountNum) || shareCountNum === 0) {
+      toast.error("请输入有效的股票张数（不能为0）"); return;
+    }
+    // 折现退出必须填写备注
+    if (addForm.shareType === '折现退出' && !addForm.reason.trim()) {
+      toast.error("折现退出必须填写备注说明"); return;
     }
     if (!addForm.grantDate) { toast.error("请选择获得日期"); return; }
+    // 折现退出类型自动转为负数
+    const finalShareCount = addForm.shareType === '折现退出'
+      ? -Math.abs(shareCountNum)
+      : shareCountNum;
     addMutation.mutate({
       ledgerId,
       userId: addForm.userId,
       memberNickname: addForm.memberNickname,
-      shareCount: Number(addForm.shareCount),
+      shareCount: finalShareCount,
       shareType: addForm.shareType || '资金股',
       grantDate: addForm.grantDate,
       reason: addForm.reason.trim(),
@@ -495,16 +504,28 @@ export default function LedgerEquityManage() {
                 </select>
               </div>
               <div>
-                <div style={labelStyle}>股票张数</div>
-                <input type="number" placeholder="请输入张数（如 100000）" value={addForm.shareCount}
-                  onChange={(e) => setAddForm(f => ({ ...f, shareCount: e.target.value }))} style={inputStyle} />
-              </div>
-              <div>
                 <div style={labelStyle}>股权类型</div>
-                <select value={addForm.shareType} onChange={(e) => setAddForm(f => ({ ...f, shareType: e.target.value }))} style={inputStyle}>
+                <select value={addForm.shareType} onChange={(e) => setAddForm(f => ({ ...f, shareType: e.target.value }))} style={addForm.shareType === '折现退出' ? { ...inputStyle, border: '1px solid #ef4444', color: '#dc2626', background: '#fff5f5' } : inputStyle}>
                   <option value="资金股">资金股</option>
                   <option value="资源股">资源股</option>
+                  <option value="折现退出">折现退出（减资）</option>
                 </select>
+                {addForm.shareType === '折现退出' && (
+                  <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', padding: '6px 8px', background: '#fff5f5', borderRadius: '6px', border: '1px solid #fecaca' }}>
+                    将从该成员股本中扣除对应张数，请输入正数，系统自动处理为减项
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={labelStyle}>{addForm.shareType === '折现退出' ? '折现张数（输入正数）' : '股票张数'}</div>
+                <input
+                  type="number"
+                  placeholder={addForm.shareType === '折现退出' ? '请输入折现张数（如 50000）' : '请输入张数（如 100000）'}
+                  value={addForm.shareCount}
+                  onChange={(e) => setAddForm(f => ({ ...f, shareCount: e.target.value }))}
+                  style={addForm.shareType === '折现退出' ? { ...inputStyle, border: '1px solid #ef4444', color: '#dc2626' } : inputStyle}
+                  min={addForm.shareType === '折现退出' ? '1' : undefined}
+                />
               </div>
               <div>
                 <div style={labelStyle}>年化股息率（%）</div>

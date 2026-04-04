@@ -61,28 +61,27 @@ function useTotalSharesWithDividend(shares: any[], filterType?: string) {
 // 资金股/市场资源股单条记录，带实时滚动股息
 function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast: boolean }) {
   const grantDateStr = dateStr; // yyyy-MM-dd
+  const base = Number(s.shareCount) || 0;
+  const isCashout = s.shareType === '折现退出' || base < 0;
   const accrued = useAccruedInterest(
-    String(Number(s.shareCount)),
+    isCashout ? '0' : String(Math.abs(base)), // 折现记录不计算股息
     String(s.annualRate ?? 6),
     grantDateStr
   );
   const isMarket = s.shareType === '资源股';
-  // 该笔快照权重（增量设计，发放时锁定）
   const w = Number(s.weight ?? 1.0);
-  const base = Number(s.shareCount) || 0;
-  // 加权后总张数：（股本 + 股息）× 权重
-  const weightedTotal = (base + accrued) * w;
-  const numGrad = isMarket ? 'none' : 'none';
-  const numGradDim = isMarket ? 'none' : 'none';
-  const labelColor = 'rgba(58,20,0,0.55)';
-  const dimColor = 'rgba(58,20,0,0.35)';
-  const unitColor = 'rgba(58,20,0,0.6)';
-  const total = base + accrued;
+  const total = base + (isCashout ? 0 : accrued);
+  // 折现退出用红色配色，普通记录用原配色
+  const cardBg = isCashout ? '#fff5f5' : '#FFF8F0';
+  const cardBorder = isCashout ? '1px solid rgba(220,38,38,0.25)' : '1px solid rgba(58,20,0,0.12)';
+  const labelColor = isCashout ? 'rgba(185,28,28,0.6)' : 'rgba(58,20,0,0.55)';
+  const unitColor = isCashout ? 'rgba(185,28,28,0.5)' : 'rgba(58,20,0,0.6)';
+  const numColor = isCashout ? '#dc2626' : '#1A0A00';
   return (
     <div className="rounded-xl mx-1 mb-2.5" style={{
-      background: '#FFF8F0',
-      border: '1px solid rgba(58,20,0,0.12)',
-      boxShadow: '0 2px 8px rgba(58,20,0,0.08), 0 1px 2px rgba(58,20,0,0.06)'
+      background: cardBg,
+      border: cardBorder,
+      boxShadow: isCashout ? '0 2px 8px rgba(220,38,38,0.08)' : '0 2px 8px rgba(58,20,0,0.08), 0 1px 2px rgba(58,20,0,0.06)'
     }}>
       <div className="px-4 py-3">
         {/* 第一行：日期 + 类型标签 + 股权编号 */}
@@ -90,12 +89,16 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
           <div className="flex items-center gap-1.5">
             <span className="text-xs" style={{ color: labelColor }}>{dateStr}</span>
             {s.shareType && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(232,96,28,0.12)', color: '#3D1F0D', border: '1px solid rgba(232,96,28,0.3)' }}>{s.shareType}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded" style={
+                isCashout
+                  ? { background: 'rgba(220,38,38,0.1)', color: '#dc2626', border: '1px solid rgba(220,38,38,0.3)' }
+                  : { background: 'rgba(232,96,28,0.12)', color: '#3D1F0D', border: '1px solid rgba(232,96,28,0.3)' }
+              }>{s.shareType}</span>
             )}
           </div>
           <span
             className="text-[10px] font-mono font-semibold select-all"
-            style={{ color: 'rgba(58,20,0,0.45)', letterSpacing: '0.08em', background: 'rgba(58,20,0,0.06)', padding: '1px 6px', borderRadius: '4px', cursor: 'pointer', WebkitUserSelect: 'all', userSelect: 'all' }}
+            style={{ color: isCashout ? 'rgba(185,28,28,0.4)' : 'rgba(58,20,0,0.45)', letterSpacing: '0.08em', background: isCashout ? 'rgba(220,38,38,0.06)' : 'rgba(58,20,0,0.06)', padding: '1px 6px', borderRadius: '4px', cursor: 'pointer', WebkitUserSelect: 'all', userSelect: 'all' }}
             onClick={() => {
               const code = s.share_code || s.regNo || '';
               if (!code) return;
@@ -110,35 +113,48 @@ function AngelShareRow({ s, dateStr, isLast }: { s: any; dateStr: string; isLast
             {s.share_code || s.regNo || ''}
           </span>
         </div>
-        {/* 数据行：股本 + 贡献 */}
-        <div className="flex items-start justify-between">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>股本</span>
-            <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>贡献</span>
-          </div>
-          <div className="flex flex-col gap-1.5 items-end">
+        {isCashout ? (
+          /* 折现退出：只显示减项金额，不显示股息 */
+          <div className="flex items-center justify-between">
+            <span className="text-[10px]" style={{ color: labelColor }}>折现减项</span>
             <div className="flex items-baseline gap-0.5">
-              <span className="text-sm font-bold" style={{ color: '#1A0A00' }}>{base.toFixed(2)}</span>
-              <span className="text-[10px]" style={{ color: unitColor }}>张</span>
-            </div>
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-sm font-bold" style={{ color: '#3D1F0D' }}>{accrued.toFixed(2)}</span>
+              <span className="text-base font-bold" style={{ color: '#dc2626' }}>{base.toFixed(2)}</span>
               <span className="text-[10px]" style={{ color: unitColor }}>张</span>
             </div>
           </div>
-        </div>
-        {/* 合计行 */}
-        <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: '1px solid rgba(58,20,0,0.1)' }}>
-          <span className="text-[10px] font-semibold" style={{ color: 'rgba(58,20,0,0.5)' }}>合计</span>
-          <div className="flex items-baseline gap-0.5">
-            <span className="text-base font-bold" style={{ color: '#E8601C' }}>{total.toFixed(2)}</span>
-            <span className="text-[10px]" style={{ color: unitColor }}>张</span>
-          </div>
-        </div>
+        ) : (
+          <>
+            {/* 数据行：股本 + 贡献 */}
+            <div className="flex items-start justify-between">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>股本</span>
+                <span className="text-[10px]" style={{ color: labelColor, lineHeight: '1.4rem' }}>贡献</span>
+              </div>
+              <div className="flex flex-col gap-1.5 items-end">
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-sm font-bold" style={{ color: numColor }}>{base.toFixed(2)}</span>
+                  <span className="text-[10px]" style={{ color: unitColor }}>张</span>
+                </div>
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-sm font-bold" style={{ color: '#3D1F0D' }}>{accrued.toFixed(2)}</span>
+                  <span className="text-[10px]" style={{ color: unitColor }}>张</span>
+                </div>
+              </div>
+            </div>
+            {/* 合计行 */}
+            <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: '1px solid rgba(58,20,0,0.1)' }}>
+              <span className="text-[10px] font-semibold" style={{ color: 'rgba(58,20,0,0.5)' }}>合计</span>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-base font-bold" style={{ color: '#E8601C' }}>{total.toFixed(2)}</span>
+                <span className="text-[10px]" style={{ color: unitColor }}>张</span>
+              </div>
+            </div>
+          </>
+        )}
         {(s.reason || (s.shareType === '资源股' && (s.sourceNickname || s.source_user_id))) && (
           <div className="flex items-center justify-between mt-1.5">
             <span className="text-[10px] shrink-0" style={{ color: labelColor }}>备注</span>
-            <span className="text-[10px] text-right truncate ml-2" style={{ color: '#1A0A00' }}>
+            <span className="text-[10px] text-right truncate ml-2" style={{ color: isCashout ? '#dc2626' : '#1A0A00' }}>
               {s.reason}{s.shareType === '资源股' && (s.sourceNickname || s.source_user_id) ? <span style={{ color: '#15803d' }}>{s.reason ? ' · ' : ''}来源:{s.sourceNickname || `用户#${s.source_user_id}`}{s.source_amount ? `(${Number(s.source_amount).toLocaleString()}张)` : ''}</span> : null}
             </span>
           </div>
