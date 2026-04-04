@@ -291,6 +291,25 @@ jobs:
             sleep 5
             echo "当前监听端口："
             ss -tlnp | grep node || echo '暂无node监听'
+            echo "🐍 部署量化回测服务..."
+            # 确保pip和venv可用
+            apt-get install -y python3-pip python3-venv python3-full 2>/dev/null || true
+            # 创建/更新虚拟环境
+            if [ ! -d "/root/haoyouji-web/quant_service/venv" ]; then
+              python3 -m venv /root/haoyouji-web/quant_service/venv
+              echo "✅ 虚拟环境创建完成"
+            fi
+            # 安装/更新Python依赖
+            /root/haoyouji-web/quant_service/venv/bin/pip install --upgrade pip -q
+            /root/haoyouji-web/quant_service/venv/bin/pip install -r /root/haoyouji-web/quant_service/requirements.txt -q && echo "✅ Python依赖安装完成" || echo "⚠️ Python依赖安装部分失败，继续部署"
+            # 用PM2管理量化服务
+            if pm2 describe quant-service > /dev/null 2>&1; then
+              pm2 restart quant-service
+            else
+              pm2 start /root/haoyouji-web/quant_service/ecosystem.config.cjs
+            fi
+            pm2 save
+            echo "✅ 量化回测服务启动完成"
             echo "✅ 部署完成！"
             echo "=== 🔍 临时调试：win_status差异查询 ==="
             bash /root/haoyouji-web/scripts/debug-win-status.sh || true
