@@ -23,7 +23,7 @@ jobs:
       
       - name: 🚀 执行部署脚本
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/haoyouji-web/scripts/deploy-server.sh"
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "cd /root/haoyouji-web && git fetch origin && git reset --hard origin/main && git clean -fd && bash scripts/deploy-server.sh"
       
       - name: 企业微信部署通知
         if: always()
