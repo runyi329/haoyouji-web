@@ -687,6 +687,82 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────
+
+// 融资订单备注内联编辑子组件
+function NoteRow({ orderId, ledgerId, initialNote, onSaved }: {
+  orderId: number;
+  ledgerId: number;
+  initialNote: string;
+  onSaved: (note: string) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState(initialNote);
+  const [saving, setSaving] = React.useState(false);
+  const updateNote = trpc.ledger.financeUpdatePublicNote.useMutation();
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: value });
+      onSaved(value);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between px-4 py-2 text-xs" style={{ borderTop: '1px solid #E8EFFF' }}>
+      <span className="shrink-0 mr-3" style={{ color: '#9CA3AF' }}>备注</span>
+      <div className="flex-1 flex items-center gap-1 justify-end min-w-0">
+        {editing ? (
+          <>
+            <input
+              autoFocus
+              className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
+              style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+              placeholder="输入备注..."
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="shrink-0 text-xs px-2 py-0.5 rounded"
+              style={{ background: '#3B82F6', color: '#fff' }}
+            >
+              {saving ? '...' : '保存'}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setValue(initialNote); }}
+              className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+              style={{ background: '#F3F4F6', color: '#6B7280' }}
+            >取消</button>
+          </>
+        ) : (
+          <>
+            <span className="text-right truncate" style={{ color: value ? '#4B5563' : '#C0C8D8', wordBreak: 'break-all' }}>
+              {value || '点击添加备注'}
+            </span>
+            <button
+              onClick={() => setEditing(true)}
+              className="shrink-0 ml-1"
+              style={{ opacity: 0.5, lineHeight: 1 }}
+              title="编辑备注"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CryptoPrediction() {
   const [, params] = useRoute("/ledger/:id/crypto-prediction");
   const [, setLocation] = useLocation();
@@ -1741,12 +1817,15 @@ export default function CryptoPrediction() {
                         </div>
 
                       </div>
-                      {order.public_note && (
-                        <div className="flex items-start justify-between px-4 py-2 text-xs" style={{ borderTop: '1px solid #E8EFFF' }}>
-                          <span className="shrink-0 mr-3" style={{ color: '#9CA3AF' }}>备注</span>
-                          <span className="text-right" style={{ color: '#4B5563', wordBreak: 'break-all' }}>{order.public_note}</span>
-                        </div>
-                      )}
+                      <NoteRow
+                        orderId={order.id}
+                        ledgerId={ledgerId}
+                        initialNote={order.public_note || ''}
+                        onSaved={(newNote: string) => {
+                          order.public_note = newNote || null;
+                          refetchFinanceOrders();
+                        }}
+                      />
                     </div>
                   );
                 })}
