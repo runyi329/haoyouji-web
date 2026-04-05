@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, RefreshCw, ExternalLink, TrendingUp, TrendingDown } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 interface ContractData {
   symbol: string;
@@ -97,65 +98,50 @@ export default function OilBusinessPage() {
   const params = useParams();
   const ledgerId = params.id;
 
-  const [contracts, setContracts] = useState<ContractData[]>([]);
-  const [fundingHistory, setFundingHistory] = useState<Record<string, FundingHistory[]>>({});
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<string>("CLUSDT");
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
-    try {
-      setError(null);
-      const results: ContractData[] = [];
-      for (const c of CONTRACTS) {
-        const [premRes, tickerRes, oiRes] = await Promise.all([
-          fetch(`/api/energy/premium/${c.symbol}`),
-          fetch(`/api/energy/ticker/${c.symbol}`),
-          fetch(`/api/energy/openInterest/${c.symbol}`),
-        ]);
-        const prem = await premRes.json();
-        const ticker = await tickerRes.json();
-        const oi = await oiRes.json();
-        results.push({
-          symbol: c.symbol,
-          name: c.name,
-          unit: c.unit,
-          markPrice: parseFloat(prem.markPrice),
-          lastFundingRate: parseFloat(prem.lastFundingRate),
-          nextFundingTime: prem.nextFundingTime,
-          priceChangePercent: parseFloat(ticker.priceChangePercent),
-          highPrice: parseFloat(ticker.highPrice),
-          lowPrice: parseFloat(ticker.lowPrice),
-          volume: parseFloat(ticker.volume),
-          openInterest: parseFloat(oi.openInterest),
-        });
-      }
-      setContracts(results);
+  // 从数据库读取行情数据（tRPC）
+  const { data: marketRows, isLoading: marketLoading, error: marketError, refetch: refetchMarket } = trpc.energy.getMarketData.useQuery(undefined, {
+    refetchInterval: 60000, // 每60秒自动刷新
+    staleTime: 30000,
+  });
 
-      const histMap: Record<string, FundingHistory[]> = {};
-      for (const c of CONTRACTS) {
-        const res = await fetch(`/api/energy/fundingRate/${c.symbol}?limit=32`);
-        const data = await res.json();
-        histMap[c.symbol] = Array.isArray(data) ? data.map((d: any) => ({
-          fundingTime: d.fundingTime,
-          fundingRate: parseFloat(d.fundingRate),
-        })) : [];
-      }
-      setFundingHistory(histMap);
-      setLastUpdated(new Date());
-    } catch (e: any) {
-      setError("数据加载失败：" + e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // 从数据库读取三个合约的资金费率历史
+  const { data: clHistory } = trpc.energy.getFundingHistory.useQuery({ symbol: "CLUSDT", limit: 32 }, { staleTime: 60000 });
+  const { data: bzHistory } = trpc.energy.getFundingHistory.useQuery({ symbol: "BZUSDT", limit: 32 }, { staleTime: 60000 });
+  const { data: ngHistory } = trpc.energy.getFundingHistory.useQuery({ symbol: "NATGASUSDT", limit: 32 }, { staleTime: 60000 });
 
-  useEffect(() => {
-    fetchData();
-    const id = setInterval(fetchData, 30000);
-    return () => clearInterval(id);
-  }, [fetchData]);
+  const fundingHistoryMap: Record<string, FundingHistory[]> = {
+    CLUSDT: (clHistory || []).map((r: any) => ({ fundingTime: Number(r.funding_time), fundingRate: parseFloat(r.funding_rate) })),
+    BZUSDT: (bzHistory || []).map((r: any) => ({ fundingTime: Number(r.funding_time), fundingRate: parseFloat(r.funding_rate) })),
+    NATGASUSDT: (ngHistory || []).map((r: any) => ({ fundingTime: Number(r.funding_time), fundingRate: parseFloat(r.funding_rate) })),
+  };
+
+  // 将数据库行转换为 ContractData
+  const contracts: ContractData[] = (marketRows || []).map((row: any) => {
+    const info = CONTRACTS.find(c => c.symbol === row.symbol)!;
+    return {
+      symbol: row.symbol,
+      name: info?.name || row.symbol_name,
+      unit: info?.unit || "USD",
+      markPrice: parseFloat(row.mark_price) || parseFloat(row.last_price) || 0,
+      lastFundingRate: parseFloat(row.funding_rate) || 0,
+      nextFundingTime: Number(row.next_funding_time) || 0,
+      priceChangePercent: parseFloat(row.price_change_percent) || 0,
+      highPrice: parseFloat(row.high_price) || 0,
+      lowPrice: parseFloat(row.low_price) || 0,
+      volume: parseFloat(row.volume) || 0,
+      openInterest: parseFloat(row.open_interest) || 0,
+    };
+  });
+
+  const loading = marketLoading;
+  const error = marketError ? "数据加载失败：" + marketError.message : null;
+  const lastUpdated = marketRows && marketRows.length > 0 ? new Date((marketRows[0] as any).updated_at) : null;
+
+  const handleRefresh = () => {
+    refetchMarket();
+  };
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: "#0a0c10", fontFamily: "'SF Mono', 'Consolas', monospace" }}>
@@ -173,7 +159,7 @@ export default function OilBusinessPage() {
             <div className="text-sm font-semibold tracking-widest text-amber-400 uppercase">Energy Markets</div>
             <div className="text-xs text-gray-500">Binance Perpetual Futures</div>
           </div>
-          <button onClick={fetchData} className="text-gray-400 hover:text-white transition-colors">
+          <button onClick={handleRefresh} className="text-gray-400 hover:text-white transition-colors">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
@@ -193,7 +179,7 @@ export default function OilBusinessPage() {
       ) : error ? (
         <div className="p-6 text-center">
           <div className="text-red-400 text-sm mb-3">{error}</div>
-          <button onClick={fetchData} className="text-xs text-blue-400 border border-blue-800 px-3 py-1.5 rounded">
+          <button onClick={handleRefresh} className="text-xs text-blue-400 border border-blue-800 px-3 py-1.5 rounded">
             重试
           </button>
         </div>
@@ -302,10 +288,10 @@ export default function OilBusinessPage() {
               </div>
             </div>
 
-            <MiniChart data={fundingHistory[activeTab] || []} symbol={activeTab} />
+            <MiniChart data={fundingHistoryMap[activeTab] || []} symbol={activeTab} />
 
             <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
-              {(fundingHistory[activeTab] || []).slice().reverse().map((d, i) => {
+              {(fundingHistoryMap[activeTab] || []).slice().reverse().map((d, i) => {
                 const rate = d.fundingRate * 100;
                 const isPos = rate >= 0;
                 const t = new Date(d.fundingTime);
@@ -345,7 +331,7 @@ export default function OilBusinessPage() {
           </div>
 
           <div className="mx-4 mt-3 text-center">
-            <div className="text-xs text-gray-700">数据来源：Binance Futures API · 每30秒自动刷新</div>
+            <div className="text-xs text-gray-700">数据来源：Binance Futures · 定时同步至数据库</div>
           </div>
         </div>
       )}
