@@ -18,6 +18,7 @@ import * as dbPoints from "./db-points";
 import * as dbTagAnalytics from "./db-tag-analytics";
 import { addPointsForAction } from "./db-point-system";
 import * as dbLedger from "./db-ledger";
+import { smsService } from "./sms-service";
 import * as dbEquity from "./db-equity";
 import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
@@ -16466,5 +16467,21 @@ export const adminFeatureRouter = router({
         // 如果没有数据，返回空数组（前端不显示）
         return top2;
       }),
+  testSms: protectedProcedure
+    .input(z.object({ phone: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      // 仅管理员可调用
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可测试短信" });
+      }
+      const phone = input.phone || process.env.ADMIN_PHONE || "13127919173";
+      const templateId = process.env.TENCENT_SMS_TEMPLATE_ID || "2623560";
+      try {
+        const result = await smsService.sendCustomMessage(phone, templateId, []);
+        return { success: true, phone, message: "短信发送成功", result };
+      } catch (err: any) {
+        return { success: false, phone, message: err.message };
+      }
+    }),
 });
 export type AppRouter = typeof appRouter;
