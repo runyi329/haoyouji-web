@@ -732,14 +732,6 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               );
             })()}
           </div>
-                    <div className="text-right text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
-                      已累计 <span className="font-semibold" style={{ color: '#EF4444' }}>-{totalFee.toFixed(2)} USDT</span>（{holdDays}天）
-                    </div>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
         </div>
       )}
     </div>
