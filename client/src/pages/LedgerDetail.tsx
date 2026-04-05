@@ -1699,9 +1699,11 @@ export default function LedgerDetail() {
                       onClick={() => setLocation(`/ledger/${ledgerId}/oil`)}
                       title="石油业务"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                      </svg>
+                      <img
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oil-pump-icon-circle.png"
+                        alt="石油"
+                        className="w-full h-full object-cover rounded-full"
+                      />
                     </div>
                   </>
                 )}
