@@ -16471,7 +16471,7 @@ export const adminFeatureRouter = router({
   // ===== SMS 短信管理 API =====
   smsGetStatus: protectedProcedure
     .query(async ({ ctx }) => {
-      if (ctx.user.role !== "admin") {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
       }
       const status = await smsService.checkServiceStatus();
@@ -16489,7 +16489,7 @@ export const adminFeatureRouter = router({
 
   smsGetTemplates: protectedProcedure
     .query(async ({ ctx }) => {
-      if (ctx.user.role !== "admin") {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
       }
       try {
@@ -16519,7 +16519,7 @@ export const adminFeatureRouter = router({
       templateId: z.string(),
     }))
     .mutation(async ({ input, ctx }) => {
-      if (ctx.user.role !== "admin") {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可操作" });
       }
       try {
