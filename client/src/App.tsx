@@ -246,6 +246,7 @@ const JiangShare = lazy(() => import("./pages/jiang/JiangShare"));
 const JiangSettings = lazy(() => import("./pages/jiang/JiangSettings"));
 const JiangMerchants = lazy(() => import("./pages/jiang/JiangMerchants"));
 const JiangOKXTrader = lazy(() => import("./pages/jiang/JiangOKXTrader"));
+const JiangSmsManage = lazy(() => import("./pages/jiang/JiangSmsManage"));
 // AB 共享意见本 - 游客扫码页面
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 // AB 意见本 - 管理者查看页面
@@ -488,6 +489,7 @@ function Router() {
         <Route path="/jiang/settings" component={JiangSettings} />
         <Route path="/jiang/merchants" component={JiangMerchants} />
         <Route path="/jiang/okx-trader" component={JiangOKXTrader} />
+        <Route path="/jiang/sms-manage" component={JiangSmsManage} />
         {/* 润仪算力研发中心 - 分享页（无需登录，参见§24） */}
         <Route path="/share/jiang" component={JiangShare} />
         {/* IDEALIGHT 红颜派（STEVEN_HUANG，无需登录） */}

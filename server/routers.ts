@@ -16467,6 +16467,73 @@ export const adminFeatureRouter = router({
         // 如果没有数据，返回空数组（前端不显示）
         return top2;
       }),
+
+  // ===== SMS 短信管理 API =====
+  smsGetStatus: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
+      }
+      const status = await smsService.checkServiceStatus();
+      return {
+        ...status,
+        config: {
+          appId: process.env.TENCENT_SMS_APP_ID || "",
+          signName: process.env.TENCENT_SMS_SIGN_NAME || "",
+          templateId: process.env.TENCENT_SMS_TEMPLATE_ID || "",
+          adminPhone: process.env.ADMIN_PHONE || "",
+          region: process.env.TENCENT_SMS_REGION || "ap-guangzhou",
+        },
+      };
+    }),
+
+  smsGetTemplates: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
+      }
+      try {
+        const tencentcloud = await import("tencentcloud-sdk-nodejs");
+        const SmsClient = (tencentcloud as any).default.sms.v20210111.Client;
+        const client = new SmsClient({
+          credential: {
+            secretId: process.env.COS_SECRET_ID || "",
+            secretKey: process.env.COS_SECRET_KEY || "",
+          },
+          region: process.env.TENCENT_SMS_REGION || "ap-guangzhou",
+        });
+        const r = await client.DescribeSmsTemplateList({ International: 0, TemplateIdSet: [] });
+        return (r.DescribeTemplateStatusSet || []).map((t: any) => ({
+          id: t.TemplateId,
+          name: t.TemplateName,
+          content: t.TemplateContent,
+          status: t.StatusCode,
+          statusText: t.StatusCode === 0 ? "审核通过" : t.StatusCode === 1 ? "审核中" : "审核拒绝",
+          createTime: t.CreateTime,
+          reviewReply: t.ReviewReply || "",
+        }));
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+
+  smsSendTest: protectedProcedure
+    .input(z.object({
+      phone: z.string(),
+      templateId: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可操作" });
+      }
+      try {
+        const result = await smsService.sendCustomMessage(input.phone, input.templateId, []);
+        return { success: result.Code === "Ok", code: result.Code, message: result.Message, serialNo: result.SerialNo };
+      } catch (err: any) {
+        return { success: false, code: "Error", message: err.message, serialNo: "" };
+      }
+    }),
+
   testSms: protectedProcedure
     .input(z.object({ phone: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
