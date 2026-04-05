@@ -1735,17 +1735,18 @@ export default function CryptoPrediction() {
                                   <span className="font-medium" style={{ color: '#4B5563' }}>{order.counterparty}</span>
                                 </div>
                               )}
-                              {order.public_note && (
-                                <div className="mt-2 pt-2" style={{ borderTop: '1px solid #E8EFFF' }}>
-                                  <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>备注</div>
-                                  <div className="text-xs leading-relaxed" style={{ color: '#4B5563', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{order.public_note}</div>
-                                </div>
-                              )}
+
                             </div>
                           </div>
                         </div>
 
                       </div>
+                      {order.public_note && (
+                        <div className="flex items-start justify-between px-4 py-2 text-xs" style={{ borderTop: '1px solid #E8EFFF' }}>
+                          <span className="shrink-0 mr-3" style={{ color: '#9CA3AF' }}>备注</span>
+                          <span className="text-right" style={{ color: '#4B5563', wordBreak: 'break-all' }}>{order.public_note}</span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
