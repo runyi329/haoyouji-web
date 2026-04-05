@@ -16493,15 +16493,11 @@ export const adminFeatureRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
       }
       try {
-        const tencentcloud = await import("tencentcloud-sdk-nodejs");
-        const SmsClient = (tencentcloud as any).default.sms.v20210111.Client;
-        const client = new SmsClient({
-          credential: {
-            secretId: process.env.COS_SECRET_ID || "",
-            secretKey: process.env.COS_SECRET_KEY || "",
-          },
-          region: process.env.TENCENT_SMS_REGION || "ap-guangzhou",
-        });
+        // 使用smsService内部的client（已静态初始化，避免动态import问题）
+        const client = (smsService as any).client;
+        if (!client) {
+          throw new Error("短信服务未初始化，请检查腾讯云API密钥配置");
+        }
         const r = await client.DescribeSmsTemplateList({ International: 0, TemplateIdSet: [] });
         return (r.DescribeTemplateStatusSet || []).map((t: any) => ({
           id: t.TemplateId,
