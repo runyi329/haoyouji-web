@@ -723,7 +723,6 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                       ? <span style={dimStyle} className="text-right">{displayRemaining} × {refPrice.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></span>
                       : <span style={dimStyle}>--</span>}
                   </div>
-                  </div>
                 </>
               );
             })()}
