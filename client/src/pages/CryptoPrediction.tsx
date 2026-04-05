@@ -379,7 +379,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">持仓数量</span>
               <span>
-                <span className="text-[11px] text-[#9CA3AF]">{(parseFloat(order.amount) * 5.25).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = </span>
+                <span className="text-[11px] text-[#9CA3AF]">{parseFloat(order.amount).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = </span>
                 <span className="text-[#1E293B] font-medium">{parseFloat(order.quantity).toFixed(8).replace(/\.?0+$/, '')} {order.coin}</span>
               </span>
             </div>
