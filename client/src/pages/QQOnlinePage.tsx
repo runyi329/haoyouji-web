@@ -45,9 +45,9 @@ interface BacktestResult {
 // ─── 常量 ─────────────────────────────────────────────────────
 
 const STRATEGY_EXAMPLES = [
-  "过去3年在20日均线上穿60日均线时买入茅台（600519.SS），回撤5%止损",
+  "过去3年在20日均线上穿60日均线时买入茅台（600519），回撤5%止损",
   "用RSI策略回测苹果股票（AAPL）最近2年，RSI低于30买入，高于70卖出",
-  "过去5年对贵州茅台（600519.SS）做20日高点突破策略，不设止损",
+  "过去5年对贵州茅台（600519）做20日高点突破策略，不设止损",
   "用均线交叉策略回测特斯拉（TSLA）2022年至今，止损8%",
 ];
 
@@ -289,13 +289,17 @@ export default function QQOnlinePage() {
           start_date: result.start_date,
           end_date: result.end_date,
           strategy_desc: parsed?.description_summary || description,
+          strategy_type: params?.strategy_type || "ma_cross",
+          trades: result.trades || [],
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "导出失败");
       const link = document.createElement("a");
-      link.href = `data:application/pdf;base64,${data.pdf_base64}`;
-      link.download = `回测报告_${result.symbol}_${result.start_date}.pdf`;
+      // 后端返回 HTML，用 Blob 下载
+      const blob = new Blob([data.html], { type: "text/html;charset=utf-8" });
+      link.href = URL.createObjectURL(blob);
+      link.download = `回测报告_${result.symbol}_${result.start_date}.html`;
       link.click();
     } catch (e: any) {
       alert("PDF导出失败：" + e.message);
@@ -444,7 +448,7 @@ export default function QQOnlinePage() {
               { label: "股票代码", key: "symbol", type: "text" },
               { label: "开始日期", key: "start_date", type: "date" },
               { label: "结束日期", key: "end_date", type: "date" },
-              { label: "止损比例（如0.05=5%，0=不设）", key: "stop_loss", type: "number" },
+              { label: "止损比例（如0.05=5%，0=不设止损）", key: "stop_loss", type: "number" },
             ].map(({ label, key, type }) => (
               <div key={key} style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 3 }}>{label}</div>
@@ -584,7 +588,7 @@ export default function QQOnlinePage() {
                 marginBottom: 20,
               }}
             >
-              {exporting ? "生成PDF中..." : "导出分析报告（PDF）"}
+              {exporting ? "生成报告中..." : "导出分析报告（HTML）"}
             </button>
           </div>
         )}
