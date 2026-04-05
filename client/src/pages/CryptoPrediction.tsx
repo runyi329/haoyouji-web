@@ -379,7 +379,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <span className="text-[#9CA3AF]">赠送市値</span>
               <span className="font-semibold" style={{ color: (order as any).giftMultiplier === '1.0' ? '#D97706' : '#EF4444' }}>
                 {parseFloat(order.amount).toFixed(2)} USDT
-                <span className="ml-1 text-[11px] font-normal opacity-70">({(order as any).giftMultiplier || '1.5'}倍)</span>
+                <span className="ml-1 text-[11px] font-normal opacity-70">({((order as any).sourceAmount ? (parseFloat(order.amount) / parseFloat((order as any).sourceAmount)).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : (order as any).giftMultiplier || '1.5')}倍)</span>
               </span>
             </div>
             {/* 持仓数量：计算过程小灰字 + 等号和结果同行显示 */}
