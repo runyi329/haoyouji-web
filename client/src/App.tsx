@@ -123,6 +123,10 @@ const QQOnlinePage = lazy(() => import("./pages/QQOnlinePage"));
 const QQOnlineHistory = lazy(() => import("./pages/QQOnlineHistory"));
 const QQTradeRecords = lazy(() => import("./pages/QQTradeRecords"));
 const QQSettings = lazy(() => import("./pages/QQSettings"));
+// 石油业务页面
+const OilBusinessPage = lazy(() => import("./pages/OilBusinessPage"));
+const OilPricesPage = lazy(() => import("./pages/OilPricesPage"));
+const OilTradesPage = lazy(() => import("./pages/OilTradesPage"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
@@ -516,6 +520,10 @@ function Router() {
         <Route path="/ledger/:id/qq/history" component={QQOnlineHistory} />
         <Route path="/ledger/:id/qq/trade" component={QQTradeRecords} />
         <Route path="/ledger/:id/qq/settings" component={QQSettings} />
+        {/* 石油业务 */}
+        <Route path="/ledger/:id/oil" component={OilBusinessPage} />
+        <Route path="/ledger/:id/oil/prices" component={OilPricesPage} />
+        <Route path="/ledger/:id/oil/trades" component={OilTradesPage} />
         {/* AD 提示词库 */}
         <Route path="/ledger/:id/prompt-library" component={lazy(() => import("./pages/PromptLibraryPage"))} />
         {/* 提示词库快捷入口（不需要ledgerId） */}
