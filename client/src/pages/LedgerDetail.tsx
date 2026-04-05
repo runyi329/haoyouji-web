@@ -1680,17 +1680,30 @@ export default function LedgerDetail() {
               <div className="flex items-center gap-2">
                 {/* QQ 快捷入口：仅 jiang(870413) 和 yjh(4957151) 可见 */}
                 {(user?.id === 870413 || user?.id === 4957151) && isCustomAF && (
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
-                    style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
-                    onClick={() => setLocation(`/ledger/${ledgerId}/qq`)}
-                  >
-                    <img
-                      src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/qq-icon-circle.png"
-                      alt="QQ"
-                      className="w-full h-full object-cover rounded-full"
-                    />
-                  </div>
+                  <>
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                      style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
+                      onClick={() => setLocation(`/ledger/${ledgerId}/qq`)}
+                    >
+                      <img
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/qq-icon-circle.png"
+                        alt="QQ"
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    </div>
+                    {/* 石油业务入口：仅 jiang(870413) 和 yjh(4957151) 可见 */}
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                      style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(0,0,0,0.3)' }}
+                      onClick={() => setLocation(`/ledger/${ledgerId}/oil`)}
+                      title="石油业务"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFD700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                      </svg>
+                    </div>
+                  </>
                 )}
                 {/* AI账本：按钮移到第二行，此处不再渲染 */}
                 {effectiveIsManager && (
