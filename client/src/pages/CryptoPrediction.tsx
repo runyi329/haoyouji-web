@@ -671,14 +671,30 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           })}
 
           {/* 当前收益权摘要 */}
-          <div className="mt-2 rounded-lg p-2 flex justify-between items-center" style={{ backgroundColor: '#EEF2FF' }}>
-            <span style={{ color: '#6B7A9A' }}>当前收益权</span>
-            <span className="font-bold text-sm" style={{ color: currentTier === 0 ? '#0EA56A' : '#EF4444' }}>
-              {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
-              <span className="text-xs ml-1" style={{ color: '#9CA3AF' }}>
-                ({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})
+          <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: '#EEF2FF' }}>
+            <div className="flex justify-between items-center">
+              <span style={{ color: '#6B7A9A' }}>当前收益权</span>
+              <span className="font-bold text-sm" style={{ color: currentTier === 0 ? '#0EA56A' : '#EF4444' }}>
+                {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
+                <span className="text-xs ml-1" style={{ color: '#9CA3AF' }}>
+                  ({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})
+                </span>
               </span>
-            </span>
+            </div>
+            {/* 当前实际持仓数量 = 原始数量 × 当前收益权比例 */}
+            {(() => {
+              const qty = parseFloat(order.quantity);
+              const pctStr = currentTier === 0 ? '100%' : (TIER_LABELS[currentTier - 1]?.pct || '100%');
+              const pct = parseFloat(pctStr) / 100;
+              const remaining = qty * pct;
+              const display = remaining % 1 === 0 ? remaining.toString() : remaining.toFixed(8).replace(/\.?0+$/, '');
+              return (
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-xs" style={{ color: '#6B7A9A' }}>当前持仓数量</span>
+                  <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{display} {order.coin}</span>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
