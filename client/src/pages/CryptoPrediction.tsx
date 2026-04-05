@@ -701,37 +701,36 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
               const totalFee = dailyFee * holdDays;
               const tierColor = currentTier === 0 ? '#0EA56A' : '#EF4444';
-              const rowCls = "flex justify-between items-center text-xs";
-              const labelSty = { color: '#6B7A9A' } as React.CSSProperties;
-              const dimSty = { color: '#9CA3AF' } as React.CSSProperties;
+              const labelStyle = { color: '#6B7A9A' } as React.CSSProperties;
+              const dimStyle = { color: '#9CA3AF' } as React.CSSProperties;
               return (
                 <>
-                  <div className={rowCls}>
-                    <span style={labelSty}>当前收益权</span>
+                  <div className="flex justify-between items-center text-xs">
+                    <span style={labelStyle}>当前收益权</span>
                     <span className="font-semibold" style={{ color: tierColor }}>
                       {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
-                      <span className="font-normal ml-1" style={dimSty}>({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})</span>
+                      <span className="font-normal ml-1" style={dimStyle}>({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})</span>
                     </span>
                   </div>
                   <div className="my-1.5" style={{ borderTop: '1px solid #D1D9F0' }} />
-                  <div className={rowCls}>
-                    <span style={labelSty}>当前持仓数量</span>
-                    <span style={dimSty}>{displayQty} × {pctStr} = <span className="font-semibold" style={{ color: '#1A2340' }}>{displayRemaining} {order.coin}</span></span>
+                  <div className="flex justify-between items-center text-xs">
+                    <span style={labelStyle} className="shrink-0 mr-2">当前持仓数量</span>
+                    <span style={dimStyle} className="text-right">{displayQty} × {pctStr} = <span className="font-semibold" style={{ color: '#1A2340' }}>{displayRemaining} {order.coin}</span></span>
                   </div>
-                  <div className={}>
-                    <span style={labelSty}>当前市值{refPriceLabel ? <span style={dimSty}> ({refPriceLabel})</span> : null}</span>
+                  <div className="flex justify-between items-center text-xs mt-1">
+                    <span style={labelStyle} className="shrink-0 mr-2">当前市值{refPriceLabel ? <span style={dimStyle}> ({refPriceLabel})</span> : null}</span>
                     {marketValue !== null
-                      ? <span style={dimSty}>{displayRemaining} × {refPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></span>
-                      : <span style={dimSty}>--</span>}
+                      ? <span style={dimStyle} className="text-right">{displayRemaining} × {refPrice.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></span>
+                      : <span style={dimStyle}>--</span>}
                   </div>
-                  <div className={}>
-                    <span style={labelSty}>当前需付管理费</span>
+                  <div className="flex justify-between items-center text-xs mt-1">
+                    <span style={labelStyle}>当前需付管理费</span>
                     <span className="font-semibold" style={{ color: '#EF4444' }}>-{totalFee.toFixed(2)} USDT</span>
                   </div>
                 </>
               );
             })()}
-          </div>
+          </div>          </div>
         </div>
       )}
     </div>
