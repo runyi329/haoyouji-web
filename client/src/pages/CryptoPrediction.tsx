@@ -1357,6 +1357,50 @@ export default function CryptoPrediction() {
             )}
             <div className="mt-4 relative z-20">
               <div className="text-sm font-semibold mb-2" style={{ color: '#1A2340' }}>当前订单</div>
+              {/* 订单数量 + 管理费汇总 */}
+              {(!ordersLoading && orders.length > 0) && (() => {
+                // 只统计谷底增筹（无损合约）且已成交的买单
+                const feeOrders = orders.filter((o: any) => o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹'));
+                const ownCount = orders.filter((o: any) => !o.isGift).length;
+                const giftCount = orders.filter((o: any) => !!o.isGift).length;
+                let settledFee = 0, unsettledFee = 0;
+                feeOrders.forEach((o: any) => {
+                  const amount = parseFloat(o.amount);
+                  const tradeValue = o.isGift ? amount : amount * 5.25;
+                  const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+                  const startDate = new Date(o.createdAt);
+                  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                  const isSold = o.sellStatus === 'sold';
+                  const endDate = (isSold && o.sellConfirmedAt) ? new Date(o.sellConfirmedAt) : new Date();
+                  const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+                  endDay.setHours(0,0,0,0);
+                  const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+                  const fee = dailyFee * holdDays;
+                  if (isSold) settledFee += fee;
+                  else unsettledFee += fee;
+                });
+                const totalFee = settledFee + unsettledFee;
+                return (
+                  <div className="mb-2 px-2 py-1.5 rounded-lg text-xs" style={{ background: '#F0F4FF', color: '#1A2340' }}>
+                    <div className="flex justify-between mb-1">
+                      <span style={{ color: '#6B7A9A' }}>订单数量</span>
+                      <span className="font-medium">{orders.length}单（自购{ownCount}单 + 获赠{giftCount}单）</span>
+                    </div>
+                    <div className="flex justify-between mb-0.5">
+                      <span style={{ color: '#6B7A9A' }}>共计管理费</span>
+                      <span className="font-semibold" style={{ color: '#1A56DB' }}>{totalFee.toFixed(2)}u</span>
+                    </div>
+                    <div className="flex justify-between mb-0.5">
+                      <span style={{ color: '#6B7A9A' }}>已结管理费</span>
+                      <span className="font-medium" style={{ color: '#6B7280' }}>{settledFee.toFixed(2)}u</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span style={{ color: '#6B7A9A' }}>未结管理费</span>
+                      <span className="font-medium" style={{ color: '#0EA56A' }}>{unsettledFee.toFixed(2)}u</span>
+                    </div>
+                  </div>
+                );
+              })()}
               {ordersLoading ? (
                 <div className="space-y-2 pt-1">
                   {[1,2,3].map(i => (
