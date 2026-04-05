@@ -5,7 +5,7 @@
  *   K 线图区域（固定，不随 Tab 切换）
  *   三 Tab 切换：无损合约 / 无损现货 / 行情评估（含竞猜）
  */
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -695,9 +695,9 @@ function NoteRow({ orderId, ledgerId, initialNote, onSaved }: {
   initialNote: string;
   onSaved: (note: string) => void;
 }) {
-  const [editing, setEditing] = React.useState(false);
-  const [value, setValue] = React.useState(initialNote);
-  const [saving, setSaving] = React.useState(false);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(initialNote);
+  const [saving, setSaving] = useState(false);
   const updateNote = trpc.ledger.financeUpdatePublicNote.useMutation();
 
   const handleSave = async () => {
