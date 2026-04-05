@@ -297,7 +297,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: order.side === 'buy' } // 委托中和已成交的买单都查询
+    { enabled: order.side === 'buy', staleTime: 120000, refetchOnWindowFocus: false, refetchOnMount: false } // 委托中和已成交的买单都查询，2分钟缓存避免重复加载
   );
   // 实时价格（用于计算当前市值）
   const coinSymbol = order.coin === 'BTC' ? 'BTCUSDT' : order.coin === 'ETH' ? 'ETHUSDT' : order.coin === 'SOL' ? 'SOLUSDT' : order.coin + 'USDT';
