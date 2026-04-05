@@ -688,15 +688,19 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 </span>
               </span>
             </div>
-            {/* 当前持仓数量 + 市值 + 管理费 */}
             {(() => {
               const qty = parseFloat(order.quantity);
               const pctStr = currentTier === 0 ? '100%' : (TIER_LABELS[currentTier - 1]?.pct || '100%');
               const pct = parseFloat(pctStr) / 100;
               const remaining = qty * pct;
-              const displayRemaining = remaining % 1 === 0 ? remaining.toString() : remaining.toFixed(8).replace(/[.]?0+$/, '');
-              const displayQty = qty % 1 === 0 ? qty.toString() : qty.toFixed(8).replace(/[.]?0+$/, '');
-              const marketValue = livePrice > 0 ? remaining * livePrice : null;
+              const displayRemaining = remaining.toFixed(6).replace(/[.]?0+$/, '');
+              const displayQty = qty.toFixed(6).replace(/[.]?0+$/, '');
+              // 优先实时价格，备用上次扫描价格
+              const scanPrice = tierData?.scanStatus?.lowestPrice ? parseFloat(String(tierData.scanStatus.lowestPrice))
+                : (tierData?.latestLowPrice ? parseFloat(String(tierData.latestLowPrice)) : 0);
+              const refPrice = livePrice > 0 ? livePrice : scanPrice;
+              const refPriceLabel = livePrice > 0 ? '' : (scanPrice > 0 ? '扫描价' : '');
+              const marketValue = refPrice > 0 ? remaining * refPrice : null;
               const amount = parseFloat(order.amount);
               const tradeValue = order.isGift ? amount : amount * 5.25;
               const dailyFee = tradeValue / 0.75 * 0.12 / 365;
@@ -709,30 +713,34 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               const totalFee = dailyFee * holdDays;
               return (
                 <>
-                  <div className="flex justify-between items-center mt-1.5">
-                    <span className="text-xs" style={{ color: '#6B7A9A' }}>当前持仓数量</span>
-                    <span className="text-xs" style={{ color: '#1A2340' }}>
-                      <span style={{ color: '#9CA3AF' }}>{displayQty} × {pctStr} = </span>
-                      <span className="font-semibold">{displayRemaining} {order.coin}</span>
-                    </span>
+                  <div className="mt-1.5 pt-1.5" style={{ borderTop: '1px solid #D1D9F0' }}>
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs shrink-0 mr-2" style={{ color: '#6B7A9A' }}>当前持仓数量</span>
+                      <span className="text-xs text-right" style={{ color: '#9CA3AF' }}>{displayQty} × {pctStr} = <span className="font-semibold" style={{ color: '#1A2340' }}>{displayRemaining} {order.coin}</span></span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-xs" style={{ color: '#6B7A9A' }}>当前市值</span>
-                    <span className="text-xs" style={{ color: '#1A2340' }}>
-                      {livePrice > 0 && marketValue !== null ? (
-                        <>
-                          <span style={{ color: '#9CA3AF' }}>{displayRemaining} × {livePrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} = </span>
-                          <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
-                        </>
-                      ) : <span style={{ color: '#9CA3AF' }}>加载中...</span>}
-                    </span>
+                  <div className="mt-1.5">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs shrink-0 mr-2" style={{ color: '#6B7A9A' }}>
+                        当前市值{refPriceLabel ? <span className="text-[10px] ml-0.5">({refPriceLabel})</span> : null}
+                      </span>
+                      {marketValue !== null ? (
+                        <span className="text-xs text-right" style={{ color: '#9CA3AF' }}>
+                          {displayRemaining} × {refPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+                        </span>
+                      ) : <span className="text-xs" style={{ color: '#9CA3AF' }}>--</span>}
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center mt-1">
-                    <span className="text-xs" style={{ color: '#6B7A9A' }}>当前需付管理费</span>
-                    <span className="text-xs font-semibold" style={{ color: '#EF4444' }}>
-                      -{dailyFee.toFixed(4)} <span className="font-normal" style={{ color: '#9CA3AF' }}>USDT/天</span>
-                      <span className="font-normal ml-1" style={{ color: '#9CA3AF' }}>· 已累计 -{totalFee.toFixed(4)} USDT（{holdDays}天）</span>
-                    </span>
+                  <div className="mt-1.5">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs shrink-0 mr-2" style={{ color: '#6B7A9A' }}>当前需付管理费</span>
+                      <span className="text-xs text-right">
+                        <span className="font-semibold" style={{ color: '#EF4444' }}>-{dailyFee.toFixed(4)} USDT/天</span>
+                      </span>
+                    </div>
+                    <div className="text-right text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
+                      已累计 <span className="font-semibold" style={{ color: '#EF4444' }}>-{totalFee.toFixed(2)} USDT</span>（{holdDays}天）
+                    </div>
                   </div>
                 </>
               );
