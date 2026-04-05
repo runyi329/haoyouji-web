@@ -439,6 +439,8 @@ async function startServer() {
   // 食物热量扫描路由
   const foodCalorieModule = await import('../food-calorie-router.js');
   app.use(foodCalorieModule.default);
+  const energyProxyModule = await import('../energy-proxy-router.js');
+  app.use(energyProxyModule.default);
 
   // tRPC API
   app.use(
