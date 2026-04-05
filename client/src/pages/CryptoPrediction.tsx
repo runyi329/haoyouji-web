@@ -1556,7 +1556,7 @@ export default function CryptoPrediction() {
                                   className="text-2xl font-bold tabular-nums leading-tight"
                                   style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                                 >
-                                  {isNegativeRate ? '-' : ''}{unpaidInterest.toFixed(2)}
+                                  {unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)}
                                 </span>
                                 <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
                               </div>
