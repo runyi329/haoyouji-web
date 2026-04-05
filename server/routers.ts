@@ -16163,10 +16163,50 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           receiverName: r.receiver_name || r.receiver_username || '未知',
           createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString('zh-CN') : '未知',
           note: r.note || '',
-        }));
+         }));
       }),
   }),
-
+  // 能源市场数据接口（从数据库读取，由沙盒定时写入）
+  energy: router({
+    // 获取三个合约的最新行情
+    getMarketData: publicProcedure.query(async () => {
+      try {
+        const conn = await getDbConnection();
+        if (!conn) throw new Error("数据库连接失败");
+        const [rows] = await (conn as any).execute(
+          `SELECT symbol, symbol_name, last_price, price_change, price_change_percent,
+                  high_price, low_price, volume, quote_volume,
+                  mark_price, index_price, funding_rate, next_funding_time,
+                  open_interest, open_interest_value, updated_at
+           FROM energy_market_data
+           ORDER BY FIELD(symbol, 'CLUSDT', 'BZUSDT', 'NATGASUSDT')`
+        );
+        return rows as any[];
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+    // 获取某合约的资金费率历史
+    getFundingHistory: publicProcedure
+      .input(z.object({ symbol: z.string(), limit: z.number().optional().default(32) }))
+      .query(async ({ input }) => {
+        try {
+          const conn = await getDbConnection();
+          if (!conn) throw new Error("数据库连接失败");
+          const [rows] = await (conn as any).execute(
+            `SELECT symbol, funding_time, funding_rate
+             FROM energy_funding_history
+             WHERE symbol = ?
+             ORDER BY funding_time ASC
+             LIMIT ?`,
+            [input.symbol, input.limit]
+          );
+          return rows as any[];
+        } catch (err: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+        }
+      }),
+  }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
@@ -16574,46 +16614,5 @@ export const adminFeatureRouter = router({
         return { success: false, phone, message: err.message };
       }
     }),
-  // 能源市场数据接口（从数据库读取，由沙盒定时写入）
-  energy: router({
-    // 获取三个合约的最新行情
-    getMarketData: publicProcedure.query(async () => {
-      try {
-        const conn = await getDbConnection();
-        if (!conn) throw new Error("数据库连接失败");
-        const [rows] = await (conn as any).execute(
-          `SELECT symbol, symbol_name, last_price, price_change, price_change_percent,
-                  high_price, low_price, volume, quote_volume,
-                  mark_price, index_price, funding_rate, next_funding_time,
-                  open_interest, open_interest_value, updated_at
-           FROM energy_market_data
-           ORDER BY FIELD(symbol, 'CLUSDT', 'BZUSDT', 'NATGASUSDT')`
-        );
-        return rows as any[];
-      } catch (err: any) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
-      }
-    }),
-    // 获取某合约的资金费率历史
-    getFundingHistory: publicProcedure
-      .input(z.object({ symbol: z.string(), limit: z.number().optional().default(32) }))
-      .query(async ({ input }) => {
-        try {
-          const conn = await getDbConnection();
-          if (!conn) throw new Error("数据库连接失败");
-          const [rows] = await (conn as any).execute(
-            `SELECT symbol, funding_time, funding_rate
-             FROM energy_funding_history
-             WHERE symbol = ?
-             ORDER BY funding_time ASC
-             LIMIT ?`,
-            [input.symbol, input.limit]
-          );
-          return rows as any[];
-        } catch (err: any) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
-        }
-      }),
-  }),
 });
 export type AppRouter = typeof appRouter;
