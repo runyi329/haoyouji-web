@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ArrowLeft, RefreshCw, ExternalLink, TrendingUp, TrendingDown } from "lucide-react";
 
 interface ContractData {
   symbol: string;
@@ -82,15 +82,12 @@ function MiniChart({ data, symbol }: { data: FundingHistory[]; symbol: string })
 
   return (
     <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-16">
-      <defs>
-        <linearGradient id={`grad-${symbol}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
       <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" />
-      <line x1="0" y1={h - ((0 - min) / range) * (h - 8) - 4} x2={w} y2={h - ((0 - min) / range) * (h - 8) - 4}
-        stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" strokeDasharray="3,3" />
+      <line
+        x1="0" y1={h - ((0 - min) / range) * (h - 8) - 4}
+        x2={w} y2={h - ((0 - min) / range) * (h - 8) - 4}
+        stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" strokeDasharray="3,3"
+      />
     </svg>
   );
 }
@@ -105,15 +102,17 @@ export default function OilBusinessPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<string>("CLUSDT");
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
+      setError(null);
       const results: ContractData[] = [];
       for (const c of CONTRACTS) {
         const [premRes, tickerRes, oiRes] = await Promise.all([
-          fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${c.symbol}`),
-          fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${c.symbol}`),
-          fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${c.symbol}`),
+          fetch(`/api/energy/premium/${c.symbol}`),
+          fetch(`/api/energy/ticker/${c.symbol}`),
+          fetch(`/api/energy/openInterest/${c.symbol}`),
         ]);
         const prem = await premRes.json();
         const ticker = await tickerRes.json();
@@ -134,20 +133,19 @@ export default function OilBusinessPage() {
       }
       setContracts(results);
 
-      // 获取资金费率历史
       const histMap: Record<string, FundingHistory[]> = {};
       for (const c of CONTRACTS) {
-        const res = await fetch(`https://fapi.binance.com/fapi/v1/fundingRate?symbol=${c.symbol}&limit=32`);
+        const res = await fetch(`/api/energy/fundingRate/${c.symbol}?limit=32`);
         const data = await res.json();
-        histMap[c.symbol] = data.map((d: any) => ({
+        histMap[c.symbol] = Array.isArray(data) ? data.map((d: any) => ({
           fundingTime: d.fundingTime,
           fundingRate: parseFloat(d.fundingRate),
-        }));
+        })) : [];
       }
       setFundingHistory(histMap);
       setLastUpdated(new Date());
-    } catch (e) {
-      console.error("数据获取失败", e);
+    } catch (e: any) {
+      setError("数据加载失败：" + e.message);
     } finally {
       setLoading(false);
     }
@@ -158,9 +156,6 @@ export default function OilBusinessPage() {
     const id = setInterval(fetchData, 30000);
     return () => clearInterval(id);
   }, [fetchData]);
-
-  const activeContract = contracts.find(c => c.symbol === activeTab);
-  const activeContractInfo = CONTRACTS.find(c => c.symbol === activeTab);
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: "#0a0c10", fontFamily: "'SF Mono', 'Consolas', monospace" }}>
@@ -178,10 +173,7 @@ export default function OilBusinessPage() {
             <div className="text-sm font-semibold tracking-widest text-amber-400 uppercase">Energy Markets</div>
             <div className="text-xs text-gray-500">Binance Perpetual Futures</div>
           </div>
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-1 text-gray-400 hover:text-white transition-colors"
-          >
+          <button onClick={fetchData} className="text-gray-400 hover:text-white transition-colors">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
@@ -195,8 +187,15 @@ export default function OilBusinessPage() {
       {loading ? (
         <div className="p-4 space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-24 rounded animate-pulse" style={{ backgroundColor: "#141920" }} />
+            <div key={i} className="h-28 rounded animate-pulse" style={{ backgroundColor: "#141920" }} />
           ))}
+        </div>
+      ) : error ? (
+        <div className="p-6 text-center">
+          <div className="text-red-400 text-sm mb-3">{error}</div>
+          <button onClick={fetchData} className="text-xs text-blue-400 border border-blue-800 px-3 py-1.5 rounded">
+            重试
+          </button>
         </div>
       ) : (
         <div className="pb-8">
@@ -305,7 +304,6 @@ export default function OilBusinessPage() {
 
             <MiniChart data={fundingHistory[activeTab] || []} symbol={activeTab} />
 
-            {/* 历史费率列表 */}
             <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
               {(fundingHistory[activeTab] || []).slice().reverse().map((d, i) => {
                 const rate = d.fundingRate * 100;
@@ -325,7 +323,7 @@ export default function OilBusinessPage() {
             </div>
           </div>
 
-          {/* 市场快捷入口 */}
+          {/* 快速跳转 */}
           <div className="mx-4 mt-3 rounded-lg p-4" style={{ backgroundColor: "#111620", border: "1px solid #1e2530" }}>
             <div className="text-xs text-gray-400 uppercase tracking-widest mb-3">Quick Access · Binance</div>
             <div className="grid grid-cols-3 gap-2">
@@ -346,7 +344,6 @@ export default function OilBusinessPage() {
             </div>
           </div>
 
-          {/* 底部说明 */}
           <div className="mx-4 mt-3 text-center">
             <div className="text-xs text-gray-700">数据来源：Binance Futures API · 每30秒自动刷新</div>
           </div>
