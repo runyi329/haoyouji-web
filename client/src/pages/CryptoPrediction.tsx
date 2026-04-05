@@ -445,8 +445,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">管理费</span>
               <span className="text-[#1E293B] font-medium">
-                {dailyFee.toFixed(4)} <span className="text-[11px] text-[#9CA3AF]">USDT/天</span>
-                <span className="text-[11px] text-[#9CA3AF] ml-1.5">· {isSold ? '已结清' : '已累计'} {totalFee.toFixed(4)} USDT（{holdDays}天）</span>
+                {dailyFee.toFixed(4)}u × {holdDays}天 = {totalFee.toFixed(4)}u
               </span>
             </div>
           );
@@ -720,8 +719,12 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                   <div className="flex justify-between items-center text-xs mt-1">
                     <span style={labelStyle} className="shrink-0 mr-2">当前市值{refPriceLabel ? <span style={dimStyle}> ({refPriceLabel})</span> : null}</span>
                     {marketValue !== null
-                      ? <span style={dimStyle} className="text-right">{displayRemaining} × {refPrice.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></span>
+                      ? <span style={dimStyle} className="text-right">{displayRemaining} × {refPrice.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} u</span></span>
                       : <span style={dimStyle}>--</span>}
+                  </div>
+                  <div className="flex justify-between items-center text-xs mt-1">
+                    <span style={labelStyle} className="shrink-0 mr-2">管理费</span>
+                    <span style={dimStyle} className="text-right">{dailyFee.toFixed(4)}u × {holdDays}天 = <span className="font-semibold" style={{ color: '#1A2340' }}>{totalFee.toFixed(4)}u</span></span>
                   </div>
                 </>
               );
