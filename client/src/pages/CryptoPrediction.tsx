@@ -677,17 +677,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             );
           })}
           {/* 当前收益权摘要 + 市值 + 管理费 */}
-          <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: '#EEF2FF' }}>
-            {/* 当前收益权 */}
-            <div className="flex justify-between items-center">
-              <span style={{ color: '#6B7A9A' }}>当前收益权</span>
-              <span className="font-bold text-sm" style={{ color: currentTier === 0 ? '#0EA56A' : '#EF4444' }}>
-                {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
-                <span className="text-xs ml-1" style={{ color: '#9CA3AF' }}>
-                  ({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})
-                </span>
-              </span>
-            </div>
+          <div className="mt-2 rounded-lg p-3" style={{ backgroundColor: '#EEF2FF' }}>
             {(() => {
               const qty = parseFloat(order.quantity);
               const pctStr = currentTier === 0 ? '100%' : (TIER_LABELS[currentTier - 1]?.pct || '100%');
@@ -695,7 +685,6 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               const remaining = qty * pct;
               const displayRemaining = remaining.toFixed(6).replace(/[.]?0+$/, '');
               const displayQty = qty.toFixed(6).replace(/[.]?0+$/, '');
-              // 优先实时价格，备用上次扫描价格
               const scanPrice = tierData?.scanStatus?.lowestPrice ? parseFloat(String(tierData.scanStatus.lowestPrice))
                 : (tierData?.latestLowPrice ? parseFloat(String(tierData.latestLowPrice)) : 0);
               const refPrice = livePrice > 0 ? livePrice : scanPrice;
@@ -711,33 +700,38 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               endDay.setHours(0,0,0,0);
               const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
               const totalFee = dailyFee * holdDays;
+              const tierColor = currentTier === 0 ? '#0EA56A' : '#EF4444';
+              const rowCls = "flex justify-between items-center text-xs";
+              const labelSty = { color: '#6B7A9A' } as React.CSSProperties;
+              const dimSty = { color: '#9CA3AF' } as React.CSSProperties;
               return (
                 <>
-                  <div className="mt-1.5 pt-1.5" style={{ borderTop: '1px solid #D1D9F0' }}>
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs shrink-0 mr-2" style={{ color: '#6B7A9A' }}>当前持仓数量</span>
-                      <span className="text-xs text-right" style={{ color: '#9CA3AF' }}>{displayQty} × {pctStr} = <span className="font-semibold" style={{ color: '#1A2340' }}>{displayRemaining} {order.coin}</span></span>
-                    </div>
+                  <div className={rowCls}>
+                    <span style={labelSty}>当前收益权</span>
+                    <span className="font-semibold" style={{ color: tierColor }}>
+                      {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
+                      <span className="font-normal ml-1" style={dimSty}>({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})</span>
+                    </span>
                   </div>
-                  <div className="mt-1.5">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs shrink-0 mr-2" style={{ color: '#6B7A9A' }}>
-                        当前市值{refPriceLabel ? <span className="text-[10px] ml-0.5">({refPriceLabel})</span> : null}
-                      </span>
-                      {marketValue !== null ? (
-                        <span className="text-xs text-right" style={{ color: '#9CA3AF' }}>
-                          {displayRemaining} × {refPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
-                        </span>
-                      ) : <span className="text-xs" style={{ color: '#9CA3AF' }}>--</span>}
-                    </div>
+                  <div className="my-1.5" style={{ borderTop: '1px solid #D1D9F0' }} />
+                  <div className={rowCls}>
+                    <span style={labelSty}>当前持仓数量</span>
+                    <span style={dimSty}>{displayQty} × {pctStr} = <span className="font-semibold" style={{ color: '#1A2340' }}>{displayRemaining} {order.coin}</span></span>
                   </div>
-                  <div className="mt-1.5">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs shrink-0 mr-2" style={{ color: '#6B7A9A' }}>当前需付管理费</span>
-                      <span className="text-xs text-right">
-                        <span className="font-semibold" style={{ color: '#EF4444' }}>-{dailyFee.toFixed(4)} USDT/天</span>
-                      </span>
-                    </div>
+                  <div className={}>
+                    <span style={labelSty}>当前市值{refPriceLabel ? <span style={dimSty}> ({refPriceLabel})</span> : null}</span>
+                    {marketValue !== null
+                      ? <span style={dimSty}>{displayRemaining} × {refPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></span>
+                      : <span style={dimSty}>--</span>}
+                  </div>
+                  <div className={}>
+                    <span style={labelSty}>当前需付管理费</span>
+                    <span className="font-semibold" style={{ color: '#EF4444' }}>-{totalFee.toFixed(2)} USDT</span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
                     <div className="text-right text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
                       已累计 <span className="font-semibold" style={{ color: '#EF4444' }}>-{totalFee.toFixed(2)} USDT</span>（{holdDays}天）
                     </div>
