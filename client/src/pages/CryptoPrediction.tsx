@@ -299,6 +299,13 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: order.side === 'buy' } // 委托中和已成交的买单都查询
   );
+  // 实时价格（用于计算当前市值）
+  const coinSymbol = order.coin === 'BTC' ? 'BTCUSDT' : order.coin === 'ETH' ? 'ETHUSDT' : order.coin === 'SOL' ? 'SOLUSDT' : order.coin + 'USDT';
+  const { data: liveTickerData } = trpc.ledger.getBinanceTicker.useQuery(
+    { symbol: coinSymbol },
+    { enabled: order.side === 'buy', staleTime: 30000, refetchInterval: 60000 }
+  );
+  const livePrice = liveTickerData ? parseFloat((liveTickerData as any).lastPrice || '0') : 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => { toast.success('委托已撒销'); },
     onError: (e) => toast.error('撒单失败', { description: e.message }),
@@ -669,9 +676,9 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               </div>
             );
           })}
-
-          {/* 当前收益权摘要 */}
+          {/* 当前收益权摘要 + 市值 + 管理费 */}
           <div className="mt-2 rounded-lg p-2" style={{ backgroundColor: '#EEF2FF' }}>
+            {/* 当前收益权 */}
             <div className="flex justify-between items-center">
               <span style={{ color: '#6B7A9A' }}>当前收益权</span>
               <span className="font-bold text-sm" style={{ color: currentTier === 0 ? '#0EA56A' : '#EF4444' }}>
@@ -681,18 +688,53 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 </span>
               </span>
             </div>
-            {/* 当前实际持仓数量 = 原始数量 × 当前收益权比例 */}
+            {/* 当前持仓数量 + 市值 + 管理费 */}
             {(() => {
               const qty = parseFloat(order.quantity);
               const pctStr = currentTier === 0 ? '100%' : (TIER_LABELS[currentTier - 1]?.pct || '100%');
               const pct = parseFloat(pctStr) / 100;
               const remaining = qty * pct;
-              const display = remaining % 1 === 0 ? remaining.toString() : remaining.toFixed(8).replace(/\.?0+$/, '');
+              const displayRemaining = remaining % 1 === 0 ? remaining.toString() : remaining.toFixed(8).replace(/[.]?0+$/, '');
+              const displayQty = qty % 1 === 0 ? qty.toString() : qty.toFixed(8).replace(/[.]?0+$/, '');
+              const marketValue = livePrice > 0 ? remaining * livePrice : null;
+              const amount = parseFloat(order.amount);
+              const tradeValue = order.isGift ? amount : amount * 5.25;
+              const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+              const startDate = new Date(order.createdAt);
+              const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+              const endDate = order.sellStatus === 'sold' && order.sellConfirmedAt ? new Date(order.sellConfirmedAt) : new Date();
+              const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+              endDay.setHours(0,0,0,0);
+              const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+              const totalFee = dailyFee * holdDays;
               return (
-                <div className="flex justify-between items-center mt-1">
-                  <span className="text-xs" style={{ color: '#6B7A9A' }}>当前持仓数量</span>
-                  <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{display} {order.coin}</span>
-                </div>
+                <>
+                  <div className="flex justify-between items-center mt-1.5">
+                    <span className="text-xs" style={{ color: '#6B7A9A' }}>当前持仓数量</span>
+                    <span className="text-xs" style={{ color: '#1A2340' }}>
+                      <span style={{ color: '#9CA3AF' }}>{displayQty} × {pctStr} = </span>
+                      <span className="font-semibold">{displayRemaining} {order.coin}</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-xs" style={{ color: '#6B7A9A' }}>当前市值</span>
+                    <span className="text-xs" style={{ color: '#1A2340' }}>
+                      {livePrice > 0 && marketValue !== null ? (
+                        <>
+                          <span style={{ color: '#9CA3AF' }}>{displayRemaining} × {livePrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} = </span>
+                          <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+                        </>
+                      ) : <span style={{ color: '#9CA3AF' }}>加载中...</span>}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-xs" style={{ color: '#6B7A9A' }}>当前需付管理费</span>
+                    <span className="text-xs font-semibold" style={{ color: '#EF4444' }}>
+                      -{dailyFee.toFixed(4)} <span className="font-normal" style={{ color: '#9CA3AF' }}>USDT/天</span>
+                      <span className="font-normal ml-1" style={{ color: '#9CA3AF' }}>· 已累计 -{totalFee.toFixed(4)} USDT（{holdDays}天）</span>
+                    </span>
+                  </div>
+                </>
               );
             })()}
           </div>
