@@ -723,14 +723,11 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                       ? <span style={dimStyle} className="text-right">{displayRemaining} × {refPrice.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span></span>
                       : <span style={dimStyle}>--</span>}
                   </div>
-                  <div className="flex justify-between items-center text-xs mt-1">
-                    <span style={labelStyle}>当前需付管理费</span>
-                    <span className="font-semibold" style={{ color: '#EF4444' }}>-{totalFee.toFixed(2)} USDT</span>
                   </div>
                 </>
               );
             })()}
-          </div>          </div>
+          </div>
         </div>
       )}
     </div>
