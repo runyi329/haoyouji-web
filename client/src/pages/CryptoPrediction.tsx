@@ -1444,7 +1444,7 @@ export default function CryptoPrediction() {
                 {financeOrders.map((order: any) => {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                   const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
-                  const isNegativeRate = (order.finance_type === '保本分成');
+                  const isNegativeRate = true; // 融资付息页面用户均为付息方，利息一律显示为负数
                   const interestBase = parseFloat(order.interest_base || order.principal || '0');
                   const startDate = order.interest_start_date || order.startDate || null;
                   const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
