@@ -10048,14 +10048,16 @@ export const appRouter = router({
               (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual`
           ).catch(() => [[{ recharged: '0', manual: '0' }]]),
 
-          // 查询2：仓位（所有币种 GROUP BY coin+side，排除已卖出订单）
+          // 查询2：仓位（按订单逐条查询，应用权益折扣档位系数）
           db.execute(
-            sql`SELECT coin, side, COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
-                FROM af_orders
-                WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
-                  AND status = 'completed' AND coin IN ('BTC','ETH','SOL')
-                  AND (sell_status IS NULL OR sell_status != 'sold')
-                GROUP BY coin, side`
+            sql`SELECT o.id, o.coin, o.side, CAST(o.quantity AS DECIMAL(28,8)) as qty,
+                       COALESCE(MAX(t.tier), 0) as max_tier
+                FROM af_orders o
+                LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
+                WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
+                  AND o.status = 'completed' AND o.coin IN ('BTC','ETH','SOL')
+                  AND (o.sell_status IS NULL OR o.sell_status != 'sold')
+                GROUP BY o.id, o.coin, o.side, o.quantity`
           ).catch(() => [[]]),
 
           // 查询3：用户信息（invite_count）
@@ -10069,16 +10071,23 @@ export const appRouter = router({
         const recharged = parseFloat(balRow?.recharged ?? '0');
         const manual = parseFloat(balRow?.manual ?? '0');
 
-        // 解析仓位
+        // 解析仓位（应用权益折扣档位系数）
+        const EQUITY_DISCOUNT_RATES: Record<number, number> = {
+          0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+          5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+        };
         const posRows: any[] = (positionResult as any)[0] || (positionResult as any) || [];
         const positions: Record<string, number> = { BTC: 0, ETH: 0, SOL: 0 };
         for (const row of posRows) {
           const coin = row.coin;
           const side = row.side;
-          const total = parseFloat((row.total ?? '0').toString());
+          const rawQty = parseFloat((row.qty ?? '0').toString());
+          const tier = parseInt((row.max_tier ?? '0').toString()) || 0;
+          const discountRate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+          const effectiveQty = rawQty * discountRate;
           if (coin in positions) {
-            if (side === 'buy') positions[coin] += total;
-            else if (side === 'sell') positions[coin] -= total;
+            if (side === 'buy') positions[coin] += effectiveQty;
+            else if (side === 'sell') positions[coin] -= effectiveQty;
           }
         }
         for (const c of ['BTC', 'ETH', 'SOL']) positions[c] = Math.max(0, positions[c]);
@@ -10334,22 +10343,33 @@ export const appRouter = router({
             try {
               const userIds4 = result.map(u => u.id);
               const placeholders5 = userIds4.map(() => '?').join(',');
+              // 按订单逐条查询，JOIN tier触发记录，应用权益折扣系数
+              const EQUITY_RATES: Record<number, number> = {
+                0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+                5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+              };
               const [holdingRows] = await rawDb.execute(
-                `SELECT user_id, coin, COALESCE(SUM(CAST(quantity AS DECIMAL(30,8))), 0) as qty
-                 FROM af_orders
-                 WHERE ledger_id = ? AND user_id IN (${placeholders5})
-                   AND status = 'completed' AND side = 'buy'
-                   AND (sell_status IS NULL OR sell_status = 'pending')
-                 GROUP BY user_id, coin`,
+                `SELECT o.user_id, o.coin, CAST(o.quantity AS DECIMAL(30,8)) as qty,
+                        COALESCE(MAX(t.tier), 0) as max_tier
+                 FROM af_orders o
+                 LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
+                 WHERE o.ledger_id = ? AND o.user_id IN (${placeholders5})
+                   AND o.status = 'completed' AND o.side = 'buy'
+                   AND (o.sell_status IS NULL OR o.sell_status = 'pending')
+                 GROUP BY o.id, o.user_id, o.coin, o.quantity`,
                 [input.ledgerId, ...userIds4]
               ) as any[];
               for (const row of (holdingRows as any[])) {
                 if (!holdingMap.has(row.user_id)) holdingMap.set(row.user_id, { BTC: 0, ETH: 0, SOL: 0 });
                 const h = holdingMap.get(row.user_id)!;
                 const coin = (row.coin as string).toUpperCase();
-                if (coin === 'BTC') h.BTC = parseFloat(row.qty?.toString() || '0');
-                else if (coin === 'ETH') h.ETH = parseFloat(row.qty?.toString() || '0');
-                else if (coin === 'SOL') h.SOL = parseFloat(row.qty?.toString() || '0');
+                const rawQty = parseFloat(row.qty?.toString() || '0');
+                const tier = parseInt((row.max_tier ?? '0').toString()) || 0;
+                const discountRate = EQUITY_RATES[tier] ?? 1.0;
+                const effectiveQty = rawQty * discountRate;
+                if (coin === 'BTC') h.BTC += effectiveQty;
+                else if (coin === 'ETH') h.ETH += effectiveQty;
+                else if (coin === 'SOL') h.SOL += effectiveQty;
               }
             } catch (e) {
               console.error('[AF] 持仓查询失败:', e);
