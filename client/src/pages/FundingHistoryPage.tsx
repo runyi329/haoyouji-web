@@ -136,8 +136,8 @@ export default function FundingHistoryPage() {
             return (
               <div key={sym} style={{ background: "#161b22", border: `1px solid ${color}33`, borderRadius: 8, padding: "10px 8px" }}>
                 <div style={{ textAlign: "center", marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, color: color, fontWeight: 700 }}>{NAMES[sym]}</span>
-                  <span style={{ fontSize: 9, color: "#6e7681", marginLeft: 4 }}>({SHORT[sym]})</span>
+                  <span style={{ fontSize: 11, color: color, fontWeight: 800 }}>{SHORT[sym]}</span>
+                  <span style={{ fontSize: 9, color: "#8b949e", marginLeft: 4 }}>{NAMES[sym]}</span>
                 </div>
                 {/* 多头净年化 */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
@@ -183,8 +183,9 @@ export default function FundingHistoryPage() {
         <div style={{ display: "grid", gridTemplateColumns: "80px 1fr 1fr 1fr", padding: "6px 12px" }}>
           <div style={{ fontSize: 10, color: "#8b949e" }}>时间</div>
           {SYMBOLS.map(sym => (
-            <div key={sym} style={{ fontSize: 10, color: COLORS[sym], textAlign: "center", fontWeight: 700 }}>
-              {NAMES[sym]}
+            <div key={sym} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: COLORS[sym], fontWeight: 800 }}>{SHORT[sym]}</div>
+              <div style={{ fontSize: 9, color: "#8b949e" }}>{NAMES[sym]}</div>
             </div>
           ))}
         </div>
