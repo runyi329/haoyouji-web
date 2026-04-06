@@ -441,6 +441,9 @@ async function startServer() {
   app.use(foodCalorieModule.default);
   const energyProxyModule = await import('../energy-proxy-router.js');
   app.use(energyProxyModule.default);
+  // 黄金行情路由（Yahoo Finance）
+  const goldTrackerModule = await import('../gold-tracker-router.js');
+  app.use(goldTrackerModule.default);
 
   // tRPC API
   app.use(

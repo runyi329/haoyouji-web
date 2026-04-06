@@ -125,6 +125,8 @@ const QQTradeRecords = lazy(() => import("./pages/QQTradeRecords"));
 const QQSettings = lazy(() => import("./pages/QQSettings"));
 // 石油业务页面
 const OilBusinessPage = lazy(() => import("./pages/OilBusinessPage"));
+// 黄金行情页面
+const GoldTrackerPage = lazy(() => import("./pages/GoldTrackerPage"));
 const FundingHistoryPage = lazy(() => import("./pages/FundingHistoryPage"));
 const CryptoFundingHistoryPage = lazy(() => import("./pages/CryptoFundingHistoryPage"));
 const OilPricesPage = lazy(() => import("./pages/OilPricesPage"));
@@ -524,6 +526,7 @@ function Router() {
         <Route path="/ledger/:id/qq/settings" component={QQSettings} />
         {/* 石油业务 */}
         <Route path="/ledger/:id/oil" component={OilBusinessPage} />
+        <Route path="/ledger/:id/gold" component={GoldTrackerPage} />
         <Route path="/ledger/:id/oil/funding-history" component={FundingHistoryPage} />
         {/* 加密货币资金费率历史 */}
         <Route path="/ledger/:id/crypto/funding-history" component={CryptoFundingHistoryPage} />

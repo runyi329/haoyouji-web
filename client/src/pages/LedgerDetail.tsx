@@ -1686,8 +1686,8 @@ export default function LedgerDetail() {
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
                       style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
-                      onClick={() => window.open('https://www.metatrader5.com', '_blank')}
-                      title="MT5 外汇平台"
+                      onClick={() => setLocation(`/ledger/${ledgerId}/gold`)}
+                      title="黄金行情"
                     >
                       <img
                         src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/OPICjhxYcoKhRcPL.png"
