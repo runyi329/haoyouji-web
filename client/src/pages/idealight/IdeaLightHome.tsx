@@ -119,35 +119,43 @@ function HealthTab() {
         video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+      // 先切换phase让video标签渲染出来，再通过useEffect绑定流
       setPhase("scanning");
       setScanMsg("正在扫描面部特征...");
-      startScanAnim();
+    } catch {
+      toast.error("无法访问摄像头，请检查权限设置");
+    }
+  }, []);
 
+  // phase变为scanning时，绑定摄像头流并启动流程
+  useEffect(() => {
+    if (phase !== "scanning" || !streamRef.current) return;
+    const stream = streamRef.current;
+    // 等一帧确保 video 已渲染
+    const timer = setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+      startScanAnim();
       // 2秒后进入锁定阶段
       timerRef.current = setTimeout(() => {
         setLocked(false);
         setPhase("locking");
         setScanMsg("检测到人脸，正在锁定...");
-        // 锁定动画 1.5秒
         timerRef.current = setTimeout(() => {
           setLocked(true);
           setScanMsg("面部锁定成功 ✓");
           stopScanAnim();
-          // 0.8秒后开始倒计时
           timerRef.current = setTimeout(() => {
             setPhase("countdown");
             setCountdown(3);
           }, 800);
         }, 1500);
       }, 2000);
-    } catch {
-      toast.error("无法访问摄像头，请检查权限设置");
-    }
-  }, [startScanAnim, stopScanAnim]);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [phase, startScanAnim, stopScanAnim]);
 
   // 倒计时逻辑
   useEffect(() => {
