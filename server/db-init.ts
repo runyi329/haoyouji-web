@@ -45,6 +45,7 @@ async function ensureOpinionBookColumns(dbConn: any) {
     { name: 'guest_ip', definition: 'VARCHAR(45) DEFAULT NULL COMMENT \'游客IP\'' },
     { name: 'is_read', definition: 'TINYINT DEFAULT 0 COMMENT \'是否已读\'' },
     { name: 'deleted_at', definition: 'DATETIME DEFAULT NULL COMMENT \'软删除时间\'' },
+    { name: 'images', definition: 'JSON DEFAULT NULL COMMENT \'多图URL数组（最多5张）\'' },
   ];
 
   let addedCount = 0;

@@ -2857,6 +2857,7 @@ export async function addTransaction(data: {
     categoryId: data.categoryId,
     description: data.description || null,
     imageUrl: data.images && data.images.length > 0 ? data.images[0] : null,
+    images: data.images && data.images.length > 0 ? JSON.stringify(data.images) : null,
     recordDate: data.transactionDate,
     createdBy: data.userId,
     reimbursementStatus: data.reimbursementStatus || 'none',
@@ -3211,6 +3212,7 @@ export async function getTransactionDetail(
       createdAt: ledgerRecords.createdAt,
       updatedAt: ledgerRecords.updatedAt,
       imageUrl: ledgerRecords.imageUrl,
+      images: ledgerRecords.images,
       reimbursementStatus: ledgerRecords.reimbursementStatus,
       reimbursementNotes: ledgerRecords.reimbursementNotes,
       reimbursementVoucherUrl: ledgerRecords.reimbursementVoucherUrl,
@@ -3327,7 +3329,14 @@ export async function getTransactionDetail(
     member: memberWithAvatar,
     recordDate: transaction.date,
     approvalStatus: 'not_required' as const, // 默认不需要审批
-    images: transaction.imageUrl ? [transaction.imageUrl] : [],
+    images: (() => {
+      // 优先使用 images JSON 字段（多图），降级到 imageUrl（单图兼容旧数据）
+      if (transaction.images) {
+        const parsed = typeof transaction.images === 'string' ? JSON.parse(transaction.images) : transaction.images;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return transaction.imageUrl ? [transaction.imageUrl] : [];
+    })(),
     reimbursementStatus: transaction.reimbursementStatus || 'none',
     reimbursementNotes: transaction.reimbursementNotes || null,
     reimbursementVoucherUrl: transaction.reimbursementVoucherUrl || null,
@@ -3759,11 +3768,15 @@ export async function updateTransaction(
     updateData.recordDate = data.transactionDate;
   }
   
-  if (data.images && data.images.length > 0 && data.images[0] !== decryptedOldRecord.imageUrl) {
-    updateData.imageUrl = data.images[0];
-    logChanges.push({ fieldName: '凭证图片', oldValue: decryptedOldRecord.imageUrl ? '有' : '无', newValue: '已更新' });
-  } else if (data.images && data.images.length > 0) {
-    updateData.imageUrl = data.images[0];
+  if (data.images !== undefined) {
+    // 同时更新 imageUrl（展示层兼容）和 images（多图完整列表）
+    const newImageUrl = data.images && data.images.length > 0 ? data.images[0] : null;
+    const newImages = data.images && data.images.length > 0 ? JSON.stringify(data.images) : null;
+    if (newImageUrl !== decryptedOldRecord.imageUrl) {
+      logChanges.push({ fieldName: '凭证图片', oldValue: decryptedOldRecord.imageUrl ? '有' : '无', newValue: newImageUrl ? '已更新' : '已删除' });
+    }
+    updateData.imageUrl = newImageUrl;
+    (updateData as any).images = newImages;
   }
   
   if (data.memberId && data.memberId !== decryptedOldRecord.memberId) {

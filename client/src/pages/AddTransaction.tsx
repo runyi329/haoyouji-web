@@ -922,40 +922,55 @@ const AddTransaction = () => {
             className="hidden"
             onChange={async (e) => {
               const files = e.target.files;
-              if (files) {
-                // 只支持上传1张图片
-                const file = files[0];
-                if (!file) return;
-                
-                try {
-                  // 显示加载提示
-                  toast.loading('正在上传图片...');
-                  
-                  // 自动压缩图片
-                  const { base64 } = await autoCompressImage(file, 'normal');
-                  
-                  // 上传到COS
-                  const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
-                  
-                  if (result.success && result.imageUrl) {
-                    setUploadedImages([result.imageUrl]); // 只保存一张
-                    toast.dismiss();
-                    toast.success('图片上传成功！');
-                  }
-                } catch (error) {
-                  toast.dismiss();
-                  console.error('图片上传失败:', error);
-                  toast.error('图片上传失败，请重试');
-                }
+              if (!files || files.length === 0) return;
+
+              const MAX_IMAGES = 5;
+              const remaining = MAX_IMAGES - uploadedImages.length;
+              if (remaining <= 0) {
+                toast.error('最多只能上传5张图片');
+                e.target.value = '';
+                return;
               }
+
+              const filesToUpload = Array.from(files).slice(0, remaining);
+              const toastId = toast.loading(`正在上传 ${filesToUpload.length} 张图片...`);
+
+              try {
+                const uploadedUrls: string[] = [];
+                for (const file of filesToUpload) {
+                  const { base64 } = await autoCompressImage(file, 'normal');
+                  const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                  if (result.success && result.imageUrl) {
+                    uploadedUrls.push(result.imageUrl);
+                  }
+                }
+                if (uploadedUrls.length > 0) {
+                  setUploadedImages(prev => [...prev, ...uploadedUrls].slice(0, MAX_IMAGES));
+                  toast.dismiss(toastId);
+                  toast.success(`成功上传 ${uploadedUrls.length} 张图片`);
+                } else {
+                  toast.dismiss(toastId);
+                }
+              } catch (error) {
+                toast.dismiss(toastId);
+                console.error('图片上传失败:', error);
+                toast.error('图片上传失败，请重试');
+              }
+              e.target.value = '';
             }}
           />
           {!isCustomAA && <button 
             className="px-6 bg-[#D32F2F] text-white flex items-center gap-2"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              if (uploadedImages.length >= 5) {
+                toast.error('最多只能上传5张图片');
+                return;
+              }
+              fileInputRef.current?.click();
+            }}
           >
             <ImageIcon className="w-5 h-5" />
-            <span className="text-sm font-medium">传图</span>
+            <span className="text-sm font-medium">传图{uploadedImages.length > 0 ? `(${uploadedImages.length}/5)` : ''}</span>
           </button>}
         </div>}
 
@@ -971,7 +986,7 @@ const AddTransaction = () => {
                     className="w-full h-full object-cover rounded"
                   />
                   <button
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-[#D32F2F]-light0 text-white rounded-full flex items-center justify-center text-xs"
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs"
                     onClick={() => {
                       setUploadedImages(prev => prev.filter((_, i) => i !== index));
                     }}
