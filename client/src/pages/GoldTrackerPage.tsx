@@ -1,6 +1,6 @@
 /**
  * 黄金行情追踪页面
- * 数据来源：Yahoo Finance GC=F（黄金期货，15分钟延迟）
+ * 数据来源：新浪财经 hq.sinajs.cn（伦敦金现货，实时无延迟）
  * 功能：实时价格、K线图、持仓录入、盈亏计算
  */
 import { useState, useEffect, useCallback } from "react";
@@ -78,7 +78,6 @@ export default function GoldTrackerPage() {
   // K线数据
   const [bars, setBars] = useState<Bar[]>([]);
   const [barsLoading, setBarsLoading] = useState(true);
-  const [interval, setInterval] = useState<string>("1d");
   const [range, setRange] = useState<string>("1y");
 
   // 持仓管理
@@ -111,7 +110,7 @@ export default function GoldTrackerPage() {
   const fetchBars = useCallback(async () => {
     try {
       setBarsLoading(true);
-      const res = await fetch(`/api/gold/bars?interval=${interval}&range=${range}`);
+      const res = await fetch(`/api/gold/bars?range=${range}`);
       if (!res.ok) throw new Error("请求失败");
       const data = await res.json();
       setBars(data.bars || []);
@@ -120,7 +119,7 @@ export default function GoldTrackerPage() {
     } finally {
       setBarsLoading(false);
     }
-  }, [interval, range]);
+  }, [range]);
 
   useEffect(() => {
     fetchPrice();
@@ -221,10 +220,7 @@ export default function GoldTrackerPage() {
       type: "category",
       data: bars.map((b) => {
         const d = new Date(b.time);
-        if (interval === "1d" || interval === "1wk" || interval === "1mo") {
           return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        }
-        return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
       }),
       axisLabel: {
         color: "rgba(201,168,76,0.6)",
@@ -370,7 +366,7 @@ export default function GoldTrackerPage() {
           </div>
           {price && (
             <div className="mt-2 text-xs" style={{ color: "rgba(201,168,76,0.35)" }}>
-              更新于 {new Date(price.timestamp).toLocaleTimeString("zh-CN")} · 数据延迟约15分钟
+              更新于 {price.updateTime || new Date(price.timestamp).toLocaleTimeString("zh-CN")} · 数据来源：新浪财经（实时）
             </div>
           )}
         </div>
@@ -382,24 +378,23 @@ export default function GoldTrackerPage() {
           className="rounded-2xl overflow-hidden"
           style={{ background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)" }}
         >
-          {/* 周期切换 */}
+          {/* 周期切换（新浪财经仅提供日K线，通过range控制显示范围） */}
           <div className="flex gap-1 px-3 pt-3 pb-2 overflow-x-auto">
             {[
-              { label: "1H", interval: "1h", range: "5d" },
-              { label: "4H", interval: "4h", range: "1mo" },
-              { label: "日线", interval: "1d", range: "1y" },
-              { label: "周线", interval: "1wk", range: "5y" },
-              { label: "月线", interval: "1mo", range: "max" },
+              { label: "1月", range: "1mo" },
+              { label: "3月", range: "3mo" },
+              { label: "6月", range: "6mo" },
+              { label: "1年", range: "1y" },
+              { label: "2年", range: "2y" },
+              { label: "5年", range: "5y" },
+              { label: "全部", range: "max" },
             ].map((opt) => (
               <button
                 key={opt.label}
-                onClick={() => {
-                  setInterval(opt.interval);
-                  setRange(opt.range);
-                }}
+                onClick={() => setRange(opt.range)}
                 className="px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 transition-all"
                 style={
-                  interval === opt.interval
+                  range === opt.range
                     ? { background: "rgba(201,168,76,0.25)", color: "#C9A84C", border: "1px solid rgba(201,168,76,0.4)" }
                     : { background: "transparent", color: "rgba(201,168,76,0.45)", border: "1px solid rgba(201,168,76,0.15)" }
                 }
@@ -668,7 +663,7 @@ export default function GoldTrackerPage() {
 
       {/* 说明 */}
       <div className="px-4 mt-3 text-xs text-center" style={{ color: "rgba(201,168,76,0.25)" }}>
-        数据来源：Yahoo Finance GC=F · 延迟约15分钟 · 仅供参考
+        数据来源：新浪财经 · 伦敦金现货（XAUUSD）· 实时报价 · 仅供参考
       </div>
     </div>
   );
