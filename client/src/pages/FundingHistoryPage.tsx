@@ -5,7 +5,7 @@ import { useLocation } from "wouter";
 const SYMBOLS = ["CLUSDT", "BZUSDT", "NATGASUSDT"];
 const NAMES: Record<string, string> = {
   CLUSDT: "WTI原油",
-  BZUSDT: "布伦特",
+  BZUSDT: "布伦特原油",
   NATGASUSDT: "天然气",
 };
 const SHORT: Record<string, string> = {
