@@ -3,8 +3,8 @@
  * 路径: /idealight
  * 无需登录，公开访问
  */
-import { useState, useRef, useCallback } from "react";
-import { Share2, ShoppingBag, Activity, BookOpen, ChevronRight, Phone, MessageCircle, Camera, RotateCcw, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { Share2, ShoppingBag, Activity, BookOpen, ChevronRight, Phone, MessageCircle, Sparkles, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { trpc } from "@/lib/trpc";
@@ -27,47 +27,32 @@ const PRODUCT_PAGES = [
 
 type TabType = "intro" | "shop" | "health";
 
-// 皮肤检测结果类型
-interface SkinItem {
-  score: number;
-  level: string;
-  desc: string;
-}
+interface SkinItem { score: number; level: string; desc: string; }
 interface SkinResult {
-  wrinkles: SkinItem;
-  pores: SkinItem;
-  acne: SkinItem;
-  sensitivity: SkinItem;
-  texture: SkinItem;
+  wrinkles: SkinItem; pores: SkinItem; acne: SkinItem;
+  sensitivity: SkinItem; texture: SkinItem;
   overall: { score: number; summary: string };
   suggestions: string[];
 }
 
-// 评分颜色
 function getScoreColor(score: number): string {
   if (score >= 80) return "#C9A96E";
   if (score >= 60) return "#E8B4B8";
   return "#E07B8A";
 }
 
-// 评分弧形进度条
 function ScoreRing({ score, label }: { score: number; label: string }) {
   const r = 28;
   const circ = 2 * Math.PI * r;
-  const pct = score / 100;
   const color = getScoreColor(score);
   return (
     <div className="flex flex-col items-center gap-1">
       <svg width="72" height="72" viewBox="0 0 72 72">
         <circle cx="36" cy="36" r={r} fill="none" stroke="#F5E6E8" strokeWidth="5" />
-        <circle
-          cx="36" cy="36" r={r} fill="none"
-          stroke={color} strokeWidth="5"
-          strokeDasharray={`${circ * pct} ${circ * (1 - pct)}`}
-          strokeLinecap="round"
-          transform="rotate(-90 36 36)"
-          style={{ transition: "stroke-dasharray 0.8s ease" }}
-        />
+        <circle cx="36" cy="36" r={r} fill="none" stroke={color} strokeWidth="5"
+          strokeDasharray={`${circ * score / 100} ${circ * (1 - score / 100)}`}
+          strokeLinecap="round" transform="rotate(-90 36 36)"
+          style={{ transition: "stroke-dasharray 0.8s ease" }} />
         <text x="36" y="40" textAnchor="middle" fontSize="16" fontWeight="700" fill={color}>{score}</text>
       </svg>
       <span className="text-xs text-[#8B6B6B] font-medium">{label}</span>
@@ -75,14 +60,23 @@ function ScoreRing({ score, label }: { score: number; label: string }) {
   );
 }
 
-// 健康检测组件
+// ===== 科技感扫描摄像头组件 =====
+type ScanPhase = "idle" | "scanning" | "locking" | "countdown" | "analyzing" | "result";
+
 function HealthTab() {
-  const [phase, setPhase] = useState<"idle" | "camera" | "preview" | "analyzing" | "result">("idle");
-  const [capturedImage, setCapturedImage] = useState<string | null>(null); // data URL
+  const [phase, setPhase] = useState<ScanPhase>("idle");
+  const [countdown, setCountdown] = useState(3);
+  const [scanMsg, setScanMsg] = useState("正在初始化扫描仪...");
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [result, setResult] = useState<SkinResult | null>(null);
+  const [scanY, setScanY] = useState(0); // 扫描线位置 0-100%
+  const [locked, setLocked] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const scanAnimRef = useRef<number>(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const analyzeMutation = trpc.analyzeSkin.useMutation({
     onSuccess: (data) => {
@@ -91,34 +85,84 @@ function HealthTab() {
         setPhase("result");
       } else {
         toast.error("分析失败，请重试");
-        setPhase("preview");
+        reset();
       }
     },
     onError: (err) => {
       toast.error(err.message || "AI分析失败，请重试");
-      setPhase("preview");
+      reset();
     },
   });
 
-  // 开启摄像头
-  const startCamera = useCallback(async () => {
+  // 扫描线动画
+  const startScanAnim = useCallback(() => {
+    let y = 0;
+    let dir = 1;
+    const step = () => {
+      y += dir * 1.2;
+      if (y >= 100) { y = 100; dir = -1; }
+      if (y <= 0) { y = 0; dir = 1; }
+      setScanY(y);
+      scanAnimRef.current = requestAnimationFrame(step);
+    };
+    scanAnimRef.current = requestAnimationFrame(step);
+  }, []);
+
+  const stopScanAnim = useCallback(() => {
+    cancelAnimationFrame(scanAnimRef.current);
+  }, []);
+
+  // 开启摄像头并自动流程
+  const startScan = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 } },
+        video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
-      setPhase("camera");
+      setPhase("scanning");
+      setScanMsg("正在扫描面部特征...");
+      startScanAnim();
+
+      // 2秒后进入锁定阶段
+      timerRef.current = setTimeout(() => {
+        setLocked(false);
+        setPhase("locking");
+        setScanMsg("检测到人脸，正在锁定...");
+        // 锁定动画 1.5秒
+        timerRef.current = setTimeout(() => {
+          setLocked(true);
+          setScanMsg("面部锁定成功 ✓");
+          stopScanAnim();
+          // 0.8秒后开始倒计时
+          timerRef.current = setTimeout(() => {
+            setPhase("countdown");
+            setCountdown(3);
+          }, 800);
+        }, 1500);
+      }, 2000);
     } catch {
       toast.error("无法访问摄像头，请检查权限设置");
     }
-  }, []);
+  }, [startScanAnim, stopScanAnim]);
 
-  // 拍照
-  const capture = useCallback(() => {
+  // 倒计时逻辑
+  useEffect(() => {
+    if (phase !== "countdown") return;
+    if (countdown <= 0) {
+      // 自动拍照
+      captureAndAnalyze();
+      return;
+    }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, countdown]);
+
+  // 拍照并发送分析
+  const captureAndAnalyze = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -126,208 +170,276 @@ function HealthTab() {
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext("2d")!;
-    const offsetX = (video.videoWidth - size) / 2;
-    const offsetY = (video.videoHeight - size) / 2;
-    ctx.drawImage(video, offsetX, offsetY, size, size, 0, 0, size, size);
+    const ox = (video.videoWidth - size) / 2;
+    const oy = (video.videoHeight - size) / 2;
+    // 镜像翻转（前置摄像头）
+    ctx.save();
+    ctx.translate(size, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, ox, oy, size, size, 0, 0, size, size);
+    ctx.restore();
     const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
     setCapturedImage(dataUrl);
     // 停止摄像头
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    setPhase("preview");
-  }, []);
-
-  // 分析
-  const analyze = useCallback(() => {
-    if (!capturedImage) return;
     setPhase("analyzing");
-    // 去掉 data:image/jpeg;base64, 前缀
-    const base64 = capturedImage.split(",")[1];
+    // 发送分析
+    const base64 = dataUrl.split(",")[1];
     analyzeMutation.mutate({ imageBase64: base64, mimeType: "image/jpeg" });
-  }, [capturedImage, analyzeMutation]);
+  }, [analyzeMutation]);
 
-  // 重新检测
   const reset = useCallback(() => {
+    stopScanAnim();
+    if (timerRef.current) clearTimeout(timerRef.current);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCapturedImage(null);
     setResult(null);
+    setLocked(false);
+    setCountdown(3);
+    setScanMsg("正在初始化扫描仪...");
     setPhase("idle");
-  }, []);
+  }, [stopScanAnim]);
 
-  // ---- 渲染 ----
+  // 清理
+  useEffect(() => {
+    return () => {
+      stopScanAnim();
+      if (timerRef.current) clearTimeout(timerRef.current);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, [stopScanAnim]);
+
+  // ===== 渲染 =====
   return (
-    <div className="min-h-[70vh] bg-gradient-to-b from-[#FDF6F0] to-[#FFF0F3] px-4 pt-6 pb-8">
-      {/* 标题区 */}
-      <div className="text-center mb-6">
-        <div className="inline-flex items-center gap-2 bg-white/80 rounded-full px-4 py-1.5 shadow-sm mb-3">
-          <Sparkles className="w-3.5 h-3.5 text-[#C9A96E]" />
-          <span className="text-xs text-[#8B6B6B] tracking-wider font-medium">AI 皮肤检测</span>
-        </div>
-        <h2 className="text-[#5C3D3D] text-xl font-bold">专业皮肤健康分析</h2>
-        <p className="text-[#A07878] text-xs mt-1.5 leading-relaxed">
-          基于 AI 视觉技术，精准检测皱纹、毛孔、痘痘<br />敏感肌与粗糙度，生成个性化护肤方案
-        </p>
-      </div>
-
-      {/* 隐藏 canvas */}
+    <div className="min-h-[70vh] bg-gradient-to-b from-[#FDF6F0] to-[#FFF0F3] px-4 pt-5 pb-8">
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* === 待机状态 === */}
+      {/* === 待机 === */}
       {phase === "idle" && (
         <div className="flex flex-col items-center">
-          {/* 装饰圆 */}
-          <div className="relative w-52 h-52 mb-8">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#F9D5D8] to-[#F5C8A0] opacity-30 animate-pulse" />
-            <div className="absolute inset-4 rounded-full bg-gradient-to-br from-[#F5E6E8] to-[#FAE8D4] flex items-center justify-center shadow-inner">
+          <div className="text-center mb-5">
+            <div className="inline-flex items-center gap-2 bg-white/80 rounded-full px-4 py-1.5 shadow-sm mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-[#C9A96E]" />
+              <span className="text-xs text-[#8B6B6B] tracking-wider font-medium">AI 皮肤检测</span>
+            </div>
+            <h2 className="text-[#5C3D3D] text-xl font-bold">专业皮肤健康分析</h2>
+            <p className="text-[#A07878] text-xs mt-1.5 leading-relaxed">
+              基于 AI 视觉技术，精准检测皱纹、毛孔<br />痘痘、敏感肌与粗糙度
+            </p>
+          </div>
+
+          {/* 科技感预览圆 */}
+          <div className="relative w-56 h-56 mb-6">
+            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 224 224">
+              {/* 外圈旋转虚线 */}
+              <circle cx="112" cy="112" r="108" fill="none" stroke="#E8B4B8" strokeWidth="1"
+                strokeDasharray="6 4" style={{ animation: "spin 12s linear infinite", transformOrigin: "112px 112px" }} />
+              {/* 内圈 */}
+              <circle cx="112" cy="112" r="90" fill="none" stroke="#C9A96E" strokeWidth="0.5" opacity="0.4" />
+              {/* 四角标记 */}
+              {[[-1,-1],[1,-1],[1,1],[-1,1]].map(([sx,sy], i) => (
+                <g key={i} transform={`translate(${112 + sx * 72}, ${112 + sy * 72})`}>
+                  <line x1="0" y1={sy * -12} x2="0" y2="0" stroke="#C9A96E" strokeWidth="2" />
+                  <line x1={sx * -12} y1="0" x2="0" y2="0" stroke="#C9A96E" strokeWidth="2" />
+                </g>
+              ))}
+            </svg>
+            <div className="absolute inset-6 rounded-full bg-gradient-to-br from-[#F5E6E8] to-[#FAE8D4] flex items-center justify-center shadow-inner">
               <div className="text-center">
-                <Camera className="w-14 h-14 text-[#C9A96E] mx-auto mb-2" />
-                <span className="text-[#8B6B6B] text-xs">点击开始检测</span>
+                <div className="text-4xl mb-1">👤</div>
+                <span className="text-[#8B6B6B] text-xs">请正对摄像头</span>
               </div>
             </div>
-            {/* 装饰点 */}
-            {[0, 60, 120, 180, 240, 300].map((deg) => (
-              <div
-                key={deg}
-                className="absolute w-2 h-2 rounded-full bg-[#E8B4B8]/60"
-                style={{
-                  top: `${50 - 46 * Math.cos((deg * Math.PI) / 180)}%`,
-                  left: `${50 + 46 * Math.sin((deg * Math.PI) / 180)}%`,
-                  transform: "translate(-50%,-50%)",
-                }}
-              />
-            ))}
           </div>
 
           {/* 检测项目 */}
-          <div className="w-full grid grid-cols-5 gap-2 mb-8">
+          <div className="w-full grid grid-cols-5 gap-2 mb-6">
             {[
-              { label: "皱纹", emoji: "〰️" },
-              { label: "毛孔", emoji: "◎" },
-              { label: "痘痘", emoji: "●" },
-              { label: "敏感肌", emoji: "🌸" },
-              { label: "粗糙度", emoji: "≈" },
+              { label: "皱纹", icon: "〰️" }, { label: "毛孔", icon: "◎" },
+              { label: "痘痘", icon: "●" }, { label: "敏感肌", icon: "🌸" },
+              { label: "粗糙度", icon: "≈" },
             ].map((item) => (
               <div key={item.label} className="flex flex-col items-center bg-white/70 rounded-2xl py-3 shadow-sm">
-                <span className="text-base mb-1">{item.emoji}</span>
+                <span className="text-base mb-1">{item.icon}</span>
                 <span className="text-[10px] text-[#8B6B6B] font-medium">{item.label}</span>
               </div>
             ))}
           </div>
 
-          <p className="text-[#B09090] text-xs text-center mb-6 leading-relaxed">
+          <p className="text-[#B09090] text-xs text-center mb-5 leading-relaxed">
             照片仅用于本次 AI 分析，不会上传或存储
           </p>
 
-          <button
-            onClick={startCamera}
-            className="w-full max-w-xs bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] text-white rounded-full py-4 text-base font-semibold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
-          >
-            <Camera className="w-5 h-5" />
-            开始皮肤检测
+          <button onClick={startScan}
+            className="w-full max-w-xs bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] text-white rounded-full py-4 text-base font-semibold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">
+            <Sparkles className="w-5 h-5" />
+            开始皮肤扫描
           </button>
         </div>
       )}
 
-      {/* === 摄像头状态 === */}
-      {phase === "camera" && (
+      {/* === 扫描 / 锁定 / 倒计时 === */}
+      {(phase === "scanning" || phase === "locking" || phase === "countdown") && (
         <div className="flex flex-col items-center">
-          <div className="relative w-full max-w-sm aspect-square rounded-3xl overflow-hidden shadow-xl mb-6">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover scale-x-[-1]"
-            />
-            {/* 人脸引导框 */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-48 h-60 border-2 border-[#C9A96E]/80 rounded-[50%] shadow-[0_0_0_2000px_rgba(0,0,0,0.3)]" />
-            </div>
-            <div className="absolute bottom-4 left-0 right-0 text-center">
-              <span className="text-white/90 text-xs bg-black/40 rounded-full px-3 py-1">将脸部对准椭圆框内</span>
-            </div>
-          </div>
-          <div className="flex gap-4 w-full max-w-sm">
-            <button
-              onClick={reset}
-              className="flex-1 bg-white/80 text-[#8B6B6B] rounded-full py-3.5 text-sm font-medium border border-[#E8D0D0] active:bg-white/60"
-            >
-              取消
-            </button>
-            <button
-              onClick={capture}
-              className="flex-2 flex-[2] bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] text-white rounded-full py-3.5 text-sm font-semibold shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2"
-            >
-              <Camera className="w-4 h-4" />
-              拍照
-            </button>
-          </div>
-        </div>
-      )}
+          {/* 扫描视窗 */}
+          <div className="relative w-full max-w-sm aspect-square rounded-2xl overflow-hidden bg-black shadow-2xl mb-4">
+            <video ref={videoRef} autoPlay playsInline muted
+              className="w-full h-full object-cover scale-x-[-1]" />
 
-      {/* === 预览状态 === */}
-      {phase === "preview" && capturedImage && (
-        <div className="flex flex-col items-center">
-          <div className="relative w-full max-w-sm aspect-square rounded-3xl overflow-hidden shadow-xl mb-6">
-            <img src={capturedImage} alt="预览" className="w-full h-full object-cover scale-x-[-1]" />
-            <div className="absolute top-3 right-3 bg-[#C9A96E] text-white text-xs rounded-full px-2.5 py-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" />
-              已拍摄
+            {/* 暗角遮罩 */}
+            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/40 pointer-events-none" />
+
+            {/* 扫描线 */}
+            {phase === "scanning" && (
+              <div className="absolute left-0 right-0 pointer-events-none"
+                style={{ top: `${scanY}%`, transition: "top 0.05s linear" }}>
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-[#C9A96E] to-transparent opacity-90" />
+                <div className="h-8 bg-gradient-to-b from-[#C9A96E]/20 to-transparent -mt-0.5" />
+              </div>
+            )}
+
+            {/* 人脸椭圆框 */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative">
+                {/* 椭圆轮廓 */}
+                <div
+                  className="w-44 h-56 rounded-[50%] border-2 transition-all duration-700"
+                  style={{
+                    borderColor: locked ? "#4ADE80" : phase === "locking" ? "#C9A96E" : "#C9A96E88",
+                    boxShadow: locked ? "0 0 20px #4ADE8066" : phase === "locking" ? "0 0 15px #C9A96E66" : "none",
+                  }}
+                />
+                {/* 四角扫描框 */}
+                {[
+                  { top: -2, left: -2, borderTop: true, borderLeft: true },
+                  { top: -2, right: -2, borderTop: true, borderRight: true },
+                  { bottom: -2, left: -2, borderBottom: true, borderLeft: true },
+                  { bottom: -2, right: -2, borderBottom: true, borderRight: true },
+                ].map((corner, i) => (
+                  <div key={i} className="absolute w-5 h-5 transition-all duration-500"
+                    style={{
+                      top: corner.top !== undefined ? corner.top : undefined,
+                      bottom: (corner as any).bottom !== undefined ? (corner as any).bottom : undefined,
+                      left: corner.left !== undefined ? corner.left : undefined,
+                      right: (corner as any).right !== undefined ? (corner as any).right : undefined,
+                      borderTopWidth: corner.borderTop ? 2 : 0,
+                      borderBottomWidth: (corner as any).borderBottom ? 2 : 0,
+                      borderLeftWidth: corner.borderLeft ? 2 : 0,
+                      borderRightWidth: (corner as any).borderRight ? 2 : 0,
+                      borderStyle: "solid",
+                      borderColor: locked ? "#4ADE80" : "#C9A96E",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* 倒计时大数字 */}
+            {phase === "countdown" && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div
+                  key={countdown}
+                  className="text-white font-bold text-8xl opacity-90"
+                  style={{ textShadow: "0 0 30px #C9A96E, 0 0 60px #C9A96E88", animation: "countPop 0.3s ease-out" }}
+                >
+                  {countdown === 0 ? "✓" : countdown}
+                </div>
+              </div>
+            )}
+
+            {/* 扫描点阵（装饰） */}
+            {phase === "scanning" && (
+              <div className="absolute top-3 right-3 flex flex-col gap-1 pointer-events-none">
+                {[0,1,2].map(i => (
+                  <div key={i} className="flex gap-1">
+                    {[0,1,2].map(j => (
+                      <div key={j} className="w-1 h-1 rounded-full bg-[#C9A96E]/60"
+                        style={{ animation: `pulse 1.5s ease-in-out ${(i*3+j)*0.1}s infinite` }} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 底部状态文字 */}
+            <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
+              <span className="text-white text-xs font-medium bg-black/50 rounded-full px-3 py-1 backdrop-blur-sm">
+                {phase === "countdown" ? `${countdown > 0 ? `${countdown} 秒后自动采集` : "采集中..."}` : scanMsg}
+              </span>
+            </div>
+
+            {/* 右上角REC指示 */}
+            <div className="absolute top-3 left-3 flex items-center gap-1.5 pointer-events-none">
+              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-white/80 text-xs font-mono">SCAN</span>
             </div>
           </div>
-          <div className="flex gap-4 w-full max-w-sm">
-            <button
-              onClick={reset}
-              className="flex-1 bg-white/80 text-[#8B6B6B] rounded-full py-3.5 text-sm font-medium border border-[#E8D0D0] active:bg-white/60 flex items-center justify-center gap-1.5"
-            >
-              <RotateCcw className="w-4 h-4" />
-              重拍
-            </button>
-            <button
-              onClick={analyze}
-              className="flex-[2] bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] text-white rounded-full py-3.5 text-sm font-semibold shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" />
-              开始 AI 分析
-            </button>
+
+          {/* 进度条 */}
+          <div className="w-full max-w-sm mb-4">
+            <div className="flex justify-between text-xs text-[#8B6B6B] mb-1.5">
+              <span>{scanMsg}</span>
+              <span className="font-mono text-[#C9A96E]">
+                {phase === "scanning" ? "25%" : phase === "locking" ? "60%" : `${Math.round((3 - countdown) / 3 * 40 + 60)}%`}
+              </span>
+            </div>
+            <div className="h-1.5 bg-[#F5E6E8] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] rounded-full transition-all duration-500"
+                style={{
+                  width: phase === "scanning" ? "25%" : phase === "locking" ? "60%" : `${Math.round((3 - countdown) / 3 * 40 + 60)}%`
+                }}
+              />
+            </div>
           </div>
+
+          <button onClick={reset}
+            className="text-[#A07878] text-sm underline underline-offset-2">
+            取消检测
+          </button>
         </div>
       )}
 
       {/* === 分析中 === */}
       {phase === "analyzing" && (
-        <div className="flex flex-col items-center py-12">
-          <div className="relative w-32 h-32 mb-8">
-            <div className="absolute inset-0 rounded-full bg-gradient-to-br from-[#F9D5D8] to-[#F5C8A0] animate-spin" style={{ animationDuration: "3s" }} />
-            <div className="absolute inset-2 rounded-full bg-[#FDF6F0] flex items-center justify-center">
-              <Loader2 className="w-10 h-10 text-[#C9A96E] animate-spin" />
+        <div className="flex flex-col items-center py-8">
+          {capturedImage && (
+            <div className="relative w-32 h-32 mb-6">
+              <img src={capturedImage} alt="" className="w-full h-full object-cover rounded-full border-4 border-[#E8D0D0]" />
+              {/* 旋转扫描环 */}
+              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[#C9A96E] animate-spin" />
+              <div className="absolute -inset-2 rounded-full border-2 border-[#E8B4B8]/40 border-dashed"
+                style={{ animation: "spin 4s linear infinite reverse" }} />
             </div>
-          </div>
-          <h3 className="text-[#5C3D3D] text-lg font-semibold mb-2">AI 正在分析中</h3>
-          <p className="text-[#A07878] text-sm text-center leading-relaxed">
-            正在检测皱纹、毛孔、痘痘<br />敏感肌与皮肤粗糙度…
-          </p>
-          <div className="mt-6 flex gap-1.5">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-2 h-2 rounded-full bg-[#E8B4B8]"
-                style={{ animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite` }}
-              />
+          )}
+          <h3 className="text-[#5C3D3D] text-lg font-semibold mb-2">AI 深度分析中</h3>
+          <div className="space-y-1.5 text-center mb-6">
+            {["皱纹检测...", "毛孔分析...", "痘痘识别...", "敏感度评估...", "粗糙度测量..."].map((txt, i) => (
+              <div key={txt} className="flex items-center justify-center gap-2"
+                style={{ opacity: 0, animation: `fadeIn 0.4s ease ${i * 0.4 + 0.2}s forwards` }}>
+                <Loader2 className="w-3 h-3 text-[#C9A96E] animate-spin" />
+                <span className="text-[#8B6B6B] text-xs">{txt}</span>
+              </div>
             ))}
+          </div>
+          <div className="w-full max-w-xs">
+            <div className="h-1.5 bg-[#F5E6E8] rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] rounded-full"
+                style={{ animation: "progressFill 8s ease-in-out forwards" }} />
+            </div>
           </div>
         </div>
       )}
 
-      {/* === 结果展示 === */}
+      {/* === 结果 === */}
       {phase === "result" && result && (
         <div className="flex flex-col">
-          {/* 照片缩略图 + 综合评分 */}
-          <div className="flex items-center gap-4 bg-white/80 rounded-2xl p-4 shadow-sm mb-5">
+          <div className="flex items-center gap-4 bg-white/80 rounded-2xl p-4 shadow-sm mb-4">
             {capturedImage && (
               <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border-2 border-[#E8D0D0]">
-                <img src={capturedImage} alt="检测照片" className="w-full h-full object-cover scale-x-[-1]" />
+                <img src={capturedImage} alt="检测照片" className="w-full h-full object-cover" />
               </div>
             )}
             <div className="flex-1">
@@ -342,11 +454,9 @@ function HealthTab() {
             </div>
           </div>
 
-          {/* 五项评分 */}
-          <div className="bg-white/80 rounded-2xl p-5 shadow-sm mb-5">
+          <div className="bg-white/80 rounded-2xl p-5 shadow-sm mb-4">
             <h3 className="text-[#5C3D3D] text-sm font-semibold mb-4 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-[#C9A96E]" />
-              各项检测结果
+              <Sparkles className="w-4 h-4 text-[#C9A96E]" />各项检测结果
             </h3>
             <div className="grid grid-cols-5 gap-2 mb-5">
               <ScoreRing score={result.wrinkles.score} label="皱纹" />
@@ -355,72 +465,57 @@ function HealthTab() {
               <ScoreRing score={result.sensitivity.score} label="敏感肌" />
               <ScoreRing score={result.texture.score} label="粗糙度" />
             </div>
-            {/* 详细说明 */}
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               {[
-                { label: "皱纹", data: result.wrinkles },
-                { label: "毛孔", data: result.pores },
-                { label: "痘痘", data: result.acne },
-                { label: "敏感肌", data: result.sensitivity },
+                { label: "皱纹", data: result.wrinkles }, { label: "毛孔", data: result.pores },
+                { label: "痘痘", data: result.acne }, { label: "敏感肌", data: result.sensitivity },
                 { label: "粗糙度", data: result.texture },
               ].map(({ label, data }) => (
                 <div key={label} className="flex items-start gap-3 bg-[#FDF6F0] rounded-xl px-3 py-2.5">
-                  <div className="flex-shrink-0 mt-0.5">
-                    <span
-                      className="inline-block text-xs font-semibold rounded-full px-2 py-0.5"
-                      style={{
-                        background: getScoreColor(data.score) + "22",
-                        color: getScoreColor(data.score),
-                      }}
-                    >
-                      {data.level}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[#5C3D3D] text-xs font-medium">{label}：</span>
-                    <span className="text-[#8B6B6B] text-xs">{data.desc}</span>
-                  </div>
+                  <span className="inline-block text-xs font-semibold rounded-full px-2 py-0.5 flex-shrink-0 mt-0.5"
+                    style={{ background: getScoreColor(data.score) + "22", color: getScoreColor(data.score) }}>
+                    {data.level}
+                  </span>
+                  <span className="text-[#6B4B4B] text-xs leading-relaxed">
+                    <span className="font-medium">{label}：</span>{data.desc}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* 护肤建议 */}
-          <div className="bg-gradient-to-br from-[#FDF0F5] to-[#FDF6E8] rounded-2xl p-5 shadow-sm mb-6">
+          <div className="bg-gradient-to-br from-[#FDF0F5] to-[#FDF6E8] rounded-2xl p-5 shadow-sm mb-5">
             <h3 className="text-[#5C3D3D] text-sm font-semibold mb-3 flex items-center gap-1.5">
-              <span className="text-base">💆‍♀️</span>
-              个性化护肤建议
+              <span className="text-base">💆‍♀️</span>个性化护肤建议
             </h3>
             <div className="space-y-2.5">
               {result.suggestions.map((s, i) => (
                 <div key={i} className="flex items-start gap-2.5">
-                  <div
-                    className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold mt-0.5"
-                    style={{ background: "linear-gradient(135deg, #C9A96E, #E8B4B8)" }}
-                  >
-                    {i + 1}
-                  </div>
+                  <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold mt-0.5"
+                    style={{ background: "linear-gradient(135deg, #C9A96E, #E8B4B8)" }}>{i + 1}</div>
                   <p className="text-[#6B4B4B] text-sm leading-relaxed">{s}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* 重新检测 */}
-          <button
-            onClick={reset}
-            className="w-full bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] text-white rounded-full py-4 text-base font-semibold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
-          >
-            <RotateCcw className="w-4 h-4" />
-            重新检测
+          <button onClick={reset}
+            className="w-full bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] text-white rounded-full py-4 text-base font-semibold shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2">
+            <RotateCcw className="w-4 h-4" />重新检测
           </button>
-
-          {/* 免责声明 */}
           <p className="text-center text-[#C0A0A0] text-[10px] mt-4 leading-relaxed">
             本检测结果仅供参考，不构成医疗诊断建议<br />如有皮肤问题请咨询专业皮肤科医生
           </p>
         </div>
       )}
+
+      {/* 全局动画样式 */}
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes countPop { from { transform: scale(1.4); opacity: 0.5; } to { transform: scale(1); opacity: 0.9; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes progressFill { 0% { width: 0%; } 30% { width: 35%; } 60% { width: 65%; } 85% { width: 88%; } 100% { width: 95%; } }
+      `}</style>
     </div>
   );
 }
@@ -431,33 +526,23 @@ export default function IdeaLightHome() {
   const handleShare = () => {
     const shareUrl = `${window.location.origin}/idealight`;
     if (navigator.share) {
-      navigator.share({
-        title: "IDEALIGHT 红颜派 · 红光美容灯",
-        text: "650nm 黄金波长，科学美容，在家享受专业护肤体验",
-        url: shareUrl,
-      }).catch(() => {});
+      navigator.share({ title: "IDEALIGHT 红颜派 · 红光美容灯", text: "650nm 黄金波长，科学美容，在家享受专业护肤体验", url: shareUrl }).catch(() => {});
     } else {
-      navigator.clipboard.writeText(shareUrl).then(() => {
-        toast.success("链接已复制，快去分享吧！");
-      });
+      navigator.clipboard.writeText(shareUrl).then(() => toast.success("链接已复制，快去分享吧！"));
     }
   };
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* 顶部导航 */}
       <div className="sticky top-0 z-50 bg-black/90 backdrop-blur-md border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <img src={ICON_URL} alt="IDEALIGHT" className="w-7 h-7 object-contain" />
             <span className="text-white font-semibold tracking-widest text-sm">IDEALIGHT</span>
           </div>
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-full px-3 py-1.5 text-xs text-white/80 transition-colors"
-          >
-            <Share2 className="w-3.5 h-3.5" />
-            <span>分享</span>
+          <button onClick={handleShare}
+            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-full px-3 py-1.5 text-xs text-white/80 transition-colors">
+            <Share2 className="w-3.5 h-3.5" /><span>分享</span>
           </button>
         </div>
         <div className="flex border-t border-white/10">
@@ -466,18 +551,11 @@ export default function IdeaLightHome() {
             { key: "shop" as TabType, label: "商城" },
             { key: "health" as TabType, label: "健康检测" },
           ] as const).map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => {
-                setActiveTab(tab.key);
-                if (tab.key === "shop") toast("商城即将上线，敬请期待");
-              }}
+            <button key={tab.key}
+              onClick={() => { setActiveTab(tab.key); if (tab.key === "shop") toast("商城即将上线，敬请期待"); }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors ${
-                activeTab === tab.key
-                  ? "text-[#E53935] border-b-2 border-[#E53935]"
-                  : "text-white/50 hover:text-white/80"
-              }`}
-            >
+                activeTab === tab.key ? "text-[#E53935] border-b-2 border-[#E53935]" : "text-white/50 hover:text-white/80"
+              }`}>
               {tab.key === "intro" && <BookOpen className="w-4 h-4" />}
               {tab.key === "shop" && <ShoppingBag className="w-4 h-4" />}
               {tab.key === "health" && <Activity className="w-4 h-4" />}
@@ -488,17 +566,11 @@ export default function IdeaLightHome() {
       </div>
 
       <div className="flex-1 pb-24">
-        {/* 产品介绍 */}
         {activeTab === "intro" && (
           <div className="w-full">
             {PRODUCT_PAGES.map((url, idx) => (
               <div key={idx} style={{ lineHeight: 0 }}>
-                <img
-                  src={url}
-                  alt={`红颜派产品介绍 ${idx + 1}`}
-                  className="w-full block"
-                  loading={idx < 3 ? "eager" : "lazy"}
-                />
+                <img src={url} alt={`红颜派产品介绍 ${idx + 1}`} className="w-full block" loading={idx < 3 ? "eager" : "lazy"} />
               </div>
             ))}
             <div className="bg-[#0D0D0D] px-6 py-8 border-t border-white/10">
@@ -507,10 +579,7 @@ export default function IdeaLightHome() {
                 <span className="text-white/60 text-xs tracking-widest">IDEALIGHT</span>
               </div>
               <div className="space-y-3">
-                <a
-                  href="tel:13761550633"
-                  className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3.5 active:bg-white/10"
-                >
+                <a href="tel:13761550633" className="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3.5 active:bg-white/10">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-[#E53935]/20 flex items-center justify-center">
                       <Phone className="w-4 h-4 text-[#E53935]" />
@@ -540,7 +609,6 @@ export default function IdeaLightHome() {
           </div>
         )}
 
-        {/* 商城 */}
         {activeTab === "shop" && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] px-8 text-center">
             <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-6">
@@ -548,17 +616,13 @@ export default function IdeaLightHome() {
             </div>
             <h3 className="text-white text-lg font-medium mb-2">商城即将上线</h3>
             <p className="text-white/40 text-sm leading-relaxed">我们正在为您精心准备<br />敬请期待</p>
-            <button
-              onClick={handleShare}
-              className="mt-8 flex items-center gap-2 bg-[#E53935] text-white rounded-full px-6 py-3 text-sm font-medium"
-            >
-              <Share2 className="w-4 h-4" />
-              分享给朋友
+            <button onClick={handleShare}
+              className="mt-8 flex items-center gap-2 bg-[#E53935] text-white rounded-full px-6 py-3 text-sm font-medium">
+              <Share2 className="w-4 h-4" />分享给朋友
             </button>
           </div>
         )}
 
-        {/* 健康检测 */}
         {activeTab === "health" && <HealthTab />}
       </div>
 
