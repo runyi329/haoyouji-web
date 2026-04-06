@@ -8,6 +8,11 @@ const NAMES: Record<string, string> = {
   BZUSDT: "布伦特",
   NATGASUSDT: "天然气",
 };
+const SHORT: Record<string, string> = {
+  CLUSDT: "CL",
+  BZUSDT: "BZ",
+  NATGASUSDT: "NATGAS",
+};
 const COLORS: Record<string, string> = {
   CLUSDT: "#60a5fa",   // 蓝
   BZUSDT: "#fb923c",   // 橙
@@ -130,16 +135,23 @@ export default function FundingHistoryPage() {
             const color = COLORS[sym];
             return (
               <div key={sym} style={{ background: "#161b22", border: `1px solid ${color}33`, borderRadius: 8, padding: "10px 8px" }}>
-                <div style={{ fontSize: 10, color: color, fontWeight: 700, marginBottom: 6, textAlign: "center" }}>{NAMES[sym]}</div>
-                <div style={{ fontSize: 9, color: "#8b949e", marginBottom: 2, textAlign: "center" }}>净年化</div>
-                <div style={{
-                  fontSize: 13,
-                  fontWeight: 800,
-                  color: s?.netAnnual >= 0 ? "#f85149" : "#3fb950",
-                  textAlign: "center",
-                  marginBottom: 6,
-                }}>
-                  {s ? fmtAnnual(s.netAnnual) : "--"}
+                <div style={{ textAlign: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, color: color, fontWeight: 700 }}>{NAMES[sym]}</span>
+                  <span style={{ fontSize: 9, color: "#6e7681", marginLeft: 4 }}>({SHORT[sym]})</span>
+                </div>
+                {/* 多头净年化 */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                  <span style={{ fontSize: 9, color: "#8b949e" }}>多头净年化</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: s?.netAnnual >= 0 ? "#f85149" : "#3fb950" }}>
+                    {s ? fmtAnnual(s.netAnnual) : "--"}
+                  </span>
+                </div>
+                {/* 空头净年化（与多头相反） */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 9, color: "#8b949e" }}>空头净年化</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: s ? (s.netAnnual >= 0 ? "#3fb950" : "#f85149") : "#8b949e" }}>
+                    {s ? fmtAnnual(-s.netAnnual) : "--"}
+                  </span>
                 </div>
                 <div style={{ borderTop: "1px solid #21262d", paddingTop: 6 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
@@ -163,7 +175,7 @@ export default function FundingHistoryPage() {
 
       {/* 说明 */}
       <div style={{ padding: "8px 12px", fontSize: 10, color: "#6e7681", lineHeight: 1.5 }}>
-        净年化：正负费率抵消后的多头年化成本（正值=多头净付出，负值=多头净收益）
+        多头净年化：正负费率抵消后的年化成本（正值=多头净付出，负值=多头净收益）；空头净年化与多头相反
       </div>
 
       {/* 三列表头 */}
