@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useParams } from "wouter";
 
 const SYMBOLS = ["CLUSDT", "BZUSDT", "NATGASUSDT"];
 const NAMES: Record<string, string> = {
@@ -39,6 +39,9 @@ function fmtTime(ts: number) {
 
 export default function FundingHistoryPage() {
   const [, setLocation] = useLocation();
+  const params = useParams<{ id: string }>();
+  const ledgerId = params?.id || "";
+  const backPath = ledgerId ? `/ledger/${ledgerId}/oil` : "/";
   const { data: rawData, isLoading, error } = trpc.energy.getAllFundingHistory.useQuery();
   const CACHE_KEY = "energy_funding_history_cache";
 
@@ -74,7 +77,7 @@ export default function FundingHistoryPage() {
       <div style={{ background: "#0d1117", minHeight: "100vh", color: "#e6edf3", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 14, color: "#f85149" }}>加载失败</div>
-          <button onClick={() => setLocation("/oil-business")} style={{ marginTop: 12, padding: "6px 16px", background: "#21262d", border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3", fontSize: 12 }}>返回</button>
+          <button onClick={() => setLocation(backPath)} style={{ marginTop: 12, padding: "6px 16px", background: "#21262d", border: "1px solid #30363d", borderRadius: 6, color: "#e6edf3", fontSize: 12 }}>返回</button>
         </div>
       </div>
     );
@@ -107,7 +110,7 @@ export default function FundingHistoryPage() {
       {/* 顶部导航 */}
       <div style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #21262d", position: "sticky", top: 0, background: "#0d1117", zIndex: 10 }}>
         <button
-          onClick={() => setLocation("/oil-business")}
+          onClick={() => setLocation(backPath)}
           style={{ background: "none", border: "none", color: "#8b949e", fontSize: 14, cursor: "pointer", padding: "4px 8px 4px 0", display: "flex", alignItems: "center", gap: 4 }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
