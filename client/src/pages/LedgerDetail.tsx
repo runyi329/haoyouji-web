@@ -343,7 +343,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
 }
 
 // 单张资金方订单卡片右栏（包含扫描数据查询）
-function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number }) {
+function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number> }) {
   const { data: stats } = trpc.ledger.funderGetOrderScanStats.useQuery(
     { orderId: order.id, ledgerId },
     { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
@@ -402,9 +402,10 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest }: { 
       <div className="flex-1 flex flex-col justify-start pt-2">
         <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>收益分成</div>
         {(() => {
-          // 当扫描价 > 买入价时，计算盈利金额并突出显示
-          const isProfit = lastScanPrice && buyPrice && lastScanPrice > buyPrice && profitPct > 0;
-          const profitU = isProfit ? (lastScanPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
+          // 优先用实时价格计算收益分成，无实时价格时回退到上次扫描价
+          const currentPrice = (livePrices && livePrices[order.coin]) ? livePrices[order.coin] : lastScanPrice;
+          const isProfit = currentPrice && buyPrice && currentPrice > buyPrice && profitPct > 0;
+          const profitU = isProfit ? (currentPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
           if (isProfit) {
             return (
               <div className="flex items-baseline justify-between w-full">
@@ -558,7 +559,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
         {/* 右栏：利息 + 收益分成 */}
         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
           {hasInterest ? (
-            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} />
+            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} livePrices={livePrices} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <ChevronRight className="w-5 h-5 text-gray-200" />
