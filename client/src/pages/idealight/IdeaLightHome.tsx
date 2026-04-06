@@ -288,148 +288,134 @@ function HealthTab() {
         </div>
       )}
 
-      {/* === 扫描 / 锁定 / 倒计时 === */}
+      {/* === 扫描 / 锁定 / 倒计时（全屏摄像头 + 人脸轮廓取景框） === */}
       {(phase === "scanning" || phase === "locking" || phase === "countdown") && (
-        <div className="flex flex-col items-center">
+        <div
+          className="fixed inset-0 z-50 bg-black flex flex-col"
+          style={{ touchAction: "none" }}
+        >
+          {/* 全屏视频 */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
+          />
 
-          {/* 摄像头全屏 + SVG遮罩层 */}
-          <div className="relative w-full" style={{ maxWidth: 360 }}>
+          {/* SVG全屏遮罩层 */}
+          <svg
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            viewBox="0 0 390 844"
+            preserveAspectRatio="xMidYMid slice"
+          >
+            <defs>
+              {/* 人脸轮廓路径：额头宽、脸颊收、下巴尖 */}
+              <clipPath id="faceShapeClip">
+                <path d="M195,140 C245,140 285,175 295,220 C305,265 305,310 300,350 C295,390 280,425 260,450 C245,470 225,485 210,490 C205,492 200,493 195,493 C190,493 185,492 180,490 C165,485 145,470 130,450 C110,425 95,390 90,350 C85,310 85,265 95,220 C105,175 145,140 195,140 Z" />
+              </clipPath>
+              <mask id="faceShapeMask">
+                <rect width="390" height="844" fill="white" />
+                <path d="M195,140 C245,140 285,175 295,220 C305,265 305,310 300,350 C295,390 280,425 260,450 C245,470 225,485 210,490 C205,492 200,493 195,493 C190,493 185,492 180,490 C165,485 145,470 130,450 C110,425 95,390 90,350 C85,310 85,265 95,220 C105,175 145,140 195,140 Z" fill="black" />
+              </mask>
+              {/* 雷达扇形渐变 */}
+              <radialGradient id="radarGrad2" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0" />
+                <stop offset="70%" stopColor="#C9A96E" stopOpacity="0.12" />
+                <stop offset="100%" stopColor="#C9A96E" stopOpacity="0.45" />
+              </radialGradient>
+            </defs>
 
-            {/* 视频层：全屏显示，被 SVG clip 裁剪 */}
-            <video ref={videoRef} autoPlay playsInline muted
-              className="w-full block scale-x-[-1]"
-              style={{ aspectRatio: "3/4", objectFit: "cover", borderRadius: 24 }} />
+            {/* 暗色遮罩（人脸外部） */}
+            <rect width="390" height="844" fill="rgba(0,0,0,0.62)" mask="url(#faceShapeMask)" />
 
-            {/* SVG覆盖层：暗色遮罩 + 橄圆镇派窗 + 雷达动画 */}
-            <svg
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              viewBox="0 0 360 480"
-              preserveAspectRatio="none"
-            >
-              <defs>
-                {/* 橄圆锗孔遮罩 */}
-                <mask id="faceMask">
-                  <rect width="360" height="480" fill="white" />
-                  <ellipse cx="180" cy="210" rx="120" ry="155" fill="black" />
-                </mask>
-                {/* 雷达扇形渐变色 */}
-                <radialGradient id="radarGrad" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="#C9A96E" stopOpacity="0" />
-                  <stop offset="60%" stopColor="#C9A96E" stopOpacity="0.15" />
-                  <stop offset="100%" stopColor="#C9A96E" stopOpacity="0.5" />
-                </radialGradient>
-                {/* 橄圆clip */}
-                <clipPath id="faceClip">
-                  <ellipse cx="180" cy="210" rx="120" ry="155" />
-                </clipPath>
-              </defs>
+            {/* 人脸轮廓边框 */}
+            <path
+              d="M195,140 C245,140 285,175 295,220 C305,265 305,310 300,350 C295,390 280,425 260,450 C245,470 225,485 210,490 C205,492 200,493 195,493 C190,493 185,492 180,490 C165,485 145,470 130,450 C110,425 95,390 90,350 C85,310 85,265 95,220 C105,175 145,140 195,140 Z"
+              fill="none"
+              stroke={locked ? "#4ADE80" : "rgba(255,255,255,0.85)"}
+              strokeWidth="2"
+              strokeDasharray={locked ? "0" : "8 5"}
+              style={{
+                filter: locked ? "drop-shadow(0 0 10px #4ADE80)" : "drop-shadow(0 0 4px rgba(255,255,255,0.5))",
+                transition: "stroke 0.5s, filter 0.5s"
+              }}
+            />
 
-              {/* 暗色遮罩（橄圆外部） */}
-              <rect width="360" height="480" fill="rgba(0,0,0,0.55)" mask="url(#faceMask)" />
-
-              {/* 橄圆边框 */}
-              <ellipse cx="180" cy="210" rx="120" ry="155" fill="none"
-                stroke={locked ? "#4ADE80" : "#C9A96E"}
-                strokeWidth="2"
-                style={{
-                  filter: locked ? "drop-shadow(0 0 8px #4ADE80)" : "drop-shadow(0 0 6px #C9A96E88)",
-                  transition: "stroke 0.5s, filter 0.5s"
-                }}
-              />
-
-              {/* 雷达扇形（锁定前旋转） */}
-              {!locked && (
-                <g clipPath="url(#faceClip)">
-                  <g style={{ transformOrigin: "180px 210px", animation: "radarSpin 2s linear infinite" }}>
-                    {/* 扇形光束 */}
-                    <path
-                      d="M180,210 L180,55 A155,155 0 0,1 295,210 Z"
-                      fill="url(#radarGrad)"
-                      opacity="0.7"
-                    />
-                    {/* 扫描线 */}
-                    <line x1="180" y1="210" x2="180" y2="55"
-                      stroke="#C9A96E" strokeWidth="1.5" opacity="0.9" />
-                  </g>
-                </g>
-              )}
-
-              {/* 锁定后显示打勾动画 */}
-              {locked && (
-                <g>
-                  <circle cx="180" cy="210" r="18" fill="none" stroke="#4ADE80" strokeWidth="2"
-                    style={{ animation: "lockPulse 0.6s ease-out" }} />
-                  <text x="180" y="216" textAnchor="middle" fontSize="16" fill="#4ADE80"
-                    style={{ animation: "lockPulse 0.6s ease-out" }}>✓</text>
-                </g>
-              )}
-
-              {/* 四角定位标记 */}
-              {[[-1,-1],[1,-1],[1,1],[-1,1]].map(([sx,sy], i) => (
-                <g key={i}>
-                  <line
-                    x1={180 + sx * 120 + (sx > 0 ? -14 : 14)} y1={210 + sy * 155}
-                    x2={180 + sx * 120} y2={210 + sy * 155}
-                    stroke={locked ? "#4ADE80" : "#C9A96E"} strokeWidth="2.5"
-                    style={{ transition: "stroke 0.5s" }}
+            {/* 雷达旋转扇形（锁定前） */}
+            {!locked && (
+              <g clipPath="url(#faceShapeClip)">
+                <g style={{ transformOrigin: "195px 316px", animation: "radarSpin 2.5s linear infinite" }}>
+                  <path
+                    d="M195,316 L195,140 A176,176 0 0,1 347,316 Z"
+                    fill="url(#radarGrad2)"
+                    opacity="0.8"
                   />
-                  <line
-                    x1={180 + sx * 120} y1={210 + sy * 155 + (sy > 0 ? -14 : 14)}
-                    x2={180 + sx * 120} y2={210 + sy * 155}
-                    stroke={locked ? "#4ADE80" : "#C9A96E"} strokeWidth="2.5"
-                    style={{ transition: "stroke 0.5s" }}
-                  />
+                  <line x1="195" y1="316" x2="195" y2="140"
+                    stroke="#C9A96E" strokeWidth="1.5" opacity="0.9" />
                 </g>
-              ))}
+              </g>
+            )}
 
-              {/* 外圈转动虚线圈 */}
-              <ellipse cx="180" cy="210" rx="138" ry="173" fill="none"
-                stroke="#C9A96E" strokeWidth="0.8" strokeDasharray="5 4" opacity="0.3"
-                style={{ transformOrigin: "180px 210px", animation: "spin 10s linear infinite" }}
-              />
+            {/* 锁定成功打勾 */}
+            {locked && (
+              <g>
+                <circle cx="195" cy="316" r="24" fill="none" stroke="#4ADE80" strokeWidth="2.5"
+                  style={{ animation: "lockPulse 0.6s ease-out" }} />
+                <text x="195" y="323" textAnchor="middle" fontSize="20" fill="#4ADE80"
+                  style={{ animation: "lockPulse 0.6s ease-out" }}>✓</text>
+              </g>
+            )}
 
-              {/* 底部状态文字 */}
-              <rect x="90" y="430" width="180" height="26" rx="13" fill="rgba(0,0,0,0.55)" />
-              <text x="180" y="447" textAnchor="middle" fontSize="11" fill="white" fontWeight="500">
-                {scanMsg}
-              </text>
+            {/* 中心十字定位线 */}
+            {!locked && (
+              <g opacity="0.5">
+                <line x1="195" y1="260" x2="195" y2="290" stroke="white" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1="195" y1="342" x2="195" y2="372" stroke="white" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1="140" y1="316" x2="170" y2="316" stroke="white" strokeWidth="1" strokeDasharray="3 3" />
+                <line x1="220" y1="316" x2="250" y2="316" stroke="white" strokeWidth="1" strokeDasharray="3 3" />
+              </g>
+            )}
 
-              {/* 左上角SCAN指示 */}
-              <circle cx="20" cy="20" r="4" fill="#ef4444"
-                style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
-              <text x="30" y="24" fontSize="10" fill="rgba(255,255,255,0.7)" fontFamily="monospace">SCAN</text>
+            {/* 顶部提示文字 */}
+            <rect x="120" y="80" width="150" height="32" rx="16" fill="rgba(0,0,0,0.55)" />
+            <text x="195" y="100" textAnchor="middle" fontSize="13" fill="white" fontWeight="500">
+              {locked ? "面部锁定成功" : scanMsg}
+            </text>
 
-              {/* 右上角点阵 */}
-              {[0,1,2].map(i => [0,1,2].map(j => (
-                <circle key={`${i}-${j}`}
-                  cx={340 - j * 6} cy={12 + i * 6} r="1.5"
-                  fill="#C9A96E" opacity="0.6"
-                  style={{ animation: `pulse 1.5s ease-in-out ${(i*3+j)*0.1}s infinite` }}
-                />
-              )))}
-            </svg>
-          </div>
+            {/* 左上角SCAN指示 */}
+            <circle cx="24" cy="52" r="5" fill="#ef4444"
+              style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
+            <text x="36" y="57" fontSize="11" fill="rgba(255,255,255,0.75)" fontFamily="monospace" fontWeight="600">SCAN</text>
+          </svg>
 
-          {/* 进度条 */}
-          <div className="w-full mt-4 mb-3" style={{ maxWidth: 360 }}>
-            <div className="flex justify-between text-xs text-[#8B6B6B] mb-1.5">
-              <span>{scanMsg}</span>
-              <span className="font-mono text-[#C9A96E]">
+          {/* 底部操作区 */}
+          <div className="absolute bottom-0 left-0 right-0 pb-10 pt-4 px-6"
+            style={{ background: "linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%)" }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-white/70 text-xs">
+                {phase === "scanning" ? "正在扫描..." : phase === "locking" ? "正在锁定..." : "准备采集..."}
+              </span>
+              <span className="text-[#C9A96E] text-xs font-mono">
                 {phase === "scanning" ? "30%" : phase === "locking" ? "65%" : "90%"}
               </span>
             </div>
-            <div className="h-1.5 bg-[#F5E6E8] rounded-full overflow-hidden">
+            <div className="h-1 bg-white/20 rounded-full overflow-hidden mb-4">
               <div
-                className="h-full bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] rounded-full transition-all duration-700"
-                style={{ width: phase === "scanning" ? "30%" : phase === "locking" ? "65%" : "90%" }}
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: phase === "scanning" ? "30%" : phase === "locking" ? "65%" : "90%",
+                  background: "linear-gradient(to right, #C9A96E, #E8B4B8)"
+                }}
               />
             </div>
+            <button
+              onClick={reset}
+              className="w-full text-white/60 text-sm py-2 text-center"
+            >
+              取消检测
+            </button>
           </div>
-
-          <button onClick={reset}
-            className="text-[#A07878] text-sm underline underline-offset-2">
-            取消检测
-          </button>
         </div>
       )}
 
