@@ -125,6 +125,7 @@ const QQTradeRecords = lazy(() => import("./pages/QQTradeRecords"));
 const QQSettings = lazy(() => import("./pages/QQSettings"));
 // 石油业务页面
 const OilBusinessPage = lazy(() => import("./pages/OilBusinessPage"));
+const FundingHistoryPage = lazy(() => import("./pages/FundingHistoryPage"));
 const OilPricesPage = lazy(() => import("./pages/OilPricesPage"));
 const OilTradesPage = lazy(() => import("./pages/OilTradesPage"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
@@ -522,6 +523,7 @@ function Router() {
         <Route path="/ledger/:id/qq/settings" component={QQSettings} />
         {/* 石油业务 */}
         <Route path="/ledger/:id/oil" component={OilBusinessPage} />
+        <Route path="/ledger/:id/oil/funding-history" component={FundingHistoryPage} />
         <Route path="/ledger/:id/oil/prices" component={OilPricesPage} />
         <Route path="/ledger/:id/oil/trades" component={OilTradesPage} />
         {/* AD 提示词库 */}

@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, RefreshCw, ExternalLink, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeft, RefreshCw, ExternalLink } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 interface ContractData {
@@ -17,35 +17,19 @@ interface ContractData {
   openInterest: number;
 }
 
-interface FundingHistory {
-  fundingTime: number;
-  fundingRate: number;
-}
-
 const CONTRACTS = [
-  { symbol: "CLUSDT", name: "WTI原油", shortName: "WTI", unit: "USD/桶", binanceUrl: "https://www.binance.com/zh-CN/futures/CLUSDT" },
-  { symbol: "BZUSDT", name: "布伦特原油", shortName: "BRENT", unit: "USD/桶", binanceUrl: "https://www.binance.com/zh-CN/futures/BZUSDT" },
-  { symbol: "NATGASUSDT", name: "天然气", shortName: "NATGAS", unit: "USD/MMBtu", binanceUrl: "https://www.binance.com/zh-CN/futures/NATGASUSDT" },
+  { symbol: "CLUSDT", name: "WTI原油", shortName: "WTI", unit: "USD/桶", binanceUrl: "https://www.binance.com/zh-CN/futures/CLUSDT", color: "#60a5fa" },
+  { symbol: "BZUSDT", name: "布伦特原油", shortName: "BRENT", unit: "USD/桶", binanceUrl: "https://www.binance.com/zh-CN/futures/BZUSDT", color: "#fb923c" },
+  { symbol: "NATGASUSDT", name: "天然气", shortName: "NATGAS", unit: "USD/MMBtu", binanceUrl: "https://www.binance.com/zh-CN/futures/NATGASUSDT", color: "#4ade80" },
 ];
-
-function formatRate(rate: number) {
-  return (rate * 100).toFixed(4) + "%";
-}
 
 function formatPrice(price: number, symbol: string) {
   if (symbol === "NATGASUSDT") return price.toFixed(3);
   return price.toFixed(2);
 }
 
-function formatVolume(vol: number) {
-  if (vol >= 1e6) return (vol / 1e6).toFixed(1) + "M";
-  if (vol >= 1e3) return (vol / 1e3).toFixed(0) + "K";
-  return vol.toFixed(0);
-}
-
 function Countdown({ nextFundingTime }: { nextFundingTime: number }) {
   const [remaining, setRemaining] = useState("");
-
   useEffect(() => {
     const update = () => {
       const diff = nextFundingTime - Date.now();
@@ -53,46 +37,217 @@ function Countdown({ nextFundingTime }: { nextFundingTime: number }) {
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      if (h > 0) {
-        setRemaining(`${h}h${String(m).padStart(2, "0")}m`);
-      } else {
-        setRemaining(`${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
-      }
+      if (h > 0) setRemaining(`${h}h${String(m).padStart(2, "0")}m`);
+      else setRemaining(`${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
     };
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, [nextFundingTime]);
-
   return <span className="font-mono text-amber-400 text-[10px]">{remaining}</span>;
 }
 
-function MiniChart({ data, symbol }: { data: FundingHistory[]; symbol: string }) {
-  if (!data || data.length < 2) return <div className="h-16 flex items-center justify-center text-gray-600 text-xs">暂无数据</div>;
+// 三合约合并折线图（SVG）
+function CombinedFundingChart({ grouped }: { grouped: Record<string, any[]> }) {
+  const W = 320;
+  const H = 130;
+  // 右边留足够空间避免最后一个X轴标签被裁切
+  const PAD = { top: 12, bottom: 22, left: 40, right: 28 };
 
-  const rates = data.map(d => d.fundingRate * 100);
-  const min = Math.min(...rates);
-  const max = Math.max(...rates);
-  const range = max - min || 0.001;
-  const w = 280;
-  const h = 60;
-  const pts = rates.map((r, i) => {
-    const x = (i / (rates.length - 1)) * w;
-    const y = h - ((r - min) / range) * (h - 8) - 4;
-    return `${x},${y}`;
-  }).join(" ");
+  const allTimes = useMemo(() => {
+    const set = new Set<number>();
+    for (const sym of Object.keys(grouped)) {
+      for (const row of grouped[sym]) set.add(Number(row.funding_time));
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }, [grouped]);
 
-  const lastRate = rates[rates.length - 1];
-  const color = lastRate >= 0 ? "#22c55e" : "#ef4444";
+  if (allTimes.length < 2) {
+    return (
+      <div className="flex items-center justify-center h-32 text-gray-600 text-xs">
+        暂无数据
+      </div>
+    );
+  }
+
+  const seriesMap: Record<string, Map<number, number>> = {};
+  for (const sym of Object.keys(grouped)) {
+    seriesMap[sym] = new Map();
+    for (const row of grouped[sym]) {
+      seriesMap[sym].set(Number(row.funding_time), parseFloat(row.funding_rate) * 100);
+    }
+  }
+
+  let globalMin = 0;
+  let globalMax = 0;
+  for (const sym of Object.keys(seriesMap)) {
+    for (const v of seriesMap[sym].values()) {
+      if (v < globalMin) globalMin = v;
+      if (v > globalMax) globalMax = v;
+    }
+  }
+  const pad = Math.max(Math.abs(globalMax - globalMin) * 0.15, 0.002);
+  globalMin -= pad;
+  globalMax += pad;
+  const range = globalMax - globalMin;
+
+  const toX = (i: number) => PAD.left + (i / Math.max(allTimes.length - 1, 1)) * (W - PAD.left - PAD.right);
+  const toY = (v: number) => PAD.top + ((globalMax - v) / range) * (H - PAD.top - PAD.bottom);
+  const zeroY = toY(0);
+
+  // 生成每条线的 points，同时找峰谷
+  const lines = CONTRACTS.map(c => {
+    const map = seriesMap[c.symbol];
+    if (!map) return null;
+    const validTimes = allTimes.filter(t => map.has(t));
+    const pts = validTimes
+      .map(t => `${toX(allTimes.indexOf(t))},${toY(map.get(t)!)}`)
+      .join(" ");
+
+    // 找峰谷（局部极值）
+    const peakLabels: { x: number; y: number; val: number; isMax: boolean }[] = [];
+    const vals = validTimes.map(t => ({ t, v: map.get(t)! }));
+    // 全局最大值和最小值
+    let maxV = -Infinity, minV = Infinity;
+    let maxIdx = -1, minIdx = -1;
+    vals.forEach((item, i) => {
+      if (item.v > maxV) { maxV = item.v; maxIdx = i; }
+      if (item.v < minV) { minV = item.v; minIdx = i; }
+    });
+    if (maxIdx >= 0) {
+      const t = vals[maxIdx].t;
+      peakLabels.push({ x: toX(allTimes.indexOf(t)), y: toY(maxV), val: maxV, isMax: true });
+    }
+    if (minIdx >= 0 && minIdx !== maxIdx) {
+      const t = vals[minIdx].t;
+      peakLabels.push({ x: toX(allTimes.indexOf(t)), y: toY(minV), val: minV, isMax: false });
+    }
+
+    return { ...c, pts, peakLabels };
+  }).filter(Boolean);
+
+  // X轴标签：均匀分布，最多5个，确保首尾都显示
+  const maxLabels = Math.min(5, allTimes.length);
+  const labelIdxs: number[] = [];
+  for (let i = 0; i < maxLabels; i++) {
+    labelIdxs.push(Math.round(i * (allTimes.length - 1) / (maxLabels - 1)));
+  }
+  const labels = [...new Set(labelIdxs)].map(i => {
+    const d = new Date(allTimes[i]);
+    return {
+      x: toX(i),
+      label: `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`,
+      isLast: i === allTimes.length - 1,
+    };
+  });
+
+  // Y轴刻度
+  const yTicks = [
+    { v: globalMax - pad * 0.5, label: `${(globalMax - pad * 0.5).toFixed(3)}%` },
+    { v: 0, label: "0" },
+    { v: globalMin + pad * 0.5, label: `${(globalMin + pad * 0.5).toFixed(3)}%` },
+  ];
 
   return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-16">
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" />
-      <line
-        x1="0" y1={h - ((0 - min) / range) * (h - 8) - 4}
-        x2={w} y2={h - ((0 - min) / range) * (h - 8) - 4}
-        stroke="rgba(255,255,255,0.1)" strokeWidth="0.5" strokeDasharray="3,3"
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ display: "block", overflow: "visible" }}>
+      {/* 背景正区域 */}
+      <rect
+        x={PAD.left} y={PAD.top}
+        width={W - PAD.left - PAD.right}
+        height={Math.max(0, zeroY - PAD.top)}
+        fill="rgba(34,197,94,0.04)"
       />
+      {/* 背景负区域 */}
+      <rect
+        x={PAD.left} y={zeroY}
+        width={W - PAD.left - PAD.right}
+        height={Math.max(0, H - PAD.bottom - zeroY)}
+        fill="rgba(239,68,68,0.04)"
+      />
+
+      {/* 零轴 */}
+      <line
+        x1={PAD.left} y1={zeroY}
+        x2={W - PAD.right} y2={zeroY}
+        stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="3,3"
+      />
+
+      {/* Y轴刻度文字 */}
+      {yTicks.map((t, i) => (
+        <text
+          key={i}
+          x={PAD.left - 3} y={toY(t.v) + 3}
+          textAnchor="end"
+          fontSize="6"
+          fill={t.v === 0 ? "rgba(255,255,255,0.4)" : t.v > 0 ? "#4ade80" : "#f87171"}
+        >
+          {t.label}
+        </text>
+      ))}
+
+      {/* X轴时间标签 */}
+      {labels.map((l, i) => (
+        <text
+          key={i}
+          x={l.isLast ? l.x - 2 : l.x}
+          y={H - 5}
+          textAnchor={l.isLast ? "end" : i === 0 ? "start" : "middle"}
+          fontSize="6"
+          fill="rgba(255,255,255,0.35)"
+        >
+          {l.label}
+        </text>
+      ))}
+
+      {/* 三条折线 */}
+      {lines.map(l => l && (
+        <polyline
+          key={l.symbol}
+          points={l.pts}
+          fill="none"
+          stroke={l.color}
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      ))}
+
+      {/* 最新值端点 */}
+      {lines.map(l => {
+        if (!l) return null;
+        const map = seriesMap[l.symbol];
+        const lastTime = allTimes.filter(t => map.has(t)).slice(-1)[0];
+        if (!lastTime) return null;
+        const lastVal = map.get(lastTime)!;
+        const cx = toX(allTimes.indexOf(lastTime));
+        const cy = toY(lastVal);
+        return (
+          <circle key={l.symbol + "_dot"} cx={cx} cy={cy} r="2.5" fill={l.color} />
+        );
+      })}
+
+      {/* 峰谷标注（每条线的全局最高/最低点） */}
+      {lines.map(l => {
+        if (!l) return null;
+        return l.peakLabels.map((pk, pi) => {
+          const labelY = pk.isMax ? pk.y - 4 : pk.y + 9;
+          const labelText = (pk.val >= 0 ? "+" : "") + pk.val.toFixed(3) + "%";
+          return (
+            <text
+              key={l.symbol + "_pk_" + pi}
+              x={pk.x}
+              y={labelY}
+              textAnchor="middle"
+              fontSize="5.5"
+              fontWeight="bold"
+              fill={l.color}
+              style={{ opacity: 0.85 }}
+            >
+              {labelText}
+            </text>
+          );
+        });
+      })}
     </svg>
   );
 }
@@ -101,27 +256,17 @@ export default function OilBusinessPage() {
   const [, setLocation] = useLocation();
   const params = useParams();
   const ledgerId = params.id;
-
   const [activeTab, setActiveTab] = useState<string>("CLUSDT");
 
-  // 从数据库读取行情数据（tRPC）
+  // 行情数据
   const { data: marketRows, isLoading: marketLoading, error: marketError, refetch: refetchMarket } = trpc.energy.getMarketData.useQuery(undefined, {
     refetchInterval: 60000,
     staleTime: 30000,
   });
 
-  // 从数据库读取三个合约的资金费率历史
-  const { data: clHistory } = trpc.energy.getFundingHistory.useQuery({ symbol: "CLUSDT", limit: 32 }, { staleTime: 60000 });
-  const { data: bzHistory } = trpc.energy.getFundingHistory.useQuery({ symbol: "BZUSDT", limit: 32 }, { staleTime: 60000 });
-  const { data: ngHistory } = trpc.energy.getFundingHistory.useQuery({ symbol: "NATGASUSDT", limit: 32 }, { staleTime: 60000 });
+  // 三合约合并资金费率历史
+  const { data: allFunding } = trpc.energy.getAllFundingHistory.useQuery({ limit: 35 }, { staleTime: 120000 });
 
-  const fundingHistoryMap: Record<string, FundingHistory[]> = {
-    CLUSDT: (clHistory || []).map((r: any) => ({ fundingTime: Number(r.funding_time), fundingRate: parseFloat(r.funding_rate) })),
-    BZUSDT: (bzHistory || []).map((r: any) => ({ fundingTime: Number(r.funding_time), fundingRate: parseFloat(r.funding_rate) })),
-    NATGASUSDT: (ngHistory || []).map((r: any) => ({ fundingTime: Number(r.funding_time), fundingRate: parseFloat(r.funding_rate) })),
-  };
-
-  // 将数据库行转换为 ContractData
   const contracts: ContractData[] = (marketRows || []).map((row: any) => {
     const info = CONTRACTS.find(c => c.symbol === row.symbol)!;
     return {
@@ -143,10 +288,6 @@ export default function OilBusinessPage() {
   const error = marketError ? "数据加载失败：" + marketError.message : null;
   const lastUpdated = marketRows && marketRows.length > 0 ? new Date((marketRows[0] as any).updated_at) : null;
 
-  const handleRefresh = () => {
-    refetchMarket();
-  };
-
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: "#0a0c10", fontFamily: "'SF Mono', 'Consolas', monospace" }}>
       {/* 顶部导航 */}
@@ -163,7 +304,7 @@ export default function OilBusinessPage() {
             <div className="text-sm font-semibold tracking-widest text-amber-400 uppercase">Energy Markets</div>
             <div className="text-xs text-gray-500">Binance Perpetual Futures</div>
           </div>
-          <button onClick={handleRefresh} className="text-gray-400 hover:text-white transition-colors">
+          <button onClick={refetchMarket} className="text-gray-400 hover:text-white transition-colors">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
@@ -185,7 +326,7 @@ export default function OilBusinessPage() {
       ) : error ? (
         <div className="p-6 text-center">
           <div className="text-red-400 text-sm mb-3">{error}</div>
-          <button onClick={handleRefresh} className="text-xs text-blue-400 border border-blue-800 px-3 py-1.5 rounded">
+          <button onClick={refetchMarket} className="text-xs text-blue-400 border border-blue-800 px-3 py-1.5 rounded">
             重试
           </button>
         </div>
@@ -196,8 +337,6 @@ export default function OilBusinessPage() {
             <div className="grid grid-cols-3 gap-1.5">
               {contracts.map((c) => {
                 const info = CONTRACTS.find(x => x.symbol === c.symbol)!;
-                const isUp = c.priceChangePercent >= 0;
-                const rateColor = c.lastFundingRate >= 0 ? "#22c55e" : "#ef4444";
                 const isActive = activeTab === c.symbol;
                 return (
                   <div
@@ -210,77 +349,46 @@ export default function OilBusinessPage() {
                     }}
                     onClick={() => setActiveTab(c.symbol)}
                   >
-                    {/* 顶部：名称 + 外链 */}
-                    <div className="flex items-center justify-between mb-1">
+                    {/* 标题行：居中 */}
+                    <div className="flex items-center justify-center gap-1 mb-2 flex-wrap">
                       <span
-                        className="text-[10px] font-bold tracking-wider px-1 py-0.5 rounded leading-none"
-                        style={{ backgroundColor: "#1e2d40", color: "#60a5fa" }}
+                        className="text-[10px] font-bold tracking-wider px-1 py-0.5 rounded leading-none shrink-0"
+                        style={{ backgroundColor: "#1e2d40", color: info.color }}
                       >
                         {info.shortName}
                       </span>
-                      <a
-                        href={info.binanceUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className="text-gray-700 hover:text-blue-400"
+                      <span className="text-[10px] text-gray-400 leading-none truncate">{c.name}</span>
+                    </div>
+
+                    {/* 价格（大字，居中，Nunito字体） */}
+                    <div className="flex justify-center mb-2">
+                      <div
+                        className="text-center leading-none"
+                        style={{
+                          fontFamily: "'Nunito', sans-serif",
+                          fontWeight: 900,
+                          color: "#f0f6ff",
+                          fontSize: "clamp(15px, 5.5vw, 24px)",
+                          width: "70%",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
                       >
-                        <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    </div>
-
-                    {/* 名称 */}
-                    <div className="text-[10px] text-gray-400 mb-1 leading-tight truncate">{c.name}</div>
-
-                    {/* 价格（大字） */}
-                    <div className="text-sm font-bold tracking-tight leading-tight mb-0.5" style={{ fontFamily: "monospace", color: "#f0f6ff" }}>
-                      {formatPrice(c.markPrice, c.symbol)}
-                    </div>
-
-                    {/* 单位 */}
-                    <div className="text-[9px] text-gray-600 mb-1 leading-none">{info.unit}</div>
-
-                    {/* 24h涨跌 */}
-                    <div className={`flex items-center gap-0.5 text-[10px] mb-1.5 ${isUp ? "text-green-400" : "text-red-400"}`}>
-                      {isUp ? <TrendingUp className="w-2.5 h-2.5 shrink-0" /> : <TrendingDown className="w-2.5 h-2.5 shrink-0" />}
-                      <span className="font-mono">{isUp ? "+" : ""}{c.priceChangePercent.toFixed(2)}%</span>
-                    </div>
-
-                    {/* 分隔线 */}
-                    <div className="mb-1.5" style={{ borderTop: "1px solid #1e2530" }} />
-
-                    {/* 资金费率 */}
-                    <div className="mb-0.5">
-                      <div className="text-[9px] text-gray-600 leading-none mb-0.5">资金费率</div>
-                      <div className="text-[11px] font-bold leading-none" style={{ color: rateColor }}>
-                        {formatRate(c.lastFundingRate)}
+                        {formatPrice(c.markPrice, c.symbol)}
                       </div>
                     </div>
 
-                    {/* 结算倒计时 */}
-                    <div className="text-[9px] text-gray-600 leading-none mb-1.5">
-                      结算 <Countdown nextFundingTime={c.nextFundingTime} />
-                    </div>
-
-                    {/* 分隔线 */}
-                    <div className="mb-1.5" style={{ borderTop: "1px solid #1e2530" }} />
-
-                    {/* 24h高低 */}
-                    <div className="flex justify-between mb-0.5">
-                      <div>
-                        <div className="text-[9px] text-gray-600 leading-none">24h高</div>
+                    {/* 24h高低左右并排，居中 */}
+                    <div className="flex justify-center gap-2">
+                      <div className="text-center">
+                        <div className="text-[9px] text-gray-600 leading-none mb-0.5">24h高</div>
                         <div className="text-[10px] font-mono text-green-400 leading-tight">{formatPrice(c.highPrice, c.symbol)}</div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-[9px] text-gray-600 leading-none">24h低</div>
+                      <div className="text-center">
+                        <div className="text-[9px] text-gray-600 leading-none mb-0.5">24h低</div>
                         <div className="text-[10px] font-mono text-red-400 leading-tight">{formatPrice(c.lowPrice, c.symbol)}</div>
                       </div>
-                    </div>
-
-                    {/* 未平仓量 */}
-                    <div>
-                      <div className="text-[9px] text-gray-600 leading-none">未平仓量</div>
-                      <div className="text-[10px] font-mono text-gray-300 leading-tight">{formatVolume(c.openInterest)}</div>
                     </div>
                   </div>
                 );
@@ -288,47 +396,73 @@ export default function OilBusinessPage() {
             </div>
           </div>
 
-          {/* 资金费率历史图表 */}
-          <div className="mx-2 rounded-lg p-4" style={{ backgroundColor: "#111620", border: "1px solid #1e2530" }}>
-            <div className="flex items-center justify-between mb-3">
+          {/* 资金费率合并折线图 */}
+          <div className="mx-2 rounded-lg p-3" style={{ backgroundColor: "#111620", border: "1px solid #1e2530" }}>
+            {/* 标题行 */}
+            <div className="flex items-center justify-between mb-2">
               <div>
-                <div className="text-xs text-gray-400 font-semibold">资金费率历史</div>
-                <div className="text-[10px] text-gray-600 mt-0.5">
-                  {CONTRACTS.find(c => c.symbol === activeTab)?.name} · 近5天 · 每4小时
+                <div className="flex items-center gap-1.5">
+                  <div className="text-xs text-gray-400 font-semibold">资金费率走势</div>
+                  <button
+                    onClick={() => setLocation(`/ledger/${ledgerId}/oil/funding-history`)}
+                    style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
+                    title="查看历史明细"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-1">
+              {/* 图例 */}
+              <div className="flex gap-2">
                 {CONTRACTS.map(c => (
-                  <button
-                    key={c.symbol}
-                    onClick={() => setActiveTab(c.symbol)}
-                    className="text-xs px-2 py-0.5 rounded transition-colors"
-                    style={{
-                      backgroundColor: activeTab === c.symbol ? "#2a4a7f" : "#1a2030",
-                      color: activeTab === c.symbol ? "#60a5fa" : "#6b7280",
-                    }}
-                  >
-                    {c.shortName}
-                  </button>
+                  <div key={c.symbol} className="flex items-center gap-0.5">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c.color }} />
+                    <span className="text-[9px]" style={{ color: c.color }}>{c.shortName}</span>
+                  </div>
                 ))}
               </div>
             </div>
 
-            <MiniChart data={fundingHistoryMap[activeTab] || []} symbol={activeTab} />
+            {/* 正负说明 */}
+            <div className="flex gap-3 mb-2">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-1 rounded" style={{ backgroundColor: "rgba(34,197,94,0.3)" }} />
+                <span className="text-[9px] text-green-600">多头付费（正费率）</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-1 rounded" style={{ backgroundColor: "rgba(239,68,68,0.3)" }} />
+                <span className="text-[9px] text-red-600">空头付费（负费率）</span>
+              </div>
+            </div>
 
-            <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
-              {(fundingHistoryMap[activeTab] || []).slice().reverse().map((d, i) => {
-                const rate = d.fundingRate * 100;
+            {/* 折线图 */}
+            <div style={{ width: "100%", height: 130, overflow: "visible" }}>
+              {allFunding ? (
+                <CombinedFundingChart grouped={allFunding as Record<string, any[]>} />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-600 text-xs">加载中...</div>
+              )}
+            </div>
+
+            {/* 当前费率一览（只显示3个，不重复） */}
+            <div className="mt-2 grid grid-cols-3 gap-1">
+              {CONTRACTS.map(c => {
+                const contract = contracts.find(x => x.symbol === c.symbol);
+                if (!contract) return null;
+                const rate = contract.lastFundingRate * 100;
                 const isPos = rate >= 0;
-                const t = new Date(d.fundingTime);
                 return (
-                  <div key={i} className="flex items-center justify-between py-1" style={{ borderBottom: "1px solid #1a2030" }}>
-                    <span className="text-xs text-gray-500 font-mono">
-                      {t.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })} {t.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                    <span className={`text-xs font-mono font-bold ${isPos ? "text-green-400" : "text-red-400"}`}>
+                  <div key={c.symbol} className="text-center py-1 rounded" style={{ backgroundColor: "#0d1117" }}>
+                    <div className="text-[9px] mb-0.5" style={{ color: c.color }}>{c.shortName}</div>
+                    <div className={`text-[11px] font-bold font-mono ${isPos ? "text-green-400" : "text-red-400"}`}>
                       {isPos ? "+" : ""}{rate.toFixed(4)}%
-                    </span>
+                    </div>
+                    <div className="text-[9px] text-gray-600">
+                      <Countdown nextFundingTime={contract.nextFundingTime} />
+                    </div>
                   </div>
                 );
               })}
@@ -357,7 +491,7 @@ export default function OilBusinessPage() {
           </div>
 
           <div className="mx-2 mt-3 text-center">
-            <div className="text-xs text-gray-700">数据来源：Binance Futures · 定时同步至数据库</div>
+            <div className="text-xs text-gray-700">数据来源：Binance Futures · 每4小时同步</div>
           </div>
         </div>
       )}

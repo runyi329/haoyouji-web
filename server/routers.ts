@@ -16174,12 +16174,17 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const conn = await getDbConnection();
         if (!conn) throw new Error("数据库连接失败");
         const [rows] = await (conn as any).execute(
-          `SELECT symbol, symbol_name, last_price, price_change, price_change_percent,
-                  high_price, low_price, volume, quote_volume,
-                  mark_price, index_price, funding_rate, next_funding_time,
-                  open_interest, open_interest_value, updated_at
-           FROM energy_market_data
-           ORDER BY FIELD(symbol, 'CLUSDT', 'BZUSDT', 'NATGASUSDT')`
+          `SELECT t.symbol, t.symbol_name, t.last_price, t.price_change, t.price_change_percent,
+                  t.high_price, t.low_price, t.volume, t.quote_volume,
+                  t.mark_price, t.index_price, t.funding_rate, t.next_funding_time,
+                  t.open_interest, t.open_interest_value, t.updated_at
+           FROM energy_market_data t
+           INNER JOIN (
+             SELECT symbol AS sym, MAX(id) as max_id
+             FROM energy_market_data
+             GROUP BY symbol
+           ) latest ON t.symbol = latest.sym AND t.id = latest.max_id
+           ORDER BY FIELD(t.symbol, 'CLUSDT', 'BZUSDT', 'NATGASUSDT')`
         );
         return rows as any[];
       } catch (err: any) {
@@ -16202,6 +16207,68 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             [input.symbol, input.limit]
           );
           return rows as any[];
+        } catch (err: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+        }
+      }),
+    // 获取三个合约的资金费率历史（合并图用）
+    getAllFundingHistory: publicProcedure
+      .query(async () => {
+        try {
+          const conn = await getDbConnection();
+          if (!conn) throw new Error("数据库连接失败");
+          const [rows] = await (conn as any).execute(
+            `SELECT symbol, funding_time, funding_rate
+             FROM energy_funding_history
+             WHERE symbol IN ('CLUSDT','BZUSDT','NATGASUSDT')
+             ORDER BY funding_time ASC`,
+            []
+          );
+          // 按 symbol 分组，全量返回
+          const grouped: Record<string, any[]> = {};
+          for (const row of rows as any[]) {
+            if (!grouped[row.symbol]) grouped[row.symbol] = [];
+            grouped[row.symbol].push({
+              fundingTime: Number(row.funding_time),
+              fundingRate: Number(row.funding_rate),
+            });
+          }
+          // 计算每个合约的年化统计
+          const stats: Record<string, any> = {};
+          for (const sym of Object.keys(grouped)) {
+            const rates = grouped[sym].map((r: any) => r.fundingRate);
+            const times = grouped[sym].map((r: any) => r.fundingTime);
+            const n = rates.length;
+            if (n < 2) {
+              stats[sym] = { avgAnnual: 0, posAnnual: 0, negAnnual: 0, netAnnual: 0, count: n };
+              continue;
+            }
+            // 用实际时间间隔计算每次费率的年化贡献
+            let annualSum = 0;
+            let posSum = 0;
+            let negSum = 0;
+            let posCount = 0;
+            let negCount = 0;
+            for (let i = 1; i < n; i++) {
+              const intervalHours = (times[i] - times[i-1]) / 3600000;
+              const safeInterval = intervalHours > 0 ? intervalHours : 8;
+              const annualFactor = 8760 / safeInterval;
+              const rate = rates[i];
+              const contrib = rate * annualFactor;
+              annualSum += contrib;
+              if (rate > 0) { posSum += contrib; posCount++; }
+              else if (rate < 0) { negSum += contrib; negCount++; }
+            }
+            stats[sym] = {
+              netAnnual: annualSum / (n - 1),       // 净年化（正负抵消）
+              posAnnual: posCount > 0 ? posSum / posCount : 0,  // 正费率期平均年化
+              negAnnual: negCount > 0 ? negSum / negCount : 0,  // 负费率期平均年化
+              count: n,
+              posCount,
+              negCount,
+            };
+          }
+          return { grouped, stats };
         } catch (err: any) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
         }
