@@ -12,6 +12,7 @@ import { startScanner } from "../blockchain-scanner";
 import { startTierScanner } from "../af-tier-scanner";
 import { startPriceScanner } from "../price-scanner";
 import { startFunderScanner } from "../funder-price-scanner";
+import { smsService } from "../sms-service";
 import { ensureBeautyTables } from "../db-beauty-init";
 
 async function initFieldCategories() {
@@ -438,9 +439,8 @@ async function startServer() {
   // 食物热量扫描路由
   const foodCalorieModule = await import('../food-calorie-router.js');
   app.use(foodCalorieModule.default);
-  // 量化回测代理路由
-  const quantProxyModule = await import('../quant-proxy.js');
-  app.use(quantProxyModule.default);
+  const energyProxyModule = await import('../energy-proxy-router.js');
+  app.use(energyProxyModule.default);
 
   // tRPC API
   app.use(
@@ -466,6 +466,15 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    // 部署成功后发送短信通知
+    const adminPhone = process.env.ADMIN_PHONE || "13127919173";
+    if (adminPhone) {
+      smsService.sendCustomMessage(adminPhone, process.env.TENCENT_SMS_TEMPLATE_ID || "2623560", []).then(() => {
+        console.log("[SMS] 部署通知短信已发送至", adminPhone);
+      }).catch((err: any) => {
+        console.warn("[SMS] 部署通知短信发送失败:", err.message);
+      });
+    }
     
     // 启动区块链扫描器（收款地址从数据库读取，无需环境变量）
     startScanner();

@@ -5,7 +5,7 @@
  *   K 线图区域（固定，不随 Tab 切换）
  *   三 Tab 切换：无损合约 / 无损现货 / 行情评估（含竞猜）
  */
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -297,8 +297,15 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: order.side === 'buy' } // 委托中和已成交的买单都查询
+    { enabled: order.side === 'buy', staleTime: 120000, refetchOnWindowFocus: false, refetchOnMount: false } // 委托中和已成交的买单都查询，2分钟缓存避免重复加载
   );
+  // 实时价格（用于计算当前市值）
+  const coinSymbol = order.coin === 'BTC' ? 'BTCUSDT' : order.coin === 'ETH' ? 'ETHUSDT' : order.coin === 'SOL' ? 'SOLUSDT' : order.coin + 'USDT';
+  const { data: liveTickerData } = trpc.ledger.getBinanceTicker.useQuery(
+    { symbol: coinSymbol },
+    { enabled: order.side === 'buy', staleTime: 30000, refetchInterval: 60000 }
+  );
+  const livePrice = liveTickerData ? parseFloat((liveTickerData as any).lastPrice || '0') : 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => { toast.success('委托已撒销'); },
     onError: (e) => toast.error('撒单失败', { description: e.message }),
@@ -372,14 +379,14 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <span className="text-[#9CA3AF]">赠送市値</span>
               <span className="font-semibold" style={{ color: (order as any).giftMultiplier === '1.0' ? '#D97706' : '#EF4444' }}>
                 {parseFloat(order.amount).toFixed(2)} USDT
-                <span className="ml-1 text-[11px] font-normal opacity-70">({(order as any).giftMultiplier || '1.5'}倍)</span>
+                <span className="ml-1 text-[11px] font-normal opacity-70">({((order as any).sourceAmount ? (parseFloat(order.amount) / parseFloat((order as any).sourceAmount)).toFixed(4).replace(/0+$/, '').replace(/\.$/, '') : (order as any).giftMultiplier || '1.5')}倍)</span>
               </span>
             </div>
             {/* 持仓数量：计算过程小灰字 + 等号和结果同行显示 */}
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">持仓数量</span>
               <span>
-                <span className="text-[11px] text-[#9CA3AF]">{(parseFloat(order.amount) * 5.25).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = </span>
+                <span className="text-[11px] text-[#9CA3AF]">{parseFloat(order.amount).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = </span>
                 <span className="text-[#1E293B] font-medium">{parseFloat(order.quantity).toFixed(8).replace(/\.?0+$/, '')} {order.coin}</span>
               </span>
             </div>
@@ -438,8 +445,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             <div className="flex justify-between items-center">
               <span className="text-[#9CA3AF]">管理费</span>
               <span className="text-[#1E293B] font-medium">
-                {dailyFee.toFixed(4)} <span className="text-[11px] text-[#9CA3AF]">USDT/天</span>
-                <span className="text-[11px] text-[#9CA3AF] ml-1.5">· {isSold ? '已结清' : '已累计'} {totalFee.toFixed(4)} USDT（{holdDays}天）</span>
+                {dailyFee.toFixed(4)}u × {holdDays}天 = {totalFee.toFixed(4)}u
               </span>
             </div>
           );
@@ -669,16 +675,60 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               </div>
             );
           })}
-
-          {/* 当前收益权摘要 */}
-          <div className="mt-2 rounded-lg p-2 flex justify-between items-center" style={{ backgroundColor: '#EEF2FF' }}>
-            <span style={{ color: '#6B7A9A' }}>当前收益权</span>
-            <span className="font-bold text-sm" style={{ color: currentTier === 0 ? '#0EA56A' : '#EF4444' }}>
-              {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
-              <span className="text-xs ml-1" style={{ color: '#9CA3AF' }}>
-                ({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})
-              </span>
-            </span>
+          {/* 当前收益权摘要 + 市值 + 管理费 */}
+          <div className="mt-2 rounded-lg p-3" style={{ backgroundColor: '#EEF2FF' }}>
+            {(() => {
+              const qty = parseFloat(order.quantity);
+              const pctStr = currentTier === 0 ? '100%' : (TIER_LABELS[currentTier - 1]?.pct || '100%');
+              const pct = parseFloat(pctStr) / 100;
+              const remaining = qty * pct;
+              const displayRemaining = remaining.toFixed(6).replace(/[.]?0+$/, '');
+              const displayQty = qty.toFixed(6).replace(/[.]?0+$/, '');
+              const scanPrice = tierData?.scanStatus?.lowestPrice ? parseFloat(String(tierData.scanStatus.lowestPrice))
+                : (tierData?.latestLowPrice ? parseFloat(String(tierData.latestLowPrice)) : 0);
+              const refPrice = livePrice > 0 ? livePrice : scanPrice;
+              const refPriceLabel = livePrice > 0 ? '' : (scanPrice > 0 ? '扫描价' : '');
+              const marketValue = refPrice > 0 ? remaining * refPrice : null;
+              const amount = parseFloat(order.amount);
+              const tradeValue = order.isGift ? amount : amount * 5.25;
+              const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+              const startDate = new Date(order.createdAt);
+              const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+              const endDate = order.sellStatus === 'sold' && order.sellConfirmedAt ? new Date(order.sellConfirmedAt) : new Date();
+              const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+              endDay.setHours(0,0,0,0);
+              const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+              const totalFee = dailyFee * holdDays;
+              const tierColor = currentTier === 0 ? '#0EA56A' : '#EF4444';
+              const labelStyle = { color: '#6B7A9A' } as React.CSSProperties;
+              const dimStyle = { color: '#9CA3AF' } as React.CSSProperties;
+              return (
+                <>
+                  <div className="flex justify-between items-center text-xs">
+                    <span style={labelStyle}>当前收益权</span>
+                    <span className="font-semibold" style={{ color: tierColor }}>
+                      {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
+                      <span className="font-normal ml-1" style={dimStyle}>({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})</span>
+                    </span>
+                  </div>
+                  <div className="my-1.5" style={{ borderTop: '1px solid #D1D9F0' }} />
+                  <div className="flex justify-between items-center text-xs">
+                    <span style={labelStyle} className="shrink-0 mr-2">当前持仓数量</span>
+                    <span style={dimStyle} className="text-right">{displayQty} × {pctStr} = <span className="font-semibold" style={{ color: '#1A2340' }}>{displayRemaining} {order.coin}</span></span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs mt-1">
+                    <span style={labelStyle} className="shrink-0 mr-2">当前市值{refPriceLabel ? <span style={dimStyle}> ({refPriceLabel})</span> : null}</span>
+                    {marketValue !== null
+                      ? <span style={dimStyle} className="text-right">{displayRemaining} × {refPrice.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{marketValue.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} u</span></span>
+                      : <span style={dimStyle}>--</span>}
+                  </div>
+                  <div className="flex justify-between items-center text-xs mt-1">
+                    <span style={labelStyle} className="shrink-0 mr-2">管理费</span>
+                    <span style={dimStyle} className="text-right">{dailyFee.toFixed(4)}u × {holdDays}天 = <span className="font-semibold" style={{ color: '#1A2340' }}>{totalFee.toFixed(4)}u</span></span>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -687,6 +737,82 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────
+
+// 融资订单备注内联编辑子组件
+function NoteRow({ orderId, ledgerId, initialNote, onSaved }: {
+  orderId: number;
+  ledgerId: number;
+  initialNote: string;
+  onSaved: (note: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(initialNote);
+  const [saving, setSaving] = useState(false);
+  const updateNote = trpc.ledger.financeUpdatePublicNote.useMutation();
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: value });
+      onSaved(value);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between px-4 py-2 text-xs" style={{ borderTop: '1px solid #E8EFFF' }}>
+      <span className="shrink-0 mr-3" style={{ color: '#9CA3AF' }}>备注</span>
+      <div className="flex-1 flex items-center gap-1 justify-end min-w-0">
+        {editing ? (
+          <>
+            <input
+              autoFocus
+              className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
+              style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+              placeholder="输入备注..."
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="shrink-0 text-xs px-2 py-0.5 rounded"
+              style={{ background: '#3B82F6', color: '#fff' }}
+            >
+              {saving ? '...' : '保存'}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setValue(initialNote); }}
+              className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+              style={{ background: '#F3F4F6', color: '#6B7280' }}
+            >取消</button>
+          </>
+        ) : (
+          <>
+            <span className="text-right truncate" style={{ color: value ? '#4B5563' : '#C0C8D8', wordBreak: 'break-all' }}>
+              {value || '点击添加备注'}
+            </span>
+            <button
+              onClick={() => setEditing(true)}
+              className="shrink-0 ml-1"
+              style={{ opacity: 0.5, lineHeight: 1 }}
+              title="编辑备注"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function CryptoPrediction() {
   const [, params] = useRoute("/ledger/:id/crypto-prediction");
   const [, setLocation] = useLocation();
@@ -1230,7 +1356,33 @@ export default function CryptoPrediction() {
               />
             )}
             <div className="mt-4 relative z-20">
-              <div className="text-sm font-semibold mb-2" style={{ color: '#1A2340' }}>当前订单</div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
+                  当前订单{(!ordersLoading && orders.length > 0) ? `（${orders.length}单）` : ''}
+                </span>
+                {(!ordersLoading && orders.length > 0) && (() => {
+                  const feeOrders = orders.filter((o: any) => o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹'));
+                  let unsettledFee = 0;
+                  feeOrders.forEach((o: any) => {
+                    const isSold = o.sellStatus === 'sold';
+                    if (isSold) return;
+                    const amount = parseFloat(o.amount);
+                    const tradeValue = o.isGift ? amount : amount * 5.25;
+                    const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+                    const startDate = new Date(o.createdAt);
+                    const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                    const endDay = new Date();
+                    endDay.setHours(0,0,0,0);
+                    const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+                    unsettledFee += dailyFee * holdDays;
+                  });
+                  return (
+                    <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
+                      管理费 <span style={{ color: '#0EA56A' }}>{unsettledFee.toFixed(2)}u</span>
+                    </span>
+                  );
+                })()}
+              </div>
               {ordersLoading ? (
                 <div className="space-y-2 pt-1">
                   {[1,2,3].map(i => (
@@ -1444,7 +1596,7 @@ export default function CryptoPrediction() {
                 {financeOrders.map((order: any) => {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                   const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
-                  const isNegativeRate = annualRate < 0;
+                  const isNegativeRate = true; // 融资付息页面用户均为付息方，利息一律显示为负数
                   const interestBase = parseFloat(order.interest_base || order.principal || '0');
                   const startDate = order.interest_start_date || order.startDate || null;
                   const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
@@ -1556,7 +1708,7 @@ export default function CryptoPrediction() {
                                   className="text-2xl font-bold tabular-nums leading-tight"
                                   style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                                 >
-                                  {isNegativeRate ? '-' : ''}{unpaidInterest.toFixed(2)}
+                                  {unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)}
                                 </span>
                                 <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
                               </div>
@@ -1735,11 +1887,21 @@ export default function CryptoPrediction() {
                                   <span className="font-medium" style={{ color: '#4B5563' }}>{order.counterparty}</span>
                                 </div>
                               )}
+
                             </div>
                           </div>
                         </div>
 
                       </div>
+                      <NoteRow
+                        orderId={order.id}
+                        ledgerId={ledgerId}
+                        initialNote={order.public_note || ''}
+                        onSaved={(newNote: string) => {
+                          order.public_note = newNote || null;
+                          refetchFinanceOrders();
+                        }}
+                      />
                     </div>
                   );
                 })}
