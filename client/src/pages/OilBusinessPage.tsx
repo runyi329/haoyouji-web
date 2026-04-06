@@ -57,7 +57,7 @@ function CombinedFundingChart({ grouped }: { grouped: Record<string, any[]> }) {
   const allTimes = useMemo(() => {
     const set = new Set<number>();
     for (const sym of Object.keys(grouped)) {
-      for (const row of grouped[sym]) set.add(Number(row.funding_time));
+      for (const row of grouped[sym]) set.add(Number(row.fundingTime ?? row.funding_time));
     }
     return Array.from(set).sort((a, b) => a - b);
   }, [grouped]);
@@ -74,7 +74,7 @@ function CombinedFundingChart({ grouped }: { grouped: Record<string, any[]> }) {
   for (const sym of Object.keys(grouped)) {
     seriesMap[sym] = new Map();
     for (const row of grouped[sym]) {
-      seriesMap[sym].set(Number(row.funding_time), parseFloat(row.funding_rate) * 100);
+      seriesMap[sym].set(Number(row.fundingTime ?? row.funding_time), parseFloat(String(row.fundingRate ?? row.funding_rate)) * 100);
     }
   }
 
