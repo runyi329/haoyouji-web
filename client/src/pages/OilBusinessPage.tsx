@@ -268,7 +268,7 @@ export default function OilBusinessPage() {
   const { data: allFundingData } = trpc.energy.getAllFundingHistory.useQuery(undefined, { staleTime: 120000 });
   const allFunding = (allFundingData as any)?.grouped;
 
-  const contracts: ContractData[] = (marketRows || []).map((row: any) => {
+  const contracts: ContractData[] = (effectiveMarketRows || []).map((row: any) => {
     const info = CONTRACTS.find(c => c.symbol === row.symbol)!;
     return {
       symbol: row.symbol,
@@ -287,7 +287,7 @@ export default function OilBusinessPage() {
 
   const loading = marketLoading;
   const error = marketError ? "数据加载失败：" + marketError.message : null;
-  const lastUpdated = marketRows && marketRows.length > 0 ? new Date((marketRows[0] as any).updated_at) : null;
+  const lastUpdated = effectiveMarketRows && (effectiveMarketRows as any[]).length > 0 ? new Date((effectiveMarketRows[0] as any).updated_at) : null;
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: "#0a0c10", fontFamily: "'SF Mono', 'Consolas', monospace" }}>
@@ -311,7 +311,11 @@ export default function OilBusinessPage() {
         </div>
         {lastUpdated && (
           <div className="px-4 pb-1.5 text-right text-xs text-gray-600">
-            更新于 {lastUpdated.toLocaleTimeString("zh-CN")}
+            {isUsingCache && cacheTime ? (
+              <span style={{ color: "#f59e0b" }}>⚠ 缓存数据 · {cacheTime.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+            ) : (
+              <span>更新于 {lastUpdated.toLocaleTimeString("zh-CN")}</span>
+            )}
           </div>
         )}
       </div>
@@ -441,8 +445,8 @@ export default function OilBusinessPage() {
 
             {/* 折线图 */}
             <div style={{ width: "100%", height: 130, overflow: "visible" }}>
-              {allFunding ? (
-                <CombinedFundingChart grouped={allFunding as Record<string, any[]>} />
+              {effectiveFunding ? (
+                <CombinedFundingChart grouped={effectiveFunding as Record<string, any[]>} />
               ) : (
                 <div className="flex items-center justify-center h-full text-gray-600 text-xs">加载中...</div>
               )}

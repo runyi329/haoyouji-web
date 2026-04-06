@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 const SYMBOLS = ["CLUSDT", "BZUSDT", "NATGASUSDT"];
@@ -33,7 +34,25 @@ function fmtTime(ts: number) {
 
 export default function FundingHistoryPage() {
   const [, setLocation] = useLocation();
-  const { data, isLoading, error } = trpc.energy.getAllFundingHistory.useQuery();
+  const { data: rawData, isLoading, error } = trpc.energy.getAllFundingHistory.useQuery();
+  const CACHE_KEY = "energy_funding_history_cache";
+
+  // 成功拉到数据时写入缓存
+  useEffect(() => {
+    if (rawData && (rawData as any).grouped && Object.keys((rawData as any).grouped).length > 0) {
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data: rawData, savedAt: Date.now() })); } catch {}
+    }
+  }, [rawData]);
+
+  // 读取缓存兜底
+  const cachedRaw = (() => {
+    try { const s = localStorage.getItem(CACHE_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
+  })();
+  const data = (rawData && (rawData as any).grouped && Object.keys((rawData as any).grouped).length > 0)
+    ? rawData
+    : cachedRaw?.data;
+  const isUsingCache = !rawData && !!cachedRaw?.data;
+  const cacheTime = isUsingCache ? new Date(cachedRaw.savedAt) : null;
 
   if (isLoading) {
     return (
@@ -93,7 +112,12 @@ export default function FundingHistoryPage() {
         </button>
         <div style={{ flex: 1, textAlign: "center" }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#e6edf3", letterSpacing: 1 }}>资金费率历史</div>
-          <div style={{ fontSize: 11, color: "#8b949e", marginTop: 1 }}>Binance 永续合约 · 每4小时结算</div>
+          <div style={{ fontSize: 11, color: "#8b949e", marginTop: 1 }}>
+            {isUsingCache && cacheTime
+              ? <span style={{ color: "#f59e0b" }}>⚠ 缓存 · {cacheTime.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+              : "Binance 永续合约 · 每4小时结算"
+            }
+          </div>
         </div>
         <div style={{ width: 60 }} />
       </div>
