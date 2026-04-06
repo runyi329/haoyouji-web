@@ -16766,5 +16766,69 @@ export const adminFeatureRouter = router({
         return { success: false, phone, message: err.message };
       }
     }),
+
+  // ===== IDEALIGHT 皮肤分析 =====
+  analyzeSkin: publicProcedure
+    .input(z.object({
+      imageBase64: z.string(),
+      mimeType: z.string().default('image/jpeg'),
+    }))
+    .mutation(async ({ input }) => {
+      const apiKey = process.env.DEEPSEEK_API_KEY;
+      if (!apiKey) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI 服务未配置' });
+      }
+      const prompt = `你是一位专业的皮肤科医生和美容顾问。请仔细分析这张人脸照片，对以下5个维度进行专业评估，并给出分数（0-100分，100分最好）和详细说明。
+请严格按照以下JSON格式返回，不要有任何其他文字：
+{
+  "wrinkles": { "score": 数字, "level": "轻微/中度/明显", "desc": "具体描述" },
+  "pores": { "score": 数字, "level": "细腻/一般/粗大", "desc": "具体描述" },
+  "acne": { "score": 数字, "level": "无/少量/较多", "desc": "具体描述" },
+  "sensitivity": { "score": 数字, "level": "稳定/轻度敏感/敏感", "desc": "具体描述" },
+  "texture": { "score": 数字, "level": "光滑/一般/粗糙", "desc": "具体描述" },
+  "overall": { "score": 数字, "summary": "整体皮肤状况总结2-3句" },
+  "suggestions": ["护肤建议1", "护肤建议2", "护肤建议3"]
+}`;
+      try {
+        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'image_url',
+                    image_url: { url: `data:${input.mimeType};base64,${input.imageBase64}` },
+                  },
+                  { type: 'text', text: prompt },
+                ],
+              },
+            ],
+            response_format: { type: 'json_object' },
+            max_tokens: 1000,
+          }),
+        });
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error('[SkinAnalysis] DeepSeek API error:', response.status, errText);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `AI分析失败: ${response.status}` });
+        }
+        const data = await response.json() as any;
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI返回结果为空' });
+        const result = JSON.parse(content);
+        return { success: true, result };
+      } catch (err: any) {
+        if (err instanceof TRPCError) throw err;
+        console.error('[SkinAnalysis] Error:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: err.message || 'AI分析失败，请重试' });
+      }
+    }),
 });
 export type AppRouter = typeof appRouter;
