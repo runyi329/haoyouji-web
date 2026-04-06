@@ -583,7 +583,7 @@ export default function Admin() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        @{u.username} · {u.points} 积分
+                        @{u.username} · {u.points} 积分 · ID: {u.id}
                       </p>
                       {u.createdAt && (
                         <p className="text-xs text-muted-foreground">
