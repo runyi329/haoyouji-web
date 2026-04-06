@@ -1690,7 +1690,7 @@ export default function LedgerDetail() {
                       title="MT5 外汇平台"
                     >
                       <img
-                        src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/vetCsrcIABqsiMmP.png"
+                        src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/OPICjhxYcoKhRcPL.png"
                         alt="MT5"
                         className="w-full h-full object-cover rounded-full"
                       />
