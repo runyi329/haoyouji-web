@@ -268,6 +268,27 @@ export default function OilBusinessPage() {
   const { data: allFundingData } = trpc.energy.getAllFundingHistory.useQuery(undefined, { staleTime: 120000 });
   const allFunding = (allFundingData as any)?.grouped;
 
+  // ---- localStorage 缓存兜底 ----
+  const CACHE_KEY_MARKET = "energy_market_cache";
+  const CACHE_KEY_FUNDING = "energy_funding_cache";
+  useEffect(() => {
+    if (marketRows && (marketRows as any[]).length > 0) {
+      try { localStorage.setItem(CACHE_KEY_MARKET, JSON.stringify({ data: marketRows, savedAt: Date.now() })); } catch {}
+    }
+  }, [marketRows]);
+  useEffect(() => {
+    if (allFunding && Object.keys(allFunding).length > 0) {
+      try { localStorage.setItem(CACHE_KEY_FUNDING, JSON.stringify({ data: allFunding, savedAt: Date.now() })); } catch {}
+    }
+  }, [allFunding]);
+  const cachedMarket = (() => { try { const s = localStorage.getItem(CACHE_KEY_MARKET); return s ? JSON.parse(s) : null; } catch { return null; } })();
+  const cachedFunding = (() => { try { const s = localStorage.getItem(CACHE_KEY_FUNDING); return s ? JSON.parse(s) : null; } catch { return null; } })();
+  const effectiveMarketRows = (marketRows && (marketRows as any[]).length > 0) ? marketRows : cachedMarket?.data;
+  const effectiveFunding = (allFunding && Object.keys(allFunding).length > 0) ? allFunding : cachedFunding?.data;
+  const isUsingCache = (!marketRows || (marketRows as any[]).length === 0) && !!cachedMarket?.data;
+  const cacheTime = isUsingCache ? new Date(cachedMarket.savedAt) : null;
+  // ---- 缓存兜底结束 ----
+
   const contracts: ContractData[] = (effectiveMarketRows || []).map((row: any) => {
     const info = CONTRACTS.find(c => c.symbol === row.symbol)!;
     return {
