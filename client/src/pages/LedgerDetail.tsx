@@ -1682,6 +1682,19 @@ export default function LedgerDetail() {
                 {/* QQ 快捷入口：仅 jiang(870413) 和 yjh(4957151) 可见 */}
                 {(user?.id === 870413 || user?.id === 4957151) && isCustomAF && (
                   <>
+                    {/* MT5 外汇平台入口 */}
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                      style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
+                      onClick={() => window.open('https://www.metatrader5.com', '_blank')}
+                      title="MT5 外汇平台"
+                    >
+                      <img
+                        src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/vetCsrcIABqsiMmP.png"
+                        alt="MT5"
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    </div>
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
                       style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
