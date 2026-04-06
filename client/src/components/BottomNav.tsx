@@ -175,7 +175,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
               onClick={handlePlusClick}
               className="relative -mt-6"
             >
-              <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center shadow-lg transition-all duration-200 ${centerBtnBg}`}>
+              <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center shadow-lg transition-all duration-200 overflow-hidden ${centerBtnBg}`}>
                 {isLiulifan ? (
                   <span className="text-white text-xs font-bold leading-tight text-center">奢贝</span>
                 ) : isCx8618 ? (
@@ -183,7 +183,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                 ) : isJiang ? (
                   <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/ba9a86df64fd3309eeb754e6b875940a_c32624a6.jpg" className="w-10 h-10 object-cover rounded-full" alt="R1" />
                 ) : isStevenHuang ? (
-                  <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/idealight_icon_white_ca457943.png" className="w-9 h-9 object-contain" alt="IDEALIGHT" />
+                  <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/idealight_icon_white_ca457943.png" className="w-full h-full object-cover" alt="IDEALIGHT" />
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}
