@@ -38,8 +38,8 @@ function formatPrice(price: number, symbol: string) {
 }
 
 function formatVolume(vol: number) {
-  if (vol >= 1e6) return (vol / 1e6).toFixed(2) + "M";
-  if (vol >= 1e3) return (vol / 1e3).toFixed(1) + "K";
+  if (vol >= 1e6) return (vol / 1e6).toFixed(1) + "M";
+  if (vol >= 1e3) return (vol / 1e3).toFixed(0) + "K";
   return vol.toFixed(0);
 }
 
@@ -49,18 +49,22 @@ function Countdown({ nextFundingTime }: { nextFundingTime: number }) {
   useEffect(() => {
     const update = () => {
       const diff = nextFundingTime - Date.now();
-      if (diff <= 0) { setRemaining("00:00:00"); return; }
+      if (diff <= 0) { setRemaining("00:00"); return; }
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      setRemaining(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+      if (h > 0) {
+        setRemaining(`${h}h${String(m).padStart(2, "0")}m`);
+      } else {
+        setRemaining(`${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+      }
     };
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
   }, [nextFundingTime]);
 
-  return <span className="font-mono text-amber-400">{remaining}</span>;
+  return <span className="font-mono text-amber-400 text-[10px]">{remaining}</span>;
 }
 
 function MiniChart({ data, symbol }: { data: FundingHistory[]; symbol: string }) {
@@ -102,7 +106,7 @@ export default function OilBusinessPage() {
 
   // 从数据库读取行情数据（tRPC）
   const { data: marketRows, isLoading: marketLoading, error: marketError, refetch: refetchMarket } = trpc.energy.getMarketData.useQuery(undefined, {
-    refetchInterval: 60000, // 每60秒自动刷新
+    refetchInterval: 60000,
     staleTime: 30000,
   });
 
@@ -171,10 +175,12 @@ export default function OilBusinessPage() {
       </div>
 
       {loading ? (
-        <div className="p-4 space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-28 rounded animate-pulse" style={{ backgroundColor: "#141920" }} />
-          ))}
+        <div className="p-3">
+          <div className="grid grid-cols-3 gap-2">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-32 rounded animate-pulse" style={{ backgroundColor: "#141920" }} />
+            ))}
+          </div>
         </div>
       ) : error ? (
         <div className="p-6 text-center">
@@ -185,89 +191,109 @@ export default function OilBusinessPage() {
         </div>
       ) : (
         <div className="pb-8">
-          {/* 三大合约价格卡片 */}
-          <div className="p-4 space-y-3">
-            {contracts.map((c) => {
-              const info = CONTRACTS.find(x => x.symbol === c.symbol)!;
-              const isUp = c.priceChangePercent >= 0;
-              const rateColor = c.lastFundingRate >= 0 ? "#22c55e" : "#ef4444";
-              return (
-                <div
-                  key={c.symbol}
-                  className="rounded-lg p-4 cursor-pointer transition-all"
-                  style={{
-                    backgroundColor: activeTab === c.symbol ? "#141f2e" : "#111620",
-                    border: `1px solid ${activeTab === c.symbol ? "#2a4a7f" : "#1e2530"}`,
-                  }}
-                  onClick={() => setActiveTab(c.symbol)}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold tracking-widest px-1.5 py-0.5 rounded" style={{ backgroundColor: "#1e2d40", color: "#60a5fa" }}>
-                          {info.shortName}
-                        </span>
-                        <span className="text-sm text-gray-300">{c.name}</span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">{info.unit}</div>
+          {/* 三大合约横向卡片 */}
+          <div className="px-2 pt-3 pb-2">
+            <div className="grid grid-cols-3 gap-1.5">
+              {contracts.map((c) => {
+                const info = CONTRACTS.find(x => x.symbol === c.symbol)!;
+                const isUp = c.priceChangePercent >= 0;
+                const rateColor = c.lastFundingRate >= 0 ? "#22c55e" : "#ef4444";
+                const isActive = activeTab === c.symbol;
+                return (
+                  <div
+                    key={c.symbol}
+                    className="rounded-lg cursor-pointer transition-all"
+                    style={{
+                      backgroundColor: isActive ? "#141f2e" : "#111620",
+                      border: `1px solid ${isActive ? "#2a4a7f" : "#1e2530"}`,
+                      padding: "8px 6px",
+                    }}
+                    onClick={() => setActiveTab(c.symbol)}
+                  >
+                    {/* 顶部：名称 + 外链 */}
+                    <div className="flex items-center justify-between mb-1">
+                      <span
+                        className="text-[10px] font-bold tracking-wider px-1 py-0.5 rounded leading-none"
+                        style={{ backgroundColor: "#1e2d40", color: "#60a5fa" }}
+                      >
+                        {info.shortName}
+                      </span>
+                      <a
+                        href={info.binanceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="text-gray-700 hover:text-blue-400"
+                      >
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
                     </div>
-                    <a
-                      href={info.binanceUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={e => e.stopPropagation()}
-                      className="text-gray-600 hover:text-blue-400 transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
 
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <div className="text-2xl font-bold tracking-tight" style={{ fontFamily: "monospace" }}>
-                        {formatPrice(c.markPrice, c.symbol)}
-                      </div>
-                      <div className={`flex items-center gap-1 text-sm mt-0.5 ${isUp ? "text-green-400" : "text-red-400"}`}>
-                        {isUp ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                        {isUp ? "+" : ""}{c.priceChangePercent.toFixed(2)}% 24h
-                      </div>
+                    {/* 名称 */}
+                    <div className="text-[10px] text-gray-400 mb-1 leading-tight truncate">{c.name}</div>
+
+                    {/* 价格（大字） */}
+                    <div className="text-sm font-bold tracking-tight leading-tight mb-0.5" style={{ fontFamily: "monospace", color: "#f0f6ff" }}>
+                      {formatPrice(c.markPrice, c.symbol)}
                     </div>
-                    <div className="text-right">
-                      <div className="text-xs text-gray-500 mb-0.5">资金费率</div>
-                      <div className="text-base font-bold" style={{ color: rateColor }}>
+
+                    {/* 单位 */}
+                    <div className="text-[9px] text-gray-600 mb-1 leading-none">{info.unit}</div>
+
+                    {/* 24h涨跌 */}
+                    <div className={`flex items-center gap-0.5 text-[10px] mb-1.5 ${isUp ? "text-green-400" : "text-red-400"}`}>
+                      {isUp ? <TrendingUp className="w-2.5 h-2.5 shrink-0" /> : <TrendingDown className="w-2.5 h-2.5 shrink-0" />}
+                      <span className="font-mono">{isUp ? "+" : ""}{c.priceChangePercent.toFixed(2)}%</span>
+                    </div>
+
+                    {/* 分隔线 */}
+                    <div className="mb-1.5" style={{ borderTop: "1px solid #1e2530" }} />
+
+                    {/* 资金费率 */}
+                    <div className="mb-0.5">
+                      <div className="text-[9px] text-gray-600 leading-none mb-0.5">资金费率</div>
+                      <div className="text-[11px] font-bold leading-none" style={{ color: rateColor }}>
                         {formatRate(c.lastFundingRate)}
                       </div>
-                      <div className="text-xs text-gray-600 mt-0.5">
-                        结算 <Countdown nextFundingTime={c.nextFundingTime} />
+                    </div>
+
+                    {/* 结算倒计时 */}
+                    <div className="text-[9px] text-gray-600 leading-none mb-1.5">
+                      结算 <Countdown nextFundingTime={c.nextFundingTime} />
+                    </div>
+
+                    {/* 分隔线 */}
+                    <div className="mb-1.5" style={{ borderTop: "1px solid #1e2530" }} />
+
+                    {/* 24h高低 */}
+                    <div className="flex justify-between mb-0.5">
+                      <div>
+                        <div className="text-[9px] text-gray-600 leading-none">24h高</div>
+                        <div className="text-[10px] font-mono text-green-400 leading-tight">{formatPrice(c.highPrice, c.symbol)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] text-gray-600 leading-none">24h低</div>
+                        <div className="text-[10px] font-mono text-red-400 leading-tight">{formatPrice(c.lowPrice, c.symbol)}</div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="grid grid-cols-3 gap-2 mt-3 pt-3" style={{ borderTop: "1px solid #1e2530" }}>
+                    {/* 未平仓量 */}
                     <div>
-                      <div className="text-xs text-gray-600">24h高</div>
-                      <div className="text-xs text-green-400 font-mono">{formatPrice(c.highPrice, c.symbol)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-600">24h低</div>
-                      <div className="text-xs text-red-400 font-mono">{formatPrice(c.lowPrice, c.symbol)}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-gray-600">未平仓量</div>
-                      <div className="text-xs text-gray-300 font-mono">{formatVolume(c.openInterest)}</div>
+                      <div className="text-[9px] text-gray-600 leading-none">未平仓量</div>
+                      <div className="text-[10px] font-mono text-gray-300 leading-tight">{formatVolume(c.openInterest)}</div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
           {/* 资金费率历史图表 */}
-          <div className="mx-4 rounded-lg p-4" style={{ backgroundColor: "#111620", border: "1px solid #1e2530" }}>
+          <div className="mx-2 rounded-lg p-4" style={{ backgroundColor: "#111620", border: "1px solid #1e2530" }}>
             <div className="flex items-center justify-between mb-3">
               <div>
-                <div className="text-xs text-gray-400 uppercase tracking-widest">Funding Rate History</div>
-                <div className="text-xs text-gray-600 mt-0.5">
+                <div className="text-xs text-gray-400 font-semibold">资金费率历史</div>
+                <div className="text-[10px] text-gray-600 mt-0.5">
                   {CONTRACTS.find(c => c.symbol === activeTab)?.name} · 近5天 · 每4小时
                 </div>
               </div>
@@ -310,7 +336,7 @@ export default function OilBusinessPage() {
           </div>
 
           {/* 快速跳转 */}
-          <div className="mx-4 mt-3 rounded-lg p-4" style={{ backgroundColor: "#111620", border: "1px solid #1e2530" }}>
+          <div className="mx-2 mt-3 rounded-lg p-4" style={{ backgroundColor: "#111620", border: "1px solid #1e2530" }}>
             <div className="text-xs text-gray-400 uppercase tracking-widest mb-3">Quick Access · Binance</div>
             <div className="grid grid-cols-3 gap-2">
               {CONTRACTS.map(c => (
@@ -330,7 +356,7 @@ export default function OilBusinessPage() {
             </div>
           </div>
 
-          <div className="mx-4 mt-3 text-center">
+          <div className="mx-2 mt-3 text-center">
             <div className="text-xs text-gray-700">数据来源：Binance Futures · 定时同步至数据库</div>
           </div>
         </div>
