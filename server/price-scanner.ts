@@ -117,9 +117,8 @@ export function getLatestPrice(coin: string): number | null {
   if (coin.toUpperCase() === 'USDT') return 1.0;
   const entry = latestPrices[coin.toUpperCase()];
   if (!entry) return null;
-  // 如果价格超过4小时未更新，视为过期
-  const age = Date.now() - new Date(entry.updatedAt).getTime();
-  if (age > 4 * 60 * 60 * 1000) return null;
+  // 只要有缓存价格就返回，不设过期限制
+  // 服务器无法访问境外API时，至少用上一次持久化缓存的价格显示资产
   return entry.price;
 }
 

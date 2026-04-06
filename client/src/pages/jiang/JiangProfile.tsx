@@ -22,7 +22,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import {
-  User, Share2, Settings, ShoppingBag, MessageCircle, Info,
+  User, Share2, Settings, ShoppingBag, MessageCircle, Info, MessageSquare,
   ChevronRight, LogIn, LogOut, Cpu, BookOpen, ExternalLink,
   ShoppingCart, Store, TrendingUp
 } from "lucide-react";
@@ -115,6 +115,12 @@ export default function JiangProfile() {
           label: "OKX AI 交易助手",
           desc: "实时行情、持仓分析、AI 对话",
           onPress: () => setLocation("/jiang/okx-trader"),
+        },
+        {
+          icon: <MessageSquare className="w-4 h-4" />,
+          label: "短信管理",
+          desc: "腾讯云短信服务 · 模板 · 发送测试",
+          onPress: () => setLocation("/jiang/sms-manage"),
         },
       ],
     }] : []),
