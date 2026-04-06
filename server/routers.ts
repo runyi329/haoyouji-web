@@ -16831,22 +16831,5 @@ export const adminFeatureRouter = router({
         return { success: false, phone, message: err.message };
       }
     }),
-        });
-        if (!response.ok) {
-          const errText = await response.text();
-          console.error('[SkinAnalysis] DeepSeek API error:', response.status, errText);
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `AI分析失败: ${response.status}` });
-        }
-        const data = await response.json() as any;
-        const content = data.choices?.[0]?.message?.content;
-        if (!content) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI返回结果为空' });
-        const result = JSON.parse(content);
-        return { success: true, result };
-      } catch (err: any) {
-        if (err instanceof TRPCError) throw err;
-        console.error('[SkinAnalysis] Error:', err);
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: err.message || 'AI分析失败，请重试' });
-      }
-    }),
 });
 export type AppRouter = typeof appRouter;
