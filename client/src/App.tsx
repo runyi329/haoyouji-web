@@ -123,6 +123,12 @@ const QQOnlinePage = lazy(() => import("./pages/QQOnlinePage"));
 const QQOnlineHistory = lazy(() => import("./pages/QQOnlineHistory"));
 const QQTradeRecords = lazy(() => import("./pages/QQTradeRecords"));
 const QQSettings = lazy(() => import("./pages/QQSettings"));
+// 石油业务页面
+const OilBusinessPage = lazy(() => import("./pages/OilBusinessPage"));
+const FundingHistoryPage = lazy(() => import("./pages/FundingHistoryPage"));
+const CryptoFundingHistoryPage = lazy(() => import("./pages/CryptoFundingHistoryPage"));
+const OilPricesPage = lazy(() => import("./pages/OilPricesPage"));
+const OilTradesPage = lazy(() => import("./pages/OilTradesPage"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
@@ -246,6 +252,7 @@ const JiangShare = lazy(() => import("./pages/jiang/JiangShare"));
 const JiangSettings = lazy(() => import("./pages/jiang/JiangSettings"));
 const JiangMerchants = lazy(() => import("./pages/jiang/JiangMerchants"));
 const JiangOKXTrader = lazy(() => import("./pages/jiang/JiangOKXTrader"));
+const JiangSmsManage = lazy(() => import("./pages/jiang/JiangSmsManage"));
 // AB 共享意见本 - 游客扫码页面
 const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 // AB 意见本 - 管理者查看页面
@@ -488,6 +495,7 @@ function Router() {
         <Route path="/jiang/settings" component={JiangSettings} />
         <Route path="/jiang/merchants" component={JiangMerchants} />
         <Route path="/jiang/okx-trader" component={JiangOKXTrader} />
+        <Route path="/jiang/sms-manage" component={JiangSmsManage} />
         {/* 润仪算力研发中心 - 分享页（无需登录，参见§24） */}
         <Route path="/share/jiang" component={JiangShare} />
         {/* IDEALIGHT 红颜派（STEVEN_HUANG，无需登录） */}
@@ -514,6 +522,13 @@ function Router() {
         <Route path="/ledger/:id/qq/history" component={QQOnlineHistory} />
         <Route path="/ledger/:id/qq/trade" component={QQTradeRecords} />
         <Route path="/ledger/:id/qq/settings" component={QQSettings} />
+        {/* 石油业务 */}
+        <Route path="/ledger/:id/oil" component={OilBusinessPage} />
+        <Route path="/ledger/:id/oil/funding-history" component={FundingHistoryPage} />
+        {/* 加密货币资金费率历史 */}
+        <Route path="/ledger/:id/crypto/funding-history" component={CryptoFundingHistoryPage} />
+        <Route path="/ledger/:id/oil/prices" component={OilPricesPage} />
+        <Route path="/ledger/:id/oil/trades" component={OilTradesPage} />
         {/* AD 提示词库 */}
         <Route path="/ledger/:id/prompt-library" component={lazy(() => import("./pages/PromptLibraryPage"))} />
         {/* 提示词库快捷入口（不需要ledgerId） */}

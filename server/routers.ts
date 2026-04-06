@@ -18,6 +18,7 @@ import * as dbPoints from "./db-points";
 import * as dbTagAnalytics from "./db-tag-analytics";
 import { addPointsForAction } from "./db-point-system";
 import * as dbLedger from "./db-ledger";
+import { smsService } from "./sms-service";
 import * as dbEquity from "./db-equity";
 import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
@@ -10047,14 +10048,16 @@ export const appRouter = router({
               (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual`
           ).catch(() => [[{ recharged: '0', manual: '0' }]]),
 
-          // 查询2：仓位（所有币种 GROUP BY coin+side，排除已卖出订单）
+          // 查询2：仓位（按订单逐条查询，应用权益折扣档位系数）
           db.execute(
-            sql`SELECT coin, side, COALESCE(SUM(CAST(quantity AS DECIMAL(28,8))), 0) as total
-                FROM af_orders
-                WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}
-                  AND status = 'completed' AND coin IN ('BTC','ETH','SOL')
-                  AND (sell_status IS NULL OR sell_status != 'sold')
-                GROUP BY coin, side`
+            sql`SELECT o.id, o.coin, o.side, CAST(o.quantity AS DECIMAL(28,8)) as qty,
+                       COALESCE(MAX(t.tier), 0) as max_tier
+                FROM af_orders o
+                LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
+                WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
+                  AND o.status = 'completed' AND o.coin IN ('BTC','ETH','SOL')
+                  AND (o.sell_status IS NULL OR o.sell_status != 'sold')
+                GROUP BY o.id, o.coin, o.side, o.quantity`
           ).catch(() => [[]]),
 
           // 查询3：用户信息（invite_count）
@@ -10068,16 +10071,23 @@ export const appRouter = router({
         const recharged = parseFloat(balRow?.recharged ?? '0');
         const manual = parseFloat(balRow?.manual ?? '0');
 
-        // 解析仓位
+        // 解析仓位（应用权益折扣档位系数）
+        const EQUITY_DISCOUNT_RATES: Record<number, number> = {
+          0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+          5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+        };
         const posRows: any[] = (positionResult as any)[0] || (positionResult as any) || [];
         const positions: Record<string, number> = { BTC: 0, ETH: 0, SOL: 0 };
         for (const row of posRows) {
           const coin = row.coin;
           const side = row.side;
-          const total = parseFloat((row.total ?? '0').toString());
+          const rawQty = parseFloat((row.qty ?? '0').toString());
+          const tier = parseInt((row.max_tier ?? '0').toString()) || 0;
+          const discountRate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+          const effectiveQty = rawQty * discountRate;
           if (coin in positions) {
-            if (side === 'buy') positions[coin] += total;
-            else if (side === 'sell') positions[coin] -= total;
+            if (side === 'buy') positions[coin] += effectiveQty;
+            else if (side === 'sell') positions[coin] -= effectiveQty;
           }
         }
         for (const c of ['BTC', 'ETH', 'SOL']) positions[c] = Math.max(0, positions[c]);
@@ -10333,22 +10343,33 @@ export const appRouter = router({
             try {
               const userIds4 = result.map(u => u.id);
               const placeholders5 = userIds4.map(() => '?').join(',');
+              // 按订单逐条查询，JOIN tier触发记录，应用权益折扣系数
+              const EQUITY_RATES: Record<number, number> = {
+                0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+                5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+              };
               const [holdingRows] = await rawDb.execute(
-                `SELECT user_id, coin, COALESCE(SUM(CAST(quantity AS DECIMAL(30,8))), 0) as qty
-                 FROM af_orders
-                 WHERE ledger_id = ? AND user_id IN (${placeholders5})
-                   AND status = 'completed' AND side = 'buy'
-                   AND (sell_status IS NULL OR sell_status = 'pending')
-                 GROUP BY user_id, coin`,
+                `SELECT o.user_id, o.coin, CAST(o.quantity AS DECIMAL(30,8)) as qty,
+                        COALESCE(MAX(t.tier), 0) as max_tier
+                 FROM af_orders o
+                 LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
+                 WHERE o.ledger_id = ? AND o.user_id IN (${placeholders5})
+                   AND o.status = 'completed' AND o.side = 'buy'
+                   AND (o.sell_status IS NULL OR o.sell_status = 'pending')
+                 GROUP BY o.id, o.user_id, o.coin, o.quantity`,
                 [input.ledgerId, ...userIds4]
               ) as any[];
               for (const row of (holdingRows as any[])) {
                 if (!holdingMap.has(row.user_id)) holdingMap.set(row.user_id, { BTC: 0, ETH: 0, SOL: 0 });
                 const h = holdingMap.get(row.user_id)!;
                 const coin = (row.coin as string).toUpperCase();
-                if (coin === 'BTC') h.BTC = parseFloat(row.qty?.toString() || '0');
-                else if (coin === 'ETH') h.ETH = parseFloat(row.qty?.toString() || '0');
-                else if (coin === 'SOL') h.SOL = parseFloat(row.qty?.toString() || '0');
+                const rawQty = parseFloat(row.qty?.toString() || '0');
+                const tier = parseInt((row.max_tier ?? '0').toString()) || 0;
+                const discountRate = EQUITY_RATES[tier] ?? 1.0;
+                const effectiveQty = rawQty * discountRate;
+                if (coin === 'BTC') h.BTC += effectiveQty;
+                else if (coin === 'ETH') h.ETH += effectiveQty;
+                else if (coin === 'SOL') h.SOL += effectiveQty;
               }
             } catch (e) {
               console.error('[AF] 持仓查询失败:', e);
@@ -12504,6 +12525,34 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 任意可见用户更新融资订单公开备注
+    financeUpdatePublicNote: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        ledgerId: z.number(),
+        publicNote: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证用户是账本成员（任何成员均可修改公开备注）
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const mysql = await import('mysql2/promise');
+        const dbUrl = process.env.DATABASE_URL || '';
+        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
+        const conn = await mysql.createConnection({
+          host: parsedUrl.hostname,
+          port: parseInt(parsedUrl.port) || 3306,
+          user: decodeURIComponent(parsedUrl.username),
+          password: decodeURIComponent(parsedUrl.password),
+          database: parsedUrl.pathname.replace(/^\//, ''),
+        });
+        await conn.execute('UPDATE finance_interest_orders SET public_note = ? WHERE id = ? AND ledger_id = ?', [input.publicNote || null, input.id, input.ledgerId]);
+        await conn.end();
+        return { success: true };
+      }),
     // 管理员删除融资付息订单
     financeDeleteOrder: protectedProcedure
       .input(z.object({ id: z.number(), ledgerId: z.number() }))
@@ -16134,10 +16183,182 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           receiverName: r.receiver_name || r.receiver_username || '未知',
           createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString('zh-CN') : '未知',
           note: r.note || '',
-        }));
+         }));
       }),
   }),
-
+  // 能源市场数据接口（从数据库读取，由沙盒定时写入）
+  energy: router({
+    // 获取三个合约的最新行情
+    getMarketData: publicProcedure.query(async () => {
+      try {
+        const conn = await getDbConnection();
+        if (!conn) throw new Error("数据库连接失败");
+        const [rows] = await (conn as any).execute(
+          `SELECT t.symbol, t.symbol_name, t.last_price, t.price_change, t.price_change_percent,
+                  t.high_price, t.low_price, t.volume, t.quote_volume,
+                  t.mark_price, t.index_price, t.funding_rate, t.next_funding_time,
+                  t.open_interest, t.open_interest_value, t.updated_at
+           FROM energy_market_data t
+           INNER JOIN (
+             SELECT symbol AS sym, MAX(id) as max_id
+             FROM energy_market_data
+             GROUP BY symbol
+           ) latest ON t.symbol = latest.sym AND t.id = latest.max_id
+           ORDER BY FIELD(t.symbol, 'CLUSDT', 'BZUSDT', 'NATGASUSDT')`
+        );
+        return rows as any[];
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+    // 获取某合约的资金费率历史
+    getFundingHistory: publicProcedure
+      .input(z.object({ symbol: z.string(), limit: z.number().optional().default(32) }))
+      .query(async ({ input }) => {
+        try {
+          const conn = await getDbConnection();
+          if (!conn) throw new Error("数据库连接失败");
+          const [rows] = await (conn as any).execute(
+            `SELECT symbol, funding_time, funding_rate
+             FROM energy_funding_history
+             WHERE symbol = ?
+             ORDER BY funding_time ASC
+             LIMIT ?`,
+            [input.symbol, input.limit]
+          );
+          return rows as any[];
+        } catch (err: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+        }
+      }),
+    // 获取三个合约的资金费率历史（合并图用）
+    getAllFundingHistory: publicProcedure
+      .query(async () => {
+        try {
+          const conn = await getDbConnection();
+          if (!conn) throw new Error("数据库连接失败");
+          const [rows] = await (conn as any).execute(
+            `SELECT symbol, funding_time, funding_rate
+             FROM energy_funding_history
+             WHERE symbol IN ('CLUSDT','BZUSDT','NATGASUSDT')
+             ORDER BY funding_time ASC`,
+            []
+          );
+          // 按 symbol 分组，全量返回
+          const grouped: Record<string, any[]> = {};
+          for (const row of rows as any[]) {
+            if (!grouped[row.symbol]) grouped[row.symbol] = [];
+            grouped[row.symbol].push({
+              fundingTime: Number(row.funding_time),
+              fundingRate: Number(row.funding_rate),
+            });
+          }
+          // 计算每个合约的年化统计
+          const stats: Record<string, any> = {};
+          for (const sym of Object.keys(grouped)) {
+            const rates = grouped[sym].map((r: any) => r.fundingRate);
+            const times = grouped[sym].map((r: any) => r.fundingTime);
+            const n = rates.length;
+            if (n < 2) {
+              stats[sym] = { avgAnnual: 0, posAnnual: 0, negAnnual: 0, netAnnual: 0, count: n };
+              continue;
+            }
+            // 用实际时间间隔计算每次费率的年化贡献
+            let annualSum = 0;
+            let posSum = 0;
+            let negSum = 0;
+            let posCount = 0;
+            let negCount = 0;
+            for (let i = 1; i < n; i++) {
+              const intervalHours = (times[i] - times[i-1]) / 3600000;
+              const safeInterval = intervalHours > 0 ? intervalHours : 8;
+              const annualFactor = 8760 / safeInterval;
+              const rate = rates[i];
+              const contrib = rate * annualFactor;
+              annualSum += contrib;
+              if (rate > 0) { posSum += contrib; posCount++; }
+              else if (rate < 0) { negSum += contrib; negCount++; }
+            }
+            stats[sym] = {
+              netAnnual: annualSum / (n - 1),       // 净年化（正负抵消）
+              posAnnual: posCount > 0 ? posSum / posCount : 0,  // 正费率期平均年化
+              negAnnual: negCount > 0 ? negSum / negCount : 0,  // 负费率期平均年化
+              count: n,
+              posCount,
+              negCount,
+            };
+          }
+          return { grouped, stats };
+        } catch (err: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+        }
+      }),
+  }),
+  // 加密货币资金费率历史接口（BTC/ETH/SOL，从数据库读取，2025-01-01至今）
+  crypto: router({
+    // 获取三个合约的资金费率历史（合并图用）
+    getAllFundingHistory: publicProcedure
+      .query(async () => {
+        try {
+          const conn = await getDbConnection();
+          if (!conn) throw new Error("数据库连接失败");
+          const [rows] = await (conn as any).execute(
+            `SELECT symbol, funding_time, funding_rate
+             FROM crypto_funding_history
+             WHERE symbol IN ('BTCUSDT','ETHUSDT','SOLUSDT')
+             ORDER BY funding_time ASC`,
+            []
+          );
+          // 按 symbol 分组，全量返回
+          const grouped: Record<string, any[]> = {};
+          for (const row of rows as any[]) {
+            if (!grouped[row.symbol]) grouped[row.symbol] = [];
+            grouped[row.symbol].push({
+              fundingTime: Number(row.funding_time),
+              fundingRate: Number(row.funding_rate),
+            });
+          }
+          // 计算每个合约的年化统计
+          const stats: Record<string, any> = {};
+          for (const sym of Object.keys(grouped)) {
+            const rates = grouped[sym].map((r: any) => r.fundingRate);
+            const times = grouped[sym].map((r: any) => r.fundingTime);
+            const n = rates.length;
+            if (n < 2) {
+              stats[sym] = { avgAnnual: 0, posAnnual: 0, negAnnual: 0, netAnnual: 0, count: n };
+              continue;
+            }
+            // 用实际时间间隔计算每次费率的年化贡献
+            let annualSum = 0;
+            let posSum = 0;
+            let negSum = 0;
+            let posCount = 0;
+            let negCount = 0;
+            for (let i = 1; i < n; i++) {
+              const intervalHours = (times[i] - times[i-1]) / 3600000;
+              const safeInterval = intervalHours > 0 ? intervalHours : 8;
+              const annualFactor = 8760 / safeInterval;
+              const rate = rates[i];
+              const contrib = rate * annualFactor;
+              annualSum += contrib;
+              if (rate > 0) { posSum += contrib; posCount++; }
+              else if (rate < 0) { negSum += contrib; negCount++; }
+            }
+            stats[sym] = {
+              netAnnual: annualSum / (n - 1),
+              posAnnual: posCount > 0 ? posSum / posCount : 0,
+              negAnnual: negCount > 0 ? negSum / negCount : 0,
+              count: n,
+              posCount,
+              negCount,
+            };
+          }
+          return { grouped, stats };
+        } catch (err: any) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+        }
+      }),
+  }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
@@ -16466,5 +16687,84 @@ export const adminFeatureRouter = router({
         // 如果没有数据，返回空数组（前端不显示）
         return top2;
       }),
+
+  // ===== SMS 短信管理 API =====
+  smsGetStatus: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
+      }
+      const status = await smsService.checkServiceStatus();
+      return {
+        ...status,
+        config: {
+          appId: process.env.TENCENT_SMS_APP_ID || "",
+          signName: process.env.TENCENT_SMS_SIGN_NAME || "",
+          templateId: process.env.TENCENT_SMS_TEMPLATE_ID || "",
+          adminPhone: process.env.ADMIN_PHONE || "",
+          region: process.env.TENCENT_SMS_REGION || "ap-guangzhou",
+        },
+      };
+    }),
+
+  smsGetTemplates: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
+      }
+      try {
+        // 使用smsService内部的client（已静态初始化，避免动态import问题）
+        const client = (smsService as any).client;
+        if (!client) {
+          throw new Error("短信服务未初始化，请检查腾讯云API密钥配置");
+        }
+        const r = await client.DescribeSmsTemplateList({ International: 0, TemplateIdSet: [] });
+        return (r.DescribeTemplateStatusSet || []).map((t: any) => ({
+          id: t.TemplateId,
+          name: t.TemplateName,
+          content: t.TemplateContent,
+          status: t.StatusCode,
+          statusText: t.StatusCode === 0 ? "审核通过" : t.StatusCode === 1 ? "审核中" : "审核拒绝",
+          createTime: t.CreateTime,
+          reviewReply: t.ReviewReply || "",
+        }));
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+
+  smsSendTest: protectedProcedure
+    .input(z.object({
+      phone: z.string(),
+      templateId: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可操作" });
+      }
+      try {
+        const result = await smsService.sendCustomMessage(input.phone, input.templateId, []);
+        return { success: result.Code === "Ok", code: result.Code, message: result.Message, serialNo: result.SerialNo };
+      } catch (err: any) {
+        return { success: false, code: "Error", message: err.message, serialNo: "" };
+      }
+    }),
+
+  testSms: protectedProcedure
+    .input(z.object({ phone: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      // 仅管理员可调用
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可测试短信" });
+      }
+      const phone = input.phone || process.env.ADMIN_PHONE || "13127919173";
+      const templateId = process.env.TENCENT_SMS_TEMPLATE_ID || "2623560";
+      try {
+        const result = await smsService.sendCustomMessage(phone, templateId, []);
+        return { success: true, phone, message: "短信发送成功", result };
+      } catch (err: any) {
+        return { success: false, phone, message: err.message };
+      }
+    }),
 });
 export type AppRouter = typeof appRouter;
