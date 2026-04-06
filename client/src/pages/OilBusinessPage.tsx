@@ -265,7 +265,8 @@ export default function OilBusinessPage() {
   });
 
   // 三合约合并资金费率历史
-  const { data: allFunding } = trpc.energy.getAllFundingHistory.useQuery({ limit: 35 }, { staleTime: 120000 });
+  const { data: allFundingData } = trpc.energy.getAllFundingHistory.useQuery(undefined, { staleTime: 120000 });
+  const allFunding = (allFundingData as any)?.grouped;
 
   const contracts: ContractData[] = (marketRows || []).map((row: any) => {
     const info = CONTRACTS.find(c => c.symbol === row.symbol)!;
