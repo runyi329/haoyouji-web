@@ -291,114 +291,137 @@ function HealthTab() {
       {/* === 扫描 / 锁定 / 倒计时 === */}
       {(phase === "scanning" || phase === "locking" || phase === "countdown") && (
         <div className="flex flex-col items-center">
-          {/* 扫描视窗 */}
-          <div className="relative w-full max-w-sm aspect-square rounded-2xl overflow-hidden bg-black shadow-2xl mb-4">
+
+          {/* 摄像头全屏 + SVG遮罩层 */}
+          <div className="relative w-full" style={{ maxWidth: 360 }}>
+
+            {/* 视频层：全屏显示，被 SVG clip 裁剪 */}
             <video ref={videoRef} autoPlay playsInline muted
-              className="w-full h-full object-cover scale-x-[-1]" />
+              className="w-full block scale-x-[-1]"
+              style={{ aspectRatio: "3/4", objectFit: "cover", borderRadius: 24 }} />
 
-            {/* 暗角遮罩 */}
-            <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/40 pointer-events-none" />
+            {/* SVG覆盖层：暗色遮罩 + 橄圆镇派窗 + 雷达动画 */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 360 480"
+              preserveAspectRatio="none"
+            >
+              <defs>
+                {/* 橄圆锗孔遮罩 */}
+                <mask id="faceMask">
+                  <rect width="360" height="480" fill="white" />
+                  <ellipse cx="180" cy="210" rx="120" ry="155" fill="black" />
+                </mask>
+                {/* 雷达扇形渐变色 */}
+                <radialGradient id="radarGrad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#C9A96E" stopOpacity="0" />
+                  <stop offset="60%" stopColor="#C9A96E" stopOpacity="0.15" />
+                  <stop offset="100%" stopColor="#C9A96E" stopOpacity="0.5" />
+                </radialGradient>
+                {/* 橄圆clip */}
+                <clipPath id="faceClip">
+                  <ellipse cx="180" cy="210" rx="120" ry="155" />
+                </clipPath>
+              </defs>
 
-            {/* 扫描线 */}
-            {phase === "scanning" && (
-              <div className="absolute left-0 right-0 pointer-events-none"
-                style={{ top: `${scanY}%`, transition: "top 0.05s linear" }}>
-                <div className="h-0.5 bg-gradient-to-r from-transparent via-[#C9A96E] to-transparent opacity-90" />
-                <div className="h-8 bg-gradient-to-b from-[#C9A96E]/20 to-transparent -mt-0.5" />
-              </div>
-            )}
+              {/* 暗色遮罩（橄圆外部） */}
+              <rect width="360" height="480" fill="rgba(0,0,0,0.55)" mask="url(#faceMask)" />
 
-            {/* 人脸椭圆框 */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="relative">
-                {/* 椭圆轮廓 */}
-                <div
-                  className="w-44 h-56 rounded-[50%] border-2 transition-all duration-700"
-                  style={{
-                    borderColor: locked ? "#4ADE80" : phase === "locking" ? "#C9A96E" : "#C9A96E88",
-                    boxShadow: locked ? "0 0 20px #4ADE8066" : phase === "locking" ? "0 0 15px #C9A96E66" : "none",
-                  }}
-                />
-                {/* 四角扫描框 */}
-                {[
-                  { top: -2, left: -2, borderTop: true, borderLeft: true },
-                  { top: -2, right: -2, borderTop: true, borderRight: true },
-                  { bottom: -2, left: -2, borderBottom: true, borderLeft: true },
-                  { bottom: -2, right: -2, borderBottom: true, borderRight: true },
-                ].map((corner, i) => (
-                  <div key={i} className="absolute w-5 h-5 transition-all duration-500"
-                    style={{
-                      top: corner.top !== undefined ? corner.top : undefined,
-                      bottom: (corner as any).bottom !== undefined ? (corner as any).bottom : undefined,
-                      left: corner.left !== undefined ? corner.left : undefined,
-                      right: (corner as any).right !== undefined ? (corner as any).right : undefined,
-                      borderTopWidth: corner.borderTop ? 2 : 0,
-                      borderBottomWidth: (corner as any).borderBottom ? 2 : 0,
-                      borderLeftWidth: corner.borderLeft ? 2 : 0,
-                      borderRightWidth: (corner as any).borderRight ? 2 : 0,
-                      borderStyle: "solid",
-                      borderColor: locked ? "#4ADE80" : "#C9A96E",
-                    }}
+              {/* 橄圆边框 */}
+              <ellipse cx="180" cy="210" rx="120" ry="155" fill="none"
+                stroke={locked ? "#4ADE80" : "#C9A96E"}
+                strokeWidth="2"
+                style={{
+                  filter: locked ? "drop-shadow(0 0 8px #4ADE80)" : "drop-shadow(0 0 6px #C9A96E88)",
+                  transition: "stroke 0.5s, filter 0.5s"
+                }}
+              />
+
+              {/* 雷达扇形（锁定前旋转） */}
+              {!locked && (
+                <g clipPath="url(#faceClip)">
+                  <g style={{ transformOrigin: "180px 210px", animation: "radarSpin 2s linear infinite" }}>
+                    {/* 扇形光束 */}
+                    <path
+                      d="M180,210 L180,55 A155,155 0 0,1 295,210 Z"
+                      fill="url(#radarGrad)"
+                      opacity="0.7"
+                    />
+                    {/* 扫描线 */}
+                    <line x1="180" y1="210" x2="180" y2="55"
+                      stroke="#C9A96E" strokeWidth="1.5" opacity="0.9" />
+                  </g>
+                </g>
+              )}
+
+              {/* 锁定后显示打勾动画 */}
+              {locked && (
+                <g>
+                  <circle cx="180" cy="210" r="18" fill="none" stroke="#4ADE80" strokeWidth="2"
+                    style={{ animation: "lockPulse 0.6s ease-out" }} />
+                  <text x="180" y="216" textAnchor="middle" fontSize="16" fill="#4ADE80"
+                    style={{ animation: "lockPulse 0.6s ease-out" }}>✓</text>
+                </g>
+              )}
+
+              {/* 四角定位标记 */}
+              {[[-1,-1],[1,-1],[1,1],[-1,1]].map(([sx,sy], i) => (
+                <g key={i}>
+                  <line
+                    x1={180 + sx * 120 + (sx > 0 ? -14 : 14)} y1={210 + sy * 155}
+                    x2={180 + sx * 120} y2={210 + sy * 155}
+                    stroke={locked ? "#4ADE80" : "#C9A96E"} strokeWidth="2.5"
+                    style={{ transition: "stroke 0.5s" }}
                   />
-                ))}
-              </div>
-            </div>
+                  <line
+                    x1={180 + sx * 120} y1={210 + sy * 155 + (sy > 0 ? -14 : 14)}
+                    x2={180 + sx * 120} y2={210 + sy * 155}
+                    stroke={locked ? "#4ADE80" : "#C9A96E"} strokeWidth="2.5"
+                    style={{ transition: "stroke 0.5s" }}
+                  />
+                </g>
+              ))}
 
-            {/* 倒计时大数字 */}
-            {phase === "countdown" && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div
-                  key={countdown}
-                  className="text-white font-bold text-8xl opacity-90"
-                  style={{ textShadow: "0 0 30px #C9A96E, 0 0 60px #C9A96E88", animation: "countPop 0.3s ease-out" }}
-                >
-                  {countdown === 0 ? "✓" : countdown}
-                </div>
-              </div>
-            )}
+              {/* 外圈转动虚线圈 */}
+              <ellipse cx="180" cy="210" rx="138" ry="173" fill="none"
+                stroke="#C9A96E" strokeWidth="0.8" strokeDasharray="5 4" opacity="0.3"
+                style={{ transformOrigin: "180px 210px", animation: "spin 10s linear infinite" }}
+              />
 
-            {/* 扫描点阵（装饰） */}
-            {phase === "scanning" && (
-              <div className="absolute top-3 right-3 flex flex-col gap-1 pointer-events-none">
-                {[0,1,2].map(i => (
-                  <div key={i} className="flex gap-1">
-                    {[0,1,2].map(j => (
-                      <div key={j} className="w-1 h-1 rounded-full bg-[#C9A96E]/60"
-                        style={{ animation: `pulse 1.5s ease-in-out ${(i*3+j)*0.1}s infinite` }} />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
+              {/* 底部状态文字 */}
+              <rect x="90" y="430" width="180" height="26" rx="13" fill="rgba(0,0,0,0.55)" />
+              <text x="180" y="447" textAnchor="middle" fontSize="11" fill="white" fontWeight="500">
+                {scanMsg}
+              </text>
 
-            {/* 底部状态文字 */}
-            <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none">
-              <span className="text-white text-xs font-medium bg-black/50 rounded-full px-3 py-1 backdrop-blur-sm">
-                {phase === "countdown" ? `${countdown > 0 ? `${countdown} 秒后自动采集` : "采集中..."}` : scanMsg}
-              </span>
-            </div>
+              {/* 左上角SCAN指示 */}
+              <circle cx="20" cy="20" r="4" fill="#ef4444"
+                style={{ animation: "pulse 1.5s ease-in-out infinite" }} />
+              <text x="30" y="24" fontSize="10" fill="rgba(255,255,255,0.7)" fontFamily="monospace">SCAN</text>
 
-            {/* 右上角REC指示 */}
-            <div className="absolute top-3 left-3 flex items-center gap-1.5 pointer-events-none">
-              <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-white/80 text-xs font-mono">SCAN</span>
-            </div>
+              {/* 右上角点阵 */}
+              {[0,1,2].map(i => [0,1,2].map(j => (
+                <circle key={`${i}-${j}`}
+                  cx={340 - j * 6} cy={12 + i * 6} r="1.5"
+                  fill="#C9A96E" opacity="0.6"
+                  style={{ animation: `pulse 1.5s ease-in-out ${(i*3+j)*0.1}s infinite` }}
+                />
+              )))}
+            </svg>
           </div>
 
           {/* 进度条 */}
-          <div className="w-full max-w-sm mb-4">
+          <div className="w-full mt-4 mb-3" style={{ maxWidth: 360 }}>
             <div className="flex justify-between text-xs text-[#8B6B6B] mb-1.5">
               <span>{scanMsg}</span>
               <span className="font-mono text-[#C9A96E]">
-                {phase === "scanning" ? "25%" : phase === "locking" ? "60%" : `${Math.round((3 - countdown) / 3 * 40 + 60)}%`}
+                {phase === "scanning" ? "30%" : phase === "locking" ? "65%" : "90%"}
               </span>
             </div>
             <div className="h-1.5 bg-[#F5E6E8] rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] rounded-full transition-all duration-500"
-                style={{
-                  width: phase === "scanning" ? "25%" : phase === "locking" ? "60%" : `${Math.round((3 - countdown) / 3 * 40 + 60)}%`
-                }}
+                className="h-full bg-gradient-to-r from-[#C9A96E] to-[#E8B4B8] rounded-full transition-all duration-700"
+                style={{ width: phase === "scanning" ? "30%" : phase === "locking" ? "65%" : "90%" }}
               />
             </div>
           </div>
@@ -520,9 +543,12 @@ function HealthTab() {
       {/* 全局动画样式 */}
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes radarSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes lockPulse { 0% { transform: scale(0.5); opacity: 0; } 60% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
         @keyframes countPop { from { transform: scale(1.4); opacity: 0.5; } to { transform: scale(1); opacity: 0.9; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
         @keyframes progressFill { 0% { width: 0%; } 30% { width: 35%; } 60% { width: 65%; } 85% { width: 88%; } 100% { width: 95%; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
       `}</style>
     </div>
   );
