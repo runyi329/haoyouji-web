@@ -62,9 +62,9 @@ jobs:
             echo "当前监听端口："
             ss -tlnp | grep node || echo '暂无node监听'
             echo "✅ 部署完成！"
-            echo "=== 🔍 临时调试：win_status差异查询 ==="
-            bash /root/haoyouji-web/scripts/debug-win-status.sh || true
-            echo "=== 🔍 调试查询完成 ==="
+            echo "=== 🔍 SSL/HTTPS 诊断 ==="
+            bash /root/haoyouji-web/scripts/diagnose-ssl.sh || true
+            echo "=== 🔍 诊断完成 ==="
           ENDSSH
       
       - name: 企业微信部署通知
