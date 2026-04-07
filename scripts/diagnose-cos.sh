@@ -13,7 +13,16 @@ echo "=== 2. ecosystem.config.cjs 中的COS配置 ==="
 grep -i "COS\|cos_secret\|cos_bucket\|cos_region" /root/haoyouji-web/ecosystem.config.cjs 2>/dev/null | head -20 || echo "未找到ecosystem.config.cjs"
 
 echo ""
-echo "=== 3. 最近的图片上传相关日志 ==="
+echo "=== 3. ecosystem.config.cjs 完整内容 ==="
+cat /root/haoyouji-web/ecosystem.config.cjs
+
+echo ""
+echo "=== 4. PM2进程实际运行环境变量 ==="
+pm2 env haoyouji-web 2>&1 | grep -i "COS\|SECRET\|BUCKET\|REGION" || echo "未找到"
+sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 env haoyouji-web 2>&1' | grep -i "COS\|SECRET\|BUCKET\|REGION" || echo "未找到"
+
+echo ""
+echo "=== 5. 最近的图片上传相关日志 ==="
 pm2 logs haoyouji-web --lines 100 --nostream 2>&1 | grep -i "COS\|uploadLedgerImage\|cos-upload\|图片上传\|upload" | tail -30
 
 echo ""
