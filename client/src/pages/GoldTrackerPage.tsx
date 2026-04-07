@@ -305,16 +305,17 @@ export default function GoldTrackerPage() {
         </button>
       </div>
 
-      {/* 价格卡片 */}
+      {/* 合并卡片：价格 + 图表 + 开高低收 */}
       <div className="px-4 pt-4">
         <div
-          className="rounded-2xl p-4"
+          className="rounded-2xl"
           style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)" }}
         >
-          <div className="flex items-start justify-between">
+          {/* 顶部：标题 + 价格 + 涨跌 */}
+          <div className="flex items-start justify-between px-4 pt-4 pb-2">
             <div>
               <div className="text-xs mb-1" style={{ color: "rgba(201,168,76,0.5)" }}>
-                XAUUSD · 黄金现货
+                XAUUSD 历史价格走势
                 {price?.stale && <span className="ml-1 text-yellow-500">（缓存）</span>}
               </div>
               {priceLoading && !price ? (
@@ -347,44 +348,10 @@ export default function GoldTrackerPage() {
                 </div>
               )}
             </div>
-            {price && (
-              <div className="text-right text-xs space-y-1" style={{ color: "rgba(201,168,76,0.5)" }}>
-                <div>
-                  开 <span style={{ color: "#e8d5a3" }}>{price.open.toFixed(2)}</span>
-                </div>
-                <div>
-                  高 <span style={{ color: "#e84040" }}>{price.high.toFixed(2)}</span>
-                </div>
-                <div>
-                  低 <span style={{ color: "#22c55e" }}>{price.low.toFixed(2)}</span>
-                </div>
-                <div>
-                  昨收 <span style={{ color: "#e8d5a3" }}>{price.prevClose.toFixed(2)}</span>
-                </div>
-              </div>
-            )}
           </div>
-          {price && (
-            <div className="mt-2 text-xs" style={{ color: "rgba(201,168,76,0.35)" }}>
-              更新于 {price.updateTime || new Date(price.timestamp).toLocaleTimeString("zh-CN")} · 数据来源：新浪财经（实时）
-            </div>
-          )}
-        </div>
-      </div>
 
-      {/* K线图 */}
-      <div className="px-4 mt-4">
-        <div
-          className="rounded-2xl overflow-hidden"
-          style={{ background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)" }}
-        >
-          {/* 标题 */}
-          <div className="px-4 pt-3 pb-1">
-            <span className="text-sm font-bold" style={{ color: '#C9A84C' }}>XAUUSD 历史价格走势</span>
-          </div>
-          {/* 周期切换（新浪财经仅提供日K线，通过range控制显示范围） */}
-          <div className="flex gap-1 px-3 pt-1 pb-2 justify-center flex-wrap">
-            {[
+          {/* 周期切换按钮 */}
+          <div className="flex gap-1 px-3 pt-0 pb-2 justify-center flex-wrap">         {[
               { label: "1月", range: "1mo" },
               { label: "3月", range: "3mo" },
               { label: "6月", range: "6mo" },
@@ -408,7 +375,7 @@ export default function GoldTrackerPage() {
           </div>
 
           {/* 图表 */}
-          <div style={{ height: 260, position: "relative" }}>
+          <div style={{ height: 260, position: "relative", borderTop: "1px solid rgba(201,168,76,0.1)" }}>
             {barsLoading ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <RefreshCw size={20} className="animate-spin" style={{ color: "rgba(201,168,76,0.4)" }} />
@@ -425,6 +392,28 @@ export default function GoldTrackerPage() {
               </div>
             )}
           </div>
+
+          {/* 底部：开高低收 */}
+          {price && (
+            <div className="flex justify-around px-4 py-3" style={{ borderTop: "1px solid rgba(201,168,76,0.1)" }}>
+              <div className="text-center">
+                <div className="text-xs mb-0.5" style={{ color: "rgba(201,168,76,0.45)" }}>开</div>
+                <div className="text-xs font-semibold" style={{ color: "#e8d5a3" }}>{price.open.toFixed(2)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs mb-0.5" style={{ color: "rgba(201,168,76,0.45)" }}>高</div>
+                <div className="text-xs font-semibold" style={{ color: "#e84040" }}>{price.high.toFixed(2)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs mb-0.5" style={{ color: "rgba(201,168,76,0.45)" }}>低</div>
+                <div className="text-xs font-semibold" style={{ color: "#22c55e" }}>{price.low.toFixed(2)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs mb-0.5" style={{ color: "rgba(201,168,76,0.45)" }}>昨收</div>
+                <div className="text-xs font-semibold" style={{ color: "#e8d5a3" }}>{price.prevClose.toFixed(2)}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
