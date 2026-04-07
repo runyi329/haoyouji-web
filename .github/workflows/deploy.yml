@@ -79,6 +79,9 @@ jobs:
             cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
             nginx -t && systemctl reload nginx
             echo "✅ Nginx配置已同步并重载"
+            echo "Nginx错误日志（最后10行）："
+            tail -10 /var/log/nginx/haoyouji_error.log 2>/dev/null || true
+            tail -10 /var/log/nginx/error.log 2>/dev/null || true
             echo "🔍 执行COS诊断..."
             bash /root/haoyouji-web/scripts/diagnose-cos.sh
           ENDSSH
