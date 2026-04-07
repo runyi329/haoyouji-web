@@ -45,7 +45,7 @@ const CRYPTO_COINS_AA = [
   { symbol: "LDO-USDT", name: "LDO" },
 ];
 const AA_PRICE_LS_KEY = 'aa_crypto_prices_cache';
-const AA_CACHE_TTL = 5 * 1000; // 5秒刷新一次
+const AA_CACHE_TTL = 60 * 1000; // 60秒刷新一次
 const CNY_RATE = 7.0;
 
 // 从 localStorage 读取持久化缓存（页面刷新后立即可用）
@@ -163,7 +163,10 @@ export default function LedgerDetailAA({
     aaFetchingRef.current = true;
     try {
       const prices = await fetchAACryptoPrices();
-      setAACryptoPrices({ ...prices });
+      // 只有获取到非空价格时才更新 state，避免覆盖 localStorage 读到的旧缓存
+      if (Object.keys(prices).length > 0) {
+        setAACryptoPrices({ ...prices });
+      }
     } finally {
       aaFetchingRef.current = false;
     }
