@@ -1586,10 +1586,10 @@ export default function LedgerDetailAA({
               };
 
               return (
-                <div className="px-1 pb-1" style={{ touchAction: 'pan-y', userSelect: 'none' }}>
+                <div className="px-1 pb-1" style={{ touchAction: 'none', userSelect: 'none' }}>
                   <ReactECharts
                     option={option}
-                    style={{ height: '260px', width: '100%', touchAction: 'pan-y' }}
+                    style={{ height: '260px', width: '100%', touchAction: 'none' }}
                     opts={{ renderer: 'canvas' }}
                   />
                 </div>
