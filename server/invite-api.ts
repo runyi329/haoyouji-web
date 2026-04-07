@@ -4,7 +4,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "./db";
 import { users, contacts, contactSharingConnections, contactInteractions, contactTags, personalContactTags } from "../drizzle/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, count } from "drizzle-orm";
 import QRCode from 'qrcode';
 
 // 生成6位随机邀请码
@@ -28,7 +28,6 @@ export const inviteRouter = router({
         id: users.id,
         inviteCode: users.inviteCode,
         inviteLink: users.inviteLink,
-        inviteCount: users.inviteCount,
         invitedByUserId: users.invitedByUserId,
       })
       .from(users)
@@ -54,11 +53,18 @@ export const inviteRouter = router({
       user.inviteCode = newCode;
       user.inviteLink = newLink;
     }
+
+    // 实时统计实际推荐人数（避免 invite_count 缓存字段因删除用户等操作导致数据不一致）
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.invitedByUserId, userId));
+    const realInviteCount = Number(countResult?.count ?? 0);
     
     return {
       inviteCode: user.inviteCode,
       inviteLink: user.inviteLink,
-      inviteCount: user.inviteCount || 0,
+      inviteCount: realInviteCount,
       invitedByUserId: user.invitedByUserId,
     };
   }),
