@@ -41,9 +41,10 @@ jobs:
             bash scripts/db-migrations.sh || true
             echo "💳 注入支付宝环境变量..."
             node /root/haoyouji-web/scripts/inject-alipay-env.cjs
-            echo "🔄 停止root PM2进程（释放3000端口）..."
-            pm2 stop haoyouji-web 2>/dev/null || true
+            echo "🔄 删除root PM2进程（释放3000端口）..."
+            pm2 delete haoyouji-web 2>/dev/null || true
             pm2 save 2>/dev/null || true
+            sleep 2
             echo "🔄 同步新代码到实际服务目录..."
             cp -r /root/haoyouji-web/dist/. /home/ubuntu/haoyouji-web/dist/
             cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
