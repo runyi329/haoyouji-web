@@ -546,8 +546,10 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	// AB型意见本专用字段（顾客扫码提意见时使用，普通账本为null）
 	rating: tinyint('rating'),                                    // 评分 1-5
 	guestName: varchar('guest_name', { length: 50 }),             // 访客昵称
+	guestWechat: varchar('guest_wechat', { length: 100 }),        // 访客微信号
 	guestIp: varchar('guest_ip', { length: 45 }),                 // 访客IP（防刷）
 	isRead: tinyint('is_read').default(0),                        // 是否已读
+	images: json(),                                                // 多图JSON数组
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp('deleted_at', { mode: 'string' }),
@@ -1805,4 +1807,32 @@ export const qqOnlineRecords = mysqlTable("qq_online_records", {
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 }, (table) => [
   index("qq_online_created_idx").on(table.createdAt),
+]);
+
+// ========== cTrader OAuth Token 存储表 ==========
+export const ctraderTokens = mysqlTable("ctrader_tokens", {
+  id: int().autoincrement().notNull(),
+  userId: int('user_id').notNull(),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token').notNull(),
+  expiresAt: timestamp('expires_at', { mode: 'date' }),
+  ctidAccountId: bigint('ctid_account_id', { mode: 'number' }),
+  createdAt: timestamp('created_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("ct_user_idx").on(table.userId),
+]);
+
+// ========== cTrader OAuth Token 存储表 ==========
+export const ctraderTokens = mysqlTable("ctrader_tokens", {
+  id: int().autoincrement().notNull(),
+  userId: int('user_id').notNull(),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token').notNull(),
+  expiresAt: timestamp('expires_at', { mode: 'date' }),
+  ctidAccountId: bigint('ctid_account_id', { mode: 'number' }),
+  createdAt: timestamp('created_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+  index("ct_user_idx").on(table.userId),
 ]);
