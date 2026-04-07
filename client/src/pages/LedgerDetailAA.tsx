@@ -22,6 +22,7 @@
  *   注意：balance 是当天 income - expense，不是累计余额
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import ReactECharts from "echarts-for-react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X } from "lucide-react";
@@ -297,6 +298,58 @@ export default function LedgerDetailAA({
     });
     return cum;
   }, [filteredTransactions]);
+
+  // ─── 全部模式：图表模式切换 ────────────────────────────────────────────────
+  const [allChartMode, setAllChartMode] = useState<'amount' | 'initial' | 'margin'>('amount');
+
+  // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
+  const allTagsChartData = useMemo(() => {
+    if (!initialBalancesData?.balances || !categories || categories.length === 0) return [];
+    // 颜色列表（每个标签一个颜色）
+    const COLORS = ['#D32F2F', '#1976D2', '#388E3C', '#F57C00', '#7B1FA2', '#00838F', '#C62828', '#283593', '#2E7D32'];
+    return categories.map((cat: any, idx: number) => {
+      const tagName = cat.name;
+      const color = COLORS[idx % COLORS.length];
+      // 初始金额
+      const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
+      // 保证金
+      const marginRaw = initialBalancesData.balances[`${tagName}__margin`];
+      const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
+      const coin = coinRaw ? String(coinRaw) : '';
+      let marginCny = 0;
+      if (marginRaw !== undefined && marginRaw !== null) {
+        const num = Number(marginRaw);
+        if (coin && CRYPTO_COINS_AA.find(c => c.name === coin)) {
+          marginCny = num * (aaCryptoPrices[coin] ?? 0);
+        } else {
+          marginCny = num;
+        }
+      }
+      // 权重比例
+      const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
+      // 该标签的所有每日余额记录（按日期升序）
+      const tagDays = (activeMemberTransactions || []).map((day: any) => {
+        const filtered = (day.records || []).filter((r: any) => r.category && r.category.includes(tagName));
+        if (filtered.length === 0) return null;
+        let income = 0, expense = 0;
+        filtered.forEach((r: any) => {
+          if (r.type === 'income') income += r.amount;
+          else expense += r.amount;
+        });
+        if (income === 0 && expense === 0) return null;
+        const balance = income > 0 ? income : expense;
+        return { date: day.date, balance, income, expense };
+      }).filter(Boolean).sort((a: any, b: any) => a.date.localeCompare(b.date));
+      // 计算每天的盈亏值（绝对金额、%初始、%保证金）
+      const points = tagDays.map((d: any) => {
+        const pnl = (initialBalance - d.balance) * ratio; // 负债视角：初始-最新=盈利
+        const pctInitial = initialBalance > 0 ? ((initialBalance - d.balance) / initialBalance) * 100 * ratio : 0;
+        const pctMargin = marginCny > 0 ? ((initialBalance - d.balance) * ratio / marginCny) * 100 : 0;
+        return { date: d.date, pnl, pctInitial, pctMargin };
+      });
+      return { name: tagName, color, points, initialBalance, marginCny };
+    });
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices]);
 
   // ─── 全部模式：计算所有标签的保证金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
@@ -1324,6 +1377,183 @@ export default function LedgerDetailAA({
       </div>
 
       </div>{/* end 可滚动内容区域 */}
+
+      {/* ── 全部模式：多线盈亏增长图表 ── */}
+      {selectedTagId === null && (
+        <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="mx-3 mt-2 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
+            {/* 图表标题 */}
+            <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+              <div>
+                <div className="text-sm font-bold" style={{ color: '#1A1A1A' }}>盈亏走势对比</div>
+                <div className="text-[11px] mt-0.5" style={{ color: '#9E9E9E' }}>各标签累计盈亏变化</div>
+              </div>
+            </div>
+
+            {/* 图表主体 */}
+            {allTagsChartData.length === 0 || allTagsChartData.every(t => t.points.length === 0) ? (
+              <div className="flex items-center justify-center py-12 text-sm" style={{ color: '#BDBDBD' }}>暂无数据</div>
+            ) : (() => {
+              // 收集所有日期（合并所有标签的日期）
+              const allDates = Array.from(new Set(
+                allTagsChartData.flatMap(t => t.points.map((p: any) => p.date))
+              )).sort();
+
+              // 默认显示最近3个月
+              const now = new Date();
+              const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+              const threeMonthsAgoStr = threeMonthsAgo.toISOString().slice(0, 10);
+              const defaultStartIdx = allDates.findIndex(d => d >= threeMonthsAgoStr);
+              const startPercent = allDates.length > 0 && defaultStartIdx > 0
+                ? Math.max(0, Math.floor((defaultStartIdx / allDates.length) * 100) - 2)
+                : 0;
+
+              // 构建ECharts series
+              const series = allTagsChartData
+                .filter(t => t.points.length > 0)
+                .map(tag => {
+                  // 为每个日期找到对应的值（若无则为null）
+                  const datePointMap = new Map(tag.points.map((p: any) => [p.date, p]));
+                  const data = allDates.map(date => {
+                    const p = datePointMap.get(date);
+                    if (!p) return null;
+                    if (allChartMode === 'amount') return parseFloat(p.pnl.toFixed(2));
+                    if (allChartMode === 'initial') return parseFloat(p.pctInitial.toFixed(2));
+                    return parseFloat(p.pctMargin.toFixed(2));
+                  });
+                  return {
+                    name: tag.name,
+                    type: 'line',
+                    data,
+                    smooth: true,
+                    symbol: 'circle',
+                    symbolSize: 4,
+                    showSymbol: false,
+                    lineStyle: { color: tag.color, width: 2 },
+                    itemStyle: { color: tag.color },
+                    connectNulls: false,
+                  };
+                });
+
+              const option = {
+                backgroundColor: '#FFFFFF',
+                grid: { top: 16, right: 12, bottom: 60, left: 52 },
+                xAxis: {
+                  type: 'category',
+                  data: allDates,
+                  axisLine: { show: false },
+                  axisTick: { show: false },
+                  axisLabel: {
+                    fontSize: 9,
+                    color: '#BDBDBD',
+                    formatter: (val: string) => val.slice(5), // 只显示月-日
+                    interval: Math.max(0, Math.floor(allDates.length / 6) - 1),
+                  },
+                  splitLine: { show: false },
+                },
+                yAxis: {
+                  type: 'value',
+                  axisLine: { show: false },
+                  axisTick: { show: false },
+                  axisLabel: {
+                    fontSize: 9,
+                    color: '#BDBDBD',
+                    formatter: (val: number) => {
+                      if (allChartMode === 'amount') {
+                        const abs = Math.abs(val);
+                        if (abs >= 10000) return (val / 10000).toFixed(1) + '万';
+                        return val.toFixed(0);
+                      }
+                      return val.toFixed(1) + '%';
+                    },
+                  },
+                  splitLine: { lineStyle: { color: '#F5F5F5', type: 'dashed' } },
+                },
+                tooltip: {
+                  trigger: 'axis',
+                  backgroundColor: '#1A1A1A',
+                  borderColor: 'transparent',
+                  textStyle: { color: '#FFFFFF', fontSize: 11 },
+                  formatter: (params: any[]) => {
+                    if (!params || params.length === 0) return '';
+                    const date = params[0].axisValue;
+                    let html = `<div style="color:#9E9E9E;font-size:10px;margin-bottom:4px">${date}</div>`;
+                    params.forEach((p: any) => {
+                      if (p.value === null || p.value === undefined) return;
+                      const val = allChartMode === 'amount'
+                        ? `¥${Number(p.value).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
+                        : `${Number(p.value).toFixed(2)}%`;
+                      html += `<div style="display:flex;align-items:center;gap:6px;margin-top:2px">`;
+                      html += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>`;
+                      html += `<span style="color:#CCCCCC">${p.seriesName}</span>`;
+                      html += `<span style="font-weight:600;margin-left:auto;padding-left:8px">${val}</span></div>`;
+                    });
+                    return html;
+                  },
+                  axisPointer: { lineStyle: { color: 'rgba(211,47,47,0.3)', type: 'dashed' } },
+                },
+                legend: {
+                  show: true,
+                  bottom: 36,
+                  type: 'scroll',
+                  textStyle: { fontSize: 10, color: '#555' },
+                  itemWidth: 12,
+                  itemHeight: 8,
+                },
+                dataZoom: [
+                  {
+                    type: 'slider',
+                    bottom: 0,
+                    height: 20,
+                    start: startPercent,
+                    end: 100,
+                    borderColor: 'transparent',
+                    backgroundColor: '#F5F5F5',
+                    fillerColor: 'rgba(211,47,47,0.12)',
+                    handleStyle: { color: '#D32F2F', borderColor: '#D32F2F' },
+                    textStyle: { color: '#BDBDBD', fontSize: 9 },
+                    showDetail: false,
+                    moveHandleSize: 0,
+                  },
+                  { type: 'inside', start: startPercent, end: 100 },
+                ],
+                series,
+              };
+
+              return (
+                <div className="px-1 pb-2">
+                  <ReactECharts
+                    option={option}
+                    style={{ height: '280px', width: '100%' }}
+                    opts={{ renderer: 'canvas' }}
+                  />
+                </div>
+              );
+            })()}
+
+            {/* 底部3个Tab切换 */}
+            <div className="px-4 pb-4 flex items-center justify-center gap-2">
+              {(['amount', 'initial', 'margin'] as const).map(mode => {
+                const active = allChartMode === mode;
+                const label = mode === 'amount' ? '¥金额' : mode === 'initial' ? '%初始' : '%保证金';
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => setAllChartMode(mode)}
+                    className="px-4 py-1.5 rounded-full text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: active ? '#D32F2F' : '#F5F5F5',
+                      color: active ? '#FFFFFF' : '#757575',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 视角切换弹窗（管理员/创建者点击头像弹出） ── */}
       {showViewAsPicker && canEdit && (
