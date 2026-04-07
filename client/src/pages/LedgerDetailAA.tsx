@@ -1512,7 +1512,7 @@ export default function LedgerDetailAA({
 
               const option = {
                 backgroundColor: '#FFFFFF',
-                grid: { top: 28, right: 16, bottom: 8, left: 52 },
+                grid: { top: 28, right: 16, bottom: 28, left: 52 },
                 xAxis: {
                   type: 'category',
                   data: allDates,
@@ -1571,7 +1571,10 @@ export default function LedgerDetailAA({
                   axisPointer: { lineStyle: { color: 'rgba(211,47,47,0.3)', type: 'dashed' } },
                 },
                 legend: { show: false },
-                dataZoom: [],
+                dataZoom: [
+                  // 禁用所有缩放和拖动
+                  { type: 'inside', disabled: true },
+                ],
                 series: initialSeries,
               };
 
