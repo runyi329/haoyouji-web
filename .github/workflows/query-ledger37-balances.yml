@@ -1,0 +1,20 @@
+name: 查询37号账本initialBalances数据
+on:
+  workflow_dispatch:
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: 查询数据库
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 37号账本ledger_members initialBalances ==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SELECT lm.userId, u.name as userName, lm.role, lm.initial_balances FROM ledger_members lm LEFT JOIN users u ON u.id = lm.userId WHERE lm.ledgerId=37;"
+          ENDSSH
