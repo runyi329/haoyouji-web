@@ -783,15 +783,18 @@ export default function LedgerDetailAA({
                 const tagName = selectedTag?.name;
                 if (!tagName || !initialBalancesData?.balances) return '';
                 const val = initialBalancesData.balances[`${tagName}__margin`];
-                const coin = initialBalancesData.balances[`${tagName}__marginCoin`];
+                const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
+                const coin = coinRaw ? String(coinRaw) : '';
                 const ratioVal = initialBalancesData.balances[`${tagName}__ratio`];
                 const parts: string[] = [];
                 // 数字币折算人民币
-                if (coin && val && CRYPTO_COINS_AA.find(c => c.name === String(coin))) {
-                  const price = aaCryptoPrices[String(coin)];
+                if (coin && val && CRYPTO_COINS_AA.find(c => c.name === coin)) {
+                  const price = aaCryptoPrices[coin];
                   if (price) {
                     const cny = Number(val) * price;
                     parts.push('≈ ¥' + cny.toLocaleString('zh-CN', { maximumFractionDigits: 0 }));
+                  } else {
+                    parts.push('≈ 获取中...');
                   }
                 }
                 if (ratioVal !== undefined && ratioVal !== null) {
