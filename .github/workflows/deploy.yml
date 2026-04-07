@@ -84,6 +84,8 @@ jobs:
             tail -10 /var/log/nginx/error.log 2>/dev/null || true
             echo "📊 导入/更新黄金历史日K线数据..."
             cd /root/haoyouji-web && node scripts/update-gold-daily.mjs || echo "⚠️ 黄金数据更新失败（非致命）"
+            echo "📊 初始化/更新数字币价格缓存..."
+            cd /root/haoyouji-web && node scripts/seed-crypto-prices.mjs || echo "⚠️ 数字币价格初始化失败（非致命）"
             # 首次部署时检查数据量，不足100条则全量导入
             source /root/haoyouji-web/.env 2>/dev/null || true
             DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
