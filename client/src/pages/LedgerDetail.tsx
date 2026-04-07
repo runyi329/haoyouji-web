@@ -1027,6 +1027,9 @@ export default function LedgerDetail() {
   
   // 读取URL查询参数
   const urlParams = new URLSearchParams(window.location.search);
+  // 读取来源账本ID（用于从其他账本跳转过来时，返回键能回到来源账本）
+  const fromLedgerId = urlParams.get('from');
+  const backTarget = fromLedgerId ? `/ledger/${fromLedgerId}` : '/ledger';
   const filters: any = {
     ledgerId: Number(ledgerId),
     limit: 2000, // 加大limit确保加载全部历史记录（原100会截断早期数据）
@@ -1723,7 +1726,7 @@ export default function LedgerDetail() {
                     <div
                       className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
                       style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
-                      onClick={() => setLocation('/ledger/37')}
+                      onClick={() => setLocation('/ledger/37?from=52')}
                       title="股票行情"
                     >
                       <img
@@ -1787,7 +1790,7 @@ export default function LedgerDetail() {
                     PDF导出
                   </button>
                   <button
-                    onClick={() => setLocation('/ledger')}
+                    onClick={() => setLocation(backTarget)}
                     className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
                     style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
                   >
@@ -1836,7 +1839,7 @@ export default function LedgerDetail() {
               )}
               {!isCustomAI && (
                 <button
-                  onClick={() => setLocation('/ledger')}
+                  onClick={() => setLocation(backTarget)}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
                   style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
                 >
@@ -1850,7 +1853,7 @@ export default function LedgerDetail() {
             {/* 标题栏 */}
             <div className="px-4 pt-3 pb-2 flex items-center justify-between">
               <button
-                onClick={() => setLocation("/ledger")}
+                onClick={() => setLocation(backTarget)}
                 className="p-1 -ml-2"
               >
                 <ChevronLeft className="w-6 h-6" />
