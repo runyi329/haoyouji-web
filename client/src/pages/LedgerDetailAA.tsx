@@ -46,26 +46,44 @@ const CRYPTO_COINS_AA = [
 let _aaCryptoPriceCache: Record<string, number> = {};
 let _aaLastFetchTime = 0;
 const AA_CACHE_TTL = 10 * 1000; // 10秒刷新一次（Binance API，不占用服务器资源）
+const CNY_RATE = 7.0;
+
+// 从单个币种获取价格（三级降级：OKX → 火币 → Binance）
+async function fetchSingleCoinPrice(coin: { name: string; symbol: string }): Promise<number | null> {
+  // 1. OKX（主力，国内可访问）
+  try {
+    const r = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${coin.symbol}`, { signal: AbortSignal.timeout(5000) });
+    const j = await r.json();
+    const last = j?.data?.[0]?.last;
+    if (last) return parseFloat(last) * CNY_RATE;
+  } catch {}
+  // 2. 火币（备用1，国内稳定）
+  try {
+    const sym = coin.name.toLowerCase() + 'usdt';
+    const r = await fetch(`https://api.huobi.pro/market/detail/merged?symbol=${sym}`, { signal: AbortSignal.timeout(5000) });
+    const j = await r.json();
+    if (j?.status === 'ok' && j?.tick?.close) return parseFloat(j.tick.close) * CNY_RATE;
+  } catch {}
+  // 3. Binance（备用2）
+  try {
+    const sym = coin.name + 'USDT';
+    const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`, { signal: AbortSignal.timeout(5000) });
+    const j = await r.json();
+    if (j?.price) return parseFloat(j.price) * CNY_RATE;
+  } catch {}
+  return null;
+}
+
 async function fetchAACryptoPrices(): Promise<Record<string, number>> {
   const now = Date.now();
   if (now - _aaLastFetchTime < AA_CACHE_TTL && Object.keys(_aaCryptoPriceCache).length > 0) {
     return _aaCryptoPriceCache;
   }
   try {
-    // 使用OKX API（国内可访问），USDT/CNY汇率固定7.0
-    const CNY_RATE = 7.0;
-    const results = await Promise.all(
-      CRYPTO_COINS_AA.map((c) =>
-        fetch(`https://www.okx.com/api/v5/market/ticker?instId=${c.symbol}`)
-          .then((r) => r.json())
-          .catch(() => null)
-      )
-    );
+    const results = await Promise.all(CRYPTO_COINS_AA.map(fetchSingleCoinPrice));
     const prices: Record<string, number> = {};
     CRYPTO_COINS_AA.forEach((coin, i) => {
-      const r = results[i];
-      const last = r?.data?.[0]?.last;
-      if (last) prices[coin.name] = parseFloat(last) * CNY_RATE;
+      if (results[i] !== null) prices[coin.name] = results[i] as number;
     });
     // 只有成功获取到新数据时才更新缓存，否则保留旧缓存
     if (Object.keys(prices).length > 0) {
