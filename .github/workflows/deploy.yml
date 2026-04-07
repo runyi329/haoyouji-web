@@ -66,6 +66,8 @@ jobs:
             cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
             nginx -t && systemctl reload nginx
             echo "✅ Nginx配置已同步并重载"
+            echo "🔍 执行数据库诊断..."
+            bash /root/haoyouji-web/scripts/diagnose-db.sh
           ENDSSH
       
       - name: 企业微信部署通知
