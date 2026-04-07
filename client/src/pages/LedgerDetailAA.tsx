@@ -44,10 +44,27 @@ const CRYPTO_COINS_AA = [
   { symbol: "SOL-USDT", name: "SOL" },
   { symbol: "LDO-USDT", name: "LDO" },
 ];
-let _aaCryptoPriceCache: Record<string, number> = {};
-let _aaLastFetchTime = 0;
-const AA_CACHE_TTL = 10 * 1000; // 10秒刷新一次（Binance API，不占用服务器资源）
+const AA_PRICE_LS_KEY = 'aa_crypto_prices_cache';
+const AA_CACHE_TTL = 30 * 1000; // 30秒刷新一次
 const CNY_RATE = 7.0;
+
+// 从 localStorage 读取持久化缓存（页面刷新后立即可用）
+function loadPriceFromLS(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(AA_PRICE_LS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') return parsed as Record<string, number>;
+  } catch {}
+  return {};
+}
+
+function savePriceToLS(prices: Record<string, number>) {
+  try { localStorage.setItem(AA_PRICE_LS_KEY, JSON.stringify(prices)); } catch {}
+}
+
+let _aaCryptoPriceCache: Record<string, number> = loadPriceFromLS(); // 初始从 localStorage 读取
+let _aaLastFetchTime = 0;
 
 // 从单个币种获取价格（三级降级：OKX → 火币 → Binance）
 async function fetchSingleCoinPrice(coin: { name: string; symbol: string }): Promise<number | null> {
@@ -90,6 +107,7 @@ async function fetchAACryptoPrices(): Promise<Record<string, number>> {
     if (Object.keys(prices).length > 0) {
       _aaCryptoPriceCache = prices;
       _aaLastFetchTime = now;
+      savePriceToLS(prices); // 持久化到 localStorage
     }
     return _aaCryptoPriceCache; // 始终返回缓存（包括旧缓存）
   } catch {
@@ -1617,12 +1635,10 @@ export default function LedgerDetailAA({
               })}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ── 标签周期年化表格 ── */}
-      {selectedTagId === null && allTagsChartData.length > 0 && (
-        <div className="mx-3 mt-3 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
+          {/* ── 标签周期年化表格（在滚动容器内） ── */}
+          {allTagsChartData.length > 0 && (
+          <div className="mx-3 mt-3 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
           {/* 表格标题行 */}
           <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: '#F5F5F5' }}>
             <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>概览</span>
@@ -1676,6 +1692,8 @@ export default function LedgerDetailAA({
               );
             })
           }
+          </div>
+          )}
         </div>
       )}
 
