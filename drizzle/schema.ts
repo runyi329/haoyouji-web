@@ -1822,17 +1822,3 @@ export const ctraderTokens = mysqlTable("ctrader_tokens", {
 }, (table) => [
   index("ct_user_idx").on(table.userId),
 ]);
-
-// ========== cTrader OAuth Token 存储表 ==========
-export const ctraderTokens = mysqlTable("ctrader_tokens", {
-  id: int().autoincrement().notNull(),
-  userId: int('user_id').notNull(),
-  accessToken: text('access_token').notNull(),
-  refreshToken: text('refresh_token').notNull(),
-  expiresAt: timestamp('expires_at', { mode: 'date' }),
-  ctidAccountId: bigint('ctid_account_id', { mode: 'number' }),
-  createdAt: timestamp('created_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp('updated_at', { mode: 'date' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-}, (table) => [
-  index("ct_user_idx").on(table.userId),
-]);
