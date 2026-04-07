@@ -389,7 +389,6 @@ export default function GoldTrackerPage() {
               { label: "3月", range: "3mo" },
               { label: "6月", range: "6mo" },
               { label: "1年", range: "1y" },
-              { label: "2年", range: "2y" },
               { label: "5年", range: "5y" },
               { label: "全部", range: "max" },
             ].map((opt) => (
