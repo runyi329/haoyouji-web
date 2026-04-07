@@ -57,12 +57,15 @@ jobs:
             rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
             chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
             echo "🔄 重启实际服务进程..."
-            # 复制ecosystem.config.cjs并替换cwd为ubuntu用户路径
-            sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' /root/haoyouji-web/ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+            # 复制ecosystem.config.cjs（保持原始路径，不替换cwd）
+            cp /root/haoyouji-web/ecosystem.config.cjs /home/ubuntu/haoyouji-web/ecosystem.config.cjs
             chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-            # 删除旧进程并重新启动，确保环境变量生效
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 delete haoyouji-web 2>/dev/null || true'
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
+            # 用restart+update-env确保环境变量生效，不删除进程避免服务中断
+            if sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 describe haoyouji-web > /dev/null 2>&1'; then
+              sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' 2>&1
+            else
+              sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /root/haoyouji-web/ecosystem.config.cjs' 2>&1
+            fi
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
             sleep 5
             echo "当前监听端口："
