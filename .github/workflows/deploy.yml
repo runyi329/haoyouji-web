@@ -62,7 +62,7 @@ jobs:
             chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
             # 删除旧进程并重新启动，确保环境变量生效
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 delete haoyouji-web 2>/dev/null || true'
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs --env production' 2>&1
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
             sleep 5
             echo "当前监听端口："
