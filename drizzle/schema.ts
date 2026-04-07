@@ -1822,3 +1822,19 @@ export const ctraderTokens = mysqlTable("ctrader_tokens", {
 }, (table) => [
   index("ct_user_idx").on(table.userId),
 ]);
+
+// ========== 黄金历史日K线数据表（XAUUSD，来源：美联储FRED / 新浪财经）==========
+export const goldDailyKline = mysqlTable("gold_daily_kline", {
+  id: int().autoincrement().notNull(),
+  tradeDate: varchar('trade_date', { length: 10 }).notNull(),
+  open: decimal('open', { precision: 10, scale: 4 }),
+  high: decimal('high', { precision: 10, scale: 4 }),
+  low: decimal('low', { precision: 10, scale: 4 }),
+  close: decimal('close', { precision: 10, scale: 4 }).notNull(),
+  volume: bigint('volume', { mode: 'number' }).default(0),
+  source: varchar('source', { length: 20 }).default('FRED'),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  uniqueIndex("gold_date_uniq").on(table.tradeDate),
+  index("gold_date_idx").on(table.tradeDate),
+]);

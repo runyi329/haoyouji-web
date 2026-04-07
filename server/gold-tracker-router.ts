@@ -157,4 +157,51 @@ function filterBarsByRange(allBars: any[], range: string): any[] {
   return allBars.filter((b: any) => b.time >= cutoff);
 }
 
+// ========== 历史全量日K线接口（从数据库读取，1975年至今）==========
+// 内存缓存，避免每次请求都查数据库
+let historyKlineCache: { data: any; ts: number } | null = null;
+const HISTORY_CACHE_TTL = 30 * 60 * 1000; // 30分钟缓存
+
+router.get("/api/gold/history-kline", async (req, res) => {
+  try {
+    const now = Date.now();
+    if (historyKlineCache && now - historyKlineCache.ts < HISTORY_CACHE_TTL) {
+      return res.json(historyKlineCache.data);
+    }
+
+    const { db } = await import('./db.js');
+    const { goldDailyKline } = await import('../drizzle/schema.js');
+    const { asc } = await import('drizzle-orm');
+
+    const rows = await db
+      .select()
+      .from(goldDailyKline)
+      .orderBy(asc(goldDailyKline.tradeDate));
+
+    const bars = rows.map((r: any) => ({
+      time: r.trade_date || r.tradeDate,  // 'YYYY-MM-DD' 格式
+      open: parseFloat(r.open || r.close),
+      high: parseFloat(r.high || r.close),
+      low: parseFloat(r.low || r.close),
+      close: parseFloat(r.close),
+      volume: Number(r.volume) || 0,
+    }));
+
+    const result = {
+      symbol: "XAUUSD",
+      source: "美联储伦敦金定盘价（LBMA Gold Price）",
+      count: bars.length,
+      startDate: bars.length > 0 ? bars[0].time : null,
+      endDate: bars.length > 0 ? bars[bars.length - 1].time : null,
+      bars,
+    };
+
+    historyKlineCache = { data: result, ts: now };
+    res.json(result);
+  } catch (err: any) {
+    console.error("[GoldHistory] error:", err.message);
+    res.status(500).json({ error: "Failed to fetch gold history", message: err.message });
+  }
+});
+
 export default router;

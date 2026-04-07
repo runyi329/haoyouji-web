@@ -82,6 +82,27 @@ jobs:
             echo "Nginx错误日志（最后10行）："
             tail -10 /var/log/nginx/haoyouji_error.log 2>/dev/null || true
             tail -10 /var/log/nginx/error.log 2>/dev/null || true
+            echo "📊 导入/更新黄金历史日K线数据..."
+            cd /root/haoyouji-web && node scripts/update-gold-daily.mjs || echo "⚠️ 黄金数据更新失败（非致命）"
+            # 首次部署时检查数据量，不足100条则全量导入
+            source /root/haoyouji-web/.env 2>/dev/null || true
+            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
+            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP '(?<=:)[0-9]{4,5}(?=/)' | tail -1 || echo '4000')
+            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://)[^:]+' || echo '')
+            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://[^:]+:)[^@]+' || echo '')
+            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP '(?<=/)[^?]+$' || echo '')
+            if [ -n "$DB_HOST" ]; then
+              GOLD_COUNT=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "SELECT COUNT(*) FROM gold_daily_kline;" 2>/dev/null || echo '0')
+              echo "当前黄金数据条数: $GOLD_COUNT"
+              if [ "$GOLD_COUNT" -lt 100 ] 2>/dev/null; then
+                echo "数据不足，执行全量导入..."
+                cd /root/haoyouji-web && node scripts/import-gold-history.mjs || echo "⚠️ 全量导入失败"
+              fi
+            fi
+            # 设置每日凌晨2点自动更新黄金数据的cron任务
+            CRON_JOB="0 2 * * * cd /root/haoyouji-web && node scripts/update-gold-daily.mjs >> /var/log/gold-update.log 2>&1"
+            (crontab -l 2>/dev/null | grep -v 'update-gold-daily'; echo "$CRON_JOB") | crontab -
+            echo "✅ 黄金数据每日更新cron任务已设置"
             echo "📤 上传同花顺股票图标到COS..."
             cd /root/haoyouji-web && node scripts/upload-ths-icon.mjs || echo "⚠️ 图标上传失败（非致命）"
             echo "🔍 执行COS诊断..."
