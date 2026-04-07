@@ -68,7 +68,7 @@ jobs:
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
             sleep 8
             echo "当前监听端口："
-            ss -tlnp | grep node || echo '暂无node监听'
+            ss -tlnp | grep ':3000\|:3001\|:8080' || echo '暂无3000/3001/8080端口监听'
             echo "ubuntu PM2进程状态："
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
             echo "ubuntu PM2错误日志（最后30行）："
