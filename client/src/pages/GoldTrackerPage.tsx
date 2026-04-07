@@ -378,8 +378,12 @@ export default function GoldTrackerPage() {
           className="rounded-2xl overflow-hidden"
           style={{ background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)" }}
         >
+          {/* 标题 */}
+          <div className="px-4 pt-3 pb-1">
+            <span className="text-sm font-bold" style={{ color: '#C9A84C' }}>XAUUSD 历史价格走势</span>
+          </div>
           {/* 周期切换（新浪财经仅提供日K线，通过range控制显示范围） */}
-          <div className="flex gap-1 px-3 pt-3 pb-2 overflow-x-auto">
+          <div className="flex gap-1 px-3 pt-1 pb-2 justify-center flex-wrap">
             {[
               { label: "1月", range: "1mo" },
               { label: "3月", range: "3mo" },
@@ -666,150 +670,7 @@ export default function GoldTrackerPage() {
         数据来源：新浪财经 · 伦敦金现货（XAUUSD）· 实时报价 · 仅供参考
       </div>
 
-      {/* 历史全量K线图 */}
-      <GoldHistoryKlineChart />
     </div>
   );
 }
 
-// ─── 历史全量K线图组件（1975年至今，数据来源：美联储）─────────────────────────
-function GoldHistoryKlineChart() {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [meta, setMeta] = useState<{ count: number; startDate: string; endDate: string } | null>(null);
-
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-    let chart: any = null;
-    let candleSeries: any = null;
-
-    async function initChart() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // 动态导入 lightweight-charts
-        const { createChart, CandlestickSeries } = await import('lightweight-charts');
-
-        // 拉取历史数据
-        const resp = await fetch('/api/gold/history-kline');
-        if (!resp.ok) throw new Error('数据加载失败');
-        const data = await resp.json();
-
-        if (!data.bars || data.bars.length === 0) {
-          setError('暂无历史数据，请稍后再试');
-          setLoading(false);
-          return;
-        }
-
-        setMeta({ count: data.count, startDate: data.startDate, endDate: data.endDate });
-
-        // 创建图表
-        chart = createChart(chartContainerRef.current!, {
-          width: chartContainerRef.current!.clientWidth,
-          height: 320,
-          layout: {
-            background: { color: '#1a0a00' },
-            textColor: 'rgba(201,168,76,0.7)',
-          },
-          grid: {
-            vertLines: { color: 'rgba(201,168,76,0.08)' },
-            horzLines: { color: 'rgba(201,168,76,0.08)' },
-          },
-          crosshair: {
-            mode: 1,
-          },
-          rightPriceScale: {
-            borderColor: 'rgba(201,168,76,0.2)',
-          },
-          timeScale: {
-            borderColor: 'rgba(201,168,76,0.2)',
-            timeVisible: true,
-          },
-        });
-
-        candleSeries = chart.addSeries(CandlestickSeries, {
-          upColor: '#e84040',
-          downColor: '#26a69a',
-          borderUpColor: '#e84040',
-          borderDownColor: '#26a69a',
-          wickUpColor: '#e84040',
-          wickDownColor: '#26a69a',
-        });
-
-        // 设置数据（time 字段为 'YYYY-MM-DD' 字符串，lightweight-charts 原生支持）
-        candleSeries.setData(data.bars);
-
-        // 自适应宽度
-        const resizeObserver = new ResizeObserver(() => {
-          if (chartContainerRef.current && chart) {
-            chart.applyOptions({ width: chartContainerRef.current.clientWidth });
-          }
-        });
-        resizeObserver.observe(chartContainerRef.current!);
-
-        setLoading(false);
-
-        return () => {
-          resizeObserver.disconnect();
-          chart.remove();
-        };
-      } catch (e: any) {
-        setError(e.message || '图表加载失败');
-        setLoading(false);
-      }
-    }
-
-    const cleanup = initChart();
-    return () => {
-      cleanup.then(fn => fn && fn());
-    };
-  }, []);
-
-  return (
-    <div className="mx-4 mt-6 mb-6 rounded-2xl overflow-hidden" style={{ background: 'rgba(26,10,0,0.9)', border: '1px solid rgba(201,168,76,0.15)' }}>
-      {/* 标题栏 */}
-      <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(201,168,76,0.1)' }}>
-        <div>
-          <div className="text-sm font-bold" style={{ color: '#c9a84c' }}>XAUUSD 历史价格走势</div>
-          <div className="text-xs mt-0.5" style={{ color: 'rgba(201,168,76,0.5)' }}>
-            {meta ? `${meta.startDate} ~ ${meta.endDate}（共 ${meta.count.toLocaleString()} 个交易日）` : '加载中...'}
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-xs" style={{ color: 'rgba(201,168,76,0.4)' }}>数据来源</div>
-          <div className="text-xs font-medium" style={{ color: 'rgba(201,168,76,0.6)' }}>美联储（FRED）</div>
-        </div>
-      </div>
-
-      {/* 图表区域 */}
-      <div className="relative">
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center z-10" style={{ background: 'rgba(26,10,0,0.8)' }}>
-            <div className="text-center">
-              <div className="text-sm" style={{ color: 'rgba(201,168,76,0.6)' }}>正在加载历史数据...</div>
-              <div className="text-xs mt-1" style={{ color: 'rgba(201,168,76,0.3)' }}>约 1 万条K线，请稍候</div>
-            </div>
-          </div>
-        )}
-        {error && (
-          <div className="flex items-center justify-center py-16">
-            <div className="text-center">
-              <div className="text-sm" style={{ color: 'rgba(201,168,76,0.5)' }}>{error}</div>
-              <div className="text-xs mt-1" style={{ color: 'rgba(201,168,76,0.3)' }}>历史数据将在首次部署后自动导入</div>
-            </div>
-          </div>
-        )}
-        <div ref={chartContainerRef} style={{ width: '100%', height: loading || error ? '0px' : '320px' }} />
-      </div>
-
-      {/* 操作提示 */}
-      {!loading && !error && (
-        <div className="px-4 py-2 text-xs text-center" style={{ color: 'rgba(201,168,76,0.25)', borderTop: '1px solid rgba(201,168,76,0.08)' }}>
-          ← 左右滑动查看历史 · 双指缩放 · 每日自动更新
-        </div>
-      )}
-    </div>
-  );
-}
