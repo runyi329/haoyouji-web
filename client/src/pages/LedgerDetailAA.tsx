@@ -38,88 +38,9 @@ import {
 } from "recharts";
 
 // 数字币价格查询（用于保证金人民币折算显示）——使用OKX API格式
-const CRYPTO_COINS_AA = [
-  { symbol: "BTC-USDT", name: "BTC" },
-  { symbol: "ETH-USDT", name: "ETH" },
-  { symbol: "SOL-USDT", name: "SOL" },
-  { symbol: "LDO-USDT", name: "LDO" },
-];
-const AA_PRICE_LS_KEY = 'aa_crypto_prices_cache';
-const AA_CACHE_TTL = 60 * 1000; // 60秒刷新一次
-const CNY_RATE = 7.0;
-
-// 从 localStorage 读取持久化缓存（页面刷新后立即可用）
-function loadPriceFromLS(): Record<string, number> {
-  try {
-    const raw = localStorage.getItem(AA_PRICE_LS_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') return parsed as Record<string, number>;
-  } catch {}
-  return {};
-}
-
-function savePriceToLS(prices: Record<string, number>) {
-  try { localStorage.setItem(AA_PRICE_LS_KEY, JSON.stringify(prices)); } catch {}
-}
-
-let _aaCryptoPriceCache: Record<string, number> = loadPriceFromLS(); // 初始从 localStorage 读取
-let _aaLastFetchTime = 0;
-const _aaPriceListeners: Set<(prices: Record<string, number>) => void> = new Set();
-
-// 从单个币种获取价格（三级降级：OKX → 火币 → Binance）
-async function fetchSingleCoinPrice(coin: { name: string; symbol: string }): Promise<number | null> {
-  // 1. OKX（主力，国内可访问）
-  try {
-    const r = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${coin.symbol}`, { signal: AbortSignal.timeout(5000) });
-    const j = await r.json();
-    const last = j?.data?.[0]?.last;
-    if (last) return parseFloat(last) * CNY_RATE;
-  } catch {}
-  // 2. 火币（备用1，国内稳定）
-  try {
-    const sym = coin.name.toLowerCase() + 'usdt';
-    const r = await fetch(`https://api.huobi.pro/market/detail/merged?symbol=${sym}`, { signal: AbortSignal.timeout(5000) });
-    const j = await r.json();
-    if (j?.status === 'ok' && j?.tick?.close) return parseFloat(j.tick.close) * CNY_RATE;
-  } catch {}
-  // 3. Binance（备用2）
-  try {
-    const sym = coin.name + 'USDT';
-    const r = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${sym}`, { signal: AbortSignal.timeout(5000) });
-    const j = await r.json();
-    if (j?.price) return parseFloat(j.price) * CNY_RATE;
-  } catch {}
-  return null;
-}
-
-async function fetchAACryptoPrices(): Promise<Record<string, number>> {
-  const now = Date.now();
-  if (now - _aaLastFetchTime < AA_CACHE_TTL && Object.keys(_aaCryptoPriceCache).length > 0) {
-    return _aaCryptoPriceCache;
-  }
-  try {
-    const results = await Promise.all(CRYPTO_COINS_AA.map(fetchSingleCoinPrice));
-    const prices: Record<string, number> = {};
-    CRYPTO_COINS_AA.forEach((coin, i) => {
-      if (results[i] !== null) prices[coin.name] = results[i] as number;
-    });
-    // 只有成功获取到新数据时才更新缓存，否则保留旧缓存
-    if (Object.keys(prices).length > 0) {
-      _aaCryptoPriceCache = prices;
-      _aaLastFetchTime = now;
-      savePriceToLS(prices); // 持久化到 localStorage
-    }
-    return _aaCryptoPriceCache; // 始终返回缓存（包括旧缓存）
-  } catch {
-    return _aaCryptoPriceCache; // 异常时保留旧缓存
-  }
-}
-
-// 模块加载时立即预取价格，获取到后通知所有已挂载的组件更新
-fetchAACryptoPrices().then(prices => {
-  _aaPriceListeners.forEach(fn => fn({ ...prices }));
-}).catch(() => {});
+// 数字币价格现已改为服务端缓存，通过 tRPC getCryptoPrices 接口获取
+// CRYPTO_COINS_AA 仅用于判断币种是否为数字币
+const CRYPTO_COINS_AA = ['BTC', 'ETH', 'SOL', 'LDO'];
 
 interface DayGroup {
   date: string;       // "YYYY-MM-DD"
@@ -147,44 +68,12 @@ export default function LedgerDetailAA({
 }: Props) {
   const [, setLocation] = useLocation();
 
-  // 数字币价格（用于保证金人民币折算）
-  // 用懒初始化确保从 localStorage 正确读取缓存（即使模块级变量未初始化）
-  const [aaCryptoPrices, setAACryptoPrices] = useState<Record<string, number>>(() => {
-    const ls = loadPriceFromLS();
-    if (Object.keys(ls).length > 0) {
-      _aaCryptoPriceCache = ls; // 同步更新模块级缓存
-      return ls;
-    }
-    return _aaCryptoPriceCache;
+  // 数字币价格（从服务端数据库缓存读取，每5分钟自动刷新）
+  const { data: cryptoPricesData } = trpc.getCryptoPrices.useQuery(undefined, {
+    refetchInterval: 5 * 60 * 1000, // 每5分钟刷新一次
+    staleTime: 60 * 1000,           // 1分钟内不重复请求
   });
-  const aaFetchingRef = useRef(false);
-  const loadAAPrices = useCallback(async () => {
-    if (aaFetchingRef.current) return;
-    aaFetchingRef.current = true;
-    try {
-      const prices = await fetchAACryptoPrices();
-      // 只有获取到非空价格时才更新 state，避免覆盖 localStorage 读到的旧缓存
-      if (Object.keys(prices).length > 0) {
-        setAACryptoPrices({ ...prices });
-      }
-    } finally {
-      aaFetchingRef.current = false;
-    }
-  }, []);
-  useEffect(() => {
-    // 注册监听器，接收模块预取完成的通知
-    const listener = (prices: Record<string, number>) => {
-      setAACryptoPrices(prices);
-    };
-    _aaPriceListeners.add(listener);
-    // 同时自己也发起请求（防止模块预取已经完成但组件还没挂载的情况）
-    loadAAPrices();
-    const timer = window.setInterval(loadAAPrices, AA_CACHE_TTL);
-    return () => {
-      _aaPriceListeners.delete(listener);
-      window.clearInterval(timer);
-    };
-  }, [loadAAPrices]);
+  const aaCryptoPrices: Record<string, number> = cryptoPricesData ?? {};
 
   // 日历当前月份
   const [calendarDate, setCalendarDate] = useState(() => {
@@ -359,7 +248,7 @@ export default function LedgerDetailAA({
       let marginCny = 0;
       if (marginRaw !== undefined && marginRaw !== null) {
         const num = Number(marginRaw);
-        if (coin && CRYPTO_COINS_AA.find(c => c.name === coin)) {
+        if (coin && CRYPTO_COINS_AA.includes(coin)) {
           marginCny = num * (aaCryptoPrices[coin] ?? 0);
         } else {
           marginCny = num;
@@ -408,7 +297,7 @@ export default function LedgerDetailAA({
       const coin = coinRaw ? String(coinRaw) : '';
       if (margin !== undefined && margin !== null) {
         const num = Number(margin);
-        if (coin && CRYPTO_COINS_AA.find(c => c.name === coin)) {
+        if (coin && CRYPTO_COINS_AA.includes(coin)) {
           // 数字币：按币种合并汇总
           hasCrypto = true;
           const price = aaCryptoPrices[coin] ?? 0;
@@ -929,7 +818,7 @@ export default function LedgerDetailAA({
               const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
               const coin = coinRaw ? String(coinRaw) : '';
               const ratioVal = initialBalancesData.balances[`${tagName}__ratio`];
-              const isCrypto = coin && CRYPTO_COINS_AA.find(c => c.name === coin);
+              const isCrypto = coin && CRYPTO_COINS_AA.includes(coin);
               const num = val !== undefined && val !== null ? Number(val) : null;
 
               if (isCrypto) {
