@@ -1512,7 +1512,7 @@ export default function LedgerDetailAA({
 
               const option = {
                 backgroundColor: '#FFFFFF',
-                grid: { top: 28, right: 16, bottom: 46, left: 52 },
+                grid: { top: 28, right: 16, bottom: 8, left: 52 },
                 xAxis: {
                   type: 'category',
                   data: allDates,
@@ -1571,49 +1571,14 @@ export default function LedgerDetailAA({
                   axisPointer: { lineStyle: { color: 'rgba(211,47,47,0.3)', type: 'dashed' } },
                 },
                 legend: { show: false },
-                dataZoom: [
-                  {
-                    type: 'slider',
-                    bottom: 2,
-                    height: 16,
-                    start: startPercent,
-                    end: 100,
-                    borderColor: 'transparent',
-                    backgroundColor: '#F5F5F5',
-                    fillerColor: 'rgba(211,47,47,0.12)',
-                    handleStyle: { color: '#D32F2F', borderColor: '#D32F2F' },
-                    textStyle: { color: '#BDBDBD', fontSize: 9 },
-                    showDetail: false,
-                    moveHandleSize: 0,
-                  },
-                  { type: 'inside', start: startPercent, end: 100 },
-                ],
+                dataZoom: [],
                 series: initialSeries,
-              };
-
-              // dataZoom 事件处理：动态更新可视区域内的最高/最低点标注
-              const onEvents = {
-                dataZoom: (params: any, chart: any) => {
-                  // 获取当前 dataZoom 范围
-                  let startPct = startPercent, endPct = 100;
-                  try {
-                    const opt = chart.getOption();
-                    if (opt?.dataZoom?.[0]) {
-                      startPct = opt.dataZoom[0].start ?? startPercent;
-                      endPct = opt.dataZoom[0].end ?? 100;
-                    }
-                  } catch {}
-                  // 重新计算并更新 markPoint
-                  const newSeries = buildSeries(startPct, endPct);
-                  chart.setOption({ series: newSeries }, { replaceMerge: ['series'] });
-                },
               };
 
               return (
                 <div className="px-1 pb-1">
                   <ReactECharts
                     option={option}
-                    onEvents={onEvents}
                     style={{ height: '260px', width: '100%' }}
                     opts={{ renderer: 'canvas' }}
                   />
@@ -1650,11 +1615,11 @@ export default function LedgerDetailAA({
         <div className="mx-3 mt-3 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
           {/* 表格标题行 */}
           <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: '#F5F5F5' }}>
-            <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>标签概览</span>
+            <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>概览</span>
           </div>
           {/* 表头 */}
           <div className="px-4 py-2 flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
-            <div className="flex-1 text-xs font-medium" style={{ color: '#9E9E9E' }}>标签</div>
+            <div className="flex-1 text-xs font-medium" style={{ color: '#9E9E9E' }}>名称</div>
             <div className="w-16 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
             <div className="w-16 text-right text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
           </div>
@@ -1670,9 +1635,9 @@ export default function LedgerDetailAA({
                 : 0;
               // 最新盈亏：取最后一个点的 pnl
               const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
-              // 年化收益 = 盈亏 / 初始金额 / 天数 * 365 * 100
-              const annualized = tag.initialBalance > 0 && days > 0
-                ? (latestPnl / tag.initialBalance / days) * 365 * 100
+              // 年化收益 = 盈亏 / 保证金(CNY) / 天数 * 365 * 100
+              const annualized = tag.marginCny > 0 && days > 0
+                ? (latestPnl / tag.marginCny / days) * 365 * 100
                 : null;
               const isLast = idx === arr.length - 1;
               return (
