@@ -1572,17 +1572,24 @@ export default function LedgerDetailAA({
                 },
                 legend: { show: false },
                 dataZoom: [
-                  // 禁用所有缩放和拖动
-                  { type: 'inside', disabled: true },
+                  // 彻底禁用所有方向的拖动和缩放
+                  {
+                    type: 'inside',
+                    disabled: true,
+                    zoomOnMouseWheel: false,
+                    moveOnMouseMove: false,
+                    moveOnMouseWheel: false,
+                    preventDefaultMouseMove: true,
+                  },
                 ],
                 series: initialSeries,
               };
 
               return (
-                <div className="px-1 pb-1">
+                <div className="px-1 pb-1" style={{ touchAction: 'pan-y', userSelect: 'none' }}>
                   <ReactECharts
                     option={option}
-                    style={{ height: '260px', width: '100%' }}
+                    style={{ height: '260px', width: '100%', touchAction: 'pan-y' }}
                     opts={{ renderer: 'canvas' }}
                   />
                 </div>
