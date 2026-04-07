@@ -575,7 +575,7 @@ const FunderOrderDetailModal = lazy(() => import('@/components/FunderOrderDetail
 const LedgerDetailAA = lazy(() => import('./LedgerDetailAA'));
 const LedgerDetailAG = lazy(() => import('./LedgerDetailAG'));
 const MemoLedgerPage = lazy(() => import('./MemoLedgerPage'));
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 // 不再使用动态主题，固定红色配色
 import { Button } from "@/components/ui/button";
@@ -1027,8 +1027,11 @@ export default function LedgerDetail() {
   
   // 读取URL查询参数
   const urlParams = new URLSearchParams(window.location.search);
+  // 使用wouter的useSearch确保SPA路由下能正确读取URL参数
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
   // 读取来源账本ID（用于从其他账本跳转过来时，返回键能回到来源账本）
-  const fromLedgerId = urlParams.get('from');
+  const fromLedgerId = searchParams.get('from');
   const backTarget = fromLedgerId ? `/ledger/${fromLedgerId}` : '/ledger';
   const filters: any = {
     ledgerId: Number(ledgerId),
