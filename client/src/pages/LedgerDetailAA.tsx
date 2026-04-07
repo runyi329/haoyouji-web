@@ -36,12 +36,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-// 数字币价格查询（用于保证金人民币折算显示）
+// 数字币价格查询（用于保证金人民币折算显示）——使用OKX API格式
 const CRYPTO_COINS_AA = [
-  { symbol: "BTCUSDT", name: "BTC" },
-  { symbol: "ETHUSDT", name: "ETH" },
-  { symbol: "SOLUSDT", name: "SOL" },
-  { symbol: "LDOUSDT", name: "LDO" },
+  { symbol: "BTC-USDT", name: "BTC" },
+  { symbol: "ETH-USDT", name: "ETH" },
+  { symbol: "SOL-USDT", name: "SOL" },
+  { symbol: "LDO-USDT", name: "LDO" },
 ];
 let _aaCryptoPriceCache: Record<string, number> = {};
 let _aaLastFetchTime = 0;
@@ -52,21 +52,20 @@ async function fetchAACryptoPrices(): Promise<Record<string, number>> {
     return _aaCryptoPriceCache;
   }
   try {
-    const symbols = [...CRYPTO_COINS_AA.map((c) => c.symbol), "USDTCNY"];
+    // 使用OKX API（国内可访问），USDT/CNY汇率固定7.0
+    const CNY_RATE = 7.0;
     const results = await Promise.all(
-      symbols.map((s) =>
-        fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`)
+      CRYPTO_COINS_AA.map((c) =>
+        fetch(`https://www.okx.com/api/v5/market/ticker?instId=${c.symbol}`)
           .then((r) => r.json())
           .catch(() => null)
       )
     );
-    let cnyRate = 7.25;
-    const usdtCnyResult = results[results.length - 1];
-    if (usdtCnyResult?.price) cnyRate = parseFloat(usdtCnyResult.price);
     const prices: Record<string, number> = {};
     CRYPTO_COINS_AA.forEach((coin, i) => {
       const r = results[i];
-      if (r?.price) prices[coin.name] = parseFloat(r.price) * cnyRate;
+      const last = r?.data?.[0]?.last;
+      if (last) prices[coin.name] = parseFloat(last) * CNY_RATE;
     });
     _aaCryptoPriceCache = prices;
     _aaLastFetchTime = now;
