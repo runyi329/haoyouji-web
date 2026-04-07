@@ -1719,6 +1719,19 @@ export default function LedgerDetail() {
                         className="w-full h-full object-cover rounded-full"
                       />
                     </div>
+                    {/* 股票行情入口：跳转到37号账本（以当前用户视角） */}
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                      style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
+                      onClick={() => setLocation('/ledger/37')}
+                      title="股票行情"
+                    >
+                      <img
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ths-stock-icon-circle.png"
+                        alt="股票"
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    </div>
                   </>
                 )}
                 {/* AI账本：按钮移到第二行，此处不再渲染 */}

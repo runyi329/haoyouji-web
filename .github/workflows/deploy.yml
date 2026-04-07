@@ -82,6 +82,8 @@ jobs:
             echo "Nginx错误日志（最后10行）："
             tail -10 /var/log/nginx/haoyouji_error.log 2>/dev/null || true
             tail -10 /var/log/nginx/error.log 2>/dev/null || true
+            echo "📤 上传同花顺股票图标到COS..."
+            cd /root/haoyouji-web && node scripts/upload-ths-icon.mjs || echo "⚠️ 图标上传失败（非致命）"
             echo "🔍 执行COS诊断..."
             bash /root/haoyouji-web/scripts/diagnose-cos.sh
             echo "=== 查询云南region数据 ==="
