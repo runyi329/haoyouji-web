@@ -16424,6 +16424,22 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       }
     }),
 
+  // 数字币实时价格（服务端缓存，前端直接读取）
+  getCryptoPrices: publicProcedure.query(async () => {
+    try {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return {};
+      const [rows] = await dbConn.execute(`SELECT coin, price_cny FROM crypto_price_cache`) as any;
+      const prices: Record<string, number> = {};
+      for (const row of (rows as any[])) {
+        prices[row.coin] = parseFloat(row.price_cny);
+      }
+      return prices;
+    } catch {
+      return {};
+    }
+  }),
+
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
@@ -16832,21 +16848,6 @@ export const adminFeatureRouter = router({
       }
     }),
 
-  // 数字币实时价格（服务端缓存，前端直接读取）
-  getCryptoPrices: publicProcedure.query(async () => {
-    try {
-      const dbConn = await getDbConnection();
-      if (!dbConn) return {};
-      const [rows] = await dbConn.execute(`SELECT coin, price_cny FROM crypto_price_cache`) as any;
-      const prices: Record<string, number> = {};
-      for (const row of (rows as any[])) {
-        prices[row.coin] = parseFloat(row.price_cny);
-      }
-      return prices;
-    } catch {
-      return {};
-    }
-  }),
 });
 export type AppRouter = typeof appRouter;
 
