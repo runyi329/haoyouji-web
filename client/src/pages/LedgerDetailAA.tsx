@@ -67,11 +67,14 @@ async function fetchAACryptoPrices(): Promise<Record<string, number>> {
       const last = r?.data?.[0]?.last;
       if (last) prices[coin.name] = parseFloat(last) * CNY_RATE;
     });
-    _aaCryptoPriceCache = prices;
-    _aaLastFetchTime = now;
-    return prices;
+    // 只有成功获取到新数据时才更新缓存，否则保留旧缓存
+    if (Object.keys(prices).length > 0) {
+      _aaCryptoPriceCache = prices;
+      _aaLastFetchTime = now;
+    }
+    return _aaCryptoPriceCache; // 始终返回缓存（包括旧缓存）
   } catch {
-    return _aaCryptoPriceCache;
+    return _aaCryptoPriceCache; // 异常时保留旧缓存
   }
 }
 
