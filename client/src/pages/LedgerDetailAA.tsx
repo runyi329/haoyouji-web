@@ -783,47 +783,56 @@ export default function LedgerDetailAA({
 
           {/* 保证金 + 比例 */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5">保证金</div>
-            <div className="text-base font-bold">
-              {(() => {
-                const tagName = selectedTag?.name;
-                if (!tagName || !initialBalancesData?.balances) return '未设置';
-                const val = initialBalancesData.balances[`${tagName}__margin`];
-                if (val === undefined || val === null) return '未设置';
-                const coin = initialBalancesData.balances[`${tagName}__marginCoin`];
-                const num = Number(val);
-                if (coin && CRYPTO_COINS_AA.find(c => c.name === String(coin))) {
-                  // 数字币模式：显示数量和币种
-                  return `${num} ${coin}`;
-                }
-                return '¥' + num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-              })()}
-            </div>
-            <div className="text-xs opacity-60 mt-0.5">
-              {(() => {
-                const tagName = selectedTag?.name;
-                if (!tagName || !initialBalancesData?.balances) return '';
-                const val = initialBalancesData.balances[`${tagName}__margin`];
-                const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
-                const coin = coinRaw ? String(coinRaw) : '';
-                const ratioVal = initialBalancesData.balances[`${tagName}__ratio`];
-                const parts: string[] = [];
-                // 数字币折算人民币
-                if (coin && val && CRYPTO_COINS_AA.find(c => c.name === coin)) {
-                  const price = aaCryptoPrices[coin];
-                  if (price) {
-                    const cny = Number(val) * price;
-                    parts.push('≈ ¥' + cny.toLocaleString('zh-CN', { maximumFractionDigits: 0 }));
-                  } else {
-                    parts.push('≈ 获取中...');
-                  }
-                }
-                if (ratioVal !== undefined && ratioVal !== null) {
-                  parts.push(`比例 ${Number(ratioVal).toFixed(0)}%`);
-                }
-                return parts.join('  ');
-              })()}
-            </div>
+            {(() => {
+              const tagName = selectedTag?.name;
+              if (!tagName || !initialBalancesData?.balances) {
+                return (
+                  <>
+                    <div className="text-xs opacity-75 mb-0.5">保证金</div>
+                    <div className="text-base font-bold">未设置</div>
+                  </>
+                );
+              }
+              const val = initialBalancesData.balances[`${tagName}__margin`];
+              const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
+              const coin = coinRaw ? String(coinRaw) : '';
+              const ratioVal = initialBalancesData.balances[`${tagName}__ratio`];
+              const isCrypto = coin && CRYPTO_COINS_AA.find(c => c.name === coin);
+              const num = val !== undefined && val !== null ? Number(val) : null;
+
+              if (isCrypto) {
+                // 数字币模式：标题行显示「保证金  比例X%」，主值显示数量+币种，副行显示约等于人民币
+                const price = aaCryptoPrices[coin];
+                const cnyText = price && num !== null
+                  ? '≈ ¥' + (num * price).toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+                  : '≈ 获取中...';
+                return (
+                  <>
+                    <div className="text-xs opacity-75 mb-0.5 flex items-center gap-2">
+                      <span>保证金</span>
+                      {ratioVal !== undefined && ratioVal !== null && (
+                        <span className="opacity-80">比例 {Number(ratioVal).toFixed(0)}%</span>
+                      )}
+                    </div>
+                    <div className="text-base font-bold">{num !== null ? `${num} ${coin}` : '未设置'}</div>
+                    <div className="text-xs opacity-60 mt-0.5">{cnyText}</div>
+                  </>
+                );
+              } else {
+                // 法币模式：标题行只显示「保证金」，主值显示¥金额，副行显示比例
+                return (
+                  <>
+                    <div className="text-xs opacity-75 mb-0.5">保证金</div>
+                    <div className="text-base font-bold">
+                      {num !== null ? '¥' + num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '未设置'}
+                    </div>
+                    <div className="text-xs opacity-60 mt-0.5">
+                      {ratioVal !== undefined && ratioVal !== null ? `比例 ${Number(ratioVal).toFixed(0)}%` : ''}
+                    </div>
+                  </>
+                );
+              }
+            })()}
           </div>
 
           {/* 初始金额 */}
