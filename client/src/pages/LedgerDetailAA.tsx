@@ -1422,7 +1422,7 @@ export default function LedgerDetailAA({
             {allTagsChartData.length === 0 || allTagsChartData.every(t => t.points.length === 0) ? (
               <div className="flex items-center justify-center py-12 text-sm" style={{ color: '#BDBDBD' }}>暂无数据</div>
             ) : (() => {
-              // 收集所有日期（合并所有标签的日期）
+              // 收集所有日期
               const allDates = Array.from(new Set(
                 allTagsChartData.flatMap(t => t.points.map((p: any) => p.date))
               )).sort();
@@ -1436,82 +1436,88 @@ export default function LedgerDetailAA({
                 ? Math.max(0, Math.floor((defaultStartIdx / allDates.length) * 100) - 2)
                 : 0;
 
-              // 构建ECharts series（包含最高/最低点标注）
-              const series = allTagsChartData
-                .filter(t => t.points.length > 0)
-                .map(tag => {
-                  const isHidden = hiddenTags.has(tag.name);
-                  const datePointMap = new Map(tag.points.map((p: any) => [p.date, p]));
-                  const data: (number | null)[] = allDates.map(date => {
-                    const p = datePointMap.get(date);
-                    if (!p) return null;
-                    if (allChartMode === 'amount') return parseFloat(p.pnl.toFixed(2));
-                    if (allChartMode === 'initial') return parseFloat(p.pctInitial.toFixed(2));
-                    return parseFloat(p.pctMargin.toFixed(2));
-                  });
-
-                  // 找全局最高点和最低点（用于标注）
-                  let maxVal = -Infinity, maxIdx = -1;
-                  let minVal = Infinity, minIdx = -1;
-                  data.forEach((v, i) => {
-                    if (v === null) return;
-                    if (v > maxVal) { maxVal = v; maxIdx = i; }
-                    if (v < minVal) { minVal = v; minIdx = i; }
-                  });
-
-                  // 构建带标注的数据（最高点和最低点显示标签）
-                  const dataWithMarks = data.map((v, i) => {
-                    if (v === null) return null;
-                    const isMax = i === maxIdx;
-                    const isMin = i === minIdx;
-                    // 隐藏时不显示标注
-                    if (!isHidden && (isMax || isMin)) {
-                      const fmt = allChartMode === 'amount'
-                        ? (Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + '万' : v.toFixed(0))
-                        : v.toFixed(1) + '%';
-                      return {
-                        value: v,
-                        symbol: 'circle',
-                        symbolSize: 6,
-                        label: {
-                          show: true,
-                          formatter: fmt,
-                          fontSize: 9,
-                          fontWeight: 600,
-                          color: tag.color,
-                          position: isMax ? 'top' : 'bottom',
-                          distance: 4,
-                          backgroundColor: 'rgba(255,255,255,0.85)',
-                          padding: [1, 3],
-                          borderRadius: 3,
-                        },
-                        itemStyle: { color: tag.color, borderColor: '#fff', borderWidth: 1.5 },
-                      };
+              // 辅助函数：根据可视区间计算每个标签的最高/最低点，返回 markPoint 配置
+              const buildMarkPoints = (tagDataList: typeof allTagsChartData, dates: string[], startPct: number, endPct: number, mode: typeof allChartMode, hidden: Set<string>) => {
+                const total = dates.length;
+                const startIdx = Math.floor(total * startPct / 100);
+                const endIdx = Math.min(total - 1, Math.ceil(total * endPct / 100));
+                return tagDataList
+                  .filter(t => t.points.length > 0 && !hidden.has(t.name))
+                  .map(tag => {
+                    const datePointMap = new Map(tag.points.map((p: any) => [p.date, p]));
+                    let maxVal = -Infinity, maxIdx2 = -1;
+                    let minVal = Infinity, minIdx2 = -1;
+                    for (let i = startIdx; i <= endIdx; i++) {
+                      const p = datePointMap.get(dates[i]);
+                      if (!p) continue;
+                      const v = mode === 'amount' ? p.pnl : mode === 'initial' ? p.pctInitial : p.pctMargin;
+                      if (v > maxVal) { maxVal = v; maxIdx2 = i; }
+                      if (v < minVal) { minVal = v; minIdx2 = i; }
                     }
-                    return v;
+                    const fmt = (v: number) => mode === 'amount'
+                      ? (Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + '万' : v.toFixed(0))
+                      : v.toFixed(1) + '%';
+                    const markData: any[] = [];
+                    if (maxIdx2 >= 0) markData.push({
+                      coord: [maxIdx2, parseFloat(maxVal.toFixed(2))],
+                      value: fmt(maxVal),
+                      symbol: 'circle', symbolSize: 6,
+                      itemStyle: { color: tag.color, borderColor: '#fff', borderWidth: 1.5 },
+                      label: { show: true, formatter: fmt(maxVal), position: 'top', fontSize: 9, fontWeight: 600, color: tag.color, distance: 4, backgroundColor: 'rgba(255,255,255,0.88)', padding: [1, 3], borderRadius: 3 },
+                    });
+                    if (minIdx2 >= 0 && minIdx2 !== maxIdx2) markData.push({
+                      coord: [minIdx2, parseFloat(minVal.toFixed(2))],
+                      value: fmt(minVal),
+                      symbol: 'circle', symbolSize: 6,
+                      itemStyle: { color: tag.color, borderColor: '#fff', borderWidth: 1.5 },
+                      label: { show: true, formatter: fmt(minVal), position: 'bottom', fontSize: 9, fontWeight: 600, color: tag.color, distance: 4, backgroundColor: 'rgba(255,255,255,0.88)', padding: [1, 3], borderRadius: 3 },
+                    });
+                    return { name: tag.name, markData };
                   });
+              };
 
-                  return {
-                    name: tag.name,
-                    type: 'line',
-                    data: dataWithMarks,
-                    smooth: true,
-                    symbol: 'circle',
-                    symbolSize: 4,
-                    showSymbol: false,
-                    lineStyle: { color: isHidden ? 'transparent' : tag.color, width: 2 },
-                    itemStyle: { color: tag.color },
-                    // 隐藏时设置透明度为0
-                    opacity: isHidden ? 0 : 1,
-                    connectNulls: false,
-                    // 隐藏时不显示标注
-                    label: { show: false },
-                  };
-                });
+              // 构建ECharts series
+              const buildSeries = (startPct: number, endPct: number) => {
+                const markPoints = buildMarkPoints(allTagsChartData, allDates, startPct, endPct, allChartMode, hiddenTags);
+                const mpMap = new Map(markPoints.map(m => [m.name, m.markData]));
+                return allTagsChartData
+                  .filter(t => t.points.length > 0)
+                  .map(tag => {
+                    const isHidden = hiddenTags.has(tag.name);
+                    const datePointMap = new Map(tag.points.map((p: any) => [p.date, p]));
+                    const data: (number | null)[] = allDates.map(date => {
+                      const p = datePointMap.get(date);
+                      if (!p) return null;
+                      if (allChartMode === 'amount') return parseFloat(p.pnl.toFixed(2));
+                      if (allChartMode === 'initial') return parseFloat(p.pctInitial.toFixed(2));
+                      return parseFloat(p.pctMargin.toFixed(2));
+                    });
+                    return {
+                      name: tag.name,
+                      type: 'line',
+                      data,
+                      smooth: true,
+                      symbol: 'circle',
+                      symbolSize: 4,
+                      showSymbol: false,
+                      lineStyle: { color: isHidden ? 'transparent' : tag.color, width: 2 },
+                      itemStyle: { color: tag.color },
+                      opacity: isHidden ? 0 : 1,
+                      connectNulls: false,
+                      label: { show: false },
+                      markPoint: isHidden ? { data: [] } : {
+                        data: mpMap.get(tag.name) ?? [],
+                        animation: false,
+                        silent: true,
+                      },
+                    };
+                  });
+              };
+
+              const initialSeries = buildSeries(startPercent, 100);
 
               const option = {
                 backgroundColor: '#FFFFFF',
-                // 调整grid：top稍大留空给标注，bottom留空给dataZoom滑块，不需要legend
                 grid: { top: 28, right: 16, bottom: 30, left: 52 },
                 xAxis: {
                   type: 'category',
@@ -1570,7 +1576,6 @@ export default function LedgerDetailAA({
                   },
                   axisPointer: { lineStyle: { color: 'rgba(211,47,47,0.3)', type: 'dashed' } },
                 },
-                // 去掉ECharts自带legend，改用自定义标签
                 legend: { show: false },
                 dataZoom: [
                   {
@@ -1589,13 +1594,32 @@ export default function LedgerDetailAA({
                   },
                   { type: 'inside', start: startPercent, end: 100 },
                 ],
-                series,
+                series: initialSeries,
+              };
+
+              // dataZoom 事件处理：动态更新可视区域内的最高/最低点标注
+              const onEvents = {
+                dataZoom: (params: any, chart: any) => {
+                  // 获取当前 dataZoom 范围
+                  let startPct = startPercent, endPct = 100;
+                  try {
+                    const opt = chart.getOption();
+                    if (opt?.dataZoom?.[0]) {
+                      startPct = opt.dataZoom[0].start ?? startPercent;
+                      endPct = opt.dataZoom[0].end ?? 100;
+                    }
+                  } catch {}
+                  // 重新计算并更新 markPoint
+                  const newSeries = buildSeries(startPct, endPct);
+                  chart.setOption({ series: newSeries }, { replaceMerge: ['series'] });
+                },
               };
 
               return (
                 <div className="px-1 pb-1">
                   <ReactECharts
                     option={option}
+                    onEvents={onEvents}
                     style={{ height: '260px', width: '100%' }}
                     opts={{ renderer: 'canvas' }}
                   />
