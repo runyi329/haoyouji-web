@@ -1530,7 +1530,7 @@ export default function LedgerDetailAA({
 
               const option = {
                 backgroundColor: '#FFFFFF',
-                grid: { top: 28, right: 16, bottom: 28, left: 52 },
+                grid: { top: 28, right: 16, bottom: 52, left: 52 },
                 xAxis: {
                   type: 'category',
                   data: allDates,
@@ -1590,14 +1590,29 @@ export default function LedgerDetailAA({
                 },
                 legend: { show: false },
                 dataZoom: [
-                  // 彻底禁用所有方向的拖动和缩放
+                  // slider滑块：保留缩放功能
+                  {
+                    type: 'slider',
+                    start: startPercent,
+                    end: 100,
+                    height: 18,
+                    bottom: 4,
+                    borderColor: 'transparent',
+                    backgroundColor: '#F5F5F5',
+                    fillerColor: 'rgba(211,47,47,0.15)',
+                    handleStyle: { color: '#D32F2F', borderColor: '#D32F2F' },
+                    moveHandleStyle: { color: '#D32F2F' },
+                    textStyle: { color: 'transparent', fontSize: 0 },
+                    showDetail: false,
+                    brushSelect: false,
+                  },
+                  // inside：禁用手指拖动移动，但保留缩放
                   {
                     type: 'inside',
-                    disabled: true,
-                    zoomOnMouseWheel: false,
                     moveOnMouseMove: false,
                     moveOnMouseWheel: false,
-                    preventDefaultMouseMove: true,
+                    zoomOnMouseWheel: false,
+                    preventDefaultMouseMove: false,
                   },
                 ],
                 series: initialSeries,
