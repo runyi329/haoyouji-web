@@ -38,11 +38,11 @@ const CRYPTO_COINS = [
 let cryptoPriceCache: Record<string, number> = {};
 let cnyRateCache = 0;
 let lastFetchTime = 0;
-const CACHE_TTL = 10 * 60 * 1000; // 10分钟
+const CACHE_TTL = 10 * 1000; // 10秒刷新一次（Binance API，不占用服务器资源）
 
 async function fetchCryptoPrices(): Promise<{ prices: Record<string, number>; cnyRate: number }> {
   const now = Date.now();
-  if (now - lastFetchTime < CACHE_TTL && cnyRateCache > 0) {
+  if (now - lastFetchTime < CACHE_TTL && cnyRateCache > 0 && Object.keys(cryptoPriceCache).length > 0) {
     return { prices: cryptoPriceCache, cnyRate: cnyRateCache };
   }
   try {
@@ -528,7 +528,7 @@ export default function LedgerAAInitialBalance() {
 
                           {/* 行5：初始保证金（支持数字币） */}
                           <div className="space-y-1.5">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 w-full overflow-hidden">
                               <span className="text-xs text-gray-400 w-16 flex-shrink-0">
                                 初始保证金
                               </span>
@@ -540,15 +540,15 @@ export default function LedgerAAInitialBalance() {
                                     marginCoin: e.target.value,
                                   })
                                 }
-                                className="text-xs border rounded-lg px-1.5 py-1 outline-none focus:border-red-400 flex-shrink-0"
+                                className="text-xs border rounded-lg px-1 py-1 outline-none focus:border-red-400 flex-shrink-0"
                                 style={{
                                   borderColor: "#E0E0E0",
                                   backgroundColor: "#FFFFFF",
                                   color: entry.marginCoin ? "#D32F2F" : "#9E9E9E",
-                                  width: "68px",
+                                  width: "60px",
                                 }}
                               >
-                                <option value="">¥ 法币</option>
+                                <option value="">¥法币</option>
                                 {CRYPTO_COINS.map((c) => (
                                   <option key={c.name} value={c.name}>
                                     {c.name}
@@ -566,7 +566,7 @@ export default function LedgerAAInitialBalance() {
                                     margin: e.target.value,
                                   })
                                 }
-                                className="flex-1 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
+                                className="min-w-0 flex-1 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
                                 style={{
                                   borderColor: "#E0E0E0",
                                   backgroundColor: "#FFFFFF",

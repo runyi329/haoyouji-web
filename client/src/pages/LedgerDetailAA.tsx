@@ -45,7 +45,7 @@ const CRYPTO_COINS_AA = [
 ];
 let _aaCryptoPriceCache: Record<string, number> = {};
 let _aaLastFetchTime = 0;
-const AA_CACHE_TTL = 10 * 60 * 1000;
+const AA_CACHE_TTL = 10 * 1000; // 10秒刷新一次（Binance API，不占用服务器资源）
 async function fetchAACryptoPrices(): Promise<Record<string, number>> {
   const now = Date.now();
   if (now - _aaLastFetchTime < AA_CACHE_TTL && Object.keys(_aaCryptoPriceCache).length > 0) {
