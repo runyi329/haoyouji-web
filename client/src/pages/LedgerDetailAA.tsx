@@ -301,15 +301,31 @@ export default function LedgerDetailAA({
   // ─── 全部模式：计算所有标签的保证金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
     if (!initialBalancesData?.balances || !categories || categories.length === 0) {
-      return { totalMargin: 0, totalPnl: 0, diff: 0 };
+      return { totalMargin: 0, totalPnl: 0, diff: 0, hasCrypto: false, cryptoDetails: [] as {coin: string, amount: number, cnyValue: number}[] };
     }
     let totalMargin = 0;
     let totalPnl = 0;
+    let hasCrypto = false;
+    const cryptoDetails: {coin: string, amount: number, cnyValue: number}[] = [];
     categories.forEach((cat: any) => {
       const tagName = cat.name;
       // 保证金
       const margin = initialBalancesData.balances[`${tagName}__margin`];
-      if (margin !== undefined && margin !== null) totalMargin += Number(margin);
+      const coinRaw = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
+      const coin = coinRaw ? String(coinRaw) : '';
+      if (margin !== undefined && margin !== null) {
+        const num = Number(margin);
+        if (coin && CRYPTO_COINS_AA.find(c => c.name === coin)) {
+          // 数字币：折算人民币
+          hasCrypto = true;
+          const price = aaCryptoPrices[coin] ?? 0;
+          const cnyValue = num * price;
+          totalMargin += cnyValue;
+          cryptoDetails.push({ coin, amount: num, cnyValue });
+        } else {
+          totalMargin += num;
+        }
+      }
       // 盈亏：需要计算每个标签的 initialBalance - latestBalance
       const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
@@ -326,8 +342,8 @@ export default function LedgerDetailAA({
         }
       }
     });
-    return { totalMargin, totalPnl, diff: totalMargin + totalPnl };
-  }, [initialBalancesData, categories, activeMemberTransactions]);
+    return { totalMargin, totalPnl, diff: totalMargin + totalPnl, hasCrypto, cryptoDetails };
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices]);
 
   // ─── 统计数据 ─────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -742,17 +758,32 @@ export default function LedgerDetailAA({
             <>
               <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
                 <div className="text-xs opacity-75 mb-0.5">保证金总计</div>
-                <div className="text-base font-bold">
-                  ¥{allTagsStats.totalMargin.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-xs opacity-60 mt-0.5">全部标签保证金之和</div>
+                {allTagsStats.hasCrypto ? (
+                  <>
+                    <div className="text-base font-bold">
+                      {allTagsStats.cryptoDetails.map(d => `${d.amount} ${d.coin}`).join(' + ')}
+                    </div>
+                    <div className="text-xs opacity-60 mt-0.5">
+                      {aaCryptoPrices[allTagsStats.cryptoDetails[0]?.coin]
+                        ? `≈ ¥${allTagsStats.totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
+                        : '≈ 获取中...'}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-base font-bold">
+                      ¥{allTagsStats.totalMargin.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div className="text-xs opacity-60 mt-0.5">全部保证金之和</div>
+                  </>
+                )}
               </div>
               <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
                 <div className="text-xs opacity-75 mb-0.5">盈亏总计</div>
                 <div className="text-base font-bold">
                   {allTagsStats.totalPnl > 0 ? '+' : ''}¥{allTagsStats.totalPnl.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div className="text-xs opacity-60 mt-0.5">全部标签盈亏之和</div>
+                <div className="text-xs opacity-60 mt-0.5">全部盈亏之和</div>
               </div>
               <div className="col-span-2 rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
                 <div className="text-xs opacity-75 mb-0.5">差値（保证金 + 盈亏）</div>
