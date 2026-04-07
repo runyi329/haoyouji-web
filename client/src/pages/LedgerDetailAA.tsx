@@ -142,7 +142,15 @@ export default function LedgerDetailAA({
   const [, setLocation] = useLocation();
 
   // 数字币价格（用于保证金人民币折算）
-  const [aaCryptoPrices, setAACryptoPrices] = useState<Record<string, number>>(_aaCryptoPriceCache);
+  // 用懒初始化确保从 localStorage 正确读取缓存（即使模块级变量未初始化）
+  const [aaCryptoPrices, setAACryptoPrices] = useState<Record<string, number>>(() => {
+    const ls = loadPriceFromLS();
+    if (Object.keys(ls).length > 0) {
+      _aaCryptoPriceCache = ls; // 同步更新模块级缓存
+      return ls;
+    }
+    return _aaCryptoPriceCache;
+  });
   const aaFetchingRef = useRef(false);
   const loadAAPrices = useCallback(async () => {
     if (aaFetchingRef.current) return;
