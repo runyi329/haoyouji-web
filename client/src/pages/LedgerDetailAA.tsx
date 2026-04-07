@@ -1314,7 +1314,7 @@ export default function LedgerDetailAA({
             {/* 图表标题行 */}
             <div className="px-4 pt-4 pb-1 flex items-center justify-between">
               <div>
-                <div className="text-sm font-bold" style={{ color: '#1A1A1A' }}>盈亏走势对比</div>
+                <div className="text-sm font-bold" style={{ color: '#1A1A1A' }}>盈亏走势</div>
               </div>
               {/* 标签图例（点击可切换显隐） */}
               <div className="flex flex-wrap gap-1.5 justify-end" style={{ maxWidth: '65%' }}>
@@ -1574,10 +1574,12 @@ export default function LedgerDetailAA({
             <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>概览</span>
           </div>
           {/* 表头 */}
-          <div className="px-4 py-2 flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
-            <div className="flex-1 text-xs font-medium" style={{ color: '#9E9E9E' }}>名称</div>
-            <div className="w-16 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
-            <div className="w-16 text-right text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
+          <div className="flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
+            <div className="flex-1 px-4 py-2 text-xs font-medium text-center" style={{ color: '#9E9E9E' }}>名称</div>
+            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+            <div className="w-20 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
+            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+            <div className="w-20 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
           </div>
           {/* 表格每行 */}
           {allTagsChartData
@@ -1599,21 +1601,23 @@ export default function LedgerDetailAA({
               return (
                 <div
                   key={tag.name}
-                  className="px-4 py-3 flex items-center"
+                  className="flex items-center"
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F9F9F9' }}
                 >
                   {/* 标签名称 */}
-                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                  <div className="flex-1 px-4 py-3 flex items-center justify-center gap-2 min-w-0">
                     <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                     <span className="text-sm font-medium truncate" style={{ color: '#1A1A1A' }}>{tag.name}</span>
                   </div>
+                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 周期 */}
-                  <div className="w-16 text-center text-sm" style={{ color: '#616161' }}>
+                  <div className="w-20 px-2 py-3 text-center text-sm" style={{ color: '#616161' }}>
                     {days > 0 ? days : '--'}
                   </div>
+                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 年化收益 */}
                   <div
-                    className="w-16 text-right text-sm font-semibold"
+                    className="w-20 px-2 py-3 text-center text-sm font-semibold"
                     style={{ color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
                   >
                     {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
