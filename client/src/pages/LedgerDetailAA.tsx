@@ -306,7 +306,7 @@ export default function LedgerDetailAA({
     let totalMargin = 0;
     let totalPnl = 0;
     let hasCrypto = false;
-    const cryptoDetails: {coin: string, amount: number, cnyValue: number}[] = [];
+    const cryptoMap: Record<string, { amount: number, cnyValue: number }> = {};
     categories.forEach((cat: any) => {
       const tagName = cat.name;
       // 保证金
@@ -316,12 +316,17 @@ export default function LedgerDetailAA({
       if (margin !== undefined && margin !== null) {
         const num = Number(margin);
         if (coin && CRYPTO_COINS_AA.find(c => c.name === coin)) {
-          // 数字币：折算人民币
+          // 数字币：按币种合并汇总
           hasCrypto = true;
           const price = aaCryptoPrices[coin] ?? 0;
           const cnyValue = num * price;
           totalMargin += cnyValue;
-          cryptoDetails.push({ coin, amount: num, cnyValue });
+          if (cryptoMap[coin]) {
+            cryptoMap[coin].amount += num;
+            cryptoMap[coin].cnyValue += cnyValue;
+          } else {
+            cryptoMap[coin] = { amount: num, cnyValue };
+          }
         } else {
           totalMargin += num;
         }
@@ -342,6 +347,7 @@ export default function LedgerDetailAA({
         }
       }
     });
+    const cryptoDetails = Object.entries(cryptoMap).map(([coin, v]) => ({ coin, amount: v.amount, cnyValue: v.cnyValue }));
     return { totalMargin, totalPnl, diff: totalMargin + totalPnl, hasCrypto, cryptoDetails };
   }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices]);
 
@@ -760,11 +766,13 @@ export default function LedgerDetailAA({
                 <div className="text-xs opacity-75 mb-0.5">保证金总计</div>
                 {allTagsStats.hasCrypto ? (
                   <>
-                    <div className="text-base font-bold">
-                      {allTagsStats.cryptoDetails.map(d => `${d.amount} ${d.coin}`).join(' + ')}
-                    </div>
+                    {allTagsStats.cryptoDetails.map(d => (
+                      <div key={d.coin} className="text-base font-bold leading-tight">
+                        {d.amount.toLocaleString('zh-CN', { maximumFractionDigits: 4 })} {d.coin}
+                      </div>
+                    ))}
                     <div className="text-xs opacity-60 mt-0.5">
-                      {aaCryptoPrices[allTagsStats.cryptoDetails[0]?.coin]
+                      {allTagsStats.cryptoDetails.length > 0 && aaCryptoPrices[allTagsStats.cryptoDetails[0]?.coin]
                         ? `≈ ¥${allTagsStats.totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
                         : '≈ 获取中...'}
                     </div>
