@@ -276,7 +276,7 @@ export default function GoldTrackerPage() {
     <div
       className="min-h-screen pb-8"
       style={{
-        background: "linear-gradient(160deg, #0d0a05 0%, #1a1208 40%, #0d0a05 100%)",
+        background: "#000000",
         color: "#e8d5a3",
       }}
     >
@@ -309,7 +309,7 @@ export default function GoldTrackerPage() {
       <div className="px-4 pt-4">
         <div
           className="rounded-2xl"
-          style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)" }}
+          style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)" }}
         >
           {/* 顶部：左边大价格，右边两行（标题+涨跌） */}
           <div className="flex items-center justify-between px-4 pt-3 pb-2">
@@ -417,7 +417,7 @@ export default function GoldTrackerPage() {
       <div className="px-4 mt-4">
         <div
           className="rounded-2xl"
-          style={{ background: "rgba(201,168,76,0.04)", border: "1px solid rgba(201,168,76,0.15)" }}
+          style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.25)" }}
         >
           {/* 标题行 */}
           <div className="flex items-center justify-between px-4 py-3">
@@ -453,7 +453,7 @@ export default function GoldTrackerPage() {
           {showAddForm && (
             <div
               className="mx-3 mb-3 rounded-xl p-3 space-y-2"
-              style={{ background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.2)" }}
+              style={{ background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)" }}
             >
               {/* 方向 */}
               <div className="flex gap-2">
