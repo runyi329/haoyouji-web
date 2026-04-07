@@ -1645,6 +1645,65 @@ export default function LedgerDetailAA({
         </div>
       )}
 
+      {/* ── 标签周期年化表格 ── */}
+      {selectedTagId === null && allTagsChartData.length > 0 && (
+        <div className="mx-3 mt-3 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
+          {/* 表格标题行 */}
+          <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: '#F5F5F5' }}>
+            <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>标签概览</span>
+          </div>
+          {/* 表头 */}
+          <div className="px-4 py-2 flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
+            <div className="flex-1 text-xs font-medium" style={{ color: '#9E9E9E' }}>标签</div>
+            <div className="w-16 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
+            <div className="w-16 text-right text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
+          </div>
+          {/* 表格每行 */}
+          {allTagsChartData
+            .filter(tag => tag.points.length > 0)
+            .map((tag, idx, arr) => {
+              // 周期：第一笔记录到今天的天数
+              const firstDate = tag.points[0]?.date;
+              const today = new Date().toISOString().slice(0, 10);
+              const days = firstDate
+                ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1)
+                : 0;
+              // 最新盈亏：取最后一个点的 pnl
+              const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
+              // 年化收益 = 盈亏 / 初始金额 / 天数 * 365 * 100
+              const annualized = tag.initialBalance > 0 && days > 0
+                ? (latestPnl / tag.initialBalance / days) * 365 * 100
+                : null;
+              const isLast = idx === arr.length - 1;
+              return (
+                <div
+                  key={tag.name}
+                  className="px-4 py-3 flex items-center"
+                  style={{ borderBottom: isLast ? 'none' : '1px solid #F9F9F9' }}
+                >
+                  {/* 标签名称 */}
+                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                    <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
+                    <span className="text-sm font-medium truncate" style={{ color: '#1A1A1A' }}>{tag.name}</span>
+                  </div>
+                  {/* 周期 */}
+                  <div className="w-16 text-center text-sm" style={{ color: '#616161' }}>
+                    {days > 0 ? days : '--'}
+                  </div>
+                  {/* 年化收益 */}
+                  <div
+                    className="w-16 text-right text-sm font-semibold"
+                    style={{ color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
+                  >
+                    {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
       {/* ── 视角切换弹窗（管理员/创建者点击头像弹出） ── */}
       {showViewAsPicker && canEdit && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setShowViewAsPicker(false)}>
