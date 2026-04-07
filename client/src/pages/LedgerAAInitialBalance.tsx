@@ -26,12 +26,12 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 
-// 支持的数字币配置
+// 支持的数字币配置（使用OKX API格式）
 const CRYPTO_COINS = [
-  { symbol: "BTCUSDT", name: "BTC", label: "比特币" },
-  { symbol: "ETHUSDT", name: "ETH", label: "以太坊" },
-  { symbol: "SOLUSDT", name: "SOL", label: "索拉纳" },
-  { symbol: "LDOUSDT", name: "LDO", label: "LDO" },
+  { symbol: "BTC-USDT", name: "BTC", label: "比特币" },
+  { symbol: "ETH-USDT", name: "ETH", label: "以太坊" },
+  { symbol: "SOL-USDT", name: "SOL", label: "索拉纳" },
+  { symbol: "LDO-USDT", name: "LDO", label: "LDO" },
 ];
 
 // 价格缓存（模块级，跨组件实例共享）
@@ -46,39 +46,25 @@ async function fetchCryptoPrices(): Promise<{ prices: Record<string, number>; cn
     return { prices: cryptoPriceCache, cnyRate: cnyRateCache };
   }
   try {
-    const symbols = [...CRYPTO_COINS.map((c) => c.symbol), "USDTCNY"];
+    // 使用OKX API（国内可访问），USDT/CNY汇率固定7.0
+    const CNY_RATE = 7.0;
     const results = await Promise.all(
-      symbols.map((s) =>
-        fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`)
+      CRYPTO_COINS.map((c) =>
+        fetch(`https://www.okx.com/api/v5/market/ticker?instId=${c.symbol}`)
           .then((r) => r.json())
           .catch(() => null)
       )
     );
     const prices: Record<string, number> = {};
-    let cnyRate = 7.25; // 默认汇率
-    results.forEach((r, i) => {
-      if (!r || !r.price) return;
-      const sym = symbols[i];
-      if (sym === "USDTCNY") {
-        cnyRate = parseFloat(r.price);
-      } else {
-        const coin = CRYPTO_COINS.find((c) => c.symbol === sym);
-        if (coin) prices[coin.name] = parseFloat(r.price) * cnyRate;
-      }
+    CRYPTO_COINS.forEach((coin, i) => {
+      const r = results[i];
+      const last = r?.data?.[0]?.last;
+      if (last) prices[coin.name] = parseFloat(last) * CNY_RATE;
     });
-    // 用拿到的cnyRate重新计算（因为USDTCNY可能在最后）
-    const usdtCnyResult = results[results.length - 1];
-    if (usdtCnyResult?.price) {
-      cnyRate = parseFloat(usdtCnyResult.price);
-      CRYPTO_COINS.forEach((coin, i) => {
-        const r = results[i];
-        if (r?.price) prices[coin.name] = parseFloat(r.price) * cnyRate;
-      });
-    }
     cryptoPriceCache = prices;
-    cnyRateCache = cnyRate;
+    cnyRateCache = CNY_RATE;
     lastFetchTime = now;
-    return { prices, cnyRate };
+    return { prices, cnyRate: CNY_RATE };
   } catch {
     return { prices: cryptoPriceCache, cnyRate: cnyRateCache || 7.25 };
   }
