@@ -217,36 +217,13 @@ export default function LedgerDetailAA({
     });
   }, [allCategories, initialBalancesData]);
 
-  // initialBalancesData 加载完成后，默认选中第1个可见标签
-  const hasAutoSelected = useRef(false);
+  // 如果当前选中的标签已被隐藏，切换到全部模式
   useEffect(() => {
-    if (!initialBalancesData) return; // 数据未加载完成，不操作
-    if (allCategories.length === 0) return; // 标签列表为空，不操作
-    // 计算当前可见标签列表（与 categories useMemo 逻辑一致）
-    const balances = initialBalancesData.balances ?? {};
-    const hasVisibleConfig = allCategories.some(
-      (c: any) => balances[`${c.name}__visible`] !== undefined && balances[`${c.name}__visible`] !== null
-    );
-    const visibleCats = hasVisibleConfig
-      ? allCategories.filter((c: any) => {
-          const v = balances[`${c.name}__visible`];
-          if (v === undefined || v === null) return true;
-          return Number(v) !== 0;
-        })
-      : allCategories;
-    if (visibleCats.length === 0) return;
-    // 首次加载：选中第1个
-    if (!hasAutoSelected.current) {
-      hasAutoSelected.current = true;
-      setSelectedTagId(visibleCats[0].id);
-      return;
+    if (selectedTagId !== null && categories.length > 0) {
+      const stillVisible = categories.find((c: any) => c.id === selectedTagId);
+      if (!stillVisible) setSelectedTagId(null);
     }
-    // 如果当前选中的标签已被隐藏，切换到第一个可见标签
-    if (selectedTagId !== null) {
-      const stillVisible = visibleCats.find((c: any) => c.id === selectedTagId);
-      if (!stillVisible) setSelectedTagId(visibleCats[0].id);
-    }
-  }, [initialBalancesData, allCategories]);
+  }, [categories]);
 
   // 当前选中的标签名
   const selectedTag = useMemo(() => {
