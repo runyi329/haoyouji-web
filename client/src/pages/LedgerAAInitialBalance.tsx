@@ -94,7 +94,7 @@ export default function LedgerAAInitialBalance() {
           startDate: balances[`${n}__startDate`] ?? "",
           visible:
             balances[`${n}__visible`] !== undefined
-              ? balances[`${n}__visible`] !== 0
+              ? Number(balances[`${n}__visible`]) !== 0
               : true,
         };
       }
