@@ -158,10 +158,8 @@ export default function LedgerDetailAA({
   // 标签（被记录者）选择
   // 用 sessionStorage 持久化选中的标签，返回时恢复；页面首次加载时清除
   const sessionKey = `ledger_${ledgerId}_selectedTagId`;
-  const [selectedTagId, setSelectedTagId] = useState<number | null>(() => {
-    const saved = sessionStorage.getItem(sessionKey);
-    return saved ? parseInt(saved) : null;
-  });
+  // 默认不选任何标签，等 categories 加载后由 useEffect 自动选中第1个
+  const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
 
   // ── 视角切换（管理员/创建者可切换到其他成员视角）──
