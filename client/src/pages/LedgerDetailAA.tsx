@@ -1518,7 +1518,7 @@ export default function LedgerDetailAA({
 
               const option = {
                 backgroundColor: '#FFFFFF',
-                grid: { top: 28, right: 16, bottom: 30, left: 52 },
+                grid: { top: 28, right: 16, bottom: 46, left: 52 },
                 xAxis: {
                   type: 'category',
                   data: allDates,
@@ -1581,7 +1581,7 @@ export default function LedgerDetailAA({
                   {
                     type: 'slider',
                     bottom: 2,
-                    height: 18,
+                    height: 16,
                     start: startPercent,
                     end: 100,
                     borderColor: 'transparent',
@@ -1631,7 +1631,7 @@ export default function LedgerDetailAA({
             <div className="px-4 pb-4 pt-1 flex items-center justify-center gap-2">
               {(['amount', 'initial', 'margin'] as const).map(mode => {
                 const active = allChartMode === mode;
-                const label = mode === 'amount' ? '¥金额' : mode === 'initial' ? '%初始' : '%保证金';
+                const label = mode === 'amount' ? '金额' : mode === 'initial' ? '波动' : '回报';
                 return (
                   <button
                     key={mode}
