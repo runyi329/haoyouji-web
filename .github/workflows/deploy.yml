@@ -57,7 +57,9 @@ jobs:
             rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
             chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
             echo "🔄 重启实际服务进程..."
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart haoyouji-web' 2>&1
+            cp /root/haoyouji-web/ecosystem.config.cjs /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+            chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --env production --update-env' 2>&1
             sleep 5
             echo "当前监听端口："
             ss -tlnp | grep node || echo '暂无node监听'
