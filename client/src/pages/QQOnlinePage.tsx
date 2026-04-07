@@ -332,7 +332,7 @@ export default function QQOnlinePage() {
         zIndex: 10,
       }}>
         <button
-          onClick={() => setLocation(-1 as any)}
+          onClick={() => window.history.back()}
           style={{
             background: "rgba(255,255,255,0.2)",
             border: "none",
