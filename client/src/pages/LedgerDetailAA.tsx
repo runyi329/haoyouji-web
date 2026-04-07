@@ -45,7 +45,7 @@ const CRYPTO_COINS_AA = [
   { symbol: "LDO-USDT", name: "LDO" },
 ];
 const AA_PRICE_LS_KEY = 'aa_crypto_prices_cache';
-const AA_CACHE_TTL = 30 * 1000; // 30秒刷新一次
+const AA_CACHE_TTL = 5 * 1000; // 5秒刷新一次
 const CNY_RATE = 7.0;
 
 // 从 localStorage 读取持久化缓存（页面刷新后立即可用）
@@ -65,6 +65,7 @@ function savePriceToLS(prices: Record<string, number>) {
 
 let _aaCryptoPriceCache: Record<string, number> = loadPriceFromLS(); // 初始从 localStorage 读取
 let _aaLastFetchTime = 0;
+const _aaPriceListeners: Set<(prices: Record<string, number>) => void> = new Set();
 
 // 从单个币种获取价格（三级降级：OKX → 火币 → Binance）
 async function fetchSingleCoinPrice(coin: { name: string; symbol: string }): Promise<number | null> {
@@ -115,6 +116,11 @@ async function fetchAACryptoPrices(): Promise<Record<string, number>> {
   }
 }
 
+// 模块加载时立即预取价格，获取到后通知所有已挂载的组件更新
+fetchAACryptoPrices().then(prices => {
+  _aaPriceListeners.forEach(fn => fn({ ...prices }));
+}).catch(() => {});
+
 interface DayGroup {
   date: string;       // "YYYY-MM-DD"
   records: any[];
@@ -163,9 +169,18 @@ export default function LedgerDetailAA({
     }
   }, []);
   useEffect(() => {
+    // 注册监听器，接收模块预取完成的通知
+    const listener = (prices: Record<string, number>) => {
+      setAACryptoPrices(prices);
+    };
+    _aaPriceListeners.add(listener);
+    // 同时自己也发起请求（防止模块预取已经完成但组件还没挂载的情况）
     loadAAPrices();
     const timer = window.setInterval(loadAAPrices, AA_CACHE_TTL);
-    return () => window.clearInterval(timer);
+    return () => {
+      _aaPriceListeners.delete(listener);
+      window.clearInterval(timer);
+    };
   }, [loadAAPrices]);
 
   // 日历当前月份
