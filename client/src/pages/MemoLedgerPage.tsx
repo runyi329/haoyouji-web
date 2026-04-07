@@ -343,6 +343,23 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     setOuyiAccounts(prev => prev.map((acct, ai) =>
       ai === acctIdx ? acct.map((f, fi) => fi === fieldIdx ? { ...f, [key]: value } : f) : acct
     ));
+  // 在指定账户末尾（__NOTE__之前）添加自定义字段
+  const addOuyiField = (acctIdx: number) => setOuyiAccounts(prev => prev.map((acct, ai) => {
+    if (ai !== acctIdx) return acct;
+    const noteIdx = acct.findIndex(f => f.label === '__NOTE__');
+    // 计算已有自定义字段数量，生成不重复的默认标签名
+    const customCount = acct.filter(f => f.label !== '__NOTE__' && f.label !== '账号/用户名' && f.label !== '密码' && f.label !== '备用邮箱' && f.label !== '手机号' && f.label !== '手机号' && f.label !== 'UID' && f.label !== '邮箱').length;
+    const newField: MemoField = { label: `备注${customCount + 1}`, value: '', sensitive: false };
+    if (noteIdx >= 0) {
+      return [...acct.slice(0, noteIdx), newField, ...acct.slice(noteIdx)];
+    }
+    return [...acct, newField];
+  }));
+  // 删除指定账户的指定字段（不允许删除账号/用户名、密码、__NOTE__）
+  const removeOuyiField = (acctIdx: number, fieldIdx: number) => setOuyiAccounts(prev => prev.map((acct, ai) => {
+    if (ai !== acctIdx) return acct;
+    return acct.filter((_, fi) => fi !== fieldIdx);
+  }));
 
   // 欧易 fields 序列化：账户间插入分隔符
   const serializeOuyiFields = (accounts: MemoField[][]): MemoField[] => {
@@ -592,8 +609,11 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
                     </div>
                     <div className="space-y-2">
                       {acct.map((field, fidx) => {
+                        // 固定字段（账号/用户名、密码）：标签不可删除，但可编辑标签名
+                        const isFixedField = fidx === 0 || field.label === '密码' || (fidx === 1 && acct[0]?.label !== '密码');
+                        const isDeletable = field.label !== '__NOTE__' && fidx >= 2;
                         if (field.label === '__NOTE__') {
-                          // 备注字段单独渲染
+                          // 备注字段单独渲染（标签固定为"备注"）
                           return (
                             <div key={fidx} className="flex items-center gap-2">
                               <span className="text-xs text-gray-400 w-14 flex-shrink-0">备注</span>
@@ -608,26 +628,51 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
                         }
                         return (
                           <div key={fidx} className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-14 flex-shrink-0">{field.label}</span>
+                            {/* 标签名输入框（所有字段均可编辑标签） */}
+                            <Input
+                              value={field.label}
+                              onChange={e => updateOuyiField(acctIdx, fidx, "label", e.target.value)}
+                              placeholder="字段名"
+                              className="w-20 flex-shrink-0 text-xs text-gray-500"
+                            />
                             <Input
                               value={field.value}
                               onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
-                              placeholder={field.label === '密码' ? '输入密码' : `输入${field.label}`}
+                              placeholder={`输入${field.label || '内容'}`}
                               type={field.sensitive ? "password" : "text"}
                               className="flex-1 text-sm"
                             />
-                            {field.sensitive && (
+                            {/* 密码显示/隐藏切换 */}
+                            <button
+                              onClick={() => updateOuyiField(acctIdx, fidx, "sensitive", !field.sensitive)}
+                              className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? 'text-[#D32F2F] bg-red-50' : 'text-gray-300 hover:bg-gray-100'}`}
+                              title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
+                            >
+                              {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                            {/* 删除按钮（前两个固定字段不可删除） */}
+                            {isDeletable ? (
                               <button
-                                onClick={() => updateOuyiField(acctIdx, fidx, "sensitive", !field.sensitive)}
-                                className="p-1.5 rounded-lg flex-shrink-0 text-[#D32F2F] bg-red-50"
-                                title="点击显示密码"
+                                onClick={() => removeOuyiField(acctIdx, fidx)}
+                                className="p-1.5 rounded-lg flex-shrink-0 text-gray-300 hover:text-red-500 hover:bg-red-50"
+                                title="删除此字段"
                               >
-                                <EyeOff className="w-4 h-4" />
+                                <X className="w-4 h-4" />
                               </button>
+                            ) : (
+                              <div className="w-7 flex-shrink-0" />
                             )}
                           </div>
                         );
                       })}
+                      {/* 在每个账户下方添加字段按钮 */}
+                      <button
+                        onClick={() => addOuyiField(acctIdx)}
+                        className="flex items-center gap-1 text-xs text-[#D32F2F] hover:bg-red-50 px-2 py-1 rounded-lg mt-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        添加字段
+                      </button>
                     </div>
                   </div>
                 ))}
