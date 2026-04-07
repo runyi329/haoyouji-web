@@ -601,7 +601,7 @@ export default function LedgerDetailAA({
                     border: "1px solid rgba(255,255,255,0.4)",
                   }}
                 >
-                  <span>{selectedTagId === null ? "全部" : (selectedTag?.name || "标签")}</span>
+                  <span>{selectedTagId === null ? "全部" : (selectedTag?.name ?? "全部")}</span>
                   <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
                 </button>
 
