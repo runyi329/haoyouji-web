@@ -21,7 +21,7 @@
  *   Array<{ date: string; records: any[]; income: number; expense: number; balance: number }>
  *   注意：balance 是当天 income - expense，不是累计余额
  */
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X } from "lucide-react";
@@ -35,6 +35,46 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+
+// 数字币价格查询（用于保证金人民币折算显示）
+const CRYPTO_COINS_AA = [
+  { symbol: "BTCUSDT", name: "BTC" },
+  { symbol: "ETHUSDT", name: "ETH" },
+  { symbol: "SOLUSDT", name: "SOL" },
+  { symbol: "LDOUSDT", name: "LDO" },
+];
+let _aaCryptoPriceCache: Record<string, number> = {};
+let _aaLastFetchTime = 0;
+const AA_CACHE_TTL = 10 * 60 * 1000;
+async function fetchAACryptoPrices(): Promise<Record<string, number>> {
+  const now = Date.now();
+  if (now - _aaLastFetchTime < AA_CACHE_TTL && Object.keys(_aaCryptoPriceCache).length > 0) {
+    return _aaCryptoPriceCache;
+  }
+  try {
+    const symbols = [...CRYPTO_COINS_AA.map((c) => c.symbol), "USDTCNY"];
+    const results = await Promise.all(
+      symbols.map((s) =>
+        fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${s}`)
+          .then((r) => r.json())
+          .catch(() => null)
+      )
+    );
+    let cnyRate = 7.25;
+    const usdtCnyResult = results[results.length - 1];
+    if (usdtCnyResult?.price) cnyRate = parseFloat(usdtCnyResult.price);
+    const prices: Record<string, number> = {};
+    CRYPTO_COINS_AA.forEach((coin, i) => {
+      const r = results[i];
+      if (r?.price) prices[coin.name] = parseFloat(r.price) * cnyRate;
+    });
+    _aaCryptoPriceCache = prices;
+    _aaLastFetchTime = now;
+    return prices;
+  } catch {
+    return _aaCryptoPriceCache;
+  }
+}
 
 interface DayGroup {
   date: string;       // "YYYY-MM-DD"
@@ -61,6 +101,25 @@ export default function LedgerDetailAA({
   membersData,
 }: Props) {
   const [, setLocation] = useLocation();
+
+  // 数字币价格（用于保证金人民币折算）
+  const [aaCryptoPrices, setAACryptoPrices] = useState<Record<string, number>>(_aaCryptoPriceCache);
+  const aaFetchingRef = useRef(false);
+  const loadAAPrices = useCallback(async () => {
+    if (aaFetchingRef.current) return;
+    aaFetchingRef.current = true;
+    try {
+      const prices = await fetchAACryptoPrices();
+      setAACryptoPrices({ ...prices });
+    } finally {
+      aaFetchingRef.current = false;
+    }
+  }, []);
+  useEffect(() => {
+    loadAAPrices();
+    const timer = window.setInterval(loadAAPrices, AA_CACHE_TTL);
+    return () => window.clearInterval(timer);
+  }, [loadAAPrices]);
 
   // 日历当前月份
   const [calendarDate, setCalendarDate] = useState(() => {
@@ -711,16 +770,35 @@ export default function LedgerDetailAA({
                 if (!tagName || !initialBalancesData?.balances) return '未设置';
                 const val = initialBalancesData.balances[`${tagName}__margin`];
                 if (val === undefined || val === null) return '未设置';
-                return '¥' + Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const coin = initialBalancesData.balances[`${tagName}__marginCoin`];
+                const num = Number(val);
+                if (coin && CRYPTO_COINS_AA.find(c => c.name === String(coin))) {
+                  // 数字币模式：显示数量和币种
+                  return `${num} ${coin}`;
+                }
+                return '¥' + num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
               })()}
             </div>
             <div className="text-xs opacity-60 mt-0.5">
               {(() => {
                 const tagName = selectedTag?.name;
                 if (!tagName || !initialBalancesData?.balances) return '';
-                const val = initialBalancesData.balances[`${tagName}__ratio`];
-                if (val === undefined || val === null) return '';
-                return `比例 ${Number(val).toFixed(0)}%`;
+                const val = initialBalancesData.balances[`${tagName}__margin`];
+                const coin = initialBalancesData.balances[`${tagName}__marginCoin`];
+                const ratioVal = initialBalancesData.balances[`${tagName}__ratio`];
+                const parts: string[] = [];
+                // 数字币折算人民币
+                if (coin && val && CRYPTO_COINS_AA.find(c => c.name === String(coin))) {
+                  const price = aaCryptoPrices[String(coin)];
+                  if (price) {
+                    const cny = Number(val) * price;
+                    parts.push('≈ ¥' + cny.toLocaleString('zh-CN', { maximumFractionDigits: 0 }));
+                  }
+                }
+                if (ratioVal !== undefined && ratioVal !== null) {
+                  parts.push(`比例 ${Number(ratioVal).toFixed(0)}%`);
+                }
+                return parts.join('  ');
               })()}
             </div>
           </div>
