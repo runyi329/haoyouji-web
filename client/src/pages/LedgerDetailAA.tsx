@@ -122,10 +122,17 @@ export default function LedgerDetailAA({
   }, [rawCategories]);
 
   // 根据 initialBalancesData 中的 visible 字段，过滤掉对当前用户隐藏的标签
+  // 注意：initialBalancesData 未加载完成时返回空数组，防止隐藏标签在加载期间闪现在下拉框中
   const categories = useMemo(() => {
-    if (!initialBalancesData?.balances) return allCategories;
+    if (!initialBalancesData) return []; // 数据未加载完，先返回空，防止隐藏标签闪现
+    const balances = initialBalancesData.balances ?? {};
+    // 检查是否有任何 visible 配置；若完全没有配置则全部显示
+    const hasVisibleConfig = allCategories.some(
+      (c: any) => balances[`${c.name}__visible`] !== undefined && balances[`${c.name}__visible`] !== null
+    );
+    if (!hasVisibleConfig) return allCategories; // 该用户没有配置，全部显示
     return allCategories.filter((c: any) => {
-      const visibleVal = initialBalancesData.balances[`${c.name}__visible`];
+      const visibleVal = balances[`${c.name}__visible`];
       // 未设置时默认显示；设置为 0 则隐藏
       if (visibleVal === undefined || visibleVal === null) return true;
       return Number(visibleVal) !== 0;
