@@ -301,6 +301,8 @@ export default function LedgerDetailAA({
 
   // ─── 全部模式：图表模式切换 ────────────────────────────────────────────────
   const [allChartMode, setAllChartMode] = useState<'amount' | 'initial' | 'margin'>('amount');
+  // 已隐藏的标签集合（点击标签名可切换显隐）
+  const [hiddenTags, setHiddenTags] = useState<Set<string>>(new Set());
 
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
@@ -1382,11 +1384,37 @@ export default function LedgerDetailAA({
       {selectedTagId === null && (
         <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
           <div className="mx-3 mt-2 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
-            {/* 图表标题 */}
-            <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+            {/* 图表标题行 */}
+            <div className="px-4 pt-4 pb-1 flex items-center justify-between">
               <div>
                 <div className="text-sm font-bold" style={{ color: '#1A1A1A' }}>盈亏走势对比</div>
-                <div className="text-[11px] mt-0.5" style={{ color: '#9E9E9E' }}>各标签累计盈亏变化</div>
+              </div>
+              {/* 标签图例（点击可切换显隐） */}
+              <div className="flex flex-wrap gap-1.5 justify-end" style={{ maxWidth: '65%' }}>
+                {allTagsChartData.filter(t => t.points.length > 0).map(tag => {
+                  const hidden = hiddenTags.has(tag.name);
+                  return (
+                    <button
+                      key={tag.name}
+                      onClick={() => setHiddenTags(prev => {
+                        const next = new Set(prev);
+                        if (next.has(tag.name)) next.delete(tag.name);
+                        else next.add(tag.name);
+                        return next;
+                      })}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all"
+                      style={{
+                        backgroundColor: hidden ? '#F5F5F5' : tag.color + '18',
+                        color: hidden ? '#BDBDBD' : tag.color,
+                        border: `1px solid ${hidden ? '#E0E0E0' : tag.color + '44'}`,
+                        textDecoration: hidden ? 'line-through' : 'none',
+                      }}
+                    >
+                      <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: hidden ? '#BDBDBD' : tag.color }} />
+                      {tag.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1408,36 +1436,83 @@ export default function LedgerDetailAA({
                 ? Math.max(0, Math.floor((defaultStartIdx / allDates.length) * 100) - 2)
                 : 0;
 
-              // 构建ECharts series
+              // 构建ECharts series（包含最高/最低点标注）
               const series = allTagsChartData
                 .filter(t => t.points.length > 0)
                 .map(tag => {
-                  // 为每个日期找到对应的值（若无则为null）
+                  const isHidden = hiddenTags.has(tag.name);
                   const datePointMap = new Map(tag.points.map((p: any) => [p.date, p]));
-                  const data = allDates.map(date => {
+                  const data: (number | null)[] = allDates.map(date => {
                     const p = datePointMap.get(date);
                     if (!p) return null;
                     if (allChartMode === 'amount') return parseFloat(p.pnl.toFixed(2));
                     if (allChartMode === 'initial') return parseFloat(p.pctInitial.toFixed(2));
                     return parseFloat(p.pctMargin.toFixed(2));
                   });
+
+                  // 找全局最高点和最低点（用于标注）
+                  let maxVal = -Infinity, maxIdx = -1;
+                  let minVal = Infinity, minIdx = -1;
+                  data.forEach((v, i) => {
+                    if (v === null) return;
+                    if (v > maxVal) { maxVal = v; maxIdx = i; }
+                    if (v < minVal) { minVal = v; minIdx = i; }
+                  });
+
+                  // 构建带标注的数据（最高点和最低点显示标签）
+                  const dataWithMarks = data.map((v, i) => {
+                    if (v === null) return null;
+                    const isMax = i === maxIdx;
+                    const isMin = i === minIdx;
+                    // 隐藏时不显示标注
+                    if (!isHidden && (isMax || isMin)) {
+                      const fmt = allChartMode === 'amount'
+                        ? (Math.abs(v) >= 10000 ? (v / 10000).toFixed(1) + '万' : v.toFixed(0))
+                        : v.toFixed(1) + '%';
+                      return {
+                        value: v,
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        label: {
+                          show: true,
+                          formatter: fmt,
+                          fontSize: 9,
+                          fontWeight: 600,
+                          color: tag.color,
+                          position: isMax ? 'top' : 'bottom',
+                          distance: 4,
+                          backgroundColor: 'rgba(255,255,255,0.85)',
+                          padding: [1, 3],
+                          borderRadius: 3,
+                        },
+                        itemStyle: { color: tag.color, borderColor: '#fff', borderWidth: 1.5 },
+                      };
+                    }
+                    return v;
+                  });
+
                   return {
                     name: tag.name,
                     type: 'line',
-                    data,
+                    data: dataWithMarks,
                     smooth: true,
                     symbol: 'circle',
                     symbolSize: 4,
                     showSymbol: false,
-                    lineStyle: { color: tag.color, width: 2 },
+                    lineStyle: { color: isHidden ? 'transparent' : tag.color, width: 2 },
                     itemStyle: { color: tag.color },
+                    // 隐藏时设置透明度为0
+                    opacity: isHidden ? 0 : 1,
                     connectNulls: false,
+                    // 隐藏时不显示标注
+                    label: { show: false },
                   };
                 });
 
               const option = {
                 backgroundColor: '#FFFFFF',
-                grid: { top: 16, right: 12, bottom: 60, left: 52 },
+                // 调整grid：top稍大留空给标注，bottom留空给dataZoom滑块，不需要legend
+                grid: { top: 28, right: 16, bottom: 30, left: 52 },
                 xAxis: {
                   type: 'category',
                   data: allDates,
@@ -1446,8 +1521,9 @@ export default function LedgerDetailAA({
                   axisLabel: {
                     fontSize: 9,
                     color: '#BDBDBD',
-                    formatter: (val: string) => val.slice(5), // 只显示月-日
-                    interval: Math.max(0, Math.floor(allDates.length / 6) - 1),
+                    formatter: (val: string) => val.slice(5),
+                    interval: Math.max(0, Math.floor(allDates.length / 5) - 1),
+                    margin: 6,
                   },
                   splitLine: { show: false },
                 },
@@ -1479,10 +1555,12 @@ export default function LedgerDetailAA({
                     const date = params[0].axisValue;
                     let html = `<div style="color:#9E9E9E;font-size:10px;margin-bottom:4px">${date}</div>`;
                     params.forEach((p: any) => {
-                      if (p.value === null || p.value === undefined) return;
+                      const rawVal = typeof p.value === 'object' && p.value !== null ? p.value.value : p.value;
+                      if (rawVal === null || rawVal === undefined) return;
+                      if (hiddenTags.has(p.seriesName)) return;
                       const val = allChartMode === 'amount'
-                        ? `¥${Number(p.value).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
-                        : `${Number(p.value).toFixed(2)}%`;
+                        ? `¥${Number(rawVal).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`
+                        : `${Number(rawVal).toFixed(2)}%`;
                       html += `<div style="display:flex;align-items:center;gap:6px;margin-top:2px">`;
                       html += `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color}"></span>`;
                       html += `<span style="color:#CCCCCC">${p.seriesName}</span>`;
@@ -1492,19 +1570,13 @@ export default function LedgerDetailAA({
                   },
                   axisPointer: { lineStyle: { color: 'rgba(211,47,47,0.3)', type: 'dashed' } },
                 },
-                legend: {
-                  show: true,
-                  bottom: 36,
-                  type: 'scroll',
-                  textStyle: { fontSize: 10, color: '#555' },
-                  itemWidth: 12,
-                  itemHeight: 8,
-                },
+                // 去掉ECharts自带legend，改用自定义标签
+                legend: { show: false },
                 dataZoom: [
                   {
                     type: 'slider',
-                    bottom: 0,
-                    height: 20,
+                    bottom: 2,
+                    height: 18,
                     start: startPercent,
                     end: 100,
                     borderColor: 'transparent',
@@ -1521,10 +1593,10 @@ export default function LedgerDetailAA({
               };
 
               return (
-                <div className="px-1 pb-2">
+                <div className="px-1 pb-1">
                   <ReactECharts
                     option={option}
-                    style={{ height: '280px', width: '100%' }}
+                    style={{ height: '260px', width: '100%' }}
                     opts={{ renderer: 'canvas' }}
                   />
                 </div>
@@ -1532,7 +1604,7 @@ export default function LedgerDetailAA({
             })()}
 
             {/* 底部3个Tab切换 */}
-            <div className="px-4 pb-4 flex items-center justify-center gap-2">
+            <div className="px-4 pb-4 pt-1 flex items-center justify-center gap-2">
               {(['amount', 'initial', 'margin'] as const).map(mode => {
                 const active = allChartMode === mode;
                 const label = mode === 'amount' ? '¥金额' : mode === 'initial' ? '%初始' : '%保证金';
