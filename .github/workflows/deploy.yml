@@ -62,9 +62,10 @@ jobs:
             echo "当前监听端口："
             ss -tlnp | grep node || echo '暂无node监听'
             echo "✅ 部署完成！"
-            echo "=== 🔍 SSL/HTTPS 诊断 ==="
-            bash /root/haoyouji-web/scripts/diagnose-ssl.sh || true
-            echo "=== 🔍 诊断完成 ==="
+            echo "🔒 同步Nginx配置并重载Nginx..."
+            cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
+            nginx -t && systemctl reload nginx
+            echo "✅ Nginx配置已同步并重载"
           ENDSSH
       
       - name: 企业微信部署通知
