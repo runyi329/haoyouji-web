@@ -89,7 +89,7 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
 
   // 处理点击事件
   const onChartClick = (params: any) => {
-    if (params.componentType === 'series') {
+    if (params.componentType === 'series' && params.seriesType === 'map') {
       // 将长名字转换为短名字，因为后端查询需要短名字
       const shortName = provinceShortNames[params.name] || params.name;
       onProvinceClick(shortName);
@@ -119,61 +119,12 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
         map: 'china',
         roam: !isMobile,
         zoom: 1.2,
-        scaleLimit: {
-          min: 1,
-          max: 5
-        },
-        label: {
-          show: !isMobile,
-          color: '#64748b',
-          fontSize: 10,
-          fontFamily: 'system-ui, sans-serif',
-          lineHeight: 14,
-          formatter: (params: any) => {
-            if (!params.value || isNaN(params.value)) return '';
-            const shortName = provinceShortNames[params.name] || params.name;
-            return `{name|${shortName}}\n{count|${params.value}}`;
-          },
-          rich: {
-            name: {
-              color: '#64748b',
-              fontSize: 10,
-              align: 'center',
-              padding: [0, 0, 2, 0]
-            },
-            count: {
-              color: THEME_PRIMARY,
-              fontSize: 11,
-              fontWeight: 'bold',
-              align: 'center'
-            }
-          }
-        },
+        scaleLimit: { min: 1, max: 5 },
+        silent: true, // 不响应交互（交互由series map处理）
         itemStyle: {
-          areaColor: '#fafafa',
-          borderColor: '#e4e4e7',
-          borderWidth: 0.5
-        },
-        emphasis: {
-          label: {
-            show: !isMobile
-          },
-          itemStyle: {
-            areaColor: THEME_PRIMARY_30,
-            borderColor: THEME_PRIMARY_60,
-            borderWidth: 1
-          }
-        },
-        select: {
-          label: {
-            show: true,
-            color: '#fff'
-          },
-          itemStyle: {
-            areaColor: THEME_PRIMARY,
-            borderColor: THEME_PRIMARY,
-            borderWidth: 1
-          }
+          areaColor: 'transparent',
+          borderColor: 'transparent',
+          borderWidth: 0
         }
       },
       visualMap: {
@@ -190,9 +141,9 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
           fontSize: 10
         },
         pieces: [
-          { min: 10, label: '10+ 人', color: THEME_PRIMARY },
-          { min: 5, max: 9, label: '5-9 人', color: THEME_PRIMARY_60 },
-          { min: 1, max: 4, label: '1-4 人', color: THEME_PRIMARY_30 },
+          { gte: 10, label: '10+ 人', color: THEME_PRIMARY },
+          { gte: 5, lt: 10, label: '5-9 人', color: THEME_PRIMARY_60 },
+          { gte: 1, lt: 5, label: '1-4 人', color: THEME_PRIMARY_30 },
           { value: 0, label: '0 人', color: '#f4f4f5' }
         ],
         seriesIndex: 0 // 仅作用于第一个系列（地图）
@@ -201,7 +152,65 @@ const ChinaMap: React.FC<ChinaMapProps> = ({ data, onProvinceClick, selectedProv
         {
           name: '好友分布',
           type: 'map',
-          geoIndex: 0, // 关联到 geo 组件
+          map: 'china',
+          roam: !isMobile,
+          zoom: 1.2,
+          scaleLimit: {
+            min: 1,
+            max: 5
+          },
+          label: {
+            show: !isMobile,
+            color: '#64748b',
+            fontSize: 10,
+            fontFamily: 'system-ui, sans-serif',
+            lineHeight: 14,
+            formatter: (params: any) => {
+              if (!params.value || isNaN(params.value) || params.value === 0) return '';
+              const shortName = provinceShortNames[params.name] || params.name;
+              return `{name|${shortName}}\n{count|${params.value}}`;
+            },
+            rich: {
+              name: {
+                color: '#64748b',
+                fontSize: 10,
+                align: 'center',
+                padding: [0, 0, 2, 0]
+              },
+              count: {
+                color: THEME_PRIMARY,
+                fontSize: 11,
+                fontWeight: 'bold',
+                align: 'center'
+              }
+            }
+          },
+          itemStyle: {
+            areaColor: '#f4f4f5',
+            borderColor: '#e4e4e7',
+            borderWidth: 0.5
+          },
+          emphasis: {
+            label: {
+              show: !isMobile
+            },
+            itemStyle: {
+              areaColor: THEME_PRIMARY_30,
+              borderColor: THEME_PRIMARY_60,
+              borderWidth: 1
+            }
+          },
+          select: {
+            label: {
+              show: true,
+              color: '#fff'
+            },
+            itemStyle: {
+              areaColor: THEME_PRIMARY,
+              borderColor: THEME_PRIMARY,
+              borderWidth: 1
+            }
+          },
           data: data
             .filter(item => item.name !== '海外' && item.name !== '其他') // 过滤掉海外和其他
             .map(item => ({
