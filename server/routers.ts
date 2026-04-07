@@ -16831,5 +16831,57 @@ export const adminFeatureRouter = router({
         return { success: false, phone, message: err.message };
       }
     }),
+
+  // 数字币实时价格（服务端缓存，前端直接读取）
+  getCryptoPrices: publicProcedure.query(async () => {
+    try {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return {};
+      const [rows] = await dbConn.execute(`SELECT coin, price_cny FROM crypto_price_cache`) as any;
+      const prices: Record<string, number> = {};
+      for (const row of (rows as any[])) {
+        prices[row.coin] = parseFloat(row.price_cny);
+      }
+      return prices;
+    } catch {
+      return {};
+    }
+  }),
 });
 export type AppRouter = typeof appRouter;
+
+// 服务端定时刷新数字币价格（每5分钟）
+const CRYPTO_COINS_SERVER = [
+  { name: 'BTC', symbol: 'BTC-USDT' },
+  { name: 'ETH', symbol: 'ETH-USDT' },
+  { name: 'SOL', symbol: 'SOL-USDT' },
+  { name: 'LDO', symbol: 'LDO-USDT' },
+];
+const CNY_RATE_SERVER = 7.0;
+
+async function refreshCryptoPricesServer() {
+  try {
+    const dbConn = await getDbConnection();
+    if (!dbConn) return;
+    for (const coin of CRYPTO_COINS_SERVER) {
+      try {
+        const res = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${coin.symbol}`);
+        const j = await res.json() as any;
+        const last = j?.data?.[0]?.last;
+        if (!last) continue;
+        const priceUsdt = parseFloat(last);
+        const priceCny = priceUsdt * CNY_RATE_SERVER;
+        await dbConn.execute(
+          `INSERT INTO crypto_price_cache (coin, price_usdt, price_cny, updated_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE price_usdt = VALUES(price_usdt), price_cny = VALUES(price_cny), updated_at = NOW()`,
+          [coin.name, priceUsdt.toFixed(8), priceCny.toFixed(4)]
+        );
+      } catch { /* 单个币种失败不影响其他 */ }
+    }
+  } catch { /* 数据库连接失败时静默 */ }
+}
+
+// 延迟15秒后首次执行，之后每5分钟刷新一次
+setTimeout(() => {
+  refreshCryptoPricesServer();
+  setInterval(refreshCryptoPricesServer, 5 * 60 * 1000);
+}, 15_000);
