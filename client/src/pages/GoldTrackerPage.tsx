@@ -311,40 +311,36 @@ export default function GoldTrackerPage() {
           className="rounded-2xl"
           style={{ background: "rgba(201,168,76,0.06)", border: "1px solid rgba(201,168,76,0.2)" }}
         >
-          {/* 顶部：标题 + 价格 + 涨跌 */}
-          <div className="flex items-start justify-between px-4 pt-4 pb-2">
-            <div>
-              <div className="text-xs mb-1" style={{ color: "rgba(201,168,76,0.5)" }}>
+          {/* 顶部：左边大价格，右边两行（标题+涨跌） */}
+          <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            {/* 左：大价格 */}
+            <div className="flex items-baseline gap-1">
+              {priceLoading && !price ? (
+                <div className="text-3xl font-bold" style={{ color: "#C9A84C" }}>加载中...</div>
+              ) : (
+                <>
+                  <div className="text-3xl font-bold" style={{ color: "#C9A84C", letterSpacing: -0.5 }}>
+                    {price?.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </div>
+                  <span className="text-xs font-normal" style={{ color: "rgba(201,168,76,0.5)" }}>USD</span>
+                </>
+              )}
+            </div>
+            {/* 右：两行（标题 + 涨跌） */}
+            <div className="text-right flex flex-col gap-0.5">
+              <div className="text-xs font-bold" style={{ color: "#C9A84C" }}>
                 XAUUSD 历史价格走势
                 {price?.stale && <span className="ml-1 text-yellow-500">（缓存）</span>}
               </div>
-              {priceLoading && !price ? (
-                <div className="text-3xl font-bold" style={{ color: "#C9A84C" }}>
-                  加载中...
-                </div>
-              ) : (
-                <div className="text-4xl font-bold" style={{ color: "#C9A84C", letterSpacing: -1 }}>
-                  {price?.price.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  <span className="text-sm font-normal ml-1" style={{ color: "rgba(201,168,76,0.5)" }}>
-                    USD
-                  </span>
-                </div>
-              )}
               {price && (
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-sm font-semibold" style={{ color: changeColor }}>
-                    {isUp ? "+" : ""}
-                    {price.change.toFixed(2)}
+                <div className="flex items-center justify-end gap-1">
+                  <span className="text-xs font-semibold" style={{ color: changeColor }}>
+                    {isUp ? "+" : ""}{price.change.toFixed(2)}
                   </span>
-                  <span className="text-sm font-semibold" style={{ color: changeColor }}>
-                    ({isUp ? "+" : ""}
-                    {price.changePercent.toFixed(2)}%)
+                  <span className="text-xs font-semibold" style={{ color: changeColor }}>
+                    ({isUp ? "+" : ""}{price.changePercent.toFixed(2)}%)
                   </span>
-                  {isUp ? (
-                    <TrendingUp size={14} style={{ color: changeColor }} />
-                  ) : (
-                    <TrendingDown size={14} style={{ color: changeColor }} />
-                  )}
+                  {isUp ? <TrendingUp size={12} style={{ color: changeColor }} /> : <TrendingDown size={12} style={{ color: changeColor }} />}
                 </div>
               )}
             </div>
