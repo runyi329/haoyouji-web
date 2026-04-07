@@ -84,6 +84,18 @@ jobs:
             tail -10 /var/log/nginx/error.log 2>/dev/null || true
             echo "🔍 执行COS诊断..."
             bash /root/haoyouji-web/scripts/diagnose-cos.sh
+            echo "=== 查询云南region数据 ==="
+            source /root/haoyouji-web/.env 2>/dev/null || true
+            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
+            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP '(?<=:)[0-9]{4,5}(?=/)' | tail -1 || echo '4000')
+            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://)[^:]+' || echo '')
+            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://[^:]+:)[^@]+' || echo '')
+            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP '(?<=/)[^?]+$' || echo '')
+            if [ -n "$DB_HOST" ]; then
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT region, COUNT(*) as cnt FROM contacts WHERE parent_user_id = (SELECT id FROM users WHERE username='jiang' LIMIT 1) AND region IS NOT NULL AND region != '' GROUP BY region ORDER BY cnt DESC LIMIT 20;" 2>&1 || echo 'mysql query failed'
+            else
+              echo 'DATABASE_URL not found'
+            fi
           ENDSSH
       
       - name: 企业微信部署通知
