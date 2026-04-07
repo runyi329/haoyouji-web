@@ -8,21 +8,44 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const CNY_RATE = 7.0;
 const COINS = [
-  { name: 'BTC', symbol: 'BTC-USDT' },
-  { name: 'ETH', symbol: 'ETH-USDT' },
-  { name: 'SOL', symbol: 'SOL-USDT' },
-  { name: 'LDO', symbol: 'LDO-USDT' },
+  { name: 'BTC', gateSymbol: 'BTC_USDT', huobiSymbol: 'btcusdt' },
+  { name: 'ETH', gateSymbol: 'ETH_USDT', huobiSymbol: 'ethusdt' },
+  { name: 'SOL', gateSymbol: 'SOL_USDT', huobiSymbol: 'solusdt' },
+  { name: 'LDO', gateSymbol: 'LDO_USDT', huobiSymbol: 'ldousdt' },
 ];
 
-async function fetchPrice(symbol) {
-  const res = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${symbol}`);
-  const j = await res.json();
-  const last = j?.data?.[0]?.last;
-  if (last) return parseFloat(last);
-  throw new Error(`No price for ${symbol}`);
+async function fetchPrice(coin) {
+  // Gate.io 主用
+  try {
+    const res = await fetch(
+      `https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${coin.gateSymbol}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0 && data[0].last) {
+        const price = parseFloat(data[0].last);
+        if (!isNaN(price) && price > 0) return price;
+      }
+    }
+  } catch {}
+  // 火币备用
+  try {
+    const res = await fetch(
+      `https://api.huobi.pro/market/detail/merged?symbol=${coin.huobiSymbol}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (res.ok) {
+      const j = await res.json();
+      if (j.status === 'ok' && j.tick?.close) {
+        return j.tick.close;
+      }
+    }
+  } catch {}
+  throw new Error(`无法获取 ${coin.name} 价格`);
 }
 
-const dbUrl = process.env.DATABASE_URL || process.env.EXTERNAL_DATABASE_URL;
+const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || process.env.EXTERNAL_DATABASE_URL;
 if (!dbUrl) {
   console.error('No DATABASE_URL found in env');
   process.exit(1);
@@ -49,7 +72,7 @@ console.log('Table ready');
 
 for (const coin of COINS) {
   try {
-    const priceUsdt = await fetchPrice(coin.symbol);
+    const priceUsdt = await fetchPrice(coin);
     const priceCny = priceUsdt * CNY_RATE;
     await conn.execute(
       `INSERT INTO crypto_price_cache (coin, price_usdt, price_cny, updated_at)
