@@ -3,7 +3,10 @@ echo "========== COS/图片上传诊断报告 =========="
 echo ""
 echo "=== 1. PM2 环境变量（COS相关） ==="
 cd /root/haoyouji-web
+echo "-- root用户PM2 --"
 pm2 env haoyouji-web 2>&1 | grep -i "COS\|cos_" || echo "未找到COS相关环境变量"
+echo "-- ubuntu用户PM2 --"
+sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 env haoyouji-web 2>&1' | grep -i "COS\|cos_" || echo "未找到COS相关环境变量"
 
 echo ""
 echo "=== 2. ecosystem.config.cjs 中的COS配置 ==="
