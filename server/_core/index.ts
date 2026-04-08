@@ -12,6 +12,7 @@ import { startScanner } from "../blockchain-scanner";
 import { startTierScanner } from "../af-tier-scanner";
 import { startPriceScanner } from "../price-scanner";
 import { startFunderScanner } from "../funder-price-scanner";
+import { startEnergyPriceScanner } from "../energy-price-scanner";
 import { smsService } from "../sms-service";
 import { ensureBeautyTables } from "../db-beauty-init";
 
@@ -490,6 +491,9 @@ async function startServer() {
 
     // 启动资金方订单收益权扫描器（每4小时扫描一次，对齐北京时间整点）
     startFunderScanner();
+
+    // 启动能源价格扫描器（每5分钟从 Yahoo Finance 更新石油/天然气价格）
+    startEnergyPriceScanner();
 
     // ─── 内嵌定时备份任务（每天北京时间凌晨 2:00 执行）───
     // 北京时间 = UTC+8，凌晨 2:00 BJT = UTC 18:00（前一天）
