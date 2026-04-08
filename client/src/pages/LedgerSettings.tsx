@@ -496,6 +496,14 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
  />
  )}
+ {/* (AA)分红管理：owner/admin可进入 */}
+ {ledgerData?.type === 'custom_aa' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="分红管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage`)}
+ />
+ )}
  {/* AE/AF 型抽奖入口 */}
  {(ledgerData?.type === 'custom_ae' || ledgerData?.type === 'custom_af') && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
