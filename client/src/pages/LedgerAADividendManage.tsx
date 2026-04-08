@@ -2,12 +2,12 @@
  * LedgerAADividendManage.tsx
  * 定制账本(AA) 分红页
  *
- * 管理员（owner/admin）：查看所有成员分红汇总，可添加/删除
- * 普通成员：只查看自己的分红明细
+ * 管理员（owner/admin）：查看所有成员分红汇总，可添加/编辑/删除
+ * 普通成员：只查看自己的分红明细，可修改备注
  */
 import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp, Pencil, Check, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -19,7 +19,7 @@ export default function LedgerAADividendManage() {
   const ledgerId = params?.id ? parseInt(params.id) : 0;
   const { user } = useAuth();
 
-  // 弹窗状态（仅管理员使用）
+  // 添加弹窗状态（仅管理员使用）
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({
     targetUserId: 0,
@@ -27,6 +27,15 @@ export default function LedgerAADividendManage() {
     amount: "",
     note: "",
   });
+
+  // 编辑弹窗状态（管理员编辑分红）
+  const [editRecord, setEditRecord] = useState<any | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editNote, setEditNote] = useState("");
+
+  // 用户端：行内编辑备注
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
 
   // 展开某个成员的明细
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
@@ -106,6 +115,30 @@ export default function LedgerAADividendManage() {
     },
   });
 
+  // 编辑分红（管理员）
+  const editMutation = trpc.adminEditDividend.useMutation({
+    onSuccess: () => {
+      toast.success("修改成功");
+      setEditRecord(null);
+      refetchDividends();
+    },
+    onError: (err) => {
+      toast.error(err.message || "修改失败");
+    },
+  });
+
+  // 修改备注（用户）
+  const updateNoteMutation = trpc.updateDividendNote.useMutation({
+    onSuccess: () => {
+      toast.success("备注已更新");
+      setEditingNoteId(null);
+      refetchMyDividends();
+    },
+    onError: (err) => {
+      toast.error(err.message || "更新失败");
+    },
+  });
+
   const handleAddSubmit = () => {
     if (!addForm.targetUserId) return toast.error("请选择成员");
     if (!addForm.tagName) return toast.error("请选择标签");
@@ -117,6 +150,26 @@ export default function LedgerAADividendManage() {
       tagName: addForm.tagName,
       amount,
       note: addForm.note || undefined,
+    });
+  };
+
+  const handleEditSubmit = () => {
+    if (!editRecord) return;
+    const amount = parseFloat(editAmount);
+    if (!amount || amount <= 0) return toast.error("请输入有效金额");
+    editMutation.mutate({
+      ledgerId,
+      recordId: editRecord.id,
+      amount,
+      note: editNote || undefined,
+    });
+  };
+
+  const handleNoteSubmit = (recordId: number) => {
+    updateNoteMutation.mutate({
+      ledgerId,
+      recordId,
+      note: editingNoteText,
     });
   };
 
@@ -158,23 +211,63 @@ export default function LedgerAADividendManage() {
             <div className="text-center py-10" style={{ color: '#BDBDBD' }}>暂无分红记录</div>
           )}
           {myRecords.map((rec: any) => (
-            <div key={rec.id} className="rounded-2xl px-4 py-3 shadow-sm flex items-center" style={{ backgroundColor: '#FFFFFF' }}>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>
-                    {rec.tag_name}
-                  </span>
-                  {rec.note && (
-                    <span className="text-xs truncate" style={{ color: '#9E9E9E' }}>{rec.note}</span>
-                  )}
+            <div key={rec.id} className="rounded-2xl px-4 py-3 shadow-sm" style={{ backgroundColor: '#FFFFFF' }}>
+              <div className="flex items-center">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>
+                      {rec.tag_name}
+                    </span>
+                  </div>
+                  <div className="text-[10px] mt-1" style={{ color: '#BDBDBD' }}>
+                    {new Date(rec.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                  </div>
                 </div>
-                <div className="text-[10px] mt-1" style={{ color: '#BDBDBD' }}>
-                  {new Date(rec.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                <div className="text-sm font-semibold mr-2" style={{ color: '#D32F2F' }}>
+                  ¥{parseFloat(rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
                 </div>
+                {/* 编辑备注按钮 */}
+                {editingNoteId === rec.id ? null : (
+                  <button
+                    onClick={() => { setEditingNoteId(rec.id); setEditingNoteText(rec.note ?? ''); }}
+                    className="p-1.5 rounded-lg"
+                    style={{ backgroundColor: '#F5F5F5' }}
+                  >
+                    <Pencil className="w-3.5 h-3.5" style={{ color: '#9E9E9E' }} />
+                  </button>
+                )}
               </div>
-              <div className="text-sm font-semibold" style={{ color: '#D32F2F' }}>
-                ¥{parseFloat(rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-              </div>
+              {/* 备注行内编辑 */}
+              {editingNoteId === rec.id ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editingNoteText}
+                    onChange={e => setEditingNoteText(e.target.value)}
+                    placeholder="添加备注..."
+                    className="flex-1 px-3 py-1.5 rounded-xl text-xs outline-none border"
+                    style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => handleNoteSubmit(rec.id)}
+                    disabled={updateNoteMutation.isPending}
+                    className="p-1.5 rounded-lg"
+                    style={{ backgroundColor: '#E8F5E9' }}
+                  >
+                    <Check className="w-3.5 h-3.5" style={{ color: '#388E3C' }} />
+                  </button>
+                  <button
+                    onClick={() => setEditingNoteId(null)}
+                    className="p-1.5 rounded-lg"
+                    style={{ backgroundColor: '#F5F5F5' }}
+                  >
+                    <X className="w-3.5 h-3.5" style={{ color: '#9E9E9E' }} />
+                  </button>
+                </div>
+              ) : rec.note ? (
+                <div className="mt-1 text-xs" style={{ color: '#9E9E9E' }}>{rec.note}</div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -258,9 +351,22 @@ export default function LedgerAADividendManage() {
                           {new Date(rec.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                         </div>
                       </div>
-                      <div className="text-sm font-semibold mr-3" style={{ color: '#D32F2F' }}>
+                      <div className="text-sm font-semibold mr-2" style={{ color: '#D32F2F' }}>
                         ¥{parseFloat(rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
                       </div>
+                      {/* 编辑按钮 */}
+                      <button
+                        onClick={() => {
+                          setEditRecord(rec);
+                          setEditAmount(String(parseFloat(rec.amount)));
+                          setEditNote(rec.note ?? '');
+                        }}
+                        className="p-1.5 rounded-lg mr-1"
+                        style={{ backgroundColor: '#FFF8E1' }}
+                      >
+                        <Pencil className="w-3.5 h-3.5" style={{ color: '#F57F17' }} />
+                      </button>
+                      {/* 删除按钮 */}
                       <button
                         onClick={() => {
                           if (confirm('确认删除这笔分红记录？')) {
@@ -377,6 +483,72 @@ export default function LedgerAADividendManage() {
                 style={{ backgroundColor: '#D32F2F', color: '#FFFFFF', opacity: addMutation.isPending ? 0.6 : 1 }}
               >
                 {addMutation.isPending ? '提交中...' : '确认添加'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑分红弹窗（管理员） */}
+      {editRecord && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setEditRecord(null)}
+        >
+          <div
+            className="w-full rounded-t-2xl overflow-hidden"
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 480 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>编辑分红</span>
+              <button onClick={() => setEditRecord(null)} className="text-sm" style={{ color: '#9E9E9E' }}>取消</button>
+            </div>
+
+            <div className="px-4 py-4 space-y-4">
+              {/* 标签（只读） */}
+              <div>
+                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>标签</div>
+                <div className="px-3 py-2.5 rounded-xl text-sm" style={{ backgroundColor: '#F5F5F5', color: '#757575' }}>
+                  {editRecord.tag_name}
+                </div>
+              </div>
+
+              {/* 金额 */}
+              <div>
+                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>分红金额（¥）</div>
+                <input
+                  type="number"
+                  value={editAmount}
+                  onChange={e => setEditAmount(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none border"
+                  style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                  autoFocus
+                />
+              </div>
+
+              {/* 备注 */}
+              <div>
+                <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>备注</div>
+                <input
+                  type="text"
+                  placeholder="如：2025年Q1分红"
+                  value={editNote}
+                  onChange={e => setEditNote(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none border"
+                  style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                />
+              </div>
+
+              {/* 提交按钮 */}
+              <button
+                onClick={handleEditSubmit}
+                disabled={editMutation.isPending}
+                className="w-full py-3 rounded-xl text-sm font-semibold"
+                style={{ backgroundColor: '#D32F2F', color: '#FFFFFF', opacity: editMutation.isPending ? 0.6 : 1 }}
+              >
+                {editMutation.isPending ? '保存中...' : '保存修改'}
               </button>
             </div>
           </div>
