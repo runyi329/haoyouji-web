@@ -16440,6 +16440,122 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     }
   }),
 
+  // 分红功能：获取某用户在某账本的分红汇总（按标签分组）
+  getDividendSummary: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      viewAsUserId: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return { byTag: {} };
+      let targetUserId = ctx.user.id;
+      if (input.viewAsUserId) {
+        const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
+        const myMembership = (members as any[]).find((m: any) => m.userId === ctx.user.id);
+        if (myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin')) {
+          targetUserId = input.viewAsUserId;
+        }
+      }
+      const [rows] = await dbConn.execute(
+        `SELECT tag_name, SUM(amount) as total FROM dividend_records WHERE ledger_id = ? AND user_id = ? GROUP BY tag_name`,
+        [input.ledgerId, targetUserId]
+      ) as any;
+      const byTag: Record<string, number> = {};
+      for (const row of (rows as any[])) {
+        byTag[row.tag_name] = parseFloat(row.total);
+      }
+      return { byTag };
+    }),
+
+  // 分红功能：获取分红明细列表
+  getDividendRecords: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      viewAsUserId: z.number().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return { records: [] };
+      let targetUserId = ctx.user.id;
+      if (input.viewAsUserId) {
+        const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
+        const myMembership = (members as any[]).find((m: any) => m.userId === ctx.user.id);
+        if (myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin')) {
+          targetUserId = input.viewAsUserId;
+        }
+      }
+      const [rows] = await dbConn.execute(
+        `SELECT id, tag_name, amount, note, created_at FROM dividend_records WHERE ledger_id = ? AND user_id = ? ORDER BY created_at DESC`,
+        [input.ledgerId, targetUserId]
+      ) as any;
+      return { records: rows as any[] };
+    }),
+
+  // 分红功能：管理员添加分红记录
+  adminAddDividend: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      targetUserId: z.number(),
+      tagName: z.string(),
+      amount: z.number().positive(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await dbConn.execute(
+        `INSERT INTO dividend_records (ledger_id, user_id, tag_name, amount, note) VALUES (?, ?, ?, ?, ?)`,
+        [input.ledgerId, input.targetUserId, input.tagName, input.amount, input.note || '']
+      );
+      return { success: true };
+    }),
+
+  // 分红功能：管理员删除分红记录
+  adminDeleteDividend: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      recordId: z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await dbConn.execute(
+        `DELETE FROM dividend_records WHERE id = ? AND ledger_id = ?`,
+        [input.recordId, input.ledgerId]
+      );
+      return { success: true };
+    }),
+
+  // 分红功能：管理员获取所有成员分红汇总
+  adminGetAllDividends: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可查看' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) return { records: [] };
+      const [rows] = await dbConn.execute(
+        `SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.note, dr.created_at, u.name as user_name
+         FROM dividend_records dr
+         LEFT JOIN users u ON u.id = dr.user_id
+         WHERE dr.ledger_id = ?
+         ORDER BY dr.created_at DESC`,
+        [input.ledgerId]
+      ) as any;
+      return { records: rows as any[] };
+    }),
+
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
