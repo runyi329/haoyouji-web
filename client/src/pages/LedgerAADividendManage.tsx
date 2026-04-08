@@ -68,7 +68,8 @@ export default function LedgerAADividendManage() {
     const map: Record<number, { userName: string; records: any[]; total: number }> = {};
     for (const r of records) {
       if (!map[r.user_id]) {
-        map[r.user_id] = { userName: r.user_name ?? `用户${r.user_id}`, records: [], total: 0 };
+        const displayName = r.user_nickname || r.user_name || r.user_username || `用户${r.user_id}`;
+        map[r.user_id] = { userName: displayName, records: [], total: 0 };
       }
       map[r.user_id].records.push(r);
       map[r.user_id].total += parseFloat(r.amount);
@@ -163,7 +164,7 @@ export default function LedgerAADividendManage() {
               >
                 <UserAvatar username={member.name ?? member.userName ?? `用户${userId}`} size="sm" />
                 <div className="ml-3 flex-1 min-w-0">
-                  <div className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{member.name ?? member.userName ?? `用户${userId}`}</div>
+                  <div className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{userDiv?.userName ?? member.name ?? member.userName ?? `用户${userId}`}</div>
                   <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>
                     {records.length > 0 ? `共 ${records.length} 笔分红` : '暂无分红记录'}
                   </div>

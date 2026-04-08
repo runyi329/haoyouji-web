@@ -16546,9 +16546,12 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const dbConn = await getDbConnection();
       if (!dbConn) return { records: [] };
       const [rows] = await dbConn.execute(
-        `SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.note, dr.created_at, u.name as user_name
+        `SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.note, dr.created_at,
+                u.name as user_name, u.username as user_username,
+                lm.nickname as user_nickname
          FROM dividend_records dr
          LEFT JOIN users u ON u.id = dr.user_id
+         LEFT JOIN ledger_members lm ON lm.ledger_id = dr.ledger_id AND lm.user_id = dr.user_id
          WHERE dr.ledger_id = ?
          ORDER BY dr.created_at DESC`,
         [input.ledgerId]
