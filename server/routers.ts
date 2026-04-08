@@ -16521,9 +16521,40 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const db = await getLedgerDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       await db.execute(sql`DELETE FROM dividend_records WHERE id = ${input.recordId} AND ledger_id = ${input.ledgerId}`);
+       return { success: true };
+    }),
+  // 分红功能：管理员编辑分红记录（金额+备注）
+  adminEditDividend: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      recordId: z.number(),
+      amount: z.number().positive(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+      }
+      const db = await getLedgerDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await db.execute(sql`UPDATE dividend_records SET amount = ${input.amount}, note = ${input.note ?? ''} WHERE id = ${input.recordId} AND ledger_id = ${input.ledgerId}`);
       return { success: true };
     }),
-
+  // 分红功能：用户修改自己分红记录的备注
+  updateDividendNote: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      recordId: z.number(),
+      note: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getLedgerDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      // 只允许修改自己的记录
+      await db.execute(sql`UPDATE dividend_records SET note = ${input.note} WHERE id = ${input.recordId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`);
+      return { success: true };
+    }),
   // 分红功能：管理员获取所有成员分红汇总
   adminGetAllDividends: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
