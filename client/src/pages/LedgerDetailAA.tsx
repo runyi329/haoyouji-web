@@ -276,8 +276,17 @@ export default function LedgerDetailAA({
         const balance = income > 0 ? income : expense;
         return { date: day.date, balance, income, expense };
       }).filter(Boolean).sort((a: any, b: any) => a.date.localeCompare(b.date));
-      // 计算每天的盈亏值（绝对金额、%初始、%保证金）
-      const points = tagDays.map((d: any) => {
+      // 计算每天的盈亏値（绝对金额、%初始、%保证金）
+      // 如果该标签配置了 startDate，则只显示 startDate 前一天及之后的数据
+      const tagStartDate = initialBalancesData.balances[`${tagName}__startDate`];
+      let filteredTagDays = tagDays;
+      if (tagStartDate) {
+        const effectiveStart = new Date(String(tagStartDate));
+        effectiveStart.setDate(effectiveStart.getDate() - 1);
+        const effectiveStartStr = effectiveStart.toISOString().slice(0, 10);
+        filteredTagDays = tagDays.filter((d: any) => d.date >= effectiveStartStr);
+      }
+      const points = filteredTagDays.map((d: any) => {
         const pnl = (initialBalance - d.balance) * ratio; // 负债视角：初始-最新=盈利
         const pctInitial = initialBalance > 0 ? ((initialBalance - d.balance) / initialBalance) * 100 * ratio : 0;
         const pctMargin = marginCny > 0 ? ((initialBalance - d.balance) * ratio / marginCny) * 100 : 0;
