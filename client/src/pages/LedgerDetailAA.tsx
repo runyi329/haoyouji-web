@@ -1713,31 +1713,38 @@ export default function LedgerDetailAA({
                 {/* 汇总行 */}
                 {validTags.length > 0 && (
                   <>
-                    <div className="px-1 py-2 text-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px' }}>
+                    {/* 合计-名称 */}
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px' }}>
                       <span className="text-[10px] font-semibold" style={{ color: '#9E9E9E' }}>合计</span>
                     </div>
-                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
-                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                    {/* 站线要用 background 而非 border，这样才能覆盖 borderTop */}
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 周期 -- */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
                     </div>
-                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
-                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <div className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 金额：只显示人民币汇总，居中 */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
                     </div>
-                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
-                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 回报 */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span className="text-[11px] font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                         {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}¥${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
                     </div>
-                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
-                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 年化 */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span className="text-[11px] font-semibold" style={{ color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                         {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
                       </span>
                     </div>
-                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
-                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 分红 */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
                       <span className="text-[11px] font-semibold" style={{ color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
                         {totalDividend > 0 ? `¥${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
