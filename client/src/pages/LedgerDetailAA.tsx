@@ -1598,8 +1598,9 @@ export default function LedgerDetailAA({
           {allTagsChartData
             .filter(tag => tag.points.length > 0)
             .map((tag, idx, arr) => {
-              // 周期：第一笔记录到今天的天数
-              const firstDate = tag.points[0]?.date;
+              // 周期：优先使用初始保证金配置中的 startDate，如果没有再回退到第一笔记录日期
+              const configStartDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__startDate`] ?? '') : '';
+              const firstDate = configStartDate || tag.points[0]?.date;
               const today = new Date().toISOString().slice(0, 10);
               const days = firstDate
                 ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1)
@@ -1677,7 +1678,8 @@ export default function LedgerDetailAA({
             const totalPnl = validTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
             // 加权年化：总盈亏 / Σ(保证金 × 天数/365)
             const weightedDenominator = validTags.reduce((s, t) => {
-              const firstDate = t.points[0]?.date;
+              const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
+              const firstDate = configSD || t.points[0]?.date;
               const today = new Date().toISOString().slice(0, 10);
               const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 1;
               return s + t.marginCny * (days / 365);
