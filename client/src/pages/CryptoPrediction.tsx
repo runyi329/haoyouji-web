@@ -1834,8 +1834,21 @@ export default function CryptoPrediction() {
                                                 <div style={{ color: '#1F2937' }}>{collQty % 1 === 0 ? collQty.toFixed(0) : collQty.toFixed(4)} {collCoin} × {collPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U = <span style={{ color: '#D97706', fontWeight: 600 }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
                                               </div>
                                               <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
-                                                <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>代付利息（待付利息累计）</div>
-                                                <div style={{ color: '#1F2937' }}><span style={{ color: '#EF4444', fontWeight: 600 }}>{isNegativeRate ? unpaidInterest.toFixed(2) : '0.00'} U</span></div>
+                                                <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>代付利息 = 本金 × 年利率 / 365 × 天数</div>
+                                                {isNegativeRate ? (() => {
+                                                  const elapsedDays = elapsedSeconds / (24 * 3600);
+                                                  return (
+                                                    <div style={{ color: '#1F2937' }}>
+                                                      {interestBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} × {Math.abs(annualRate)}% / 365 × {elapsedDays.toFixed(2)}天
+                                                      {' = '}<span style={{ color: '#EF4444', fontWeight: 600 }}>{accruedInterest.toFixed(2)} U</span>
+                                                      {paidInterest > 0 && (
+                                                        <span style={{ color: '#9CA3AF', fontSize: '11px' }}>（已付 {paidInterest.toFixed(2)} U，待付 <span style={{ color: '#EF4444', fontWeight: 600 }}>{unpaidInterest.toFixed(2)} U</span>）</span>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })() : (
+                                                  <div style={{ color: '#1F2937' }}><span style={{ color: '#EF4444', fontWeight: 600 }}>0.00 U</span></div>
+                                                )}
                                               </div>
                                               <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                                                 <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>净担保价値 = 担保价値 - 代付利息</div>
