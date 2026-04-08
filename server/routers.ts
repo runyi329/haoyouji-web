@@ -16447,8 +16447,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       viewAsUserId: z.number().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const dbConn = await getDbConnection();
-      if (!dbConn) return { byTag: {} };
+      const db = await getLedgerDb();
+      if (!db) return { byTag: {} };
       let targetUserId = ctx.user.id;
       if (input.viewAsUserId) {
         const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
@@ -16457,12 +16457,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           targetUserId = input.viewAsUserId;
         }
       }
-      const [rows] = await dbConn.execute(
-        `SELECT tag_name, SUM(amount) as total FROM dividend_records WHERE ledger_id = ? AND user_id = ? GROUP BY tag_name`,
-        [input.ledgerId, targetUserId]
-      ) as any;
+      const result = await db.execute(sql`SELECT tag_name, SUM(amount) as total FROM dividend_records WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} GROUP BY tag_name`);
+      const dataRows = (result as any)[0] as any[];
       const byTag: Record<string, number> = {};
-      for (const row of (rows as any[])) {
+      for (const row of dataRows) {
         byTag[row.tag_name] = parseFloat(row.total);
       }
       return { byTag };
@@ -16475,8 +16473,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       viewAsUserId: z.number().optional(),
     }))
     .query(async ({ ctx, input }) => {
-      const dbConn = await getDbConnection();
-      if (!dbConn) return { records: [] };
+      const db = await getLedgerDb();
+      if (!db) return { records: [] };
       let targetUserId = ctx.user.id;
       if (input.viewAsUserId) {
         const members = await dbLedger.getLedgerMembers(input.ledgerId, ctx.user.id);
@@ -16485,11 +16483,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           targetUserId = input.viewAsUserId;
         }
       }
-      const [rows] = await dbConn.execute(
-        `SELECT id, tag_name, amount, note, created_at FROM dividend_records WHERE ledger_id = ? AND user_id = ? ORDER BY created_at DESC`,
-        [input.ledgerId, targetUserId]
-      ) as any;
-      return { records: rows as any[] };
+      const result = await db.execute(sql`SELECT id, tag_name, amount, note, created_at FROM dividend_records WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`);
+      return { records: (result as any)[0] as any[] };
     }),
 
   // 分红功能：管理员添加分红记录
@@ -16506,12 +16501,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
       }
-      const dbConn = await getDbConnection();
-      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      await dbConn.execute(
-        `INSERT INTO dividend_records (ledger_id, user_id, tag_name, amount, note) VALUES (?, ?, ?, ?, ?)`,
-        [input.ledgerId, input.targetUserId, input.tagName, input.amount, input.note || '']
-      );
+      const db = await getLedgerDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await db.execute(sql`INSERT INTO dividend_records (ledger_id, user_id, tag_name, amount, note) VALUES (${input.ledgerId}, ${input.targetUserId}, ${input.tagName}, ${input.amount}, ${input.note || ''})`);
       return { success: true };
     }),
 
@@ -16526,12 +16518,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
       }
-      const dbConn = await getDbConnection();
-      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      await dbConn.execute(
-        `DELETE FROM dividend_records WHERE id = ? AND ledger_id = ?`,
-        [input.recordId, input.ledgerId]
-      );
+      const db = await getLedgerDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await db.execute(sql`DELETE FROM dividend_records WHERE id = ${input.recordId} AND ledger_id = ${input.ledgerId}`);
       return { success: true };
     }),
 
@@ -16543,20 +16532,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可查看' });
       }
-      const dbConn = await getDbConnection();
-      if (!dbConn) return { records: [] };
-      const [rows] = await dbConn.execute(
-        `SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.note, dr.created_at,
-                u.name as user_name, u.username as user_username,
-                lm.nickname as user_nickname
-         FROM dividend_records dr
-         LEFT JOIN users u ON u.id = dr.user_id
-         LEFT JOIN ledger_members lm ON lm.ledger_id = dr.ledger_id AND lm.user_id = dr.user_id
-         WHERE dr.ledger_id = ?
-         ORDER BY dr.created_at DESC`,
-        [input.ledgerId]
-      ) as any;
-      return { records: rows as any[] };
+      const db = await getLedgerDb();
+      if (!db) return { records: [] };
+      const result = await db.execute(sql`SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.note, dr.created_at, u.name as user_name, u.username as user_username, lm.nickname as user_nickname FROM dividend_records dr LEFT JOIN users u ON u.id = dr.user_id LEFT JOIN ledger_members lm ON lm.ledger_id = dr.ledger_id AND lm.user_id = dr.user_id WHERE dr.ledger_id = ${input.ledgerId} ORDER BY dr.created_at DESC`);
+      return { records: (result as any)[0] as any[] };
     }),
 
 });
