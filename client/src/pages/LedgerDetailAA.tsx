@@ -1679,7 +1679,7 @@ export default function LedgerDetailAA({
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder }}><span style={{ color: '#424242' }}>{days > 0 ? days : '--'}</span></div>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder }}><span style={{ color: '#424242' }}>{days > 0 ? `${days}天` : '--'}</span></div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 金额 */}
                       <div className="px-1 py-2 flex flex-col items-end justify-center" style={{ borderBottom: rowBorder }}>
