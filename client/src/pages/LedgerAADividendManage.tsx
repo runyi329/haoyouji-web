@@ -162,9 +162,9 @@ export default function LedgerAADividendManage() {
                 className="flex items-center px-4 py-3 cursor-pointer"
                 onClick={() => setExpandedUserId(isExpanded ? null : userId)}
               >
-                <UserAvatar username={member.name ?? member.userName ?? `用户${userId}`} size="sm" />
+                <UserAvatar username={member.nickname ?? member.username ?? `用户${userId}`} size="sm" />
                 <div className="ml-3 flex-1 min-w-0">
-                  <div className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{userDiv?.userName ?? member.name ?? member.userName ?? `用户${userId}`}</div>
+                  <div className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`}</div>
                   <div className="text-xs mt-0.5" style={{ color: '#9E9E9E' }}>
                     {records.length > 0 ? `共 ${records.length} 笔分红` : '暂无分红记录'}
                   </div>
@@ -245,7 +245,7 @@ export default function LedgerAADividendManage() {
               <div>
                 <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>选择成员</div>
                 <div className="flex flex-wrap gap-2">
-                  {members.map((m: any) => (
+                    {members.map((m: any) => (
                     <button
                       key={m.userId}
                       onClick={() => setAddForm(f => ({ ...f, targetUserId: m.userId, tagName: "" }))}
@@ -256,7 +256,7 @@ export default function LedgerAADividendManage() {
                         borderColor: addForm.targetUserId === m.userId ? '#D32F2F' : '#E0E0E0',
                       }}
                     >
-                      {m.name ?? m.userName ?? `用户${m.userId}`}
+                      {m.nickname ?? m.username ?? `用户${m.userId}`}
                     </button>
                   ))}
                 </div>
