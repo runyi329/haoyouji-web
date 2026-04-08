@@ -12,7 +12,6 @@ export default function Login() {
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  const [autoLoggingIn, setAutoLoggingIn] = useState(false);
 
   // 登录表单
   const [loginUsername, setLoginUsername] = useState("");
@@ -63,12 +62,11 @@ export default function Login() {
       clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
-      setAutoLoggingIn(false);
       toast.error(error.message);
     },
   });
 
-  // 自动登录：页面加载时检查是否有保存的凭据
+  // 自动填写：页面加载时检查是否有保存的凭据，只自动填写用户名密码，不自动提交
   const autoLoginAttempted = useRef(false);
   useEffect(() => {
     if (autoLoginAttempted.current) return;
@@ -80,8 +78,7 @@ export default function Login() {
         setLoginPassword(creds.password);
         setRememberMe(true);
         setAgreedToTerms(true);
-        setAutoLoggingIn(true);
-        loginMutation.mutate({ username: creds.username, password: creds.password });
+        // 不自动调用 loginMutation，让用户手动点击登录按鈕
       }
     });
   }, []);
@@ -190,18 +187,6 @@ export default function Login() {
       e.stopPropagation();
     }
   };
-
-  // 自动登录中，显示加载状态
-  if (autoLoggingIn) {
-    return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center" style={{ backgroundColor: '#A80000' }}>
-        <div className="text-white text-center">
-          <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-base">正在自动登录...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 flex flex-col" style={{ backgroundColor: '#A80000' }}>
