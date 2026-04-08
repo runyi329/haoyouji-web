@@ -1573,15 +1573,15 @@ export default function LedgerDetailAA({
           <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: '#F5F5F5' }}>
             <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>概览</span>
           </div>
-          {/* 表头 */}
+          {/* 表头 - 四列均分 */}
           <div className="flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
-            <div className="flex-1 px-4 py-2 text-xs font-medium text-center" style={{ color: '#9E9E9E' }}>名称</div>
+            <div className="flex-1 px-3 py-2 text-xs font-medium text-center" style={{ color: '#9E9E9E' }}>名称</div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div className="w-20 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>金额</div>
+            <div className="flex-1 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>金额</div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div className="w-16 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
+            <div className="flex-1 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div className="w-16 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
+            <div className="flex-1 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
           </div>
           {/* 表格每行 */}
           {allTagsChartData
@@ -1607,31 +1607,31 @@ export default function LedgerDetailAA({
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F9F9F9' }}
                 >
                   {/* 标签名称 */}
-                  <div className="flex-1 px-4 py-3 flex items-center justify-center gap-2 min-w-0">
-                    <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
+                  <div className="flex-1 px-3 py-3 flex items-center justify-center gap-1.5 min-w-0">
+                    <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                     <span className="text-sm font-medium truncate" style={{ color: '#1A1A1A' }}>{tag.name}</span>
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 金额 */}
-                  <div className="w-20 px-2 py-3 text-center" style={{ color: '#1A1A1A' }}>
+                  <div className="flex-1 px-2 py-3 flex flex-col items-center justify-center" style={{ color: '#1A1A1A' }}>
                     {tag.marginCny > 0 ? (
                       <>
-                        <div className="text-sm font-medium">¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                        <div className="text-sm font-medium leading-none">¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
                         {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
-                          <div className="text-[10px] mt-0.5" style={{ color: '#9E9E9E' }}>{tag.marginRaw} {tag.marginCoin}</div>
+                          <div className="text-[9px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                         )}
                       </>
                     ) : <span className="text-sm" style={{ color: '#BDBDBD' }}>--</span>}
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 周期 */}
-                  <div className="w-16 px-2 py-3 text-center text-sm" style={{ color: '#616161' }}>
+                  <div className="flex-1 px-2 py-3 text-center text-sm" style={{ color: '#616161' }}>
                     {days > 0 ? days : '--'}
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 年化收益 */}
                   <div
-                    className="w-16 px-2 py-3 text-center text-sm font-semibold"
+                    className="flex-1 px-2 py-3 text-center text-sm font-semibold"
                     style={{ color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
                   >
                     {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
