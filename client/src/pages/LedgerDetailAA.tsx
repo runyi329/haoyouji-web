@@ -1623,17 +1623,17 @@ export default function LedgerDetailAA({
           </div>
           {/* 表头 */}
           <div className="flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
-            <div style={{ flexShrink: 0, minWidth: 52, maxWidth: 72 }} className="px-1 py-1.5 text-[10px] font-medium text-center"><span style={{ color: '#9E9E9E' }}>名称</span></div>
+            <div style={{ flexShrink: 0, width: 52 }} className="px-1 py-1.5 text-[10px] font-medium text-center"><span style={{ color: '#9E9E9E' }}>名称</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: 0.7, minWidth: 0 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>周期</span></div>
+            <div style={{ flex: '1 1 auto', minWidth: 28 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>周期</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: 1.1, minWidth: 0 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>金额</span></div>
+            <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>金额</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: 1.1, minWidth: 0 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>回报</span></div>
+            <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>回报</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: 0.85, minWidth: 0 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>年化</span></div>
+            <div style={{ flex: '1 1 auto', minWidth: 48 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>年化</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: 1, minWidth: 0 }} className="px-1 py-1.5 text-center text-[10px] font-medium cursor-pointer" onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}>分红</span></div>
+            <div style={{ flex: '1 1 auto', minWidth: 32 }} className="px-1 py-1.5 text-center text-[10px] font-medium cursor-pointer" onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}>分红</span></div>
           </div>
           {/* 表格每行 */}
           {allTagsChartData
@@ -1666,10 +1666,10 @@ export default function LedgerDetailAA({
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 周期 */}
-                  <div style={{ flex: 0.7, minWidth: 0 }} className="px-1 py-2 text-right text-[11px]"><span style={{ color: '#424242' }}>{days > 0 ? days : '--'}</span></div>
+                  <div style={{ flex: '1 1 auto', minWidth: 28 }} className="px-1 py-2 text-right text-[11px]"><span style={{ color: '#424242' }}>{days > 0 ? days : '--'}</span></div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 金额 */}
-                  <div style={{ flex: 1.1, minWidth: 0 }} className="px-1 py-2 flex flex-col items-end justify-center">
+                  <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-2 flex flex-col items-end justify-center">
                     {tag.marginCny > 0 ? (
                       <>
                         <div className="text-[11px] leading-none" style={{ color: '#424242' }}>¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
@@ -1682,7 +1682,7 @@ export default function LedgerDetailAA({
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 回报 */}
                   <div
-                    style={{ flex: 1.1, minWidth: 0, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}
+                    style={{ flex: '1 1 auto', minWidth: 40, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}
                     className="px-1 py-2 text-right text-[11px]"
                   >
                     {latestPnl !== 0
@@ -1692,7 +1692,7 @@ export default function LedgerDetailAA({
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 年化 */}
                   <div
-                    style={{ flex: 0.85, minWidth: 0, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
+                    style={{ flex: '1 1 auto', minWidth: 48, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
                     className="px-1 py-2 text-right text-[11px]"
                   >
                     {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
@@ -1702,7 +1702,7 @@ export default function LedgerDetailAA({
                   {(() => {
                     const divAmt = dividendByTag[tag.name] ?? 0;
                     return (
-                      <div style={{ flex: 1, minWidth: 0, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }} className="px-1 py-2 text-right text-[11px]">
+                      <div style={{ flex: '1 1 auto', minWidth: 32, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }} className="px-1 py-2 text-right text-[11px]">
                         {divAmt > 0 ? `¥${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                     );
@@ -1733,24 +1733,24 @@ export default function LedgerDetailAA({
                 </div>
                 <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                 {/* 汇总-周期 */}
-                <div style={{ flex: 0.7, minWidth: 0 }} className="px-1 py-2 text-right">
+                <div style={{ flex: '1 1 auto', minWidth: 28 }} className="px-1 py-2 text-right">
                   <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
                 </div>
                 <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                 {/* 汇总-金额 */}
-                <div style={{ flex: 1.1, minWidth: 0 }} className="px-1 py-2 text-right">
+                <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-2 text-right">
                   <div className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
                 </div>
                 <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                 {/* 汇总-回报 */}
-                <div style={{ flex: 1.1, minWidth: 0 }} className="px-1 py-2 text-right">
+                <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-2 text-right">
                   <span className="text-[11px] font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                     {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}¥${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                   </span>
                 </div>
                 <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                 {/* 汇总-年化 */}
-                <div style={{ flex: 0.85, minWidth: 0 }} className="px-1 py-2 text-right">
+                <div style={{ flex: '1 1 auto', minWidth: 48 }} className="px-1 py-2 text-right">
                   <span className="text-[11px] font-semibold" style={{ color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                     {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
                   </span>
@@ -1760,7 +1760,7 @@ export default function LedgerDetailAA({
                 {(() => {
                   const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
                   return (
-                    <div style={{ flex: 1, minWidth: 0 }} className="px-1 py-2 text-right">
+                    <div style={{ flex: '1 1 auto', minWidth: 32 }} className="px-1 py-2 text-right">
                       <span className="text-[11px] font-semibold" style={{ color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
                         {totalDividend > 0 ? `¥${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
