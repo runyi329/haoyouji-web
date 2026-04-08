@@ -1732,7 +1732,7 @@ export default function LedgerDetailAA({
         </div>
       )}
 
-      {/* ── 视角切换弹窗（管理员/创建者点击头像弹出） ── */
+      {/* ── 视角切换弹窗（管理员/创建者点击头像弹出） ── */}
       {showViewAsPicker && canEdit && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setShowViewAsPicker(false)}>
           <div
