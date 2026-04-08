@@ -39,15 +39,15 @@ export default function LedgerAADividendManage() {
     { enabled: !!ledgerId }
   );
 
-  // 获取标签列表
-  const { data: rawCategories } = trpc.ledger.getCategories.useQuery(
-    { ledgerId, parentId: null },
-    { enabled: !!ledgerId }
+  // 从balancesMap中获取选中成员的标签列表
+  const balancesMap: Record<number, Record<string, number>> = useMemo(
+    () => initialBalancesAll?.balancesMap ?? {},
+    [initialBalancesAll]
   );
-  const categories = useMemo(() => {
-    if (!rawCategories) return [];
-    return (rawCategories as any[]).filter((c: any) => !c.isDefault);
-  }, [rawCategories]);
+  const selectedMemberTags = useMemo(() => {
+    if (!addForm.targetUserId || !balancesMap[addForm.targetUserId]) return [];
+    return Object.keys(balancesMap[addForm.targetUserId]);
+  }, [addForm.targetUserId, balancesMap]);
 
   // 获取所有成员分红记录
   const { data: allDividendsData, refetch: refetchDividends } = trpc.adminGetAllDividends.useQuery(
@@ -267,18 +267,18 @@ export default function LedgerAADividendManage() {
                 <div>
                   <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>选择标签</div>
                   <div className="flex flex-wrap gap-2">
-                    {categories.map((c: any) => (
+                    {selectedMemberTags.map((tagName: string) => (
                       <button
-                        key={c.name}
-                        onClick={() => setAddForm(f => ({ ...f, tagName: c.name }))}
+                        key={tagName}
+                        onClick={() => setAddForm(f => ({ ...f, tagName }))}
                         className="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
                         style={{
-                          backgroundColor: addForm.tagName === c.name ? '#D32F2F' : '#FAFAFA',
-                          color: addForm.tagName === c.name ? '#FFFFFF' : '#424242',
-                          borderColor: addForm.tagName === c.name ? '#D32F2F' : '#E0E0E0',
+                          backgroundColor: addForm.tagName === tagName ? '#D32F2F' : '#FAFAFA',
+                          color: addForm.tagName === tagName ? '#FFFFFF' : '#424242',
+                          borderColor: addForm.tagName === tagName ? '#D32F2F' : '#E0E0E0',
                         }}
                       >
-                        {c.name}
+                        {tagName}
                       </button>
                     ))}
                   </div>
