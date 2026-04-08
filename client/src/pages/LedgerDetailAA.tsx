@@ -1575,15 +1575,15 @@ export default function LedgerDetailAA({
           </div>
           {/* 表头 */}
           <div className="flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
-            <div style={{ flex: '1.2', minWidth: 0 }} className="px-2 py-1.5 text-[10px] font-medium text-center"><span style={{ color: '#9E9E9E' }}>名称</span></div>
+            <div style={{ flexShrink: 0, width: 'fit-content', minWidth: 60, maxWidth: 90 }} className="px-2 py-1.5 text-[10px] font-medium text-center"><span style={{ color: '#9E9E9E' }}>名称</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '1.3', minWidth: 0 }} className="pr-2 pl-1 py-1.5 text-right text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>金额</span></div>
+            <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>金额</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '0.7', minWidth: 0 }} className="pr-2 pl-1 py-1.5 text-right text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>周期</span></div>
+            <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>周期</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '1.3', minWidth: 0 }} className="pr-2 pl-1 py-1.5 text-right text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>回报</span></div>
+            <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>回报</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '1', minWidth: 0 }} className="pr-2 pl-1 py-1.5 text-right text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>年化</span></div>
+            <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>年化</span></div>
           </div>
           {/* 表格每行 */}
           {allTagsChartData
@@ -1608,17 +1608,17 @@ export default function LedgerDetailAA({
                   className="flex items-center"
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F9F9F9' }}
                 >
-                  {/* 标签名称 */}
-                  <div style={{ flex: '1.2', minWidth: 0 }} className="px-2 py-2.5 flex items-center justify-center gap-1">
+                  {/* 标签名称 - 自适应宽度 */}
+                  <div style={{ flexShrink: 0, width: 'fit-content', minWidth: 60, maxWidth: 90 }} className="px-2 py-2.5 flex items-center justify-center gap-1">
                     <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
-                    <span className="text-xs font-medium truncate" style={{ color: '#1A1A1A' }}>{tag.name}</span>
+                    <span className="text-xs font-medium" style={{ color: '#1A1A1A', whiteSpace: 'nowrap' }}>{tag.name}</span>
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 金额 */}
-                  <div style={{ flex: '1.3', minWidth: 0 }} className="pr-2 pl-1 py-2.5 flex flex-col items-end justify-center">
+                  {/* 金额 - 与周期同样式 */}
+                  <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-2.5 flex flex-col items-end justify-center">
                     {tag.marginCny > 0 ? (
                       <>
-                        <div className="text-xs font-medium leading-none" style={{ color: '#1A1A1A' }}>¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                        <div className="text-xs leading-none" style={{ color: '#424242' }}>¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
                         {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
                           <div className="text-[8px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                         )}
@@ -1626,23 +1626,23 @@ export default function LedgerDetailAA({
                     ) : <span className="text-xs" style={{ color: '#BDBDBD' }}>--</span>}
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 周期 */}
-                  <div style={{ flex: '0.7', minWidth: 0 }} className="pr-2 pl-1 py-2.5 text-right text-xs"><span style={{ color: '#616161' }}>{days > 0 ? days : '--'}</span></div>
+                  {/* 周期 - 与金额同样式 */}
+                  <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-2.5 text-right text-xs" ><span style={{ color: '#424242' }}>{days > 0 ? days : '--'}</span></div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 回报 */}
+                  {/* 回报 - 与年化同样式，不加粗 */}
                   <div
-                    style={{ flex: '1.3', minWidth: 0, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}
-                    className="pr-2 pl-1 py-2.5 text-right text-xs font-medium"
+                    style={{ flex: 1, minWidth: 0, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}
+                    className="px-2 py-2.5 text-right text-xs"
                   >
                     {latestPnl !== 0
                       ? `${latestPnl < 0 ? '-' : ''}¥${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
                       : '--'}
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 年化收益 */}
+                  {/* 年化 - 与回报同样式，不加粗 */}
                   <div
-                    style={{ flex: '1', minWidth: 0, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
-                    className="pr-2 pl-1 py-2.5 text-right text-xs font-semibold"
+                    style={{ flex: 1, minWidth: 0, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
+                    className="px-2 py-2.5 text-right text-xs"
                   >
                     {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
                   </div>
