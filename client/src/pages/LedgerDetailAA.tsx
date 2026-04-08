@@ -1650,6 +1650,48 @@ export default function LedgerDetailAA({
               );
             })
           }
+          {/* 汇总行 */}
+          {(() => {
+            const validTags = allTagsChartData.filter(tag => tag.points.length > 0 && tag.marginCny > 0);
+            if (validTags.length === 0) return null;
+            const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
+            const totalPnl = validTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
+            // 加权年化：总盈亏 / Σ(保证金 × 天数/365)
+            const weightedDenominator = validTags.reduce((s, t) => {
+              const firstDate = t.points[0]?.date;
+              const today = new Date().toISOString().slice(0, 10);
+              const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 1;
+              return s + t.marginCny * (days / 365);
+            }, 0);
+            const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
+            return (
+              <div className="flex items-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 16px' }}>
+                <div style={{ flexShrink: 0, width: 'fit-content', minWidth: 60, maxWidth: 90 }} className="px-2 py-2.5 text-center">
+                  <span className="text-[10px] font-semibold" style={{ color: '#9E9E9E' }}>合计</span>
+                </div>
+                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+                <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-2.5 text-right">
+                  <div className="text-xs font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                </div>
+                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+                <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-2.5 text-right">
+                  <span className="text-xs" style={{ color: '#BDBDBD' }}>--</span>
+                </div>
+                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+                <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-2.5 text-right">
+                  <span className="text-xs font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                    {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}¥${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                  </span>
+                </div>
+                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+                <div style={{ flex: 1, minWidth: 0 }} className="px-2 py-2.5 text-right">
+                  <span className="text-xs font-semibold" style={{ color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                    {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
           </div>
           )}
         </div>
