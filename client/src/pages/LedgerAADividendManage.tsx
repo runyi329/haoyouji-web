@@ -1,12 +1,9 @@
 /**
  * LedgerAADividendManage.tsx
- * 定制账本(AA) 分红管理页
- * 仅账本创建人(owner)和管理员(admin)可访问
+ * 定制账本(AA) 分红页
  *
- * 功能：
- *  - 查看所有成员的分红记录汇总
- *  - 为指定成员的指定标签添加分红
- *  - 查看/删除每笔分红明细
+ * 管理员（owner/admin）：查看所有成员分红汇总，可添加/删除
+ * 普通成员：只查看自己的分红明细
  */
 import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
@@ -14,14 +11,15 @@ import { ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react"
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
-// UserAvatar props: username, avatar, nickname, size (sm/md/lg)
+import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function LedgerAADividendManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
+  const { user } = useAuth();
 
-  // 弹窗状态
+  // 弹窗状态（仅管理员使用）
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({
     targetUserId: 0,
@@ -39,31 +37,29 @@ export default function LedgerAADividendManage() {
     { enabled: !!ledgerId }
   );
 
-  // 获取成员列表（用于显示头像和姓名）
+  const isAdmin = ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
+
+  // ── 管理员：获取成员列表和所有分红记录 ──
   const { data: initialBalancesAll } = trpc.ledger.adminGetAllInitialBalances.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId }
+    { enabled: !!ledgerId && isAdmin }
   );
   const members: any[] = useMemo(() => initialBalancesAll?.members ?? [], [initialBalancesAll]);
 
-  // 从balancesMap中获取选中成员的标签列表
   const balancesMap: Record<number, Record<string, number>> = useMemo(
     () => initialBalancesAll?.balancesMap ?? {},
     [initialBalancesAll]
   );
   const selectedMemberTags = useMemo(() => {
     if (!addForm.targetUserId || !balancesMap[addForm.targetUserId]) return [];
-    // 过滤掉辅助字段（含__的key如 LQY__ratio, LQY__margin, LQY__startDate, LQY__marginCoin）
     return Object.keys(balancesMap[addForm.targetUserId]).filter(k => !k.includes('__'));
   }, [addForm.targetUserId, balancesMap]);
 
-  // 获取所有成员分红记录
   const { data: allDividendsData, refetch: refetchDividends } = trpc.adminGetAllDividends.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId }
+    { enabled: !!ledgerId && isAdmin }
   );
 
-  // 按用户分组分红记录
   const dividendsByUser = useMemo(() => {
     const records: any[] = allDividendsData?.records ?? [];
     const map: Record<number, { userName: string; records: any[]; total: number }> = {};
@@ -78,7 +74,15 @@ export default function LedgerAADividendManage() {
     return map;
   }, [allDividendsData]);
 
-  // 添加分红
+  // ── 普通成员：获取自己的分红明细 ──
+  const { data: myDividendData, refetch: refetchMyDividends } = trpc.getDividendRecords.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId && !isAdmin && !!ledgerData }
+  );
+  const myRecords: any[] = myDividendData?.records ?? [];
+  const myTotal = myRecords.reduce((s, r) => s + parseFloat(r.amount), 0);
+
+  // 添加分红（管理员）
   const addMutation = trpc.adminAddDividend.useMutation({
     onSuccess: () => {
       toast.success("分红添加成功");
@@ -91,7 +95,7 @@ export default function LedgerAADividendManage() {
     },
   });
 
-  // 删除分红
+  // 删除分红（管理员）
   const deleteMutation = trpc.adminDeleteDividend.useMutation({
     onSuccess: () => {
       toast.success("已删除");
@@ -116,16 +120,69 @@ export default function LedgerAADividendManage() {
     });
   };
 
-  const canEdit = ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
-
-  if (!canEdit) {
+  // 数据加载中
+  if (!ledgerData) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#F5F5F5' }}>
-        <span style={{ color: '#9E9E9E' }}>无权限访问</span>
+        <span style={{ color: '#9E9E9E' }}>加载中...</span>
       </div>
     );
   }
 
+  // ── 普通成员视图 ──
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen pb-20 max-w-md mx-auto" style={{ backgroundColor: '#F5F5F5' }}>
+        {/* 顶部导航 */}
+        <div className="sticky top-0 z-10 flex items-center px-4 py-3 border-b" style={{ backgroundColor: '#FFFFFF', borderColor: '#F0F0F0' }}>
+          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="mr-3">
+            <ChevronLeft className="w-5 h-5" style={{ color: '#424242' }} />
+          </button>
+          <span className="text-base font-semibold flex-1" style={{ color: '#1A1A1A' }}>我的分红</span>
+        </div>
+
+        {/* 汇总卡片 */}
+        <div className="px-3 mt-3">
+          <div className="rounded-2xl px-4 py-4 shadow-sm" style={{ backgroundColor: '#FFFFFF' }}>
+            <div className="text-xs mb-1" style={{ color: '#9E9E9E' }}>累计分红</div>
+            <div className="text-2xl font-bold" style={{ color: myTotal > 0 ? '#D32F2F' : '#BDBDBD' }}>
+              {myTotal > 0 ? `¥${myTotal.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+            </div>
+            <div className="text-xs mt-1" style={{ color: '#BDBDBD' }}>共 {myRecords.length} 笔</div>
+          </div>
+        </div>
+
+        {/* 明细列表 */}
+        <div className="px-3 mt-3 space-y-2">
+          {myRecords.length === 0 && (
+            <div className="text-center py-10" style={{ color: '#BDBDBD' }}>暂无分红记录</div>
+          )}
+          {myRecords.map((rec: any) => (
+            <div key={rec.id} className="rounded-2xl px-4 py-3 shadow-sm flex items-center" style={{ backgroundColor: '#FFFFFF' }}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>
+                    {rec.tag_name}
+                  </span>
+                  {rec.note && (
+                    <span className="text-xs truncate" style={{ color: '#9E9E9E' }}>{rec.note}</span>
+                  )}
+                </div>
+                <div className="text-[10px] mt-1" style={{ color: '#BDBDBD' }}>
+                  {new Date(rec.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                </div>
+              </div>
+              <div className="text-sm font-semibold" style={{ color: '#D32F2F' }}>
+                ¥{parseFloat(rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 管理员视图 ──
   return (
     <div className="min-h-screen pb-20 max-w-md mx-auto" style={{ backgroundColor: '#F5F5F5' }}>
       {/* 顶部导航 */}
@@ -246,7 +303,7 @@ export default function LedgerAADividendManage() {
               <div>
                 <div className="text-xs font-medium mb-2" style={{ color: '#757575' }}>选择成员</div>
                 <div className="flex flex-wrap gap-2">
-                    {members.map((m: any) => (
+                  {members.map((m: any) => (
                     <button
                       key={m.userId}
                       onClick={() => setAddForm(f => ({ ...f, targetUserId: m.userId, tagName: "" }))}
