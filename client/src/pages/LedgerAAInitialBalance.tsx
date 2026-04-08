@@ -21,7 +21,7 @@
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, Save } from "lucide-react";
+import { ChevronLeft, Save, Tag, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -261,6 +261,28 @@ export default function LedgerAAInitialBalance() {
     return `≈ ¥${cny.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;
   };
 
+  // 视角切换："user"=用户视角（原有），"tag"=标签视角
+  const [viewMode, setViewMode] = useState<"user" | "tag">("user");
+  const [selectedTagName, setSelectedTagName] = useState<string | null>(null);
+
+  // 标签视角：计算每个标签下各用户的占比
+  const tagRatioView = useMemo(() => {
+    if (!allBalancesData || categories.length === 0) return {};
+    const result: Record<string, Array<{ member: any; ratio: number; amount: string }>> = {};
+    for (const cat of categories) {
+      const n = cat.name;
+      const rows: Array<{ member: any; ratio: number; amount: string }> = [];
+      for (const member of (allBalancesData as any).members) {
+        const balances = (allBalancesData as any).balancesMap[member.userId] ?? {};
+        const ratio = balances[`${n}__ratio`] !== undefined ? parseFloat(String(balances[`${n}__ratio`])) : 0;
+        const amount = balances[n] !== undefined ? String(balances[n]) : "";
+        rows.push({ member, ratio: isNaN(ratio) ? 0 : ratio, amount });
+      }
+      result[n] = rows;
+    }
+    return result;
+  }, [allBalancesData, categories]);
+
   const canAccess =
     ledgerData?.userRole === "owner" || ledgerData?.userRole === "admin";
 
@@ -304,9 +326,30 @@ export default function LedgerAAInitialBalance() {
         <h1 className="text-white font-semibold text-base flex-1">
           初始金额管理
         </h1>
-        {/* 价格状态指示 */}
-        <div className="text-xs text-white/60">
-          {Object.keys(cryptoPrices).length > 0 ? "价格已加载" : "加载价格..."}
+        {/* 视角切换按钮 */}
+        <div className="flex items-center gap-1 bg-white/20 rounded-lg p-0.5">
+          <button
+            onClick={() => setViewMode("user")}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all"
+            style={{
+              backgroundColor: viewMode === "user" ? "#FFFFFF" : "transparent",
+              color: viewMode === "user" ? "#D32F2F" : "rgba(255,255,255,0.8)",
+            }}
+          >
+            <Users size={12} />
+            用户
+          </button>
+          <button
+            onClick={() => { setViewMode("tag"); if (!selectedTagName && categories.length > 0) setSelectedTagName(categories[0].name); }}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all"
+            style={{
+              backgroundColor: viewMode === "tag" ? "#FFFFFF" : "transparent",
+              color: viewMode === "tag" ? "#D32F2F" : "rgba(255,255,255,0.8)",
+            }}
+          >
+            <Tag size={12} />
+            标签
+          </button>
         </div>
       </div>
 
@@ -319,7 +362,145 @@ export default function LedgerAAInitialBalance() {
         <div className="mx-4 mt-6 text-center text-gray-400 text-sm">
           该账本暂无标签，请先在分类管理中添加标签
         </div>
+      ) : viewMode === "tag" ? (
+        /* ===== 标签视角 ===== */
+        <div className="pb-8">
+          {/* 标签选择横向滚动列表 */}
+          <div className="px-4 mt-3 mb-3">
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+              {categories.map((cat: any) => {
+                const rows = tagRatioView[cat.name] ?? [];
+                const total = rows.reduce((s, r) => s + r.ratio, 0);
+                const isSelected = selectedTagName === cat.name;
+                const isComplete = Math.abs(total - 100) < 0.01;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedTagName(cat.name)}
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                    style={{
+                      backgroundColor: isSelected ? (cat.color || "#D32F2F") : "#FFFFFF",
+                      color: isSelected ? "#FFFFFF" : "#555555",
+                      borderColor: isSelected ? (cat.color || "#D32F2F") : "#E0E0E0",
+                    }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: isSelected ? "rgba(255,255,255,0.7)" : (cat.color || "#D32F2F") }}
+                    />
+                    {cat.name}
+                    <span
+                      className="ml-0.5 px-1 rounded-full text-xs"
+                      style={{
+                        backgroundColor: isSelected ? "rgba(255,255,255,0.25)" : (isComplete ? "#E8F5E9" : "#FFF3E0"),
+                        color: isSelected ? "#FFFFFF" : (isComplete ? "#2E7D32" : "#E65100"),
+                      }}
+                    >
+                      {total.toFixed(0)}%
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 选中标签的详情 */}
+          {selectedTagName && (() => {
+            const cat = categories.find((c: any) => c.name === selectedTagName);
+            const rows = tagRatioView[selectedTagName] ?? [];
+            const total = rows.reduce((s, r) => s + r.ratio, 0);
+            const isComplete = Math.abs(total - 100) < 0.01;
+            const isOver = total > 100.01;
+            return (
+              <div className="mx-4 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
+                {/* 标签头部 */}
+                <div
+                  className="flex items-center justify-between px-4 py-3"
+                  style={{ borderBottom: "1px solid #F0E8E0" }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full"
+                      style={{ backgroundColor: cat?.color || "#D32F2F" }}
+                    />
+                    <span className="text-sm font-semibold text-gray-800">{selectedTagName}</span>
+                  </div>
+                  {/* 合计状态 */}
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+                    style={{
+                      backgroundColor: isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF3E0",
+                      color: isComplete ? "#2E7D32" : isOver ? "#C62828" : "#E65100",
+                    }}
+                  >
+                    <span>合计 {total.toFixed(1)}%</span>
+                    <span>{isComplete ? "✓ 已满" : isOver ? "⚠ 超出" : `还差 ${(100 - total).toFixed(1)}%`}</span>
+                  </div>
+                </div>
+
+                {/* 各用户占比列表 */}
+                <div className="px-4 py-2 space-y-2">
+                  {rows.map(({ member, ratio, amount }) => {
+                    const pct = ratio;
+                    return (
+                      <div key={member.userId} className="flex items-center gap-3 py-2">
+                        {/* 用户信息 */}
+                        <div className="flex items-center gap-2 w-28 flex-shrink-0">
+                          <div
+                            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                            style={{ backgroundColor: cat?.color || "#D32F2F" }}
+                          >
+                            {(member.nickname || member.username || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-xs text-gray-700 truncate">
+                            {member.nickname || member.username || "未知"}
+                          </span>
+                        </div>
+                        {/* 进度条 */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-xs font-semibold" style={{ color: pct > 0 ? (cat?.color || "#D32F2F") : "#BDBDBD" }}>
+                              {pct > 0 ? `${pct.toFixed(1)}%` : "—"}
+                            </span>
+                            {amount && (
+                              <span className="text-xs text-gray-400">¥{parseFloat(amount).toLocaleString("zh-CN")}</span>
+                            )}
+                          </div>
+                          <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: "#F5F5F5" }}>
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(pct, 100)}%`,
+                                backgroundColor: pct > 0 ? (cat?.color || "#D32F2F") : "transparent",
+                                opacity: pct > 0 ? 1 : 0,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 底部合计条 */}
+                <div
+                  className="mx-4 mb-4 mt-1 rounded-xl px-4 py-2 flex items-center justify-between"
+                  style={{ backgroundColor: isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF8E1" }}
+                >
+                  <span className="text-xs text-gray-500">共 {rows.filter(r => r.ratio > 0).length} 人参与</span>
+                  <span
+                    className="text-sm font-bold"
+                    style={{ color: isComplete ? "#2E7D32" : isOver ? "#C62828" : "#E65100" }}
+                  >
+                    {total.toFixed(1)}% / 100%
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
       ) : (
+        /* ===== 用户视角（原有） ===== */
         <div className="pb-8">
           {members.length === 0 ? (
             <div className="mx-4 mt-6 text-center text-gray-400 text-sm">
