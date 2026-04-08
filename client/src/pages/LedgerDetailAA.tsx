@@ -816,11 +816,19 @@ export default function LedgerDetailAA({
                 <div className="text-xs opacity-60 mt-0.5">全部盈亏之和</div>
               </div>
               <div className="col-span-2 rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-xs opacity-75 mb-0.5">差値（保证金 + 盈亏）</div>
-                <div className="text-base font-bold">
-                  {allTagsStats.diff > 0 ? '+' : ''}¥{allTagsStats.diff.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-xs opacity-60 mt-0.5">当前实际保证金余额</div>
+                {(() => {
+                  const totalDividend = Object.values(dividendByTag).reduce((s: number, v: any) => s + Number(v), 0);
+                  const value = allTagsStats.diff - totalDividend;
+                  return (
+                    <>
+                      <div className="text-xs opacity-75 mb-0.5">价値（保证金 + 盈亏 - 分红）</div>
+                      <div className="text-base font-bold">
+                        {value > 0 ? '+' : ''}¥{value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      <div className="text-xs opacity-60 mt-0.5">已分红 ¥{totalDividend.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </>
+                  );
+                })()}
               </div>
             </>
           ) : (
