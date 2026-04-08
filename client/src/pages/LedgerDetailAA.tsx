@@ -1575,13 +1575,15 @@ export default function LedgerDetailAA({
           </div>
           {/* 表头 - 四列均分 */}
           <div className="flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
-            <div className="flex-1 px-3 py-2 text-xs font-medium text-center" style={{ color: '#9E9E9E' }}>名称</div>
+            <div style={{ flex: '2', minWidth: 0 }} className="px-3 py-2 text-xs font-medium text-center" style2={{ color: '#9E9E9E' }}><span style={{ color: '#9E9E9E' }}>名称</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div className="flex-1 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>金额</div>
+            <div style={{ flex: '1.4', minWidth: 0 }} className="px-2 py-2 text-center text-xs font-medium"><span style={{ color: '#9E9E9E' }}>金额</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div className="flex-1 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
+            <div style={{ flex: '0.8', minWidth: 0 }} className="px-1 py-2 text-center text-xs font-medium"><span style={{ color: '#9E9E9E' }}>周期</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div className="flex-1 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
+            <div style={{ flex: '1.4', minWidth: 0 }} className="px-2 py-2 text-center text-xs font-medium"><span style={{ color: '#9E9E9E' }}>回报</span></div>
+            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+            <div style={{ flex: '0.8', minWidth: 0 }} className="px-1 py-2 text-center text-xs font-medium"><span style={{ color: '#9E9E9E' }}>年化</span></div>
           </div>
           {/* 表格每行 */}
           {allTagsChartData
@@ -1607,16 +1609,16 @@ export default function LedgerDetailAA({
                   style={{ borderBottom: isLast ? 'none' : '1px solid #F9F9F9' }}
                 >
                   {/* 标签名称 */}
-                  <div className="flex-1 px-3 py-3 flex items-center justify-center gap-1.5 min-w-0">
+                  <div style={{ flex: '2', minWidth: 0 }} className="px-3 py-3 flex items-center justify-center gap-1.5">
                     <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                     <span className="text-sm font-medium truncate" style={{ color: '#1A1A1A' }}>{tag.name}</span>
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 金额 */}
-                  <div className="flex-1 px-2 py-3 flex flex-col items-center justify-center" style={{ color: '#1A1A1A' }}>
+                  <div style={{ flex: '1.4', minWidth: 0 }} className="px-2 py-3 flex flex-col items-center justify-center">
                     {tag.marginCny > 0 ? (
                       <>
-                        <div className="text-sm font-medium leading-none">¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                        <div className="text-sm font-medium leading-none" style={{ color: '#1A1A1A' }}>¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
                         {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
                           <div className="text-[9px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                         )}
@@ -1625,14 +1627,22 @@ export default function LedgerDetailAA({
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 周期 */}
-                  <div className="flex-1 px-2 py-3 text-center text-sm" style={{ color: '#616161' }}>
-                    {days > 0 ? days : '--'}
+                  <div style={{ flex: '0.8', minWidth: 0 }} className="px-1 py-3 text-center text-sm" style2={{ color: '#616161' }}><span style={{ color: '#616161' }}>{days > 0 ? days : '--'}</span></div>
+                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+                  {/* 回报 */}
+                  <div
+                    style={{ flex: '1.4', minWidth: 0, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}
+                    className="px-2 py-3 text-center text-sm font-medium"
+                  >
+                    {latestPnl !== 0
+                      ? `${latestPnl > 0 ? '+' : ''}¥${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
+                      : '--'}
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 年化收益 */}
                   <div
-                    className="flex-1 px-2 py-3 text-center text-sm font-semibold"
-                    style={{ color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
+                    style={{ flex: '0.8', minWidth: 0, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
+                    className="px-1 py-3 text-center text-sm font-semibold"
                   >
                     {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
                   </div>
