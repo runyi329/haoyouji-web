@@ -39,6 +39,13 @@ export default function LedgerAADividendManage() {
     { enabled: !!ledgerId }
   );
 
+  // 获取成员列表（用于显示头像和姓名）
+  const { data: initialBalancesAll } = trpc.ledger.adminGetAllInitialBalances.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
+  const members: any[] = useMemo(() => initialBalancesAll?.members ?? [], [initialBalancesAll]);
+
   // 从balancesMap中获取选中成员的标签列表
   const balancesMap: Record<number, Record<string, number>> = useMemo(
     () => initialBalancesAll?.balancesMap ?? {},
@@ -54,13 +61,6 @@ export default function LedgerAADividendManage() {
     { ledgerId },
     { enabled: !!ledgerId }
   );
-
-  // 获取成员列表（用于显示头像和姓名）
-  const { data: initialBalancesAll } = trpc.ledger.adminGetAllInitialBalances.useQuery(
-    { ledgerId },
-    { enabled: !!ledgerId }
-  );
-  const members: any[] = useMemo(() => initialBalancesAll?.members ?? [], [initialBalancesAll]);
 
   // 按用户分组分红记录
   const dividendsByUser = useMemo(() => {
