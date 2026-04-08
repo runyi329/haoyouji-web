@@ -464,8 +464,18 @@ export default function LedgerDetailAA({
     return currentVal - prevVal;
   };
 
+  // 计算当前标签的有效开始日期：初始日期的前一天
+  const tagEffectiveStartDate = useMemo(() => {
+    if (!stats.startDate) return null;
+    const d = new Date(stats.startDate);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }, [stats.startDate]);
+
   const getCellValue = (day: number): string | null => {
     const dateStr = getDateStr(day);
+    // 如果该日期在有效开始日期之前，不显示
+    if (tagEffectiveStartDate && dateStr < tagEffectiveStartDate) return null;
     const data = dayMap.get(dateStr);
     if (!data) return null;
 
@@ -513,7 +523,10 @@ export default function LedgerDetailAA({
   };
 
   const getCellPnl = (day: number): number | null => {
-    const data = dayMap.get(getDateStr(day));
+    const dateStr = getDateStr(day);
+    // 如果该日期在有效开始日期之前，不显示
+    if (tagEffectiveStartDate && dateStr < tagEffectiveStartDate) return null;
+    const data = dayMap.get(dateStr);
     if (!data) return null;
     return data.income - data.expense;
   };
