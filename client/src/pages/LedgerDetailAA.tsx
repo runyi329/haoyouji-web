@@ -381,11 +381,22 @@ export default function LedgerDetailAA({
     return { latestBalance, latestDate, returnRate, recordDays, totalPnl, initialBalance, startDate };
   }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag]);
 
-  // ─── 余额曲线数据（根据日历模式生成对应时间范围内所有日期点） ─────────
+   // ─── 余额曲线数据（根据日历模式生成对应时间范围内所有日期点） ─────
+  // 计算走势图的有效开始日期（startDate前一天），与日历同步
+  const chartEffectiveStartDate = useMemo(() => {
+    if (!stats.startDate) return null;
+    const d = new Date(stats.startDate);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }, [stats.startDate]);
+
   const chartData = useMemo(() => {
     const { year, month } = calendarDate;
-    const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
-
+    let sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
+    // 过滤掉 startDate 前一天之前的数据
+    if (chartEffectiveStartDate) {
+      sorted = sorted.filter(d => d.date >= chartEffectiveStartDate);
+    }
     if (calendarMode === "balance" || calendarMode === "daily") {
       // 余额/日模式：只保留当月有数据的交易日，去除空白间隔，折线图连续显示
       const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -424,7 +435,7 @@ export default function LedgerDetailAA({
       balance: d.income > 0 ? d.income : d.expense,
       pnl: d.income - d.expense,
     }));
-  }, [filteredTransactions, cumulativeMap, calendarMode, calendarDate, dayMap]);
+  }, [filteredTransactions, cumulativeMap, calendarMode, calendarDate, dayMap, chartEffectiveStartDate]);
 
   // ─── 当前月日历格子 ────────────────────────────────────────────────────────
   const calendarCells = useMemo(() => {
