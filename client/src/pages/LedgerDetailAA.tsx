@@ -1633,7 +1633,7 @@ export default function LedgerDetailAA({
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
             <div style={{ flex: 0.85, minWidth: 0 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>年化</span></div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: 1, minWidth: 0 }} className="px-1 py-1.5 text-center text-[10px] font-medium cursor-pointer" onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#D32F2F', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>分红</span></div>
+            <div style={{ flex: 1, minWidth: 0 }} className="px-1 py-1.5 text-center text-[10px] font-medium cursor-pointer" onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}>分红</span></div>
           </div>
           {/* 表格每行 */}
           {allTagsChartData
