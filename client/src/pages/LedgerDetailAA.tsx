@@ -1621,103 +1621,24 @@ export default function LedgerDetailAA({
           <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: '#F5F5F5' }}>
             <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>概览</span>
           </div>
-          {/* 表头 */}
-          <div className="flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
-            <div style={{ flexShrink: 0, width: 52 }} className="px-1 py-1.5 text-[10px] font-medium text-center"><span style={{ color: '#9E9E9E' }}>名称</span></div>
-            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '1 1 auto', minWidth: 28 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>周期</span></div>
-            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>金额</span></div>
-            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>回报</span></div>
-            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '1 1 auto', minWidth: 48 }} className="px-1 py-1.5 text-center text-[10px] font-medium"><span style={{ color: '#9E9E9E' }}>年化</span></div>
-            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div style={{ flex: '1 1 auto', minWidth: 32 }} className="px-1 py-1.5 text-center text-[10px] font-medium cursor-pointer" onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}>分红</span></div>
-          </div>
-          {/* 表格每行 */}
-          {allTagsChartData
-            .filter(tag => tag.points.length > 0)
-            .map((tag, idx, arr) => {
-              // 周期：优先使用初始保证金配置中的 startDate，如果没有再回退到第一笔记录日期
+          {/* 概览表格 - 用单个 Grid 容器包裹所有行，确保整列宽度一致 */}
+          {(() => {
+            const visibleTags = allTagsChartData.filter(tag => tag.points.length > 0);
+            const validTags = visibleTags.filter(t => t.marginCny > 0);
+            // 计算每个 tag 的数据
+            const tagData = visibleTags.map((tag, idx) => {
               const configStartDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__startDate`] ?? '') : '';
               const firstDate = configStartDate || tag.points[0]?.date;
               const today = new Date().toISOString().slice(0, 10);
-              const days = firstDate
-                ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1)
-                : 0;
-              // 最新盈亏：取最后一个点的 pnl
+              const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 0;
               const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
-              // 年化收益 = 盈亏 / 保证金(CNY) / 天数 * 365 * 100
-              const annualized = tag.marginCny > 0 && days > 0
-                ? (latestPnl / tag.marginCny / days) * 365 * 100
-                : null;
-              const isLast = idx === arr.length - 1;
-              return (
-                <div
-                  key={tag.name}
-                  className="flex items-center"
-                  style={{ borderBottom: isLast ? 'none' : '1px solid #F9F9F9' }}
-                >
-                  {/* 标签名称 - 自适应宽度 */}
-                  <div style={{ flexShrink: 0, minWidth: 52, maxWidth: 72 }} className="px-1 py-2 flex items-center justify-center gap-1">
-                    <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
-                    <span className="text-[11px] font-medium" style={{ color: '#1A1A1A', whiteSpace: 'nowrap' }}>{tag.name}</span>
-                  </div>
-                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 周期 */}
-                  <div style={{ flex: '1 1 auto', minWidth: 28 }} className="px-1 py-2 text-right text-[11px]"><span style={{ color: '#424242' }}>{days > 0 ? days : '--'}</span></div>
-                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 金额 */}
-                  <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-2 flex flex-col items-end justify-center">
-                    {tag.marginCny > 0 ? (
-                      <>
-                        <div className="text-[11px] leading-none" style={{ color: '#424242' }}>¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
-                        {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
-                          <div className="text-[8px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
-                        )}
-                      </>
-                    ) : <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>}
-                  </div>
-                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 回报 */}
-                  <div
-                    style={{ flex: '1 1 auto', minWidth: 40, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}
-                    className="px-1 py-2 text-right text-[11px]"
-                  >
-                    {latestPnl !== 0
-                      ? `${latestPnl < 0 ? '-' : ''}¥${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
-                      : '--'}
-                  </div>
-                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 年化 */}
-                  <div
-                    style={{ flex: '1 1 auto', minWidth: 48, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
-                    className="px-1 py-2 text-right text-[11px]"
-                  >
-                    {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
-                  </div>
-                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                  {/* 分红 */}
-                  {(() => {
-                    const divAmt = dividendByTag[tag.name] ?? 0;
-                    return (
-                      <div style={{ flex: '1 1 auto', minWidth: 32, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }} className="px-1 py-2 text-right text-[11px]">
-                        {divAmt > 0 ? `¥${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
-                      </div>
-                    );
-                  })()}
-                </div>
-              );
-            })
-          }
-          {/* 汇总行 */}
-          {(() => {
-            const validTags = allTagsChartData.filter(tag => tag.points.length > 0 && tag.marginCny > 0);
-            if (validTags.length === 0) return null;
+              const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
+              const divAmt = dividendByTag[tag.name] ?? 0;
+              return { tag, days, latestPnl, annualized, divAmt, isLast: idx === visibleTags.length - 1 };
+            });
+            // 汇总行数据
             const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
             const totalPnl = validTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
-            // 加权年化：总盈亏 / Σ(保证金 × 天数/365)
             const weightedDenominator = validTags.reduce((s, t) => {
               const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
               const firstDate = configSD || t.points[0]?.date;
@@ -1726,47 +1647,103 @@ export default function LedgerDetailAA({
               return s + t.marginCny * (days / 365);
             }, 0);
             const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
+            const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
+            // Grid 列定义：名称固定52px，其他列 minmax 自适应
+            const gridCols = '52px 1px minmax(28px,0.7fr) 1px minmax(48px,1.2fr) 1px minmax(48px,1.2fr) 1px minmax(52px,1fr) 1px minmax(36px,0.8fr)';
+            const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
+            const dataCellCls = 'px-1 py-2 text-right text-[11px]';
+            const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
             return (
-              <div className="flex items-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 16px' }}>
-                <div style={{ flexShrink: 0, minWidth: 52, maxWidth: 72 }} className="px-1 py-2 text-center">
-                  <span className="text-[10px] font-semibold" style={{ color: '#9E9E9E' }}>合计</span>
-                </div>
-                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                {/* 汇总-周期 */}
-                <div style={{ flex: '1 1 auto', minWidth: 28 }} className="px-1 py-2 text-right">
-                  <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
-                </div>
-                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                {/* 汇总-金额 */}
-                <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-2 text-right">
-                  <div className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
-                </div>
-                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                {/* 汇总-回报 */}
-                <div style={{ flex: '1 1 auto', minWidth: 40 }} className="px-1 py-2 text-right">
-                  <span className="text-[11px] font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                    {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}¥${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
-                  </span>
-                </div>
-                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                {/* 汇总-年化 */}
-                <div style={{ flex: '1 1 auto', minWidth: 48 }} className="px-1 py-2 text-right">
-                  <span className="text-[11px] font-semibold" style={{ color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
-                    {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
-                  </span>
-                </div>
-                <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-                {/* 汇总-分红 */}
-                {(() => {
-                  const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
+                {/* 表头行 */}
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>名称</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>周期</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>金额</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>回报</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>年化</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}>分红</span></div>
+                {/* 数据行 */}
+                {tagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast }) => {
+                  const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
                   return (
-                    <div style={{ flex: '1 1 auto', minWidth: 32 }} className="px-1 py-2 text-right">
+                    <>
+                      {/* 名称 */}
+                      <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder }}>
+                        <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
+                        <span className="text-[11px] font-medium" style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44 }}>{tag.name}</span>
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 周期 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder }}><span style={{ color: '#424242' }}>{days > 0 ? days : '--'}</span></div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 金额 */}
+                      <div className="px-1 py-2 flex flex-col items-end justify-center" style={{ borderBottom: rowBorder }}>
+                        {tag.marginCny > 0 ? (
+                          <>
+                            <div className="text-[11px] leading-none" style={{ color: '#424242' }}>¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                            {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
+                              <div className="text-[8px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
+                            )}
+                          </>
+                        ) : <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 回报 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                        {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}¥${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 年化 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                        {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 分红 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                        {divAmt > 0 ? `¥${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </div>
+                    </>
+                  );
+                })}
+                {/* 汇总行 */}
+                {validTags.length > 0 && (
+                  <>
+                    <div className="px-1 py-2 text-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px' }}>
+                      <span className="text-[10px] font-semibold" style={{ color: '#9E9E9E' }}>合计</span>
+                    </div>
+                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
+                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
+                    </div>
+                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
+                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <div className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                    </div>
+                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
+                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px] font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                        {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}¥${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </span>
+                    </div>
+                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
+                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
+                      <span className="text-[11px] font-semibold" style={{ color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                        {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
+                      </span>
+                    </div>
+                    <div style={{ ...dividerStyle, borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }} />
+                    <div className="px-1 py-2 text-right" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
                       <span className="text-[11px] font-semibold" style={{ color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
                         {totalDividend > 0 ? `¥${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
                     </div>
-                  );
-                })()}
+                  </>
+                )}
               </div>
             );
           })()}
