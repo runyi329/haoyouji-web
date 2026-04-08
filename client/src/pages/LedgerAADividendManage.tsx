@@ -53,7 +53,8 @@ export default function LedgerAADividendManage() {
   );
   const selectedMemberTags = useMemo(() => {
     if (!addForm.targetUserId || !balancesMap[addForm.targetUserId]) return [];
-    return Object.keys(balancesMap[addForm.targetUserId]);
+    // 过滤掉辅助字段（含__的key如 LQY__ratio, LQY__margin, LQY__startDate, LQY__marginCoin）
+    return Object.keys(balancesMap[addForm.targetUserId]).filter(k => !k.includes('__'));
   }, [addForm.targetUserId, balancesMap]);
 
   // 获取所有成员分红记录
