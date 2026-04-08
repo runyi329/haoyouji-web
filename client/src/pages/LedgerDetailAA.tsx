@@ -276,7 +276,7 @@ export default function LedgerDetailAA({
         const pctMargin = marginCny > 0 ? ((initialBalance - d.balance) * ratio / marginCny) * 100 : 0;
         return { date: d.date, pnl, pctInitial, pctMargin };
       });
-      return { name: tagName, color, points, initialBalance, marginCny };
+      return { name: tagName, color, points, initialBalance, marginCny, marginRaw: marginRaw !== undefined && marginRaw !== null ? Number(marginRaw) : null, marginCoin: coin };
     });
   }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices]);
 
@@ -1577,9 +1577,11 @@ export default function LedgerDetailAA({
           <div className="flex items-center" style={{ borderBottom: '1px solid #F5F5F5' }}>
             <div className="flex-1 px-4 py-2 text-xs font-medium text-center" style={{ color: '#9E9E9E' }}>名称</div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div className="w-20 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
+            <div className="w-20 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>金额</div>
             <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
-            <div className="w-20 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
+            <div className="w-16 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>周期(天)</div>
+            <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+            <div className="w-16 px-2 py-2 text-center text-xs font-medium" style={{ color: '#9E9E9E' }}>年化</div>
           </div>
           {/* 表格每行 */}
           {allTagsChartData
@@ -1610,14 +1612,26 @@ export default function LedgerDetailAA({
                     <span className="text-sm font-medium truncate" style={{ color: '#1A1A1A' }}>{tag.name}</span>
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
+                  {/* 金额 */}
+                  <div className="w-20 px-2 py-3 text-center" style={{ color: '#1A1A1A' }}>
+                    {tag.marginCny > 0 ? (
+                      <>
+                        <div className="text-sm font-medium">¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                        {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
+                          <div className="text-[10px] mt-0.5" style={{ color: '#9E9E9E' }}>{tag.marginRaw} {tag.marginCoin}</div>
+                        )}
+                      </>
+                    ) : <span className="text-sm" style={{ color: '#BDBDBD' }}>--</span>}
+                  </div>
+                  <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 周期 */}
-                  <div className="w-20 px-2 py-3 text-center text-sm" style={{ color: '#616161' }}>
+                  <div className="w-16 px-2 py-3 text-center text-sm" style={{ color: '#616161' }}>
                     {days > 0 ? days : '--'}
                   </div>
                   <div className="w-px self-stretch" style={{ backgroundColor: '#F0F0F0' }} />
                   {/* 年化收益 */}
                   <div
-                    className="w-20 px-2 py-3 text-center text-sm font-semibold"
+                    className="w-16 px-2 py-3 text-center text-sm font-semibold"
                     style={{ color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}
                   >
                     {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
