@@ -1314,7 +1314,7 @@ export default function LedgerDetailAA({
             {/* 图表标题行 */}
             <div className="px-4 pt-4 pb-1 flex items-center justify-between">
               <div>
-                <div className="text-sm font-bold" style={{ color: '#1A1A1A' }}>盈亏走势</div>
+                <div className="text-sm font-bold" style={{ color: '#1A1A1A' }}>走势</div>
               </div>
               {/* 标签图例（点击可切换显隐） */}
               <div className="flex flex-wrap gap-1.5 justify-end" style={{ maxWidth: '65%' }}>
