@@ -489,21 +489,33 @@ export default function LedgerSettings() {
  />
  )}
  {/* (AA)owner/admin */}
- {ledgerData?.type === 'custom_aa' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
- <SettingItem
- label="初始金额管理"
- showIcon
- onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
- />
- )}
+ {ledgerData?.type === 'custom_aa' && (() => {
+   const myMemberRole = members?.find((m: any) => m.userId === user?.id)?.role;
+   const isOwnerOrAdmin = myMemberRole === 'owner' || myMemberRole === 'admin'
+     || ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
+   if (!isOwnerOrAdmin) return null;
+   return (
+     <SettingItem
+       label="初始金额管理"
+       showIcon
+       onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
+     />
+   );
+ })()}
  {/* (AA)分红管理：owner/admin可进入 */}
- {ledgerData?.type === 'custom_aa' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
- <SettingItem
- label="分红管理"
- showIcon
- onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage`)}
- />
- )}
+ {ledgerData?.type === 'custom_aa' && (() => {
+   const myMemberRole = members?.find((m: any) => m.userId === user?.id)?.role;
+   const isOwnerOrAdmin = myMemberRole === 'owner' || myMemberRole === 'admin'
+     || ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
+   if (!isOwnerOrAdmin) return null;
+   return (
+     <SettingItem
+       label="分红管理"
+       showIcon
+       onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage`)}
+     />
+   );
+ })()}
  {/* AE/AF 型抽奖入口 */}
  {(ledgerData?.type === 'custom_ae' || ledgerData?.type === 'custom_af') && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
