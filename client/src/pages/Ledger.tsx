@@ -998,14 +998,13 @@ export default function Ledger() {
                                     <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
                                   </button>
                                 )}
-                                {/* 置顶按钮 */}
+                                {/* 置顶按钮 - 线框风格 */}
                                 <button
-                                  className="p-1 rounded-lg transition-colors flex-shrink-0"
+                                  className="flex-shrink-0 h-6 px-2 rounded-md text-[10px] font-medium transition-colors border"
+                                  style={isPinned ? { backgroundColor: '#FFF8E8', borderColor: '#D4A017', color: '#D4A017' } : { backgroundColor: 'transparent', borderColor: '#E0E0E0', color: '#9E9E9E' }}
                                   onClick={(e) => togglePin(ledger.id, e)}
-                                  title={isPinned ? '取消置顶' : '置顶'}
-                                  style={{ color: isPinned ? '#D4A017' : '#D1D5DB' }}
                                 >
-                                  <Pin className="w-4 h-4" style={{ fill: isPinned ? '#D4A017' : 'none' }} />
+                                  {isPinned ? '已置顶' : '置顶'}
                                 </button>
                               </div>
                               {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_af' && ((ledger as any).userRole === 'member' || (ledger as any).userRole === 'funder')) && (
@@ -1075,6 +1074,14 @@ export default function Ledger() {
                                     <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
                                   </button>
                                 )}
+                                {/* 置顶按钮 - 线框风格 */}
+                                <button
+                                  className="flex-shrink-0 h-6 px-2 rounded-md text-[10px] font-medium transition-colors border"
+                                  style={isPinned ? { backgroundColor: '#FFF8E8', borderColor: '#D4A017', color: '#D4A017' } : { backgroundColor: 'transparent', borderColor: '#E0E0E0', color: '#9E9E9E' }}
+                                  onClick={(e) => togglePin(ledger.id, e)}
+                                >
+                                  {isPinned ? '已置顶' : '置顶'}
+                                </button>
                               </div>
                               {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_af' && ((ledger as any).userRole === 'member' || (ledger as any).userRole === 'funder')) && (
                               <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
