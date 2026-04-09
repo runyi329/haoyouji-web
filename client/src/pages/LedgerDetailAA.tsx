@@ -407,19 +407,50 @@ export default function LedgerDetailAA({
       sorted = sorted.filter(d => d.date >= chartEffectiveStartDate);
     }
     if (calendarMode === "balance" || calendarMode === "daily") {
-      // 余额/日模式：只保留当月有数据的交易日，去除空白间隔，折线图连续显示
+      // 余额/日模式：填充当月所有日期，有数据的日期用实际余额，无数据（周末/节假日）用null
+      // 这样折线图可以用灰色虚线连接断点
       const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
-      // 只取当月有数据的日期，按日期升序排列
-      const monthDays = sorted
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      // 建立当月有数据的日期映射
+      const monthDataMap = new Map<string, { balance: number | null; pnl: number }>();
+      sorted
         .filter((d) => d.date.startsWith(monthPrefix))
-        .sort((a, b) => a.date.localeCompare(b.date));
-      return monthDays.map((d) => {
-        const day = parseInt(d.date.slice(8), 10);
+        .forEach((d) => {
+          monthDataMap.set(d.date, {
+            balance: cumulativeMap.get(d.date) ?? null,
+            pnl: d.income - d.expense,
+          });
+        });
+      // 填充当月所有日期（1~daysInMonth），无数据日期 balance=null，标记 isGap=true
+      return Array.from({ length: daysInMonth }, (_, i) => {
+        const day = i + 1;
+        const dateStr = `${monthPrefix}-${String(day).padStart(2, "0")}`;
+        const label = `${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const data = monthDataMap.get(dateStr);
         return {
-          date: `${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-          balance: cumulativeMap.get(d.date) ?? null,
-          pnl: d.income - d.expense,
+          date: label,
+          balance: data ? data.balance : null,
+          balanceGap: null as number | null, // 将在下方填充
+          pnl: data ? data.pnl : null,
+          isGap: !data,
         };
+      }).map((point, idx, arr) => {
+        // balanceGap：对于无数据的点，用线性插值连接前后有数据的点，形成灰色虚线
+        if (point.balance !== null) {
+          return { ...point, balanceGap: point.balance };
+        }
+        // 找前一个有数据的点
+        let prevIdx = idx - 1;
+        while (prevIdx >= 0 && arr[prevIdx].balance === null) prevIdx--;
+        // 找后一个有数据的点
+        let nextIdx = idx + 1;
+        while (nextIdx < arr.length && arr[nextIdx].balance === null) nextIdx++;
+        if (prevIdx < 0 || nextIdx >= arr.length) return { ...point, balanceGap: null };
+        // 线性插值
+        const prevVal = arr[prevIdx].balance!;
+        const nextVal = arr[nextIdx].balance!;
+        const ratio = (idx - prevIdx) / (nextIdx - prevIdx);
+        return { ...point, balanceGap: prevVal + (nextVal - prevVal) * ratio };
       });
     } else if (calendarMode === "monthly") {
       // 月模式：取当月最后一天的余额快照作为该月余额
@@ -1331,6 +1362,22 @@ export default function LedgerDetailAA({
                   ]}
                   cursor={{ stroke: "rgba(211,47,47,0.3)", strokeWidth: 1, strokeDasharray: "4 2" }}
                 />
+                {/* 灰色虚线层：连接断点（周末/节假日），在实线层之下渲染 */}
+                {(calendarMode === 'balance' || calendarMode === 'daily') && (
+                  <Area
+                    type="monotone"
+                    dataKey="balanceGap"
+                    stroke="#CCCCCC"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    fill="none"
+                    connectNulls={true}
+                    dot={false}
+                    activeDot={false}
+                    legendType="none"
+                  />
+                )}
+                {/* 红色实线层：只在有数据的日期显示 */}
                 <Area
                   type="monotone"
                   dataKey="balance"
