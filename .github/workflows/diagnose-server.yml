@@ -1,0 +1,38 @@
+name: 诊断服务器状态
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 测试SSH连接
+        run: |
+          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@124.223.54.69 "echo 'SSH连接成功'" || echo "SSH连接失败"
+
+      - name: 查看服务器状态
+        run: |
+          ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no root@124.223.54.69 << 'EOF'
+            echo "=== 磁盘空间 ==="
+            df -h
+            echo ""
+            echo "=== 内存状态 ==="
+            free -h
+            echo ""
+            echo "=== PM2进程状态 ==="
+            pm2 list 2>/dev/null || echo "PM2未运行"
+            echo ""
+            echo "=== PM2最近日志 ==="
+            pm2 logs --lines 30 --nostream 2>/dev/null || echo "无PM2日志"
+            echo ""
+            echo "=== 项目目录 ==="
+            ls -la ~/haoyouji-web/ 2>/dev/null || ls -la /root/haoyouji-web/ 2>/dev/null || echo "找不到项目目录"
+          EOF
