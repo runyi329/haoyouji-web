@@ -311,6 +311,56 @@ export default function LedgerAAInitialBalance() {
 
   const members = (allBalancesData as any)?.members ?? [];
 
+  // 找到 jiang 用户的 userId（展开占比充到100%）
+  const jiangUserId = useMemo(() => {
+    const m = members.find((m: any) =>
+      (m.username ?? '').toLowerCase() === 'jiang' ||
+      (m.nickname ?? '').toLowerCase() === 'jiang'
+    );
+    return m ? m.userId : null;
+  }, [members]);
+
+  // 包装 updateEntry：当非-jiang 用户修改某标签的 ratio 时，自动计算 jiang 的剩余占比
+  const updateEntryWithAutoJiang = (
+    userId: number,
+    catName: string,
+    patch: Partial<TagEntry>
+  ) => {
+    updateEntry(userId, catName, patch);
+    // 只有修改了 ratio 字段，且操作的不是 jiang 本人，才自动计算
+    if ('ratio' in patch && jiangUserId !== null && userId !== jiangUserId) {
+      // 延迟一小步等 setEditState 生效
+      setTimeout(() => {
+        setEditState(prev => {
+          const newRatio = parseFloat(patch.ratio as string);
+          if (isNaN(newRatio)) return prev;
+          // 计算所有非-jiang 用户在该标签下的占比之和
+          let othersTotal = 0;
+          for (const m of members) {
+            if (m.userId === jiangUserId) continue;
+            const uid = m.userId;
+            const r = uid === userId
+              ? newRatio
+              : parseFloat((prev[uid]?.[catName]?.ratio) ?? '0') || 0;
+            othersTotal += r;
+          }
+          const jiangRatio = Math.max(0, 100 - othersTotal);
+          return {
+            ...prev,
+            [jiangUserId]: {
+              ...(prev[jiangUserId] ?? {}),
+              [catName]: {
+                ...(prev[jiangUserId]?.[catName] ?? defaultEntry()),
+                ratio: String(parseFloat(jiangRatio.toFixed(2))),
+              },
+            },
+          };
+        });
+        setDirtyUsers(prev => new Set(prev).add(jiangUserId!));
+      }, 0);
+    }
+  };
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FAF3ED" }}>
       {/* 顶部导航栏 */}
@@ -670,15 +720,16 @@ export default function LedgerAAInitialBalance() {
                                 max={100}
                                 value={entry.ratio}
                                 onChange={(e) =>
-                                  updateEntry(userId, cat.name, {
+                                  updateEntryWithAutoJiang(userId, cat.name, {
                                     ratio: e.target.value,
                                   })
                                 }
+                                readOnly={userId === jiangUserId}
                                 className="flex-1 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
                                 style={{
-                                  borderColor: "#E0E0E0",
-                                  backgroundColor: "#FFFFFF",
-                                  color: "#222222",
+                                  borderColor: userId === jiangUserId ? "#FFB74D" : "#E0E0E0",
+                                  backgroundColor: userId === jiangUserId ? "#FFF8F0" : "#FFFFFF",
+                                  color: userId === jiangUserId ? "#E65100" : "#222222",
                                 }}
                               />
                               <span className="text-xs text-gray-400">%</span>
