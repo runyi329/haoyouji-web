@@ -21,7 +21,7 @@
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, Save, Tag, Users } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -264,6 +264,7 @@ export default function LedgerAAInitialBalance() {
   // 视角切换："user"=用户视角（原有），"tag"=标签视角
   const [viewMode, setViewMode] = useState<"user" | "tag">("user");
   const [selectedTagName, setSelectedTagName] = useState<string | null>(null);
+  const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set()); // 默认全部折叠
 
   // 标签视角：计算每个标签下各用户的占比
   const tagRatioView = useMemo(() => {
@@ -513,16 +514,24 @@ export default function LedgerAAInitialBalance() {
               const isDirty = dirtyUsers.has(userId);
               const isSaving = savingUsers.has(userId);
 
+              const isExpanded = expandedUsers.has(userId);
+              const toggleExpand = () => setExpandedUsers(prev => {
+                const s = new Set(prev);
+                s.has(userId) ? s.delete(userId) : s.add(userId);
+                return s;
+              });
+
               return (
                 <div
                   key={userId}
                   className="mx-4 mt-3 rounded-2xl overflow-hidden shadow-sm"
                   style={{ backgroundColor: "#FFFFFF" }}
                 >
-                  {/* 成员头部 */}
+                  {/* 成员头部 - 可点击展开/折叠 */}
                   <div
-                    className="flex items-center justify-between px-4 py-3"
-                    style={{ borderBottom: "1px solid #F0E8E0" }}
+                    className="flex items-center justify-between px-4 py-3 cursor-pointer"
+                    style={{ borderBottom: isExpanded ? "1px solid #F0E8E0" : "none" }}
+                    onClick={toggleExpand}
                   >
                     <div className="flex items-center gap-2">
                       <UserAvatar
@@ -544,24 +553,34 @@ export default function LedgerAAInitialBalance() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleSaveMember(userId)}
-                      disabled={!isDirty || isSaving}
-                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-                      style={{
-                        backgroundColor:
-                          isDirty && !isSaving ? "#D32F2F" : "#E0E0E0",
-                        color:
-                          isDirty && !isSaving ? "#FFFFFF" : "#9E9E9E",
-                      }}
-                    >
-                      <Save size={12} />
-                      {isSaving ? "保存中..." : "保存"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {isDirty && isExpanded && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleSaveMember(userId); }}
+                          disabled={isSaving}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+                          style={{
+                            backgroundColor: !isSaving ? "#D32F2F" : "#E0E0E0",
+                            color: !isSaving ? "#FFFFFF" : "#9E9E9E",
+                          }}
+                        >
+                          <Save size={12} />
+                          {isSaving ? "保存中..." : "保存"}
+                        </button>
+                      )}
+                      {isDirty && !isExpanded && (
+                        <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" title="有未保存修改" />
+                      )}
+                      <ChevronDown
+                        size={16}
+                        className="text-gray-400 transition-transform flex-shrink-0"
+                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                      />
+                    </div>
                   </div>
 
-                  {/* 标签行 */}
-                  <div className="px-4 py-2 space-y-4">
+                  {/* 标签行 - 只在展开时显示 */}
+                  {isExpanded && <div className="px-4 py-2 space-y-4">
                     {categories.map((cat: any) => {
                       const entry = userEdit[cat.name] ?? defaultEntry();
                       const marginCNY = calcMarginCNY(entry.margin, entry.marginCoin);
@@ -757,11 +776,11 @@ export default function LedgerAAInitialBalance() {
                             )}
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                    })
+                  }
+                  </div>}
 
-                  <div className="h-3" />
+                  {isExpanded && <div className="h-3" />}
                 </div>
               );
             })
