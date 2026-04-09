@@ -1306,7 +1306,7 @@ export default function LedgerDetailAA({
             {selectedTag ? `「${selectedTag.name}」暂无记录` : "暂无数据，点击日历格子添加记录"}
           </div>
         ) : (
-          <div className="px-1 pb-4">
+          <div className="px-1 pb-4" style={{ touchAction: 'pan-y' }} onTouchMove={(e) => { e.stopPropagation(); }}>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={chartData} margin={{ top: 12, right: 16, left: 0, bottom: 4 }}>
                 <defs>
@@ -1614,10 +1614,10 @@ export default function LedgerDetailAA({
               };
 
               return (
-                <div className="px-1 pb-1" style={{ touchAction: 'none', userSelect: 'none' }}>
+                <div className="px-1 pb-1" style={{ touchAction: 'pan-y', userSelect: 'none' }} onTouchMove={(e) => { e.stopPropagation(); }}>
                   <ReactECharts
                     option={option}
-                    style={{ height: '260px', width: '100%', touchAction: 'none' }}
+                    style={{ height: '260px', width: '100%', touchAction: 'pan-y' }}
                     opts={{ renderer: 'canvas' }}
                   />
                 </div>
