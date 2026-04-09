@@ -279,7 +279,7 @@ export default function LedgerAAInitialBalance() {
         const amount = balances[n] !== undefined ? String(balances[n]) : "";
         rows.push({ member, ratio: isNaN(ratio) ? 0 : ratio, amount });
       }
-      result[n] = rows;
+      result[n] = rows.sort((a, b) => b.ratio - a.ratio); // 按占比从高到低排序
     }
     return result;
   }, [allBalancesData, categories]);
