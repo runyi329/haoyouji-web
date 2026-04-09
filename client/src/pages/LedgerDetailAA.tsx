@@ -1362,29 +1362,14 @@ export default function LedgerDetailAA({
                   ]}
                   cursor={{ stroke: "rgba(211,47,47,0.3)", strokeWidth: 1, strokeDasharray: "4 2" }}
                 />
-                {/* 灰色虚线层：连接断点（周末/节假日），在实线层之下渲染 */}
-                {(calendarMode === 'balance' || calendarMode === 'daily') && (
-                  <Area
-                    type="monotone"
-                    dataKey="balanceGap"
-                    stroke="#CCCCCC"
-                    strokeWidth={1.5}
-                    strokeDasharray="4 3"
-                    fill="none"
-                    connectNulls={true}
-                    dot={false}
-                    activeDot={false}
-                    legendType="none"
-                  />
-                )}
-                {/* 红色实线层：只在有数据的日期显示 */}
+                {/* 主线：connectNulls=true 直接平滑连接断点（周末/节假日） */}
                 <Area
                   type="monotone"
                   dataKey="balance"
                   stroke="#D32F2F"
                   strokeWidth={2.5}
                   fill="url(#aaBalanceGradientUp)"
-                  connectNulls={false}
+                  connectNulls={true}
                   dot={false}
                   activeDot={{
                     r: 5,
@@ -1525,7 +1510,7 @@ export default function LedgerDetailAA({
                       lineStyle: { color: isHidden ? 'transparent' : tag.color, width: 2 },
                       itemStyle: { color: tag.color },
                       opacity: isHidden ? 0 : 1,
-                      connectNulls: false,
+                      connectNulls: true,
                       label: { show: false },
                       markPoint: isHidden ? { data: [] } : {
                         data: mpMap.get(tag.name) ?? [],
