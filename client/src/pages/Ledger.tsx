@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Crown, Notebook, Gem, MessageSquare, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, Calculator } from "lucide-react";
+import { Crown, Notebook, Gem, MessageSquare, ChevronLeft, Search, UserPlus, ChevronDown, ArrowUpDown, X, Hourglass, BookOpen, FolderPlus, Folder, FolderOpen, Pencil, Trash2, FolderInput, Calculator, Pin } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
@@ -69,6 +69,29 @@ export default function Ledger() {
   const [showAssignGroupDialog, setShowAssignGroupDialog] = useState(false);
   const [assigningLedgerId, setAssigningLedgerId] = useState<number | null>(null);
   const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<number>>(new Set());
+
+  // 置顶功能：用 localStorage 持久化置顶的账本 ID 集合
+  const [pinnedLedgerIds, setPinnedLedgerIds] = useState<Set<number>>(() => {
+    try {
+      const saved = localStorage.getItem('pinnedLedgerIds');
+      if (saved) return new Set(JSON.parse(saved) as number[]);
+    } catch (e) {}
+    return new Set();
+  });
+
+  const togglePin = (ledgerId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedLedgerIds(prev => {
+      const next = new Set(prev);
+      if (next.has(ledgerId)) {
+        next.delete(ledgerId);
+      } else {
+        next.add(ledgerId);
+      }
+      try { localStorage.setItem('pinnedLedgerIds', JSON.stringify([...next])); } catch (e) {}
+      return next;
+    });
+  };
 
   // 持久化排序设置的包装函数
   const setSortBy = (val: "members" | "records" | "date") => {
@@ -201,9 +224,15 @@ export default function Ledger() {
       );
     }
     
-    // 排序：最近点击的账本置顶，其余按自定义排序
+    // 排序：置顶账本最优先，其次最近点击，再按自定义排序
     result = [...result].sort((a, b) => {
-      // 第一优先级：最近点击的账本置顶
+      // 第一优先级：手动置顶（不受筛选排序影响）
+      const aPinned = pinnedLedgerIds.has(a.id);
+      const bPinned = pinnedLedgerIds.has(b.id);
+      if (aPinned && !bPinned) return -1;
+      if (!aPinned && bPinned) return 1;
+
+      // 第二优先级：最近点击的账本置顶
       if (lastClickedLedgerId !== null) {
         if (a.id === lastClickedLedgerId && b.id !== lastClickedLedgerId) return -1;
         if (b.id === lastClickedLedgerId && a.id !== lastClickedLedgerId) return 1;
@@ -227,7 +256,7 @@ export default function Ledger() {
     });
     
     return result;
-  }, [ledgers, searchQuery, selectedMember, sortBy, sortOrder, lastClickedLedgerId]);
+  }, [ledgers, searchQuery, selectedMember, sortBy, sortOrder, lastClickedLedgerId, pinnedLedgerIds]);
 
   // 封存账本的mutation
   const archiveMutation = trpc.ledger.archive.useMutation({
@@ -947,9 +976,11 @@ export default function Ledger() {
                   </button>
                   {!isCollapsed && (
                     <div className="space-y-3">
-                      {groupLedgers.map(ledger => (
+                      {groupLedgers.map(ledger => {
+                        const isPinned = pinnedLedgerIds.has(ledger.id);
+                        return (
                         <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book_demo') { setLocation(`/demo/opinion/${ledger.id}`); return; } if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
-                          <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow border-l-4 border-[#D32F2F]">
+                          <div className="rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow border-l-4 border-[#D32F2F]" style={{ backgroundColor: isPinned ? '#FFFBF0' : '#FFFFFF', outline: isPinned ? '1px solid #F5E6C0' : 'none' }}>
                             <div className="px-4 py-4">
                               <div className="mb-3">
                                 <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -962,21 +993,30 @@ export default function Ledger() {
                                     {(ledger as any).userRole === 'owner' && (ledger as any).type === 'opinion_book' && <span className="text-[10px] font-medium flex-shrink-0 px-1 py-0.5 rounded" style={{backgroundColor:'rgba(203,164,113,0.15)',color:'#9B7A3A'}}>意见本</span>}
                                     {ledger.isVip === true && <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-amber-500 text-white text-xs px-1.5 py-0.5 flex-shrink-0 shadow-sm">VIP</Badge>}
                                   </div>
-                                  {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && ((ledger as any).userRole === 'member' || (ledger as any).userRole === 'funder')) && (
-                                    <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
-                                      <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
-                                    </button>
-                                  )}
-                                </div>
-                                {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_af' && ((ledger as any).userRole === 'member' || (ledger as any).userRole === 'funder')) && (
-                                <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
-                                  <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
-                                  <span className="text-gray-300">|</span>
-                                  <span>{(ledger as any).type === 'custom_ae' ? <>开箱 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</> : <>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</>}</span>
-                                  <span className="text-gray-300">|</span>
-                                  <span>{(ledger as any).type === 'custom_ae' ? <>{(ledger as any).activeLotteryCount || 0}个抽奖进行中</> : <>{ledger.recordCount || 0}条账目</>}</span>
-                                </div>
+                                {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && ((ledger as any).userRole === 'member' || (ledger as any).userRole === 'funder')) && (
+                                  <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); setExpandedLedgerIds(prev => { const s = new Set(prev); s.has(ledger.id) ? s.delete(ledger.id) : s.add(ledger.id); return s; }); }}>
+                                    <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${expandedLedgerIds.has(ledger.id) ? 'rotate-180' : ''}`} />
+                                  </button>
                                 )}
+                                {/* 置顶按钮 */}
+                                <button
+                                  className="p-1 rounded-lg transition-colors flex-shrink-0"
+                                  onClick={(e) => togglePin(ledger.id, e)}
+                                  title={isPinned ? '取消置顶' : '置顶'}
+                                  style={{ color: isPinned ? '#D4A017' : '#D1D5DB' }}
+                                >
+                                  <Pin className="w-4 h-4" style={{ fill: isPinned ? '#D4A017' : 'none' }} />
+                                </button>
+                              </div>
+                              {!((ledger as any).type === 'custom_aa' && user?.role !== 'super_admin') && !((ledger as any).type === 'custom_af' && ((ledger as any).userRole === 'member' || (ledger as any).userRole === 'funder')) && (
+                              <div className="flex items-center gap-3 text-sm text-gray-400 font-medium">
+                                <span className="flex items-center gap-1"><span className="text-[#D32F2F] font-semibold">{ledger.memberCount}</span><span className="text-gray-500">人共享</span></span>
+                                <span className="text-gray-300">|</span>
+                                <span>{(ledger as any).type === 'custom_ae' ? <>开笱 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</> : <>开账 {Math.floor((Date.now() - new Date(ledger.createdAt).getTime()) / (1000 * 60 * 60 * 24))}天</>}</span>
+                                <span className="text-gray-300">|</span>
+                                <span>{(ledger as any).type === 'custom_ae' ? <>{(ledger as any).activeLotteryCount || 0}个抽奖进行中</> : <>{ledger.recordCount || 0}条账目</>}</span>
+                              </div>
+                              )}
                               </div>
                               {expandedLedgerIds.has(ledger.id) && !((ledger as any).type === 'custom_ae' && (ledger as any).userRole === 'member') && !((ledger as any).type === 'custom_af' && (ledger as any).userRole === 'member') && (
                                 <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
@@ -992,7 +1032,8 @@ export default function Ledger() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      );
+                      })}
                     </div>
                   )}
                 </div>
@@ -1012,9 +1053,11 @@ export default function Ledger() {
                     </div>
                   )}
                   <div className="space-y-3">
-                    {ungrouped.map(ledger => (
+                    {ungrouped.map(ledger => {
+                      const isPinned = pinnedLedgerIds.has(ledger.id);
+                      return (
                       <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book_demo') { setLocation(`/demo/opinion/${ledger.id}`); return; } if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
-                        <div className="bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
+                        <div className="rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow" style={{ backgroundColor: isPinned ? '#FFFBF0' : '#FFFFFF', border: isPinned ? '1px solid #F5E6C0' : 'none' }}>
                           <div className="px-4 py-4">
                             <div className="mb-3">
                               <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -1057,7 +1100,8 @@ export default function Ledger() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
               );
