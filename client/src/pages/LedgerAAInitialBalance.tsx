@@ -827,8 +827,8 @@ export default function LedgerAAInitialBalance() {
                             )}
                           </div>
                         </div>
-                    })
-                  }
+                      );
+                    })}
                   </div>}
 
                   {isExpanded && <div className="h-3" />}
