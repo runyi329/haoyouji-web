@@ -688,16 +688,7 @@ export default function LedgerDetailAA({
                 return viewTarget ? (viewTarget.nickname || viewTarget.username) : (user?.nickname || user?.username || "用户");
               })()}
             </div>
-            {viewAsUserId && (
-              <div className="text-xs opacity-70 flex items-center gap-1">
-                <span>查看视角</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleSwitchView(null); }}
-                  className="ml-1 px-1.5 py-0.5 rounded-full text-xs"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff' }}
-                >返回自己</button>
-              </div>
-            )}
+
             </div>
 
             {/* 右侧：操作按鈕 + 返回按鈕 + 标签下拉 */}
