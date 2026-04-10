@@ -711,7 +711,7 @@ export default function LedgerDetailAA({
                   <BarChart3 className="w-3.5 h-3.5 text-white" />
                 </button>
               )}
-              {canEdit && (
+              {canEdit && !viewAsUserId && (
                 <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
                   className="w-7 h-7 rounded-full flex items-center justify-center"
