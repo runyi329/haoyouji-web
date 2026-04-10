@@ -32,6 +32,7 @@ const CRYPTO_COINS = [
   { symbol: "ETH-USDT", name: "ETH", label: "以太坊" },
   { symbol: "SOL-USDT", name: "SOL", label: "索拉纳" },
   { symbol: "LDO-USDT", name: "LDO", label: "LDO" },
+  { symbol: "USDT", name: "USDT", label: "USDT" },
 ];
 
 // 价格缓存（模块级，跨组件实例共享）
@@ -255,7 +256,8 @@ export default function LedgerAAInitialBalance() {
     const num = parseFloat(margin);
     if (isNaN(num) || num === 0) return null;
     if (!coin) return null; // 法币模式不需要折算
-    const price = cryptoPrices[coin];
+    // USDT 稳定币，用固定汇率 7.0 折算
+    const price = coin === 'USDT' ? (cnyRateCache || 7.0) : cryptoPrices[coin];
     if (!price) return null;
     const cny = num * price;
     return `≈ ¥${cny.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;
