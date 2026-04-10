@@ -9993,7 +9993,7 @@ export const appRouter = router({
         const existingList = (existing as any)[0] as any[];
         if (existingList.length > 0) {
           await db.execute(
-            sql`UPDATE ledger_tag_config SET settlement_amount = ${input.settlementAmount ?? null}, interest_mode = ${input.interestMode ?? 'fixed'}, interest_rate = ${input.interestRate ?? null}, note = ${input.note ?? null}, margin_by_coin = ${input.marginByCoin ?? null}, pnl_manual = ${input.pnlManual ?? null}, pnl_note = ${input.pnlNote ?? null}, original_amount = ${input.originalAmount ?? null}, updated_at = ${Date.now()} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
+            sql`UPDATE ledger_tag_config SET settlement_amount = ${input.settlementAmount ?? null}, interest_mode = ${input.interestMode ?? 'fixed'}, interest_rate = ${input.interestRate ?? null}, note = ${input.note ?? null}, margin_by_coin = ${input.marginByCoin ?? null}, pnl_manual = ${input.pnlManual ?? null}, pnl_note = ${input.pnlNote ?? null}, original_amount = ${input.originalAmount ?? null} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
           );
         } else {
           await db.execute(
