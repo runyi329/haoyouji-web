@@ -268,6 +268,120 @@ export default function LedgerAAInitialBalance() {
   const [selectedTagName, setSelectedTagName] = useState<string | null>(null);
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set()); // 默认全部折叠
 
+  // 标签配置相关状态
+  const [tagConfigForm, setTagConfigForm] = useState<{
+    settlementAmount: string;
+    interestMode: 'fixed' | 'profit_only';
+    interestRate: string;
+    note: string;
+    pnlNote: string;
+    originalAmount: string;
+  }>({
+    settlementAmount: '',
+    interestMode: 'fixed',
+    interestRate: '',
+    note: '',
+    pnlNote: '',
+    originalAmount: '',
+  });
+  // 盈亏手动补充编辑状态
+  const [pnlManualEdits, setPnlManualEdits] = useState<Array<{ coin: string; amount: string }>>([]);
+  const [tagConfigSaving, setTagConfigSaving] = useState(false);
+  // 标签配置是否处于编辑模式
+  const [tagConfigEditing, setTagConfigEditing] = useState(false);
+  // 保证金手动编辑状态：{ coin: string, amount: string }[]
+  const [marginEdits, setMarginEdits] = useState<Array<{ coin: string; amount: string }>>([]);
+
+  // 获取标签配置
+  const { data: tagConfigData, refetch: refetchTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId, tagName: selectedTagName ?? '' },
+    { enabled: !!ledgerId && !!selectedTagName }
+  );
+
+  // 获取标签保证金汇总和最新市值
+  const { data: tagSummaryData } = trpc.ledger.getTagSummary.useQuery(
+    { ledgerId, tagName: selectedTagName ?? '' },
+    { enabled: !!ledgerId && !!selectedTagName }
+  );
+
+  // 当标签配置数据加载时，同步到表单
+  useEffect(() => {
+    if (tagConfigData) {
+      setTagConfigForm({
+        settlementAmount: tagConfigData.settlement_amount ?? '',
+        interestMode: (tagConfigData.interest_mode as 'fixed' | 'profit_only') ?? 'fixed',
+        interestRate: tagConfigData.interest_rate ?? '',
+        note: tagConfigData.note ?? '',
+        pnlNote: tagConfigData.pnl_note ?? '',
+        originalAmount: tagConfigData.original_amount ?? '',
+      });
+    } else if (selectedTagName) {
+      setTagConfigForm({ settlementAmount: '', interestMode: 'fixed', interestRate: '', note: '', pnlNote: '', originalAmount: '' });
+    }
+    // 切换标签时重置编辑模式
+    setTagConfigEditing(false);
+  }, [tagConfigData, selectedTagName]);
+
+  // 保存标签配置
+  const saveTagConfigMutation = trpc.ledger.saveTagConfig.useMutation({
+    onSuccess: () => {
+      toast.success('标签配置已保存');
+      setTagConfigSaving(false);
+      setTagConfigEditing(false);
+      refetchTagConfig();
+    },
+    onError: (err) => {
+      toast.error((err as any).message || '保存失败');
+      setTagConfigSaving(false);
+    },
+  });
+
+  const handleSaveTagConfig = () => {
+    if (!selectedTagName) return;
+    setTagConfigSaving(true);
+    // 将 marginEdits 转换为 JSON 字符串保存
+    const marginByCoinJson = marginEdits.filter(e => e.amount).length > 0
+      ? JSON.stringify(Object.fromEntries(marginEdits.filter(e => e.amount).map(e => [e.coin, parseFloat(e.amount) || 0])))
+      : undefined;
+    // 将 pnlManualEdits 转换为 JSON 字符串保存
+    const pnlManualJson = pnlManualEdits.filter(e => e.amount).length > 0
+      ? JSON.stringify(Object.fromEntries(pnlManualEdits.filter(e => e.amount).map(e => [e.coin, parseFloat(e.amount) || 0])))
+      : undefined;
+    saveTagConfigMutation.mutate({
+      ledgerId,
+      tagName: selectedTagName,
+      settlementAmount: tagConfigForm.settlementAmount || undefined,
+      interestMode: tagConfigForm.interestMode,
+      interestRate: tagConfigForm.interestRate || undefined,
+      note: tagConfigForm.note || undefined,
+      marginByCoin: marginByCoinJson,
+      pnlManual: pnlManualJson,
+      pnlNote: tagConfigForm.pnlNote || undefined,
+      originalAmount: tagConfigForm.originalAmount || undefined,
+    });
+  };
+
+  // 进入编辑模式时，初始化编辑数据
+  const handleStartEditing = () => {
+    // 保证金：仅从已保存的配置读取（纯手动，不自动计算）
+    const savedMargin = tagConfigData?.margin_by_coin
+      ? (() => { try { return JSON.parse(tagConfigData.margin_by_coin); } catch { return null; } })()
+      : null;
+    const marginEntries = savedMargin
+      ? Object.entries(savedMargin).map(([coin, amount]) => ({ coin, amount: String(amount) }))
+      : [{ coin: '', amount: '' }];
+    setMarginEdits(marginEntries);
+    // 盈亏手动补充：从已保存的配置读取
+    const savedPnl = tagConfigData?.pnl_manual
+      ? (() => { try { return JSON.parse(tagConfigData.pnl_manual); } catch { return null; } })()
+      : null;
+    const pnlEntries = savedPnl
+      ? Object.entries(savedPnl).map(([coin, amount]) => ({ coin, amount: String(amount) }))
+      : [{ coin: '', amount: '' }];
+    setPnlManualEdits(pnlEntries);
+    setTagConfigEditing(true);
+  };
+
   // 标签视角：计算每个标签下各用户的占比
   const tagRatioView = useMemo(() => {
     if (!allBalancesData || categories.length === 0) return {};
@@ -465,6 +579,7 @@ export default function LedgerAAInitialBalance() {
             const isComplete = Math.abs(total - 100) < 0.01;
             const isOver = total > 100.01;
             return (
+              <>
               <div className="mx-4 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
                 {/* 标签头部 */}
                 <div
@@ -549,9 +664,362 @@ export default function LedgerAAInitialBalance() {
                   </span>
                 </div>
               </div>
+
+              {/* ===== 标签配置框 ===== */}
+              <div className="mx-4 mt-3 mb-6 rounded-2xl overflow-hidden shadow-sm" style={{ backgroundColor: "#FFFFFF" }}>
+                {/* 标签配置头部 */}
+                <div
+                  className="flex items-center justify-between px-4 py-3"
+                  style={{ borderBottom: "1px solid #F0E8E0" }}
+                >
+                  <span className="text-sm font-semibold text-gray-800">标签配置</span>
+                  {!tagConfigEditing ? (
+                    <button
+                      onClick={handleStartEditing}
+                      className="text-xs px-3 py-1 rounded-full font-medium"
+                      style={{ backgroundColor: "#FFF0F0", color: "#D32F2F" }}
+                    >
+                      编辑
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setTagConfigEditing(false)}
+                      className="text-xs px-3 py-1 rounded-full font-medium"
+                      style={{ backgroundColor: "#F5F5F5", color: "#757575" }}
+                    >
+                      取消
+                    </button>
+                  )}
+                </div>
+
+                <div className="px-4 py-3 space-y-4">
+                  {/* 保证金汇总 */}
+                  <div>
+                    <div className="text-xs font-medium text-gray-500 mb-1.5">保证金汇总</div>
+                    {!tagConfigEditing ? (
+                      /* 查看模式：仅显示手动录入的保证金 */
+                      <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAF3ED" }}>
+                        {(() => {
+                          const savedMargin = tagConfigData?.margin_by_coin
+                            ? (() => { try { return JSON.parse(tagConfigData.margin_by_coin); } catch { return null; } })()
+                            : null;
+                          const entries = savedMargin
+                            ? Object.entries(savedMargin).filter(([, v]) => Number(v) > 0)
+                            : [];
+                          return entries.length > 0 ? (
+                            <div className="space-y-1">
+                              {entries.map(([coin, amount]) => (
+                                <div key={coin} className="flex items-center justify-between">
+                                  <span className="text-xs text-gray-500">{coin || '人民币'}</span>
+                                  <span className="text-sm font-semibold text-gray-800">
+                                    {Number(amount).toLocaleString('zh-CN', { maximumFractionDigits: 4 })}
+                                    {coin ? ` ${coin}` : ' 元'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">暂无保证金数据，点「编辑」手动录入</span>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      /* 编辑模式：可编辑列表 */
+                      <div className="space-y-2">
+                        {marginEdits.map((entry, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={entry.coin}
+                              onChange={e => setMarginEdits(prev => prev.map((x, i) => i === idx ? { ...x, coin: e.target.value } : x))}
+                              placeholder="币种（如BTC或留空表示人民币）"
+                              className="w-24 rounded-lg px-2 py-1.5 text-xs border outline-none flex-shrink-0"
+                              style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                            />
+                            <input
+                              type="number"
+                              value={entry.amount}
+                              onChange={e => setMarginEdits(prev => prev.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x))}
+                              placeholder="金额"
+                              className="flex-1 rounded-lg px-2 py-1.5 text-xs border outline-none"
+                              style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                            />
+                            <button
+                              onClick={() => setMarginEdits(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-gray-400 hover:text-red-500 flex-shrink-0 text-sm"
+                            >×</button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setMarginEdits(prev => [...prev, { coin: '', amount: '' }])}
+                          className="text-xs text-gray-400 hover:text-gray-600"
+                        >+ 添加一行</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 最新股票市值 */}
+                  <div>
+                    <div className="text-xs font-medium text-gray-500 mb-1.5">最新股票市值（自动读取）</div>
+                    <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAF3ED" }}>
+                      {tagSummaryData?.latestBalance ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-400">{tagSummaryData.latestBalance.recordDate}</span>
+                          <span className="text-sm font-semibold text-gray-800">
+                            ¥{parseFloat(String(tagSummaryData.latestBalance.balance)).toLocaleString('zh-CN', { maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">暂无市值数据（请先登记账目记录）</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 盈亏情况 - 市值下方 */}
+                  <div>
+                    <div className="text-xs font-medium text-gray-500 mb-1.5">盈亏情况</div>
+                    {!tagConfigEditing ? (
+                      /* 查看模式：显示汇总（市值 - 原始金额 + 手动调剂） */
+                      <div className="rounded-xl px-3 py-2 space-y-1.5" style={{ backgroundColor: "#FAF3ED" }}>
+                        {(() => {
+                          // 市值（自动读取）
+                          const marketVal = tagSummaryData?.latestBalance?.balance
+                            ? parseFloat(String(tagSummaryData.latestBalance.balance))
+                            : null;
+                          // 原始金额（手动录入）
+                          const origAmt = tagConfigData?.original_amount
+                            ? parseFloat(String(tagConfigData.original_amount))
+                            : null;
+                          // 手动调剂
+                          const savedPnl = tagConfigData?.pnl_manual
+                            ? (() => { try { return JSON.parse(tagConfigData.pnl_manual); } catch { return null; } })()
+                            : null;
+                          const pnlAdjust: number = savedPnl
+                            ? Object.values(savedPnl as Record<string, unknown>).reduce((s: number, v: unknown) => s + Number(v), 0)
+                            : 0;
+                          // 盈亏汇总 = 市值 - 原始金额 + 手动调剂
+                          const hasEnough = marketVal !== null && origAmt !== null;
+                          const totalPnl: number | null = hasEnough ? (marketVal! - origAmt! + pnlAdjust) : null;
+                          // 盈利才收的利息判断依据
+                          const isProfitable = totalPnl !== null && totalPnl > 0;
+                          return (
+                            <>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-500">市值</span>
+                                <span className="text-xs text-gray-700">
+                                  {marketVal !== null ? `¥${marketVal.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}` : <span className="text-gray-400">未记录</span>}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-500">原始金额</span>
+                                <span className="text-xs text-gray-700">
+                                  {origAmt !== null ? `¥${origAmt.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}` : <span className="text-gray-400">未录入</span>}
+                                </span>
+                              </div>
+                              {pnlAdjust !== 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs text-gray-500">手动调剂</span>
+                                  <span className="text-xs" style={{ color: pnlAdjust >= 0 ? '#388E3C' : '#D32F2F' }}>
+                                    {pnlAdjust >= 0 ? '+' : ''}{pnlAdjust.toLocaleString('zh-CN')}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px solid #E8D8C8' }}>
+                                <span className="text-xs font-semibold text-gray-700">盈亏汇总</span>
+                                <span className="text-sm font-bold" style={{ color: totalPnl === null ? '#9E9E9E' : totalPnl >= 0 ? '#388E3C' : '#D32F2F' }}>
+                                  {totalPnl === null
+                                    ? '数据不全'
+                                    : `${totalPnl >= 0 ? '+' : ''}¥${totalPnl.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}`
+                                  }
+                                </span>
+                              </div>
+                              {tagConfigData?.pnl_note && (
+                                <div className="text-xs text-gray-400 pt-0.5">{tagConfigData.pnl_note}</div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      /* 编辑模式：原始金额 + 手动调剂 */
+                      <div className="space-y-2">
+                        <div>
+                          <div className="text-xs text-gray-400 mb-1">原始金额（初始投入金额）</div>
+                          <input
+                            type="number"
+                            value={tagConfigForm.originalAmount}
+                            onChange={e => setTagConfigForm(prev => ({ ...prev, originalAmount: e.target.value }))}
+                            placeholder="如：1000000"
+                            className="w-full rounded-lg px-2 py-1.5 text-sm border outline-none"
+                            style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                          />
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">手动调剂（如其他资产盈亏、调整项）</div>
+                        {pnlManualEdits.map((entry, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={entry.coin}
+                              onChange={e => setPnlManualEdits(prev => prev.map((x, i) => i === idx ? { ...x, coin: e.target.value } : x))}
+                              placeholder="项目（如其他或留空）"
+                              className="w-24 rounded-lg px-2 py-1.5 text-xs border outline-none flex-shrink-0"
+                              style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                            />
+                            <input
+                              type="number"
+                              value={entry.amount}
+                              onChange={e => setPnlManualEdits(prev => prev.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x))}
+                              placeholder="金额（负数表示亏损）"
+                              className="flex-1 rounded-lg px-2 py-1.5 text-xs border outline-none"
+                              style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                            />
+                            <button
+                              onClick={() => setPnlManualEdits(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-gray-400 hover:text-red-500 flex-shrink-0 text-sm"
+                            >×</button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setPnlManualEdits(prev => [...prev, { coin: '', amount: '' }])}
+                          className="text-xs text-gray-400 hover:text-gray-600"
+                        >+ 添加调剂项</button>
+                        <div className="mt-1">
+                          <div className="text-xs text-gray-400 mb-1">盈亏备注</div>
+                          <input
+                            type="text"
+                            value={tagConfigForm.pnlNote}
+                            onChange={e => setTagConfigForm(prev => ({ ...prev, pnlNote: e.target.value }))}
+                            placeholder="如：已扣除手续费、包含利息收益..."
+                            className="w-full rounded-lg px-2 py-1.5 text-xs border outline-none"
+                            style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 结算规则 */}
+                  <div>
+                    <div className="text-xs font-medium text-gray-500 mb-1.5">结算规则（±X万）</div>
+                    {!tagConfigEditing ? (
+                      <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAF3ED" }}>
+                        <span className="text-sm text-gray-700">
+                          {tagConfigForm.settlementAmount || <span className="text-gray-400">未设置</span>}
+                        </span>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={tagConfigForm.settlementAmount}
+                        onChange={e => setTagConfigForm(prev => ({ ...prev, settlementAmount: e.target.value }))}
+                        placeholder="如：±3 表示±3万"
+                        className="w-full rounded-xl px-3 py-2 text-sm border outline-none"
+                        style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                      />
+                    )}
+                  </div>
+
+                  {/* 利息规则 */}
+                  <div>
+                    <div className="text-xs font-medium text-gray-500 mb-2">利息规则</div>
+                    {!tagConfigEditing ? (
+                      /* 查看模式 */
+                      <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAF3ED" }}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-500">
+                            {tagConfigForm.interestMode === 'fixed' ? '固定年化' : '盈利才收'}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-800">
+                            {tagConfigForm.interestRate ? `${tagConfigForm.interestRate}%` : <span className="text-gray-400">未设置</span>}
+                          </span>
+                        </div>
+                        {tagConfigForm.interestMode === 'profit_only' && (
+                          <div className="mt-1 text-xs text-gray-400">亏损时利息自动为 0%（依据盈亏汇总判断）</div>
+                        )}
+                      </div>
+                    ) : (
+                      /* 编辑模式 */
+                      <>
+                        <div className="flex gap-2 mb-2">
+                          <button
+                            onClick={() => setTagConfigForm(prev => ({ ...prev, interestMode: 'fixed' }))}
+                            className="flex-1 py-2 rounded-xl text-xs font-medium border transition-all"
+                            style={{
+                              backgroundColor: tagConfigForm.interestMode === 'fixed' ? '#D32F2F' : '#FAFAFA',
+                              color: tagConfigForm.interestMode === 'fixed' ? '#FFFFFF' : '#555555',
+                              borderColor: tagConfigForm.interestMode === 'fixed' ? '#D32F2F' : '#E0E0E0',
+                            }}
+                          >固定年化</button>
+                          <button
+                            onClick={() => setTagConfigForm(prev => ({ ...prev, interestMode: 'profit_only' }))}
+                            className="flex-1 py-2 rounded-xl text-xs font-medium border transition-all"
+                            style={{
+                              backgroundColor: tagConfigForm.interestMode === 'profit_only' ? '#D32F2F' : '#FAFAFA',
+                              color: tagConfigForm.interestMode === 'profit_only' ? '#FFFFFF' : '#555555',
+                              borderColor: tagConfigForm.interestMode === 'profit_only' ? '#D32F2F' : '#E0E0E0',
+                            }}
+                          >盈利才收</button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={tagConfigForm.interestRate}
+                            onChange={e => setTagConfigForm(prev => ({ ...prev, interestRate: e.target.value }))}
+                            placeholder="年化利率"
+                            className="flex-1 rounded-xl px-3 py-2 text-sm border outline-none"
+                            style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                          />
+                          <span className="text-sm text-gray-500">%</span>
+                        </div>
+                        {tagConfigForm.interestMode === 'profit_only' && (
+                          <div className="mt-1.5 text-xs text-gray-400">亏损时利息自动为 0%（依据盈亏汇总判断）</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* 备注 */}
+                  <div>
+                    <div className="text-xs font-medium text-gray-500 mb-1.5">备注</div>
+                    {!tagConfigEditing ? (
+                      <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAF3ED" }}>
+                        <span className="text-sm text-gray-700">
+                          {tagConfigForm.note || <span className="text-gray-400">无</span>}
+                        </span>
+                      </div>
+                    ) : (
+                      <textarea
+                        value={tagConfigForm.note}
+                        onChange={e => setTagConfigForm(prev => ({ ...prev, note: e.target.value }))}
+                        placeholder="其他说明..."
+                        rows={2}
+                        className="w-full rounded-xl px-3 py-2 text-sm border outline-none resize-none"
+                        style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                      />
+                    )}
+                  </div>
+
+                  {/* 保存按钮：仅编辑模式显示 */}
+                  {tagConfigEditing && (
+                    <button
+                      onClick={handleSaveTagConfig}
+                      disabled={tagConfigSaving}
+                      className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all"
+                      style={{
+                        backgroundColor: tagConfigSaving ? "#BDBDBD" : "#D32F2F",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      {tagConfigSaving ? '保存中...' : '保存标签配置'}
+                    </button>
+                  )}
+                </div>
+              </div>
+              </>
             );
-          })()}
-        </div>
+          })()
+        }
+      </div>
       ) : (
         /* ===== 用户视角（原有） ===== */
         <div className="pb-8">
