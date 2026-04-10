@@ -284,6 +284,17 @@ export default function LedgerAAInitialBalance() {
     return result;
   }, [allBalancesData, categories]);
 
+  const members = (allBalancesData as any)?.members ?? [];
+
+  // 找到 jiang 用户的 userId（展开占比充到100%）
+  const jiangUserId = useMemo(() => {
+    const m = members.find((m: any) =>
+      (m.username ?? '').toLowerCase() === 'jiang' ||
+      (m.nickname ?? '').toLowerCase() === 'jiang'
+    );
+    return m ? m.userId : null;
+  }, [members]);
+
   const canAccess =
     ledgerData?.userRole === "owner" || ledgerData?.userRole === "admin";
 
@@ -308,17 +319,6 @@ export default function LedgerAAInitialBalance() {
       </div>
     );
   }
-
-  const members = (allBalancesData as any)?.members ?? [];
-
-  // 找到 jiang 用户的 userId（展开占比充到100%）
-  const jiangUserId = useMemo(() => {
-    const m = members.find((m: any) =>
-      (m.username ?? '').toLowerCase() === 'jiang' ||
-      (m.nickname ?? '').toLowerCase() === 'jiang'
-    );
-    return m ? m.userId : null;
-  }, [members]);
 
   // 包装 updateEntry：当非-jiang 用户修改某标签的 ratio 时，自动计算 jiang 的剩余占比
   const updateEntryWithAutoJiang = (
