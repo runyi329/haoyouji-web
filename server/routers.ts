@@ -9951,6 +9951,107 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 获取标签配置
+    getTagConfig: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const rows = await db.execute(
+          sql`SELECT * FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
+        );
+        const list = (rows as any)[0] as any[];
+        return list.length > 0 ? list[0] : null;
+      }),
+
+    // 保存标签配置
+    saveTagConfig: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+        settlementAmount: z.string().optional(),
+        interestMode: z.enum(['fixed', 'profit_only']).optional(),
+        interestRate: z.string().optional(),
+        note: z.string().optional(),
+        marginByCoin: z.string().optional(),
+        pnlManual: z.string().optional(),
+        pnlNote: z.string().optional(),
+        originalAmount: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedgerMod = await import('./db-ledger');
+        const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可设置标签配置' });
+        }
+        const db = await getLedgerDb();
+        const existing = await db.execute(
+          sql`SELECT id FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
+        );
+        const existingList = (existing as any)[0] as any[];
+        if (existingList.length > 0) {
+          await db.execute(
+            sql`UPDATE ledger_tag_config SET settlement_amount = ${input.settlementAmount ?? null}, interest_mode = ${input.interestMode ?? 'fixed'}, interest_rate = ${input.interestRate ?? null}, note = ${input.note ?? null}, margin_by_coin = ${input.marginByCoin ?? null}, pnl_manual = ${input.pnlManual ?? null}, pnl_note = ${input.pnlNote ?? null}, original_amount = ${input.originalAmount ?? null}, updated_at = ${Date.now()} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
+          );
+        } else {
+          await db.execute(
+            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, note, margin_by_coin, pnl_manual, pnl_note, original_amount, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${ctx.user.id})`
+          );
+        }
+        return { success: true };
+      }),
+
+    // 获取标签保证金汇总和最新市值
+    getTagSummary: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const balancesRows = await db.execute(
+          sql`SELECT userId, initial_balances FROM ledger_members WHERE ledgerId = ${input.ledgerId}`
+        );
+        const balancesList = (balancesRows as any)[0] as any[];
+        const marginByCoin: Record<string, number> = {};
+        for (const row of balancesList) {
+          try {
+            const balances = typeof row.initial_balances === 'string'
+              ? JSON.parse(row.initial_balances)
+              : (row.initial_balances ?? {});
+            const marginKey = `${input.tagName}__margin`;
+            const coinKey = `${input.tagName}__marginCoin`;
+            const margin = parseFloat(balances[marginKey] ?? 0);
+            const coin = balances[coinKey] ?? 'CNY';
+            if (margin > 0) {
+              marginByCoin[coin] = (marginByCoin[coin] ?? 0) + margin;
+            }
+          } catch {}
+        }
+        const latestBalanceRows = await db.execute(
+          sql`SELECT lr.amount, lr.recordDate
+              FROM ledger_records lr
+              INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
+              WHERE lr.ledgerId = ${input.ledgerId}
+                AND lc.name = ${input.tagName}
+              ORDER BY lr.recordDate DESC
+              LIMIT 1`
+        );
+        const latestBalanceList = (latestBalanceRows as any)[0] as any[];
+        const latestBalance = latestBalanceList.length > 0 ? latestBalanceList[0] : null;
+        return {
+          marginByCoin,
+          latestBalance: latestBalance ? {
+            balance: latestBalance.amount,
+            recordDate: typeof latestBalance.recordDate === 'string'
+              ? latestBalance.recordDate.slice(0, 10)
+              : new Date(latestBalance.recordDate).toISOString().slice(0, 10),
+          } : null,
+        };
+      }),
+
     // AF 手动调账 - 获取列表
     afGetManualBalances: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
