@@ -273,6 +273,8 @@ export default function LedgerAAInitialBalance() {
     settlementAmount: string;
     interestMode: 'fixed' | 'profit_only';
     interestRate: string;
+    interestBaseAmount: string;
+    interestStartDate: string;
     note: string;
     pnlNote: string;
     originalAmount: string;
@@ -280,6 +282,8 @@ export default function LedgerAAInitialBalance() {
     settlementAmount: '',
     interestMode: 'fixed',
     interestRate: '',
+    interestBaseAmount: '',
+    interestStartDate: '',
     note: '',
     pnlNote: '',
     originalAmount: '',
@@ -311,12 +315,14 @@ export default function LedgerAAInitialBalance() {
         settlementAmount: tagConfigData.settlement_amount ?? '',
         interestMode: (tagConfigData.interest_mode as 'fixed' | 'profit_only') ?? 'fixed',
         interestRate: tagConfigData.interest_rate ?? '',
+        interestBaseAmount: tagConfigData.interest_base_amount ?? '',
+        interestStartDate: tagConfigData.interest_start_date ?? '',
         note: tagConfigData.note ?? '',
         pnlNote: tagConfigData.pnl_note ?? '',
         originalAmount: tagConfigData.original_amount ?? '',
       });
     } else if (selectedTagName) {
-      setTagConfigForm({ settlementAmount: '', interestMode: 'fixed', interestRate: '', note: '', pnlNote: '', originalAmount: '' });
+      setTagConfigForm({ settlementAmount: '', interestMode: 'fixed', interestRate: '', interestBaseAmount: '', interestStartDate: '', note: '', pnlNote: '', originalAmount: '' });
     }
     // 切换标签时重置编辑模式
     setTagConfigEditing(false);
@@ -354,6 +360,8 @@ export default function LedgerAAInitialBalance() {
       settlementAmount: tagConfigForm.settlementAmount || undefined,
       interestMode: tagConfigForm.interestMode,
       interestRate: tagConfigForm.interestRate || undefined,
+      interestBaseAmount: tagConfigForm.interestBaseAmount || undefined,
+      interestStartDate: tagConfigForm.interestStartDate || undefined,
       note: tagConfigForm.note || undefined,
       marginByCoin: marginByCoinJson,
       pnlManual: pnlManualJson,
@@ -802,7 +810,6 @@ export default function LedgerAAInitialBalance() {
                           const savedPnl = tagConfigData?.pnl_manual
                             ? (() => { try { return JSON.parse(tagConfigData.pnl_manual); } catch { return null; } })()
                             : null;
-                          // 解析调剂条目列表
                           let pnlItems: Array<{ reason: string; amount: number }> = [];
                           if (Array.isArray(savedPnl)) {
                             pnlItems = savedPnl.map((e: any) => ({ reason: String(e.reason ?? ''), amount: Number(e.amount ?? 0) }));
@@ -810,9 +817,27 @@ export default function LedgerAAInitialBalance() {
                             pnlItems = Object.entries(savedPnl).map(([key, val]) => ({ reason: key, amount: Number(val) }));
                           }
                           const pnlAdjust = pnlItems.reduce((s, e) => s + e.amount, 0);
-                          // 盈亏汇总 = 市值 - 原始金额 + 手动调剂
+                          // 利息实时计算
+                          const interestRate = tagConfigData?.interest_rate ? parseFloat(String(tagConfigData.interest_rate)) : 0;
+                          const interestBase = tagConfigData?.interest_base_amount ? parseFloat(String(tagConfigData.interest_base_amount)) : null;
+                          const interestStartStr = tagConfigData?.interest_start_date ?? '';
+                          const interestMode = tagConfigData?.interest_mode ?? 'fixed';
+                          let interestDays = 0;
+                          let interestAmount = 0;
+                          if (interestBase !== null && interestRate > 0 && interestStartStr) {
+                            const startDate = new Date(interestStartStr + 'T00:00:00');
+                            const now = new Date();
+                            interestDays = Math.max(0, Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+                            const dailyRate = interestRate / 100 / 365;
+                            interestAmount = interestBase * dailyRate * interestDays;
+                          }
+                          // 盈利才收模式：先算出盈亏（不含利息），亏损时利息为0
                           const hasEnough = marketVal !== null && origAmt !== null;
-                          const totalPnl: number | null = hasEnough ? (marketVal! - origAmt! + pnlAdjust) : null;
+                          const rawPnl: number | null = hasEnough ? (marketVal! - origAmt! + pnlAdjust) : null;
+                          // 盈利才收模式下，亏损时利息自动为0
+                          const effectiveInterest = (interestMode === 'profit_only' && rawPnl !== null && rawPnl <= 0) ? 0 : interestAmount;
+                          // 盈亏汇总 = 市值 - 原始金额 + 手动调剂 - 利息
+                          const totalPnl: number | null = hasEnough ? (rawPnl! - effectiveInterest) : null;
                           return (
                             <>
                               <div className="flex items-center justify-between">
@@ -848,6 +873,25 @@ export default function LedgerAAInitialBalance() {
                                     </div>
                                   )}
                                 </div>
+                              )}
+                              {/* 利息明细 */}
+                              {effectiveInterest > 0 && (
+                                <div className="space-y-0.5">
+                                  <div className="text-xs text-gray-500 font-medium">利息计算</div>
+                                  <div className="flex items-center justify-between pl-2">
+                                    <span className="text-xs text-gray-400">基数</span>
+                                    <span className="text-xs text-gray-600">¥{interestBase!.toLocaleString('zh-CN')}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between pl-2">
+                                    <span className="text-xs text-gray-400">年化{interestRate}% × {interestDays}天</span>
+                                    <span className="text-xs" style={{ color: '#D32F2F' }}>
+                                      -¥{effectiveInterest.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                              {interestMode === 'profit_only' && effectiveInterest === 0 && interestAmount > 0 && (
+                                <div className="text-xs text-gray-400 pl-2">盈利才收模式：当前亏损，利息为 0</div>
                               )}
                               <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px solid #E8D8C8' }}>
                                 <span className="text-xs font-semibold text-gray-700">盈亏汇总</span>
@@ -953,7 +997,7 @@ export default function LedgerAAInitialBalance() {
                     <div className="text-xs font-medium text-gray-500 mb-2">利息规则</div>
                     {!tagConfigEditing ? (
                       /* 查看模式 */
-                      <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "#FAF3ED" }}>
+                      <div className="rounded-xl px-3 py-2 space-y-1" style={{ backgroundColor: "#FAF3ED" }}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-gray-500">
                             {tagConfigForm.interestMode === 'fixed' ? '固定年化' : '盈利才收'}
@@ -962,6 +1006,18 @@ export default function LedgerAAInitialBalance() {
                             {tagConfigForm.interestRate ? `${tagConfigForm.interestRate}%` : <span className="text-gray-400">未设置</span>}
                           </span>
                         </div>
+                        {tagConfigForm.interestBaseAmount && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">计息基数</span>
+                            <span className="text-xs text-gray-700">¥{parseFloat(tagConfigForm.interestBaseAmount).toLocaleString('zh-CN')}</span>
+                          </div>
+                        )}
+                        {tagConfigForm.interestStartDate && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">起息日</span>
+                            <span className="text-xs text-gray-700">{tagConfigForm.interestStartDate}</span>
+                          </div>
+                        )}
                         {tagConfigForm.interestMode === 'profit_only' && (
                           <div className="mt-1 text-xs text-gray-400">亏损时利息自动为 0%（依据盈亏汇总判断）</div>
                         )}
@@ -999,6 +1055,27 @@ export default function LedgerAAInitialBalance() {
                             style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
                           />
                           <span className="text-sm text-gray-500">%</span>
+                        </div>
+                        <div className="mt-2">
+                          <div className="text-xs text-gray-400 mb-1">利息计算基数（元）</div>
+                          <input
+                            type="number"
+                            value={tagConfigForm.interestBaseAmount}
+                            onChange={e => setTagConfigForm(prev => ({ ...prev, interestBaseAmount: e.target.value }))}
+                            placeholder="如：1000000"
+                            className="w-full rounded-xl px-3 py-2 text-sm border outline-none"
+                            style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                          />
+                        </div>
+                        <div className="mt-2">
+                          <div className="text-xs text-gray-400 mb-1">起息日</div>
+                          <input
+                            type="date"
+                            value={tagConfigForm.interestStartDate}
+                            onChange={e => setTagConfigForm(prev => ({ ...prev, interestStartDate: e.target.value }))}
+                            className="w-full rounded-xl px-3 py-2 text-sm border outline-none"
+                            style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                          />
                         </div>
                         {tagConfigForm.interestMode === 'profit_only' && (
                           <div className="mt-1.5 text-xs text-gray-400">亏损时利息自动为 0%（依据盈亏汇总判断）</div>
