@@ -284,8 +284,8 @@ export default function LedgerAAInitialBalance() {
     pnlNote: '',
     originalAmount: '',
   });
-  // 盈亏手动补充编辑状态
-  const [pnlManualEdits, setPnlManualEdits] = useState<Array<{ coin: string; amount: string }>>([]);
+  // 盈亏手动补充编辑状态（多条，每条有原因和金额）
+  const [pnlManualEdits, setPnlManualEdits] = useState<Array<{ reason: string; amount: string }>>([]);
   const [tagConfigSaving, setTagConfigSaving] = useState(false);
   // 标签配置是否处于编辑模式
   const [tagConfigEditing, setTagConfigEditing] = useState(false);
@@ -343,9 +343,10 @@ export default function LedgerAAInitialBalance() {
     const marginByCoinJson = marginEdits.filter(e => e.amount).length > 0
       ? JSON.stringify(Object.fromEntries(marginEdits.filter(e => e.amount).map(e => [e.coin, parseFloat(e.amount) || 0])))
       : undefined;
-    // 将 pnlManualEdits 转换为 JSON 字符串保存
-    const pnlManualJson = pnlManualEdits.filter(e => e.amount).length > 0
-      ? JSON.stringify(Object.fromEntries(pnlManualEdits.filter(e => e.amount).map(e => [e.coin, parseFloat(e.amount) || 0])))
+    // 将 pnlManualEdits 转换为 JSON 数组字符串保存 [{reason, amount}]
+    const validPnlEdits = pnlManualEdits.filter(e => e.amount);
+    const pnlManualJson = validPnlEdits.length > 0
+      ? JSON.stringify(validPnlEdits.map(e => ({ reason: e.reason || '', amount: parseFloat(e.amount) || 0 })))
       : undefined;
     saveTagConfigMutation.mutate({
       ledgerId,
@@ -371,13 +372,20 @@ export default function LedgerAAInitialBalance() {
       ? Object.entries(savedMargin).map(([coin, amount]) => ({ coin, amount: String(amount) }))
       : [{ coin: '', amount: '' }];
     setMarginEdits(marginEntries);
-    // 盈亏手动补充：从已保存的配置读取
+    // 盈亏手动补充：从已保存的配置读取（兼容旧格式{coin:amount}和新格式[{reason,amount}]）
     const savedPnl = tagConfigData?.pnl_manual
       ? (() => { try { return JSON.parse(tagConfigData.pnl_manual); } catch { return null; } })()
       : null;
-    const pnlEntries = savedPnl
-      ? Object.entries(savedPnl).map(([coin, amount]) => ({ coin, amount: String(amount) }))
-      : [{ coin: '', amount: '' }];
+    let pnlEntries: Array<{ reason: string; amount: string }>;
+    if (Array.isArray(savedPnl)) {
+      // 新格式：[{reason, amount}]
+      pnlEntries = savedPnl.map((e: any) => ({ reason: String(e.reason ?? ''), amount: String(e.amount ?? '') }));
+    } else if (savedPnl && typeof savedPnl === 'object') {
+      // 旧格式：{coin: amount} → 转换为新格式
+      pnlEntries = Object.entries(savedPnl).map(([key, val]) => ({ reason: key, amount: String(val) }));
+    } else {
+      pnlEntries = [{ reason: '', amount: '' }];
+    }
     setPnlManualEdits(pnlEntries);
     setTagConfigEditing(true);
   };
@@ -790,18 +798,21 @@ export default function LedgerAAInitialBalance() {
                           const origAmt = tagConfigData?.original_amount
                             ? parseFloat(String(tagConfigData.original_amount))
                             : null;
-                          // 手动调剂
+                          // 手动调剂（兼容新旧格式）
                           const savedPnl = tagConfigData?.pnl_manual
                             ? (() => { try { return JSON.parse(tagConfigData.pnl_manual); } catch { return null; } })()
                             : null;
-                          const pnlAdjust: number = savedPnl
-                            ? Object.values(savedPnl as Record<string, unknown>).reduce((s: number, v: unknown) => s + Number(v), 0)
-                            : 0;
+                          // 解析调剂条目列表
+                          let pnlItems: Array<{ reason: string; amount: number }> = [];
+                          if (Array.isArray(savedPnl)) {
+                            pnlItems = savedPnl.map((e: any) => ({ reason: String(e.reason ?? ''), amount: Number(e.amount ?? 0) }));
+                          } else if (savedPnl && typeof savedPnl === 'object') {
+                            pnlItems = Object.entries(savedPnl).map(([key, val]) => ({ reason: key, amount: Number(val) }));
+                          }
+                          const pnlAdjust = pnlItems.reduce((s, e) => s + e.amount, 0);
                           // 盈亏汇总 = 市值 - 原始金额 + 手动调剂
                           const hasEnough = marketVal !== null && origAmt !== null;
                           const totalPnl: number | null = hasEnough ? (marketVal! - origAmt! + pnlAdjust) : null;
-                          // 盈利才收的利息判断依据
-                          const isProfitable = totalPnl !== null && totalPnl > 0;
                           return (
                             <>
                               <div className="flex items-center justify-between">
@@ -816,12 +827,26 @@ export default function LedgerAAInitialBalance() {
                                   {origAmt !== null ? `¥${origAmt.toLocaleString('zh-CN', { maximumFractionDigits: 2 })}` : <span className="text-gray-400">未录入</span>}
                                 </span>
                               </div>
-                              {pnlAdjust !== 0 && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-gray-500">手动调剂</span>
-                                  <span className="text-xs" style={{ color: pnlAdjust >= 0 ? '#388E3C' : '#D32F2F' }}>
-                                    {pnlAdjust >= 0 ? '+' : ''}{pnlAdjust.toLocaleString('zh-CN')}
-                                  </span>
+                              {/* 逐条显示手动调剂明细 */}
+                              {pnlItems.length > 0 && (
+                                <div className="space-y-0.5">
+                                  <div className="text-xs text-gray-500 font-medium">手动调剂明细</div>
+                                  {pnlItems.map((item, idx) => (
+                                    <div key={idx} className="flex items-center justify-between pl-2">
+                                      <span className="text-xs text-gray-400 truncate max-w-[60%]">{item.reason || `调剂项${idx + 1}`}</span>
+                                      <span className="text-xs" style={{ color: item.amount >= 0 ? '#388E3C' : '#D32F2F' }}>
+                                        {item.amount >= 0 ? '+' : ''}{item.amount.toLocaleString('zh-CN')}
+                                      </span>
+                                    </div>
+                                  ))}
+                                  {pnlItems.length > 1 && (
+                                    <div className="flex items-center justify-between pl-2 pt-0.5" style={{ borderTop: '1px dashed #E0D0C0' }}>
+                                      <span className="text-xs text-gray-500">调剂合计</span>
+                                      <span className="text-xs font-medium" style={{ color: pnlAdjust >= 0 ? '#388E3C' : '#D32F2F' }}>
+                                        {pnlAdjust >= 0 ? '+' : ''}{pnlAdjust.toLocaleString('zh-CN')}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                               <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px solid #E8D8C8' }}>
@@ -854,34 +879,38 @@ export default function LedgerAAInitialBalance() {
                             style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
                           />
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">手动调剂（如其他资产盈亏、调整项）</div>
+                        <div className="text-xs text-gray-400 mt-2 mb-1">手动调剂（可添加多条，每条填写原因和金额）</div>
                         {pnlManualEdits.map((entry, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
+                          <div key={idx} className="rounded-lg p-2 space-y-1.5" style={{ backgroundColor: '#F9F5F0', border: '1px solid #EDE5DC' }}>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs text-gray-500 font-medium">第{idx + 1}条</span>
+                              <button
+                                onClick={() => setPnlManualEdits(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-gray-400 hover:text-red-500 text-xs px-1"
+                              >删除</button>
+                            </div>
                             <input
                               type="text"
-                              value={entry.coin}
-                              onChange={e => setPnlManualEdits(prev => prev.map((x, i) => i === idx ? { ...x, coin: e.target.value } : x))}
-                              placeholder="项目（如其他或留空）"
-                              className="w-24 rounded-lg px-2 py-1.5 text-xs border outline-none flex-shrink-0"
-                              style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                              value={entry.reason}
+                              onChange={e => setPnlManualEdits(prev => prev.map((x, i) => i === idx ? { ...x, reason: e.target.value } : x))}
+                              placeholder="原因（如：其他资产收益、手续费、分红...)"
+                              className="w-full rounded-lg px-2 py-1.5 text-xs border outline-none"
+                              style={{ borderColor: "#E0E0E0", backgroundColor: "#FFFFFF" }}
                             />
                             <input
                               type="number"
                               value={entry.amount}
                               onChange={e => setPnlManualEdits(prev => prev.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x))}
-                              placeholder="金额（负数表示亏损）"
-                              className="flex-1 rounded-lg px-2 py-1.5 text-xs border outline-none"
-                              style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                              placeholder="金额（正数表示盈利，负数表示亏损）"
+                              className="w-full rounded-lg px-2 py-1.5 text-xs border outline-none"
+                              style={{ borderColor: "#E0E0E0", backgroundColor: "#FFFFFF" }}
                             />
-                            <button
-                              onClick={() => setPnlManualEdits(prev => prev.filter((_, i) => i !== idx))}
-                              className="text-gray-400 hover:text-red-500 flex-shrink-0 text-sm"
-                            >×</button>
                           </div>
                         ))}
                         <button
-                          onClick={() => setPnlManualEdits(prev => [...prev, { coin: '', amount: '' }])}
-                          className="text-xs text-gray-400 hover:text-gray-600"
+                          onClick={() => setPnlManualEdits(prev => [...prev, { reason: '', amount: '' }])}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg"
+                          style={{ color: '#D32F2F', backgroundColor: '#FFF0F0' }}
                         >+ 添加调剂项</button>
                         <div className="mt-1">
                           <div className="text-xs text-gray-400 mb-1">盈亏备注</div>
