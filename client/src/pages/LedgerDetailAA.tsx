@@ -714,9 +714,9 @@ export default function LedgerDetailAA({
                   minWidth: "44px",
                 }}
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                刷新
               </button>
-              {/* 返回按钮：椭圆形，点击返回账本首页 */}
+              {/* 返回按鈕：渿圆形，点击返回账本首页 */}
               <button
                 onClick={() => setLocation("/ledger")}
                 className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
