@@ -693,24 +693,7 @@ export default function LedgerDetailAA({
 
             {/* 右侧：操作按鈕 + 返回按鈕 + 标签下拉 */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              {canEdit && (
-                <button
-                  onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-                >
-                  <Search className="w-3.5 h-3.5 text-white" />
-                </button>
-              )}
-              {canEdit && (
-                <button
-                  onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-                >
-                  <BarChart3 className="w-3.5 h-3.5 text-white" />
-                </button>
-              )}
+              {/* 搜索和数据按钮已隐藏 */}
               {canEdit && !viewAsUserId && (
                 <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
