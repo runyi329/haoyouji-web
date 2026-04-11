@@ -227,9 +227,17 @@ export default function SharingSettings() {
     try {
       const scanner = new Html5Qrcode('qr-reader');
       scannerRef.current = scanner;
+      // 尝试启用连续自动对焦
+      const videoConstraints: MediaTrackConstraints = {
+        facingMode: 'environment',
+        // @ts-ignore - focusMode 是非标准扩展属性，部分浏览器支持
+        focusMode: 'continuous',
+        // @ts-ignore
+        advanced: [{ focusMode: 'continuous' }],
+      };
       await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        videoConstraints,
+        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
         async (decodedText) => {
           await stopScanner();
           // 判断二维码类型
