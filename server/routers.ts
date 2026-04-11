@@ -16527,6 +16527,63 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       }
     }),
 
+  // ===== IDEALIGHT 图库 =====
+  // 获取图库列表（公开）
+  idealightGalleryList: publicProcedure.query(async () => {
+    const dbConn = await getDbConnection();
+    if (!dbConn) return [];
+    const [rows] = await dbConn.execute(
+      `SELECT id, url, title, sort_order, created_at FROM idealight_gallery ORDER BY sort_order ASC, created_at DESC`
+    ) as any;
+    return (rows as any[]).map((r: any) => ({
+      id: r.id as number,
+      url: r.url as string,
+      title: r.title as string,
+      sortOrder: r.sort_order as number,
+      createdAt: r.created_at as Date,
+    }));
+  }),
+
+  // 上传图片到图库（仅管理员）
+  idealightGalleryUpload: protectedProcedure
+    .input(z.object({
+      imageBase64: z.string(),
+      mimeType: z.string().default('image/jpeg'),
+      title: z.string().default(''),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      // 仅允许管理员（owner）上传
+      if (ctx.user.openId !== process.env.OWNER_OPEN_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可上传图片' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      // 解码 base64
+      const base64Data = input.imageBase64.replace(/^data:[^;]+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      const ext = input.mimeType === 'image/png' ? 'png' : input.mimeType === 'image/gif' ? 'gif' : 'jpg';
+      const fileKey = `idealight-gallery/${Date.now()}-${nanoid(8)}.${ext}`;
+      const { url } = await storagePut(fileKey, buffer, input.mimeType);
+      await dbConn.execute(
+        `INSERT INTO idealight_gallery (url, file_key, title, created_by) VALUES (?, ?, ?, ?)`,
+        [url, fileKey, input.title, ctx.user.openId]
+      );
+      return { success: true, url };
+    }),
+
+  // 删除图库图片（仅管理员）
+  idealightGalleryDelete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.openId !== process.env.OWNER_OPEN_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可删除图片' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await dbConn.execute(`DELETE FROM idealight_gallery WHERE id = ?`, [input.id]);
+      return { success: true };
+    }),
+
   // 数字币实时价格（服务端缓存，前端直接读取）
   getCryptoPrices: publicProcedure.query(async () => {
     try {

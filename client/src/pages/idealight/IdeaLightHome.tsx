@@ -4,10 +4,11 @@
  * 无需登录，公开访问
  */
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Share2, ShoppingBag, Activity, BookOpen, ChevronRight, Phone, MessageCircle, Sparkles, Loader2, RotateCcw } from "lucide-react";
+import { Share2, ShoppingBag, Activity, BookOpen, ChevronRight, Phone, MessageCircle, Sparkles, Loader2, RotateCcw, Images, Upload, Trash2, X, ZoomIn } from "lucide-react";
 import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
 const ICON_URL = `${CDN}/idealight_icon_white_ca457943.png`;
@@ -25,7 +26,7 @@ const PRODUCT_PAGES = [
   `${CDN}/page10_ending_0f63160b.png`,
 ];
 
-type TabType = "intro" | "shop" | "health";
+type TabType = "intro" | "shop" | "health" | "gallery";
 
 interface SkinItem { score: number; level: string; desc: string; }
 interface SkinResult {
@@ -540,6 +541,162 @@ function HealthTab() {
   );
 }
 
+// ===== 图库组件 =====
+function GalleryTab() {
+  const { user, isAuthenticated } = useAuth();
+  const utils = trpc.useUtils();
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: images = [], isLoading } = trpc.idealightGalleryList.useQuery();
+
+  const uploadMutation = trpc.idealightGalleryUpload.useMutation({
+    onSuccess: () => {
+      toast.success('图片上传成功');
+      utils.idealightGalleryList.invalidate();
+      setUploading(false);
+    },
+    onError: (err) => {
+      toast.error(err.message || '上传失败');
+      setUploading(false);
+    },
+  });
+
+  const deleteMutation = trpc.idealightGalleryDelete.useMutation({
+    onSuccess: () => {
+      toast.success('已删除');
+      utils.idealightGalleryList.invalidate();
+    },
+    onError: (err) => toast.error(err.message || '删除失败'),
+  });
+
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('图片不能超过 10MB');
+      return;
+    }
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      uploadMutation.mutate({ imageBase64: base64, mimeType: file.type, title: file.name.replace(/\.[^.]+$/, '') });
+    };
+    reader.readAsDataURL(file);
+    // 重置input以允许重复选择同一文件
+    e.target.value = '';
+  }, [uploadMutation]);
+
+  // 判断是否是管理员（owner）
+  const isOwner = isAuthenticated && user?.openId === (window as any).__OWNER_OPEN_ID__;
+  // 通过尝试上传来判断，实际权限在后端检查
+  const canManage = isAuthenticated;
+
+  return (
+    <div className="px-3 py-4">
+      {/* 标题行 */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Images className="w-5 h-5 text-[#E53935]" />
+          <span className="text-white font-semibold text-base">宣传图库</span>
+          <span className="text-white/40 text-xs">({images.length}张)</span>
+        </div>
+        {canManage && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-1.5 bg-[#E53935] hover:bg-[#C62828] disabled:opacity-50 text-white rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
+            >
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              {uploading ? '上传中...' : '上传图片'}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* 图片网格 - 每行两张 */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-8 h-8 text-[#E53935] animate-spin" />
+        </div>
+      ) : images.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Images className="w-12 h-12 text-white/20 mb-3" />
+          <p className="text-white/40 text-sm">暂无图片</p>
+          {canManage && <p className="text-white/25 text-xs mt-1">点击上方「上传图片」添加宣传海报</p>}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {images.map((img) => (
+            <div key={img.id} className="relative group rounded-xl overflow-hidden bg-white/5 aspect-[3/4]">
+              <img
+                src={img.url}
+                alt={img.title || '图库图片'}
+                className="w-full h-full object-cover cursor-pointer transition-transform duration-200 active:scale-95"
+                loading="lazy"
+                onClick={() => setLightboxUrl(img.url)}
+              />
+              {/* 放大图标 */}
+              <div
+                className="absolute inset-0 bg-black/0 active:bg-black/20 flex items-center justify-center transition-colors"
+                onClick={() => setLightboxUrl(img.url)}
+              >
+                <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-80 transition-opacity drop-shadow-lg" />
+              </div>
+              {/* 删除按鈕（管理员可见） */}
+              {canManage && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); if (confirm('确认删除这张图片？')) deleteMutation.mutate({ id: img.id }); }}
+                  className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 hover:bg-red-600 rounded-full flex items-center justify-center transition-colors"
+                >
+                  <Trash2 className="w-3 h-3 text-white" />
+                </button>
+              )}
+              {/* 图片标题 */}
+              {img.title && (
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-2">
+                  <p className="text-white text-xs truncate">{img.title}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 灯笱放大查看 */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center"
+            onClick={() => setLightboxUrl(null)}
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+          <img
+            src={lightboxUrl}
+            alt="放大查看"
+            className="max-w-full max-h-full object-contain px-4"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function IdeaLightHome() {
   const [activeTab, setActiveTab] = useState<TabType>("intro");
 
@@ -569,16 +726,18 @@ export default function IdeaLightHome() {
           {([
             { key: "intro" as TabType, label: "产品介绍" },
             { key: "shop" as TabType, label: "商城" },
+            { key: "gallery" as TabType, label: "图库" },
             { key: "health" as TabType, label: "健康检测" },
           ] as const).map((tab) => (
             <button key={tab.key}
               onClick={() => { setActiveTab(tab.key); if (tab.key === "shop") toast("商城即将上线，敬请期待"); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-1 py-3 text-xs font-medium transition-colors ${
                 activeTab === tab.key ? "text-[#E53935] border-b-2 border-[#E53935]" : "text-white/50 hover:text-white/80"
               }`}>
-              {tab.key === "intro" && <BookOpen className="w-4 h-4" />}
-              {tab.key === "shop" && <ShoppingBag className="w-4 h-4" />}
-              {tab.key === "health" && <Activity className="w-4 h-4" />}
+              {tab.key === "intro" && <BookOpen className="w-3.5 h-3.5" />}
+              {tab.key === "shop" && <ShoppingBag className="w-3.5 h-3.5" />}
+              {tab.key === "gallery" && <Images className="w-3.5 h-3.5" />}
+              {tab.key === "health" && <Activity className="w-3.5 h-3.5" />}
               {tab.label}
             </button>
           ))}
@@ -642,6 +801,8 @@ export default function IdeaLightHome() {
             </button>
           </div>
         )}
+
+        {activeTab === "gallery" && <GalleryTab />}
 
         {activeTab === "health" && <HealthTab />}
       </div>
