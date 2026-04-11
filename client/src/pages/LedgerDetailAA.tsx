@@ -25,7 +25,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ReactECharts from "echarts-for-react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   AreaChart,
@@ -703,6 +703,14 @@ export default function LedgerDetailAA({
                   <Settings className="w-3.5 h-3.5 text-white" />
                 </button>
               )}
+              {/* 刷新按钮 */}
+              <button
+                onClick={() => window.location.reload()}
+                className="w-7 h-7 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-white" />
+              </button>
               {/* 返回按钮：椭圆形，点击返回账本首页 */}
               <button
                 onClick={() => setLocation("/ledger")}
