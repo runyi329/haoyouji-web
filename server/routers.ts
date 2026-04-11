@@ -16544,7 +16544,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     }));
   }),
 
-  // 上传图片到图库（仅管理员）
+  // 上传图片到图库（所有登录用户）
   idealightGalleryUpload: protectedProcedure
     .input(z.object({
       imageBase64: z.string(),
@@ -16554,12 +16554,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     .mutation(async ({ input, ctx }) => {
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      // 解码 base64
-      const base64Data = input.imageBase64.replace(/^data:[^;]+;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-      const ext = input.mimeType === 'image/png' ? 'png' : input.mimeType === 'image/gif' ? 'gif' : 'jpg';
-      const fileKey = `idealight-gallery/${Date.now()}-${nanoid(8)}.${ext}`;
-      const { url } = await storagePut(fileKey, buffer, input.mimeType);
+      // 使用腾讯云COS上传（自动压缩为WebP）
+      const { uploadImageToCOS } = await import('./cos-upload');
+      const url = await uploadImageToCOS(input.imageBase64, 'posters');
+      const fileKey = url.replace(/^https?:\/\/[^/]+\//, '');
       await dbConn.execute(
         `INSERT INTO idealight_gallery (url, file_key, title, created_by) VALUES (?, ?, ?, ?)`,
         [url, fileKey, input.title, ctx.user.openId]
