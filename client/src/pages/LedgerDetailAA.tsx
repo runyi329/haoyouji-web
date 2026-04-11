@@ -703,13 +703,18 @@ export default function LedgerDetailAA({
                   <Settings className="w-3.5 h-3.5 text-white" />
                 </button>
               )}
-              {/* 刷新按钮 */}
+              {/* 刷新按鈕 */}
               <button
                 onClick={() => window.location.reload()}
-                className="w-7 h-7 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.9)",
+                  color: "#D32F2F",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                  minWidth: "44px",
+                }}
               >
-                <RefreshCw className="w-3.5 h-3.5 text-white" />
+                <RefreshCw className="w-3.5 h-3.5" />
               </button>
               {/* 返回按钮：椭圆形，点击返回账本首页 */}
               <button
