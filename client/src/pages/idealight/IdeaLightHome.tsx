@@ -589,9 +589,7 @@ function GalleryTab() {
     e.target.value = '';
   }, [uploadMutation]);
 
-  // 判断是否是管理员（owner）
-  const isOwner = isAuthenticated && user?.openId === (window as any).__OWNER_OPEN_ID__;
-  // 通过尝试上传来判断，实际权限在后端检查
+  // 所有登录用户均可上传和删除（实际权限在后端检查）
   const canManage = isAuthenticated;
 
   return (

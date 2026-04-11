@@ -16552,10 +16552,6 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       title: z.string().default(''),
     }))
     .mutation(async ({ input, ctx }) => {
-      // 仅允许管理员（owner）上传
-      if (ctx.user.openId !== process.env.OWNER_OPEN_ID) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可上传图片' });
-      }
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       // 解码 base64
