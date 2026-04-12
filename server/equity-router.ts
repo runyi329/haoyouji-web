@@ -552,7 +552,7 @@ export const equityRouter = router({
       const networkBonus2 = Math.min(contactCount2 * 0.01, 1.0);
       const tagBonus2 = Math.min(Math.floor(tagCount2 / 10) * 0.01, 1.0);
       const referralBonus2 = Math.min(referralCount2 * 0.1, 1.0);
-      const r = Math.round((1.0 + networkBonus2 + tagBonus2 + referralBonus2) * 10000) / 10000;
+      const autoR = Math.round((1.0 + networkBonus2 + tagBonus2 + referralBonus2) * 10000) / 10000;
       // 实时计算资金权重
       const [[snRow]] = await (db as any).execute(
         'SELECT shareNo FROM shareholder_numbers WHERE userId = ? LIMIT 1',
@@ -580,7 +580,14 @@ export const equityRouter = router({
         }
       }
       const autoBonus2 = Math.round(rawBonus2 * capitalRatio2 * 10000) / 10000;
-      const c = Math.round((1.0 + autoBonus2) * 10000) / 10000;
+      const autoC = Math.round((1.0 + autoBonus2) * 10000) / 10000;
+      // 读取手动保存的权重（与 getWeightDetail 保持一致）
+      const [[weightRow2]] = await (db as any).execute(
+        'SELECT resource_weight, capital_weight FROM equity_weights WHERE user_id = ? LIMIT 1',
+        [input.userId]
+      ) as any;
+      const r = weightRow2 ? Number(weightRow2.resource_weight) : autoR;
+      const c = weightRow2 ? Number(weightRow2.capital_weight) : autoC;
       return {
         resourceWeight: r,
         capitalWeight: c,
