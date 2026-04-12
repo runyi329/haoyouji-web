@@ -16722,6 +16722,257 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const result = await db.execute(sql`SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.note, dr.created_at, u.name as user_name, u.username as user_username, lm.nickname as user_nickname FROM dividend_records dr LEFT JOIN users u ON u.id = dr.user_id LEFT JOIN ledger_members lm ON lm.ledgerId = dr.ledger_id AND lm.userId = dr.user_id WHERE dr.ledger_id = ${input.ledgerId} ORDER BY dr.created_at DESC`);
       return { records: (result as any)[0] as any[] };
     }),
+  // ============================================================
+  // A股全景仪表盘接口
+  // ============================================================
+
+  /** 生存分析：股价高于/低于上市首日的比例（直接从 ts_daily 实时计算） */
+  aiDashboardSurvival: publicProcedure
+    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        // 板块过滤条件（基于股票代码前缀）
+        const marketCond: Record<string, string> = {
+          all: '',
+          SH: "AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
+          SZ: "AND b.ts_code LIKE '0%'",
+          GEM: "AND b.ts_code LIKE '3%'",
+          STAR: "AND b.ts_code LIKE '688%'",
+        };
+        const mf = marketCond[input.market] || '';
+        // 优化SQL：用GROUP BY预聚合替代相关子查询，只扫描一遍 ts_daily
+        // 第一步：一次性获取每只股票的最早和最新交易日
+        // 第二步：再 JOIN 回去拿对应日期的开盘价和收盘价
+        const [rows] = await dbConn.execute(`
+          SELECT
+            b.ts_code,
+            SUBSTRING(b.list_date, 1, 4) AS list_year,
+            d_first.open AS first_open,
+            d_latest.close AS latest_close
+          FROM ts_stock_basic b
+          INNER JOIN (
+            SELECT ts_code, MIN(trade_date) AS min_date, MAX(trade_date) AS max_date
+            FROM ts_daily
+            GROUP BY ts_code
+          ) date_range ON date_range.ts_code = b.ts_code
+          INNER JOIN ts_daily d_first
+            ON d_first.ts_code = date_range.ts_code
+            AND d_first.trade_date = date_range.min_date
+            AND d_first.open > 0
+          INNER JOIN ts_daily d_latest
+            ON d_latest.ts_code = date_range.ts_code
+            AND d_latest.trade_date = date_range.max_date
+            AND d_latest.close > 0
+          WHERE b.list_status = 'L'
+          ${mf}
+        `) as any[];
+        const stocks = rows as any[];
+        const total = stocks.length;
+        let above = 0, below = 0, equal = 0;
+        const byYear: Record<string, { above: number; below: number; total: number }> = {};
+        const byEra: Record<string, { above: number; below: number; total: number }> = {};
+        for (const s of stocks) {
+          const ratio = s.first_open > 0 ? s.latest_close / s.first_open : 1;
+          let status: 'above' | 'below' | 'equal';
+          if (ratio > 1.001) { above++; status = 'above'; }
+          else if (ratio < 0.999) { below++; status = 'below'; }
+          else { equal++; status = 'equal'; }
+          // 按年份分组
+          const year = s.list_year || '未知';
+          if (!byYear[year]) byYear[year] = { above: 0, below: 0, total: 0 };
+          byYear[year].total++;
+          if (status === 'above') byYear[year].above++;
+          else if (status === 'below') byYear[year].below++;
+          // 按年代分组
+          const y = parseInt(year) || 0;
+          let era = '其他';
+          if (y > 0 && y < 2000) era = '2000年前';
+          else if (y >= 2000 && y < 2010) era = '2000-2009';
+          else if (y >= 2010 && y < 2015) era = '2010-2014';
+          else if (y >= 2015 && y < 2020) era = '2015-2019';
+          else if (y >= 2020) era = '2020至今';
+          if (!byEra[era]) byEra[era] = { above: 0, below: 0, total: 0 };
+          byEra[era].total++;
+          if (status === 'above') byEra[era].above++;
+          else if (status === 'below') byEra[era].below++;
+        }
+        return { total, above, below, equal, byEra, byYear, updatedAt: new Date().toISOString() };
+      } finally { await dbConn.end(); }
+    }),
+
+  /** 估值分布：全市场PE/PB/市值分布 */
+  aiDashboardValuation: publicProcedure
+    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        const [latestRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily_basic') as any[];
+        const latestDate = (latestRows as any[])[0]?.latest;
+        if (!latestDate) return { latestDate: null, peDistribution: [], pbDistribution: [], mvDistribution: [], breakNetCount: 0, totalCount: 0, negPeCount: 0 };
+        const marketFilter: Record<string, string> = {
+          all: '',
+          SH: "AND d.ts_code LIKE '6%'",
+          SZ: "AND d.ts_code LIKE '0%'",
+          GEM: "AND d.ts_code LIKE '3%'",
+          STAR: "AND d.ts_code LIKE '68%'",
+        };
+        const mf = marketFilter[input.market] || '';
+        const [rows] = await dbConn.execute(`SELECT d.ts_code, d.pe_ttm, d.pb, d.total_mv FROM ts_daily_basic d WHERE d.trade_date = ? ${mf}`, [latestDate]) as any[];
+        const data = rows as any[];
+        const totalCount = data.length;
+        const negPeCount = data.filter((r: any) => r.pe_ttm !== null && r.pe_ttm < 0).length;
+        const breakNetCount = data.filter((r: any) => r.pb !== null && r.pb < 1).length;
+        const peBuckets = [
+          { label: '0-10', count: 0 }, { label: '10-20', count: 0 }, { label: '20-30', count: 0 },
+          { label: '30-50', count: 0 }, { label: '50-100', count: 0 }, { label: '100+', count: 0 },
+        ];
+        const peLimits = [0, 10, 20, 30, 50, 100, Infinity];
+        for (const r of data) {
+          if (r.pe_ttm === null || r.pe_ttm <= 0) continue;
+          for (let i = 0; i < peBuckets.length; i++) {
+            if (r.pe_ttm >= peLimits[i] && r.pe_ttm < peLimits[i + 1]) { peBuckets[i].count++; break; }
+          }
+        }
+        const pbBuckets = [
+          { label: '<1', count: 0 }, { label: '1-2', count: 0 }, { label: '2-3', count: 0 },
+          { label: '3-5', count: 0 }, { label: '5+', count: 0 },
+        ];
+        const pbLimits = [0, 1, 2, 3, 5, Infinity];
+        for (const r of data) {
+          if (r.pb === null || r.pb <= 0) continue;
+          for (let i = 0; i < pbBuckets.length; i++) {
+            if (r.pb >= pbLimits[i] && r.pb < pbLimits[i + 1]) { pbBuckets[i].count++; break; }
+          }
+        }
+        const mvBuckets = [
+          { label: '<10亿', count: 0 }, { label: '10-50亿', count: 0 }, { label: '50-100亿', count: 0 },
+          { label: '100-500亿', count: 0 }, { label: '500亿+', count: 0 },
+        ];
+        const mvLimits = [0, 100000, 500000, 1000000, 5000000, Infinity];
+        for (const r of data) {
+          if (r.total_mv === null) continue;
+          for (let i = 0; i < mvBuckets.length; i++) {
+            if (r.total_mv >= mvLimits[i] && r.total_mv < mvLimits[i + 1]) { mvBuckets[i].count++; break; }
+          }
+        }
+        return { latestDate, totalCount, negPeCount, breakNetCount, peDistribution: peBuckets, pbDistribution: pbBuckets, mvDistribution: mvBuckets };
+      } finally { await dbConn.end(); }
+    }),
+
+  /** 涨跌统计：今日/近期涨跌分布 */
+  aiDashboardRisefall: publicProcedure
+    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        const [latestRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
+        const latestDate = (latestRows as any[])[0]?.latest;
+        if (!latestDate) return { latestDate: null, today: null, periods: [] };
+        const marketFilter: Record<string, string> = {
+          all: '',
+          SH: "AND ts_code LIKE '6%'",
+          SZ: "AND ts_code LIKE '0%'",
+          GEM: "AND ts_code LIKE '3%'",
+          STAR: "AND ts_code LIKE '68%'",
+        };
+        const mf = marketFilter[input.market] || '';
+        const [todayRows] = await dbConn.execute(`
+          SELECT COUNT(*) AS total,
+            SUM(CASE WHEN pct_chg > 0 THEN 1 ELSE 0 END) AS up,
+            SUM(CASE WHEN pct_chg < 0 THEN 1 ELSE 0 END) AS down,
+            SUM(CASE WHEN pct_chg = 0 THEN 1 ELSE 0 END) AS flat,
+            SUM(CASE WHEN pct_chg >= 9.9 THEN 1 ELSE 0 END) AS limit_up,
+            SUM(CASE WHEN pct_chg <= -9.9 THEN 1 ELSE 0 END) AS limit_down,
+            MAX(pct_chg) AS max_rise, MIN(pct_chg) AS max_fall
+          FROM ts_daily WHERE trade_date = ? ${mf}
+        `, [latestDate]) as any[];
+        const today = (todayRows as any[])[0];
+        const [tradeDates] = await dbConn.execute('SELECT DISTINCT trade_date FROM ts_daily ORDER BY trade_date DESC LIMIT 61') as any[];
+        const dates = (tradeDates as any[]).map((r: any) => r.trade_date);
+        const periodResults = [];
+        for (const p of [{ label: '近5日', days: 5 }, { label: '近20日', days: 20 }, { label: '近60日', days: 60 }]) {
+          const periodDates = dates.slice(0, p.days);
+          if (periodDates.length < 2) continue;
+          const startDate = periodDates[periodDates.length - 1];
+          const endDate = periodDates[0];
+          const [pRows] = await dbConn.execute(`
+            SELECT (d_end.close - d_start.close) / d_start.close * 100 AS pct
+            FROM ts_stock_basic b
+            INNER JOIN ts_daily d_start ON d_start.ts_code = b.ts_code AND d_start.trade_date = ?
+            INNER JOIN ts_daily d_end ON d_end.ts_code = b.ts_code AND d_end.trade_date = ?
+            WHERE b.list_status = 'L' ${mf} AND d_start.close > 0
+          `, [startDate, endDate]) as any[];
+          const pData = pRows as any[];
+          const buckets = [
+            { label: '<-10%', count: 0 }, { label: '-10~-5%', count: 0 }, { label: '-5~0%', count: 0 },
+            { label: '0~5%', count: 0 }, { label: '5~10%', count: 0 }, { label: '>10%', count: 0 },
+          ];
+          for (const r of pData) {
+            const v = parseFloat(r.pct);
+            if (v < -10) buckets[0].count++;
+            else if (v < -5) buckets[1].count++;
+            else if (v < 0) buckets[2].count++;
+            else if (v < 5) buckets[3].count++;
+            else if (v < 10) buckets[4].count++;
+            else buckets[5].count++;
+          }
+          periodResults.push({ label: p.label, total: pData.length, distribution: buckets });
+        }
+        return { latestDate, today, periods: periodResults };
+      } finally { await dbConn.end(); }
+    }),
+
+  /** 宏观数据：M2/CPI/LPR/北向资金/指数趋势 */
+  aiDashboardMacro: publicProcedure
+    .query(async () => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        const [m2Rows] = await dbConn.execute('SELECT month, m2, m2_yoy FROM ts_cn_m ORDER BY month DESC LIMIT 24') as any[];
+        const [cpiRows] = await dbConn.execute('SELECT month, nt_val, nt_yoy FROM ts_cn_cpi ORDER BY month DESC LIMIT 24') as any[];
+        const [lprRows] = await dbConn.execute('SELECT date, y1, y5 FROM ts_shibor_lpr ORDER BY date DESC LIMIT 24') as any[];
+        const [hsgtRows] = await dbConn.execute('SELECT trade_date, north_money, south_money FROM ts_moneyflow_hsgt ORDER BY trade_date DESC LIMIT 60') as any[];
+        const [indexRows] = await dbConn.execute("SELECT trade_date, close, pct_chg FROM ts_index_daily WHERE ts_code = '000300.SH' ORDER BY trade_date DESC LIMIT 60") as any[];
+        return {
+          m2: (m2Rows as any[]).reverse(),
+          cpi: (cpiRows as any[]).reverse(),
+          lpr: (lprRows as any[]).reverse(),
+          northMoney: (hsgtRows as any[]).reverse(),
+          hs300: (indexRows as any[]).reverse(),
+        };
+      } finally { await dbConn.end(); }
+    }),
+
+  /** 各板块股票数量（用于Tab标签显示，从 ts_stock_basic 实时计算） */
+  aiDashboardMarketCount: publicProcedure
+    .query(async () => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return { all: 0, SH: 0, SZ: 0, GEM: 0, STAR: 0 };
+      try {
+        const [rows] = await dbConn.execute(
+          `SELECT
+            COUNT(*) AS all_count,
+            SUM(CASE WHEN ts_code LIKE '6%' AND ts_code NOT LIKE '688%' THEN 1 ELSE 0 END) AS sh_count,
+            SUM(CASE WHEN ts_code LIKE '0%' AND ts_code NOT LIKE '3%' THEN 1 ELSE 0 END) AS sz_count,
+            SUM(CASE WHEN ts_code LIKE '3%' THEN 1 ELSE 0 END) AS gem_count,
+            SUM(CASE WHEN ts_code LIKE '688%' THEN 1 ELSE 0 END) AS star_count
+          FROM ts_stock_basic
+          WHERE list_status = 'L'`
+        ) as any;
+        const r = (rows as any[])[0];
+        return {
+          all: Number(r.all_count) || 0,
+          SH: Number(r.sh_count) || 0,
+          SZ: Number(r.sz_count) || 0,
+          GEM: Number(r.gem_count) || 0,
+          STAR: Number(r.star_count) || 0,
+        };
+      } finally { await dbConn.end(); }
+    }),
 
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
@@ -17217,257 +17468,6 @@ export const adminFeatureRouter = router({
       return { success: true };
     }),
 
-  // ============================================================
-  // A股全景仪表盘接口
-  // ============================================================
-
-  /** 生存分析：股价高于/低于上市首日的比例（直接从 ts_daily 实时计算） */
-  aiDashboardSurvival: publicProcedure
-    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
-    .query(async ({ input }) => {
-      const dbConn = await getDbConnection();
-      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      try {
-        // 板块过滤条件（基于股票代码前缀）
-        const marketCond: Record<string, string> = {
-          all: '',
-          SH: "AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
-          SZ: "AND b.ts_code LIKE '0%'",
-          GEM: "AND b.ts_code LIKE '3%'",
-          STAR: "AND b.ts_code LIKE '688%'",
-        };
-        const mf = marketCond[input.market] || '';
-        // 优化SQL：用GROUP BY预聚合替代相关子查询，只扫描一遍 ts_daily
-        // 第一步：一次性获取每只股票的最早和最新交易日
-        // 第二步：再 JOIN 回去拿对应日期的开盘价和收盘价
-        const [rows] = await dbConn.execute(`
-          SELECT
-            b.ts_code,
-            SUBSTRING(b.list_date, 1, 4) AS list_year,
-            d_first.open AS first_open,
-            d_latest.close AS latest_close
-          FROM ts_stock_basic b
-          INNER JOIN (
-            SELECT ts_code, MIN(trade_date) AS min_date, MAX(trade_date) AS max_date
-            FROM ts_daily
-            GROUP BY ts_code
-          ) date_range ON date_range.ts_code = b.ts_code
-          INNER JOIN ts_daily d_first
-            ON d_first.ts_code = date_range.ts_code
-            AND d_first.trade_date = date_range.min_date
-            AND d_first.open > 0
-          INNER JOIN ts_daily d_latest
-            ON d_latest.ts_code = date_range.ts_code
-            AND d_latest.trade_date = date_range.max_date
-            AND d_latest.close > 0
-          WHERE b.list_status = 'L'
-          ${mf}
-        `) as any[];
-        const stocks = rows as any[];
-        const total = stocks.length;
-        let above = 0, below = 0, equal = 0;
-        const byYear: Record<string, { above: number; below: number; total: number }> = {};
-        const byEra: Record<string, { above: number; below: number; total: number }> = {};
-        for (const s of stocks) {
-          const ratio = s.first_open > 0 ? s.latest_close / s.first_open : 1;
-          let status: 'above' | 'below' | 'equal';
-          if (ratio > 1.001) { above++; status = 'above'; }
-          else if (ratio < 0.999) { below++; status = 'below'; }
-          else { equal++; status = 'equal'; }
-          // 按年份分组
-          const year = s.list_year || '未知';
-          if (!byYear[year]) byYear[year] = { above: 0, below: 0, total: 0 };
-          byYear[year].total++;
-          if (status === 'above') byYear[year].above++;
-          else if (status === 'below') byYear[year].below++;
-          // 按年代分组
-          const y = parseInt(year) || 0;
-          let era = '其他';
-          if (y > 0 && y < 2000) era = '2000年前';
-          else if (y >= 2000 && y < 2010) era = '2000-2009';
-          else if (y >= 2010 && y < 2015) era = '2010-2014';
-          else if (y >= 2015 && y < 2020) era = '2015-2019';
-          else if (y >= 2020) era = '2020至今';
-          if (!byEra[era]) byEra[era] = { above: 0, below: 0, total: 0 };
-          byEra[era].total++;
-          if (status === 'above') byEra[era].above++;
-          else if (status === 'below') byEra[era].below++;
-        }
-        return { total, above, below, equal, byEra, byYear, updatedAt: new Date().toISOString() };
-      } finally { await dbConn.end(); }
-    }),
-
-  /** 估值分布：全市场PE/PB/市值分布 */
-  aiDashboardValuation: publicProcedure
-    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
-    .query(async ({ input }) => {
-      const dbConn = await getDbConnection();
-      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      try {
-        const [latestRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily_basic') as any[];
-        const latestDate = (latestRows as any[])[0]?.latest;
-        if (!latestDate) return { latestDate: null, peDistribution: [], pbDistribution: [], mvDistribution: [], breakNetCount: 0, totalCount: 0, negPeCount: 0 };
-        const marketFilter: Record<string, string> = {
-          all: '',
-          SH: "AND d.ts_code LIKE '6%'",
-          SZ: "AND d.ts_code LIKE '0%'",
-          GEM: "AND d.ts_code LIKE '3%'",
-          STAR: "AND d.ts_code LIKE '68%'",
-        };
-        const mf = marketFilter[input.market] || '';
-        const [rows] = await dbConn.execute(`SELECT d.ts_code, d.pe_ttm, d.pb, d.total_mv FROM ts_daily_basic d WHERE d.trade_date = ? ${mf}`, [latestDate]) as any[];
-        const data = rows as any[];
-        const totalCount = data.length;
-        const negPeCount = data.filter((r: any) => r.pe_ttm !== null && r.pe_ttm < 0).length;
-        const breakNetCount = data.filter((r: any) => r.pb !== null && r.pb < 1).length;
-        const peBuckets = [
-          { label: '0-10', count: 0 }, { label: '10-20', count: 0 }, { label: '20-30', count: 0 },
-          { label: '30-50', count: 0 }, { label: '50-100', count: 0 }, { label: '100+', count: 0 },
-        ];
-        const peLimits = [0, 10, 20, 30, 50, 100, Infinity];
-        for (const r of data) {
-          if (r.pe_ttm === null || r.pe_ttm <= 0) continue;
-          for (let i = 0; i < peBuckets.length; i++) {
-            if (r.pe_ttm >= peLimits[i] && r.pe_ttm < peLimits[i + 1]) { peBuckets[i].count++; break; }
-          }
-        }
-        const pbBuckets = [
-          { label: '<1', count: 0 }, { label: '1-2', count: 0 }, { label: '2-3', count: 0 },
-          { label: '3-5', count: 0 }, { label: '5+', count: 0 },
-        ];
-        const pbLimits = [0, 1, 2, 3, 5, Infinity];
-        for (const r of data) {
-          if (r.pb === null || r.pb <= 0) continue;
-          for (let i = 0; i < pbBuckets.length; i++) {
-            if (r.pb >= pbLimits[i] && r.pb < pbLimits[i + 1]) { pbBuckets[i].count++; break; }
-          }
-        }
-        const mvBuckets = [
-          { label: '<10亿', count: 0 }, { label: '10-50亿', count: 0 }, { label: '50-100亿', count: 0 },
-          { label: '100-500亿', count: 0 }, { label: '500亿+', count: 0 },
-        ];
-        const mvLimits = [0, 100000, 500000, 1000000, 5000000, Infinity];
-        for (const r of data) {
-          if (r.total_mv === null) continue;
-          for (let i = 0; i < mvBuckets.length; i++) {
-            if (r.total_mv >= mvLimits[i] && r.total_mv < mvLimits[i + 1]) { mvBuckets[i].count++; break; }
-          }
-        }
-        return { latestDate, totalCount, negPeCount, breakNetCount, peDistribution: peBuckets, pbDistribution: pbBuckets, mvDistribution: mvBuckets };
-      } finally { await dbConn.end(); }
-    }),
-
-  /** 涨跌统计：今日/近期涨跌分布 */
-  aiDashboardRisefall: publicProcedure
-    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
-    .query(async ({ input }) => {
-      const dbConn = await getDbConnection();
-      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      try {
-        const [latestRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
-        const latestDate = (latestRows as any[])[0]?.latest;
-        if (!latestDate) return { latestDate: null, today: null, periods: [] };
-        const marketFilter: Record<string, string> = {
-          all: '',
-          SH: "AND ts_code LIKE '6%'",
-          SZ: "AND ts_code LIKE '0%'",
-          GEM: "AND ts_code LIKE '3%'",
-          STAR: "AND ts_code LIKE '68%'",
-        };
-        const mf = marketFilter[input.market] || '';
-        const [todayRows] = await dbConn.execute(`
-          SELECT COUNT(*) AS total,
-            SUM(CASE WHEN pct_chg > 0 THEN 1 ELSE 0 END) AS up,
-            SUM(CASE WHEN pct_chg < 0 THEN 1 ELSE 0 END) AS down,
-            SUM(CASE WHEN pct_chg = 0 THEN 1 ELSE 0 END) AS flat,
-            SUM(CASE WHEN pct_chg >= 9.9 THEN 1 ELSE 0 END) AS limit_up,
-            SUM(CASE WHEN pct_chg <= -9.9 THEN 1 ELSE 0 END) AS limit_down,
-            MAX(pct_chg) AS max_rise, MIN(pct_chg) AS max_fall
-          FROM ts_daily WHERE trade_date = ? ${mf}
-        `, [latestDate]) as any[];
-        const today = (todayRows as any[])[0];
-        const [tradeDates] = await dbConn.execute('SELECT DISTINCT trade_date FROM ts_daily ORDER BY trade_date DESC LIMIT 61') as any[];
-        const dates = (tradeDates as any[]).map((r: any) => r.trade_date);
-        const periodResults = [];
-        for (const p of [{ label: '近5日', days: 5 }, { label: '近20日', days: 20 }, { label: '近60日', days: 60 }]) {
-          const periodDates = dates.slice(0, p.days);
-          if (periodDates.length < 2) continue;
-          const startDate = periodDates[periodDates.length - 1];
-          const endDate = periodDates[0];
-          const [pRows] = await dbConn.execute(`
-            SELECT (d_end.close - d_start.close) / d_start.close * 100 AS pct
-            FROM ts_stock_basic b
-            INNER JOIN ts_daily d_start ON d_start.ts_code = b.ts_code AND d_start.trade_date = ?
-            INNER JOIN ts_daily d_end ON d_end.ts_code = b.ts_code AND d_end.trade_date = ?
-            WHERE b.list_status = 'L' ${mf} AND d_start.close > 0
-          `, [startDate, endDate]) as any[];
-          const pData = pRows as any[];
-          const buckets = [
-            { label: '<-10%', count: 0 }, { label: '-10~-5%', count: 0 }, { label: '-5~0%', count: 0 },
-            { label: '0~5%', count: 0 }, { label: '5~10%', count: 0 }, { label: '>10%', count: 0 },
-          ];
-          for (const r of pData) {
-            const v = parseFloat(r.pct);
-            if (v < -10) buckets[0].count++;
-            else if (v < -5) buckets[1].count++;
-            else if (v < 0) buckets[2].count++;
-            else if (v < 5) buckets[3].count++;
-            else if (v < 10) buckets[4].count++;
-            else buckets[5].count++;
-          }
-          periodResults.push({ label: p.label, total: pData.length, distribution: buckets });
-        }
-        return { latestDate, today, periods: periodResults };
-      } finally { await dbConn.end(); }
-    }),
-
-  /** 宏观数据：M2/CPI/LPR/北向资金/指数趋势 */
-  aiDashboardMacro: publicProcedure
-    .query(async () => {
-      const dbConn = await getDbConnection();
-      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      try {
-        const [m2Rows] = await dbConn.execute('SELECT month, m2, m2_yoy FROM ts_cn_m ORDER BY month DESC LIMIT 24') as any[];
-        const [cpiRows] = await dbConn.execute('SELECT month, nt_val, nt_yoy FROM ts_cn_cpi ORDER BY month DESC LIMIT 24') as any[];
-        const [lprRows] = await dbConn.execute('SELECT date, y1, y5 FROM ts_shibor_lpr ORDER BY date DESC LIMIT 24') as any[];
-        const [hsgtRows] = await dbConn.execute('SELECT trade_date, north_money, south_money FROM ts_moneyflow_hsgt ORDER BY trade_date DESC LIMIT 60') as any[];
-        const [indexRows] = await dbConn.execute("SELECT trade_date, close, pct_chg FROM ts_index_daily WHERE ts_code = '000300.SH' ORDER BY trade_date DESC LIMIT 60") as any[];
-        return {
-          m2: (m2Rows as any[]).reverse(),
-          cpi: (cpiRows as any[]).reverse(),
-          lpr: (lprRows as any[]).reverse(),
-          northMoney: (hsgtRows as any[]).reverse(),
-          hs300: (indexRows as any[]).reverse(),
-        };
-      } finally { await dbConn.end(); }
-    }),
-
-  /** 各板块股票数量（用于Tab标签显示，从 ts_stock_basic 实时计算） */
-  aiDashboardMarketCount: publicProcedure
-    .query(async () => {
-      const dbConn = await getDbConnection();
-      if (!dbConn) return { all: 0, SH: 0, SZ: 0, GEM: 0, STAR: 0 };
-      try {
-        const [rows] = await dbConn.execute(
-          `SELECT
-            COUNT(*) AS all_count,
-            SUM(CASE WHEN ts_code LIKE '6%' AND ts_code NOT LIKE '688%' THEN 1 ELSE 0 END) AS sh_count,
-            SUM(CASE WHEN ts_code LIKE '0%' AND ts_code NOT LIKE '3%' THEN 1 ELSE 0 END) AS sz_count,
-            SUM(CASE WHEN ts_code LIKE '3%' THEN 1 ELSE 0 END) AS gem_count,
-            SUM(CASE WHEN ts_code LIKE '688%' THEN 1 ELSE 0 END) AS star_count
-          FROM ts_stock_basic
-          WHERE list_status = 'L'`
-        ) as any;
-        const r = (rows as any[])[0];
-        return {
-          all: Number(r.all_count) || 0,
-          SH: Number(r.sh_count) || 0,
-          SZ: Number(r.sz_count) || 0,
-          GEM: Number(r.gem_count) || 0,
-          STAR: Number(r.star_count) || 0,
-        };
-      } finally { await dbConn.end(); }
-    }),
 });
 export type AppRouter = typeof appRouter;
 
