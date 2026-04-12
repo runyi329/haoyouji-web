@@ -17067,6 +17067,53 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         };
       } finally { /* pool auto-manages connections */ }
     }),
+  /** 个股详情：基本信息 + 全生命周期涨跌天数 */
+  aiStockDetail: publicProcedure
+    .input(z.object({ tsCode: z.string() }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        const [rows] = await dbConn.execute(
+          `SELECT
+            b.ts_code,
+            b.name,
+            b.list_status,
+            b.list_date,
+            b.delist_date,
+            b.exchange,
+            b.industry,
+            COALESCE(l.up_days, 0) AS up_days,
+            COALESCE(l.down_days, 0) AS down_days,
+            COALESCE(l.flat_days, 0) AS flat_days,
+            COALESCE(l.total_days, 0) AS total_days,
+            COALESCE(l.up_rate, 0) AS up_rate,
+            l.updated_at
+          FROM ts_stock_basic b
+          LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
+          WHERE b.ts_code = ?
+          LIMIT 1`,
+          [input.tsCode]
+        ) as any[];
+        const r = (rows as any[])[0];
+        if (!r) throw new TRPCError({ code: 'NOT_FOUND', message: '股票不存在' });
+        return {
+          tsCode: r.ts_code as string,
+          name: r.name as string,
+          listStatus: r.list_status as string,
+          listDate: r.list_date as string | null,
+          delistDate: r.delist_date as string | null,
+          exchange: r.exchange as string,
+          industry: r.industry as string | null,
+          upDays: Number(r.up_days),
+          downDays: Number(r.down_days),
+          flatDays: Number(r.flat_days),
+          totalDays: Number(r.total_days),
+          upRate: String(Number(r.up_rate).toFixed(2)),
+          updatedAt: r.updated_at ? String(r.updated_at) : null,
+        };
+      } finally { /* pool auto-manages connections */ }
+    }),
 });;
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
