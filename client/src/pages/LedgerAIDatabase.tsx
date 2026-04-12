@@ -273,7 +273,7 @@ function EraBarChart({
   return (
     <div style={{ width: '100%' }}>
       {/* X轴刻度行 */}
-      <div className="flex mb-1" style={{ paddingLeft: LABEL_W, paddingRight: PCT_W }}>
+      <div className="flex mb-1" style={{ paddingLeft: LABEL_W }}>
         {[0, 25, 50, 75, 100].map(v => (
           <div key={v} className="flex-1 text-center" style={{ fontSize: 8, color: MUTED, lineHeight: 1 }}>
             {v === 0 ? '' : `${v}%`}
@@ -282,8 +282,9 @@ function EraBarChart({
       </div>
       {/* 柱子行 */}
       {data.map((row, i) => {
-        const targetPct = row["低于首日"];
         const curPct = displayPcts[i] ?? 0;
+        // 防止数字超出轨道右边界：当进度接近100%时数字改为显示在柱子内部
+        const nearEnd = curPct > 82;
         return (
           <div
             key={row.name}
@@ -297,7 +298,7 @@ function EraBarChart({
             >
               {row.name}
             </div>
-            {/* 柱子轨道区 */}
+            {/* 柱子轨道区（包含跟随数字） */}
             <div
               className="relative flex-1"
               style={{ height: BAR_H, borderRadius: 2, background: '#E8E0D8' }}
@@ -321,27 +322,43 @@ function EraBarChart({
                   boxShadow: '0 1px 3px rgba(0,176,80,0.25)',
                 }}
               />
-            </div>
-            {/* 百分比数字 */}
-            <div
-              className="flex-shrink-0 text-right"
-              style={{
-                width: PCT_W,
-                fontSize: 9,
-                fontWeight: 600,
-                color: curPct > 0 ? STOCK_GREEN : MUTED,
-                lineHeight: `${ROW_H}px`,
-                paddingLeft: 4,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              {transitioning ? '0.0' : curPct.toFixed(1)}%
+              {/* 百分比数字：跟随柱子右端移动 */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  // 接近100%时显示在柱子内部（白字），其他时显示在右侧（绿字）
+                  ...(nearEnd
+                    ? {
+                        right: `${100 - curPct}%`,
+                        paddingRight: 3,
+                        color: '#fff',
+                        textShadow: '0 0 3px rgba(0,0,0,0.3)',
+                      }
+                    : {
+                        left: transitioning ? '0%' : `${curPct}%`,
+                        paddingLeft: 3,
+                        color: curPct > 0 ? STOCK_GREEN : 'transparent',
+                      }
+                  ),
+                  fontSize: 9,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  whiteSpace: 'nowrap',
+                  fontVariantNumeric: 'tabular-nums',
+                  transition: transitioning ? 'none' : undefined,
+                  pointerEvents: 'none',
+                }}
+              >
+                {transitioning ? '' : `${curPct.toFixed(1)}%`}
+              </div>
             </div>
           </div>
         );
       })}
       {/* X轴底线 */}
-      <div style={{ marginLeft: LABEL_W, marginRight: PCT_W, height: 1, background: BORDER, marginTop: 2 }} />
+      <div style={{ marginLeft: LABEL_W, height: 1, background: BORDER, marginTop: 2 }} />
     </div>
   );
 }
