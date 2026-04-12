@@ -508,22 +508,23 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
               <span className="text-[11px]" style={{ color: MUTED }}>&lt;50% 超过半数亏损</span>
             </div>
           </div>
-          {/* 横向可滚动区域，每行高度 18px，35年共 630px */}
-          <ResponsiveContainer width="100%" height={eraData.length * 18 + 30}>
+          {/* 每行高度 14px，35年共 490px，强制显示所有年份 */}
+          <ResponsiveContainer width="100%" height={eraData.length * 14 + 24}>
             <BarChart
               data={eraData}
               layout="vertical"
               margin={{ top: 0, right: 36, left: 0, bottom: 0 }}
-              barSize={10}
+              barSize={8}
             >
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
               <YAxis
                 dataKey="name"
                 type="category"
                 width={36}
-                tick={{ fill: MUTED, fontSize: 10 }}
+                tick={{ fill: MUTED, fontSize: 9 }}
                 axisLine={false}
                 tickLine={false}
+                interval={0}
               />
               <XAxis
                 type="number"
