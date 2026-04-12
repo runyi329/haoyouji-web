@@ -1,0 +1,49 @@
+name: 调试 AI数据库接口错误
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 配置 SSH 密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 查看服务器应用日志和错误
+        run: |
+          ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            echo "=== PM2 进程状态 ==="
+            pm2 list 2>/dev/null || echo "PM2 未运行"
+
+            echo ""
+            echo "=== 最近50行应用错误日志 ==="
+            pm2 logs --lines 50 --nostream 2>/dev/null | grep -i "error\|Error\|survival\|aiDashboard" | tail -50 || true
+
+            echo ""
+            echo "=== 查找应用日志文件 ==="
+            find /var/www /root /home -name "*.log" -newer /tmp 2>/dev/null | head -10 || true
+
+            echo ""
+            echo "=== 测试 aiDashboardSurvival 接口 ==="
+            curl -s -X POST http://localhost:3000/api/trpc/aiDashboardSurvival \
+              -H "Content-Type: application/json" \
+              -d '{"json":null}' \
+              --max-time 30 2>&1 | head -200 || echo "接口请求失败"
+
+            echo ""
+            echo "=== ts_daily 表行数 ==="
+            mysql -u root -e "SELECT COUNT(*) as total FROM ts_daily;" haoyouji 2>/dev/null || \
+            mysql -u root -e "SHOW DATABASES;" 2>/dev/null | head -20 || \
+            echo "无法直接连接MySQL"
+
+            echo ""
+            echo "=== ts_daily 索引状态 ==="
+            mysql -u root -e "SHOW INDEX FROM ts_daily;" haoyouji 2>/dev/null || echo "无法查询索引"
+          EOF
