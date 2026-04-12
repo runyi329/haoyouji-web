@@ -453,7 +453,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   // 按年份降序排列（最新年在上方）
   const eraData = [...years].reverse().map(y => ({
     name: y,
-    胜率: parseFloat(pct(byYearSrc[y].above, byYearSrc[y].total)),
+    低于首日: parseFloat(pct(byYearSrc[y].below, byYearSrc[y].total)),
     total: byYearSrc[y].total,
   }));
 
@@ -613,7 +613,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 
         {/* 按年份横向柱状图（年份在左，胜率向右延伸） */}
         <div className="px-3 pt-3 pb-2">
-          <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>按上市年份</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>按上市年份（低于首日开盘价占比）</p>
           {/* 每行高度 14px，强制显示所有年份 */}
           <ResponsiveContainer width="100%" height={eraData.length * 14 + 24}>
             <BarChart
@@ -644,11 +644,11 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
                 contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 12, boxShadow: CARD_SHADOW }}
                 formatter={(v: any, _: any, props: any) => [
                   `${v}% （${props.payload?.total ?? ''}只上市）`,
-                  "高于首日价占比"
+                  "低于首日价占比"
                 ]}
               />
               <ReferenceLine x={50} stroke="#aaa" strokeDasharray="4 3" />
-              <Bar dataKey="胜率" radius={[0, 3, 3, 0]} fill="#B0B0B0" fillOpacity={0.85} label={{ position: 'right', formatter: (v: any) => `${v}%`, fill: TEXT, fontSize: 9, fontWeight: 600 }} isAnimationActive={true} />
+              <Bar dataKey="低于首日" radius={[0, 3, 3, 0]} fill="#B0B0B0" fillOpacity={0.85} label={{ position: 'right', formatter: (v: any) => `${v}%`, fill: TEXT, fontSize: 9, fontWeight: 600 }} isAnimationActive={true} />
             </BarChart>
           </ResponsiveContainer>
         </div>
