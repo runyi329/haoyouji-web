@@ -289,6 +289,7 @@ function useCountUp(target: number, duration: number, active: boolean) {
 function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const [market, setMarket] = useState<Market>("all");
   const [animated, setAnimated] = useState(false);
+  const [transitioning, setTransitioning] = useState(false); // true时禁用transition，让宽度瞬间归零
 
   // 使用静态数据（来源：AKShare/东方财富，统计截至2026-04-10）
   const data = SURVIVAL_STATIC[market];
@@ -452,11 +453,16 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const abovePct = parseFloat(pct(displayData.above, displayData.total));
   const belowPct = parseFloat(pct(displayData.below, displayData.total));
 
-  // 切换 Tab 时重播动画
+  // 切换 Tab 时重播动画：先禁用transition让宽度瞬间归零，再延迟触发展开
   useEffect(() => {
     setAnimated(false);
-    const t = setTimeout(() => setAnimated(true), 80);
-    return () => clearTimeout(t);
+    setTransitioning(true); // 禁用transition，宽度即刻归零
+    const t1 = setTimeout(() => {
+      setTransitioning(false); // 恢复transition
+      const t2 = setTimeout(() => setAnimated(true), 30); // 再触发展开
+      return () => clearTimeout(t2);
+    }, 50);
+    return () => clearTimeout(t1);
   }, [market]);
 
   // 数字滚动计数（与色条展开同步，0.85s）
@@ -543,7 +549,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
             style={{
               width: animated ? `${abovePct}%` : "0%",
               background: GRAD_UP,
-              transition: "width 0.85s cubic-bezier(0.4,0,0.2,1)",
+              transition: transitioning ? "none" : "width 0.85s cubic-bezier(0.4,0,0.2,1)",
               boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.25)",
             }}
           >
@@ -555,7 +561,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
             style={{
               width: animated ? `${belowPct}%` : "0%",
               background: GRAD_DOWN,
-              transition: "width 0.85s cubic-bezier(0.4,0,0.2,1)",
+              transition: transitioning ? "none" : "width 0.85s cubic-bezier(0.4,0,0.2,1)",
               boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.18)",
             }}
           >
