@@ -599,6 +599,7 @@ export default function LedgerAIDatabase() {
   const ledgerId = params?.id ? parseInt(params.id) : 0;
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const utils = trpc.useUtils();
 
   // 各板块数量（全局共享，只请求一次）
   const { data: countData } = trpc.aiDashboardMarketCount.useQuery();
@@ -610,11 +611,20 @@ export default function LedgerAIDatabase() {
     STAR: countData?.STAR ?? 0,
   };
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
     setRefreshing(true);
+    // 强制使所有缓存失效，重新从服务器拉取最新数据
+    await Promise.all([
+      utils.aiDashboardSurvival.invalidate(),
+      utils.aiDashboardValuation.invalidate(),
+      utils.aiDashboardRisefall.invalidate(),
+      utils.aiDashboardMacro.invalidate(),
+      utils.aiDashboardMarketCount.invalidate(),
+    ]);
     setRefreshKey(k => k + 1);
-    setTimeout(() => setRefreshing(false), 800);
-  }, []);
+    setTimeout(() => setRefreshing(false), 1200);
+  }, [utils, refreshing]);
 
   return (
     <div className="h-screen flex flex-col" style={{ background: BG }}>
