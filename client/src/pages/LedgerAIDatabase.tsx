@@ -75,7 +75,7 @@ function SectionTitle({ title, sub, extra }: { title: string; sub: string; extra
       <div className="flex-1 flex items-start justify-between">
         <div>
           <p className="text-base font-bold" style={{ color: TEXT }}>{title}</p>
-          <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>{sub}</p>
+          <p className="text-[12px] mt-0.5 whitespace-nowrap" style={{ color: MUTED }}>{sub}</p>
         </div>
         {extra && <div className="flex-shrink-0 ml-2 mt-0.5">{extra}</div>}
       </div>
