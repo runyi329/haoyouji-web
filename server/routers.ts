@@ -17131,6 +17131,92 @@ export const adminFeatureRouter = router({
       }
     }),
 
+  // ==================== 汉明会员图库 ====================
+  // 获取汉明的下线会员列表（通过邀请关系）
+  hanmingGetMembers: publicProcedure.query(async () => {
+    const HANMING_USER_ID = 4957321;
+    const dbConn = await getDbConnection();
+    if (!dbConn) return [];
+    // 查询汉明直接邀请的下线（invited_by_user_id = 4957321）
+    const [rows] = await dbConn.execute(
+      `SELECT u.id, u.username, u.name, u.real_name, u.avatar,
+        (SELECT COUNT(*) FROM hanming_member_gallery g WHERE g.owner_user_id = u.id) AS gallery_count
+       FROM users u
+       WHERE u.invited_by_user_id = ?
+       ORDER BY u.createdAt ASC`,
+      [HANMING_USER_ID]
+    ) as any;
+    return (rows as any[]).map((r: any) => ({
+      id: r.id as number,
+      username: r.username as string,
+      displayName: (r.name || r.real_name || r.username) as string,
+      avatar: r.avatar as string | null,
+      galleryCount: Number(r.gallery_count),
+    }));
+  }),
+
+  // 获取某个会员的图库
+  hanmingGetMemberGallery: publicProcedure
+    .input(z.object({ memberId: z.number() }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return [];
+      const [rows] = await dbConn.execute(
+        `SELECT id, image_url, title, created_at FROM hanming_member_gallery
+         WHERE owner_user_id = ? ORDER BY sort_order ASC, id ASC`,
+        [input.memberId]
+      ) as any;
+      return (rows as any[]).map((r: any) => ({
+        id: r.id as number,
+        imageUrl: r.image_url as string,
+        title: r.title as string | null,
+        createdAt: r.created_at as Date,
+      }));
+    }),
+
+  // 上传图片到某个会员的图库（登录用户可操作）
+  hanmingUploadMemberGallery: protectedProcedure
+    .input(z.object({
+      memberId: z.number(),
+      imageBase64: z.string(),
+      mimeType: z.string().default('image/jpeg'),
+      title: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      // 上传到COS（使用posters文件夹，自动压缩WebP）
+      const { uploadImageToCOS } = await import('./cos-upload');
+      const url = await uploadImageToCOS(input.imageBase64, 'posters');
+      const fileKey = url.replace(/^https?:\/\/[^/]+\//, '');
+      await dbConn.execute(
+        `INSERT INTO hanming_member_gallery (owner_user_id, uploader_user_id, image_url, image_key, title) VALUES (?, ?, ?, ?, ?)`,
+        [input.memberId, ctx.user.id, url, fileKey, input.title || null]
+      );
+      return { success: true, imageUrl: url };
+    }),
+
+  // 删除会员图库图片（上传者或汉明本人可删除）
+  hanmingDeleteMemberGallery: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const [rows] = await dbConn.execute(
+        `SELECT uploader_user_id FROM hanming_member_gallery WHERE id = ?`,
+        [input.id]
+      ) as any;
+      if (!(rows as any[]).length) throw new TRPCError({ code: 'NOT_FOUND', message: '图片不存在' });
+      const pic = (rows as any[])[0];
+      const isHanming = ctx.user.id === 4957321;
+      const isUploader = pic.uploader_user_id === ctx.user.id;
+      if (!isHanming && !isUploader) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '只能删除自己上传的图片' });
+      }
+      await dbConn.execute(`DELETE FROM hanming_member_gallery WHERE id = ?`, [input.id]);
+      return { success: true };
+    }),
+
 });
 export type AppRouter = typeof appRouter;
 
