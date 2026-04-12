@@ -30,11 +30,12 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: 📦 上传同步脚本到服务器
+      - name: 📦 上传同步脚本和依赖包到服务器
         run: |
           scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_PORT }} \
             scripts/tushare/sync_daily.py \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/sync_daily.py
+            scripts/tushare/PyMySQL-1.1.1-py3-none-any.whl \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/
 
       - name: 🚀 在服务器上安装依赖并运行同步
         run: |
@@ -51,10 +52,13 @@ jobs:
             python3 -c "import pymysql; print('pymysql OK:', pymysql.__version__)" 2>/dev/null || echo "pymysql 未安装"
             python3 -c "import pandas; print('pandas OK:', pandas.__version__)" 2>/dev/null || echo "pandas 未安装"
 
-            echo "=== 尝试安装依赖（如果网络可用）==="
-            pip3 install tushare pymysql pandas --quiet --break-system-packages 2>&1 | tail -3 || \
-            pip3 install tushare pymysql pandas --quiet 2>&1 | tail -3 || \
-            echo "网络不可用，使用已有包"
+            echo "=== 离线安装 pymysql ==="
+            pip3 install /root/PyMySQL-1.1.1-py3-none-any.whl --quiet --break-system-packages 2>&1 || \
+            pip3 install /root/PyMySQL-1.1.1-py3-none-any.whl --quiet 2>&1 || \
+            echo "离线安装失败"
+
+            echo "=== 再次检查包状态 ==="
+            python3 -c "import pymysql; print('pymysql OK:', pymysql.__version__)" 2>/dev/null || echo "pymysql 仍未安装"
 
             echo "=== 开始同步（task=${{ github.event.inputs.task }}）==="
             cd /root
