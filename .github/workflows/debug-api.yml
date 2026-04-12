@@ -21,19 +21,8 @@ jobs:
       - name: 上传诊断脚本并运行
         run: |
           scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            scripts/tushare/deep_debug.py \
-            scripts/tushare/PyMySQL-1.1.1-py3-none-any.whl \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/
+            scripts/tushare/check_app.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/check_app.sh
 
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
-            pip3 install /root/PyMySQL-1.1.1-py3-none-any.whl --break-system-packages 2>/dev/null || true
-            python3 /root/deep_debug.py
-
-            echo ""
-            echo "=== 10. 测试本地API ==="
-            curl -s "http://localhost:3000/api/trpc/aiDashboardMarketCount?input=%7B%22json%22%3Anull%7D" \
-              --max-time 30 2>&1 | head -500
-            echo ""
-            echo "=== API测试完成 ==="
-          EOF
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/check_app.sh"
