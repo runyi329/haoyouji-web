@@ -305,26 +305,40 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
       {/* 合并卡片：Tab + 色条 + 分隔线 + 年代图 */}
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
 
-        {/* 顶部 Tab 选择器 */}
-        <div className="flex gap-2 px-3 pt-3 pb-2 overflow-x-auto">
-          {MARKET_KEYS.map(m => {
+        {/* 顶部分段选择器：一整条，5等分，方正严谨 */}
+        <div
+          className="flex border-b"
+          style={{ borderColor: BORDER }}
+        >
+          {MARKET_KEYS.map((m, idx) => {
             const cnt = displayCounts[m.key];
             const active = market === m.key;
             return (
               <button
                 key={m.key}
                 onClick={() => setMarket(m.key)}
-                className="flex-shrink-0 flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[52px]"
+                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
                 style={{
-                  background: active ? GRAD_UP : "rgba(211,47,47,0.08)",
-                  color: active ? "#fff" : RED,
-                  boxShadow: active ? "0 3px 10px rgba(211,47,47,0.30)" : "inset 0 0 0 1px rgba(211,47,47,0.2)",
-                  transform: active ? "translateY(-1px)" : "none",
+                  background: active ? "#F5EDED" : "transparent",
+                  borderRight: idx < MARKET_KEYS.length - 1 ? `1px solid ${BORDER}` : "none",
                 }}
               >
-                <span className="text-[13px] font-semibold leading-tight">{m.label}</span>
+                {/* 选中指示线 */}
+                {active && (
+                  <span
+                    className="absolute bottom-0 left-0 right-0"
+                    style={{ height: '2px', background: RED }}
+                  />
+                )}
+                <span
+                  className="text-[13px] font-semibold leading-tight"
+                  style={{ color: active ? RED : "#555" }}
+                >{m.label}</span>
                 {cnt > 0 && (
-                  <span className="text-[11px] leading-tight mt-0.5" style={{ opacity: active ? 0.9 : 0.7 }}>{cnt.toLocaleString()}</span>
+                  <span
+                    className="text-[11px] leading-tight mt-0.5"
+                    style={{ color: active ? RED : "#999" }}
+                  >{cnt.toLocaleString()}</span>
                 )}
               </button>
             );
