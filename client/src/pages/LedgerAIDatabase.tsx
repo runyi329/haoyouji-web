@@ -246,15 +246,14 @@ function EraBarChart({
 
   useEffect(() => {
     if (!animated || data.length === 0) return;
-    const duration = 900; // ms
+     const duration = 1080; // ms（延长20%）
     const start = performance.now();
     const targets = data.map(d => d["低于首日"]);
-
     const frame = (now: number) => {
       const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
-      // easeOutCubic: 到终点前明显减速
-      const ease = 1 - Math.pow(1 - progress, 3);
+      // easeOutQuart: 开始快、到终点前明显减速
+      const ease = 1 - Math.pow(1 - progress, 4);
       setDisplayPcts(targets.map(t => parseFloat((ease * t).toFixed(1))));
       if (progress < 1) requestAnimationFrame(frame);
     };
@@ -265,7 +264,7 @@ function EraBarChart({
   if (data.length === 0) return null;
 
   const ROW_H = 20; // 每行高度px
-  const ROW_GAP = 4; // 行间距
+  const ROW_GAP = 2; // 行间距（减半）
   const BAR_H = 10;  // 柱子高度px
   const LABEL_W = 32; // 左侧年份标签宽度
   const PCT_W = 36;  // 右侧百分比宽度
