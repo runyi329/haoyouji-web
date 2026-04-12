@@ -4,7 +4,7 @@
  * 路径: /ledger/:id/stock-lifecycle
  */
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useParams, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { ChevronLeft, Search, X, ChevronUp, ChevronDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { keepPreviousData } from "@tanstack/react-query";
@@ -53,7 +53,6 @@ type StockItem = {
 };
 
 export default function StockLifecycle() {
-  const { id: ledgerId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
 
   const [market, setMarket] = useState<Market>("all");
@@ -250,7 +249,7 @@ export default function StockLifecycle() {
           </div>
         )}
         {allItems.map((stock, idx) => (
-          <StockRow key={stock.tsCode} stock={stock} idx={idx} sortBy={sortBy} />
+          <StockRow key={stock.tsCode} stock={stock} idx={idx} sortBy={sortBy} onAI={(tsCode) => setLocation(`/stock/${encodeURIComponent(tsCode)}`)} />
         ))}
         {/* 加载更多 */}
         {isFetching && allItems.length > 0 && (
@@ -270,7 +269,7 @@ export default function StockLifecycle() {
 }
 
 // ─── 单行股票组件 ─────────────────────────────────────────────────────────
-function StockRow({ stock, idx, sortBy }: { stock: StockItem; idx: number; sortBy: SortBy }) {
+function StockRow({ stock, idx, sortBy, onAI }: { stock: StockItem; idx: number; sortBy: SortBy; onAI: (tsCode: string) => void }) {
   const isDelisted = stock.listStatus === "D";
   const upRateColor = stock.upRate >= 50 ? RED : STOCK_GREEN;
 
@@ -337,6 +336,22 @@ function StockRow({ stock, idx, sortBy }: { stock: StockItem; idx: number; sortB
       >
         {stock.totalDays.toLocaleString()}
       </div>
+
+      {/* AI 按钮 */}
+      <button
+        onClick={() => onAI(stock.tsCode)}
+        className="flex-shrink-0 ml-1 flex items-center justify-center rounded-full text-xs font-bold"
+        style={{
+          width: 32,
+          height: 22,
+          background: "linear-gradient(135deg, #E53935 0%, #B71C1C 100%)",
+          color: "#fff",
+          boxShadow: "0 1px 4px rgba(211,47,47,0.35)",
+          letterSpacing: "0.02em",
+        }}
+      >
+        AI
+      </button>
     </div>
   );
 }
