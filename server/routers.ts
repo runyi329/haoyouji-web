@@ -17228,45 +17228,39 @@ export const adminFeatureRouter = router({
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       try {
+        // 从 ts_survival_analysis 表查询（已从Excel导入的完整数据）
         const marketFilter: Record<string, string> = {
           all: '',
-          SH: "AND b.exchange = 'SSE'",
-          SZ: "AND b.exchange = 'SZSE' AND b.ts_code NOT LIKE '30%' AND b.ts_code NOT LIKE '68%'",
-          GEM: "AND b.ts_code LIKE '30%'",
-          STAR: "AND b.ts_code LIKE '68%'",
+          SH: "AND market = '沪市主板'",
+          SZ: "AND market = '深市主板'",
+          GEM: "AND market = '创业板'",
+          STAR: "AND market = '科创板'",
         };
         const mf = marketFilter[input.market] || '';
         const [rows] = await dbConn.execute(`
-          SELECT b.ts_code, b.name, b.list_date, b.exchange,
-            first_day.close AS first_close, last_day.close AS last_close
-          FROM ts_stock_basic b
-          INNER JOIN ts_daily first_day
-            ON first_day.ts_code = b.ts_code
-            AND first_day.trade_date = (SELECT MIN(trade_date) FROM ts_daily WHERE ts_code = b.ts_code)
-          INNER JOIN ts_daily last_day
-            ON last_day.ts_code = b.ts_code
-            AND last_day.trade_date = (SELECT MAX(trade_date) FROM ts_daily WHERE ts_code = b.ts_code)
-          WHERE b.list_status = 'L' ${mf}
-          HAVING first_close > 0 AND last_close > 0
+          SELECT vs_first, list_year, above_pct
+          FROM ts_survival_analysis
+          WHERE 1=1 ${mf}
         `) as any[];
         const stocks = rows as any[];
         const total = stocks.length;
-        const above = stocks.filter((s: any) => s.last_close > s.first_close).length;
-        const below = stocks.filter((s: any) => s.last_close < s.first_close).length;
-        const equal = total - above - below;
+        const above = stocks.filter((s: any) => s.vs_first === '高于').length;
+        const below = stocks.filter((s: any) => s.vs_first === '低于').length;
+        const equal = stocks.filter((s: any) => s.vs_first === '等于').length;
+        // 按年代分组
         const byEra: Record<string, { above: number; below: number; total: number }> = {};
         for (const s of stocks) {
-          const year = s.list_date ? parseInt(s.list_date.substring(0, 4)) : 0;
+          const year = s.list_year || 0;
           let era = '其他';
-          if (year < 2000) era = '2000年前';
-          else if (year < 2010) era = '2000-2009';
-          else if (year < 2015) era = '2010-2014';
-          else if (year < 2020) era = '2015-2019';
-          else era = '2020至今';
+          if (year > 0 && year < 2000) era = '2000年前';
+          else if (year >= 2000 && year < 2010) era = '2000-2009';
+          else if (year >= 2010 && year < 2015) era = '2010-2014';
+          else if (year >= 2015 && year < 2020) era = '2015-2019';
+          else if (year >= 2020) era = '2020至今';
           if (!byEra[era]) byEra[era] = { above: 0, below: 0, total: 0 };
           byEra[era].total++;
-          if (s.last_close > s.first_close) byEra[era].above++;
-          else if (s.last_close < s.first_close) byEra[era].below++;
+          if (s.vs_first === '高于') byEra[era].above++;
+          else if (s.vs_first === '低于') byEra[era].below++;
         }
         return { total, above, below, equal, byEra, updatedAt: new Date().toISOString() };
       } finally { await dbConn.end(); }
