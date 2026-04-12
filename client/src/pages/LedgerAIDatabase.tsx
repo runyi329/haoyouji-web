@@ -188,7 +188,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 
   return (
     <div>
-      <SectionTitle title="生存分析" sub="上市至今盈亏全景" />
+      <SectionTitle title="全生命周期" sub="统计各股自上市首日至今，现价相对首日开盘价的盈亏分布" />
       <MarketTabs market={market} onChange={setMarket} counts={displayCounts} />
       <div className="px-4 space-y-3">
         <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
