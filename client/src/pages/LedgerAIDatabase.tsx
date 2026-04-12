@@ -1054,6 +1054,18 @@ export default function LedgerAIDatabase() {
           <p className="font-bold text-lg">A股追踪</p>
         </div>
         <button
+          onClick={() => setLocation(`/ledger/${ledgerId}/stock-lifecycle`)}
+          className="flex items-center justify-center px-3 h-7 rounded-full text-sm font-medium"
+          style={{
+            backgroundColor: "rgba(255,255,255,0.9)",
+            color: "#D32F2F",
+            border: "1px solid rgba(255,255,255,0.4)",
+            minWidth: "44px",
+          }}
+        >
+          个股
+        </button>
+        <button
           onClick={() => window.location.reload()}
           className="flex items-center justify-center px-3 h-7 rounded-full text-sm font-medium"
           style={{

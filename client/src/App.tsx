@@ -134,6 +134,7 @@ const OilTradesPage = lazy(() => import("./pages/OilTradesPage"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
 const LedgerAADividendManage = lazy(() => import("./pages/LedgerAADividendManage"));
 const LedgerAIDatabase = lazy(() => import("./pages/LedgerAIDatabase"));
+const StockLifecycle = lazy(() => import("./pages/StockLifecycle"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
 const EditLedgerName = lazy(() => import("./pages/EditLedgerName"));
@@ -423,6 +424,7 @@ function Router() {
         <Route path="/ledger/:id/aa-initial-balance" component={LedgerAAInitialBalance} />
         <Route path="/ledger/:id/aa-dividend-manage" component={LedgerAADividendManage} />
         <Route path="/ledger/:id/ai-database" component={LedgerAIDatabase} />
+        <Route path="/ledger/:id/stock-lifecycle" component={StockLifecycle} />
         <Route path="/ledger/:id/admin-transactions" component={AdminTransactionList} />
         <Route path="/ledger/:id/import" component={LedgerImport} />
         <Route path="/ledger/:id/edit-name" component={EditLedgerName} />
