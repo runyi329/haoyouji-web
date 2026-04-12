@@ -21,8 +21,8 @@ jobs:
       - name: 上传修复脚本并运行
         run: |
           scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            scripts/tushare/check_routes.sh \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/check_routes.sh
+            scripts/tushare/full_fix_deploy.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/full_fix_deploy.sh
 
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/check_routes.sh"
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/full_fix_deploy.sh"
