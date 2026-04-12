@@ -4541,9 +4541,17 @@ export default function LedgerDetail() {
                 >
                   <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
                   <div className="flex-1 text-left">
-                    <div className="text-sm font-medium text-gray-900">{m.nickname || m.username}</div>
-                    <div className="text-xs text-gray-500">
-                      {m.role === 'owner' ? '创始人' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资金方' : '普通成员'}
+                    <div className="text-sm font-medium text-gray-900">
+                      {m.nickname && m.nickname !== m.username ? m.nickname : (m.username || '未知用户')}
+                    </div>
+                    <div className="text-xs text-gray-500 space-y-0.5">
+                      <div>
+                        {m.role === 'owner' ? '创始人' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资金方' : '普通成员'}
+                        {m.nickname && m.nickname !== m.username && m.username && (
+                          <span className="ml-1.5 text-gray-400">@{m.username}</span>
+                        )}
+                      </div>
+                      <div className="text-gray-400">ID: {m.userId}</div>
                     </div>
                   </div>
                   {viewAsUserId === m.userId && (
