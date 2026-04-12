@@ -322,26 +322,16 @@ function EraBarChart({
                   boxShadow: '0 1px 3px rgba(0,176,80,0.25)',
                 }}
               />
-              {/* 百分比数字：跟随柱子右端移动 */}
+              {/* 百分比数字：内置在柱子内部靠右端，白色 */}
               <div
                 style={{
                   position: 'absolute',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  // 接近100%时显示在柱子内部（白字），其他时显示在右侧（绿字）
-                  ...(nearEnd
-                    ? {
-                        right: `${100 - curPct}%`,
-                        paddingRight: 3,
-                        color: '#fff',
-                        textShadow: '0 0 3px rgba(0,0,0,0.3)',
-                      }
-                    : {
-                        left: transitioning ? '0%' : `${curPct}%`,
-                        paddingLeft: 3,
-                        color: curPct > 0 ? STOCK_GREEN : 'transparent',
-                      }
-                  ),
+                  right: transitioning ? '100%' : `${100 - curPct}%`,
+                  paddingRight: 3,
+                  color: '#fff',
+                  textShadow: '0 1px 2px rgba(0,0,0,0.35)',
                   fontSize: 9,
                   fontWeight: 700,
                   lineHeight: 1,
@@ -349,6 +339,7 @@ function EraBarChart({
                   fontVariantNumeric: 'tabular-nums',
                   transition: transitioning ? 'none' : undefined,
                   pointerEvents: 'none',
+                  opacity: curPct < 8 ? 0 : 1, // 进度太短时隐藏数字避免拥挤
                 }}
               >
                 {transitioning ? '' : `${curPct.toFixed(1)}%`}
