@@ -17417,15 +17417,15 @@ export const adminFeatureRouter = router({
       const dbConn = await getDbConnection();
       if (!dbConn) return { all: 0, SH: 0, SZ: 0, GEM: 0, STAR: 0 };
       try {
+        // 从 ts_survival_analysis 读取各板块数量（数据最完整）
         const [rows] = await dbConn.execute(
           `SELECT
             COUNT(*) AS all_count,
-            SUM(CASE WHEN exchange='SSE' AND LEFT(ts_code,3) NOT IN ('688') THEN 1 ELSE 0 END) AS sh_count,
-            SUM(CASE WHEN exchange='SZSE' AND LEFT(ts_code,3) NOT IN ('300','301') THEN 1 ELSE 0 END) AS sz_count,
-            SUM(CASE WHEN LEFT(ts_code,3) IN ('300','301') THEN 1 ELSE 0 END) AS gem_count,
-            SUM(CASE WHEN LEFT(ts_code,3)='688' THEN 1 ELSE 0 END) AS star_count
-          FROM ts_stock_basic
-          WHERE list_status='L'`
+            SUM(CASE WHEN market='沪市主板' THEN 1 ELSE 0 END) AS sh_count,
+            SUM(CASE WHEN market='深市主板' THEN 1 ELSE 0 END) AS sz_count,
+            SUM(CASE WHEN market='创业板' THEN 1 ELSE 0 END) AS gem_count,
+            SUM(CASE WHEN market='科创板' THEN 1 ELSE 0 END) AS star_count
+          FROM ts_survival_analysis`
         ) as any;
         const r = (rows as any[])[0];
         return {
