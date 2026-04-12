@@ -4,7 +4,7 @@
  * 路径: /ledger/:id/ai-database
  * 风格与 LedgerDetailAA 一致：顶部 #D32F2F，页面背景 #FAF3ED，卡片白色
  */
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -15,15 +15,21 @@ import {
 
 // ─── 配色（与首页一致） ────────────────────────────────────
 const RED = "#D32F2F";
-const BG = "#FAF3ED";
+const BG = "#F2EAE0";           // 背景稍加深，让卡片更立体
 const CARD = "#FFFFFF";
-const BORDER = "#E0E0E0";
-const TEXT = "#222222";
+const BORDER = "#E8E0D8";
+const TEXT = "#1A1A1A";
 const MUTED = "#555555";
 const DIM = "#666666";
 const GREEN = "#4CAF50";
 const CHART_UP = "#D32F2F";
 const CHART_DOWN = "#4CAF50";
+// 渐变色（立体感用）
+const GRAD_UP = "linear-gradient(135deg, #E53935 0%, #B71C1C 100%)";
+const GRAD_DOWN = "linear-gradient(135deg, #43A047 0%, #1B5E20 100%)";
+const GRAD_NEUTRAL = "linear-gradient(135deg, #9E9E9E 0%, #757575 100%)";
+// 卡片阴影
+const CARD_SHADOW = "0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)";
 
 // ─── 市场 Tab ──────────────────────────────────────────────
 type Market = "all" | "SH" | "SZ" | "GEM" | "STAR";
@@ -61,12 +67,15 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
-// ─── 分区标题（无图标） ────────────────────────────────────
+// ─── 分区标题（左侧红色竖条装饰） ────────────────────────
 function SectionTitle({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="px-4 pt-5 pb-2">
-      <p className="text-base font-bold" style={{ color: TEXT }}>{title}</p>
-      <p className="text-[12px]" style={{ color: MUTED }}>{sub}</p>
+    <div className="px-4 pt-5 pb-2 flex items-start gap-2.5">
+      <div className="w-1 rounded-full mt-0.5 flex-shrink-0" style={{ height: '36px', background: GRAD_UP }} />
+      <div>
+        <p className="text-base font-bold" style={{ color: TEXT }}>{title}</p>
+        <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>{sub}</p>
+      </div>
     </div>
   );
 }
@@ -89,10 +98,12 @@ function MarketTabs({
           <button
             key={m.key}
             onClick={() => onChange(m.key)}
-            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors"
+            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[12px] font-medium transition-all duration-200"
             style={{
-              background: market === m.key ? RED : "#F0F0F0",
+              background: market === m.key ? GRAD_UP : "#EEEBE6",
               color: market === m.key ? "#fff" : MUTED,
+              boxShadow: market === m.key ? "0 2px 8px rgba(211,47,47,0.35)" : "none",
+              transform: market === m.key ? "translateY(-1px)" : "none",
             }}
           >
             {m.label}{cnt > 0 ? `(${cnt})` : ""}
@@ -103,7 +114,99 @@ function MarketTabs({
   );
 }
 
-// ─── 生存分析 ──────────────────────────────────────────────
+// ─── 动画色条卡片组件 ────────────────────────────────────────────
+function AnimatedSurvivalBar({
+  above, below, equal, total, abovePct, belowPct
+}: {
+  above: number; below: number; equal: number; total: number;
+  abovePct: number; belowPct: number;
+}) {
+  const [animated, setAnimated] = useState(false);
+  const equalPct = parseFloat(pct(equal, total));
+
+  useEffect(() => {
+    // 延迟少许再启动动画，让浏览器先渲染初始状态
+    const t = setTimeout(() => setAnimated(true), 80);
+    return () => clearTimeout(t);
+  }, [above, below, equal]);
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}
+    >
+      {/* 头部信息行 */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-2">
+        <p className="text-[12px]" style={{ color: MUTED }}>
+          共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(total)}</span> 只 A 股
+        </p>
+        <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10</p>
+      </div>
+
+      {/* 宽色条：渐变色 + 入场动画 */}
+      <div className="flex h-14 mx-3 mb-1 rounded-lg overflow-hidden" style={{ background: "#eee" }}>
+        {/* 红色区：高于首日 */}
+        <div
+          className="flex flex-col items-center justify-center overflow-hidden"
+          style={{
+            width: animated ? `${abovePct}%` : "0%",
+            background: GRAD_UP,
+            transition: "width 0.9s cubic-bezier(0.4,0,0.2,1)",
+            boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)",
+          }}
+        >
+          <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(above)}</span>
+          <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{abovePct}%</span>
+        </div>
+        {/* 灰色区：持平 */}
+        {equal > 0 && (
+          <div
+            className="flex flex-col items-center justify-center overflow-hidden"
+            style={{
+              width: animated ? `${Math.max(equalPct, 4)}%` : "0%",
+              minWidth: animated ? '28px' : '0',
+              background: GRAD_NEUTRAL,
+              transition: "width 0.9s cubic-bezier(0.4,0,0.2,1) 0.1s",
+              boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.1)",
+            }}
+          >
+            <span className="text-[10px] font-bold text-white leading-tight">{fmt(equal)}</span>
+            <span className="text-[9px] text-white" style={{ opacity: 0.9 }}>持平</span>
+          </div>
+        )}
+        {/* 绿色区：低于首日 */}
+        <div
+          className="flex flex-col items-center justify-center overflow-hidden flex-1"
+          style={{
+            background: GRAD_DOWN,
+            boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15)",
+            opacity: animated ? 1 : 0,
+            transition: "opacity 0.4s ease 0.7s",
+          }}
+        >
+          <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(below)}</span>
+          <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{belowPct}%</span>
+        </div>
+      </div>
+
+      {/* 图例行 */}
+      <div className="flex items-center justify-center gap-4 px-3 pb-3 pt-1">
+        {[
+          { color: CHART_UP, label: "高于首日开盘价" },
+          { color: "#9E9E9E", label: "持平" },
+          { color: CHART_DOWN, label: "低于首日开盘价" },
+        ].map(item => (
+          <div key={item.label} className="flex items-center gap-1">
+            <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: item.color }} />
+            <span className="text-[12px]" style={{ color: MUTED }}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── 生存分析 ──────────────────────────────────────────────────────
 // ─── 生存分析静态数据（来源：AKShare/东方财富，统计截至2026-04-10） ──────────
 const SURVIVAL_STATIC: Record<Market, {
   total: number; above: number; below: number; equal: number;
@@ -191,61 +294,15 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
       <SectionTitle title="全生命周期" sub="统计各股自上市首日至今，现价相对首日开盘价的盈亏分布" />
       <MarketTabs market={market} onChange={setMarket} counts={displayCounts} />
       <div className="px-4 space-y-3">
-        <div className="rounded-xl overflow-hidden" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-          {/* 头部信息行 */}
-          <div className="flex items-center justify-between px-3 pt-3 pb-2">
-            <p className="text-[12px]" style={{ color: MUTED }}>
-              共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(displayData.total)}</span> 只 A 股
-            </p>
-            <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10</p>
-          </div>
-
-          {/* 宽色条：数字和百分比直接嵌入内部 */}
-          <div className="flex h-14 mx-3 mb-1 rounded-lg overflow-hidden">
-            {/* 红色区：高于首日 */}
-            <div
-              className="flex flex-col items-center justify-center"
-              style={{ width: `${abovePct}%`, background: CHART_UP }}
-            >
-              <span className="text-sm font-bold text-white leading-tight">{fmt(displayData.above)}</span>
-              <span className="text-[11px] text-white opacity-90">{abovePct}%</span>
-            </div>
-            {/* 灰色区：持平 */}
-            {displayData.equal > 0 && (
-              <div
-                className="flex flex-col items-center justify-center"
-                style={{ width: `${Math.max(parseFloat(pct(displayData.equal, displayData.total)), 4)}%`, background: "#BDBDBD", minWidth: '28px' }}
-              >
-                <span className="text-[10px] font-bold text-white leading-tight">{fmt(displayData.equal)}</span>
-                <span className="text-[9px] text-white opacity-90">持平</span>
-              </div>
-            )}
-            {/* 绿色区：低于首日 */}
-            <div
-              className="flex flex-col items-center justify-center flex-1"
-              style={{ background: CHART_DOWN }}
-            >
-              <span className="text-sm font-bold text-white leading-tight">{fmt(displayData.below)}</span>
-              <span className="text-[11px] text-white opacity-90">{belowPct}%</span>
-            </div>
-          </div>
-
-          {/* 图例行 */}
-          <div className="flex items-center justify-center gap-4 px-3 pb-3 pt-1">
-            <div className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CHART_UP }} />
-              <span className="text-[12px]" style={{ color: MUTED }}>高于首日开盘价</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "#BDBDBD" }} />
-              <span className="text-[12px]" style={{ color: MUTED }}>持平</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CHART_DOWN }} />
-              <span className="text-[12px]" style={{ color: MUTED }}>低于首日开盘价</span>
-            </div>
-          </div>
-        </div>
+        {/* 全生命周期主卡片 */}
+        <AnimatedSurvivalBar
+          above={displayData.above}
+          below={displayData.below}
+          equal={displayData.equal}
+          total={displayData.total}
+          abovePct={abovePct}
+          belowPct={belowPct}
+        />
         <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
           <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>按上市年代 — 历史胜率（%）</p>
           <ResponsiveContainer width="100%" height={140}>
