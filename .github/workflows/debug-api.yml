@@ -6,7 +6,7 @@ on:
 jobs:
   debug:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: 配置 SSH 密钥
         run: |
@@ -15,35 +15,57 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 查看服务器应用日志和错误
+      - name: 诊断服务器API和数据库
         run: |
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
-            echo "=== PM2 进程状态 ==="
-            pm2 list 2>/dev/null || echo "PM2 未运行"
+            echo "=== 1. PM2 进程状态 ==="
+            pm2 list 2>/dev/null || sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>/dev/null || echo "PM2 未运行"
 
             echo ""
-            echo "=== 最近50行应用错误日志 ==="
-            pm2 logs --lines 50 --nostream 2>/dev/null | grep -i "error\|Error\|survival\|aiDashboard" | tail -50 || true
+            echo "=== 2. 最近30行PM2错误日志 ==="
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --err --lines 30 --nostream' 2>/dev/null || true
 
             echo ""
-            echo "=== 查找应用日志文件 ==="
-            find /var/www /root /home -name "*.log" -newer /tmp 2>/dev/null | head -10 || true
+            echo "=== 3. 最近30行PM2输出日志 ==="
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --out --lines 30 --nostream' 2>/dev/null || true
 
             echo ""
-            echo "=== 测试 aiDashboardSurvival 接口 ==="
-            curl -s -X POST http://localhost:3000/api/trpc/aiDashboardSurvival \
-              -H "Content-Type: application/json" \
-              -d '{"json":null}' \
-              --max-time 30 2>&1 | head -200 || echo "接口请求失败"
+            echo "=== 4. 测试 aiDashboardMarketCount 接口（简单查询） ==="
+            curl -s -X GET "http://localhost:3000/api/trpc/aiDashboardMarketCount?input=%7B%22json%22%3Anull%7D" \
+              --max-time 15 2>&1 | head -500 || echo "请求失败或超时"
 
             echo ""
-            echo "=== ts_daily 表行数 ==="
-            mysql -u root -e "SELECT COUNT(*) as total FROM ts_daily;" haoyouji 2>/dev/null || \
-            mysql -u root -e "SHOW DATABASES;" 2>/dev/null | head -20 || \
-            echo "无法直接连接MySQL"
+            echo "=== 5. 测试 aiDashboardSurvival 接口（复杂查询） ==="
+            curl -s -X GET "http://localhost:3000/api/trpc/aiDashboardSurvival?input=%7B%22json%22%3A%7B%22market%22%3A%22all%22%7D%7D" \
+              --max-time 60 2>&1 | head -500 || echo "请求失败或超时"
 
             echo ""
-            echo "=== ts_daily 索引状态 ==="
-            mysql -u root -e "SHOW INDEX FROM ts_daily;" haoyouji 2>/dev/null || echo "无法查询索引"
+            echo "=== 6. 测试 aiDashboardRisefall 接口 ==="
+            curl -s -X GET "http://localhost:3000/api/trpc/aiDashboardRisefall?input=%7B%22json%22%3A%7B%22date%22%3Anull%7D%7D" \
+              --max-time 30 2>&1 | head -500 || echo "请求失败或超时"
+
+            echo ""
+            echo "=== 7. 数据库表行数检查 ==="
+            mysql -u root -e "
+              SELECT 'ts_daily' AS tbl, COUNT(*) AS cnt FROM ts_daily
+              UNION ALL
+              SELECT 'ts_stock_basic', COUNT(*) FROM ts_stock_basic
+              UNION ALL
+              SELECT 'ts_daily_basic', COUNT(*) FROM ts_daily_basic
+              UNION ALL
+              SELECT 'ts_survival_analysis', COUNT(*) FROM ts_survival_analysis;
+            " crm_db 2>/dev/null || echo "无法连接MySQL（crm_db）"
+
+            echo ""
+            echo "=== 8. 尝试haoyouji数据库 ==="
+            mysql -u root -e "SHOW DATABASES;" 2>/dev/null || echo "MySQL未运行"
+
+            echo ""
+            echo "=== 9. 检查ts_daily索引 ==="
+            mysql -u root -e "SHOW INDEX FROM ts_daily;" crm_db 2>/dev/null || echo "无法查询索引"
+
+            echo ""
+            echo "=== 10. 检查.env中的DATABASE_URL ==="
+            grep "DATABASE_URL\|ORIGINAL_DATABASE_URL" /home/ubuntu/haoyouji-web/.env 2>/dev/null | sed 's/\(.*=.*:\/\/[^:]*:\)[^@]*/\1***/' || echo "未找到.env"
           EOF
