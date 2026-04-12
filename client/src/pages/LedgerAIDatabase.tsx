@@ -648,24 +648,9 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
                 ]}
               />
               <ReferenceLine x={50} stroke="#aaa" strokeDasharray="4 3" />
-              <Bar dataKey="胜率" radius={[0, 3, 3, 0]} label={{ position: 'right', formatter: (v: any) => `${v}%`, fill: TEXT, fontSize: 9, fontWeight: 600 }} isAnimationActive={true}>
-                {eraData.map((entry, i) => (
-                  <Cell key={i} fill={entry.胜率 >= 50 ? CHART_UP : CHART_DOWN} fillOpacity={0.88} />
-                ))}
-              </Bar>
+              <Bar dataKey="胜率" radius={[0, 3, 3, 0]} fill="#B0B0B0" fillOpacity={0.85} label={{ position: 'right', formatter: (v: any) => `${v}%`, fill: TEXT, fontSize: 9, fontWeight: 600 }} isAnimationActive={true} />
             </BarChart>
           </ResponsiveContainer>
-          {/* 图例，与色条风格统一 */}
-          <div className="flex items-center justify-center gap-4 pt-2 pb-1">
-            <div className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CHART_UP }} />
-              <span className="text-[12px]" style={{ color: MUTED }}>&gt;50% 超过半数胜出</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CHART_DOWN }} />
-              <span className="text-[12px]" style={{ color: MUTED }}>&lt;50% 超过半数亏损</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
