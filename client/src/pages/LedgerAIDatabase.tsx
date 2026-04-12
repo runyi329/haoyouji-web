@@ -191,55 +191,59 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
       <SectionTitle title="全生命周期" sub="统计各股自上市首日至今，现价相对首日开盘价的盈亏分布" />
       <MarketTabs market={market} onChange={setMarket} counts={displayCounts} />
       <div className="px-4 space-y-3">
-        <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-          {/* 标题行 */}
-          <div className="flex items-center justify-between mb-3">
+        <div className="rounded-xl overflow-hidden" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+          {/* 头部信息行 */}
+          <div className="flex items-center justify-between px-3 pt-3 pb-2">
             <p className="text-[12px]" style={{ color: MUTED }}>
-              共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(displayData.total)}</span> 只在市 A 股
+              共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(displayData.total)}</span> 只 A 股
             </p>
             <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10</p>
           </div>
 
-          {/* 主数据区：涨跌两侧大字，持平居中 */}
-          <div className="flex items-center mb-3">
-            {/* 左：高于 */}
-            <div className="flex-1 text-center">
-              <p className="text-3xl font-bold" style={{ color: CHART_UP }}>{fmt(displayData.above)}</p>
-              <p className="text-xs font-medium mt-0.5" style={{ color: CHART_UP }}>{abovePct}%</p>
-              <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>高于首日</p>
+          {/* 宽色条：数字和百分比直接嵌入内部 */}
+          <div className="flex h-14 mx-3 mb-1 rounded-lg overflow-hidden">
+            {/* 红色区：高于首日 */}
+            <div
+              className="flex flex-col items-center justify-center"
+              style={{ width: `${abovePct}%`, background: CHART_UP }}
+            >
+              <span className="text-sm font-bold text-white leading-tight">{fmt(displayData.above)}</span>
+              <span className="text-[11px] text-white opacity-90">{abovePct}%</span>
             </div>
-
-            {/* 中：持平（小字居中） */}
-            <div className="flex flex-col items-center px-2">
-              <div className="w-px h-8" style={{ background: BORDER }} />
-              <div className="my-1 text-center">
-                <p className="text-base font-bold" style={{ color: DIM }}>{fmt(displayData.equal)}</p>
-                <p className="text-[11px]" style={{ color: DIM }}>持平</p>
+            {/* 灰色区：持平 */}
+            {displayData.equal > 0 && (
+              <div
+                className="flex flex-col items-center justify-center"
+                style={{ width: `${Math.max(parseFloat(pct(displayData.equal, displayData.total)), 4)}%`, background: "#BDBDBD", minWidth: '28px' }}
+              >
+                <span className="text-[10px] font-bold text-white leading-tight">{fmt(displayData.equal)}</span>
+                <span className="text-[9px] text-white opacity-90">持平</span>
               </div>
-              <div className="w-px h-8" style={{ background: BORDER }} />
-            </div>
-
-            {/* 右：低于 */}
-            <div className="flex-1 text-center">
-              <p className="text-3xl font-bold" style={{ color: CHART_DOWN }}>{fmt(displayData.below)}</p>
-              <p className="text-xs font-medium mt-0.5" style={{ color: CHART_DOWN }}>{belowPct}%</p>
-              <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>低于首日</p>
+            )}
+            {/* 绿色区：低于首日 */}
+            <div
+              className="flex flex-col items-center justify-center flex-1"
+              style={{ background: CHART_DOWN }}
+            >
+              <span className="text-sm font-bold text-white leading-tight">{fmt(displayData.below)}</span>
+              <span className="text-[11px] text-white opacity-90">{belowPct}%</span>
             </div>
           </div>
 
-          {/* 进度条：红绿展示占比，中间灰色小块代表持平 */}
-          <div className="relative">
-            <div className="flex rounded-full overflow-hidden h-3">
-              <div style={{ width: `${abovePct}%`, background: CHART_UP }} />
-              <div style={{ width: `${parseFloat(pct(displayData.equal, displayData.total))}%`, background: "#BDBDBD", minWidth: displayData.equal > 0 ? '3px' : '0' }} />
-              <div style={{ width: `${belowPct}%`, background: CHART_DOWN }} />
+          {/* 图例行 */}
+          <div className="flex items-center justify-center gap-4 px-3 pb-3 pt-1">
+            <div className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CHART_UP }} />
+              <span className="text-[12px]" style={{ color: MUTED }}>高于首日开盘价</span>
             </div>
-            {/* 持平标注（若占比过小则显示标注） */}
-            {displayData.equal > 0 && parseFloat(pct(displayData.equal, displayData.total)) < 3 && (
-              <p className="text-[11px] text-center mt-1" style={{ color: DIM }}>
-                灰色小块 = 持平 {fmt(displayData.equal)} 只（{pct(displayData.equal, displayData.total)}%）
-              </p>
-            )}
+            <div className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: "#BDBDBD" }} />
+              <span className="text-[12px]" style={{ color: MUTED }}>持平</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CHART_DOWN }} />
+              <span className="text-[12px]" style={{ color: MUTED }}>低于首日开盘价</span>
+            </div>
           </div>
         </div>
         <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
