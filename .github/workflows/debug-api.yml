@@ -1,4 +1,4 @@
-name: 快速修复密码
+name: 强制重启PM2
 
 on:
   workflow_dispatch:
@@ -21,8 +21,8 @@ jobs:
       - name: 上传修复脚本并运行
         run: |
           scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            scripts/tushare/quick_fix.sh \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/quick_fix.sh
+            scripts/tushare/force_restart.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/force_restart.sh
 
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/quick_fix.sh"
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/force_restart.sh"
