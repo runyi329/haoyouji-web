@@ -417,7 +417,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 
         {/* 按年份横向柱状图（年份在左，胜率向右延伸） */}
         <div className="px-3 pt-3 pb-2">
-          <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>按上市年份（低于首日开盘价占比）</p>
+          <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>按上市年份（最新价低于首日开盘价占比）</p>
           {/* 每行高度 14px，强制显示所有年份 */}
           <ResponsiveContainer width="100%" height={eraData.length * 14 + 24}>
             <BarChart
