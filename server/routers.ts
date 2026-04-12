@@ -16745,6 +16745,14 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         // 优化SQL：用GROUP BY预聚合替代相关子查询，只扫描一遍 ts_daily
         // 第一步：一次性获取每只股票的最早和最新交易日
         // 第二步：再 JOIN 回去拿对应日期的开盘价和收盘价
+        // 先查最新交易日
+        const [latestDateRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
+        const latestDate: string = (latestDateRows as any[])[0]?.latest ?? '';
+        // 格式化为 YYYY-MM-DD
+        const latestDateFormatted = latestDate.length === 8
+          ? `${latestDate.slice(0, 4)}-${latestDate.slice(4, 6)}-${latestDate.slice(6, 8)}`
+          : latestDate;
+
         const [rows] = await dbConn.execute(`
           SELECT
             b.ts_code,
@@ -16798,7 +16806,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           if (status === 'above') byEra[era].above++;
           else if (status === 'below') byEra[era].below++;
         }
-        return { total, above, below, equal, byEra, byYear, updatedAt: new Date().toISOString() };
+        return { total, above, below, equal, byEra, byYear, latestDate: latestDateFormatted };
       } finally { /* pool auto-manages connections */ }
     }),
 

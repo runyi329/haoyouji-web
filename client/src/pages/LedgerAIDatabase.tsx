@@ -300,7 +300,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
         sub="上市首日至今现价相对首日开盘价的盈亏分布"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
-            {survivalLoading ? '数据加载中...' : liveData ? `实时计算 共${liveData.total.toLocaleString()}只` : '数据加载中...'}
+            {survivalLoading ? '数据加载中...' : liveData ? `数据截至 ${(liveData as any).latestDate || ''}` : '数据加载中...'}
           </p>
         }
       />
