@@ -17027,7 +17027,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const sortDir = input.sortDir === 'asc' ? 'ASC' : 'DESC';
         const offset = (input.page - 1) * input.pageSize;
         const [countRows] = await dbConn.execute(
-          `SELECT COUNT(*) AS cnt FROM ts_stock_basic b WHERE 1=1 ${mf} ${kwCond}`,
+          `SELECT COUNT(*) AS cnt FROM ts_stock_basic b
+           LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
+           WHERE 1=1 ${mf} ${kwCond}`,
           kwParams
         ) as any[];
         const total = Number((countRows as any[])[0]?.cnt) || 0;
@@ -17036,22 +17038,13 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             b.ts_code,
             b.name,
             b.list_status,
-            COALESCE(s.up_days, 0) AS up_days,
-            COALESCE(s.down_days, 0) AS down_days,
-            COALESCE(s.flat_days, 0) AS flat_days,
-            COALESCE(s.total_days, 0) AS total_days,
-            CASE WHEN COALESCE(s.total_days, 0) > 0
-              THEN ROUND(COALESCE(s.up_days, 0) * 100.0 / s.total_days, 1)
-              ELSE 0 END AS up_rate
+            COALESCE(l.up_days, 0) AS up_days,
+            COALESCE(l.down_days, 0) AS down_days,
+            COALESCE(l.flat_days, 0) AS flat_days,
+            COALESCE(l.total_days, 0) AS total_days,
+            COALESCE(l.up_rate, 0) AS up_rate
           FROM ts_stock_basic b
-          LEFT JOIN (
-            SELECT ts_code,
-              SUM(CASE WHEN pct_chg > 0 THEN 1 ELSE 0 END) AS up_days,
-              SUM(CASE WHEN pct_chg < 0 THEN 1 ELSE 0 END) AS down_days,
-              SUM(CASE WHEN pct_chg = 0 THEN 1 ELSE 0 END) AS flat_days,
-              COUNT(*) AS total_days
-            FROM ts_daily GROUP BY ts_code
-          ) s ON s.ts_code = b.ts_code
+          LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
           WHERE 1=1 ${mf} ${kwCond}
           ORDER BY ${sortCol} ${sortDir}, b.ts_code ASC
           LIMIT ? OFFSET ?`,
