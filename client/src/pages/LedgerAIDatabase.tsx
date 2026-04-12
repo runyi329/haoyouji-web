@@ -6,7 +6,7 @@
  */
 import { useState, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, TrendingUp, BarChart2, Activity, Globe } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -27,7 +27,7 @@ const CHART_DOWN = "#4CAF50";
 
 // ─── 市场 Tab ──────────────────────────────────────────────
 type Market = "all" | "SH" | "SZ" | "GEM" | "STAR";
-const MARKETS: { key: Market; label: string }[] = [
+const MARKET_KEYS: { key: Market; label: string }[] = [
   { key: "all", label: "全市场" },
   { key: "SH", label: "沪市" },
   { key: "SZ", label: "深市" },
@@ -53,7 +53,6 @@ function fmtDate(s: string | null | undefined) {
 function Skeleton() {
   return <div className="h-24 w-full rounded-xl animate-pulse" style={{ background: BORDER }} />;
 }
-
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-8" style={{ color: DIM }}>
@@ -62,44 +61,50 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
-// ─── 分区标题 ──────────────────────────────────────────────
-function SectionTitle({ icon: Icon, title, sub }: { icon: typeof TrendingUp; title: string; sub: string }) {
+// ─── 分区标题（无图标） ────────────────────────────────────
+function SectionTitle({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="flex items-center gap-2 px-4 pt-5 pb-2">
-      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "#FFEBEE" }}>
-        <Icon className="w-4 h-4" style={{ color: RED }} />
-      </div>
-      <div>
-        <p className="text-sm font-bold" style={{ color: TEXT }}>{title}</p>
-        <p className="text-[10px]" style={{ color: MUTED }}>{sub}</p>
-      </div>
+    <div className="px-4 pt-5 pb-2">
+      <p className="text-sm font-bold" style={{ color: TEXT }}>{title}</p>
+      <p className="text-[10px]" style={{ color: MUTED }}>{sub}</p>
     </div>
   );
 }
 
-// ─── 市场 Tab 栏 ───────────────────────────────────────────
-function MarketTabs({ market, onChange }: { market: Market; onChange: (m: Market) => void }) {
+// ─── 市场 Tab 栏（带数量） ─────────────────────────────────
+function MarketTabs({
+  market,
+  onChange,
+  counts,
+}: {
+  market: Market;
+  onChange: (m: Market) => void;
+  counts: Record<Market, number>;
+}) {
   return (
     <div className="flex gap-1.5 px-4 pb-2 overflow-x-auto">
-      {MARKETS.map(m => (
-        <button
-          key={m.key}
-          onClick={() => onChange(m.key)}
-          className="flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-medium transition-colors"
-          style={{
-            background: market === m.key ? RED : "#F0F0F0",
-            color: market === m.key ? "#fff" : MUTED,
-          }}
-        >
-          {m.label}
-        </button>
-      ))}
+      {MARKET_KEYS.map(m => {
+        const cnt = counts[m.key];
+        return (
+          <button
+            key={m.key}
+            onClick={() => onChange(m.key)}
+            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors"
+            style={{
+              background: market === m.key ? RED : "#F0F0F0",
+              color: market === m.key ? "#fff" : MUTED,
+            }}
+          >
+            {m.label}{cnt > 0 ? `(${cnt})` : ""}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 // ─── 生存分析 ──────────────────────────────────────────────
-function SurvivalSection() {
+function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const [market, setMarket] = useState<Market>("all");
   const { data, isLoading } = trpc.aiDashboardSurvival.useQuery({ market });
 
@@ -109,9 +114,6 @@ function SurvivalSection() {
     return {
       name: e.replace("2000年前", "<2000"),
       胜率: parseFloat(pct(d.above, d.total)),
-      上涨: d.above,
-      下跌: d.below,
-      total: d.total,
     };
   }) : [];
 
@@ -120,8 +122,8 @@ function SurvivalSection() {
 
   return (
     <div>
-      <SectionTitle icon={TrendingUp} title="生存分析" sub="上市至今盈亏全景" />
-      <MarketTabs market={market} onChange={setMarket} />
+      <SectionTitle title="生存分析" sub="上市至今盈亏全景" />
+      <MarketTabs market={market} onChange={setMarket} counts={counts} />
       <div className="px-4 space-y-3">
         {isLoading ? (
           <><Skeleton /><Skeleton /></>
@@ -129,10 +131,9 @@ function SurvivalSection() {
           <EmptyState label="数据同步中，请稍后刷新" />
         ) : (
           <>
-            {/* 总览卡片 */}
             <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
               <p className="text-[10px] mb-3" style={{ color: MUTED }}>
-                统计范围：全部在市 A 股（共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(data.total)}</span> 只）
+                统计范围：共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(data.total)}</span> 只在市 A 股
               </p>
               <div className="flex rounded-full overflow-hidden h-4 mb-3">
                 <div
@@ -163,8 +164,6 @@ function SurvivalSection() {
                 ))}
               </div>
             </div>
-
-            {/* 年代胜率 */}
             <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
               <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>按上市年代 — 历史胜率（%）</p>
               <ResponsiveContainer width="100%" height={140}>
@@ -193,7 +192,7 @@ function SurvivalSection() {
 }
 
 // ─── 估值分布 ──────────────────────────────────────────────
-function ValuationSection() {
+function ValuationSection({ counts }: { counts: Record<Market, number> }) {
   const [market, setMarket] = useState<Market>("all");
   const [subTab, setSubTab] = useState<"pe" | "pb" | "mv">("pe");
   const { data, isLoading } = trpc.aiDashboardValuation.useQuery({ market });
@@ -203,8 +202,8 @@ function ValuationSection() {
 
   return (
     <div>
-      <SectionTitle icon={BarChart2} title="估值分布" sub="PE / PB / 市值结构" />
-      <MarketTabs market={market} onChange={setMarket} />
+      <SectionTitle title="估值分布" sub="PE / PB / 市值结构" />
+      <MarketTabs market={market} onChange={setMarket} counts={counts} />
       <div className="px-4 space-y-3">
         {isLoading ? (
           <><Skeleton /><Skeleton /></>
@@ -268,7 +267,7 @@ function ValuationSection() {
 }
 
 // ─── 涨跌统计 ──────────────────────────────────────────────
-function RisefallSection() {
+function RisefallSection({ counts }: { counts: Record<Market, number> }) {
   const [market, setMarket] = useState<Market>("all");
   const [periodIdx, setPeriodIdx] = useState(0);
   const { data, isLoading } = trpc.aiDashboardRisefall.useQuery({ market });
@@ -284,8 +283,8 @@ function RisefallSection() {
 
   return (
     <div>
-      <SectionTitle icon={Activity} title="涨跌统计" sub="今日及近期涨跌分布" />
-      <MarketTabs market={market} onChange={setMarket} />
+      <SectionTitle title="涨跌统计" sub="今日及近期涨跌分布" />
+      <MarketTabs market={market} onChange={setMarket} counts={counts} />
       <div className="px-4 space-y-3">
         {isLoading ? (
           <><Skeleton /><Skeleton /></>
@@ -352,7 +351,6 @@ function RisefallSection() {
                 <p className="text-xs text-center py-4" style={{ color: DIM }}>今日无数据（非交易日）</p>
               )}
             </div>
-
             {data.periods.length > 0 && period && (
               <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
                 <div className="flex items-center justify-between mb-3">
@@ -416,7 +414,7 @@ function MacroSection() {
 
   return (
     <div>
-      <SectionTitle icon={Globe} title="宏观数据" sub="M2 / CPI / LPR / 北向" />
+      <SectionTitle title="宏观数据" sub="M2 / CPI / LPR / 北向" />
       <div className="px-4 space-y-3">
         {isLoading ? (
           <><Skeleton /><Skeleton /></>
@@ -424,7 +422,6 @@ function MacroSection() {
           <EmptyState label="数据同步中，请稍后刷新" />
         ) : (
           <>
-            {/* 关键数字 */}
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
                 <p className="text-[10px] mb-1" style={{ color: MUTED }}>北向净流入（最新）</p>
@@ -467,8 +464,6 @@ function MacroSection() {
                 ) : <p className="text-sm" style={{ color: DIM }}>—</p>}
               </div>
             </div>
-
-            {/* 子Tab */}
             <div className="flex gap-1.5 overflow-x-auto">
               {SUBTABS.map(t => (
                 <button key={t.key} onClick={() => setSubTab(t.key)}
@@ -482,8 +477,6 @@ function MacroSection() {
                 </button>
               ))}
             </div>
-
-            {/* 图表 */}
             <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
               {subTab === "north" && (
                 <>
@@ -607,6 +600,16 @@ export default function LedgerAIDatabase() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
+  // 各板块数量（全局共享，只请求一次）
+  const { data: countData } = trpc.aiDashboardMarketCount.useQuery();
+  const counts: Record<Market, number> = {
+    all: countData?.all ?? 0,
+    SH: countData?.SH ?? 0,
+    SZ: countData?.SZ ?? 0,
+    GEM: countData?.GEM ?? 0,
+    STAR: countData?.STAR ?? 0,
+  };
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     setRefreshKey(k => k + 1);
@@ -645,11 +648,11 @@ export default function LedgerAIDatabase() {
 
       {/* 全部内容单页展开，上下滚动 */}
       <div key={refreshKey} className="flex-1 overflow-y-auto pb-8">
-        <SurvivalSection />
+        <SurvivalSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <ValuationSection />
+        <ValuationSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <RisefallSection />
+        <RisefallSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <MacroSection />
       </div>
