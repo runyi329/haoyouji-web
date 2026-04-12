@@ -1,4 +1,4 @@
-name: 深度诊断路由
+name: 重新构建并重启
 
 on:
   workflow_dispatch:
@@ -21,8 +21,8 @@ jobs:
       - name: 上传修复脚本并运行
         run: |
           scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            scripts/tushare/deep_diag.sh \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/deep_diag.sh
+            scripts/tushare/rebuild_and_restart.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/rebuild_and_restart.sh
 
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/deep_diag.sh"
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/rebuild_and_restart.sh"
