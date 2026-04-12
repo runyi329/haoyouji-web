@@ -619,8 +619,7 @@ export default function LedgerAIDatabase() {
           <ChevronLeft className="w-4 h-4 text-white" />
         </button>
         <div className="flex-1">
-          <p className="font-bold text-sm">A股全景仪表盘</p>
-          <p className="text-[10px] opacity-75">基于全市场数据的横截面分析</p>
+          <p className="font-bold text-sm">A股数据全览图</p>
         </div>
         <button
           onClick={() => window.location.reload()}
