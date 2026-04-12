@@ -67,14 +67,17 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
-// ─── 分区标题（左侧红色竖条装饰） ────────────────────────
-function SectionTitle({ title, sub }: { title: string; sub: string }) {
+/// ─── 分区标题（左侧红色竖条装饰） ──────────────────
+function SectionTitle({ title, sub, extra }: { title: string; sub: string; extra?: React.ReactNode }) {
   return (
     <div className="px-4 pt-5 pb-2 flex items-start gap-2.5">
       <div className="w-1 rounded-full mt-0.5 flex-shrink-0" style={{ height: '36px', background: GRAD_UP }} />
-      <div>
-        <p className="text-base font-bold" style={{ color: TEXT }}>{title}</p>
-        <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>{sub}</p>
+      <div className="flex-1 flex items-start justify-between">
+        <div>
+          <p className="text-base font-bold" style={{ color: TEXT }}>{title}</p>
+          <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>{sub}</p>
+        </div>
+        {extra && <div className="flex-shrink-0 ml-2 mt-0.5">{extra}</div>}
       </div>
     </div>
   );
@@ -332,7 +335,16 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 
   return (
     <div>
-      <SectionTitle title="全生命周期" sub="统计各股自上市首日至今，现价相对首日开盘价的盈亏分布" />
+      <SectionTitle
+        title="全生命周期"
+        sub="统计各股自上市首日至今，现价相对首日开盘价的盈亏分布"
+        extra={
+          <p className="text-[11px] text-right leading-tight" style={{ color: DIM }}>
+            数据截止<br />
+            2026-04-10 15:00:00
+          </p>
+        }
+      />
 
       {/* 合并卡片：Tab + 色条 + 分隔线 + 年代图 */}
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
@@ -375,14 +387,6 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
               </button>
             );
           })}
-        </div>
-
-        {/* 头部信息行 */}
-        <div className="flex items-center justify-between px-3 pb-2">
-          <p className="text-[12px]" style={{ color: MUTED }}>
-            共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(displayData.total)}</span> 只 A 股
-          </p>
-          <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10 15:00:00</p>
         </div>
 
         {/* 双向展开色条 */}
