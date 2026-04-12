@@ -301,23 +301,116 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   return (
     <div>
       <SectionTitle title="全生命周期" sub="统计各股自上市首日至今，现价相对首日开盘价的盈亏分布" />
-      <MarketTabs market={market} onChange={setMarket} counts={displayCounts} />
-      <div className="px-4 space-y-3">
-        {/* 全生命周期主卡片 */}
-        <AnimatedSurvivalBar
-          above={displayData.above}
-          below={displayData.below}
-          equal={displayData.equal}
-          total={displayData.total}
-          abovePct={abovePct}
-          belowPct={belowPct}
-        />
-        <div className="rounded-xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
+
+      {/* 合并卡片：Tab + 色条 + 分隔线 + 年代图 */}
+      <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
+
+        {/* 顶部 Tab 选择器 */}
+        <div className="flex gap-2 px-3 pt-3 pb-2 overflow-x-auto">
+          {MARKET_KEYS.map(m => {
+            const cnt = displayCounts[m.key];
+            const active = market === m.key;
+            return (
+              <button
+                key={m.key}
+                onClick={() => setMarket(m.key)}
+                className="flex-shrink-0 flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[52px]"
+                style={{
+                  background: active ? GRAD_UP : "rgba(211,47,47,0.08)",
+                  color: active ? "#fff" : RED,
+                  boxShadow: active ? "0 3px 10px rgba(211,47,47,0.30)" : "inset 0 0 0 1px rgba(211,47,47,0.2)",
+                  transform: active ? "translateY(-1px)" : "none",
+                }}
+              >
+                <span className="text-[13px] font-semibold leading-tight">{m.label}</span>
+                {cnt > 0 && (
+                  <span className="text-[11px] leading-tight mt-0.5" style={{ opacity: active ? 0.9 : 0.7 }}>{cnt.toLocaleString()}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 头部信息行 */}
+        <div className="flex items-center justify-between px-3 pb-2">
+          <p className="text-[12px]" style={{ color: MUTED }}>
+            共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(displayData.total)}</span> 只 A 股
+          </p>
+          <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10 15:00:00</p>
+        </div>
+
+        {/* 双向展开色条 */}
+        <div
+          className="relative h-14 mx-3 rounded-lg overflow-hidden"
+          style={{ background: "#E0D8D0" }}
+        >
+          <div
+            className="absolute top-0 left-0 h-full flex flex-col items-center justify-center overflow-hidden"
+            style={{
+              width: animated ? `${abovePct}%` : "0%",
+              background: GRAD_UP,
+              transition: "width 0.85s cubic-bezier(0.4,0,0.2,1)",
+              boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.25)",
+            }}
+          >
+            <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(displayData.above)}</span>
+            <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{abovePct}%</span>
+          </div>
+          <div
+            className="absolute top-0 right-0 h-full flex flex-col items-center justify-center overflow-hidden"
+            style={{
+              width: animated ? `${belowPct}%` : "0%",
+              background: GRAD_DOWN,
+              transition: "width 0.85s cubic-bezier(0.4,0,0.2,1)",
+              boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.18)",
+            }}
+          >
+            <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(displayData.below)}</span>
+            <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{belowPct}%</span>
+          </div>
+          {displayData.equal > 0 && (
+            <div
+              className="absolute top-0 h-full flex flex-col items-center justify-center"
+              style={{
+                left: `${abovePct}%`,
+                width: `${Math.max(parseFloat(pct(displayData.equal, displayData.total)), 3)}%`,
+                minWidth: '24px',
+                background: GRAD_NEUTRAL,
+                boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.12)",
+                opacity: animated ? 1 : 0,
+                transition: "opacity 0.5s ease 0.75s",
+              }}
+            >
+              <span className="text-[10px] font-bold text-white leading-tight">{fmt(displayData.equal)}</span>
+              <span className="text-[9px] text-white" style={{ opacity: 0.9 }}>持平</span>
+            </div>
+          )}
+        </div>
+
+        {/* 图例 */}
+        <div className="flex items-center justify-center gap-4 px-3 pt-2 pb-2">
+          {[
+            { color: CHART_UP, label: "高于首日开盘价" },
+            { color: "#9E9E9E", label: "持平" },
+            { color: CHART_DOWN, label: "低于首日开盘价" },
+          ].map(item => (
+            <div key={item.label} className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: item.color }} />
+              <span className="text-[12px]" style={{ color: MUTED }}>{item.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 分隔线 */}
+        <div className="mx-3" style={{ height: '1px', background: BORDER }} />
+
+        {/* 年代柱状图 */}
+        <div className="px-3 pt-3 pb-4">
           <div className="flex items-center justify-between mb-1">
             <p className="text-sm font-semibold" style={{ color: TEXT }}>按上市年代</p>
             <p className="text-[12px]" style={{ color: MUTED }}>现价高于首日开盘价的比例</p>
           </div>
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3 mb-2">
             <div className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_UP }} />
               <span className="text-[11px]" style={{ color: MUTED }}>&gt;50% 超过半数胜出</span>
@@ -339,12 +432,8 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
               <ReferenceLine y={50} stroke="#999" strokeDasharray="4 3" label={{ value: '50%', position: 'right', fill: '#999', fontSize: 10 }} />
               <Bar dataKey="胜率" radius={[4, 4, 0, 0]} label={{ position: 'top', formatter: (v: any) => `${v}%`, fill: TEXT, fontSize: 10, fontWeight: 600 }}>
                 {eraData.map((entry, i) => (
-                  <Cell
-                    key={i}
-                    fill={entry.胜率 >= 50 ? CHART_UP : CHART_DOWN}
-                    fillOpacity={0.9}
-                    style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.15))' }}
-                  />
+                  <Cell key={i} fill={entry.胜率 >= 50 ? CHART_UP : CHART_DOWN} fillOpacity={0.9}
+                    style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.15))' }} />
                 ))}
               </Bar>
             </BarChart>
