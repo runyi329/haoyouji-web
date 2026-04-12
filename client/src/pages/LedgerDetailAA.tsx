@@ -833,7 +833,7 @@ export default function LedgerDetailAA({
                 </div>
                 <div className="text-xs opacity-60 mt-0.5">全部盈亏之和</div>
               </div>
-              <div className="col-span-2 rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
                 {(() => {
                   const totalDividend = Object.values(dividendByTag).reduce((s: number, v: any) => s + Number(v), 0);
                   const value = allTagsStats.diff - totalDividend;
@@ -847,6 +847,16 @@ export default function LedgerDetailAA({
                     </>
                   );
                 })()}
+              </div>
+              {/* AI数据库入口 */}
+              <div
+                className="rounded-xl p-2 cursor-pointer active:opacity-70 transition-opacity"
+                style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/ai-database`)}
+              >
+                <div className="text-xs opacity-75 mb-0.5">AI数据库</div>
+                <div className="text-base font-bold">进入 →</div>
+                <div className="text-xs opacity-60 mt-0.5">点击查看</div>
               </div>
             </>
           ) : (
