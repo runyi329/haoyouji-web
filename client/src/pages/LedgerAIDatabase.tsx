@@ -19,8 +19,8 @@ const BG = "#FAF3ED";
 const CARD = "#FFFFFF";
 const BORDER = "#E0E0E0";
 const TEXT = "#222222";
-const MUTED = "#757575";
-const DIM = "#9E9E9E";
+const MUTED = "#555555";
+const DIM = "#666666";
 const GREEN = "#4CAF50";
 const CHART_UP = "#D32F2F";
 const CHART_DOWN = "#4CAF50";
@@ -56,7 +56,7 @@ function Skeleton() {
 function EmptyState({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-8" style={{ color: DIM }}>
-      <p className="text-xs">{label}</p>
+      <p className="text-sm">{label}</p>
     </div>
   );
 }
@@ -65,8 +65,8 @@ function EmptyState({ label }: { label: string }) {
 function SectionTitle({ title, sub }: { title: string; sub: string }) {
   return (
     <div className="px-4 pt-5 pb-2">
-      <p className="text-sm font-bold" style={{ color: TEXT }}>{title}</p>
-      <p className="text-[10px]" style={{ color: MUTED }}>{sub}</p>
+      <p className="text-base font-bold" style={{ color: TEXT }}>{title}</p>
+      <p className="text-[12px]" style={{ color: MUTED }}>{sub}</p>
     </div>
   );
 }
@@ -89,7 +89,7 @@ function MarketTabs({
           <button
             key={m.key}
             onClick={() => onChange(m.key)}
-            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors"
+            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[12px] font-medium transition-colors"
             style={{
               background: market === m.key ? RED : "#F0F0F0",
               color: market === m.key ? "#fff" : MUTED,
@@ -194,36 +194,36 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
         <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
           {/* 标题行 */}
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px]" style={{ color: MUTED }}>
+            <p className="text-[12px]" style={{ color: MUTED }}>
               共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(displayData.total)}</span> 只在市 A 股
             </p>
-            <p className="text-[10px]" style={{ color: DIM }}>截至 2026-04-10</p>
+            <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10</p>
           </div>
 
           {/* 主数据区：涨跌两侧大字，持平居中 */}
           <div className="flex items-center mb-3">
             {/* 左：高于 */}
             <div className="flex-1 text-center">
-              <p className="text-2xl font-bold" style={{ color: CHART_UP }}>{fmt(displayData.above)}</p>
-              <p className="text-[11px] font-medium mt-0.5" style={{ color: CHART_UP }}>{abovePct}%</p>
-              <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>高于首日</p>
+              <p className="text-3xl font-bold" style={{ color: CHART_UP }}>{fmt(displayData.above)}</p>
+              <p className="text-xs font-medium mt-0.5" style={{ color: CHART_UP }}>{abovePct}%</p>
+              <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>高于首日</p>
             </div>
 
             {/* 中：持平（小字居中） */}
             <div className="flex flex-col items-center px-2">
               <div className="w-px h-8" style={{ background: BORDER }} />
               <div className="my-1 text-center">
-                <p className="text-sm font-bold" style={{ color: DIM }}>{fmt(displayData.equal)}</p>
-                <p className="text-[9px]" style={{ color: DIM }}>持平</p>
+                <p className="text-base font-bold" style={{ color: DIM }}>{fmt(displayData.equal)}</p>
+                <p className="text-[11px]" style={{ color: DIM }}>持平</p>
               </div>
               <div className="w-px h-8" style={{ background: BORDER }} />
             </div>
 
             {/* 右：低于 */}
             <div className="flex-1 text-center">
-              <p className="text-2xl font-bold" style={{ color: CHART_DOWN }}>{fmt(displayData.below)}</p>
-              <p className="text-[11px] font-medium mt-0.5" style={{ color: CHART_DOWN }}>{belowPct}%</p>
-              <p className="text-[10px] mt-0.5" style={{ color: MUTED }}>低于首日</p>
+              <p className="text-3xl font-bold" style={{ color: CHART_DOWN }}>{fmt(displayData.below)}</p>
+              <p className="text-xs font-medium mt-0.5" style={{ color: CHART_DOWN }}>{belowPct}%</p>
+              <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>低于首日</p>
             </div>
           </div>
 
@@ -236,14 +236,14 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
             </div>
             {/* 持平标注（若占比过小则显示标注） */}
             {displayData.equal > 0 && parseFloat(pct(displayData.equal, displayData.total)) < 3 && (
-              <p className="text-[9px] text-center mt-1" style={{ color: DIM }}>
+              <p className="text-[11px] text-center mt-1" style={{ color: DIM }}>
                 灰色小块 = 持平 {fmt(displayData.equal)} 只（{pct(displayData.equal, displayData.total)}%）
               </p>
             )}
           </div>
         </div>
         <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-          <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>按上市年代 — 历史胜率（%）</p>
+          <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>按上市年代 — 历史胜率（%）</p>
           <ResponsiveContainer width="100%" height={140}>
             <BarChart data={eraData} margin={{ top: 14, right: 4, left: -24, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
@@ -287,23 +287,23 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
           <EmptyState label="数据同步中，请稍后刷新" />
         ) : (
           <>
-            <p className="text-[10px]" style={{ color: DIM }}>数据截至 {fmtDate(data.latestDate)} · 共 {fmt(data.totalCount)} 只</p>
+            <p className="text-[12px]" style={{ color: DIM }}>数据截至 {fmtDate(data.latestDate)} · 共 {fmt(data.totalCount)} 只</p>
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-                <p className="text-[10px] mb-1" style={{ color: MUTED }}>负PE（亏损股）</p>
-                <p className="text-xl font-bold" style={{ color: RED }}>{fmt(data.negPeCount)}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: DIM }}>占比 {pct(data.negPeCount, data.totalCount)}%</p>
+                <p className="text-[12px] mb-1" style={{ color: MUTED }}>负PE（亏损股）</p>
+                <p className="text-2xl font-bold" style={{ color: RED }}>{fmt(data.negPeCount)}</p>
+                <p className="text-[12px] mt-0.5" style={{ color: DIM }}>占比 {pct(data.negPeCount, data.totalCount)}%</p>
               </div>
               <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-                <p className="text-[10px] mb-1" style={{ color: MUTED }}>破净股（PB&lt;1）</p>
-                <p className="text-xl font-bold" style={{ color: "#1976D2" }}>{fmt(data.breakNetCount)}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: DIM }}>占比 {pct(data.breakNetCount, data.totalCount)}%</p>
+                <p className="text-[12px] mb-1" style={{ color: MUTED }}>破净股（PB&lt;1）</p>
+                <p className="text-2xl font-bold" style={{ color: "#1976D2" }}>{fmt(data.breakNetCount)}</p>
+                <p className="text-[12px] mt-0.5" style={{ color: DIM }}>占比 {pct(data.breakNetCount, data.totalCount)}%</p>
               </div>
             </div>
             <div className="flex rounded-lg overflow-hidden" style={{ border: `1px solid ${BORDER}`, background: CARD }}>
               {(["pe", "pb", "mv"] as const).map((t, i) => (
                 <button key={t} onClick={() => setSubTab(t)}
-                  className="flex-1 py-2 text-xs font-medium transition-colors"
+                  className="flex-1 py-2 text-sm font-medium transition-colors"
                   style={{
                     background: subTab === t ? RED : CARD,
                     color: subTab === t ? "#fff" : MUTED,
@@ -315,7 +315,7 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
               ))}
             </div>
             <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-              <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>
+              <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>
                 {subTab === "pe" ? "市盈率（TTM）分布" : subTab === "pb" ? "市净率（PB）分布" : "总市值分布"}
               </p>
               <ResponsiveContainer width="100%" height={150}>
@@ -368,21 +368,21 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
           <EmptyState label="数据同步中，请稍后刷新" />
         ) : (
           <>
-            <p className="text-[10px]" style={{ color: DIM }}>最新交易日 {fmtDate(data.latestDate)}</p>
+            <p className="text-[12px]" style={{ color: DIM }}>最新交易日 {fmtDate(data.latestDate)}</p>
             <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-              <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>今日涨跌分布</p>
+              <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>今日涨跌分布</p>
               {total > 0 ? (
                 <>
                   <div className="flex rounded-full overflow-hidden h-4 mb-3">
                     <div
-                      className="flex items-center justify-center text-[9px] font-bold text-white"
+                      className="flex items-center justify-center text-[11px] font-bold text-white"
                       style={{ width: `${pct(up, total)}%`, background: CHART_UP }}
                     >
                       {parseFloat(pct(up, total)) > 10 ? `${pct(up, total)}%` : ""}
                     </div>
                     <div style={{ width: `${pct(flat, total)}%`, background: "#E0E0E0" }} />
                     <div
-                      className="flex items-center justify-center text-[9px] font-bold text-white"
+                      className="flex items-center justify-center text-[11px] font-bold text-white"
                       style={{ width: `${pct(down, total)}%`, background: CHART_DOWN }}
                     >
                       {parseFloat(pct(down, total)) > 10 ? `${pct(down, total)}%` : ""}
@@ -395,46 +395,46 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
                       { label: "下跌", value: down, color: CHART_DOWN },
                     ].map(item => (
                       <div key={item.label} className="text-center">
-                        <p className="text-base font-bold" style={{ color: item.color }}>{fmt(item.value)}</p>
-                        <p className="text-[10px]" style={{ color: MUTED }}>{item.label}</p>
+                        <p className="text-lg font-bold" style={{ color: item.color }}>{fmt(item.value)}</p>
+                        <p className="text-[12px]" style={{ color: MUTED }}>{item.label}</p>
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-4 gap-1 pt-3 border-t" style={{ borderColor: BORDER }}>
                     <div className="text-center">
-                      <p className="text-sm font-bold" style={{ color: CHART_UP }}>{fmt(limitUp)}</p>
-                      <p className="text-[10px]" style={{ color: DIM }}>涨停</p>
+                      <p className="text-base font-bold" style={{ color: CHART_UP }}>{fmt(limitUp)}</p>
+                      <p className="text-[12px]" style={{ color: DIM }}>涨停</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-bold" style={{ color: CHART_UP }}>
+                      <p className="text-base font-bold" style={{ color: CHART_UP }}>
                         {t?.max_rise != null ? `+${Number(t.max_rise).toFixed(2)}%` : "—"}
                       </p>
-                      <p className="text-[10px]" style={{ color: DIM }}>最大涨幅</p>
+                      <p className="text-[12px]" style={{ color: DIM }}>最大涨幅</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-bold" style={{ color: CHART_DOWN }}>
+                      <p className="text-base font-bold" style={{ color: CHART_DOWN }}>
                         {t?.max_fall != null ? `${Number(t.max_fall).toFixed(2)}%` : "—"}
                       </p>
-                      <p className="text-[10px]" style={{ color: DIM }}>最大跌幅</p>
+                      <p className="text-[12px]" style={{ color: DIM }}>最大跌幅</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-bold" style={{ color: CHART_DOWN }}>{fmt(limitDown)}</p>
-                      <p className="text-[10px]" style={{ color: DIM }}>跌停</p>
+                      <p className="text-base font-bold" style={{ color: CHART_DOWN }}>{fmt(limitDown)}</p>
+                      <p className="text-[12px]" style={{ color: DIM }}>跌停</p>
                     </div>
                   </div>
                 </>
               ) : (
-                <p className="text-xs text-center py-4" style={{ color: DIM }}>今日无数据（非交易日）</p>
+                <p className="text-sm text-center py-4" style={{ color: DIM }}>今日无数据（非交易日）</p>
               )}
             </div>
             {data.periods.length > 0 && period && (
               <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-medium" style={{ color: TEXT }}>区间涨跌分布</p>
+                  <p className="text-sm font-medium" style={{ color: TEXT }}>区间涨跌分布</p>
                   <div className="flex gap-1">
                     {data.periods.map((p, i) => (
                       <button key={i} onClick={() => setPeriodIdx(i)}
-                        className="px-2 py-0.5 rounded text-[10px] transition-colors"
+                        className="px-2 py-0.5 rounded text-[12px] transition-colors"
                         style={{
                           background: periodIdx === i ? RED : "#F5F5F5",
                           color: periodIdx === i ? "#fff" : MUTED,
@@ -500,50 +500,50 @@ function MacroSection() {
           <>
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-                <p className="text-[10px] mb-1" style={{ color: MUTED }}>北向净流入（最新）</p>
+                <p className="text-[12px] mb-1" style={{ color: MUTED }}>北向净流入（最新）</p>
                 {latestNorth ? (
                   <>
                     <p className="text-lg font-bold" style={{ color: Number(latestNorth.north_money) >= 0 ? RED : GREEN }}>
                       {Number(latestNorth.north_money) >= 0 ? "+" : ""}{(Number(latestNorth.north_money) / 100).toFixed(1)}亿
                     </p>
-                    <p className="text-[10px]" style={{ color: DIM }}>{fmtDate(latestNorth.trade_date)}</p>
+                    <p className="text-[12px]" style={{ color: DIM }}>{fmtDate(latestNorth.trade_date)}</p>
                   </>
-                ) : <p className="text-sm" style={{ color: DIM }}>—</p>}
+                ) : <p className="text-base" style={{ color: DIM }}>—</p>}
               </div>
               <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-                <p className="text-[10px] mb-1" style={{ color: MUTED }}>LPR（5年期）</p>
+                <p className="text-[12px] mb-1" style={{ color: MUTED }}>LPR（5年期）</p>
                 {latestLpr ? (
                   <>
                     <p className="text-lg font-bold" style={{ color: "#F57C00" }}>{latestLpr.y5}%</p>
-                    <p className="text-[10px]" style={{ color: DIM }}>{fmtDate(latestLpr.date)}</p>
+                    <p className="text-[12px]" style={{ color: DIM }}>{fmtDate(latestLpr.date)}</p>
                   </>
-                ) : <p className="text-sm" style={{ color: DIM }}>—</p>}
+                ) : <p className="text-base" style={{ color: DIM }}>—</p>}
               </div>
               <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-                <p className="text-[10px] mb-1" style={{ color: MUTED }}>M2同比增速（最新）</p>
+                <p className="text-[12px] mb-1" style={{ color: MUTED }}>M2同比增速（最新）</p>
                 {latestM2 ? (
                   <>
                     <p className="text-lg font-bold" style={{ color: "#1976D2" }}>{latestM2.m2_yoy}%</p>
-                    <p className="text-[10px]" style={{ color: DIM }}>{latestM2.month}</p>
+                    <p className="text-[12px]" style={{ color: DIM }}>{latestM2.month}</p>
                   </>
-                ) : <p className="text-sm" style={{ color: DIM }}>—</p>}
+                ) : <p className="text-base" style={{ color: DIM }}>—</p>}
               </div>
               <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-                <p className="text-[10px] mb-1" style={{ color: MUTED }}>CPI同比（最新）</p>
+                <p className="text-[12px] mb-1" style={{ color: MUTED }}>CPI同比（最新）</p>
                 {latestCpi ? (
                   <>
                     <p className="text-lg font-bold" style={{ color: Number(latestCpi.nt_yoy) > 0 ? RED : GREEN }}>
                       {Number(latestCpi.nt_yoy) > 0 ? "+" : ""}{latestCpi.nt_yoy}%
                     </p>
-                    <p className="text-[10px]" style={{ color: DIM }}>{latestCpi.month}</p>
+                    <p className="text-[12px]" style={{ color: DIM }}>{latestCpi.month}</p>
                   </>
-                ) : <p className="text-sm" style={{ color: DIM }}>—</p>}
+                ) : <p className="text-base" style={{ color: DIM }}>—</p>}
               </div>
             </div>
             <div className="flex gap-1.5 overflow-x-auto">
               {SUBTABS.map(t => (
                 <button key={t.key} onClick={() => setSubTab(t.key)}
-                  className="flex-shrink-0 px-3 py-1 rounded-full text-[10px] font-medium transition-colors"
+                  className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium transition-colors"
                   style={{
                     background: subTab === t.key ? RED : "#F0F0F0",
                     color: subTab === t.key ? "#fff" : MUTED,
@@ -556,7 +556,7 @@ function MacroSection() {
             <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
               {subTab === "north" && (
                 <>
-                  <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>北向资金净流入（近60日，亿元）</p>
+                  <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>北向资金净流入（近60日，亿元）</p>
                   <ResponsiveContainer width="100%" height={150}>
                     <BarChart
                       data={data.northMoney.map((d: any) => ({ ...d, val: (Number(d.north_money) / 100).toFixed(1) }))}
@@ -582,7 +582,7 @@ function MacroSection() {
               )}
               {subTab === "hs300" && (
                 <>
-                  <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>沪深300 收盘价走势（近60日）</p>
+                  <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>沪深300 收盘价走势（近60日）</p>
                   <ResponsiveContainer width="100%" height={150}>
                     <LineChart data={data.hs300} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
@@ -600,7 +600,7 @@ function MacroSection() {
               )}
               {subTab === "m2" && (
                 <>
-                  <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>M2同比增速（%）</p>
+                  <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>M2同比增速（%）</p>
                   <ResponsiveContainer width="100%" height={150}>
                     <LineChart data={data.m2} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
@@ -617,7 +617,7 @@ function MacroSection() {
               )}
               {subTab === "cpi" && (
                 <>
-                  <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>CPI同比（%）</p>
+                  <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>CPI同比（%）</p>
                   <ResponsiveContainer width="100%" height={150}>
                     <LineChart data={data.cpi} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
@@ -635,7 +635,7 @@ function MacroSection() {
               )}
               {subTab === "lpr" && (
                 <>
-                  <p className="text-xs font-medium mb-3" style={{ color: TEXT }}>LPR 利率（%）</p>
+                  <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>LPR 利率（%）</p>
                   <ResponsiveContainer width="100%" height={150}>
                     <LineChart data={data.lpr} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
@@ -651,10 +651,10 @@ function MacroSection() {
                     </LineChart>
                   </ResponsiveContainer>
                   <div className="flex gap-4 justify-center mt-2">
-                    <span className="flex items-center gap-1 text-[10px]" style={{ color: MUTED }}>
+                    <span className="flex items-center gap-1 text-[12px]" style={{ color: MUTED }}>
                       <span className="w-3 h-0.5 inline-block rounded" style={{ background: "#1976D2" }} />1年期
                     </span>
-                    <span className="flex items-center gap-1 text-[10px]" style={{ color: MUTED }}>
+                    <span className="flex items-center gap-1 text-[12px]" style={{ color: MUTED }}>
                       <span className="w-3 h-0.5 inline-block rounded" style={{ background: "#F57C00" }} />5年期
                     </span>
                   </div>
@@ -699,7 +699,7 @@ export default function LedgerAIDatabase() {
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
+          className="flex items-center justify-center px-3 h-7 rounded-full text-sm font-medium"
           style={{
             backgroundColor: "rgba(255,255,255,0.9)",
             color: "#D32F2F",
