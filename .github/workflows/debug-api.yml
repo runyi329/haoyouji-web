@@ -1,10 +1,10 @@
-name: 调试 AI数据库接口错误
+name: 修复数据库连接
 
 on:
   workflow_dispatch:
 
 jobs:
-  debug:
+  fix:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -18,11 +18,11 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 上传诊断脚本并运行
+      - name: 上传修复脚本并运行
         run: |
           scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            scripts/tushare/check_app.sh \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/check_app.sh
+            scripts/tushare/fix_db_password.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/fix_db_password.sh
 
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/check_app.sh"
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/fix_db_password.sh"
