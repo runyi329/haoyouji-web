@@ -140,7 +140,7 @@ function AnimatedSurvivalBar({
         <p className="text-[12px]" style={{ color: MUTED }}>
           共 <span className="font-semibold" style={{ color: TEXT }}>{fmt(total)}</span> 只 A 股
         </p>
-        <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10</p>
+        <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10 15:00:00</p>
       </div>
 
       {/* 宽色条：渐变色 + 入场动画 */}
@@ -303,21 +303,39 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
           abovePct={abovePct}
           belowPct={belowPct}
         />
-        <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
-          <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>按上市年代 — 历史胜率（%）</p>
-          <ResponsiveContainer width="100%" height={140}>
-            <BarChart data={eraData} margin={{ top: 14, right: 4, left: -24, bottom: 0 }}>
+        <div className="rounded-xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>按上市年代</p>
+            <p className="text-[12px]" style={{ color: MUTED }}>现价高于首日开盘价的比例</p>
+          </div>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_UP }} />
+              <span className="text-[11px]" style={{ color: MUTED }}>&gt;50% 超过半数胜出</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_DOWN }} />
+              <span className="text-[11px]" style={{ color: MUTED }}>&lt;50% 超过半数亏损</span>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={155}>
+            <BarChart data={eraData} margin={{ top: 20, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false} />
-              <YAxis domain={[0, 100]} tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fill: MUTED, fontSize: 10 }} axisLine={{ stroke: BORDER }} tickLine={false} />
+              <YAxis domain={[0, 100]} tick={{ fill: MUTED, fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
               <Tooltip
-                contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
-                formatter={(v: any) => [`${v}%`, "胜率"]}
+                contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 12, boxShadow: CARD_SHADOW }}
+                formatter={(v: any) => [`${v}%`, "高于首日价占比"]}
               />
-              <ReferenceLine y={50} stroke={DIM} strokeDasharray="4 2" />
-              <Bar dataKey="胜率" radius={[3, 3, 0, 0]}>
+              <ReferenceLine y={50} stroke="#999" strokeDasharray="4 3" label={{ value: '50%', position: 'right', fill: '#999', fontSize: 10 }} />
+              <Bar dataKey="胜率" radius={[4, 4, 0, 0]} label={{ position: 'top', formatter: (v: any) => `${v}%`, fill: TEXT, fontSize: 10, fontWeight: 600 }}>
                 {eraData.map((entry, i) => (
-                  <Cell key={i} fill={entry.胜率 >= 50 ? CHART_UP : CHART_DOWN} fillOpacity={0.85} />
+                  <Cell
+                    key={i}
+                    fill={entry.胜率 >= 50 ? CHART_UP : CHART_DOWN}
+                    fillOpacity={0.9}
+                    style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.15))' }}
+                  />
                 ))}
               </Bar>
             </BarChart>
