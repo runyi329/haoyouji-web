@@ -18,11 +18,11 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 检查服务器前端文件
+      - name: 重新构建并重启
         run: |
           scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            scripts/tushare/check_frontend.sh \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/check_frontend.sh
+            scripts/tushare/rebuild_and_restart.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/rebuild_and_restart.sh
 
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/check_frontend.sh"
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/rebuild_and_restart.sh"
