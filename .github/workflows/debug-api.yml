@@ -18,12 +18,18 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 上传脚本并运行增量同步
+      - name: 上传脚本并运行
         run: |
           scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            scripts/tushare/sync_daily_basic_incremental.py \
-            scripts/tushare/run_incremental_sync.sh \
+            scripts/tushare/sync_delisted_stocks.py \
+            scripts/tushare/rebuild_and_restart.sh \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/
 
+          # 步骤1：同步退市股票数据到数据库
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/run_incremental_sync.sh"
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "pip3 install tushare pymysql pandas -q 2>/dev/null; cd /root/haoyouji-web 2>/dev/null || cd /home/ubuntu/haoyouji-web; python3 /root/sync_delisted_stocks.py"
+
+          # 步骤2：重新构建并重启应用
+          ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/rebuild_and_restart.sh"

@@ -16753,27 +16753,30 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           ? `${latestDate.slice(0, 4)}-${latestDate.slice(4, 6)}-${latestDate.slice(6, 8)}`
           : latestDate;
 
+        // 统计逻辑：包含在市股票（L）和退市股票（D）
+        // 退市股票最终收盘价趋近于0，必然低于首日开盘价，全部归入“低于首日开盘价”
         const [rows] = await dbConn.execute(`
           SELECT
             b.ts_code,
+            b.list_status,
             SUBSTRING(b.list_date, 1, 4) AS list_year,
             d_first.open AS first_open,
-            d_latest.close AS latest_close
+            COALESCE(d_latest.close, 0) AS latest_close
           FROM ts_stock_basic b
-          INNER JOIN (
+          LEFT JOIN (
             SELECT ts_code, MIN(trade_date) AS min_date, MAX(trade_date) AS max_date
             FROM ts_daily
             GROUP BY ts_code
           ) date_range ON date_range.ts_code = b.ts_code
-          INNER JOIN ts_daily d_first
+          LEFT JOIN ts_daily d_first
             ON d_first.ts_code = date_range.ts_code
             AND d_first.trade_date = date_range.min_date
             AND d_first.open > 0
-          INNER JOIN ts_daily d_latest
+          LEFT JOIN ts_daily d_latest
             ON d_latest.ts_code = date_range.ts_code
             AND d_latest.trade_date = date_range.max_date
             AND d_latest.close > 0
-          WHERE b.list_status = 'L'
+          WHERE b.list_status IN ('L', 'D')
           ${mf}
         `) as any[];
         const stocks = rows as any[];
@@ -16782,11 +16785,16 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const byYear: Record<string, { above: number; below: number; total: number }> = {};
         const byEra: Record<string, { above: number; below: number; total: number }> = {};
         for (const s of stocks) {
-          const ratio = s.first_open > 0 ? s.latest_close / s.first_open : 1;
           let status: 'above' | 'below' | 'equal';
-          if (ratio > 1.001) { above++; status = 'above'; }
-          else if (ratio < 0.999) { below++; status = 'below'; }
-          else { equal++; status = 'equal'; }
+          // 退市股票或无首日开盘价数据，直接归入“低于首日开盘价”
+          if (s.list_status === 'D' || !s.first_open || s.first_open <= 0) {
+            below++; status = 'below';
+          } else {
+            const ratio = s.latest_close / s.first_open;
+            if (ratio > 1.001) { above++; status = 'above'; }
+            else if (ratio < 0.999) { below++; status = 'below'; }
+            else { equal++; status = 'equal'; }
+          }
           // 按年份分组
           const year = s.list_year || '未知';
           if (!byYear[year]) byYear[year] = { above: 0, below: 0, total: 0 };
