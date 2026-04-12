@@ -4,7 +4,7 @@
  * 路径: /ledger/:id/ai-database
  * 风格与 LedgerDetailAA 一致：顶部 #D32F2F，页面背景 #FAF3ED，卡片白色
  */
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -597,10 +597,6 @@ export default function LedgerAIDatabase() {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const utils = trpc.useUtils();
-
   // 各板块数量（全局共享，只请求一次）
   const { data: countData } = trpc.aiDashboardMarketCount.useQuery();
   const counts: Record<Market, number> = {
@@ -610,21 +606,6 @@ export default function LedgerAIDatabase() {
     GEM: countData?.GEM ?? 0,
     STAR: countData?.STAR ?? 0,
   };
-
-  const handleRefresh = useCallback(async () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    // 强制使所有缓存失效，重新从服务器拉取最新数据
-    await Promise.all([
-      utils.aiDashboardSurvival.invalidate(),
-      utils.aiDashboardValuation.invalidate(),
-      utils.aiDashboardRisefall.invalidate(),
-      utils.aiDashboardMacro.invalidate(),
-      utils.aiDashboardMarketCount.invalidate(),
-    ]);
-    setRefreshKey(k => k + 1);
-    setTimeout(() => setRefreshing(false), 1200);
-  }, [utils, refreshing]);
 
   return (
     <div className="h-screen flex flex-col" style={{ background: BG }}>
@@ -642,22 +623,21 @@ export default function LedgerAIDatabase() {
           <p className="text-[10px] opacity-75">基于全市场数据的横截面分析</p>
         </div>
         <button
-          onClick={handleRefresh}
-          className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium transition-opacity"
+          onClick={() => window.location.reload()}
+          className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
           style={{
             backgroundColor: "rgba(255,255,255,0.9)",
             color: "#D32F2F",
             border: "1px solid rgba(255,255,255,0.4)",
             minWidth: "44px",
-            opacity: refreshing ? 0.6 : 1,
           }}
         >
-          {refreshing ? "刷新中" : "刷新"}
+          刷新
         </button>
       </div>
 
       {/* 全部内容单页展开，上下滚动 */}
-      <div key={refreshKey} className="flex-1 overflow-y-auto pb-8">
+      <div className="flex-1 overflow-y-auto pb-8">
         <SurvivalSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <ValuationSection counts={counts} />
