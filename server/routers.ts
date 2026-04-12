@@ -17047,8 +17047,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
           WHERE 1=1 ${mf} ${kwCond}
           ORDER BY ${sortCol} ${sortDir}, b.ts_code ASC
-          LIMIT ? OFFSET ?`,
-          [...kwParams, input.pageSize, offset]
+          LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`,
+          kwParams
         ) as any[];
         return {
           total,
