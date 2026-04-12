@@ -429,7 +429,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 
         {/* 双向展开色条 */}
         <div
-          className="relative h-14 mx-3 rounded-lg overflow-hidden"
+          className="relative h-14 mx-3 my-3 rounded-lg overflow-hidden"
           style={{ background: "#E0D8D0" }}
         >
           <div
