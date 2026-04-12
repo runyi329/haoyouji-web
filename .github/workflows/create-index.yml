@@ -8,6 +8,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
       - name: 配置 SSH 密钥
         run: |
           mkdir -p ~/.ssh
@@ -15,103 +18,15 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: 在服务器上建立索引
+      - name: 上传建索引脚本到服务器
+        run: |
+          scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            scripts/tushare/create_index.py \
+            scripts/tushare/PyMySQL-1.1.1-py3-none-any.whl \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/
+
+      - name: 在服务器上安装依赖并建立索引
         run: |
           ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
-            echo "=== 开始建立 ts_daily 索引 ==="
-            
-            # 读取数据库配置
-            DB_CONF=$(cat /var/www/haoyouji-web/.env 2>/dev/null || cat /root/.env 2>/dev/null || echo "")
-            
-            # 从环境变量或配置文件获取数据库连接信息
-            DB_URL=$(echo "$DB_CONF" | grep DATABASE_URL | cut -d'=' -f2- | tr -d '"' | tr -d "'")
-            
-            if [ -z "$DB_URL" ]; then
-              # 尝试从应用目录读取
-              DB_URL=$(cat /var/www/haoyouji-web/.env 2>/dev/null | grep DATABASE_URL | cut -d'=' -f2-)
-            fi
-            
-            echo "正在建立索引（可能需要5-15分钟）..."
-            
-            # 用 Python 执行建索引
-            python3 << 'PYEOF'
-import subprocess
-import os
-
-# 从环境文件读取数据库URL
-db_url = ""
-for env_file in ["/var/www/haoyouji-web/.env", "/root/.env", "/home/ubuntu/.env"]:
-    try:
-        with open(env_file) as f:
-            for line in f:
-                if line.startswith("DATABASE_URL=") or line.startswith("EXTERNAL_DATABASE_URL="):
-                    db_url = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    break
-        if db_url:
-            break
-    except:
-        pass
-
-if not db_url:
-    print("未找到数据库URL，尝试直接连接本地MySQL...")
-    # 尝试直接连接本地MySQL
-    import pymysql
-    try:
-        conn = pymysql.connect(
-            host='127.0.0.1', port=3306,
-            user='root', password='',
-            database='haoyouji',
-            connect_timeout=10
-        )
-    except Exception as e:
-        print(f"本地连接失败: {e}")
-        exit(1)
-else:
-    print(f"使用数据库URL: {db_url[:50]}...")
-    import pymysql
-    from urllib.parse import urlparse
-    parsed = urlparse(db_url)
-    conn = pymysql.connect(
-        host=parsed.hostname,
-        port=parsed.port or 3306,
-        user=parsed.username,
-        password=parsed.password,
-        database=parsed.path.lstrip('/').split('?')[0],
-        connect_timeout=30,
-        read_timeout=1800,
-        write_timeout=1800,
-    )
-
-cur = conn.cursor()
-
-# 检查现有索引
-print("检查现有索引...")
-cur.execute("SHOW INDEX FROM ts_daily")
-existing = [row[2] for row in cur.fetchall()]
-print(f"现有索引: {set(existing)}")
-
-# 建立复合索引 (ts_code, trade_date)
-if 'idx_ts_daily_code_date' not in existing:
-    print("建立索引 idx_ts_daily_code_date (ts_code, trade_date)...")
-    cur.execute("ALTER TABLE ts_daily ADD INDEX idx_ts_daily_code_date (ts_code, trade_date)")
-    conn.commit()
-    print("✅ 索引建立成功！")
-else:
-    print("✅ 索引已存在，跳过")
-
-# 建立 ts_code 单列索引（用于GROUP BY）
-if 'idx_ts_daily_code' not in existing:
-    print("建立索引 idx_ts_daily_code (ts_code)...")
-    cur.execute("ALTER TABLE ts_daily ADD INDEX idx_ts_daily_code (ts_code)")
-    conn.commit()
-    print("✅ ts_code 索引建立成功！")
-else:
-    print("✅ ts_code 索引已存在，跳过")
-
-cur.close()
-conn.close()
-print("=== 索引建立完成 ===")
-PYEOF
-            echo "=== 完成 ==="
-          ENDSSH
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "pip3 install /root/PyMySQL-1.1.1-py3-none-any.whl --break-system-packages -q 2>/dev/null || true && python3 /root/create_index.py"
