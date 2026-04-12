@@ -1,0 +1,44 @@
+name: Tushare 早期数据补充（1990-1995年）
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sync-early:
+    name: 补充同步1990-1995年A股历史数据
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      - name: 🔑 配置 SSH 密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 📦 上传脚本和依赖到服务器
+        run: |
+          scp -i ~/.ssh/id_rsa \
+            scripts/tushare/sync_early.py \
+            scripts/tushare/PyMySQL-1.1.1-py3-none-any.whl \
+            root@124.223.54.69:/root/
+
+      - name: 🚀 在服务器上安装依赖并运行同步
+        run: |
+          ssh -i ~/.ssh/id_rsa root@124.223.54.69 << 'EOF'
+            set -e
+            echo "=== 安装依赖 ==="
+            pip3 install /root/PyMySQL-1.1.1-py3-none-any.whl --break-system-packages -q 2>/dev/null || true
+            pip3 install tushare pandas --break-system-packages -q 2>/dev/null || true
+
+            echo "=== 启动早期数据同步 ==="
+            cd /root
+            python3 sync_early.py
+
+            echo "=== 同步完成 ==="
+            tail -5 /root/sync_early.log
+          EOF
