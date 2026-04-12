@@ -16993,6 +16993,87 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         };
       } finally { /* pool auto-manages connections */ }
     }),
+
+  /** 个股全生命周期涨跌天数统计 */
+  aiStockLifecycle: publicProcedure
+    .input(z.object({
+      page: z.number().int().min(1).default(1),
+      pageSize: z.number().int().min(10).max(200).default(50),
+      sortBy: z.enum(['up', 'down', 'flat', 'total', 'upRate']).default('upRate'),
+      sortDir: z.enum(['asc', 'desc']).default('desc'),
+      keyword: z.string().optional(),
+      market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR', 'DELISTED']).default('all'),
+    }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        const marketCond: Record<string, string> = {
+          all: "AND b.list_status IN ('L','D')",
+          SH: "AND b.list_status = 'L' AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
+          SZ: "AND b.list_status = 'L' AND b.ts_code LIKE '0%'",
+          GEM: "AND b.list_status = 'L' AND b.ts_code LIKE '3%'",
+          STAR: "AND b.list_status = 'L' AND b.ts_code LIKE '688%'",
+          DELISTED: "AND b.list_status = 'D'",
+        };
+        const mf = marketCond[input.market] || marketCond.all;
+        const kwCond = input.keyword ? `AND (b.ts_code LIKE ? OR b.name LIKE ?)` : '';
+        const kwParams: string[] = input.keyword ? [`%${input.keyword}%`, `%${input.keyword}%`] : [];
+        const sortColMap: Record<string, string> = {
+          up: 'up_days', down: 'down_days', flat: 'flat_days',
+          total: 'total_days', upRate: 'up_rate',
+        };
+        const sortCol = sortColMap[input.sortBy] || 'up_rate';
+        const sortDir = input.sortDir === 'asc' ? 'ASC' : 'DESC';
+        const offset = (input.page - 1) * input.pageSize;
+        const [countRows] = await dbConn.execute(
+          `SELECT COUNT(*) AS cnt FROM ts_stock_basic b WHERE 1=1 ${mf} ${kwCond}`,
+          kwParams
+        ) as any[];
+        const total = Number((countRows as any[])[0]?.cnt) || 0;
+        const [rows] = await dbConn.execute(
+          `SELECT
+            b.ts_code,
+            b.name,
+            b.list_status,
+            COALESCE(s.up_days, 0) AS up_days,
+            COALESCE(s.down_days, 0) AS down_days,
+            COALESCE(s.flat_days, 0) AS flat_days,
+            COALESCE(s.total_days, 0) AS total_days,
+            CASE WHEN COALESCE(s.total_days, 0) > 0
+              THEN ROUND(COALESCE(s.up_days, 0) * 100.0 / s.total_days, 1)
+              ELSE 0 END AS up_rate
+          FROM ts_stock_basic b
+          LEFT JOIN (
+            SELECT ts_code,
+              SUM(CASE WHEN pct_chg > 0 THEN 1 ELSE 0 END) AS up_days,
+              SUM(CASE WHEN pct_chg < 0 THEN 1 ELSE 0 END) AS down_days,
+              SUM(CASE WHEN pct_chg = 0 THEN 1 ELSE 0 END) AS flat_days,
+              COUNT(*) AS total_days
+            FROM ts_daily GROUP BY ts_code
+          ) s ON s.ts_code = b.ts_code
+          WHERE 1=1 ${mf} ${kwCond}
+          ORDER BY ${sortCol} ${sortDir}, b.ts_code ASC
+          LIMIT ? OFFSET ?`,
+          [...kwParams, input.pageSize, offset]
+        ) as any[];
+        return {
+          total,
+          page: input.page,
+          pageSize: input.pageSize,
+          list: (rows as any[]).map(r => ({
+            tsCode: r.ts_code as string,
+            name: r.name as string,
+            listStatus: r.list_status as string,
+            upDays: Number(r.up_days),
+            downDays: Number(r.down_days),
+            flatDays: Number(r.flat_days),
+            totalDays: Number(r.total_days),
+            upRate: Number(r.up_rate),
+          })),
+        };
+      } finally { /* pool auto-manages connections */ }
+    }),
 });;
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
