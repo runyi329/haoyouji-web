@@ -91,22 +91,26 @@ function MarketTabs({
   counts: Record<Market, number>;
 }) {
   return (
-    <div className="flex gap-1.5 px-4 pb-2 overflow-x-auto">
+    <div className="flex gap-2 px-4 pb-3 overflow-x-auto">
       {MARKET_KEYS.map(m => {
         const cnt = counts[m.key];
+        const active = market === m.key;
         return (
           <button
             key={m.key}
             onClick={() => onChange(m.key)}
-            className="flex-shrink-0 px-2.5 py-1 rounded-full text-[12px] font-medium transition-all duration-200"
+            className="flex-shrink-0 flex flex-col items-center justify-center px-3 py-1.5 rounded-xl transition-all duration-200 min-w-[52px]"
             style={{
-              background: market === m.key ? GRAD_UP : "#EEEBE6",
-              color: market === m.key ? "#fff" : MUTED,
-              boxShadow: market === m.key ? "0 2px 8px rgba(211,47,47,0.35)" : "none",
-              transform: market === m.key ? "translateY(-1px)" : "none",
+              background: active ? GRAD_UP : "rgba(211,47,47,0.08)",
+              color: active ? "#fff" : RED,
+              boxShadow: active ? "0 3px 10px rgba(211,47,47,0.30)" : "inset 0 0 0 1px rgba(211,47,47,0.2)",
+              transform: active ? "translateY(-1px)" : "none",
             }}
           >
-            {m.label}{cnt > 0 ? `(${cnt})` : ""}
+            <span className="text-[13px] font-semibold leading-tight">{m.label}</span>
+            {cnt > 0 && (
+              <span className="text-[11px] leading-tight mt-0.5" style={{ opacity: active ? 0.9 : 0.7 }}>{cnt.toLocaleString()}</span>
+            )}
           </button>
         );
       })}
