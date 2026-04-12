@@ -263,14 +263,32 @@ const SURVIVAL_STATIC: Record<Market, {
   },
 };
 
+// 数字滚动计数 Hook
+function useCountUp(target: number, duration: number, active: boolean) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!active) { setCount(0); return; }
+    let start: number | null = null;
+    const step = (ts: number) => {
+      if (!start) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      // easeOutCubic
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(ease * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    const raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [target, duration, active]);
+  return count;
+}
+
 function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const [market, setMarket] = useState<Market>("all");
+  const [animated, setAnimated] = useState(false);
 
   // 使用静态数据（来源：AKShare/东方财富，统计截至2026-04-10）
-  // 等 Tushare ts_daily 同步完成后切回接口数据
   const data = SURVIVAL_STATIC[market];
-
-  // 同时尝试从接口获取（有数据时自动覆盖静态数据）
   const { data: liveData } = trpc.aiDashboardSurvival.useQuery({ market });
   const displayData = (liveData && liveData.total > 0) ? liveData : data;
 
@@ -285,6 +303,20 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 
   const abovePct = parseFloat(pct(displayData.above, displayData.total));
   const belowPct = parseFloat(pct(displayData.below, displayData.total));
+
+  // 切换 Tab 时重播动画
+  useEffect(() => {
+    setAnimated(false);
+    const t = setTimeout(() => setAnimated(true), 80);
+    return () => clearTimeout(t);
+  }, [market]);
+
+  // 数字滚动计数（与色条展开同步，0.85s）
+  const countAbove = useCountUp(displayData.above, 850, animated);
+  const countBelow = useCountUp(displayData.below, 850, animated);
+  const countEqual = useCountUp(displayData.equal, 850, animated);
+  const pctAbove = useCountUp(Math.round(abovePct * 10), 850, animated) / 10;
+  const pctBelow = useCountUp(Math.round(belowPct * 10), 850, animated) / 10;
 
   // 动态counts：优先用接口数据，否则用静态
   const staticCounts: Record<Market, number> = {
@@ -367,8 +399,8 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
               boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.25)",
             }}
           >
-            <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(displayData.above)}</span>
-            <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{abovePct}%</span>
+            <span className="text-sm font-bold text-white leading-tight drop-shadow">{countAbove.toLocaleString()}</span>
+            <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{pctAbove.toFixed(1)}%</span>
           </div>
           <div
             className="absolute top-0 right-0 h-full flex flex-col items-center justify-center overflow-hidden"
@@ -379,8 +411,8 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
               boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.18)",
             }}
           >
-            <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(displayData.below)}</span>
-            <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{belowPct}%</span>
+            <span className="text-sm font-bold text-white leading-tight drop-shadow">{countBelow.toLocaleString()}</span>
+            <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{pctBelow.toFixed(1)}%</span>
           </div>
           {displayData.equal > 0 && (
             <div
@@ -395,7 +427,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
                 transition: "opacity 0.5s ease 0.75s",
               }}
             >
-              <span className="text-[10px] font-bold text-white leading-tight">{fmt(displayData.equal)}</span>
+              <span className="text-[10px] font-bold text-white leading-tight">{countEqual.toLocaleString()}</span>
               <span className="text-[9px] text-white" style={{ opacity: 0.9 }}>持平</span>
             </div>
           )}
