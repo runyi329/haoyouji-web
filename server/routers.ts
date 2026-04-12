@@ -17426,9 +17426,9 @@ export const adminFeatureRouter = router({
         const [rows] = await dbConn.execute(
           `SELECT
             COUNT(*) AS all_count,
-            SUM(CASE WHEN LEFT(ts_code,2)='60' THEN 1 ELSE 0 END) AS sh_count,
-            SUM(CASE WHEN LEFT(ts_code,2)='00' THEN 1 ELSE 0 END) AS sz_count,
-            SUM(CASE WHEN LEFT(ts_code,2)='30' THEN 1 ELSE 0 END) AS gem_count,
+            SUM(CASE WHEN exchange='SSE' AND LEFT(ts_code,3) NOT IN ('688') THEN 1 ELSE 0 END) AS sh_count,
+            SUM(CASE WHEN exchange='SZSE' AND LEFT(ts_code,3) NOT IN ('300','301') THEN 1 ELSE 0 END) AS sz_count,
+            SUM(CASE WHEN LEFT(ts_code,3) IN ('300','301') THEN 1 ELSE 0 END) AS gem_count,
             SUM(CASE WHEN LEFT(ts_code,3)='688' THEN 1 ELSE 0 END) AS star_count
           FROM ts_stock_basic
           WHERE list_status='L'`
