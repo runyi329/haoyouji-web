@@ -461,6 +461,15 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   );
 }
 
+// 估值分布和涨跌统计专用 Tab（不含退市）
+const MARKET_KEYS_NO_DELISTED: { key: Market; label: string }[] = [
+  { key: "all", label: "全市场" },
+  { key: "SH", label: "沪市" },
+  { key: "SZ", label: "深市" },
+  { key: "GEM", label: "创业板" },
+  { key: "STAR", label: "科创板" },
+];
+
 // ─── 估値分布 ──────────────────────────────────────────────
 function ValuationSection({ counts }: { counts: Record<Market, number> }) {
   const [market, setMarket] = useState<Market>("all");
@@ -473,8 +482,36 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
   return (
     <div>
       <SectionTitle title="估值分布" sub="PE / PB / 市值结构" />
-      <MarketTabs market={market} onChange={setMarket} counts={counts} />
-      <div className="px-4 space-y-3">
+      {/* 合并卡片：Tab + 内容 */}
+      <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
+        {/* 顶部内嵌 Tab */}
+        <div className="flex border-b" style={{ borderColor: BORDER }}>
+          {MARKET_KEYS_NO_DELISTED.map((m, idx) => {
+            const cnt = counts[m.key];
+            const active = market === m.key;
+            return (
+              <button
+                key={m.key}
+                onClick={() => setMarket(m.key)}
+                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
+                style={{
+                  background: active ? "#F5EDED" : "transparent",
+                  borderRight: idx < MARKET_KEYS_NO_DELISTED.length - 1 ? `1px solid ${BORDER}` : "none",
+                }}
+              >
+                {active && (
+                  <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: RED }} />
+                )}
+                <span className="text-[13px] font-semibold leading-tight" style={{ color: active ? RED : "#555" }}>{m.label}</span>
+                {cnt > 0 && (
+                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: active ? RED : "#999" }}>{cnt.toLocaleString()}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {/* 内容区 */}
+        <div className="p-3 space-y-3">
         {isLoading ? (
           <><Skeleton /><Skeleton /></>
         ) : !data || !data.latestDate ? (
@@ -508,7 +545,7 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
                 </button>
               ))}
             </div>
-            <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+            <div className="rounded-xl p-4" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
               <p className="text-sm font-medium mb-3" style={{ color: TEXT }}>
                 {subTab === "pe" ? "市盈率（TTM）分布" : subTab === "pb" ? "市净率（PB）分布" : "总市值分布"}
               </p>
@@ -531,6 +568,7 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
             </div>
           </>
         )}
+        </div>
       </div>
     </div>
   );
@@ -554,8 +592,36 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
   return (
     <div>
       <SectionTitle title="涨跌统计" sub="今日及近期涨跌分布" />
-      <MarketTabs market={market} onChange={setMarket} counts={counts} />
-      <div className="px-4 space-y-3">
+      {/* 合并卡片：Tab + 内容 */}
+      <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
+        {/* 顶部内嵌 Tab */}
+        <div className="flex border-b" style={{ borderColor: BORDER }}>
+          {MARKET_KEYS_NO_DELISTED.map((m, idx) => {
+            const cnt = counts[m.key];
+            const active = market === m.key;
+            return (
+              <button
+                key={m.key}
+                onClick={() => setMarket(m.key)}
+                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
+                style={{
+                  background: active ? "#F5EDED" : "transparent",
+                  borderRight: idx < MARKET_KEYS_NO_DELISTED.length - 1 ? `1px solid ${BORDER}` : "none",
+                }}
+              >
+                {active && (
+                  <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: RED }} />
+                )}
+                <span className="text-[13px] font-semibold leading-tight" style={{ color: active ? RED : "#555" }}>{m.label}</span>
+                {cnt > 0 && (
+                  <span className="text-[11px] leading-tight mt-0.5" style={{ color: active ? RED : "#999" }}>{cnt.toLocaleString()}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {/* 内容区 */}
+        <div className="p-3 space-y-3">
         {isLoading ? (
           <><Skeleton /><Skeleton /></>
         ) : !data || !data.latestDate ? (
@@ -659,6 +725,7 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );
