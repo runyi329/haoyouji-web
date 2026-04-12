@@ -119,7 +119,7 @@ function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: n
   const saveMutation = trpc.equity.setMemberWeight.useMutation({
     onSuccess: () => {
       utils.equity.getWeightMembers.invalidate({ ledgerId });
-      utils.equity.getUserWeight.invalidate();
+      utils.equity.getMemberWeightScore.invalidate();
       setSavedWeight(autoResourceWeight);
     },
     onError: (e) => { alert('保存失败：' + e.message); },
@@ -539,8 +539,8 @@ export default function EquityWeightManage() {
         const freshMember = (freshData as Member[]).find(m => m.userId === variables.userId);
         if (freshMember) setSelected(freshMember);
       }
-      // 使所有成员的 getUserWeight 缓存失效，确保每个成员返回账本首页后立即看到最新权重
-      utils.equity.getUserWeight.invalidate();
+      // 使所有成员的 getMemberWeightScore 缓存失效，确保每个成员返回账本首页后立即看到最新权重
+      utils.equity.getMemberWeightScore.invalidate();
       setMsg('保存成功');
       setTimeout(() => setMsg(''), 2500);
     },

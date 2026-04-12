@@ -1369,13 +1369,13 @@ export default function LedgerDetail() {
   // 所有类型股权总和（用于顶部累计股权格子，未来新增类型自动包含）
   const totalAllSharesWithDividend = useTotalSharesWithDividend(myShares ?? []);
   // 查询当前用户权重
-  const { data: userWeight } = trpc.equity.getUserWeight.useQuery(
-    { userId: effectiveShareUserId },
+  const { data: userWeight } = trpc.equity.getMemberWeightScore.useQuery(
+    { ledgerId: Number(ledgerId), userId: effectiveShareUserId },
     { enabled: isCustomAI && !!effectiveShareUserId, refetchOnWindowFocus: true, refetchOnMount: 'always', staleTime: 0 }
   );
-  const totalWeight = userWeight?.totalWeight ?? 1.00;
-  const resourceWeight = userWeight?.resourceWeight ?? 1.00;
-  const capitalWeight = userWeight?.capitalWeight ?? 1.00;
+  const totalWeight = userWeight?.totalMultiplier ?? 1.00;
+  const resourceWeight = userWeight?.resourceMultiplier ?? 0;
+  const capitalWeight = userWeight?.capitalMultiplier ?? 0;
   // 加权股权 = 原始张数 × 权重
   const weightedSharesTotal = totalAllSharesWithDividend * totalWeight;
   // 权重详情弹窗状态（必须在useQuery之前声明，避免初始化前访问）
