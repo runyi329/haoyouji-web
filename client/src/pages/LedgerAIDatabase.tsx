@@ -224,6 +224,128 @@ function AnimatedSurvivalBar({
 // ─── 生存分析 ──────────────────────────────────────────────────────
 // // 静态备用数据已删除，全部改为从后端 ts_daily 实时计算;
 
+// ─── 年份横向柱状图（自定义CSS动效） ──────────────────────────────────────
+const STOCK_GREEN = "#00B050"; // A股标准股票绿
+const STOCK_GREEN_GRAD = "linear-gradient(90deg, #00B050 0%, #00C853 100%)";
+
+function EraBarChart({
+  data,
+  animated,
+  transitioning,
+}: {
+  data: { name: string; 低于首日: number; total: number }[];
+  animated: boolean;
+  transitioning: boolean;
+}) {
+  // 每根柱子的实时百分比（用于滚动数字和宽度展开）
+  const [displayPcts, setDisplayPcts] = useState<number[]>([]);
+
+  useEffect(() => {
+    setDisplayPcts(new Array(data.length).fill(0));
+  }, [data.length, transitioning]);
+
+  useEffect(() => {
+    if (!animated || data.length === 0) return;
+    const duration = 900; // ms
+    const start = performance.now();
+    const targets = data.map(d => d["低于首日"]);
+
+    const frame = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      // easeOutCubic: 到终点前明显减速
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setDisplayPcts(targets.map(t => parseFloat((ease * t).toFixed(1))));
+      if (progress < 1) requestAnimationFrame(frame);
+    };
+    const raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [animated, data]);
+
+  if (data.length === 0) return null;
+
+  const ROW_H = 20; // 每行高度px
+  const ROW_GAP = 4; // 行间距
+  const BAR_H = 10;  // 柱子高度px
+  const LABEL_W = 32; // 左侧年份标签宽度
+  const PCT_W = 36;  // 右侧百分比宽度
+
+  return (
+    <div style={{ width: '100%' }}>
+      {/* X轴刻度行 */}
+      <div className="flex mb-1" style={{ paddingLeft: LABEL_W, paddingRight: PCT_W }}>
+        {[0, 25, 50, 75, 100].map(v => (
+          <div key={v} className="flex-1 text-center" style={{ fontSize: 8, color: MUTED, lineHeight: 1 }}>
+            {v === 0 ? '' : `${v}%`}
+          </div>
+        ))}
+      </div>
+      {/* 柱子行 */}
+      {data.map((row, i) => {
+        const targetPct = row["低于首日"];
+        const curPct = displayPcts[i] ?? 0;
+        return (
+          <div
+            key={row.name}
+            className="flex items-center"
+            style={{ height: ROW_H + ROW_GAP, marginBottom: 0 }}
+          >
+            {/* 年份标签 */}
+            <div
+              className="flex-shrink-0 text-right pr-1.5"
+              style={{ width: LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${ROW_H}px` }}
+            >
+              {row.name}
+            </div>
+            {/* 柱子轨道区 */}
+            <div
+              className="relative flex-1"
+              style={{ height: BAR_H, borderRadius: 2, background: '#E8E0D8' }}
+            >
+              {/* 50% 参考线 */}
+              <div
+                className="absolute top-0 bottom-0"
+                style={{ left: '50%', width: 1, background: '#bbb', opacity: 0.6 }}
+              />
+              {/* 动效柱子 */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  height: '100%',
+                  width: transitioning ? '0%' : `${curPct}%`,
+                  background: STOCK_GREEN_GRAD,
+                  borderRadius: '2px 3px 3px 2px',
+                  transition: transitioning ? 'none' : undefined,
+                  boxShadow: '0 1px 3px rgba(0,176,80,0.25)',
+                }}
+              />
+            </div>
+            {/* 百分比数字 */}
+            <div
+              className="flex-shrink-0 text-right"
+              style={{
+                width: PCT_W,
+                fontSize: 9,
+                fontWeight: 600,
+                color: curPct > 0 ? STOCK_GREEN : MUTED,
+                lineHeight: `${ROW_H}px`,
+                paddingLeft: 4,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {transitioning ? '0.0' : curPct.toFixed(1)}%
+            </div>
+          </div>
+        );
+      })}
+      {/* X轴底线 */}
+      <div style={{ marginLeft: LABEL_W, marginRight: PCT_W, height: 1, background: BORDER, marginTop: 2 }} />
+    </div>
+  );
+}
+
 // 数字滚动计数 Hook
 function useCountUp(target: number, duration: number, active: boolean) {
   const [count, setCount] = useState(0);
@@ -415,46 +537,10 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
         {/* 分隔线 */}
         <div className="mx-3" style={{ height: '1px', background: BORDER }} />
 
-        {/* 按年份横向柱状图（年份在左，胜率向右延伸） */}
-        <div className="px-3 pt-3 pb-2">
+        {/* 按年份横向柱状图（自定义CSS动效版） */}
+        <div className="px-3 pt-3 pb-3">
           <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>按上市年份（最新价低于首日开盘价占比）</p>
-          {/* 每行高度 14px，强制显示所有年份 */}
-          <ResponsiveContainer width="100%" height={eraData.length * 14 + 24}>
-            <BarChart
-              data={eraData}
-              layout="vertical"
-              margin={{ top: 0, right: 36, left: 0, bottom: 0 }}
-              barSize={8}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
-              <YAxis
-                dataKey="name"
-                type="category"
-                width={36}
-                tick={{ fill: MUTED, fontSize: 9 }}
-                axisLine={false}
-                tickLine={false}
-                interval={0}
-              />
-              <XAxis
-                type="number"
-                domain={[0, 100]}
-                tick={{ fill: MUTED, fontSize: 9 }}
-                axisLine={{ stroke: BORDER }}
-                tickLine={false}
-                tickFormatter={(v) => `${v}%`}
-              />
-              <Tooltip
-                contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 12, boxShadow: CARD_SHADOW }}
-                formatter={(v: any, _: any, props: any) => [
-                  `${v}% （${props.payload?.total ?? ''}只上市）`,
-                  "低于首日价占比"
-                ]}
-              />
-              <ReferenceLine x={50} stroke="#aaa" strokeDasharray="4 3" />
-              <Bar dataKey="低于首日" radius={[0, 3, 3, 0]} fill="#B0B0B0" fillOpacity={0.85} label={{ position: 'right', formatter: (v: any) => `${v}%`, fill: TEXT, fontSize: 9, fontWeight: 600 }} isAnimationActive={true} />
-            </BarChart>
-          </ResponsiveContainer>
+          <EraBarChart data={eraData} animated={animated} transitioning={transitioning} />
         </div>
       </div>
     </div>
@@ -462,7 +548,8 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 }
 
 // 估值分布和涨跌统计专用 Tab（不含退市）
-const MARKET_KEYS_NO_DELISTED: { key: Market; label: string }[] = [
+type MarketNoDelisted = "all" | "SH" | "SZ" | "GEM" | "STAR";
+const MARKET_KEYS_NO_DELISTED: { key: MarketNoDelisted; label: string }[] = [
   { key: "all", label: "全市场" },
   { key: "SH", label: "沪市" },
   { key: "SZ", label: "深市" },
@@ -472,7 +559,7 @@ const MARKET_KEYS_NO_DELISTED: { key: Market; label: string }[] = [
 
 // ─── 估値分布 ──────────────────────────────────────────────
 function ValuationSection({ counts }: { counts: Record<Market, number> }) {
-  const [market, setMarket] = useState<Market>("all");
+  const [market, setMarket] = useState<MarketNoDelisted>("all");
   const [subTab, setSubTab] = useState<"pe" | "pb" | "mv">("pe");
   const { data, isLoading } = trpc.aiDashboardValuation.useQuery({ market });
   const COLORS = [RED, "#F57C00", "#1976D2", "#388E3C", "#7B1FA2", "#00838F"];
@@ -576,7 +663,7 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
 
 // ─── 涨跌统计 ──────────────────────────────────────────────
 function RisefallSection({ counts }: { counts: Record<Market, number> }) {
-  const [market, setMarket] = useState<Market>("all");
+  const [market, setMarket] = useState<MarketNoDelisted>("all");
   const [periodIdx, setPeriodIdx] = useState(0);
   const { data, isLoading } = trpc.aiDashboardRisefall.useQuery({ market });
 
