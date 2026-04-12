@@ -599,22 +599,9 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
         <div className="mx-3" style={{ height: '1px', background: BORDER }} />
 
         {/* 按年份横向柱状图（年份在左，胜率向右延伸） */}
-        <div className="px-3 pt-3 pb-4">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-sm font-semibold" style={{ color: TEXT }}>按上市年份</p>
-            <p className="text-[12px]" style={{ color: MUTED }}>现价高于首日开盘价的比例</p>
-          </div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_UP }} />
-              <span className="text-[11px]" style={{ color: MUTED }}>&gt;50% 超过半数胜出</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm inline-block" style={{ background: CHART_DOWN }} />
-              <span className="text-[11px]" style={{ color: MUTED }}>&lt;50% 超过半数亏损</span>
-            </div>
-          </div>
-          {/* 每行高度 14px，35年共 490px，强制显示所有年份 */}
+        <div className="px-3 pt-3 pb-2">
+          <p className="text-sm font-semibold mb-2" style={{ color: TEXT }}>按上市年份</p>
+          {/* 每行高度 14px，强制显示所有年份 */}
           <ResponsiveContainer width="100%" height={eraData.length * 14 + 24}>
             <BarChart
               data={eraData}
@@ -655,13 +642,24 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          {/* 图例，与色条风格统一 */}
+          <div className="flex items-center justify-center gap-4 pt-2 pb-1">
+            <div className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CHART_UP }} />
+              <span className="text-[12px]" style={{ color: MUTED }}>&gt;50% 超过半数胜出</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: CHART_DOWN }} />
+              <span className="text-[12px]" style={{ color: MUTED }}>&lt;50% 超过半数亏损</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── 估值分布 ──────────────────────────────────────────────
+// ─── 估値分布 ──────────────────────────────────────────────
 function ValuationSection({ counts }: { counts: Record<Market, number> }) {
   const [market, setMarket] = useState<Market>("all");
   const [subTab, setSubTab] = useState<"pe" | "pb" | "mv">("pe");
