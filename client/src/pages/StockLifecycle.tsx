@@ -7,6 +7,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { ChevronLeft, Search, X, ChevronUp, ChevronDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { keepPreviousData } from "@tanstack/react-query";
 
 // ─── 配色（与 LedgerAIDatabase 一致） ────────────────────────────────────
 const RED = "#D32F2F";
@@ -40,6 +41,17 @@ const SORT_COLS: { key: SortBy; label: string; width: number }[] = [
 
 const PAGE_SIZE = 50;
 
+type StockItem = {
+  tsCode: string;
+  name: string;
+  listStatus: string;
+  upDays: number;
+  downDays: number;
+  flatDays: number;
+  totalDays: number;
+  upRate: number;
+};
+
 export default function StockLifecycle() {
   const { id: ledgerId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
@@ -50,54 +62,54 @@ export default function StockLifecycle() {
   const [sortBy, setSortBy] = useState<SortBy>("upRate");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
-  const [allItems, setAllItems] = useState<any[]>([]);
-  const [hasMore, setHasMore] = useState(true);
 
-  // 切换市场/关键词/排序时重置列表
-  const resetList = useCallback(() => {
-    setAllItems([]);
-    setPage(1);
-    setHasMore(true);
-  }, []);
+  // 累积列表：key 为 market+keyword+sortBy+sortDir，变化时清空
+  const listKey = `${market}|${keyword}|${sortBy}|${sortDir}`;
+  const listKeyRef = useRef(listKey);
+  const [allItems, setAllItems] = useState<StockItem[]>([]);
+  const [total, setTotal] = useState(0);
 
-  const prevMarket = useRef(market);
-  const prevKeyword = useRef(keyword);
-  const prevSortBy = useRef(sortBy);
-  const prevSortDir = useRef(sortDir);
-
+  // 当筛选条件变化时重置
   useEffect(() => {
-    if (
-      prevMarket.current !== market ||
-      prevKeyword.current !== keyword ||
-      prevSortBy.current !== sortBy ||
-      prevSortDir.current !== sortDir
-    ) {
-      prevMarket.current = market;
-      prevKeyword.current = keyword;
-      prevSortBy.current = sortBy;
-      prevSortDir.current = sortDir;
-      resetList();
+    if (listKeyRef.current !== listKey) {
+      listKeyRef.current = listKey;
+      setAllItems([]);
+      setTotal(0);
+      setPage(1);
     }
-  }, [market, keyword, sortBy, sortDir, resetList]);
+  }, [listKey]);
 
   const { data, isFetching } = trpc.aiStockLifecycle.useQuery(
     { page, pageSize: PAGE_SIZE, market, keyword: keyword || undefined, sortBy, sortDir },
-    { keepPreviousData: true }
+    { placeholderData: keepPreviousData }
   );
 
+  // 追加数据到列表
+  const appendedPageRef = useRef(0);
   useEffect(() => {
     if (!data) return;
-    if (page === 1) {
+    // 防止同一页重复追加
+    if (appendedPageRef.current === data.page && data.page !== 1) return;
+    appendedPageRef.current = data.page;
+
+    setTotal(data.total);
+    if (data.page === 1) {
       setAllItems(data.list);
     } else {
       setAllItems(prev => {
-        const existingCodes = new Set(prev.map((s: any) => s.tsCode));
-        const newItems = data.list.filter((s: any) => !existingCodes.has(s.tsCode));
+        const existingCodes = new Set(prev.map(s => s.tsCode));
+        const newItems = data.list.filter(s => !existingCodes.has(s.tsCode));
         return [...prev, ...newItems];
       });
     }
-    setHasMore(data.list.length === PAGE_SIZE && allItems.length + data.list.length < data.total);
   }, [data]);
+
+  // 重置 appendedPageRef 当 listKey 变化
+  useEffect(() => {
+    appendedPageRef.current = 0;
+  }, [listKey]);
+
+  const hasMore = allItems.length < total;
 
   // 无限滚动
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -147,8 +159,8 @@ export default function StockLifecycle() {
         </button>
         <div className="flex-1">
           <p className="font-bold text-lg">个股涨跌天数</p>
-          {data && (
-            <p className="text-xs opacity-80">共 {data.total.toLocaleString()} 只</p>
+          {total > 0 && (
+            <p className="text-xs opacity-80">共 {total.toLocaleString()} 只</p>
           )}
         </div>
       </div>
@@ -225,6 +237,13 @@ export default function StockLifecycle() {
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto"
       >
+        {/* 初始加载中 */}
+        {allItems.length === 0 && isFetching && (
+          <div className="flex items-center justify-center h-32 text-sm" style={{ color: MUTED }}>
+            加载中...
+          </div>
+        )}
+        {/* 无数据 */}
         {allItems.length === 0 && !isFetching && (
           <div className="flex items-center justify-center h-32 text-sm" style={{ color: MUTED }}>
             暂无数据
@@ -233,14 +252,16 @@ export default function StockLifecycle() {
         {allItems.map((stock, idx) => (
           <StockRow key={stock.tsCode} stock={stock} idx={idx} sortBy={sortBy} />
         ))}
-        {isFetching && (
+        {/* 加载更多 */}
+        {isFetching && allItems.length > 0 && (
           <div className="flex items-center justify-center py-4 text-xs" style={{ color: MUTED }}>
             加载中...
           </div>
         )}
+        {/* 全部加载完 */}
         {!hasMore && allItems.length > 0 && (
           <div className="flex items-center justify-center py-4 text-xs" style={{ color: MUTED }}>
-            已加载全部 {allItems.length} 只
+            已加载全部 {allItems.length.toLocaleString()} 只
           </div>
         )}
       </div>
@@ -249,7 +270,7 @@ export default function StockLifecycle() {
 }
 
 // ─── 单行股票组件 ─────────────────────────────────────────────────────────
-function StockRow({ stock, idx, sortBy }: { stock: any; idx: number; sortBy: SortBy }) {
+function StockRow({ stock, idx, sortBy }: { stock: StockItem; idx: number; sortBy: SortBy }) {
   const isDelisted = stock.listStatus === "D";
   const upRateColor = stock.upRate >= 50 ? RED : STOCK_GREEN;
 
