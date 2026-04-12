@@ -564,7 +564,7 @@ function Router() {
         <Route path="/ledger/:id/qrcodes" component={QrCodeManager} />
 
         {/* 个股列表 & 详情 */}
-        <Route path="/stock-lifecycle" component={StockLifecycle} />
+        <Route path="/ledger/:id/stock-lifecycle" component={StockLifecycle} />
         <Route path="/stock/:tsCode" component={StockDetail} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />

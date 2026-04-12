@@ -4,7 +4,7 @@
  * 路径: /ledger/:id/stock-lifecycle
  */
 import { useState, useCallback, useRef, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { ChevronLeft, Search, X, ChevronUp, ChevronDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { keepPreviousData } from "@tanstack/react-query";
@@ -53,6 +53,7 @@ type StockItem = {
 };
 
 export default function StockLifecycle() {
+  const { id: ledgerId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
 
   const [market, setMarket] = useState<Market>("all");
