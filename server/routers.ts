@@ -16799,7 +16799,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           else if (status === 'below') byEra[era].below++;
         }
         return { total, above, below, equal, byEra, byYear, updatedAt: new Date().toISOString() };
-      } finally { await dbConn.end(); }
+      } finally { /* pool auto-manages connections */ }
     }),
 
   /** 估值分布：全市场PE/PB/市值分布 */
@@ -16859,7 +16859,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           }
         }
         return { latestDate, totalCount, negPeCount, breakNetCount, peDistribution: peBuckets, pbDistribution: pbBuckets, mvDistribution: mvBuckets };
-      } finally { await dbConn.end(); }
+      } finally { /* pool auto-manages connections */ }
     }),
 
   /** 涨跌统计：今日/近期涨跌分布 */
@@ -16923,10 +16923,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           periodResults.push({ label: p.label, total: pData.length, distribution: buckets });
         }
         return { latestDate, today, periods: periodResults };
-      } finally { await dbConn.end(); }
+   } finally { /* pool auto-manages connections */ }
     }),
 
-  /** 宏观数据：M2/CPI/LPR/北向资金/指数趋势 */
+  /** 宏观经济指标据：M2/CPI/LPR/北向资金/指数趋势 */
   aiDashboardMacro: publicProcedure
     .query(async () => {
       const dbConn = await getDbConnection();
@@ -16944,10 +16944,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           northMoney: (hsgtRows as any[]).reverse(),
           hs300: (indexRows as any[]).reverse(),
         };
-      } finally { await dbConn.end(); }
+      } finally { /* pool auto-manages connections */ }
     }),
-
-  /** 各板块股票数量（用于Tab标签显示，从 ts_stock_basic 实时计算） */
+  /** 各板块股票数量量（用于Tab标签显示，从 ts_stock_basic 实时计算） */
   aiDashboardMarketCount: publicProcedure
     .query(async () => {
       const dbConn = await getDbConnection();
@@ -16971,10 +16970,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           GEM: Number(r.gem_count) || 0,
           STAR: Number(r.star_count) || 0,
         };
-      } finally { await dbConn.end(); }
+      } finally { /* pool auto-manages connections */ }
     }),
-
-});
+});;
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
   // 获取所有容器定义
