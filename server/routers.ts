@@ -17231,37 +17231,35 @@ export const adminFeatureRouter = router({
         // 板块过滤条件（基于股票代码前缀）
         const marketCond: Record<string, string> = {
           all: '',
-          SH: "AND b.ts_code LIKE '6%'",
+          SH: "AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
           SZ: "AND b.ts_code LIKE '0%'",
           GEM: "AND b.ts_code LIKE '3%'",
           STAR: "AND b.ts_code LIKE '688%'",
         };
         const mf = marketCond[input.market] || '';
-        // 从 ts_daily 计算每只股票：首日开盘价 vs 最新收盘价
-        // 首日开盘价 = 该股票最早交易日的 open
-        // 最新收盘价 = 该股票最新交易日的 close
+        // 优化SQL：用GROUP BY预聚合替代相关子查询，只扫描一遍 ts_daily
+        // 第一步：一次性获取每只股票的最早和最新交易日
+        // 第二步：再 JOIN 回去拿对应日期的开盘价和收盘价
         const [rows] = await dbConn.execute(`
           SELECT
             b.ts_code,
-            b.list_date,
             SUBSTRING(b.list_date, 1, 4) AS list_year,
-            first_day.open AS first_open,
-            latest_day.close AS latest_close
+            d_first.open AS first_open,
+            d_latest.close AS latest_close
           FROM ts_stock_basic b
           INNER JOIN (
-            SELECT ts_code, open
-            FROM ts_daily d1
-            WHERE d1.trade_date = (
-              SELECT MIN(d2.trade_date) FROM ts_daily d2 WHERE d2.ts_code = d1.ts_code
-            ) AND d1.open > 0
-          ) first_day ON first_day.ts_code = b.ts_code
-          INNER JOIN (
-            SELECT ts_code, close
-            FROM ts_daily d3
-            WHERE d3.trade_date = (
-              SELECT MAX(d4.trade_date) FROM ts_daily d4 WHERE d4.ts_code = d3.ts_code
-            ) AND d3.close > 0
-          ) latest_day ON latest_day.ts_code = b.ts_code
+            SELECT ts_code, MIN(trade_date) AS min_date, MAX(trade_date) AS max_date
+            FROM ts_daily
+            GROUP BY ts_code
+          ) date_range ON date_range.ts_code = b.ts_code
+          INNER JOIN ts_daily d_first
+            ON d_first.ts_code = date_range.ts_code
+            AND d_first.trade_date = date_range.min_date
+            AND d_first.open > 0
+          INNER JOIN ts_daily d_latest
+            ON d_latest.ts_code = date_range.ts_code
+            AND d_latest.trade_date = date_range.max_date
+            AND d_latest.close > 0
           WHERE b.list_status = 'L'
           ${mf}
         `) as any[];
