@@ -1,0 +1,52 @@
+name: 重启 MySQL 服务
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restart-mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 配置 SSH 密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 重启 MySQL 并验证
+        run: |
+          ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            echo "=== 当前 MySQL 状态 ==="
+            systemctl status mysql 2>/dev/null || service mysql status 2>/dev/null || echo "无法获取MySQL状态"
+
+            echo ""
+            echo "=== 重启 MySQL ==="
+            systemctl restart mysql 2>/dev/null || service mysql restart 2>/dev/null || echo "重启失败，尝试其他方式"
+
+            echo ""
+            echo "=== 等待3秒后检查状态 ==="
+            sleep 3
+            systemctl status mysql 2>/dev/null | head -10 || service mysql status 2>/dev/null | head -10
+
+            echo ""
+            echo "=== 验证数据库连接 ==="
+            mysql -u root -e "SHOW DATABASES;" 2>/dev/null && echo "MySQL连接成功！" || echo "MySQL连接失败"
+
+            echo ""
+            echo "=== 检查 ts_daily 表 ==="
+            mysql -u root -e "SELECT COUNT(*) AS total FROM ts_daily;" crm_db 2>/dev/null || echo "无法查询ts_daily"
+
+            echo ""
+            echo "=== 重启应用服务 ==="
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart haoyouji-web --update-env' 2>&1 || true
+            sleep 5
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
+
+            echo ""
+            echo "=== 验证API接口 ==="
+            curl -s "http://localhost:3000/api/trpc/aiDashboardMarketCount?input=%7B%22json%22%3Anull%7D" \
+              --max-time 15 2>&1 | head -200 || echo "API请求失败"
+          EOF
