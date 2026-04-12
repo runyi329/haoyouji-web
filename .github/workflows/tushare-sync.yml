@@ -47,7 +47,9 @@ jobs:
             python3 --version
 
             echo "=== 安装依赖 ==="
-            pip3 install tushare pymysql pandas --quiet 2>&1 | tail -3
+            pip3 install tushare pymysql pandas --quiet --break-system-packages 2>&1 | tail -5 || \
+            pip3 install tushare pymysql pandas --quiet 2>&1 | tail -5 || \
+            python3 -m pip install tushare pymysql pandas --quiet --break-system-packages 2>&1 | tail -5
 
             echo "=== 开始同步（task=${{ github.event.inputs.task }}）==="
             cd /root
