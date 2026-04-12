@@ -71,13 +71,15 @@ function EmptyState({ label }: { label: string }) {
 function SectionTitle({ title, sub, extra }: { title: string; sub: string; extra?: React.ReactNode }) {
   return (
     <div className="px-4 pt-5 pb-2 flex items-start gap-2.5">
-      <div className="w-1 rounded-full mt-0.5 flex-shrink-0" style={{ height: '36px', background: GRAD_UP }} />
-      <div className="flex-1 flex items-start justify-between">
-        <div>
-          <p className="text-base font-bold" style={{ color: TEXT }}>{title}</p>
-          <p className="text-[12px] mt-0.5 whitespace-nowrap" style={{ color: MUTED }}>{sub}</p>
+      <div className="w-1 rounded-full mt-1 flex-shrink-0" style={{ height: '32px', background: GRAD_UP }} />
+      <div className="flex-1 min-w-0">
+        {/* 标题行：标题左对齐 + 截止时间右对齐，同一行 */}
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-base font-bold flex-shrink-0" style={{ color: TEXT }}>{title}</p>
+          {extra && <div className="flex-shrink-0">{extra}</div>}
         </div>
-        {extra && <div className="flex-shrink-0 ml-2 mt-0.5">{extra}</div>}
+        {/* 副标题行 */}
+        <p className="text-[12px] mt-0.5" style={{ color: MUTED }}>{sub}</p>
       </div>
     </div>
   );
