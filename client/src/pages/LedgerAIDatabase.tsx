@@ -376,11 +376,10 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
     <div>
       <SectionTitle
         title="全生命周期"
-        sub="统计各股自上市首日至今，现价相对首日开盘价的盈亏分布"
+        sub="上市首日至今现价相对首日开盘价的盈亏分布"
         extra={
-          <p className="text-[11px] text-right leading-tight" style={{ color: DIM }}>
-            数据截止<br />
-            2026-04-10 15:00:00
+          <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
+            数据截止 2026-04-10 15:00:00
           </p>
         }
       />
