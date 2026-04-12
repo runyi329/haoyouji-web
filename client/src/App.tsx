@@ -244,6 +244,8 @@ const WineProductRomanico = lazy(() => import("./pages/wine/products/WineProduct
 const WineProductRomanicoShare = lazy(() => import("./pages/wine/products/WineProductRomanicoShare"));
 // IDEALIGHT 红颜派（STEVEN_HUANG）
 const IdeaLightHome = lazy(() => import("./pages/idealight/IdeaLightHome"));
+// 汉明专属产品页面
+const HanmingHome = lazy(() => import("./pages/hanming/HanmingHome"));
 // 润仪算力研发中心（jiang）
 const JiangHome = lazy(() => import("./pages/jiang/JiangHome"));
 const JiangServices = lazy(() => import("./pages/jiang/JiangServices"));
@@ -504,6 +506,8 @@ function Router() {
         <Route path="/share/jiang" component={JiangShare} />
         {/* IDEALIGHT 红颜派（STEVEN_HUANG，无需登录） */}
         <Route path="/idealight" component={IdeaLightHome} />
+        {/* 汉明专属产品页面 */}
+        <Route path="/hanming" component={HanmingHome} />
         {/* 红酒文化商会（cx8618） */}
         <Route path="/wine" component={WineHome} />
         <Route path="/wine/news" component={WineNews} />

@@ -22,6 +22,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const isJiang = user?.username === 'jiang';
   const isYJH = user?.username === 'YJH';
   const isStevenHuang = user?.username === 'STEVEN_HUANG';
+  const isHanming = user?.id === 4957321;
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
@@ -53,6 +54,10 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       // STEVEN_HUANG：跳转到IDEALIGHT红颜派商家主页
       setShowLedgerMenu(false);
       setLocation('/idealight');
+    } else if (isHanming) {
+      // 汉明：跳转到汉明专属产品页面
+      setShowLedgerMenu(false);
+      setLocation('/hanming');
     } else if (isYJH) {
       // YJH：跳转到数金研投网站
       setShowLedgerMenu(false);
@@ -184,6 +189,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                   <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/ba9a86df64fd3309eeb754e6b875940a_c32624a6.jpg" className="w-10 h-10 object-cover rounded-full" alt="R1" />
                 ) : isStevenHuang ? (
                   <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/idealight_icon_white_ca457943.png" className="w-full h-full object-cover" alt="IDEALIGHT" />
+                ) : isHanming ? (
+                  <span className="text-white text-xs font-bold leading-tight text-center">汉明</span>
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}
