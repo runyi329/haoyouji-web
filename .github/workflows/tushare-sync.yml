@@ -46,10 +46,15 @@ jobs:
             echo "=== 检查 Python 环境 ==="
             python3 --version
 
-            echo "=== 安装依赖 ==="
-            pip3 install tushare pymysql pandas --quiet --break-system-packages 2>&1 | tail -5 || \
-            pip3 install tushare pymysql pandas --quiet 2>&1 | tail -5 || \
-            python3 -m pip install tushare pymysql pandas --quiet --break-system-packages 2>&1 | tail -5
+            echo "=== 检查已安装的包 ==="
+            python3 -c "import tushare; print('tushare OK:', tushare.__version__)" 2>/dev/null || echo "tushare 未安装"
+            python3 -c "import pymysql; print('pymysql OK:', pymysql.__version__)" 2>/dev/null || echo "pymysql 未安装"
+            python3 -c "import pandas; print('pandas OK:', pandas.__version__)" 2>/dev/null || echo "pandas 未安装"
+
+            echo "=== 尝试安装依赖（如果网络可用）==="
+            pip3 install tushare pymysql pandas --quiet --break-system-packages 2>&1 | tail -3 || \
+            pip3 install tushare pymysql pandas --quiet 2>&1 | tail -3 || \
+            echo "网络不可用，使用已有包"
 
             echo "=== 开始同步（task=${{ github.event.inputs.task }}）==="
             cd /root
@@ -65,5 +70,5 @@ jobs:
             done
 
             echo "=== 同步完成，最终日志 ==="
-            tail -20 /root/tushare_sync.log
+            tail -20 /root/tushare_sync.log 2>/dev/null || cat /root/tushare_sync_stdout.log 2>/dev/null || echo "日志为空"
           ENDSSH
