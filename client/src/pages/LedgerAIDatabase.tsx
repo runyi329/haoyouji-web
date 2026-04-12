@@ -147,50 +147,55 @@ function AnimatedSurvivalBar({
         <p className="text-[12px]" style={{ color: DIM }}>截至 2026-04-10 15:00:00</p>
       </div>
 
-      {/* 宽色条：渐变色 + 入场动画 */}
-      <div className="flex h-14 mx-3 mb-1 rounded-lg overflow-hidden" style={{ background: "#eee" }}>
-        {/* 红色区：高于首日 */}
+      {/* 宽色条：双向展开动画 — 红色从左、绿色从右同时展开，持平最后淡入 */}
+      <div
+        className="relative h-14 mx-3 mb-1 rounded-lg overflow-hidden"
+        style={{ background: "#E0D8D0" }}
+      >
+        {/* 红色区：从左向右展开 */}
         <div
-          className="flex flex-col items-center justify-center overflow-hidden"
+          className="absolute top-0 left-0 h-full flex flex-col items-center justify-center overflow-hidden"
           style={{
             width: animated ? `${abovePct}%` : "0%",
             background: GRAD_UP,
-            transition: "width 0.9s cubic-bezier(0.4,0,0.2,1)",
-            boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)",
+            transition: "width 0.85s cubic-bezier(0.4,0,0.2,1)",
+            boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.25)",
           }}
         >
           <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(above)}</span>
           <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{abovePct}%</span>
         </div>
-        {/* 灰色区：持平 */}
+        {/* 绿色区：从右向左展开 */}
+        <div
+          className="absolute top-0 right-0 h-full flex flex-col items-center justify-center overflow-hidden"
+          style={{
+            width: animated ? `${belowPct}%` : "0%",
+            background: GRAD_DOWN,
+            transition: "width 0.85s cubic-bezier(0.4,0,0.2,1)",
+            boxShadow: "inset 0 -3px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.18)",
+          }}
+        >
+          <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(below)}</span>
+          <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{belowPct}%</span>
+        </div>
+        {/* 灰色区：持平，居中淡入（延迟0.7s） */}
         {equal > 0 && (
           <div
-            className="flex flex-col items-center justify-center overflow-hidden"
+            className="absolute top-0 h-full flex flex-col items-center justify-center"
             style={{
-              width: animated ? `${Math.max(equalPct, 4)}%` : "0%",
-              minWidth: animated ? '28px' : '0',
+              left: `${abovePct}%`,
+              width: `${Math.max(equalPct, 3)}%`,
+              minWidth: '24px',
               background: GRAD_NEUTRAL,
-              transition: "width 0.9s cubic-bezier(0.4,0,0.2,1) 0.1s",
-              boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.1)",
+              boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.12)",
+              opacity: animated ? 1 : 0,
+              transition: "opacity 0.5s ease 0.75s",
             }}
           >
             <span className="text-[10px] font-bold text-white leading-tight">{fmt(equal)}</span>
             <span className="text-[9px] text-white" style={{ opacity: 0.9 }}>持平</span>
           </div>
         )}
-        {/* 绿色区：低于首日 */}
-        <div
-          className="flex flex-col items-center justify-center overflow-hidden flex-1"
-          style={{
-            background: GRAD_DOWN,
-            boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15)",
-            opacity: animated ? 1 : 0,
-            transition: "opacity 0.4s ease 0.7s",
-          }}
-        >
-          <span className="text-sm font-bold text-white leading-tight drop-shadow">{fmt(below)}</span>
-          <span className="text-[11px] text-white" style={{ opacity: 0.92 }}>{belowPct}%</span>
-        </div>
       </div>
 
       {/* 图例行 */}
