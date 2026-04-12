@@ -221,52 +221,7 @@ function AnimatedSurvivalBar({
 }
 
 // ─── 生存分析 ──────────────────────────────────────────────────────
-// ─── 生存分析静态数据（来源：AKShare/东方财富，统计截至2026-04-10） ──────────
-const SURVIVAL_STATIC: Record<Market, {
-  total: number; above: number; below: number; equal: number;
-  byEra: Record<string, { above: number; below: number; total: number }>;
-}> = {
-  all:  { total: 5193, above: 1756, below: 3433, equal: 4,
-    byEra: {
-      "2000年前":  { above: 110, below: 200, total: 310 },
-      "2000-2009": { above: 368, below: 591, total: 959 },
-      "2010-2014": { above: 312, below: 644, total: 956 },
-      "2015-2019": { above: 462, below: 1031, total: 1493 },
-      "2020至今":  { above: 504, below: 967, total: 1471 },
-    }
-  },
-  SH:   { total: 1702, above: 691, below: 1009, equal: 2,
-    byEra: {
-      "2000年前":  { above: 95, below: 155, total: 250 },
-      "2000-2009": { above: 198, below: 252, total: 450 },
-      "2010-2014": { above: 148, below: 252, total: 400 },
-      "2015-2019": { above: 138, below: 212, total: 350 },
-      "2020至今":  { above: 112, below: 138, total: 250 },
-    }
-  },
-  SZ:   { total: 528, above: 173, below: 355, equal: 0,
-    byEra: {
-      "2000年前":  { above: 12, below: 38, total: 50 },
-      "2000-2009": { above: 62, below: 118, total: 180 },
-      "2010-2014": { above: 48, below: 102, total: 150 },
-      "2015-2019": { above: 32, below: 58, total: 90 },
-      "2020至今":  { above: 19, below: 39, total: 58 },
-    }
-  },
-  GEM:  { total: 1394, above: 427, below: 965, equal: 2,
-    byEra: {
-      "2000-2009": { above: 28, below: 52, total: 80 },
-      "2010-2014": { above: 98, below: 202, total: 300 },
-      "2015-2019": { above: 148, below: 352, total: 500 },
-      "2020至今":  { above: 153, below: 359, total: 512 },
-    }
-  },
-  STAR: { total: 605, above: 200, below: 405, equal: 0,
-    byEra: {
-      "2020至今":  { above: 200, below: 405, total: 605 },
-    }
-  },
-};
+// // 静态备用数据已删除，全部改为从后端 ts_daily 实时计算;
 
 // 数字滚动计数 Hook
 function useCountUp(target: number, duration: number, active: boolean) {
@@ -293,162 +248,12 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const [animated, setAnimated] = useState(false);
   const [transitioning, setTransitioning] = useState(false); // true时禁用transition，让宽度瞬间归零
 
-  // 使用静态数据（来源：AKShare/东方财富，统计截至2026-04-10）
-  const data = SURVIVAL_STATIC[market];
-  const { data: liveData } = trpc.aiDashboardSurvival.useQuery({ market });
-  const displayData = (liveData && liveData.total > 0) ? liveData : data;
+  // 全部从后端 ts_daily 实时计算，无静态备用数据
+  const { data: liveData, isLoading: survivalLoading } = trpc.aiDashboardSurvival.useQuery({ market });
+  const displayData = liveData ?? { total: 0, above: 0, below: 0, equal: 0, byEra: {}, byYear: {} };
 
-  // 按年分组静态数据（全市场，1991-2025）
-  const YEAR_DATA_ALL: Record<string, { above: number; below: number; total: number }> = {
-    "1990": { above: 0,   below: 4,   total: 4   },
-    "1991": { above: 1,   below: 4,   total: 5   },
-    "1992": { above: 1,   below: 32,  total: 34  },
-    "1993": { above: 30,  below: 68,  total: 98  },
-    "1994": { above: 30,  below: 57,  total: 88  },
-    "1995": { above: 10,  below: 8,   total: 18  },
-    "1996": { above: 64,  below: 95,  total: 159 },
-    "1997": { above: 41,  below: 133, total: 174 },
-    "1998": { above: 28,  below: 65,  total: 93  },
-    "1999": { above: 25,  below: 56,  total: 81  },
-    "2000": { above: 26,  below: 88,  total: 114 },
-    "2001": { above: 22,  below: 51,  total: 73  },
-    "2002": { above: 23,  below: 42,  total: 65  },
-    "2003": { above: 29,  below: 34,  total: 63  },
-    "2004": { above: 34,  below: 60,  total: 94  },
-    "2005": { above: 8,   below: 6,   total: 14  },
-    "2006": { above: 18,  below: 44,  total: 62  },
-    "2007": { above: 13,  below: 109, total: 122 },
-    "2008": { above: 16,  below: 58,  total: 74  },
-    "2009": { above: 8,   below: 83,  total: 91  },
-    "2010": { above: 30,  below: 292, total: 322 },
-    "2011": { above: 24,  below: 239, total: 264 },
-    "2012": { above: 30,  below: 113, total: 143 },
-    "2013": { above: 1,   below: 1,   total: 2   },
-    "2014": { above: 48,  below: 70,  total: 118 },
-    "2015": { above: 97,  below: 117, total: 214 },
-    "2016": { above: 120, below: 106, total: 226 },
-    "2017": { above: 251, below: 180, total: 432 },
-    "2018": { above: 68,  below: 36,  total: 104 },
-    "2019": { above: 96,  below: 106, total: 202 },
-    "2020": { above: 135, below: 258, total: 393 },
-    "2021": { above: 145, below: 338, total: 483 },
-    "2022": { above: 152, below: 193, total: 345 },
-    "2023": { above: 83,  below: 153, total: 236 },
-    "2024": { above: 19,  below: 58,  total: 77  },
-    "2025": { above: 28,  below: 62,  total: 90  },
-    "2026": { above: 1,   below: 14,  total: 15  },
-  };
-  // 各板块按年份静态数据
-  const YEAR_DATA_SH: Record<string, { above: number; below: number; total: number }> = {
-    "1990": { above: 0,  below: 4,  total: 4  },
-    "1991": { above: 0,  below: 1,  total: 1  },
-    "1992": { above: 0,  below: 19, total: 20 },
-    "1993": { above: 16, below: 41, total: 57 },
-    "1994": { above: 15, below: 39, total: 55 },
-    "1995": { above: 7,  below: 6,  total: 13 },
-    "1996": { above: 39, below: 45, total: 84 },
-    "1997": { above: 19, below: 50, total: 69 },
-    "1998": { above: 12, below: 36, total: 48 },
-    "1999": { above: 11, below: 23, total: 34 },
-    "2000": { above: 14, below: 58, total: 72 },
-    "2001": { above: 22, below: 50, total: 72 },
-    "2002": { above: 22, below: 42, total: 64 },
-    "2003": { above: 29, below: 34, total: 63 },
-    "2004": { above: 21, below: 37, total: 58 },
-    "2005": { above: 1,  below: 1,  total: 2  },
-    "2006": { above: 6,  below: 8,  total: 14 },
-    "2007": { above: 2,  below: 23, total: 25 },
-    "2008": { above: 3,  below: 3,  total: 6  },
-    "2009": { above: 1,  below: 6,  total: 7  },
-    "2010": { above: 7,  below: 21, total: 28 },
-    "2011": { above: 10, below: 26, total: 36 },
-    "2012": { above: 10, below: 15, total: 25 },
-    "2013": { above: 0,  below: 1,  total: 1  },
-    "2014": { above: 22, below: 20, total: 42 },
-    "2015": { above: 35, below: 54, total: 89 },
-    "2016": { above: 59, below: 44, total: 103 },
-    "2017": { above: 106, below: 104, total: 210 },
-    "2018": { above: 38, below: 18, total: 56 },
-    "2019": { above: 29, below: 26, total: 55 },
-    "2020": { above: 44, below: 46, total: 90 },
-    "2021": { above: 47, below: 41, total: 88 },
-    "2022": { above: 22, below: 9,  total: 31 },
-    "2023": { above: 14, below: 22, total: 36 },
-    "2024": { above: 2,  below: 15, total: 17 },
-    "2025": { above: 6,  below: 17, total: 23 },
-    "2026": { above: 0,  below: 4,  total: 4  },
-  };
-  const YEAR_DATA_SZ: Record<string, { above: number; below: number; total: number }> = {
-    "1991": { above: 1,  below: 3,  total: 4  },
-    "1992": { above: 1,  below: 13, total: 14 },
-    "1993": { above: 14, below: 27, total: 41 },
-    "1994": { above: 15, below: 18, total: 33 },
-    "1995": { above: 3,  below: 2,  total: 5  },
-    "1996": { above: 25, below: 50, total: 75 },
-    "1997": { above: 22, below: 83, total: 105 },
-    "1998": { above: 16, below: 29, total: 45 },
-    "1999": { above: 14, below: 33, total: 47 },
-    "2000": { above: 12, below: 30, total: 42 },
-    "2001": { above: 0,  below: 1,  total: 1  },
-    "2002": { above: 1,  below: 0,  total: 1  },
-    "2004": { above: 13, below: 23, total: 36 },
-    "2005": { above: 7,  below: 5,  total: 12 },
-    "2006": { above: 12, below: 36, total: 48 },
-    "2007": { above: 11, below: 86, total: 97 },
-    "2008": { above: 13, below: 55, total: 68 },
-    "2009": { above: 5,  below: 45, total: 50 },
-    "2010": { above: 17, below: 169, total: 186 },
-    "2011": { above: 7,  below: 103, total: 110 },
-    "2012": { above: 8,  below: 43, total: 51 },
-    "2013": { above: 1,  below: 0,  total: 1  },
-    "2014": { above: 13, below: 17, total: 30 },
-    "2015": { above: 18, below: 22, total: 40 },
-    "2016": { above: 23, below: 23, total: 46 },
-    "2017": { above: 52, below: 30, total: 82 },
-    "2018": { above: 12, below: 8,  total: 20 },
-    "2019": { above: 13, below: 13, total: 26 },
-    "2020": { above: 32, below: 22, total: 54 },
-    "2021": { above: 18, below: 16, total: 34 },
-    "2022": { above: 27, below: 13, total: 40 },
-    "2023": { above: 5,  below: 18, total: 23 },
-    "2024": { above: 2,  below: 5,  total: 7  },
-    "2025": { above: 3,  below: 12, total: 15 },
-    "2026": { above: 1,  below: 1,  total: 2  },
-  };
-  const YEAR_DATA_GEM: Record<string, { above: number; below: number; total: number }> = {
-    "2009": { above: 2,  below: 32,  total: 34  },
-    "2010": { above: 6,  below: 102, total: 108 },
-    "2011": { above: 7,  below: 110, total: 118 },
-    "2012": { above: 12, below: 55,  total: 67  },
-    "2014": { above: 13, below: 33,  total: 46  },
-    "2015": { above: 44, below: 41,  total: 85  },
-    "2016": { above: 38, below: 39,  total: 77  },
-    "2017": { above: 93, below: 46,  total: 140 },
-    "2018": { above: 18, below: 10,  total: 28  },
-    "2019": { above: 29, below: 22,  total: 51  },
-    "2020": { above: 31, below: 76,  total: 107 },
-    "2021": { above: 32, below: 167, total: 199 },
-    "2022": { above: 48, below: 102, total: 150 },
-    "2023": { above: 33, below: 77,  total: 110 },
-    "2024": { above: 9,  below: 29,  total: 38  },
-    "2025": { above: 12, below: 21,  total: 33  },
-    "2026": { above: 0,  below: 3,   total: 3   },
-  };
-  const YEAR_DATA_STAR: Record<string, { above: number; below: number; total: number }> = {
-    "2019": { above: 25, below: 45,  total: 70  },
-    "2020": { above: 28, below: 114, total: 142 },
-    "2021": { above: 48, below: 114, total: 162 },
-    "2022": { above: 55, below: 69,  total: 124 },
-    "2023": { above: 31, below: 36,  total: 67  },
-    "2024": { above: 6,  below: 9,   total: 15  },
-    "2025": { above: 7,  below: 12,  total: 19  },
-    "2026": { above: 0,  below: 6,   total: 6   },
-  };
-  const YEAR_DATA_MAP: Record<Market, Record<string, { above: number; below: number; total: number }>> = {
-    all: YEAR_DATA_ALL, SH: YEAR_DATA_SH, SZ: YEAR_DATA_SZ, GEM: YEAR_DATA_GEM, STAR: YEAR_DATA_STAR,
-  };
-  // 年份数据：优先用接口数据中的 byYear，否则根据当前市场选择静态数据
-  const byYearSrc = (liveData && (liveData as any).byYear) ? (liveData as any).byYear : YEAR_DATA_MAP[market];
+  // 年份数据：直接使用接口返回的 byYear
+  const byYearSrc = (liveData as any)?.byYear ?? {};
   const years = Object.keys(byYearSrc).sort();
   // 按年份降序排列（最新年在上方）
   const eraData = [...years].reverse().map(y => ({
@@ -479,16 +284,13 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const pctAbove = useCountUp(Math.round(abovePct * 10), 850, animated) / 10;
   const pctBelow = useCountUp(Math.round(belowPct * 10), 850, animated) / 10;
 
-  // 动态counts：优先用接口数据，否则用静态
-  const staticCounts: Record<Market, number> = {
-    all: 5193, SH: 1702, SZ: 528, GEM: 1394, STAR: 605
-  };
+  // 直接使用后端返回的实时股票数量
   const displayCounts: Record<Market, number> = {
-    all: counts.all || staticCounts.all,
-    SH: counts.SH || staticCounts.SH,
-    SZ: counts.SZ || staticCounts.SZ,
-    GEM: counts.GEM || staticCounts.GEM,
-    STAR: counts.STAR || staticCounts.STAR,
+    all: counts.all || 0,
+    SH: counts.SH || 0,
+    SZ: counts.SZ || 0,
+    GEM: counts.GEM || 0,
+    STAR: counts.STAR || 0,
   };
 
   return (
@@ -498,7 +300,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
         sub="上市首日至今现价相对首日开盘价的盈亏分布"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
-            数据截止 2026-04-10 15:00:00
+            {survivalLoading ? '数据加载中...' : liveData ? `实时计算 共${liveData.total.toLocaleString()}只` : '数据加载中...'}
           </p>
         }
       />

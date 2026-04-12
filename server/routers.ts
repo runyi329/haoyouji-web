@@ -17221,48 +17221,81 @@ export const adminFeatureRouter = router({
   // A股全景仪表盘接口
   // ============================================================
 
-  /** 生存分析：股价高于/低于上市首日的比例 */
+  /** 生存分析：股价高于/低于上市首日的比例（直接从 ts_daily 实时计算） */
   aiDashboardSurvival: publicProcedure
     .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
     .query(async ({ input }) => {
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       try {
-        // 从 ts_survival_analysis 表查询（已从Excel导入的完整数据）
-        const marketFilter: Record<string, string> = {
+        // 板块过滤条件（基于股票代码前缀）
+        const marketCond: Record<string, string> = {
           all: '',
-          SH: "AND market = '沪市主板'",
-          SZ: "AND market = '深市主板'",
-          GEM: "AND market = '创业板'",
-          STAR: "AND market = '科创板'",
+          SH: "AND b.ts_code LIKE '6%'",
+          SZ: "AND b.ts_code LIKE '0%'",
+          GEM: "AND b.ts_code LIKE '3%'",
+          STAR: "AND b.ts_code LIKE '688%'",
         };
-        const mf = marketFilter[input.market] || '';
+        const mf = marketCond[input.market] || '';
+        // 从 ts_daily 计算每只股票：首日开盘价 vs 最新收盘价
+        // 首日开盘价 = 该股票最早交易日的 open
+        // 最新收盘价 = 该股票最新交易日的 close
         const [rows] = await dbConn.execute(`
-          SELECT vs_first, list_year, above_pct
-          FROM ts_survival_analysis
-          WHERE 1=1 ${mf}
+          SELECT
+            b.ts_code,
+            b.list_date,
+            SUBSTRING(b.list_date, 1, 4) AS list_year,
+            first_day.open AS first_open,
+            latest_day.close AS latest_close
+          FROM ts_stock_basic b
+          INNER JOIN (
+            SELECT ts_code, open
+            FROM ts_daily d1
+            WHERE d1.trade_date = (
+              SELECT MIN(d2.trade_date) FROM ts_daily d2 WHERE d2.ts_code = d1.ts_code
+            ) AND d1.open > 0
+          ) first_day ON first_day.ts_code = b.ts_code
+          INNER JOIN (
+            SELECT ts_code, close
+            FROM ts_daily d3
+            WHERE d3.trade_date = (
+              SELECT MAX(d4.trade_date) FROM ts_daily d4 WHERE d4.ts_code = d3.ts_code
+            ) AND d3.close > 0
+          ) latest_day ON latest_day.ts_code = b.ts_code
+          WHERE b.list_status = 'L'
+          ${mf}
         `) as any[];
         const stocks = rows as any[];
         const total = stocks.length;
-        const above = stocks.filter((s: any) => s.vs_first === '高于').length;
-        const below = stocks.filter((s: any) => s.vs_first === '低于').length;
-        const equal = stocks.filter((s: any) => s.vs_first === '等于').length;
-        // 按年代分组
+        let above = 0, below = 0, equal = 0;
+        const byYear: Record<string, { above: number; below: number; total: number }> = {};
         const byEra: Record<string, { above: number; below: number; total: number }> = {};
         for (const s of stocks) {
-          const year = s.list_year || 0;
+          const ratio = s.first_open > 0 ? s.latest_close / s.first_open : 1;
+          let status: 'above' | 'below' | 'equal';
+          if (ratio > 1.001) { above++; status = 'above'; }
+          else if (ratio < 0.999) { below++; status = 'below'; }
+          else { equal++; status = 'equal'; }
+          // 按年份分组
+          const year = s.list_year || '未知';
+          if (!byYear[year]) byYear[year] = { above: 0, below: 0, total: 0 };
+          byYear[year].total++;
+          if (status === 'above') byYear[year].above++;
+          else if (status === 'below') byYear[year].below++;
+          // 按年代分组
+          const y = parseInt(year) || 0;
           let era = '其他';
-          if (year > 0 && year < 2000) era = '2000年前';
-          else if (year >= 2000 && year < 2010) era = '2000-2009';
-          else if (year >= 2010 && year < 2015) era = '2010-2014';
-          else if (year >= 2015 && year < 2020) era = '2015-2019';
-          else if (year >= 2020) era = '2020至今';
+          if (y > 0 && y < 2000) era = '2000年前';
+          else if (y >= 2000 && y < 2010) era = '2000-2009';
+          else if (y >= 2010 && y < 2015) era = '2010-2014';
+          else if (y >= 2015 && y < 2020) era = '2015-2019';
+          else if (y >= 2020) era = '2020至今';
           if (!byEra[era]) byEra[era] = { above: 0, below: 0, total: 0 };
           byEra[era].total++;
-          if (s.vs_first === '高于') byEra[era].above++;
-          else if (s.vs_first === '低于') byEra[era].below++;
+          if (status === 'above') byEra[era].above++;
+          else if (status === 'below') byEra[era].below++;
         }
-        return { total, above, below, equal, byEra, updatedAt: new Date().toISOString() };
+        return { total, above, below, equal, byEra, byYear, updatedAt: new Date().toISOString() };
       } finally { await dbConn.end(); }
     }),
 
@@ -17411,21 +17444,21 @@ export const adminFeatureRouter = router({
       } finally { await dbConn.end(); }
     }),
 
-  /** 各板块股票数量（用于Tab标签显示） */
+  /** 各板块股票数量（用于Tab标签显示，从 ts_stock_basic 实时计算） */
   aiDashboardMarketCount: publicProcedure
     .query(async () => {
       const dbConn = await getDbConnection();
       if (!dbConn) return { all: 0, SH: 0, SZ: 0, GEM: 0, STAR: 0 };
       try {
-        // 从 ts_survival_analysis 读取各板块数量（数据最完整）
         const [rows] = await dbConn.execute(
           `SELECT
             COUNT(*) AS all_count,
-            SUM(CASE WHEN market='沪市主板' THEN 1 ELSE 0 END) AS sh_count,
-            SUM(CASE WHEN market='深市主板' THEN 1 ELSE 0 END) AS sz_count,
-            SUM(CASE WHEN market='创业板' THEN 1 ELSE 0 END) AS gem_count,
-            SUM(CASE WHEN market='科创板' THEN 1 ELSE 0 END) AS star_count
-          FROM ts_survival_analysis`
+            SUM(CASE WHEN ts_code LIKE '6%' AND ts_code NOT LIKE '688%' THEN 1 ELSE 0 END) AS sh_count,
+            SUM(CASE WHEN ts_code LIKE '0%' AND ts_code NOT LIKE '3%' THEN 1 ELSE 0 END) AS sz_count,
+            SUM(CASE WHEN ts_code LIKE '3%' THEN 1 ELSE 0 END) AS gem_count,
+            SUM(CASE WHEN ts_code LIKE '688%' THEN 1 ELSE 0 END) AS star_count
+          FROM ts_stock_basic
+          WHERE list_status = 'L'`
         ) as any;
         const r = (rows as any[])[0];
         return {
