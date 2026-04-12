@@ -16728,7 +16728,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
 
   /** 生存分析：股价高于/低于上市首日的比例（直接从 ts_daily 实时计算） */
   aiDashboardSurvival: publicProcedure
-    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
+    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR', 'DELISTED']).default('all') }))
     .query(async ({ input }) => {
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
@@ -16740,6 +16740,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           SZ: "AND b.ts_code LIKE '0%'",
           GEM: "AND b.ts_code LIKE '3%'",
           STAR: "AND b.ts_code LIKE '688%'",
+          DELISTED: "AND b.list_status = 'D'",
         };
         const mf = marketCond[input.market] || '';
         // 优化SQL：用GROUP BY预聚合替代相关子查询，只扫描一遍 ts_daily
@@ -16966,25 +16967,29 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
   aiDashboardMarketCount: publicProcedure
     .query(async () => {
       const dbConn = await getDbConnection();
-      if (!dbConn) return { all: 0, SH: 0, SZ: 0, GEM: 0, STAR: 0 };
+      if (!dbConn) return { all: 0, SH: 0, SZ: 0, GEM: 0, STAR: 0, DELISTED: 0 };
       try {
         const [rows] = await dbConn.execute(
           `SELECT
-            COUNT(*) AS all_count,
-            SUM(CASE WHEN ts_code LIKE '6%' AND ts_code NOT LIKE '688%' THEN 1 ELSE 0 END) AS sh_count,
-            SUM(CASE WHEN ts_code LIKE '0%' AND ts_code NOT LIKE '3%' THEN 1 ELSE 0 END) AS sz_count,
-            SUM(CASE WHEN ts_code LIKE '3%' THEN 1 ELSE 0 END) AS gem_count,
-            SUM(CASE WHEN ts_code LIKE '688%' THEN 1 ELSE 0 END) AS star_count
+            SUM(CASE WHEN list_status = 'L' THEN 1 ELSE 0 END) AS listed_count,
+            SUM(CASE WHEN list_status = 'D' THEN 1 ELSE 0 END) AS delisted_count,
+            SUM(CASE WHEN list_status = 'L' AND ts_code LIKE '6%' AND ts_code NOT LIKE '688%' THEN 1 ELSE 0 END) AS sh_count,
+            SUM(CASE WHEN list_status = 'L' AND ts_code LIKE '0%' AND ts_code NOT LIKE '3%' THEN 1 ELSE 0 END) AS sz_count,
+            SUM(CASE WHEN list_status = 'L' AND ts_code LIKE '3%' THEN 1 ELSE 0 END) AS gem_count,
+            SUM(CASE WHEN list_status = 'L' AND ts_code LIKE '688%' THEN 1 ELSE 0 END) AS star_count
           FROM ts_stock_basic
-          WHERE list_status = 'L'`
+          WHERE list_status IN ('L', 'D')`
         ) as any;
         const r = (rows as any[])[0];
+        const listed = Number(r.listed_count) || 0;
+        const delisted = Number(r.delisted_count) || 0;
         return {
-          all: Number(r.all_count) || 0,
+          all: listed + delisted,
           SH: Number(r.sh_count) || 0,
           SZ: Number(r.sz_count) || 0,
           GEM: Number(r.gem_count) || 0,
           STAR: Number(r.star_count) || 0,
+          DELISTED: delisted,
         };
       } finally { /* pool auto-manages connections */ }
     }),

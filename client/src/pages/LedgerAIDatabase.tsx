@@ -32,13 +32,14 @@ const GRAD_NEUTRAL = "linear-gradient(135deg, #9E9E9E 0%, #757575 100%)";
 const CARD_SHADOW = "0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)";
 
 // ─── 市场 Tab ──────────────────────────────────────────────
-type Market = "all" | "SH" | "SZ" | "GEM" | "STAR";
+type Market = "all" | "SH" | "SZ" | "GEM" | "STAR" | "DELISTED";
 const MARKET_KEYS: { key: Market; label: string }[] = [
   { key: "all", label: "全市场" },
   { key: "SH", label: "沪市" },
   { key: "SZ", label: "深市" },
   { key: "GEM", label: "创业板" },
   { key: "STAR", label: "科创板" },
+  { key: "DELISTED", label: "退市" },
 ];
 
 // ─── 工具函数 ──────────────────────────────────────────────
@@ -291,6 +292,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
     SZ: counts.SZ || 0,
     GEM: counts.GEM || 0,
     STAR: counts.STAR || 0,
+    DELISTED: (counts as any).DELISTED || 0,
   };
 
   return (
@@ -873,6 +875,7 @@ export default function LedgerAIDatabase() {
     SZ: countData?.SZ ?? 0,
     GEM: countData?.GEM ?? 0,
     STAR: countData?.STAR ?? 0,
+    DELISTED: (countData as any)?.DELISTED ?? 0,
   };
 
   return (
