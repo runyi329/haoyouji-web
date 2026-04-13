@@ -559,14 +559,13 @@ function UpRateDistSection() {
   const [market, setMarket] = useState<"all" | "SH" | "SZ" | "GEM" | "STAR">("all");
   const { data, isLoading } = trpc.aiDashboardUpRateDist.useQuery({ market });
 
-  // 正态曲线叠加数据
+  // 正态曲线叠加数据（桶宽2%）
   const chartData = (data?.buckets ?? []).map((b: any) => {
-    // 正态曲线值（高斯函数，用于叠加显示）
-    const x = b.min + 2.5; // 桶中心值
+    const x = b.min + 1; // 桶中心值（桶宽2%，中心在+1处）
     const mean = data?.mean ?? 50;
     const std = data?.stdDev ?? 5;
     const normalY = std > 0
-      ? Math.round((data?.totalCount ?? 0) * 5 / (std * Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * Math.pow((x - mean) / std, 2)))
+      ? Math.round((data?.totalCount ?? 0) * 2 / (std * Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * Math.pow((x - mean) / std, 2)))
       : 0;
     return { ...b, normalY };
   });
@@ -628,7 +627,7 @@ function UpRateDistSection() {
               </div>
               {/* 说明文字 */}
               <p className="text-[11px] mb-2" style={{ color: DIM }}>
-                X轴：涨天率区间（0%~100%）· Y轴：股票数量 · 红线：正态曲线拟合
+                X轴：涨天率区间（30%~70%，每格2%）· Y轴：股票数量 · 红线：正态曲线拟合
               </p>
               {/* 柱状图 + 正态曲线 */}
               <ResponsiveContainer width="100%" height={180}>
@@ -640,7 +639,7 @@ function UpRateDistSection() {
                     axisLine={{ stroke: BORDER }}
                     tickLine={false}
                     tickFormatter={(v) => `${v}%`}
-                    interval={3}
+                    interval={1}
                   />
                   <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} />
                   <Tooltip
@@ -648,7 +647,7 @@ function UpRateDistSection() {
                       name === 'count' ? `${value} 只` : `${value} 只（拟合）`,
                       name === 'count' ? '实际数量' : '正态拟合'
                     ]}
-                    labelFormatter={(label) => `涨天率 ${label}%-${Number(label)+5}%`}
+                    labelFormatter={(label) => `涨天率 ${label}%-${Number(label)+2}%`}
                     contentStyle={{ fontSize: 11, background: CARD, border: `1px solid ${BORDER}` }}
                   />
                   <Bar dataKey="count" name="count" radius={[2, 2, 0, 0]}>
@@ -674,7 +673,7 @@ function UpRateDistSection() {
                     name="normalY"
                   />
                   <ReferenceLine
-                    x={Math.floor(data.mean / 5) * 5}
+                    x={Math.floor((data.mean - 30) / 2) * 2 + 30}
                     stroke={RED}
                     strokeDasharray="4 3"
                     strokeWidth={1.5}
