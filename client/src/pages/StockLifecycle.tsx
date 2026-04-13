@@ -5,9 +5,20 @@
  */
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, Search, X, ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronLeft, Search, X, ChevronUp, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { keepPreviousData } from "@tanstack/react-query";
+
+// ─── 总天数筛选选项 ────────────────────────────────────────────────────────
+const MIN_DAYS_OPTIONS: { label: string; value: number }[] = [
+  { label: "不限", value: 0 },
+  { label: "≥100天", value: 100 },
+  { label: "≥200天", value: 200 },
+  { label: "≥500天", value: 500 },
+  { label: "≥1000天", value: 1000 },
+  { label: "≥2000天", value: 2000 },
+  { label: "≥3000天", value: 3000 },
+];
 
 // ─── 配色（与 LedgerAIDatabase 一致） ────────────────────────────────────
 const RED = "#D32F2F";
@@ -62,9 +73,11 @@ export default function StockLifecycle() {
   const [sortBy, setSortBy] = useState<SortBy>("upRate");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
+  const [minTotalDays, setMinTotalDays] = useState(0);
+  const [showDaysFilter, setShowDaysFilter] = useState(false);
 
-  // 累积列表：key 为 market+keyword+sortBy+sortDir，变化时清空
-  const listKey = `${market}|${keyword}|${sortBy}|${sortDir}`;
+  // 累积列表：key 为 market+keyword+sortBy+sortDir+minTotalDays，变化时清空
+  const listKey = `${market}|${keyword}|${sortBy}|${sortDir}|${minTotalDays}`;
   const listKeyRef = useRef(listKey);
   const [allItems, setAllItems] = useState<StockItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -80,7 +93,7 @@ export default function StockLifecycle() {
   }, [listKey]);
 
   const { data, isFetching } = trpc.aiStockLifecycle.useQuery(
-    { page, pageSize: PAGE_SIZE, market, keyword: keyword || undefined, sortBy, sortDir },
+    { page, pageSize: PAGE_SIZE, market, keyword: keyword || undefined, sortBy, sortDir, minTotalDays },
     { placeholderData: keepPreviousData }
   );
 
@@ -131,11 +144,21 @@ export default function StockLifecycle() {
 
   // 排序列点击
   const handleSort = (col: SortBy) => {
-    if (sortBy === col) {
-      setSortDir(d => (d === "desc" ? "asc" : "desc"));
+    if (col === "total") {
+      // 总天列：点击排序图标排序，点击漏斗图标弹出筛选
+      if (sortBy === col) {
+        setSortDir(d => (d === "desc" ? "asc" : "desc"));
+      } else {
+        setSortBy(col);
+        setSortDir("desc");
+      }
     } else {
-      setSortBy(col);
-      setSortDir("desc");
+      if (sortBy === col) {
+        setSortDir(d => (d === "desc" ? "asc" : "desc"));
+      } else {
+        setSortBy(col);
+        setSortDir("desc");
+      }
     }
   };
 
@@ -211,24 +234,69 @@ export default function StockLifecycle() {
 
       {/* 表头 */}
       <div
-        className="flex items-center px-3 py-1.5 flex-shrink-0 text-xs font-medium"
+        className="flex items-center px-3 py-1.5 flex-shrink-0 text-xs font-medium relative"
         style={{ background: "#F8F4F0", borderBottom: `1px solid ${BORDER}`, color: MUTED }}
       >
         <div className="flex-1 min-w-0">股票</div>
         {SORT_COLS.map(col => (
-          <button
-            key={col.key}
-            onClick={() => handleSort(col.key)}
-            className="flex items-center justify-center gap-0.5 flex-shrink-0"
-            style={{
-              width: col.width,
-              color: sortBy === col.key ? RED : MUTED,
-              fontWeight: sortBy === col.key ? 700 : 500,
-            }}
-          >
-            {col.label}<SortIcon col={col.key} />
-          </button>
+          col.key === "total" ? (
+            // 总天列：排序按钮 + 漏斗筛选图标
+            <div key={col.key} className="flex items-center justify-center flex-shrink-0" style={{ width: col.width + 20 }}>
+              <button
+                onClick={() => handleSort(col.key)}
+                className="flex items-center gap-0.5"
+                style={{ color: sortBy === col.key ? RED : MUTED, fontWeight: sortBy === col.key ? 700 : 500 }}
+              >
+                {col.label}<SortIcon col={col.key} />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowDaysFilter(v => !v); }}
+                className="ml-1 flex items-center justify-center"
+                style={{ color: minTotalDays > 0 ? RED : MUTED }}
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <button
+              key={col.key}
+              onClick={() => handleSort(col.key)}
+              className="flex items-center justify-center gap-0.5 flex-shrink-0"
+              style={{
+                width: col.width,
+                color: sortBy === col.key ? RED : MUTED,
+                fontWeight: sortBy === col.key ? 700 : 500,
+              }}
+            >
+              {col.label}<SortIcon col={col.key} />
+            </button>
+          )
         ))}
+        {/* AI按钮占位 */}
+        <div style={{ width: 36, flexShrink: 0 }} />
+
+        {/* 总天数筛选弹出层 */}
+        {showDaysFilter && (
+          <div
+            className="absolute right-2 top-full z-50 rounded-xl shadow-lg py-1"
+            style={{ background: CARD, border: `1px solid ${BORDER}`, minWidth: 110, marginTop: 2 }}
+          >
+            {MIN_DAYS_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => { setMinTotalDays(opt.value); setShowDaysFilter(false); setPage(1); }}
+                className="w-full text-left px-4 py-2 text-xs"
+                style={{
+                  color: minTotalDays === opt.value ? RED : TEXT,
+                  fontWeight: minTotalDays === opt.value ? 700 : 400,
+                  background: minTotalDays === opt.value ? "#FFF0F0" : "transparent",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 列表 */}
