@@ -17133,6 +17133,55 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return mockData();
       }
     }),
+
+  /** 个股日线数据：调用 Tushare daily 接口，返回最近 N 天涨跌幅+实心/空心 */
+  aiStockDailyData: publicProcedure
+    .input(z.object({
+      tsCode: z.string(),
+      limit: z.number().min(10).max(500).default(60),
+    }))
+    .query(async ({ input }) => {
+      const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+      const TUSHARE_URL = 'http://api.tushare.pro';
+      try {
+        const resp = await fetch(TUSHARE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_name: 'daily',
+            token: TUSHARE_TOKEN,
+            params: {
+              ts_code: input.tsCode,
+              limit: input.limit,
+            },
+            fields: 'trade_date,open,close,pct_chg',
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const json = await resp.json() as any;
+        if (json.code !== 0 || !json.data?.items?.length) {
+          return { items: [] };
+        }
+        // Tushare 返回最新在前，需要反转为时间正序
+        const fields: string[] = json.data.fields;
+        const dateIdx = fields.indexOf('trade_date');
+        const openIdx = fields.indexOf('open');
+        const closeIdx = fields.indexOf('close');
+        const pctIdx = fields.indexOf('pct_chg');
+        const items = (json.data.items as any[])
+          .slice()
+          .reverse()
+          .map((row: any[]) => ({
+            tradeDate: String(row[dateIdx]),
+            pct: Number(row[pctIdx]),
+            // 实心：收盘 >= 开盘（阳线或十字星）
+            solid: Number(row[closeIdx]) >= Number(row[openIdx]),
+          }));
+        return { items };
+      } catch (e) {
+        return { items: [] };
+      }
+    }),
 });;
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
