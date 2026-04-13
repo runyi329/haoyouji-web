@@ -4,7 +4,7 @@
  * 路径: /stock/:tsCode
  */
 import { useParams } from "wouter";
-import { ChevronLeft, Calendar, Building2 } from "lucide-react";
+import { ChevronLeft, Calendar, Building2, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
@@ -525,22 +525,29 @@ export default function StockDetail() {
   // wouter 路由不支持含 . 的参数，跳转时 . 被替换为 -，这里还原
   const tsCode = (params.tsCode || "").replace(/-(?=[A-Z]{2}$)/g, ".");
 
-  const { data, isLoading, error } = trpc.aiStockDetail.useQuery(
+  const { data, isLoading, error, refetch: refetchDetail } = trpc.aiStockDetail.useQuery(
     { tsCode },
     { enabled: !!tsCode, staleTime: 300_000 }
   );
 
   // 日线数据（珠盘路近期展示，最多180条）
-  const { data: dailyData, isLoading: dailyLoading } = trpc.aiStockDailyData.useQuery(
+  const { data: dailyData, isLoading: dailyLoading, refetch: refetchDaily } = trpc.aiStockDailyData.useQuery(
     { tsCode, limit: 180 },
     { enabled: !!tsCode, staleTime: 300_000 }
   );
 
   // 全生命周期连涨/连跌统计（后端拉取全量日线并计算）
-  const { data: streakStats } = trpc.aiStockStreakStats.useQuery(
+  const { data: streakStats, refetch: refetchStreak } = trpc.aiStockStreakStats.useQuery(
     { tsCode },
     { enabled: !!tsCode, staleTime: 600_000 }
   );
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await Promise.all([refetchDetail(), refetchDaily(), refetchStreak()]);
+    setIsRefreshing(false);
+  };
 
   // 兜底数据：即使后端报错也能显示页面框架
   const fallback = {
@@ -614,6 +621,14 @@ export default function StockDetail() {
         >
           {statusInfo.text}
         </span>
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0"
+          style={{ background: "rgba(255,255,255,0.2)", opacity: isRefreshing ? 0.5 : 1 }}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 text-white ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* 内容区域 */}
