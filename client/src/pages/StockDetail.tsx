@@ -95,18 +95,18 @@ function calcNextDayProb(
 }
 
 function ZhuLuScrollArea({
-  columns,
+  cells,
+  totalCols,
   CELL,
   GAP,
-  totalH,
   FIXED_ROWS,
   getColorAndText,
   nextDayProb,
 }: {
-  columns: { pct: number; date: string }[][];
+  cells: { col: number; row: number; pct: number; date: string }[];
+  totalCols: number;
   CELL: number;
   GAP: number;
-  totalH: number;
   FIXED_ROWS: number;
   getColorAndText: (pct: number) => { bg: string; fg: string; label: string };
   nextDayProb?: { upPct: number; downPct: number; flatPct: number; total: number; curDir: 'up' | 'down'; curLen: number; totalDays: number } | null;
@@ -130,7 +130,27 @@ function ZhuLuScrollArea({
       }, 0);
     });
     return () => cancelAnimationFrame(raf);
-  }, [columns.length, CELL, GAP]);
+  }, [totalCols, CELL, GAP]);
+
+  // 计算概率格子的位置：同向延续在最后一个数据格子的下一格（同列下一行），反向在右侧第一列第一格
+  const lastCell = cells.length > 0 ? cells[cells.length - 1] : null;
+  let probSamePos: { col: number; row: number } | null = null;
+  let probReversePos: { col: number; row: number } | null = null;
+  if (lastCell && nextDayProb && nextDayProb.total > 0) {
+    // 同向：最后格子的下一行（如果还有空间）
+    if (lastCell.row + 1 < FIXED_ROWS) {
+      probSamePos = { col: lastCell.col, row: lastCell.row + 1 };
+    } else {
+      // 最后格子已在底部（借位行），同向概率放在右侧第一列底部
+      probSamePos = { col: totalCols, row: FIXED_ROWS - 1 };
+    }
+    // 反向：右侧第一列第一格（如果同向占了该位置则往下一格）
+    const reverseCol = totalCols + (probSamePos && probSamePos.col === totalCols ? 1 : 0);
+    probReversePos = { col: reverseCol, row: 0 };
+  }
+
+  const totalH = FIXED_ROWS * (CELL + GAP);
+  const allCols = totalCols + emptyCols + 1; // +1 for prob cells overflow
 
   return (<>
     <div
@@ -140,135 +160,103 @@ function ZhuLuScrollArea({
     >
       <div
         style={{
-          display: "flex",
-          flexDirection: "row",
-          alignItems: "flex-start",
-          gap: GAP,
-          minWidth: (columns.length + emptyCols) * (CELL + GAP),
+          position: "relative",
+          width: allCols * (CELL + GAP),
           height: totalH,
+          flexShrink: 0,
         }}
       >
-        {columns.map((col, ci) => (
-          <div
-            key={ci}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: GAP,
-              width: CELL,
-              flexShrink: 0,
-            }}
-          >
-            {/* 实际数据格子 */}
-            {col.map((cell, ri) => {
-              const { bg, fg, label } = getColorAndText(cell.pct);
-              return (
-                <div
-                  key={ri}
-                  title={`${cell.date} ${cell.pct > 0 ? '+' : ''}${cell.pct.toFixed(2)}%`}
-                  style={{
-                    width: CELL,
-                    height: CELL,
-                    borderRadius: 2,
-                    background: bg,
-                    flexShrink: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 8,
-                    fontWeight: 600,
-                    color: fg,
-                    lineHeight: 1,
-                    letterSpacing: "-0.3px",
-                  }}
-                >
-                  {label}
-                </div>
-              );
-            })}
-            {/* 补充空白格子，确保每列总是6行，显示边框 */}
-            {Array.from({ length: Math.max(0, FIXED_ROWS - col.length) }).map((_, ei) => {
-              // 最后一列的第一个空格：显示同向延续概率（金黄色）
-              const isLastCol = ci === columns.length - 1;
-              const isSameDir = isLastCol && ei === 0 && nextDayProb && nextDayProb.total > 0;
-              if (isSameDir && nextDayProb) {
-                const samePct = nextDayProb.curDir === 'up' ? nextDayProb.upPct : nextDayProb.downPct;
-                return (
-                  <div
-                    key={`empty-${ei}`}
-                    onClick={() => setShowProbDetail(true)}
-                    style={{
-                      width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
-                      background: "#FFF3CD", border: "1.5px solid #F59E0B",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {samePct}%
-                  </div>
-                );
-              }
-              return (
-                <div
-                  key={`empty-${ei}`}
-                  style={{
-                    width: CELL,
-                    height: CELL,
-                    borderRadius: 2,
-                    background: "transparent",
-                    border: "1px solid #E0E0E0",
-                    flexShrink: 0,
-                  }}
-                />
-              );
-            })}
-          </div>
-        ))}
-        {/* 右侧空白格子列（有边框无数据，给用户“后续还会有新数据”的视觉暗示） */}
-        {Array.from({ length: emptyCols }).map((_, ci) => {
-          // 第一列：显示条件概率（金黄色）
-          const isProb = ci === 0 && nextDayProb && nextDayProb.total > 0;
+        {/* 背景网格：所有列的空白格子 */}
+        {Array.from({ length: allCols }).map((_, ci) =>
+          Array.from({ length: FIXED_ROWS }).map((_, ri) => (
+            <div
+              key={`bg-${ci}-${ri}`}
+              style={{
+                position: "absolute",
+                left: ci * (CELL + GAP),
+                top: ri * (CELL + GAP),
+                width: CELL,
+                height: CELL,
+                borderRadius: 2,
+                background: "transparent",
+                border: "1px solid #E0E0E0",
+              }}
+            />
+          ))
+        )}
+        {/* 数据格子（覆盖背景网格） */}
+        {cells.map((cell, idx) => {
+          const { bg, fg, label } = getColorAndText(cell.pct);
           return (
             <div
-              key={`right-empty-col-${ci}`}
+              key={idx}
+              title={`${cell.date} ${cell.pct > 0 ? '+' : ''}${cell.pct.toFixed(2)}%`}
               style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: GAP,
+                position: "absolute",
+                left: cell.col * (CELL + GAP),
+                top: cell.row * (CELL + GAP),
                 width: CELL,
-                flexShrink: 0,
+                height: CELL,
+                borderRadius: 2,
+                background: bg,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 8,
+                fontWeight: 600,
+                color: fg,
+                lineHeight: 1,
+                letterSpacing: "-0.3px",
               }}
             >
-              {Array.from({ length: FIXED_ROWS }).map((_, ri) => {
-                // 右侧第一列第一格：显示反向换列概率（金黄色，可点击）
-                if (isProb && nextDayProb && ci === 0 && ri === 0) {
-                  const reversePct = nextDayProb.curDir === 'up' ? nextDayProb.downPct : nextDayProb.upPct;
-                  return (
-                    <div key={ri} onClick={() => setShowProbDetail(true)} style={{
-                      width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
-                      background: "#FFF3CD", border: "1.5px solid #F59E0B",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
-                      cursor: "pointer",
-                    }}>
-                      {reversePct}%
-                    </div>
-                  );
-                }
-                return (
-                  <div
-                    key={ri}
-                    style={{
-                      width: CELL, height: CELL, borderRadius: 2,
-                      background: "transparent", border: "1px solid #E0E0E0", flexShrink: 0,
-                    }}
-                  />
-                );
-              })}
+              {label}
             </div>
           );
         })}
+        {/* 同向延续概率格子（金黄色，可点击） */}
+        {probSamePos && nextDayProb && (() => {
+          const samePct = nextDayProb.curDir === 'up' ? nextDayProb.upPct : nextDayProb.downPct;
+          return (
+            <div
+              onClick={() => setShowProbDetail(true)}
+              title="点击查看统计详情"
+              style={{
+                position: "absolute",
+                left: probSamePos.col * (CELL + GAP),
+                top: probSamePos.row * (CELL + GAP),
+                width: CELL, height: CELL, borderRadius: 2,
+                background: "#FFF3CD", border: "1.5px solid #F59E0B",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
+                cursor: "pointer", zIndex: 2,
+              }}
+            >
+              {samePct}%
+            </div>
+          );
+        })()}
+        {/* 反向换列概率格子（金黄色，可点击） */}
+        {probReversePos && nextDayProb && (() => {
+          const reversePct = nextDayProb.curDir === 'up' ? nextDayProb.downPct : nextDayProb.upPct;
+          return (
+            <div
+              onClick={() => setShowProbDetail(true)}
+              title="点击查看统计详情"
+              style={{
+                position: "absolute",
+                left: probReversePos.col * (CELL + GAP),
+                top: probReversePos.row * (CELL + GAP),
+                width: CELL, height: CELL, borderRadius: 2,
+                background: "#FFF3CD", border: "1.5px solid #F59E0B",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
+                cursor: "pointer", zIndex: 2,
+              }}
+            >
+              {reversePct}%
+            </div>
+          );
+        })()}
       </div>
     </div>
 
@@ -447,20 +435,43 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
     return { bg, fg, label };
   }
 
-  // 构建列结构：同向堆列，换向开新列
-  const columns: { pct: number; date: string }[][] = [];
-  let curDir: 'up' | 'down' | 'flat' | null = null;
+  // 构建二维坐标格子（百家乐大路图借位规则）
+  // - 同向继续：row++；列满（row >= FIXED_ROWS）时向右借位：col++，row 保持在 FIXED_ROWS-1
+  // - 换向：col++，row 从 0 开始
+  const _FIXED_ROWS = 6; // 临时常量，后面会统一定义
+  const cells: { col: number; row: number; pct: number; date: string }[] = [];
+  let curCol = 0;
+  let curRow = -1;
+  let curCellDir: 'up' | 'down' | 'flat' | null = null;
+  let borrowing = false; // 是否处于借位横向延伸状态
+
   for (const item of sorted) {
     const dir = item.pct > 0 ? 'up' : item.pct < 0 ? 'down' : 'flat';
-    if (dir === 'flat' && columns.length > 0) {
-      columns[columns.length - 1].push({ pct: item.pct, date: item.tradeDate });
-    } else if (dir !== curDir) {
-      columns.push([{ pct: item.pct, date: item.tradeDate }]);
-      curDir = dir;
+    if (cells.length === 0) {
+      // 第一个格子
+      curCol = 0; curRow = 0; curCellDir = dir; borrowing = false;
+    } else if (dir === curCellDir || (dir === 'flat')) {
+      // 同向或平天：继续当前方向
+      if (!borrowing && curRow + 1 < _FIXED_ROWS) {
+        // 正常向下
+        curRow++;
+      } else {
+        // 列满或已在借位行：向右借位，row 保持在 FIXED_ROWS-1
+        curCol++;
+        curRow = _FIXED_ROWS - 1;
+        borrowing = true;
+      }
+      if (dir !== 'flat') curCellDir = dir; // 平天不改变方向
     } else {
-      columns[columns.length - 1].push({ pct: item.pct, date: item.tradeDate });
+      // 换向：新列从第一行开始
+      curCol++;
+      curRow = 0;
+      curCellDir = dir;
+      borrowing = false;
     }
+    cells.push({ col: curCol, row: curRow, pct: item.pct, date: item.tradeDate });
   }
+  const totalCols = cells.length > 0 ? cells[cells.length - 1].col + 1 : 0;
 
   // 连涨/连跌统计：全量来自后端 streakStats，近期各档前端计算
   const allUpStreakMap: Record<number, number> = streakStats?.upStreakMap ?? {};
@@ -492,7 +503,6 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
   const CELL = 21; // 28px 缩小 25% = 21px
   const GAP = 1;
   const FIXED_ROWS = 6; // 固定6行，类似百家乐大路图
-  const totalH = FIXED_ROWS * (CELL + GAP);
 
   // 计算当前最后一段连涨/连跌的方向和天数
   const lastProb = (() => {
@@ -516,10 +526,10 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
   return (
     <div style={{ background: CARD, paddingBottom: 12 }}>
       <ZhuLuScrollArea
-        columns={columns}
+        cells={cells}
+        totalCols={totalCols}
         CELL={CELL}
         GAP={GAP}
-        totalH={totalH}
         FIXED_ROWS={FIXED_ROWS}
         getColorAndText={getColorAndText}
         nextDayProb={lastProb}
