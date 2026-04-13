@@ -17384,24 +17384,37 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             ${mf}
         `) as any[];
         const stocks = rows as any[];
-        const BUCKETS = 20;
+        // 聚焦区间：30%~70%，共 20 个桶，每桶 2%
+        const RANGE_MIN = 30;
+        const RANGE_MAX = 70;
+        const BUCKET_WIDTH = 2;
+        const BUCKETS = (RANGE_MAX - RANGE_MIN) / BUCKET_WIDTH; // 20
         const buckets = Array.from({ length: BUCKETS }, (_, i) => ({
-          label: `${i * 5}-${(i + 1) * 5}%`,
-          min: i * 5,
-          max: (i + 1) * 5,
+          label: `${RANGE_MIN + i * BUCKET_WIDTH}-${RANGE_MIN + (i + 1) * BUCKET_WIDTH}%`,
+          min: RANGE_MIN + i * BUCKET_WIDTH,
+          max: RANGE_MIN + (i + 1) * BUCKET_WIDTH,
           count: 0,
         }));
         let totalCount = 0;
         let sumRate = 0;
         let sumRateSq = 0;
+        let outOfRange = 0; // 区间外的股票数
         for (const s of stocks) {
           const rate = parseFloat(s.up_rate);
           if (isNaN(rate)) continue;
           totalCount++;
           sumRate += rate;
           sumRateSq += rate * rate;
-          const idx = Math.min(Math.floor(rate / 5), BUCKETS - 1);
-          buckets[idx].count++;
+          if (rate < RANGE_MIN) {
+            outOfRange++;
+            buckets[0].count++; // 归入最左桶
+          } else if (rate >= RANGE_MAX) {
+            outOfRange++;
+            buckets[BUCKETS - 1].count++; // 归入最右桶
+          } else {
+            const idx = Math.floor((rate - RANGE_MIN) / BUCKET_WIDTH);
+            buckets[Math.min(idx, BUCKETS - 1)].count++;
+          }
         }
         const mean = totalCount > 0 ? sumRate / totalCount : 50;
         const variance = totalCount > 0 ? sumRateSq / totalCount - mean * mean : 0;
