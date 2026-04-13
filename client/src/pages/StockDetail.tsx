@@ -725,15 +725,18 @@ function ZhuPanLu({
           </button>
         </div>
 
-        {/* 统计格子：表头 */}
-        <div className="grid grid-cols-4 gap-1.5 text-center mb-1.5">
-          {["涨", "跌", "平", "总"].map((label, i) => (
-            <div key={i} className="text-xs" style={{ color: MUTED }}>{label}</div>
-          ))}
+        {/* 统计格子：表头（左侧占位与行标签等宽，保证列对齐） */}
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex-shrink-0 w-14" />
+          <div className="flex-1 grid grid-cols-4 gap-1.5 text-center">
+            {["涨", "跌", "平", "总"].map((label, i) => (
+              <div key={i} className="text-xs" style={{ color: MUTED }}>{label}</div>
+            ))}
+          </div>
         </div>
         {/* 筛选区间行 */}
         <div className="flex items-center gap-1.5 mb-1.5">
-          <div className="text-xs flex-shrink-0 w-10" style={{ color: MUTED }}>近{tab}天</div>
+          <div className="text-xs flex-shrink-0 w-14 whitespace-nowrap" style={{ color: MUTED }}>近{tab}天</div>
           <div className="flex-1 grid grid-cols-4 gap-1.5 text-center">
             {[
               { val: upItems.length, rate: recentUpRate, color: RED },
@@ -754,7 +757,7 @@ function ZhuPanLu({
         <div className="my-1.5" style={{ height: 1, background: BORDER }} />
         {/* 全量行 */}
         <div className="flex items-center gap-1.5">
-          <div className="text-xs flex-shrink-0 w-10" style={{ color: MUTED }}>全量</div>
+          <div className="text-xs flex-shrink-0 w-14 whitespace-nowrap" style={{ color: MUTED }}>全量</div>
           <div className="flex-1 grid grid-cols-4 gap-1.5 text-center">
             {[
               { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED },
