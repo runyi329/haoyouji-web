@@ -495,30 +495,39 @@ async function startServer() {
     // 启动能源价格扫描器（每5分钟从 Yahoo Finance 更新石油/天然气价格）
     startEnergyPriceScanner();
 
-    // ─── 内嵌定时备份任务（每天北京时间凌晨 2:00 执行）───
-    // 北京时间 = UTC+8，凌晨 2:00 BJT = UTC 18:00（前一天）
-    // 策略：每分钟检查一次当前 UTC 时间是否为 18:00（即 BJT 02:00），
-    // 并用一个标志位保证同一天只触发一次。
-    let lastBackupDate = '';
-    setInterval(async () => {
-      try {
-        const now = new Date();
-        // UTC 18:00 = 北京时间 02:00
-        if (now.getUTCHours() === 18 && now.getUTCMinutes() === 0) {
-          const todayKey = now.toISOString().slice(0, 10); // 'YYYY-MM-DD'
-          if (lastBackupDate !== todayKey) {
-            lastBackupDate = todayKey;
-            console.log(`[定时备份] 触发每日备份任务 (BJT 02:00) - ${todayKey}`);
-            const { checkAndExecuteBackups } = await import('../backup-service');
-            await checkAndExecuteBackups();
-            console.log(`[定时备份] 备份任务完成 - ${todayKey}`);
-          }
+    // 启动股票日线数据定时扫描器（每个交易日 BJT 15:30 自动增量写入 ts_daily）
+    const { startStockDailyScanner } = await import('../stock-daily-scanner');
+    startStockDailyScanner();
+
+    // ─── 内嵌定时备份任务（每天北京时间凌晨 2:00 精确触发）───
+    const scheduleBackup = () => {
+      // 计算距离下次 BJT 02:00 的毫秒数
+      const now = new Date();
+      const bjtNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+      const target = new Date(Date.UTC(
+        bjtNow.getUTCFullYear(), bjtNow.getUTCMonth(), bjtNow.getUTCDate(),
+        2 - 8, 0, 0, 0  // BJT 02:00 = UTC 18:00 前一天
+      ));
+      if (target.getTime() <= now.getTime()) target.setUTCDate(target.getUTCDate() + 1);
+      const ms = target.getTime() - now.getTime();
+      const nextStr = target.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      console.log(`[定时备份] 下次触发时间: ${nextStr} (BJT 02:00)`);
+      setTimeout(async () => {
+        try {
+          const dateKey = new Date().toISOString().slice(0, 10);
+          console.log(`[定时备份] 触发每日备份任务 (BJT 02:00) - ${dateKey}`);
+          const { checkAndExecuteBackups } = await import('../backup-service');
+          await checkAndExecuteBackups();
+          console.log(`[定时备份] 备份任务完成 - ${dateKey}`);
+        } catch (err) {
+          console.error('[定时备份] 执行失败:', err);
+        } finally {
+          scheduleBackup(); // 无论成败都设置下一次
         }
-      } catch (err) {
-        console.error('[定时备份] 执行失败:', err);
-      }
-    }, 60 * 1000); // 每分钟检查一次
-    console.log('[定时备份] 已注册，每天北京时间凌晨 02:00 自动执行');
+      }, ms);
+    };
+    scheduleBackup();
+    console.log('[定时备份] 已注册，每天北京时间凌晨 02:00 精确触发一次');
     // ──────────────────────────────────────────────────────
   });
 }
