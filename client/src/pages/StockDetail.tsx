@@ -1012,6 +1012,358 @@ function StrengthPath({
   );
 }
 
+// ─── 形态路组件（K线组合信号识别）────────────────────
+type PatternSignal = 'bullish' | 'bearish' | 'neutral';
+interface PatternResult {
+  name: string;
+  signal: PatternSignal;
+  date: string;
+  desc: string;
+}
+
+function detectPatterns(
+  items: { tradeDate: string; pct: number; open?: number | null; high?: number | null; low?: number | null; close?: number | null }[]
+): PatternResult[] {
+  const results: PatternResult[] = [];
+  const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+
+  for (let i = 2; i < sorted.length; i++) {
+    const prev2 = sorted[i - 2];
+    const prev = sorted[i - 1];
+    const cur = sorted[i];
+    if (!cur.open || !cur.high || !cur.low || !cur.close) continue;
+    if (!prev.open || !prev.high || !prev.low || !prev.close) continue;
+
+    const o = cur.open, h = cur.high, l = cur.low, c = cur.close;
+    const po = prev.open!, ph = prev.high!, pl = prev.low!, pc = prev.close!;
+    const range = h - l;
+    const body = Math.abs(c - o);
+    const prevBody = Math.abs(pc - po);
+    const upperShadow = h - Math.max(o, c);
+    const lowerShadow = Math.min(o, c) - l;
+    const isUp = c > o;
+    const prevIsUp = pc > po;
+
+    // 锤子线（下跌趋势后，下影线长，实体小，上影线短）
+    if (!prevIsUp && lowerShadow >= body * 2 && upperShadow <= body * 0.3 && range > 0) {
+      results.push({ name: '锤子线', signal: 'bullish', date: cur.tradeDate, desc: '下跌后出现，潜在反转信号' });
+      continue;
+    }
+    // 射击之星（上涨趋势后，上影线长，实体小，下影线短）
+    if (prevIsUp && upperShadow >= body * 2 && lowerShadow <= body * 0.3 && range > 0) {
+      results.push({ name: '射击之星', signal: 'bearish', date: cur.tradeDate, desc: '上涨后出现，潜在顶部信号' });
+      continue;
+    }
+    // 吞没阳线（前日阴线，今日阳线实体覆盖前日实体）
+    if (!prevIsUp && isUp && o <= pc && c >= po && body > prevBody * 0.8) {
+      results.push({ name: '吞没阳线', signal: 'bullish', date: cur.tradeDate, desc: '强烈看涨反转信号' });
+      continue;
+    }
+    // 吞没阴线（前日阳线，今日阴线实体覆盖前日实体）
+    if (prevIsUp && !isUp && o >= pc && c <= po && body > prevBody * 0.8) {
+      results.push({ name: '吞没阴线', signal: 'bearish', date: cur.tradeDate, desc: '强烈看跌反转信号' });
+      continue;
+    }
+    // 十字星（实体极小）
+    if (body / (range || 1) < 0.1 && range > 0) {
+      results.push({ name: '十字星', signal: 'neutral', date: cur.tradeDate, desc: '多空分歧，趋势犹豫' });
+      continue;
+    }
+    // 孕线（当日实体在前日实体内）
+    if (body < prevBody * 0.5 && Math.max(o, c) <= Math.max(po, pc) && Math.min(o, c) >= Math.min(po, pc)) {
+      results.push({ name: '孕线', signal: 'neutral', date: cur.tradeDate, desc: '趋势减弱，方向待确认' });
+      continue;
+    }
+    // 早晨之星（三日：大阴→小实体→大阳）
+    if (prev2.close && prev2.open) {
+      const p2o = prev2.open, p2c = prev2.close;
+      const p2Body = Math.abs(p2c - p2o);
+      if (!prevIsUp && isUp && p2c < p2o && p2Body > prevBody * 1.5 && body > p2Body * 0.6) {
+        results.push({ name: '早晨之星', signal: 'bullish', date: cur.tradeDate, desc: '三日看涨反转组合' });
+        continue;
+      }
+      // 黄昏之星（三日：大阳→小实体→大阴）
+      if (prevIsUp && !isUp && p2c > p2o && p2Body > prevBody * 1.5 && body > p2Body * 0.6) {
+        results.push({ name: '黄昏之星', signal: 'bearish', date: cur.tradeDate, desc: '三日看跌反转组合' });
+        continue;
+      }
+    }
+  }
+  return results;
+}
+
+function PatternPath({
+  items,
+  tab,
+}: {
+  items: { tradeDate: string; pct: number; open?: number | null; high?: number | null; low?: number | null; close?: number | null }[];
+  tab: 30 | 60 | 90 | 180 | 365;
+}) {
+  const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+  const displayed = sorted.slice(-tab);
+  const patterns = detectPatterns(displayed);
+  const recent = patterns.slice(-20).reverse(); // 最近20条，倒序（最新在前）
+
+  const bullCount = patterns.filter(p => p.signal === 'bullish').length;
+  const bearCount = patterns.filter(p => p.signal === 'bearish').length;
+  const neutralCount = patterns.filter(p => p.signal === 'neutral').length;
+  const total = patterns.length;
+
+  const trendLabel = bullCount > bearCount ? '近期偏多信号' : bullCount < bearCount ? '近期偏空信号' : '多空均衡';
+  const trendColor = bullCount > bearCount ? RED : bullCount < bearCount ? GREEN_A : MUTED;
+
+  const signalColor = (s: PatternSignal) => s === 'bullish' ? RED : s === 'bearish' ? GREEN_A : MUTED;
+  const signalLabel = (s: PatternSignal) => s === 'bullish' ? '看涨' : s === 'bearish' ? '看跌' : '中性';
+
+  return (
+    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+      {/* 标题行 */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold" style={{ color: '#444' }}>形态路</span>
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F5F5F5', color: trendColor, fontWeight: 600 }}>
+          {trendLabel}
+        </span>
+      </div>
+
+      {/* 统计行 */}
+      <div className="flex items-center gap-3 px-4 pb-3">
+        <div className="flex items-center gap-1">
+          <span className="text-lg font-bold" style={{ color: RED }}>{bullCount}</span>
+          <span className="text-xs" style={{ color: MUTED }}>看涨</span>
+        </div>
+        <span style={{ color: BORDER }}>|</span>
+        <div className="flex items-center gap-1">
+          <span className="text-lg font-bold" style={{ color: GREEN_A }}>{bearCount}</span>
+          <span className="text-xs" style={{ color: MUTED }}>看跌</span>
+        </div>
+        <span style={{ color: BORDER }}>|</span>
+        <div className="flex items-center gap-1">
+          <span className="text-lg font-bold" style={{ color: MUTED }}>{neutralCount}</span>
+          <span className="text-xs" style={{ color: MUTED }}>中性</span>
+        </div>
+        <span className="ml-auto text-xs" style={{ color: MUTED }}>共{total}个形态</span>
+      </div>
+
+      {/* 形态列表 */}
+      {recent.length === 0 ? (
+        <div className="px-4 pb-4 text-xs" style={{ color: MUTED }}>近{tab}天未识别到典型形态</div>
+      ) : (
+        <div className="border-t" style={{ borderColor: BORDER }}>
+          {recent.map((p, i) => (
+            <div
+              key={i}
+              className="flex items-center px-4 py-2"
+              style={{ borderBottom: i < recent.length - 1 ? `1px solid ${BORDER}` : 'none' }}
+            >
+              <div
+                className="text-xs font-bold px-2 py-0.5 rounded mr-3 flex-shrink-0"
+                style={{ background: signalColor(p.signal) + '18', color: signalColor(p.signal) }}
+              >
+                {p.name}
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-xs" style={{ color: MUTED }}>{p.desc}</span>
+              </div>
+              <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded"
+                  style={{ background: signalColor(p.signal) + '18', color: signalColor(p.signal) }}
+                >
+                  {signalLabel(p.signal)}
+                </span>
+                <span className="text-xs" style={{ color: MUTED }}>{p.date.slice(4, 6)}/{p.date.slice(6, 8)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 组合路组件（规则加权综合信号）────────────────────
+function ComboPath({
+  items,
+  tab,
+}: {
+  items: { tradeDate: string; pct: number; open?: number | null; high?: number | null; low?: number | null; close?: number | null; vol?: number | null }[];
+  tab: 30 | 60 | 90 | 180 | 365;
+}) {
+  const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+  const displayed = sorted.slice(-tab);
+
+  // ── 维度1：涨跌概率偏离（近N天涨跌率 vs 全量涨跌率）──
+  const allUp = sorted.filter(d => d.pct > 0).length;
+  const allTotal = sorted.length;
+  const allUpRate = allTotal > 0 ? allUp / allTotal : 0.5;
+  const recentUp = displayed.filter(d => d.pct > 0).length;
+  const recentTotal = displayed.length;
+  const recentUpRate = recentTotal > 0 ? recentUp / recentTotal : 0.5;
+  const pctDeviation = recentUpRate - allUpRate; // 正数偏多，负数偏空
+  const dim1Score = Math.max(-1, Math.min(1, pctDeviation * 5)); // 归一化到[-1,1]
+
+  // ── 维度2：量能信号（量比 + 放量方向）──
+  const withVol = displayed.filter(d => d.vol != null && d.vol > 0);
+  let dim2Score = 0;
+  if (withVol.length >= 6) {
+    const recent5AvgVol = withVol.slice(-6, -1).reduce((s, d) => s + d.vol!, 0) / 5;
+    const latestVol = withVol[withVol.length - 1];
+    const volRatio = recent5AvgVol > 0 ? latestVol.vol! / recent5AvgVol : 1;
+    const isVolUp = latestVol.pct > 0;
+    if (volRatio >= 1.5) dim2Score = isVolUp ? 0.8 : -0.8;
+    else if (volRatio <= 0.7) dim2Score = isVolUp ? 0.2 : -0.2;
+    else dim2Score = isVolUp ? 0.3 : -0.3;
+  }
+
+  // ── 维度3：K线强度（近20日强阳 vs 强阴）──
+  const withOHLC = displayed.filter(d => d.open != null && d.high != null && d.low != null && d.close != null);
+  const recent20 = withOHLC.slice(-20);
+  const strongBull = recent20.filter(d => {
+    const range = d.high! - d.low!;
+    return range > 0 && d.close! > d.open! && (d.close! - d.open!) / range >= 0.7;
+  }).length;
+  const strongBear = recent20.filter(d => {
+    const range = d.high! - d.low!;
+    return range > 0 && d.close! < d.open! && (d.open! - d.close!) / range >= 0.7;
+  }).length;
+  const dim3Score = recent20.length > 0 ? Math.max(-1, Math.min(1, (strongBull - strongBear) / (recent20.length * 0.3))) : 0;
+
+  // ── 维度4：K线形态（看涨 vs 看跌信号）──
+  const patterns = detectPatterns(displayed);
+  const bullPat = patterns.filter(p => p.signal === 'bullish').length;
+  const bearPat = patterns.filter(p => p.signal === 'bearish').length;
+  const patTotal = bullPat + bearPat;
+  const dim4Score = patTotal > 0 ? Math.max(-1, Math.min(1, (bullPat - bearPat) / patTotal)) : 0;
+
+  // ── 维度5：连涨连跌（当前连续方向和天数）──
+  let dim5Score = 0;
+  if (displayed.length >= 3) {
+    let streak = 0;
+    let dir: 'up' | 'down' | null = null;
+    for (const d of displayed) {
+      const curDir = d.pct > 0 ? 'up' : d.pct < 0 ? 'down' : null;
+      if (curDir === null) { streak = 0; dir = null; continue; }
+      if (curDir === dir) streak++;
+      else { streak = 1; dir = curDir; }
+    }
+    const factor = Math.min(streak / 5, 1); // 最多5天满分
+    dim5Score = dir === 'up' ? factor : dir === 'down' ? -factor : 0;
+  }
+
+  // ── 综合评分（加权平均，映射到-100~+100）──
+  const weights = [0.25, 0.20, 0.20, 0.20, 0.15];
+  const scores = [dim1Score, dim2Score, dim3Score, dim4Score, dim5Score];
+  const composite = scores.reduce((s, v, i) => s + v * weights[i], 0);
+  const finalScore = Math.round(composite * 100);
+
+  const dims = [
+    { label: '涨跌概率', score: dim1Score, weight: weights[0], desc: `近${tab}天涨率${(recentUpRate*100).toFixed(0)}% vs 历史${(allUpRate*100).toFixed(0)}%` },
+    { label: '量能信号', score: dim2Score, weight: weights[1], desc: '最新量比 + 放量方向' },
+    { label: 'K线强度', score: dim3Score, weight: weights[2], desc: `近20日强阳${strongBull}次 强阴${strongBear}次` },
+    { label: 'K线形态', score: dim4Score, weight: weights[3], desc: `看涨形态${bullPat}个 看跌${bearPat}个` },
+    { label: '连涨连跌', score: dim5Score, weight: weights[4], desc: '当前连续方向和天数' },
+  ];
+
+  const scoreColor = finalScore > 20 ? RED : finalScore < -20 ? GREEN_A : MUTED;
+  const scoreLabel = finalScore > 40 ? '偏多' : finalScore > 20 ? '略偏多' : finalScore < -40 ? '偏空' : finalScore < -20 ? '略偏空' : '中性';
+
+  return (
+    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+      {/* 标题行 */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold" style={{ color: '#444' }}>组合路</span>
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F5F5F5', color: scoreColor, fontWeight: 600 }}>
+          {scoreLabel}
+        </span>
+      </div>
+
+      {/* 综合评分大字 */}
+      <div className="flex items-baseline gap-2 px-4 pb-3">
+        <span className="text-3xl font-bold" style={{ color: scoreColor }}>
+          {finalScore > 0 ? '+' : ''}{finalScore}
+        </span>
+        <span className="text-sm" style={{ color: MUTED }}>综合评分（-100 ~ +100）</span>
+      </div>
+
+      {/* 综合进度条 */}
+      <div className="px-4 pb-3">
+        <div className="relative w-full rounded-full overflow-hidden" style={{ height: 10, background: '#E8E8E8' }}>
+          {/* 中线 */}
+          <div className="absolute top-0 bottom-0" style={{ left: '50%', width: 1, background: '#CCC', zIndex: 1 }} />
+          {finalScore >= 0 ? (
+            <div
+              style={{
+                position: 'absolute', top: 0, bottom: 0,
+                left: '50%',
+                width: `${Math.abs(finalScore) / 2}%`,
+                background: RED,
+                borderRadius: '0 4px 4px 0',
+                transition: 'width 0.4s',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                position: 'absolute', top: 0, bottom: 0,
+                right: '50%',
+                width: `${Math.abs(finalScore) / 2}%`,
+                background: GREEN_A,
+                borderRadius: '4px 0 0 4px',
+                transition: 'width 0.4s',
+              }}
+            />
+          )}
+        </div>
+        <div className="flex justify-between mt-1">
+          <span className="text-xs" style={{ color: GREEN_A }}>偏空 -100</span>
+          <span className="text-xs" style={{ color: MUTED }}>中性 0</span>
+          <span className="text-xs" style={{ color: RED }}>偏多 +100</span>
+        </div>
+      </div>
+
+      {/* 分项得分 */}
+      <div className="border-t" style={{ borderColor: BORDER }}>
+        {dims.map((dim, i) => {
+          const pct = Math.abs(dim.score) * 100;
+          const isPos = dim.score >= 0;
+          const barColor = isPos ? RED : GREEN_A;
+          const dimScore = Math.round(dim.score * 100);
+          return (
+            <div
+              key={i}
+              className="px-4 py-2"
+              style={{ borderBottom: i < dims.length - 1 ? `1px solid ${BORDER}` : 'none' }}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium" style={{ color: '#444' }}>{dim.label}</span>
+                  <span className="text-xs" style={{ color: MUTED, fontSize: '0.65rem' }}>权重{(dim.weight * 100).toFixed(0)}%</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs font-bold" style={{ color: barColor }}>
+                    {dimScore > 0 ? '+' : ''}{dimScore}
+                  </span>
+                </div>
+              </div>
+              <div className="relative w-full rounded-full overflow-hidden" style={{ height: 6, background: '#F0F0F0' }}>
+                <div className="absolute top-0 bottom-0" style={{ left: '50%', width: 1, background: '#DDD', zIndex: 1 }} />
+                {isPos ? (
+                  <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: `${pct / 2}%`, background: barColor, borderRadius: '0 3px 3px 0' }} />
+                ) : (
+                  <div style={{ position: 'absolute', top: 0, bottom: 0, right: '50%', width: `${pct / 2}%`, background: barColor, borderRadius: '3px 0 0 3px' }} />
+                )}
+              </div>
+              <div className="mt-0.5">
+                <span className="text-xs" style={{ color: MUTED, fontSize: '0.65rem' }}>{dim.desc}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── 珠盘路组件（统计数字主体 + 弹出框明细）────────────────────
 function ZhuPanLu({
   items,
@@ -1171,6 +1523,16 @@ function ZhuPanLu({
       <div style={{ height: 6, background: BG }} />
       {/* ── 强度路 ── */}
       <StrengthPath items={items} tab={tab} />
+
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
+      {/* ── 形态路 ── */}
+      <PatternPath items={items} tab={tab} />
+
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
+      {/* ── 组合路 ── */}
+      <ComboPath items={items} tab={tab} />
 
       {/* 底部收尾 */}
       <div className="pb-4" style={{ background: CARD }} />
