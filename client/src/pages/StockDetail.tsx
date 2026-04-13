@@ -133,34 +133,21 @@ function ZhuPanLu({
         </button>
       </div>
 
-      {/* ── 统计对比区：上行近期 / 下行全生命周期，4格完全对齐 ── */}
-      {/* 列标题 */}
-      <div className="grid grid-cols-4 gap-1.5 text-center mb-1 px-4">
-        {[
-          { label: "涨天", color: RED },
-          { label: "跌天", color: GREEN_A },
-          { label: "平天", color: MUTED },
-          { label: "总天", color: "#7B1FA2" },
-        ].map((col, i) => (
-          <div key={i} className="text-xs font-semibold" style={{ color: col.color }}>{col.label}</div>
-        ))}
-      </div>
-
       {/* 近期行 */}
       <div className="p-4 pb-3" style={{ background: "#FFF8F2" }}>
         <div className="text-xs font-semibold mb-2" style={{ color: RED }}>近{tab}天（{displayed.length}个交易日）</div>
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {[
-            { val: upItems.length, rate: recentUpRate, color: RED, bg: "#FFF0F0", isTotal: false },
-            { val: downItems.length, rate: recentDownRate, color: GREEN_A, bg: "#F0FFF4", isTotal: false },
-            { val: flatItems.length, rate: displayed.length > 0 ? (flatItems.length / displayed.length) * 100 : 0, color: MUTED, bg: "#F5F5F5", isTotal: false },
-            { val: displayed.length, rate: 100, color: "#7B1FA2", bg: "#EEE8FF", isTotal: true },
+            { val: upItems.length, rate: recentUpRate, color: RED, bg: "#FFF0F0", suffix: "天涨" },
+            { val: downItems.length, rate: recentDownRate, color: GREEN_A, bg: "#F0FFF4", suffix: "天跌" },
+            { val: flatItems.length, rate: displayed.length > 0 ? (flatItems.length / displayed.length) * 100 : 0, color: MUTED, bg: "#F5F5F5", suffix: "天平" },
+            { val: displayed.length, rate: displayed.length > 0 ? ((upItems.length + downItems.length + flatItems.length) / displayed.length) * 100 : 0, color: "#7B1FA2", bg: "#EEE8FF", suffix: "天" },
           ].map((item, i) => (
             <div key={i} className="rounded-lg py-2.5" style={{ background: item.bg }}>
               <div className="text-lg font-bold leading-tight" style={{ color: item.color }}>
-                {item.isTotal ? "—" : `${item.rate.toFixed(1)}%`}
+                {`${item.rate.toFixed(1)}%`}
               </div>
-              <div className="text-xs mt-0.5" style={{ color: item.color, opacity: 0.75 }}>{item.val}天</div>
+              <div className="text-xs mt-0.5" style={{ color: item.color, opacity: 0.75 }}>{item.val}{item.suffix}</div>
             </div>
           ))}
         </div>
@@ -190,16 +177,16 @@ function ZhuPanLu({
         <div className="text-xs font-semibold mb-2" style={{ color: "#7B1FA2" }}>全生命周期（{lifetimeTotalDays}个交易日）</div>
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {[
-            { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED, bg: "#FFF0F0", isTotal: false },
-            { val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A, bg: "#F0FFF4", isTotal: false },
-            { val: lifetimeFlatDays, rate: lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0, color: MUTED, bg: "#F5F5F5", isTotal: false },
-            { val: lifetimeTotalDays, rate: 100, color: "#7B1FA2", bg: "#EEE8FF", isTotal: true },
+            { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED, bg: "#FFF0F0", suffix: "天涨" },
+            { val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A, bg: "#F0FFF4", suffix: "天跌" },
+            { val: lifetimeFlatDays, rate: lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0, color: MUTED, bg: "#F5F5F5", suffix: "天平" },
+            { val: lifetimeTotalDays, rate: lifetimeTotalDays > 0 ? ((lifetimeUpDays + lifetimeDownDays + lifetimeFlatDays) / lifetimeTotalDays) * 100 : 0, color: "#7B1FA2", bg: "#EEE8FF", suffix: "天" },
           ].map((item, i) => (
             <div key={i} className="rounded-lg py-2.5" style={{ background: item.bg }}>
               <div className="text-lg font-bold leading-tight" style={{ color: item.color }}>
-                {item.isTotal ? "—" : `${item.rate.toFixed(1)}%`}
+                {`${item.rate.toFixed(1)}%`}
               </div>
-              <div className="text-xs mt-0.5" style={{ color: item.color, opacity: 0.75 }}>{item.val}天</div>
+              <div className="text-xs mt-0.5" style={{ color: item.color, opacity: 0.75 }}>{item.val}{item.suffix}</div>
             </div>
           ))}
         </div>
