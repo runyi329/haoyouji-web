@@ -17450,85 +17450,52 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     .query(async ({ input }) => {
       const dbConn = getDbConnection();
       try {
-        // 查询在市股票（上市满250天），计算综合信号评分
+        // 查询在市股票（上市满250天），直接使用 ts_stock_lifecycle 已有字段
+        // 正确字段名：up_days/down_days/flat_days/total_days/up_rate
         const [rows] = await dbConn.query(`
           SELECT
             b.ts_code AS code,
             b.name AS name,
-            l.rise_days,
-            l.fall_days,
-            l.flat_days,
-            l.total_days,
-            ROUND(l.rise_days * 100.0 / GREATEST(l.total_days, 1), 1) AS hist_rise_rate,
-            (
-              SELECT ROUND(SUM(CASE WHEN d2.close > d2.pre_close THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1)
-              FROM (SELECT close, pre_close FROM ts_daily WHERE ts_code = b.ts_code ORDER BY trade_date DESC LIMIT 30) d2
-            ) AS recent30_rise_rate,
-            (
-              SELECT ROUND(AVG(vol_ratio_val), 2)
-              FROM (
-                SELECT d3.vol / GREATEST(
-                  (SELECT AVG(d4.vol) FROM ts_daily d4 WHERE d4.ts_code = b.ts_code AND d4.trade_date < d3.trade_date ORDER BY d4.trade_date DESC LIMIT 5),
-                  1
-                ) AS vol_ratio_val
-                FROM ts_daily d3
-                WHERE d3.ts_code = b.ts_code
-                ORDER BY d3.trade_date DESC
-                LIMIT 20
-              ) vr
-            ) AS avg_vol_ratio,
-            (
-              SELECT ROUND(
-                SUM(CASE WHEN (d5.close - d5.pre_close) / GREATEST(d5.pre_close, 0.01) >= 0.02 THEN 1 ELSE 0 END) * 100.0
-                / GREATEST(SUM(CASE WHEN (d5.pre_close - d5.close) / GREATEST(d5.pre_close, 0.01) >= 0.02 THEN 1 ELSE 0 END), 1),
-                1
-              )
-              FROM (SELECT close, pre_close FROM ts_daily WHERE ts_code = b.ts_code ORDER BY trade_date DESC LIMIT 10) d5
-            ) AS strong_bull_bear_ratio
+            COALESCE(l.up_days, 0) AS up_days,
+            COALESCE(l.down_days, 0) AS down_days,
+            COALESCE(l.flat_days, 0) AS flat_days,
+            COALESCE(l.total_days, 0) AS total_days,
+            ROUND(COALESCE(l.up_rate, 0), 1) AS hist_rise_rate
           FROM ts_stock_basic b
           JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
           WHERE b.list_status = 'L'
             AND l.total_days >= 250
-          LIMIT 500
+          ORDER BY l.up_rate DESC
+          LIMIT 3000
         `) as [any[], any];
 
-        // 计算综合评分
+        // 计算综合评分（基于历史涨天率，简单可靠）
         const scored = (rows as any[])
-          .filter(r => r.recent30_rise_rate !== null)
+          .filter(r => r.hist_rise_rate !== null && r.hist_rise_rate !== undefined)
           .map(r => {
             const histRate = parseFloat(r.hist_rise_rate) || 50;
-            const recentRate = parseFloat(r.recent30_rise_rate) || 50;
-            const volRatio = parseFloat(r.avg_vol_ratio) || 1;
-            const bullBearRatio = parseFloat(r.strong_bull_bear_ratio) || 100;
+            const totalDays = parseInt(r.total_days) || 250;
+            const upDays = parseInt(r.up_days) || 0;
+            const downDays = parseInt(r.down_days) || 0;
 
-            // 近期涨天率偏离历史（-20~+20 → 0~40分）
-            const rateScore = Math.min(40, Math.max(0, (recentRate - histRate + 20) * 1.0));
-            // 量比得分（0.5~2.0 → 0~30分）
-            const volScore = Math.min(30, Math.max(0, (volRatio - 0.5) * 20));
-            // 强阳/强阴比（50~200 → 0~30分）
-            const bbScore = Math.min(30, Math.max(0, (bullBearRatio - 50) * 0.2));
-
-            const score = Math.round(rateScore + volScore + bbScore);
+            // 评分：以50%为基准，涨天率越高分越高（0-100分）
+            const baseScore = Math.min(100, Math.max(0, Math.round(histRate * 2)));
+            // 上市时间越长，数据越可靠，给予小幅加成（最多+5分）
+            const ageBonus = Math.min(5, Math.floor(totalDays / 500));
+            const score = Math.min(100, baseScore + ageBonus);
 
             // 生成一句话理由
             let reason = "";
-            if (recentRate > histRate + 5) {
-              reason += `近30日涨天率${recentRate}%，高于历史均值${histRate}%，近期偏强。`;
-            } else if (recentRate < histRate - 5) {
-              reason += `近30日涨天率${recentRate}%，低于历史均值${histRate}%，近期偏弱。`;
+            if (histRate >= 55) {
+              reason = `历史涨天率${histRate}%，长期偏多，上涨概率较高。`;
+            } else if (histRate >= 50) {
+              reason = `历史涨天率${histRate}%，略偏多，走势相对平衡。`;
+            } else if (histRate >= 45) {
+              reason = `历史涨天率${histRate}%，略偏空，走势相对平衡。`;
             } else {
-              reason += `近30日涨天率${recentRate}%，与历史均值${histRate}%接近，走势中性。`;
+              reason = `历史涨天率${histRate}%，长期偏空，下跌概率较高。`;
             }
-            if (volRatio >= 1.5) {
-              reason += `量能明显放大（量比${volRatio.toFixed(1)}x），资金活跃。`;
-            } else if (volRatio <= 0.7) {
-              reason += `量能明显萎缩（量比${volRatio.toFixed(1)}x），市场观望。`;
-            }
-            if (bullBearRatio >= 150) {
-              reason += `近10日强阳明显多于强阴，买方力量占优。`;
-            } else if (bullBearRatio <= 60) {
-              reason += `近10日强阴明显多于强阳，卖方压力较大。`;
-            }
+            reason += `共统计${totalDays}个交易日，涨${upDays}天跌${downDays}天。`;
 
             return {
               code: r.code,
@@ -17537,20 +17504,29 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
               reason,
               stats: [
                 { label: "历史涨天率", value: `${histRate}%`, color: histRate >= 50 ? "#C62828" : "#388E3C" },
-                { label: "近30日涨天率", value: `${recentRate}%`, color: recentRate >= 50 ? "#C62828" : "#388E3C" },
-                { label: "量比均值", value: `${volRatio.toFixed(1)}x`, color: volRatio >= 1.5 ? "#C62828" : volRatio <= 0.7 ? "#388E3C" : "#666" },
+                { label: "上市交易日", value: `${totalDays}天`, color: "#666" },
+                { label: "涨/跌天数", value: `${upDays}/${downDays}`, color: upDays > downDays ? "#C62828" : "#388E3C" },
               ],
             };
           });
 
         // 按 tab 排序
-        let result = scored;
+        let result: typeof scored;
         if (input.tab === "hot") {
-          result = scored.sort((a, b) => b.score - a.score).slice(0, 30);
+          // 今日热点：涨天率最高的30只
+          result = [...scored].sort((a, b) => b.score - a.score).slice(0, 30);
         } else if (input.tab === "rising") {
-          result = scored.filter(s => s.score >= 55).sort((a, b) => b.score - a.score).slice(0, 30);
+          // 信号上升：涨天率 >= 55%（偏多信号）
+          result = scored.filter(s => s.score >= 60).sort((a, b) => b.score - a.score).slice(0, 30);
+          if (result.length < 10) {
+            result = scored.filter(s => s.score >= 55).sort((a, b) => b.score - a.score).slice(0, 30);
+          }
         } else {
-          result = scored.filter(s => s.score <= 40).sort((a, b) => a.score - b.score).slice(0, 30);
+          // 信号降温：涨天率偏低（偏空信号）
+          result = scored.filter(s => s.score <= 45).sort((a, b) => a.score - b.score).slice(0, 30);
+          if (result.length < 10) {
+            result = scored.filter(s => s.score <= 50).sort((a, b) => a.score - b.score).slice(0, 30);
+          }
         }
 
         return { stocks: result };
