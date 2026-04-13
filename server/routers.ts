@@ -17213,7 +17213,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           body: JSON.stringify({
             api_name: 'daily',
             token: TUSHARE_TOKEN,
-            params: { ts_code: input.tsCode },
+            params: { ts_code: input.tsCode, limit: 10000 },
             fields: 'trade_date,pct_chg',
           }),
           signal: AbortSignal.timeout(30000),
