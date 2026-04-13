@@ -725,55 +725,53 @@ function ZhuPanLu({
           </button>
         </div>
 
-        {/* 统计格子：表头（左侧占位与行标签等宽，保证列对齐） */}
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <div className="flex-shrink-0 w-14" />
-          <div className="flex-1 grid grid-cols-4 gap-1.5 text-center">
-            {["涨", "跌", "平", "总"].map((label, i) => (
-              <div key={i} className="text-xs" style={{ color: MUTED }}>{label}</div>
-            ))}
-          </div>
-        </div>
-        {/* 筛选区间行 */}
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <div className="text-xs flex-shrink-0 w-14 whitespace-nowrap" style={{ color: MUTED }}>近{tab}天</div>
-          <div className="flex-1 grid grid-cols-4 gap-1.5 text-center">
-            {[
-              { val: upItems.length, rate: recentUpRate, color: RED },
-              { val: downItems.length, rate: recentDownRate, color: GREEN_A },
-              { val: flatItems.length, rate: displayed.length > 0 ? (flatItems.length / displayed.length) * 100 : 0, color: MUTED },
-              { val: displayed.length, rate: 100, color: "#7B1FA2" },
-            ].map((item, i) => (
-              <div key={i} className="rounded py-1.5" style={{ background: "#F8F8F8" }}>
-                <div className="text-sm font-bold leading-tight" style={{ color: item.color }}>
-                  {i < 3 ? `${item.rate.toFixed(1)}%` : item.val}
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: MUTED }}>{i < 3 ? `${item.val}天` : '天'}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        {/* 分隔线 */}
-        <div className="my-1.5" style={{ height: 1, background: BORDER }} />
-        {/* 全量行 */}
-        <div className="flex items-center gap-1.5">
-          <div className="text-xs flex-shrink-0 w-14 whitespace-nowrap" style={{ color: MUTED }}>全量</div>
-          <div className="flex-1 grid grid-cols-4 gap-1.5 text-center">
-            {[
-              { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED },
-              { val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A },
-              { val: lifetimeFlatDays, rate: lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0, color: MUTED },
-              { val: lifetimeTotalDays, rate: 100, color: "#7B1FA2" },
-            ].map((item, i) => (
-              <div key={i} className="rounded py-1.5" style={{ background: "#F8F8F8" }}>
-                <div className="text-sm font-bold leading-tight" style={{ color: item.color }}>
-                  {i < 3 ? `${item.rate.toFixed(1)}%` : item.val}
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: MUTED }}>{i < 3 ? `${item.val}天` : '天'}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* 统计表格：带边框线，视觉上像表格 */}
+        <table className="w-full text-center text-xs mb-0" style={{ borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th className="py-1.5 text-left" style={{ color: MUTED, fontWeight: 400, width: "3.5rem", borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}></th>
+              {["涨", "跌", "平", "总"].map((label, i) => (
+                <th key={i} className="py-1.5" style={{ color: MUTED, fontWeight: 500, borderBottom: `1px solid ${BORDER}`, borderRight: i < 3 ? `1px solid ${BORDER}` : "none" }}>{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* 近N天行 */}
+            <tr style={{ background: "#FAFAFA" }}>
+              <td className="py-2 text-left pl-0.5 whitespace-nowrap" style={{ color: MUTED, borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>近{tab}天</td>
+              {[
+                { val: upItems.length, rate: recentUpRate, color: RED },
+                { val: downItems.length, rate: recentDownRate, color: GREEN_A },
+                { val: flatItems.length, rate: displayed.length > 0 ? (flatItems.length / displayed.length) * 100 : 0, color: MUTED },
+                { val: displayed.length, rate: 100, color: "#7B1FA2" },
+              ].map((item, i) => (
+                <td key={i} className="py-2" style={{ borderBottom: `1px solid ${BORDER}`, borderRight: i < 3 ? `1px solid ${BORDER}` : "none" }}>
+                  <div className="font-bold leading-tight" style={{ color: item.color, fontSize: "0.8rem" }}>
+                    {i < 3 ? `${item.rate.toFixed(1)}%` : item.val}
+                  </div>
+                  <div style={{ color: MUTED, fontSize: "0.7rem" }}>{i < 3 ? `${item.val}天` : "天"}</div>
+                </td>
+              ))}
+            </tr>
+            {/* 全量行 */}
+            <tr style={{ background: "#fff" }}>
+              <td className="py-2 text-left pl-0.5 whitespace-nowrap" style={{ color: MUTED, borderRight: `1px solid ${BORDER}` }}>全量</td>
+              {[
+                { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED },
+                { val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A },
+                { val: lifetimeFlatDays, rate: lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0, color: MUTED },
+                { val: lifetimeTotalDays, rate: 100, color: "#7B1FA2" },
+              ].map((item, i) => (
+                <td key={i} className="py-2" style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : "none" }}>
+                  <div className="font-bold leading-tight" style={{ color: item.color, fontSize: "0.8rem" }}>
+                    {i < 3 ? `${item.rate.toFixed(1)}%` : item.val}
+                  </div>
+                  <div style={{ color: MUTED, fontSize: "0.7rem" }}>{i < 3 ? `${item.val}天` : "天"}</div>
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
 
         {/* 分隔线 */}
         <div className="mt-3 mb-3" style={{ height: 1, background: BORDER }} />
