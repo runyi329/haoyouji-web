@@ -729,56 +729,44 @@ function ZhuPanLu({
           </button>
         </div>
 
-        {/* 统计表格：带边框线，视觉上像表格 */}
-        <table className="w-full text-center text-xs mb-0" style={{ borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th className="py-1.5 text-left" style={{ color: MUTED, fontWeight: 400, width: "3.5rem", borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}></th>
-              {["涨", "跌", "平", "总"].map((label, i) => (
-                <th key={i} className="py-1.5" style={{ color: MUTED, fontWeight: 500, borderBottom: `1px solid ${BORDER}`, borderRight: i < 3 ? `1px solid ${BORDER}` : "none" }}>{label}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {/* 近N天行 */}
-            <tr style={{ background: "#FAFAFA" }}>
-              <td className="py-2 text-center whitespace-nowrap" style={{ color: MUTED, borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>近{tab}天</td>
-              {[
-                { val: upItems.length, rate: recentUpRate, color: RED },
-                { val: downItems.length, rate: recentDownRate, color: GREEN_A },
-                { val: flatItems.length, rate: displayed.length > 0 ? (flatItems.length / displayed.length) * 100 : 0, color: MUTED },
-                { val: displayed.length, rate: 100, color: "#7B1FA2" },
-              ].map((item, i) => (
-                <td key={i} className="py-2" style={{ borderBottom: `1px solid ${BORDER}`, borderRight: i < 3 ? `1px solid ${BORDER}` : "none" }}>
-                  <div className="font-bold leading-tight" style={{ color: item.color, fontSize: "0.8rem" }}>
-                    {i < 3 ? `${item.rate.toFixed(1)}%` : item.val}
-                  </div>
-                  <div style={{ color: MUTED, fontSize: "0.7rem" }}>{i < 3 ? `${item.val}天` : "天"}</div>
-                </td>
-              ))}
-            </tr>
-            {/* 全量行 */}
-            <tr style={{ background: "#fff" }}>
-              <td className="py-2 text-center whitespace-nowrap" style={{ color: MUTED, borderRight: `1px solid ${BORDER}` }}>全量</td>
-              {[
-                { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED },
-                { val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A },
-                { val: lifetimeFlatDays, rate: lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0, color: MUTED },
-                { val: lifetimeTotalDays, rate: 100, color: "#7B1FA2" },
-              ].map((item, i) => (
-                <td key={i} className="py-2" style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : "none" }}>
-                  <div className="font-bold leading-tight" style={{ color: item.color, fontSize: "0.8rem" }}>
-                    {i < 3 ? `${item.rate.toFixed(1)}%` : item.val}
-                  </div>
-                  <div style={{ color: MUTED, fontSize: "0.7rem" }}>{i < 3 ? `${item.val}天` : "天"}</div>
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
+        {/* 进度条对比：近N天 vs 历史全期（醒目，放在 Tab 下方） */}
+        <div className="space-y-3 mb-4">
+          {/* 近N天进度条 */}
+          <div>
+            <div className="flex justify-between items-baseline mb-1.5">
+              <span className="text-xs font-medium" style={{ color: MUTED }}>近{tab}天</span>
+              <span className="text-xs">
+                <span className="font-semibold" style={{ color: RED }}>{recentUpRate.toFixed(1)}%涨</span>
+                <span style={{ color: MUTED }}> · {(displayed.length > 0 ? flatItems.length / displayed.length * 100 : 0).toFixed(1)}%平 · </span>
+                <span className="font-semibold" style={{ color: GREEN_A }}>{recentDownRate.toFixed(1)}%跌</span>
+              </span>
+            </div>
+            <div className="flex overflow-hidden" style={{ height: 10, borderRadius: 3 }}>
+              <div style={{ width: `${recentUpRate}%`, background: RED }} />
+              <div style={{ width: `${displayed.length > 0 ? flatItems.length / displayed.length * 100 : 0}%`, background: "#D0D0D0" }} />
+              <div style={{ flex: 1, background: GREEN_A }} />
+            </div>
+          </div>
+          {/* 历史全期进度条 */}
+          <div>
+            <div className="flex justify-between items-baseline mb-1.5">
+              <span className="text-xs font-medium" style={{ color: MUTED }}>历史全期</span>
+              <span className="text-xs">
+                <span className="font-semibold" style={{ color: RED }}>{lifetimeUpRate.toFixed(1)}%涨</span>
+                <span style={{ color: MUTED }}> · {(lifetimeTotalDays > 0 ? lifetimeFlatDays / lifetimeTotalDays * 100 : 0).toFixed(1)}%平 · </span>
+                <span className="font-semibold" style={{ color: GREEN_A }}>{lifetimeDownRate.toFixed(1)}%跌</span>
+              </span>
+            </div>
+            <div className="flex overflow-hidden" style={{ height: 10, borderRadius: 3 }}>
+              <div style={{ width: `${lifetimeUpRate}%`, background: RED }} />
+              <div style={{ width: `${lifetimeTotalDays > 0 ? lifetimeFlatDays / lifetimeTotalDays * 100 : 0}%`, background: "#D0D0D0" }} />
+              <div style={{ flex: 1, background: GREEN_A }} />
+            </div>
+          </div>
+        </div>
 
         {/* 分隔线 */}
-        <div className="mt-3 mb-3" style={{ height: 1, background: BORDER }} />
+        <div className="mb-3" style={{ height: 1, background: BORDER }} />
 
         {/* 偏离值 + 标签 */}
         <div className="flex items-center justify-between mb-2">
@@ -793,36 +781,10 @@ function ZhuPanLu({
           </div>
         </div>
         {deviationAbs >= 3 && (
-          <div className="mb-2 text-xs" style={{ color: deviationColor }}>
+          <div className="text-xs" style={{ color: deviationColor }}>
             {deviation < 0 ? "近期跌天偏多，历史均值回归信号，可关注反弹机会" : "近期涨天偏多，注意高位风险，可关注回调压力"}
           </div>
         )}
-
-        {/* 近期 vs 历史进度条对比 */}
-        <div className="space-y-2">
-          <div>
-            <div className="flex justify-between text-xs mb-1" style={{ color: MUTED }}>
-              <span>近{tab}天</span>
-              <span><span style={{ color: RED }}>{recentUpRate.toFixed(1)}%涨</span> · <span>{(displayed.length > 0 ? flatItems.length / displayed.length * 100 : 0).toFixed(1)}%平</span> · <span style={{ color: GREEN_A }}>{recentDownRate.toFixed(1)}%跌</span></span>
-            </div>
-            <div className="flex overflow-hidden" style={{ height: 8, borderRadius: 2 }}>
-              <div style={{ width: `${recentUpRate}%`, background: RED }} />
-              <div style={{ width: `${displayed.length > 0 ? flatItems.length / displayed.length * 100 : 0}%`, background: "#D0D0D0" }} />
-              <div style={{ flex: 1, background: GREEN_A }} />
-            </div>
-          </div>
-          <div>
-            <div className="flex justify-between text-xs mb-1" style={{ color: MUTED }}>
-              <span>历史全期</span>
-              <span><span style={{ color: RED }}>{lifetimeUpRate.toFixed(1)}%涨</span> · <span>{(lifetimeTotalDays > 0 ? lifetimeFlatDays / lifetimeTotalDays * 100 : 0).toFixed(1)}%平</span> · <span style={{ color: GREEN_A }}>{lifetimeDownRate.toFixed(1)}%跌</span></span>
-            </div>
-            <div className="flex overflow-hidden" style={{ height: 8, borderRadius: 2 }}>
-              <div style={{ width: `${lifetimeUpRate}%`, background: RED }} />
-              <div style={{ width: `${lifetimeTotalDays > 0 ? lifetimeFlatDays / lifetimeTotalDays * 100 : 0}%`, background: "#D0D0D0" }} />
-              <div style={{ flex: 1, background: GREEN_A }} />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* 间隙 */}
