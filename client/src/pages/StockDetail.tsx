@@ -280,7 +280,8 @@ export default function StockDetail() {
   const params = useParams<{ tsCode: string }>();
   const { user } = useAuth();
 
-  const tsCode = decodeURIComponent(params.tsCode || "");
+  // wouter 路由不支持含 . 的参数，跳转时 . 被替换为 -，这里还原
+  const tsCode = (params.tsCode || "").replace(/-(?=[A-Z]{2}$)/g, ".");
 
   const { data, isLoading, error } = trpc.aiStockDetail.useQuery(
     { tsCode },

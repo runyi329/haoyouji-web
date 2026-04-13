@@ -250,7 +250,7 @@ export default function StockLifecycle() {
           </div>
         )}
         {allItems.map((stock, idx) => (
-          <StockRow key={stock.tsCode} stock={stock} idx={idx} sortBy={sortBy} onAI={(tsCode) => setLocation(`/stock/${encodeURIComponent(tsCode)}`)} />
+          <StockRow key={stock.tsCode} stock={stock} idx={idx} sortBy={sortBy} onAI={(tsCode) => setLocation(`/stock/${tsCode.replace(/\./g, '-')}`)} />
         ))}
         {/* 加载更多 */}
         {isFetching && allItems.length > 0 && (

@@ -17071,66 +17071,133 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
   aiStockDetail: publicProcedure
     .input(z.object({ tsCode: z.string() }))
     .query(async ({ input }) => {
-      // 模拟数据工具函数（数据库无数据时展示UI用）
-      const mockData = () => ({
-        tsCode: input.tsCode,
-        name: '模拟股票（模拟数据）',
-        listStatus: 'L',
-        listDate: '19910403',
-        delistDate: null as string | null,
-        exchange: 'SZSE',
-        industry: '银行',
-        upDays: 1823,
-        downDays: 1654,
-        flatDays: 312,
-        totalDays: 3789,
-        upRate: '48.12',
-        updatedAt: '2025-01-01',
-      });
+      const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+      const TUSHARE_URL = 'http://api.tushare.pro';
+
+      // 从 Tushare stock_basic API 实时拉取基本信息
+      const fetchFromTushare = async () => {
+        const resp = await fetch(TUSHARE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_name: 'stock_basic',
+            token: TUSHARE_TOKEN,
+            params: { ts_code: input.tsCode, list_status: 'L' },
+            fields: 'ts_code,name,list_status,list_date,delist_date,exchange,industry',
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const json = await resp.json() as any;
+        if (json.code !== 0 || !json.data?.items?.length) {
+          // 尝试查询退市股票
+          const resp2 = await fetch(TUSHARE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_name: 'stock_basic',
+              token: TUSHARE_TOKEN,
+              params: { ts_code: input.tsCode, list_status: 'D' },
+              fields: 'ts_code,name,list_status,list_date,delist_date,exchange,industry',
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          const json2 = await resp2.json() as any;
+          if (json2.code !== 0 || !json2.data?.items?.length) return null;
+          const fields2: string[] = json2.data.fields;
+          const row2 = json2.data.items[0];
+          return {
+            tsCode: String(row2[fields2.indexOf('ts_code')]),
+            name: String(row2[fields2.indexOf('name')]),
+            listStatus: String(row2[fields2.indexOf('list_status')] || 'D'),
+            listDate: row2[fields2.indexOf('list_date')] ? String(row2[fields2.indexOf('list_date')]) : null,
+            delistDate: row2[fields2.indexOf('delist_date')] ? String(row2[fields2.indexOf('delist_date')]) : null,
+            exchange: String(row2[fields2.indexOf('exchange')] || ''),
+            industry: row2[fields2.indexOf('industry')] ? String(row2[fields2.indexOf('industry')]) : null,
+          };
+        }
+        const fields: string[] = json.data.fields;
+        const row = json.data.items[0];
+        return {
+          tsCode: String(row[fields.indexOf('ts_code')]),
+          name: String(row[fields.indexOf('name')]),
+          listStatus: String(row[fields.indexOf('list_status')] || 'L'),
+          listDate: row[fields.indexOf('list_date')] ? String(row[fields.indexOf('list_date')]) : null,
+          delistDate: row[fields.indexOf('delist_date')] ? String(row[fields.indexOf('delist_date')]) : null,
+          exchange: String(row[fields.indexOf('exchange')] || ''),
+          industry: row[fields.indexOf('industry')] ? String(row[fields.indexOf('industry')]) : null,
+        };
+      };
+
       try {
         const dbConn = await getDbConnection();
-        if (!dbConn) return mockData();
-        const [rows] = await dbConn.execute(
-          `SELECT
-            b.ts_code,
-            b.name,
-            b.list_status,
-            b.list_date,
-            b.delist_date,
-            b.exchange,
-            b.industry,
-            COALESCE(l.up_days, 0) AS up_days,
-            COALESCE(l.down_days, 0) AS down_days,
-            COALESCE(l.flat_days, 0) AS flat_days,
-            COALESCE(l.total_days, 0) AS total_days,
-            COALESCE(l.up_rate, 0) AS up_rate,
-            l.updated_at
-          FROM ts_stock_basic b
-          LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
-          WHERE b.ts_code = ?
-          LIMIT 1`,
-          [input.tsCode]
-        ) as any[];
-        const r = (rows as any[])[0];
-        if (!r) return mockData();
+        let basicInfo: { tsCode: string; name: string; listStatus: string; listDate: string | null; delistDate: string | null; exchange: string; industry: string | null } | null = null;
+        let lifecycleInfo: { upDays: number; downDays: number; flatDays: number; totalDays: number; upRate: string; updatedAt: string | null } | null = null;
+
+        if (dbConn) {
+          const [rows] = await dbConn.execute(
+            `SELECT
+              b.ts_code,
+              b.name,
+              b.list_status,
+              b.list_date,
+              b.delist_date,
+              b.exchange,
+              b.industry,
+              COALESCE(l.up_days, 0) AS up_days,
+              COALESCE(l.down_days, 0) AS down_days,
+              COALESCE(l.flat_days, 0) AS flat_days,
+              COALESCE(l.total_days, 0) AS total_days,
+              COALESCE(l.up_rate, 0) AS up_rate,
+              l.updated_at
+            FROM ts_stock_basic b
+            LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
+            WHERE b.ts_code = ?
+            LIMIT 1`,
+            [input.tsCode]
+          ) as any[];
+          const r = (rows as any[])[0];
+          if (r) {
+            basicInfo = {
+              tsCode: r.ts_code as string,
+              name: r.name as string,
+              listStatus: r.list_status as string,
+              listDate: r.list_date as string | null,
+              delistDate: r.delist_date as string | null,
+              exchange: r.exchange as string,
+              industry: r.industry as string | null,
+            };
+            lifecycleInfo = {
+              upDays: Number(r.up_days),
+              downDays: Number(r.down_days),
+              flatDays: Number(r.flat_days),
+              totalDays: Number(r.total_days),
+              upRate: String(Number(r.up_rate).toFixed(2)),
+              updatedAt: r.updated_at ? String(r.updated_at) : null,
+            };
+          }
+        }
+
+        // 数据库没有基本信息时，实时调用 Tushare
+        if (!basicInfo) {
+          basicInfo = await fetchFromTushare();
+        }
+
+        if (!basicInfo) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '未找到该股票数据' });
+        }
+
         return {
-          tsCode: r.ts_code as string,
-          name: r.name as string,
-          listStatus: r.list_status as string,
-          listDate: r.list_date as string | null,
-          delistDate: r.delist_date as string | null,
-          exchange: r.exchange as string,
-          industry: r.industry as string | null,
-          upDays: Number(r.up_days),
-          downDays: Number(r.down_days),
-          flatDays: Number(r.flat_days),
-          totalDays: Number(r.total_days),
-          upRate: String(Number(r.up_rate).toFixed(2)),
-          updatedAt: r.updated_at ? String(r.updated_at) : null,
+          ...basicInfo,
+          upDays: lifecycleInfo?.upDays ?? 0,
+          downDays: lifecycleInfo?.downDays ?? 0,
+          flatDays: lifecycleInfo?.flatDays ?? 0,
+          totalDays: lifecycleInfo?.totalDays ?? 0,
+          upRate: lifecycleInfo?.upRate ?? '0.00',
+          updatedAt: lifecycleInfo?.updatedAt ?? null,
         };
       } catch (e) {
-        // 任何错误都返回模拟数据，确保前端能预览UI
-        return mockData();
+        if (e instanceof TRPCError) throw e;
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '服务器错误' });
       }
     }),
 
