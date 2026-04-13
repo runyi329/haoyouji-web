@@ -1032,16 +1032,19 @@ export default function StockDetail() {
                   const isDown = pct !== null && pct < 0;
                   const priceColor = isUp ? RED : isDown ? GREEN_A : TEXT;
                   const tradeDate = latestItem?.tradeDate;
+                  const close = latestItem?.close ?? null;
                   return (
                     <div>
-                      {/* 涨跌幅大字 */}
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold" style={{ color: priceColor }}>
-                          {pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%` : '--'}
-                        </span>
+                      {/* 收盘价大字 */}
+                      <div className="text-3xl font-bold leading-tight" style={{ color: priceColor }}>
+                        {close !== null ? close.toFixed(2) : '--'}
+                      </div>
+                      {/* 涨跌幅 */}
+                      <div className="text-base font-semibold mt-0.5" style={{ color: priceColor }}>
+                        {pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%` : '--'}
                       </div>
                       <div className="text-xs mt-0.5" style={{ color: MUTED }}>
-                        {tradeDate ? `${tradeDate.slice(0,4)}-${tradeDate.slice(4,6)}-${tradeDate.slice(6,8)} 收盘` : '最新涨跌幅'}
+                        {tradeDate ? `${tradeDate.slice(0,4)}-${tradeDate.slice(4,6)}-${tradeDate.slice(6,8)} 收盘` : '最新价格'}
                       </div>
                       {/* 涨/跌标签 */}
                       {pct !== null && (
