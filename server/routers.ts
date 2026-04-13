@@ -17371,6 +17371,14 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           STAR: "AND b.ts_code LIKE '688%'",
         };
         const mf = marketCond[input.market] || '';
+        // 查询退市股票数量
+        const sqlDelisted = `SELECT COUNT(*) AS cnt FROM ts_stock_lifecycle l INNER JOIN ts_stock_basic b ON b.ts_code = l.ts_code WHERE b.list_status = 'D' ${mf}`;
+        const [delistedRows] = await (dbConn as any).query(sqlDelisted) as any[];
+        const delistedCount = Number((delistedRows as any[])[0]?.cnt ?? 0);
+        // 查询在市但不足60天的新股数量
+        const sqlNewStock = `SELECT COUNT(*) AS cnt FROM ts_stock_lifecycle l INNER JOIN ts_stock_basic b ON b.ts_code = l.ts_code WHERE b.list_status = 'L' AND l.total_days < 60 ${mf}`;
+        const [newStockRows] = await (dbConn as any).query(sqlNewStock) as any[];
+        const newStockCount = Number((newStockRows as any[])[0]?.cnt ?? 0);
         // 使用 query() 而非 execute()，避免 prepared statement 对 SQL 片段插入的限制
         const sql = `
           SELECT
@@ -17426,9 +17434,11 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           totalCount,
           mean: parseFloat(mean.toFixed(2)),
           stdDev: parseFloat(stdDev.toFixed(2)),
+          delistedCount,
+          newStockCount,
         };
       } finally {
-        dbConn.end?.();
+        // 不调用 dbConn.end()，连接池是共享的，关闭后后续请求会失败
       }
     }),
 

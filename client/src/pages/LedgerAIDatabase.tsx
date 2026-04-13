@@ -724,6 +724,12 @@ function UpRateDistSection() {
                   {` 标准差 ${data.stdDev}%，分布${data.stdDev < 5 ? '集中' : data.stdDev < 8 ? '适中' : '分散'}，个股涨天率差异${data.stdDev < 5 ? '较小' : data.stdDev < 8 ? '适中' : '较大'}。`}
                 </p>
               </div>
+              {/* 排除说明 */}
+              <div className="mt-2 px-2 py-1.5 rounded-lg flex flex-wrap gap-x-4 gap-y-1" style={{ background: "#F5F5F5", border: `1px solid ${BORDER}` }}>
+                <span className="text-[10px]" style={{ color: MUTED }}>样本说明：共统计 {fmt(data.totalCount)} 只在市股（上市满60天）</span>
+                <span className="text-[10px]" style={{ color: MUTED }}>已排除退市股 {fmt(data.delistedCount)} 只</span>
+                <span className="text-[10px]" style={{ color: MUTED }}>已排除新股（上市不足60天）{fmt(data.newStockCount)} 只</span>
+              </div>
             </>
           )}
         </div>
