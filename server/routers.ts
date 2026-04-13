@@ -11089,7 +11089,7 @@ export const appRouter = router({
         quantity: z.string().optional(),
         status: z.enum(['pending', 'completed', 'cancelled']).optional(),
         // 新增：确认卖出成交
-        sellStatus: z.enum(['sold', 'sell_cancelled']).optional(),
+        sellStatus: z.enum(['selling', 'sold', 'sell_cancelled']).optional(),
         sellPrice: z.string().optional(), // 实际卖出成交价
       }))
       .mutation(async ({ ctx, input }) => {
@@ -11182,6 +11182,16 @@ export const appRouter = router({
                 WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
           );
           return { success: true };
+        }
+        
+        // ========== 管理员手动标记委卖中（直接设置 selling 状态）==========
+        if (input.sellStatus === 'selling') {
+          const sellPriceUpdate = input.sellPrice ? `, sell_price = '${input.sellPrice.replace(/'/g, '')}'` : '';
+          await db.execute(
+            sql`UPDATE af_orders SET sell_status = 'selling'${sql.raw(sellPriceUpdate)}, updated_at = NOW()
+                WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
+          );
+          // 继续执行后续的买单状态/金额更新逻辑（不提前 return）
         }
         
         // ========== 原有买单状态处理 ==========
