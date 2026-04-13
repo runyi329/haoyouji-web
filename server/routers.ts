@@ -17317,7 +17317,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
               ts_code: input.tsCode,
               limit: input.limit,
             },
-            fields: 'trade_date,open,close,pct_chg',
+            fields: 'trade_date,open,close,pct_chg,vol,amount',
           }),
           signal: AbortSignal.timeout(10000),
         });
@@ -17331,6 +17331,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const openIdx = fields.indexOf('open');
         const closeIdx = fields.indexOf('close');
         const pctIdx = fields.indexOf('pct_chg');
+        const volIdx = fields.indexOf('vol');
+        const amountIdx = fields.indexOf('amount');
         const items = (json.data.items as any[])
           .slice()
           .reverse()
@@ -17338,6 +17340,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             tradeDate: String(row[dateIdx]),
             pct: Number(row[pctIdx]),
             close: Number(row[closeIdx]),
+            vol: volIdx >= 0 ? Number(row[volIdx]) : null,       // 成交量（手）
+            amount: amountIdx >= 0 ? Number(row[amountIdx]) : null, // 成交额（千元）
             // 实心：收盘 >= 开盘（阳线或十字星）
             solid: Number(row[closeIdx]) >= Number(row[openIdx]),
           }));

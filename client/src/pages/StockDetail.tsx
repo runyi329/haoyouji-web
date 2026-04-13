@@ -657,6 +657,179 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
   );
 }
 
+// ─── 放量缩量信号组件 ────────────────────────────────────────────
+function VolSignal({
+  items,
+  tab,
+}: {
+  items: { tradeDate: string; pct: number; vol?: number | null; amount?: number | null }[];
+  tab: 30 | 60 | 90 | 180 | 365;
+}) {
+  // 按日期正序排列
+  const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+  // 取近 tab 天数据
+  const displayed = sorted.slice(-tab);
+
+  // 过滤掉没有 vol 数据的条目
+  const withVol = displayed.filter(d => d.vol != null && d.vol > 0);
+
+  if (withVol.length < 5) {
+    return (
+      <div className="mx-0 rounded-none p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        <div className="text-xs font-semibold mb-2" style={{ color: "#444" }}>放量缩量信号</div>
+        <div className="text-xs" style={{ color: MUTED }}>成交量数据不足</div>
+      </div>
+    );
+  }
+
+  // 计算每日量比：当日成交量 / 过去 MA_PERIOD 日平均成交量
+  const MA_PERIOD = 5;
+  type VolItem = {
+    tradeDate: string;
+    pct: number;
+    vol: number;
+    volRatio: number; // 量比
+    signal: 'vol_up_rise' | 'vol_up_fall' | 'shrink_up_rise' | 'shrink_up_fall' | 'normal';
+  };
+
+  const volItems: VolItem[] = [];
+  for (let i = 0; i < withVol.length; i++) {
+    const item = withVol[i];
+    const prevN = withVol.slice(Math.max(0, i - MA_PERIOD), i);
+    if (prevN.length < 3) continue; // 前期数据不足跳过
+    const avgVol = prevN.reduce((s, d) => s + (d.vol ?? 0), 0) / prevN.length;
+    const volRatio = avgVol > 0 ? (item.vol ?? 0) / avgVol : 1;
+
+    let signal: VolItem['signal'] = 'normal';
+    if (volRatio >= 1.5 && item.pct > 0) signal = 'vol_up_rise';
+    else if (volRatio >= 1.5 && item.pct < 0) signal = 'vol_up_fall';
+    else if (volRatio <= 0.7 && item.pct > 0) signal = 'shrink_up_rise';
+    else if (volRatio <= 0.7 && item.pct < 0) signal = 'shrink_up_fall';
+
+    volItems.push({ tradeDate: item.tradeDate, pct: item.pct, vol: item.vol ?? 0, volRatio, signal });
+  }
+
+  if (volItems.length === 0) {
+    return null;
+  }
+
+  // 最新一条
+  const latest = volItems[volItems.length - 1];
+  const latestRatio = latest.volRatio;
+  const latestSignalLabel =
+    latest.signal === 'vol_up_rise' ? '放量上涨' :
+    latest.signal === 'vol_up_fall' ? '放量下跌' :
+    latest.signal === 'shrink_up_rise' ? '缩量上涨' :
+    latest.signal === 'shrink_up_fall' ? '缩量下跌' :
+    latestRatio >= 1.5 ? '放量平盘' :
+    latestRatio <= 0.7 ? '缩量平盘' : '量能正常';
+  const latestSignalColor =
+    latest.signal === 'vol_up_rise' ? RED :
+    latest.signal === 'vol_up_fall' ? GREEN_A :
+    latest.signal === 'shrink_up_rise' ? '#FF8C00' :
+    latest.signal === 'shrink_up_fall' ? '#888' : MUTED;
+
+  // 统计各信号次数
+  const countMap: Record<string, number> = {
+    vol_up_rise: 0, vol_up_fall: 0, shrink_up_rise: 0, shrink_up_fall: 0, normal: 0,
+  };
+  volItems.forEach(d => countMap[d.signal]++);
+
+  // 近 N 天量比柱状图（最多显示最近 60 条）
+  const chartItems = volItems.slice(-60);
+  const maxRatio = Math.max(...chartItems.map(d => d.volRatio), 2);
+
+  // 柱子颜色
+  const barColor = (item: VolItem) => {
+    if (item.signal === 'vol_up_rise') return RED;
+    if (item.signal === 'vol_up_fall') return GREEN_A;
+    if (item.signal === 'shrink_up_rise') return '#FF8C00';
+    if (item.signal === 'shrink_up_fall') return '#90CAF9';
+    if (item.volRatio >= 1.5) return '#FFAB40';
+    if (item.volRatio <= 0.7) return '#CFD8DC';
+    return '#BDBDBD';
+  };
+
+  return (
+    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+      {/* 标题行 */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold" style={{ color: "#444" }}>放量缩量信号</span>
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: "#F5F5F5", color: latestSignalColor, fontWeight: 600 }}>
+          最新：{latestSignalLabel}
+        </span>
+      </div>
+
+      {/* 量比大字 + 说明 */}
+      <div className="flex items-baseline gap-2 px-4 pb-3">
+        <span className="text-2xl font-bold" style={{ color: latestSignalColor }}>{latestRatio.toFixed(2)}</span>
+        <span className="text-xs" style={{ color: MUTED }}>量比（近{MA_PERIOD}日均量）</span>
+        <span className="text-xs ml-auto" style={{ color: MUTED }}>
+          {latestRatio >= 1.5 ? '放量（>1.5x）' : latestRatio <= 0.7 ? '缩量（<0.7x）' : '正常（0.7~1.5x）'}
+        </span>
+      </div>
+
+      {/* 量比柱状图 */}
+      <div className="px-4 pb-3">
+        <div className="flex items-end gap-px" style={{ height: 48 }}>
+          {chartItems.map((item, i) => {
+            const h = Math.max(2, (item.volRatio / maxRatio) * 44);
+            return (
+              <div
+                key={i}
+                title={`${item.tradeDate} 量比${item.volRatio.toFixed(2)}`}
+                style={{
+                  flex: 1,
+                  height: h,
+                  background: barColor(item),
+                  borderRadius: 1,
+                  minWidth: 2,
+                  alignSelf: 'flex-end',
+                }}
+              />
+            );
+          })}
+        </div>
+        {/* 基准线 1.0x */}
+        <div className="flex items-center gap-1 mt-1">
+          <div style={{ flex: 1, height: 1, background: BORDER }} />
+          <span className="text-xs" style={{ color: MUTED, whiteSpace: 'nowrap' }}>基准 1.0x</span>
+        </div>
+      </div>
+
+      {/* 信号统计 */}
+      <div className="grid grid-cols-4 gap-0 border-t" style={{ borderColor: BORDER }}>
+        {[
+          { label: '放量上涨', count: countMap.vol_up_rise, color: RED },
+          { label: '放量下跌', count: countMap.vol_up_fall, color: GREEN_A },
+          { label: '缩量上涨', count: countMap.shrink_up_rise, color: '#FF8C00' },
+          { label: '缩量下跌', count: countMap.shrink_up_fall, color: '#90CAF9' },
+        ].map((item, i) => (
+          <div key={i} className="flex flex-col items-center py-2" style={{ borderRight: i < 3 ? `1px solid ${BORDER}` : 'none' }}>
+            <span className="text-sm font-bold" style={{ color: item.color }}>{item.count}</span>
+            <span className="text-xs mt-0.5" style={{ color: MUTED }}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 图例说明 */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 px-4 py-2 border-t" style={{ borderColor: BORDER }}>
+        {[
+          { color: RED, label: '放量上涨（强势）' },
+          { color: GREEN_A, label: '放量下跌（恐慌）' },
+          { color: '#FF8C00', label: '缩量上涨（弱势）' },
+          { color: '#90CAF9', label: '缩量下跌（弱势）' },
+        ].map((item, i) => (
+          <div key={i} className="flex items-center gap-1">
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: item.color }} />
+            <span className="text-xs" style={{ color: MUTED }}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── 珠盘路组件（统计数字主体 + 弹出框明细）────────────────────
 function ZhuPanLu({
   items,
@@ -667,7 +840,7 @@ function ZhuPanLu({
   lifetimeTotalDays,
   streakStats,
 }: {
-  items: { tradeDate: string; pct: number; solid: boolean }[];
+  items: { tradeDate: string; pct: number; solid: boolean; vol?: number | null; amount?: number | null }[];
   lifetimeUpRate: number;
   lifetimeUpDays: number;
   lifetimeDownDays: number;
@@ -806,6 +979,11 @@ function ZhuPanLu({
       {/* ── 珠路图（百家乐大路风格）── */}
       {/* 珠路图用 displayed（受 ZhuPanLu tab 控制），连涨/连跌统计用全量 items 自行切片 */}
       <ZhuLuMap items={displayed} allItems={items} streakStats={streakStats} />
+
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
+      {/* ── 放量缩量信号 ── */}
+      <VolSignal items={items} tab={tab} />
 
       {/* 底部收尾 */}
       <div className="pb-4" style={{ background: CARD }} />
