@@ -17469,7 +17469,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           LIMIT 3000
         `) as [any[], any];
 
-        // 计算综合评分（基于历史涨天率，简单可靠）
+        // 评分逻辑：直接用 up_rate 作为分数（实际数据分布 39%~56.4%，均值约50.3%）
+        // Tab 划分基于实际分布：偏高端(>=52%)为信号上升，偏低端(<=47%)为信号降温
         const scored = (rows as any[])
           .filter(r => r.hist_rise_rate !== null && r.hist_rise_rate !== undefined)
           .map(r => {
@@ -17477,26 +17478,22 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             const totalDays = parseInt(r.total_days) || 250;
             const upDays = parseInt(r.up_days) || 0;
             const downDays = parseInt(r.down_days) || 0;
-
-            // 评分：以50%为基准，涨天率越高分越高（0-100分）
-            const baseScore = Math.min(100, Math.max(0, Math.round(histRate * 2)));
-            // 上市时间越长，数据越可靠，给予小幅加成（最多+5分）
-            const ageBonus = Math.min(5, Math.floor(totalDays / 500));
-            const score = Math.min(100, baseScore + ageBonus);
-
+            // 直接用 up_rate 作为分数（保留一位小数）
+            const score = histRate;
             // 生成一句话理由
             let reason = "";
-            if (histRate >= 55) {
-              reason = `历史涨天率${histRate}%，长期偏多，上涨概率较高。`;
+            if (histRate >= 53) {
+              reason = `历史涨天率${histRate}%，高于市场均值，长期偏多。`;
             } else if (histRate >= 50) {
-              reason = `历史涨天率${histRate}%，略偏多，走势相对平衡。`;
+              reason = `历史涨天率${histRate}%，略高于市场均值，走势小幅偏多。`;
+            } else if (histRate >= 48) {
+              reason = `历史涨天率${histRate}%，接近市场均值，走势中性。`;
             } else if (histRate >= 45) {
-              reason = `历史涨天率${histRate}%，略偏空，走势相对平衡。`;
+              reason = `历史涨天率${histRate}%，略低于市场均值，走势小幅偏空。`;
             } else {
-              reason = `历史涨天率${histRate}%，长期偏空，下跌概率较高。`;
+              reason = `历史涨天率${histRate}%，明显低于市场均值，长期偏空。`;
             }
             reason += `共统计${totalDays}个交易日，涨${upDays}天跌${downDays}天。`;
-
             return {
               code: r.code,
               name: r.name,
@@ -17509,26 +17506,24 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
               ],
             };
           });
-
-        // 按 tab 排序
+        // 按 tab 排序（阈值基于实际分布 39%~56.4%，均值约50.3%）
         let result: typeof scored;
         if (input.tab === "hot") {
-          // 今日热点：涨天率最高的30只
+          // 今日热点：涨天率最高的30只（无条件，保证有数据）
           result = [...scored].sort((a, b) => b.score - a.score).slice(0, 30);
         } else if (input.tab === "rising") {
-          // 信号上升：涨天率 >= 55%（偏多信号）
-          result = scored.filter(s => s.score >= 60).sort((a, b) => b.score - a.score).slice(0, 30);
+          // 信号上升：涨天率 >= 52%（高于市场均值，约170只可选）
+          result = scored.filter(s => s.score >= 52).sort((a, b) => b.score - a.score).slice(0, 30);
           if (result.length < 10) {
-            result = scored.filter(s => s.score >= 55).sort((a, b) => b.score - a.score).slice(0, 30);
+            result = scored.filter(s => s.score >= 51).sort((a, b) => b.score - a.score).slice(0, 30);
           }
         } else {
-          // 信号降温：涨天率偏低（偏空信号）
-          result = scored.filter(s => s.score <= 45).sort((a, b) => a.score - b.score).slice(0, 30);
+          // 信号降温：涨天率 <= 47%（低于市场均值，约330只可选）
+          result = scored.filter(s => s.score <= 47).sort((a, b) => a.score - b.score).slice(0, 30);
           if (result.length < 10) {
-            result = scored.filter(s => s.score <= 50).sort((a, b) => a.score - b.score).slice(0, 30);
+            result = scored.filter(s => s.score <= 48).sort((a, b) => a.score - b.score).slice(0, 30);
           }
         }
-
         return { stocks: result };
       } finally {
         // 不关闭共享连接池
