@@ -109,7 +109,7 @@ function ZhuLuScrollArea({
   totalH: number;
   FIXED_ROWS: number;
   getColorAndText: (pct: number) => { bg: string; fg: string; label: string };
-  nextDayProb?: { upPct: number; downPct: number; flatPct: number; total: number; curDir: 'up' | 'down'; curLen: number } | null;
+  nextDayProb?: { upPct: number; downPct: number; flatPct: number; total: number; curDir: 'up' | 'down'; curLen: number; totalDays: number } | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // 右侧空白列数：初始默认 4 列，第一帧根据容器宽度计算实际列数
@@ -187,19 +187,42 @@ function ZhuLuScrollArea({
               );
             })}
             {/* 补充空白格子，确保每列总是6行，显示边框 */}
-            {Array.from({ length: Math.max(0, FIXED_ROWS - col.length) }).map((_, ei) => (
-              <div
-                key={`empty-${ei}`}
-                style={{
-                  width: CELL,
-                  height: CELL,
-                  borderRadius: 2,
-                  background: "transparent",
-                  border: "1px solid #E0E0E0",
-                  flexShrink: 0,
-                }}
-              />
-            ))}
+            {Array.from({ length: Math.max(0, FIXED_ROWS - col.length) }).map((_, ei) => {
+              // 最后一列的第一个空格：显示同向延续概率（金黄色）
+              const isLastCol = ci === columns.length - 1;
+              const isSameDir = isLastCol && ei === 0 && nextDayProb && nextDayProb.total > 0;
+              if (isSameDir && nextDayProb) {
+                const samePct = nextDayProb.curDir === 'up' ? nextDayProb.upPct : nextDayProb.downPct;
+                return (
+                  <div
+                    key={`empty-${ei}`}
+                    onClick={() => setShowProbDetail(true)}
+                    style={{
+                      width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
+                      background: "#FFF3CD", border: "1.5px solid #F59E0B",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {samePct}%
+                  </div>
+                );
+              }
+              return (
+                <div
+                  key={`empty-${ei}`}
+                  style={{
+                    width: CELL,
+                    height: CELL,
+                    borderRadius: 2,
+                    background: "transparent",
+                    border: "1px solid #E0E0E0",
+                    flexShrink: 0,
+                  }}
+                />
+              );
+            })}
           </div>
         ))}
         {/* 右侧空白格子列（有边框无数据，给用户“后续还会有新数据”的视觉暗示） */}
@@ -218,9 +241,10 @@ function ZhuLuScrollArea({
               }}
             >
               {Array.from({ length: FIXED_ROWS }).map((_, ri) => {
-                if (isProb && nextDayProb) {
-                  // 第1格：涨的概率（金黄底，可点击）
-                  if (ri === 0) return (
+                // 右侧第一列第一格：显示反向换列概率（金黄色，可点击）
+                if (isProb && nextDayProb && ci === 0 && ri === 0) {
+                  const reversePct = nextDayProb.curDir === 'up' ? nextDayProb.downPct : nextDayProb.upPct;
+                  return (
                     <div key={ri} onClick={() => setShowProbDetail(true)} style={{
                       width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
                       background: "#FFF3CD", border: "1.5px solid #F59E0B",
@@ -228,31 +252,7 @@ function ZhuLuScrollArea({
                       fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
                       cursor: "pointer",
                     }}>
-                      涨{nextDayProb.upPct}%
-                    </div>
-                  );
-                  // 第2格：跌的概率（可点击）
-                  if (ri === 1) return (
-                    <div key={ri} onClick={() => setShowProbDetail(true)} style={{
-                      width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
-                      background: "#FFF3CD", border: "1.5px solid #F59E0B",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
-                      cursor: "pointer",
-                    }}>
-                      跌{nextDayProb.downPct}%
-                    </div>
-                  );
-                  // 第3格：当前状态说明（连涨/连跌 N 天，可点击）
-                  if (ri === 2) return (
-                    <div key={ri} onClick={() => setShowProbDetail(true)} style={{
-                      width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
-                      background: "#FFFBEB", border: "1px dashed #F59E0B",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 6, fontWeight: 600, color: "#92400E", lineHeight: 1,
-                      textAlign: "center", cursor: "pointer",
-                    }}>
-                      {nextDayProb.curDir === 'up' ? '连涨' : '连跌'}{nextDayProb.curLen}天
+                      {reversePct}%
                     </div>
                   );
                 }
@@ -296,72 +296,74 @@ function ZhuLuScrollArea({
             <div onClick={() => setShowProbDetail(false)} style={{ fontSize: 20, color: "#999", cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</div>
           </div>
 
-          {/* 当前状态 */}
+          {/* 数据概要行 */}
           <div style={{
-            background: "#FFFBEB", border: "1px solid #F59E0B", borderRadius: 8,
-            padding: "10px 14px", marginBottom: 16,
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 1, background: "#E8E8E8", border: "1px solid #E8E8E8",
+            borderRadius: 8, overflow: "hidden", marginBottom: 16,
           }}>
-            <div style={{ fontSize: 13, color: "#92400E", fontWeight: 600 }}>
-              当前已连{nextDayProb.curDir === 'up' ? '涨' : '跌'} {nextDayProb.curLen} 天
-            </div>
-            <div style={{ fontSize: 12, color: "#B45309", marginTop: 4 }}>
-              基于全量历史数据，统计在同样情况下（连{nextDayProb.curDir === 'up' ? '涨' : '跌'} {nextDayProb.curLen} 天后），
-              下一个交易日的涨跌分布。
-            </div>
-          </div>
-
-          {/* 计算公式说明 */}
-          <div style={{ fontSize: 12, color: "#666", marginBottom: 14, lineHeight: 1.7 }}>
-            <span style={{ fontWeight: 600, color: "#333" }}>统计方法：</span>
-            遍历全量历史日线数据，找出所有「连续{nextDayProb.curDir === 'up' ? '上涨' : '下跌'} {nextDayProb.curLen} 天」的时间节点，
-            记录其后一个交易日的涨跌情况，汇总得出概率分布。
-          </div>
-
-          {/* 概率条形图 */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
-            {/* 涨 */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: "#C62828", flexShrink: 0 }}>涨</div>
-              <div style={{ flex: 1, background: "#F5F5F5", borderRadius: 4, height: 20, overflow: "hidden" }}>
-                <div style={{ width: `${nextDayProb.upPct}%`, height: "100%", background: "#EF5350", borderRadius: 4, transition: "width 0.4s" }} />
+            {[
+              { label: "全量历史交易日", value: `${nextDayProb.totalDays} 天`, sub: "" },
+              { label: "当前状态", value: `连${nextDayProb.curDir === 'up' ? '涨' : '跌'} ${nextDayProb.curLen} 天`, sub: "" },
+              { label: "有效样本数", value: `${nextDayProb.total} 次`, sub: "" },
+            ].map((item, i) => (
+              <div key={i} style={{ background: "#FAFAFA", padding: "10px 8px", textAlign: "center" }}>
+                <div style={{ fontSize: 11, color: "#888", marginBottom: 4 }}>{item.label}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a1a" }}>{item.value}</div>
               </div>
-              <div style={{ width: 40, fontSize: 13, fontWeight: 700, color: "#C62828", textAlign: "right", flexShrink: 0 }}>{nextDayProb.upPct}%</div>
+            ))}
+          </div>
+
+          {/* 统计结果表格 */}
+          <div style={{
+            border: "1px solid #E0E0E0", borderRadius: 8, overflow: "hidden", marginBottom: 16,
+          }}>
+            {/* 表头 */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "60px 1fr 1fr 1fr",
+              background: "#F5F5F5", borderBottom: "1px solid #E0E0E0",
+            }}>
+              {["结果", "次数", "概率", "说明"].map((h, i) => (
+                <div key={i} style={{ padding: "8px 6px", fontSize: 11, fontWeight: 600, color: "#555", textAlign: i === 0 ? "left" : "center" }}>{h}</div>
+              ))}
+            </div>
+            {/* 涨 */}
+            <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr 1fr", borderBottom: "1px solid #F0F0F0" }}>
+              <div style={{ padding: "10px 6px", fontSize: 13, fontWeight: 700, color: "#C62828" }}>涨</div>
+              <div style={{ padding: "10px 6px", fontSize: 13, color: "#333", textAlign: "center" }}>{Math.round(nextDayProb.total * nextDayProb.upPct / 100)}</div>
+              <div style={{ padding: "10px 6px", fontSize: 14, fontWeight: 700, color: "#C62828", textAlign: "center" }}>{nextDayProb.upPct}%</div>
+              <div style={{ padding: "10px 6px", fontSize: 11, color: "#888", textAlign: "center" }}>转向或延续</div>
             </div>
             {/* 平 */}
             {nextDayProb.flatPct > 0 && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: "#888", flexShrink: 0 }}>平</div>
-                <div style={{ flex: 1, background: "#F5F5F5", borderRadius: 4, height: 20, overflow: "hidden" }}>
-                  <div style={{ width: `${nextDayProb.flatPct}%`, height: "100%", background: "#BDBDBD", borderRadius: 4, transition: "width 0.4s" }} />
-                </div>
-                <div style={{ width: 40, fontSize: 13, fontWeight: 700, color: "#888", textAlign: "right", flexShrink: 0 }}>{nextDayProb.flatPct}%</div>
+              <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr 1fr", borderBottom: "1px solid #F0F0F0" }}>
+                <div style={{ padding: "10px 6px", fontSize: 13, fontWeight: 700, color: "#888" }}>平</div>
+                <div style={{ padding: "10px 6px", fontSize: 13, color: "#333", textAlign: "center" }}>{Math.round(nextDayProb.total * nextDayProb.flatPct / 100)}</div>
+                <div style={{ padding: "10px 6px", fontSize: 14, fontWeight: 700, color: "#888", textAlign: "center" }}>{nextDayProb.flatPct}%</div>
+                <div style={{ padding: "10px 6px", fontSize: 11, color: "#888", textAlign: "center" }}>平盘</div>
               </div>
             )}
             {/* 跌 */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: "#2E7D32", flexShrink: 0 }}>跌</div>
-              <div style={{ flex: 1, background: "#F5F5F5", borderRadius: 4, height: 20, overflow: "hidden" }}>
-                <div style={{ width: `${nextDayProb.downPct}%`, height: "100%", background: "#43A047", borderRadius: 4, transition: "width 0.4s" }} />
-              </div>
-              <div style={{ width: 40, fontSize: 13, fontWeight: 700, color: "#2E7D32", textAlign: "right", flexShrink: 0 }}>{nextDayProb.downPct}%</div>
+            <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr 1fr" }}>
+              <div style={{ padding: "10px 6px", fontSize: 13, fontWeight: 700, color: "#2E7D32" }}>跌</div>
+              <div style={{ padding: "10px 6px", fontSize: 13, color: "#333", textAlign: "center" }}>{Math.round(nextDayProb.total * nextDayProb.downPct / 100)}</div>
+              <div style={{ padding: "10px 6px", fontSize: 14, fontWeight: 700, color: "#2E7D32", textAlign: "center" }}>{nextDayProb.downPct}%</div>
+              <div style={{ padding: "10px 6px", fontSize: 11, color: "#888", textAlign: "center" }}>转向或延续</div>
             </div>
           </div>
 
-          {/* 样本数量 */}
-          <div style={{
-            background: "#F8F8F8", borderRadius: 8, padding: "10px 14px",
-            fontSize: 12, color: "#666", lineHeight: 1.8,
-          }}>
-            <div><span style={{ color: "#333", fontWeight: 600 }}>样本数量：</span>{nextDayProb.total} 次</div>
-            <div><span style={{ color: "#333", fontWeight: 600 }}>计算公式：</span></div>
-            <div style={{ fontFamily: "monospace", background: "#EFEFEF", borderRadius: 4, padding: "6px 10px", marginTop: 4, fontSize: 11, color: "#444", lineHeight: 1.9 }}>
-              P(涨) = 连{nextDayProb.curDir === 'up' ? '涨' : '跌'}{nextDayProb.curLen}天后次日上涨次数 ÷ 样本总数<br/>
-              P(跌) = 连{nextDayProb.curDir === 'up' ? '涨' : '跌'}{nextDayProb.curLen}天后次日下跌次数 ÷ 样本总数<br/>
-              P(平) = 连{nextDayProb.curDir === 'up' ? '涨' : '跌'}{nextDayProb.curLen}天后次日平盘次数 ÷ 样本总数
+          {/* 统计方法说明 */}
+          <div style={{ fontSize: 12, color: "#555", lineHeight: 1.8, marginBottom: 12, background: "#F8F8F8", borderRadius: 8, padding: "10px 14px" }}>
+            <div style={{ fontWeight: 600, color: "#333", marginBottom: 4 }}>统计方法</div>
+            <div>全量历史日线共 <span style={{ fontWeight: 700, color: "#1a1a1a" }}>{nextDayProb.totalDays}</span> 个交易日，遍历全部日线，找出所有「连续{nextDayProb.curDir === 'up' ? '上涨' : '下跌'} {nextDayProb.curLen} 天」的时间节点，共找到 <span style={{ fontWeight: 700, color: "#1a1a1a" }}>{nextDayProb.total}</span> 次。记录每次后一个交易日的涨跌情况，汇总得出上表概率分布。</div>
+            <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 11, color: "#666" }}>
+              P(结果) = 该结果出现次数 / 样本总数 ({nextDayProb.total})
             </div>
-            <div style={{ marginTop: 8, color: "#999", fontSize: 11 }}>
-              ⚠️ 本统计仅反映历史规律，不构成投资建议，市场存在不确定性。
-            </div>
+          </div>
+
+          {/* 免责声明 */}
+          <div style={{ fontSize: 11, color: "#999", lineHeight: 1.6, borderTop: "1px solid #F0F0F0", paddingTop: 10 }}>
+            本统计仅反映该股票历史价格规律，不构成投资建议。市场未来走势受多种因素影响，存在重大不确定性。
           </div>
         </div>
       </div>
@@ -508,7 +510,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
     if (!curDir || curLen === 0) return null;
     const prob = calcNextDayProb(allSorted, curDir, curLen);
     if (prob.total === 0) return null;
-    return { ...prob, curDir, curLen };
+    return { ...prob, curDir, curLen, totalDays: allSorted.length };
   })();
 
   return (
