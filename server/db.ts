@@ -134,6 +134,16 @@ export async function getLedgerDb() {
  * 统一使用腾讯云数据库
  */
 export async function getDbConnection(forceGuest: boolean = false): Promise<mysql.Connection | null> {
+  // 如果连接池已关闭（被错误地调用了 end()），重置并重新创建
+  if (_pool) {
+    const poolState = (_pool as any)._closed ?? (_pool as any).pool?._closed;
+    if (poolState === true) {
+      console.warn('[Database] 连接池已关闭，重新创建...');
+      _pool = null;
+      _db = null;
+    }
+  }
+
   // 先调用 getDb() 确保连接已创建
   await getDb(false);
   
