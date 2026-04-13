@@ -56,7 +56,9 @@ function shortDate(dateStr: string): string {
 }
 
 // ─── 珠路图组件（百家乐大路风格）────────────────────────────
-function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
+type StreakStats = { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number; totalDays: number } | undefined;
+
+function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: number }[]; streakStats?: StreakStats }) {
   // 按日期正序排列（旧到新）
   const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
 
@@ -113,33 +115,11 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
     }
   }
 
-  // 连涨/连跌统计：统计每次连续涨跌的长度
-  const upStreakMap: Record<number, number> = {};
-  const downStreakMap: Record<number, number> = {};
-  let streak = 0;
-  let streakDir: 'up' | 'down' | null = null;
-  for (const item of sorted) {
-    const dir = item.pct > 0 ? 'up' : item.pct < 0 ? 'down' : null;
-    if (dir === null) {
-      // 平天不中断也不累加
-      continue;
-    }
-    if (dir === streakDir) {
-      streak++;
-    } else {
-      // 结算上一段
-      if (streakDir === 'up' && streak > 0) upStreakMap[streak] = (upStreakMap[streak] || 0) + 1;
-      if (streakDir === 'down' && streak > 0) downStreakMap[streak] = (downStreakMap[streak] || 0) + 1;
-      streak = 1;
-      streakDir = dir;
-    }
-  }
-  // 结算最后一段
-  if (streakDir === 'up' && streak > 0) upStreakMap[streak] = (upStreakMap[streak] || 0) + 1;
-  if (streakDir === 'down' && streak > 0) downStreakMap[streak] = (downStreakMap[streak] || 0) + 1;
-
-  const maxUpStreak = Math.max(...Object.keys(upStreakMap).map(Number), 0);
-  const maxDownStreak = Math.max(...Object.keys(downStreakMap).map(Number), 0);
+  // 连涨/连跌统计：使用后端全生命周期统计结果，加载中则显示占位符
+  const upStreakMap: Record<number, number> = streakStats?.upStreakMap ?? {};
+  const downStreakMap: Record<number, number> = streakStats?.downStreakMap ?? {};
+  const maxUpStreak = streakStats?.maxUpStreak ?? 0;
+  const maxDownStreak = streakStats?.maxDownStreak ?? 0;
   const maxStreak = Math.max(maxUpStreak, maxDownStreak);
 
   // 格子放大以内嵌数字
@@ -302,6 +282,7 @@ function ZhuPanLu({
   lifetimeDownDays,
   lifetimeFlatDays,
   lifetimeTotalDays,
+  streakStats,
 }: {
   items: { tradeDate: string; pct: number; solid: boolean }[];
   lifetimeUpRate: number;
@@ -309,6 +290,7 @@ function ZhuPanLu({
   lifetimeDownDays: number;
   lifetimeFlatDays: number;
   lifetimeTotalDays: number;
+  streakStats?: StreakStats;
 }) {
   const [tab, setTab] = useState<30 | 60 | 90 | 180>(60);
   const [showDetail, setShowDetail] = useState(false);
@@ -472,7 +454,7 @@ function ZhuPanLu({
       {/* 间隙 */}
       <div style={{ height: 6, background: BG }} />
       {/* ── 珠路图（百家乐大路风格）── */}
-      <ZhuLuMap items={displayed} />
+      <ZhuLuMap items={displayed} streakStats={streakStats} />
 
       {/* 底部收尾 */}
       <div className="pb-4" style={{ background: CARD }} />
@@ -560,10 +542,16 @@ export default function StockDetail() {
     { enabled: !!tsCode, staleTime: 300_000 }
   );
 
-  // 日线数据（珠盘路）
+  // 日线数据（珠盘路近期展示，最多180条）
   const { data: dailyData, isLoading: dailyLoading } = trpc.aiStockDailyData.useQuery(
     { tsCode, limit: 180 },
     { enabled: !!tsCode, staleTime: 300_000 }
+  );
+
+  // 全生命周期连涨/连跌统计（后端拉取全量日线并计算）
+  const { data: streakStats } = trpc.aiStockStreakStats.useQuery(
+    { tsCode },
+    { enabled: !!tsCode, staleTime: 600_000 }
   );
 
   // 兜底数据：即使后端报错也能显示页面框架
@@ -712,6 +700,7 @@ export default function StockDetail() {
               lifetimeDownDays={displayData.downDays}
               lifetimeFlatDays={displayData.flatDays}
               lifetimeTotalDays={displayData.totalDays}
+              streakStats={streakStats}
             />
           ) : (
             <div className="flex items-center justify-center h-16" style={{ color: MUTED }}>

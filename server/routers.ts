@@ -17199,6 +17199,63 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     }),
 
   /** 个股日线数据：调用 Tushare daily 接口，返回最近 N 天涨跌幅+实心/空心 */
+  // 全生命周期连涨/连跌统计（拉取全量日线，后端计算）
+  aiStockStreakStats: publicProcedure
+    .input(z.object({ tsCode: z.string() }))
+    .query(async ({ input }) => {
+      const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+      const TUSHARE_URL = 'http://api.tushare.pro';
+      try {
+        // 不传 limit，拉取全量
+        const resp = await fetch(TUSHARE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_name: 'daily',
+            token: TUSHARE_TOKEN,
+            params: { ts_code: input.tsCode },
+            fields: 'trade_date,pct_chg',
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
+        const json = await resp.json() as any;
+        if (json.code !== 0 || !json.data?.items?.length) {
+          return { upStreakMap: {}, downStreakMap: {}, maxUpStreak: 0, maxDownStreak: 0, totalDays: 0 };
+        }
+        const fields: string[] = json.data.fields;
+        const dateIdx = fields.indexOf('trade_date');
+        const pctIdx = fields.indexOf('pct_chg');
+        // Tushare 返回最新在前，反转为时间正序
+        const rows = (json.data.items as any[]).slice().reverse();
+        // 计算连涨/连跌统计
+        const upStreakMap: Record<number, number> = {};
+        const downStreakMap: Record<number, number> = {};
+        let streak = 0;
+        let streakDir: 'up' | 'down' | null = null;
+        for (const row of rows) {
+          const pct = Number(row[pctIdx]);
+          const dir = pct > 0 ? 'up' : pct < 0 ? 'down' : null;
+          if (dir === null) continue; // 平天不中断
+          if (dir === streakDir) {
+            streak++;
+          } else {
+            if (streakDir === 'up' && streak > 0) upStreakMap[streak] = (upStreakMap[streak] || 0) + 1;
+            if (streakDir === 'down' && streak > 0) downStreakMap[streak] = (downStreakMap[streak] || 0) + 1;
+            streak = 1;
+            streakDir = dir;
+          }
+        }
+        // 结算最后一段
+        if (streakDir === 'up' && streak > 0) upStreakMap[streak] = (upStreakMap[streak] || 0) + 1;
+        if (streakDir === 'down' && streak > 0) downStreakMap[streak] = (downStreakMap[streak] || 0) + 1;
+        const maxUpStreak = Math.max(...Object.keys(upStreakMap).map(Number), 0);
+        const maxDownStreak = Math.max(...Object.keys(downStreakMap).map(Number), 0);
+        return { upStreakMap, downStreakMap, maxUpStreak, maxDownStreak, totalDays: rows.length };
+      } catch (e) {
+        return { upStreakMap: {}, downStreakMap: {}, maxUpStreak: 0, maxDownStreak: 0, totalDays: 0 };
+      }
+    }),
+
   aiStockDailyData: publicProcedure
     .input(z.object({
       tsCode: z.string(),
