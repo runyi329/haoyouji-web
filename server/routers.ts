@@ -17206,27 +17206,37 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
       const TUSHARE_URL = 'http://api.tushare.pro';
       try {
-        // 不传 limit，拉取全量
-        const resp = await fetch(TUSHARE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            api_name: 'daily',
-            token: TUSHARE_TOKEN,
-            params: { ts_code: input.tsCode, limit: 10000 },
-            fields: 'trade_date,pct_chg',
-          }),
-          signal: AbortSignal.timeout(30000),
-        });
-        const json = await resp.json() as any;
-        if (json.code !== 0 || !json.data?.items?.length) {
+        // Tushare daily 接口单次最多返回 6000 条，需分页循环拉取全量
+        const PAGE_SIZE = 6000;
+        let allItems: any[] = [];
+        let fields: string[] = [];
+        let offset = 0;
+        while (true) {
+          const resp = await fetch(TUSHARE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_name: 'daily',
+              token: TUSHARE_TOKEN,
+              params: { ts_code: input.tsCode, limit: PAGE_SIZE, offset },
+              fields: 'trade_date,pct_chg',
+            }),
+            signal: AbortSignal.timeout(30000),
+          });
+          const json = await resp.json() as any;
+          if (json.code !== 0 || !json.data?.items?.length) break;
+          if (fields.length === 0) fields = json.data.fields;
+          allItems = allItems.concat(json.data.items);
+          if (json.data.items.length < PAGE_SIZE) break; // 最后一页
+          offset += PAGE_SIZE;
+        }
+        if (allItems.length === 0 || fields.length === 0) {
           return { upStreakMap: {}, downStreakMap: {}, maxUpStreak: 0, maxDownStreak: 0, totalDays: 0 };
         }
-        const fields: string[] = json.data.fields;
         const dateIdx = fields.indexOf('trade_date');
         const pctIdx = fields.indexOf('pct_chg');
         // Tushare 返回最新在前，反转为时间正序
-        const rows = (json.data.items as any[]).slice().reverse();
+        const rows = allItems.slice().reverse();
         // 计算连涨/连跌统计
         const upStreakMap: Record<number, number> = {};
         const downStreakMap: Record<number, number> = {};
