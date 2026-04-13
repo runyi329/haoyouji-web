@@ -4,7 +4,7 @@
  * 路径: /stock/:tsCode
  */
 import { useParams } from "wouter";
-import { ChevronLeft, TrendingUp, TrendingDown, Minus, Calendar, Building2 } from "lucide-react";
+import { ChevronLeft, Calendar, Building2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useRef, useState } from "react";
@@ -451,7 +451,6 @@ export default function StockDetail() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" style={{ color: RED }} />
                   <span className="text-xs" style={{ color: MUTED }}>涨天占比</span>
                 </div>
                 <span className="text-xs font-semibold" style={{ color: RED }}>{upRate.toFixed(1)}%</span>
@@ -465,7 +464,6 @@ export default function StockDetail() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1">
-                  <TrendingDown className="w-3 h-3" style={{ color: GREEN_A }} />
                   <span className="text-xs" style={{ color: MUTED }}>跌天占比</span>
                 </div>
                 <span className="text-xs font-semibold" style={{ color: GREEN_A }}>{downRate.toFixed(1)}%</span>
@@ -479,7 +477,6 @@ export default function StockDetail() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1">
-                  <Minus className="w-3 h-3" style={{ color: MUTED }} />
                   <span className="text-xs" style={{ color: MUTED }}>平天占比</span>
                 </div>
                 <span className="text-xs font-semibold" style={{ color: MUTED }}>{flatRate.toFixed(1)}%</span>
