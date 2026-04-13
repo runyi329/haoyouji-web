@@ -2121,60 +2121,11 @@ export default function StockDetail() {
         </div>
         <div style={{ height: 8, background: BG }} />
 
-        {/* 七条路预告卡片 */}
-        <div className="mx-4 mt-3 rounded-xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
-          <div className="text-xs font-semibold mb-2" style={{ color: RED }}>七条路分析</div>
-          <div className="text-xs mb-3" style={{ color: MUTED }}>基于全生命周期数据的多维度信号分析</div>
-          <div className="space-y-2">
-            {[
-              { name: "涨跌概率", desc: "原始K线胜负记录", done: true },
-              { name: "大路", desc: "连续涨跌方向" },
-              { name: "量能路", desc: "放量/缩量信号" },
-              { name: "强度路", desc: "强弱阳/强弱阴" },
-              { name: "形态路", desc: "K线组合信号" },
-              { name: "组合路", desc: "规则加权综合信号" },
-              { name: "AI翻译路", desc: "深度学习状态分类（6-8色标签）" },
-            ].map((item, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between px-3 py-2 rounded-lg"
-                style={{ background: item.done ? "#FFF5F5" : "#F8F4F0", opacity: item.done ? 1 : 0.7 }}
-              >
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                    style={{ background: item.done ? RED : MUTED, fontSize: 10 }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="text-sm font-medium" style={{ color: item.done ? RED : TEXT }}>{item.name}</span>
-                </div>
-                <span className="text-xs" style={{ color: item.done ? RED : MUTED }}>
-                  {item.done ? "已上线" : item.desc}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {displayData.updatedAt && (
           <div className="mx-4 mt-3 mb-4 text-center text-xs" style={{ color: MUTED }}>
             数据更新时间：{displayData.updatedAt?.slice(0, 10)}
           </div>
         )}
-
-        {/* DEBUG 信息（临时，排查问题后删除） */}
-        <div className="mx-4 mt-2 mb-4 p-3 rounded-lg text-xs break-all" style={{ background: '#333', color: '#0f0', fontFamily: 'monospace' }}>
-          <div>tsCode参数: {tsCode}</div>
-          <div>error: {error ? error.message : 'null'}</div>
-          <div>data: {data ? 'yes' : 'null'}</div>
-          <div>data.name: {data?.name ?? 'N/A'}</div>
-          <div>data.listDate: {data?.listDate ?? 'N/A'}</div>
-          <div>data.industry: {data?.industry ?? 'N/A'}</div>
-          <div>data.totalDays: {data?.totalDays ?? 'N/A'}</div>
-          <div>debugMsg: {(data as any)?.debugMsg ?? 'none'}</div>
-          <div>dailyItems: {dailyData?.items?.length ?? 'N/A'}</div>
-        </div>
       </div>
     </div>
   );
