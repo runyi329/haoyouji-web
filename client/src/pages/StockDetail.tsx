@@ -134,8 +134,7 @@ function ZhuPanLu({
       </div>
 
       {/* 近期行 */}
-      <div className="p-4 pb-3" style={{ background: "#FFF8F2" }}>
-        <div className="text-xs font-semibold mb-2" style={{ color: RED }}>近{tab}天（{displayed.length}个交易日）</div>
+      <div className="px-4 py-3" style={{ background: "#FFF8F2" }}>
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {[
             { val: upItems.length, rate: recentUpRate, color: RED, bg: "#FFF0F0", suffix: "天涨" },
@@ -171,10 +170,9 @@ function ZhuPanLu({
       </div>
 
       {/* 间隙 */}
-      <div style={{ height: 8, background: BG }} />
+      <div style={{ height: 6, background: BG }} />
       {/* 全生命周期行 */}
-      <div className="p-4 pb-3" style={{ background: "#F5F0FF" }}>
-        <div className="text-xs font-semibold mb-2" style={{ color: "#7B1FA2" }}>全生命周期（{lifetimeTotalDays}个交易日）</div>
+      <div className="px-4 py-3" style={{ background: "#F5F0FF" }}>
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {[
             { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED, bg: "#FFF0F0", suffix: "天涨" },
@@ -193,7 +191,7 @@ function ZhuPanLu({
       </div>
 
       {/* 间隙 */}
-      <div style={{ height: 8, background: BG }} />
+      <div style={{ height: 6, background: BG }} />
       {/* ── 偏离值 ── */}
       <div
         className="p-4"
