@@ -134,19 +134,21 @@ function ZhuPanLu({
       </div>
 
       {/* 近期行 */}
-      <div className="px-4 py-3" style={{ background: "#FFF8F2" }}>
+      <div className="px-4 py-3" style={{ background: CARD }}>
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {[
-            { val: upItems.length, rate: recentUpRate, color: RED, bg: "#FFF0F0", suffix: "天涨" },
-            { val: downItems.length, rate: recentDownRate, color: GREEN_A, bg: "#F0FFF4", suffix: "天跌" },
-            { val: flatItems.length, rate: displayed.length > 0 ? (flatItems.length / displayed.length) * 100 : 0, color: MUTED, bg: "#F5F5F5", suffix: "天平" },
-            { val: displayed.length, rate: displayed.length > 0 ? ((upItems.length + downItems.length + flatItems.length) / displayed.length) * 100 : 0, color: "#7B1FA2", bg: "#EEE8FF", suffix: "天" },
+            { val: upItems.length, rate: recentUpRate, color: RED, labelColor: RED, label: "涨" },
+            { val: downItems.length, rate: recentDownRate, color: GREEN_A, labelColor: GREEN_A, label: "跌" },
+            { val: flatItems.length, rate: displayed.length > 0 ? (flatItems.length / displayed.length) * 100 : 0, color: MUTED, labelColor: MUTED, label: "平" },
+            { val: displayed.length, rate: displayed.length > 0 ? ((upItems.length + downItems.length + flatItems.length) / displayed.length) * 100 : 0, color: "#7B1FA2", labelColor: MUTED, label: "总" },
           ].map((item, i) => (
-            <div key={i} className="rounded-lg py-2.5" style={{ background: item.bg }}>
+            <div key={i} className="rounded-lg py-2.5" style={{ background: "#F8F8F8" }}>
               <div className="text-lg font-bold leading-tight" style={{ color: item.color }}>
                 {`${item.rate.toFixed(1)}%`}
               </div>
-              <div className="text-xs mt-0.5" style={{ color: item.color, opacity: 0.75 }}>{item.val}{item.suffix}</div>
+              <div className="text-xs mt-0.5" style={{ color: MUTED }}>
+                {item.val}天<span style={{ color: item.labelColor }}>{item.label}</span>
+              </div>
             </div>
           ))}
         </div>
@@ -172,19 +174,21 @@ function ZhuPanLu({
       {/* 间隙 */}
       <div style={{ height: 6, background: BG }} />
       {/* 全生命周期行 */}
-      <div className="px-4 py-3" style={{ background: "#F5F0FF" }}>
+      <div className="px-4 py-3" style={{ background: CARD }}>
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {[
-            { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED, bg: "#FFF0F0", suffix: "天涨" },
-            { val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A, bg: "#F0FFF4", suffix: "天跌" },
-            { val: lifetimeFlatDays, rate: lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0, color: MUTED, bg: "#F5F5F5", suffix: "天平" },
-            { val: lifetimeTotalDays, rate: lifetimeTotalDays > 0 ? ((lifetimeUpDays + lifetimeDownDays + lifetimeFlatDays) / lifetimeTotalDays) * 100 : 0, color: "#7B1FA2", bg: "#EEE8FF", suffix: "天" },
+            { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED, labelColor: RED, label: "涨" },
+            { val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A, labelColor: GREEN_A, label: "跌" },
+            { val: lifetimeFlatDays, rate: lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0, color: MUTED, labelColor: MUTED, label: "平" },
+            { val: lifetimeTotalDays, rate: lifetimeTotalDays > 0 ? ((lifetimeUpDays + lifetimeDownDays + lifetimeFlatDays) / lifetimeTotalDays) * 100 : 0, color: "#7B1FA2", labelColor: MUTED, label: "总" },
           ].map((item, i) => (
-            <div key={i} className="rounded-lg py-2.5" style={{ background: item.bg }}>
+            <div key={i} className="rounded-lg py-2.5" style={{ background: "#F8F8F8" }}>
               <div className="text-lg font-bold leading-tight" style={{ color: item.color }}>
                 {`${item.rate.toFixed(1)}%`}
               </div>
-              <div className="text-xs mt-0.5" style={{ color: item.color, opacity: 0.75 }}>{item.val}{item.suffix}</div>
+              <div className="text-xs mt-0.5" style={{ color: MUTED }}>
+                {item.val}天<span style={{ color: item.labelColor }}>{item.label}</span>
+              </div>
             </div>
           ))}
         </div>
@@ -195,7 +199,7 @@ function ZhuPanLu({
       {/* ── 偏离值 ── */}
       <div
         className="p-4"
-        style={{ background: deviationAbs < 3 ? "#F8F8F8" : deviation < 0 ? "#F0FFF4" : "#FFF5F5" }}
+        style={{ background: CARD }}
       >
         <div className="flex items-center justify-between">
           <div>
