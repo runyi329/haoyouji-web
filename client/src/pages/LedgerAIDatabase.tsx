@@ -557,7 +557,9 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 // ─── 涨天率正态分布 ──────────────────────────────────────────
 function UpRateDistSection() {
   const [market, setMarket] = useState<"all" | "SH" | "SZ" | "GEM" | "STAR">("all");
-  const { data, isLoading } = trpc.aiDashboardUpRateDist.useQuery({ market });
+  const { data, isLoading, error } = trpc.aiDashboardUpRateDist.useQuery({ market });
+  // 调试日志
+  if (error) console.error('[UpRateDistSection] 请求失败:', market, error.message);
 
   // 正态曲线叠加数据（桶宽2%）
   const chartData = (data?.buckets ?? []).map((b: any) => {
@@ -606,8 +608,10 @@ function UpRateDistSection() {
         <div className="p-3">
           {isLoading ? (
             <><Skeleton /><Skeleton /></>
+          ) : error ? (
+            <EmptyState label={`加载失败: ${error.message.slice(0, 40)}`} />
           ) : !data ? (
-            <EmptyState label="数据加载中..." />
+            <EmptyState label="暂无数据" />
           ) : (
             <>
               {/* 统计摘要 */}
