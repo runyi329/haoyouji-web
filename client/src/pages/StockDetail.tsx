@@ -4,7 +4,7 @@
  * 路径: /stock/:tsCode
  */
 import { useParams } from "wouter";
-import { ChevronLeft, Calendar, Building2, RefreshCw } from "lucide-react";
+import { ChevronLeft, Calendar, Building2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState } from "react";
@@ -525,34 +525,33 @@ export default function StockDetail() {
   // wouter 路由不支持含 . 的参数，跳转时 . 被替换为 -，这里还原
   const tsCode = (params.tsCode || "").replace(/-(?=[A-Z]{2}$)/g, ".");
 
-  const { data, isLoading, error, refetch: refetchDetail } = trpc.aiStockDetail.useQuery(
-    { tsCode },
-    { enabled: !!tsCode, staleTime: 300_000 }
+  // refreshKey 递增就能让 tRPC 认为是新查询，绕过客户端缓存强制重拉
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const { data, isLoading, error } = trpc.aiStockDetail.useQuery(
+    { tsCode, _r: refreshKey },
+    { enabled: !!tsCode, staleTime: 0 }
   );
 
   // 日线数据（珠盘路近期展示，最多180条）
-  const { data: dailyData, isLoading: dailyLoading, refetch: refetchDaily } = trpc.aiStockDailyData.useQuery(
-    { tsCode, limit: 180 },
-    { enabled: !!tsCode, staleTime: 300_000 }
+  const { data: dailyData, isLoading: dailyLoading } = trpc.aiStockDailyData.useQuery(
+    { tsCode, limit: 180, _r: refreshKey },
+    { enabled: !!tsCode, staleTime: 0 }
   );
 
   // 全生命周期连涨/连跌统计（后端拉取全量日线并计算）
-  const { data: streakStats, refetch: refetchStreak } = trpc.aiStockStreakStats.useQuery(
-    { tsCode },
-    { enabled: !!tsCode, staleTime: 600_000 }
+  const { data: streakStats } = trpc.aiStockStreakStats.useQuery(
+    { tsCode, _r: refreshKey },
+    { enabled: !!tsCode, staleTime: 0 }
   );
 
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const handleRefresh = async () => {
+  const handleRefresh = () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
-    // 强制刷新：先清除缓存，再重新拉取
-    await Promise.all([
-      refetchDetail({ cancelRefetch: true }),
-      refetchDaily({ cancelRefetch: true }),
-      refetchStreak({ cancelRefetch: true }),
-    ]);
-    setIsRefreshing(false);
+    setRefreshKey(k => k + 1);
+    // 等待一个请求周期后自动恢复
+    setTimeout(() => setIsRefreshing(false), 2000);
   };
 
   // 兜底数据：即使后端报错也能显示页面框架
@@ -630,10 +629,9 @@ export default function StockDetail() {
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full flex-shrink-0 text-xs font-medium"
+          className="px-2.5 py-1 rounded-full flex-shrink-0 text-xs font-medium"
           style={{ background: "rgba(255,255,255,0.2)", opacity: isRefreshing ? 0.6 : 1, color: '#fff' }}
         >
-          <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
           {isRefreshing ? '刷新中...' : '刷新'}
         </button>
       </div>

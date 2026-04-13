@@ -17069,7 +17069,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     }),
   /** 个股详情：基本信息 + 全生命周期涨跌天数 */
   aiStockDetail: publicProcedure
-    .input(z.object({ tsCode: z.string() }))
+    .input(z.object({ tsCode: z.string(), _r: z.number().optional() }))
     .query(async ({ input }) => {
       const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
       const TUSHARE_URL = 'http://api.tushare.pro';
@@ -17201,7 +17201,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
   /** 个股日线数据：调用 Tushare daily 接口，返回最近 N 天涨跌幅+实心/空心 */
   // 全生命周期连涨/连跌统计（拉取全量日线，后端计算）
   aiStockStreakStats: publicProcedure
-    .input(z.object({ tsCode: z.string() }))
+    .input(z.object({ tsCode: z.string(), _r: z.number().optional() }))
     .query(async ({ input }) => {
       const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
       const TUSHARE_URL = 'http://api.tushare.pro';
@@ -17260,6 +17260,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     .input(z.object({
       tsCode: z.string(),
       limit: z.number().min(10).max(500).default(60),
+      _r: z.number().optional(),
     }))
     .query(async ({ input }) => {
       const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
