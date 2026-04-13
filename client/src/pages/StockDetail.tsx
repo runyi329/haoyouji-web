@@ -363,32 +363,36 @@ function ZhuLuScrollArea({
 type CondProbEntry = { up: number; down: number; flat: number; total: number };
 type StreakStats = { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number; totalDays: number; condProbTable?: Record<string, Record<number, CondProbEntry>> } | undefined;
 
-function calcStreakFromItems(data: { pct: number }[]): { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number } {
+function calcStreakFromItems(data: { pct: number }[]): { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; flatMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number } {
   const upMap: Record<number, number> = {};
   const downMap: Record<number, number> = {};
+  const flatMap: Record<number, number> = {};
   let streak = 0;
-  let dir: 'up' | 'down' | null = null;
+  let dir: 'up' | 'down' | 'flat' | null = null;
   for (const item of data) {
-    const d = item.pct > 0 ? 'up' : item.pct < 0 ? 'down' : null;
-    if (d === null) { streak = 0; dir = null; continue; }
+    const d = item.pct > 0 ? 'up' : item.pct < 0 ? 'down' : 'flat';
     if (d === dir) {
       streak++;
     } else {
+      // 结束上一段
       if (dir !== null && streak > 0) {
         if (dir === 'up') upMap[streak] = (upMap[streak] || 0) + 1;
-        else downMap[streak] = (downMap[streak] || 0) + 1;
+        else if (dir === 'down') downMap[streak] = (downMap[streak] || 0) + 1;
+        else flatMap[streak] = (flatMap[streak] || 0) + 1;
       }
       streak = 1;
       dir = d;
     }
   }
+  // 结束最后一段
   if (dir !== null && streak > 0) {
     if (dir === 'up') upMap[streak] = (upMap[streak] || 0) + 1;
-    else downMap[streak] = (downMap[streak] || 0) + 1;
+    else if (dir === 'down') downMap[streak] = (downMap[streak] || 0) + 1;
+    else flatMap[streak] = (flatMap[streak] || 0) + 1;
   }
   const maxUp = Math.max(0, ...Object.keys(upMap).map(Number));
   const maxDown = Math.max(0, ...Object.keys(downMap).map(Number));
-  return { upStreakMap: upMap, downStreakMap: downMap, maxUpStreak: maxUp, maxDownStreak: maxDown };
+  return { upStreakMap: upMap, downStreakMap: downMap, flatMap, maxUpStreak: maxUp, maxDownStreak: maxDown };
 }
 
 function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string; pct: number }[]; allItems: { tradeDate: string; pct: number }[]; streakStats?: StreakStats }) {
@@ -636,6 +640,16 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
               最长连涨{maxUpStreak}天 · 最长连跌{maxDownStreak}天
               {streakTab === 'all' && <span style={{ marginLeft: 6, color: MUTED }}>（全历史）</span>}
               {streakTab !== 'all' && <span style={{ marginLeft: 6, color: MUTED }}>（近{streakTab}天）</span>}
+              {/* 总天数验证：连涨+连跌+平盘段天数之和 = 总天数 */}
+              {(() => {
+                const upTotal = Object.entries(curStreakData.upStreakMap).reduce((s, [k, v]) => s + Number(k) * v, 0);
+                const downTotal = Object.entries(curStreakData.downStreakMap).reduce((s, [k, v]) => s + Number(k) * v, 0);
+                const flatTotal = 'flatMap' in curStreakData
+                  ? Object.entries((curStreakData as any).flatMap).reduce((s: number, [k, v]) => s + Number(k) * (v as number), 0)
+                  : 0;
+                const total = upTotal + downTotal + flatTotal;
+                return total > 0 ? <span style={{ marginLeft: 6 }}>· 共{total}天</span> : null;
+              })()}
             </div>
           )}
         </div>
