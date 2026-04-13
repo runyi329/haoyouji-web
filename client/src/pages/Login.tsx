@@ -51,6 +51,15 @@ export default function Login() {
     }, 200);
   };
 
+  // 过滤错误消息，避免将 SQL 原始错误暴露给用户
+  const safeErrorMsg = (msg: string): string => {
+    const sqlKeywords = ['Failed query', 'select ', 'SELECT ', 'from `', 'FROM `', 'where ', 'WHERE ', 'ER_', 'ECONNREFUSED', 'ETIMEDOUT', 'Access denied'];
+    if (sqlKeywords.some(k => msg.includes(k))) {
+      return '服务器异常，请稍后重试';
+    }
+    return msg;
+  };
+
   const loginMutation = trpc.auth.loginWithPassword.useMutation({
     onSuccess: async (data) => {
       if (rememberMe) {
@@ -62,7 +71,7 @@ export default function Login() {
       clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(safeErrorMsg(error.message));
     },
   });
 
@@ -90,7 +99,7 @@ export default function Login() {
       clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
-      toast.error("游客登录失败: " + error.message);
+      toast.error("游客登录失败: " + safeErrorMsg(error.message));
     },
   });
 
@@ -121,7 +130,7 @@ export default function Login() {
       clearAllCacheAndNavigate(data.token);
     },
     onError: (error) => {
-      toast.error(error.message);
+      toast.error(safeErrorMsg(error.message));
     },
   });
 
