@@ -17096,7 +17096,24 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           [input.tsCode]
         ) as any[];
         const r = (rows as any[])[0];
-        if (!r) throw new TRPCError({ code: 'NOT_FOUND', message: '股票不存在' });
+        // 数据库查不到时，返回模拟数据以便前端预览UI（后续接真实数据后删除）
+        if (!r) {
+          return {
+            tsCode: input.tsCode,
+            name: '模拟股票（数据库无数据）',
+            listStatus: 'L',
+            listDate: '19910403',
+            delistDate: null,
+            exchange: 'SZSE',
+            industry: '银行',
+            upDays: 1823,
+            downDays: 1654,
+            flatDays: 312,
+            totalDays: 3789,
+            upRate: '48.12',
+            updatedAt: '2025-01-01',
+          };
+        }
         return {
           tsCode: r.ts_code as string,
           name: r.name as string,
