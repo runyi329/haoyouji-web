@@ -17355,6 +17355,68 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { items: [] };
       }
     }),
+
+  // 全市场涨天率正态分布
+  aiDashboardUpRateDist: publicProcedure
+    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        const marketCond: Record<string, string> = {
+          all: '',
+          SH: "AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
+          SZ: "AND b.ts_code LIKE '0%'",
+          GEM: "AND b.ts_code LIKE '3%'",
+          STAR: "AND b.ts_code LIKE '688%'",
+        };
+        const mf = marketCond[input.market] || '';
+        const [rows] = await dbConn.execute(`
+          SELECT
+            l.ts_code,
+            l.up_days,
+            l.total_days,
+            ROUND(l.up_days * 100.0 / NULLIF(l.total_days, 0), 1) AS up_rate
+          FROM ts_stock_lifecycle l
+          INNER JOIN ts_stock_basic b ON b.ts_code = l.ts_code
+          WHERE b.list_status = 'L'
+            AND l.total_days >= 60
+            ${mf}
+        `) as any[];
+        const stocks = rows as any[];
+        const BUCKETS = 20;
+        const buckets = Array.from({ length: BUCKETS }, (_, i) => ({
+          label: `${i * 5}-${(i + 1) * 5}%`,
+          min: i * 5,
+          max: (i + 1) * 5,
+          count: 0,
+        }));
+        let totalCount = 0;
+        let sumRate = 0;
+        let sumRateSq = 0;
+        for (const s of stocks) {
+          const rate = parseFloat(s.up_rate);
+          if (isNaN(rate)) continue;
+          totalCount++;
+          sumRate += rate;
+          sumRateSq += rate * rate;
+          const idx = Math.min(Math.floor(rate / 5), BUCKETS - 1);
+          buckets[idx].count++;
+        }
+        const mean = totalCount > 0 ? sumRate / totalCount : 50;
+        const variance = totalCount > 0 ? sumRateSq / totalCount - mean * mean : 0;
+        const stdDev = Math.sqrt(Math.max(variance, 0));
+        return {
+          buckets: buckets.map(b => ({ label: b.label, count: b.count, min: b.min, max: b.max })),
+          totalCount,
+          mean: parseFloat(mean.toFixed(2)),
+          stdDev: parseFloat(stdDev.toFixed(2)),
+        };
+      } finally {
+        dbConn.end?.();
+      }
+    }),
+
 });;
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
@@ -17847,70 +17909,6 @@ export const adminFeatureRouter = router({
       }
        await dbConn.execute(`DELETE FROM hanming_member_gallery WHERE id = ?`, [input.id]);
       return { success: true };
-    }),
-
-  // 全市场涨天率正态分布
-  aiDashboardUpRateDist: publicProcedure
-    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all') }))
-    .query(async ({ input }) => {
-      const dbConn = await getDbConnection();
-      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      try {
-        const marketCond: Record<string, string> = {
-          all: '',
-          SH: "AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
-          SZ: "AND b.ts_code LIKE '0%'",
-          GEM: "AND b.ts_code LIKE '3%'",
-          STAR: "AND b.ts_code LIKE '688%'",
-        };
-        const mf = marketCond[input.market] || '';
-        // 查询每只股票的涨天数和总天数，计算涨天率
-        const [rows] = await dbConn.execute(`
-          SELECT
-            l.ts_code,
-            l.up_days,
-            l.total_days,
-            ROUND(l.up_days * 100.0 / NULLIF(l.total_days, 0), 1) AS up_rate
-          FROM ts_stock_lifecycle l
-          INNER JOIN ts_stock_basic b ON b.ts_code = l.ts_code
-          WHERE b.list_status = 'L'
-            AND l.total_days >= 60
-            ${mf}
-        `) as any[];
-        const stocks = rows as any[];
-        // 分桶：0-5%, 5-10%, ..., 95-100%，共 20 个桶
-        const BUCKETS = 20;
-        const buckets = Array.from({ length: BUCKETS }, (_, i) => ({
-          label: `${i * 5}-${(i + 1) * 5}%`,
-          min: i * 5,
-          max: (i + 1) * 5,
-          count: 0,
-        }));
-        let totalCount = 0;
-        let sumRate = 0;
-        let sumRateSq = 0;
-        for (const s of stocks) {
-          const rate = parseFloat(s.up_rate);
-          if (isNaN(rate)) continue;
-          totalCount++;
-          sumRate += rate;
-          sumRateSq += rate * rate;
-          const idx = Math.min(Math.floor(rate / 5), BUCKETS - 1);
-          buckets[idx].count++;
-        }
-        const mean = totalCount > 0 ? sumRate / totalCount : 50;
-        const variance = totalCount > 0 ? sumRateSq / totalCount - mean * mean : 0;
-        const stdDev = Math.sqrt(Math.max(variance, 0));
-        // 找到当前股票的涨天率分桶位置（用于标注）
-        return {
-          buckets: buckets.map(b => ({ label: b.label, count: b.count, min: b.min, max: b.max })),
-          totalCount,
-          mean: parseFloat(mean.toFixed(2)),
-          stdDev: parseFloat(stdDev.toFixed(2)),
-        };
-      } finally {
-        dbConn.end?.();
-      }
     }),
 
 });
