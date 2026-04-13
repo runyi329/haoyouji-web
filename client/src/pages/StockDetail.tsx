@@ -113,6 +113,35 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
     }
   }
 
+  // 连涨/连跌统计：统计每次连续涨跌的长度
+  const upStreakMap: Record<number, number> = {};
+  const downStreakMap: Record<number, number> = {};
+  let streak = 0;
+  let streakDir: 'up' | 'down' | null = null;
+  for (const item of sorted) {
+    const dir = item.pct > 0 ? 'up' : item.pct < 0 ? 'down' : null;
+    if (dir === null) {
+      // 平天不中断也不累加
+      continue;
+    }
+    if (dir === streakDir) {
+      streak++;
+    } else {
+      // 结算上一段
+      if (streakDir === 'up' && streak > 0) upStreakMap[streak] = (upStreakMap[streak] || 0) + 1;
+      if (streakDir === 'down' && streak > 0) downStreakMap[streak] = (downStreakMap[streak] || 0) + 1;
+      streak = 1;
+      streakDir = dir;
+    }
+  }
+  // 结算最后一段
+  if (streakDir === 'up' && streak > 0) upStreakMap[streak] = (upStreakMap[streak] || 0) + 1;
+  if (streakDir === 'down' && streak > 0) downStreakMap[streak] = (downStreakMap[streak] || 0) + 1;
+
+  const maxUpStreak = Math.max(...Object.keys(upStreakMap).map(Number), 0);
+  const maxDownStreak = Math.max(...Object.keys(downStreakMap).map(Number), 0);
+  const maxStreak = Math.max(maxUpStreak, maxDownStreak);
+
   // 格子放大以内嵌数字
   const CELL = 28;
   const GAP = 1;
@@ -195,6 +224,72 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
           每{STEP}%一档，共6档（最大涨跌幅{maxAbs.toFixed(1)}%）
         </div>
       </div>
+
+      {/* 连涨/连跌统计列表 */}
+      {maxStreak > 0 && (
+        <div style={{ background: CARD }}>
+          <div className="px-4 pt-3 pb-1">
+            <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计（全历史）</span>
+          </div>
+          {/* 表头 */}
+          <div className="px-4 grid grid-cols-3 gap-0 text-xs font-medium pb-1" style={{ color: MUTED }}>
+            <span>连续天数</span>
+            <span className="text-center" style={{ color: RED }}>连涨次数</span>
+            <span className="text-right" style={{ color: GREEN_A }}>连跌次数</span>
+          </div>
+          {/* 表行 */}
+          {Array.from({ length: maxStreak }, (_, i) => i + 1).map(n => {
+            const upCnt = upStreakMap[n] || 0;
+            const downCnt = downStreakMap[n] || 0;
+            if (upCnt === 0 && downCnt === 0) return null;
+            const maxCnt = Math.max(upCnt, downCnt, 1);
+            return (
+              <div
+                key={n}
+                className="px-4 py-1.5 grid grid-cols-3 gap-0 items-center"
+                style={{ borderTop: `1px solid ${BG}` }}
+              >
+                <span className="text-xs font-semibold" style={{ color: MUTED }}>{n}天</span>
+                {/* 涨：左对齐进度条 */}
+                <div className="flex items-center gap-1 justify-center">
+                  <div
+                    style={{
+                      height: 8,
+                      width: upCnt > 0 ? `${Math.round((upCnt / maxCnt) * 60)}px` : 0,
+                      background: RED,
+                      borderRadius: 2,
+                      opacity: 0.8,
+                      minWidth: upCnt > 0 ? 4 : 0,
+                    }}
+                  />
+                  <span className="text-xs font-bold" style={{ color: RED, minWidth: 20 }}>
+                    {upCnt > 0 ? `${upCnt}次` : '—'}
+                  </span>
+                </div>
+                {/* 跌：右对齐进度条 */}
+                <div className="flex items-center gap-1 justify-end">
+                  <span className="text-xs font-bold" style={{ color: GREEN_A, minWidth: 20, textAlign: 'right' }}>
+                    {downCnt > 0 ? `${downCnt}次` : ‘—’}
+                  </span>
+                  <div
+                    style={{
+                      height: 8,
+                      width: downCnt > 0 ? `${Math.round((downCnt / maxCnt) * 60)}px` : 0,
+                      background: GREEN_A,
+                      borderRadius: 2,
+                      opacity: 0.8,
+                      minWidth: downCnt > 0 ? 4 : 0,
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+          <div className="px-4 py-2 text-xs" style={{ color: MUTED }}>
+            最长连涨{maxUpStreak}天 · 最长连跌{maxDownStreak}天
+          </div>
+        </div>
+      )}
     </div>
   );
 }
