@@ -383,10 +383,10 @@ export default function AfOrderManage() {
             {filteredOrders.map((order: any) => {
               const isEditing = editingId === order.id;
               const statusDisplay = getStatusDisplay(order);
-              // 计算编辑时的实时数量
+              // 计算编辑时的实时数量（始终用数据库原始买入价 order.limitPrice，避免被卖出价误覆盖）
               let previewQuantity = editState?.quantity ?? "";
               if (isEditing && editState) {
-                const p = parseFloat(editState.limitPrice);
+                const p = parseFloat(order.limitPrice); // 用 order.limitPrice 而非 editState.limitPrice
                 const a = parseFloat(editState.amount);
                 if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
                   previewQuantity = (a * 5.25 / p).toFixed(8);
@@ -494,7 +494,7 @@ export default function AfOrderManage() {
                         />
                       ) : (
                         <span className="font-medium text-gray-900">
-                          {parseFloat(isEditing ? editState!.limitPrice : order.limitPrice).toLocaleString()} USDT
+                          {parseFloat(order.limitPrice).toLocaleString()} USDT
                         </span>
                       )}
                     </div>
