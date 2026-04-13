@@ -17108,6 +17108,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
 
         if (!basicInfo) {
           // Tushare 也查不到，返回最基础的兜底（不抛异常，保证前端有框架）
+          console.error('[aiStockDetail] stock_basic returned empty for', input.tsCode);
           return {
             tsCode: input.tsCode,
             name: input.tsCode,
@@ -17122,6 +17123,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             totalDays: 0,
             upRate: '0.00',
             updatedAt: null,
+            debugMsg: 'stock_basic returned empty for all statuses (L/D/P)',
           };
         }
 
@@ -17160,8 +17162,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           upRate,
           updatedAt: new Date().toISOString().slice(0, 10),
         };
-      } catch (e) {
-        // 任何错误都不抛异常，返回基础兜底数据
+      } catch (e: any) {
+        // 任何错误都不抛异常，返回基础兜底数据 + 错误信息
+        console.error('[aiStockDetail] error for', input.tsCode, e?.message || e);
         return {
           tsCode: input.tsCode,
           name: input.tsCode,
@@ -17176,6 +17179,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           totalDays: 0,
           upRate: '0.00',
           updatedAt: null,
+          debugMsg: `catch: ${e?.message || String(e)}`,
         };
       }
     }),

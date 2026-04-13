@@ -567,6 +567,19 @@ export default function StockDetail() {
             数据更新时间：{displayData.updatedAt?.slice(0, 10)}
           </div>
         )}
+
+        {/* DEBUG 信息（临时，排查问题后删除） */}
+        <div className="mx-4 mt-2 mb-4 p-3 rounded-lg text-xs break-all" style={{ background: '#333', color: '#0f0', fontFamily: 'monospace' }}>
+          <div>tsCode参数: {tsCode}</div>
+          <div>error: {error ? error.message : 'null'}</div>
+          <div>data: {data ? 'yes' : 'null'}</div>
+          <div>data.name: {data?.name ?? 'N/A'}</div>
+          <div>data.listDate: {data?.listDate ?? 'N/A'}</div>
+          <div>data.industry: {data?.industry ?? 'N/A'}</div>
+          <div>data.totalDays: {data?.totalDays ?? 'N/A'}</div>
+          <div>debugMsg: {(data as any)?.debugMsg ?? 'none'}</div>
+          <div>dailyItems: {dailyData?.items?.length ?? 'N/A'}</div>
+        </div>
       </div>
     </div>
   );
