@@ -212,55 +212,43 @@ function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: num
             <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计（全历史）</span>
           </div>
           {/* 表头 */}
-          <div className="px-4 grid grid-cols-3 gap-0 text-xs font-medium pb-1" style={{ color: MUTED }}>
-            <span>连续天数</span>
-            <span className="text-center" style={{ color: RED }}>连涨次数</span>
-            <span className="text-right" style={{ color: GREEN_A }}>连跌次数</span>
+          <div className="px-4 pb-1" style={{ display: 'grid', gridTemplateColumns: '1fr 36px 1fr', gap: 0 }}>
+            <span className="text-xs font-medium text-right pr-2" style={{ color: RED }}>连涨次数</span>
+            <span className="text-xs font-medium text-center" style={{ color: MUTED }}>天数</span>
+            <span className="text-xs font-medium text-left pl-2" style={{ color: GREEN_A }}>连跌次数</span>
           </div>
           {/* 表行 */}
           {Array.from({ length: maxStreak }, (_, i) => i + 1).map(n => {
             const upCnt = upStreakMap[n] || 0;
             const downCnt = downStreakMap[n] || 0;
             if (upCnt === 0 && downCnt === 0) return null;
-            const maxCnt = Math.max(upCnt, downCnt, 1);
+            const maxCnt = Math.max(
+              ...Array.from({ length: maxStreak }, (_, i) => Math.max(upStreakMap[i+1]||0, downStreakMap[i+1]||0)),
+              1
+            );
+            const BAR_MAX = 80; // 最大进度条宽度 px
+            const upW = upCnt > 0 ? Math.max(Math.round((upCnt / maxCnt) * BAR_MAX), 4) : 0;
+            const downW = downCnt > 0 ? Math.max(Math.round((downCnt / maxCnt) * BAR_MAX), 4) : 0;
             return (
               <div
                 key={n}
-                className="px-4 py-1.5 grid grid-cols-3 gap-0 items-center"
-                style={{ borderTop: `1px solid ${BG}` }}
+                style={{ display: 'grid', gridTemplateColumns: '1fr 36px 1fr', gap: 0, borderTop: `1px solid ${BG}`, padding: '5px 16px', alignItems: 'center' }}
               >
-                <span className="text-xs font-semibold" style={{ color: MUTED }}>{n}天</span>
-                {/* 涨：左对齐进度条 */}
-                <div className="flex items-center gap-1 justify-center">
-                  <div
-                    style={{
-                      height: 8,
-                      width: upCnt > 0 ? `${Math.round((upCnt / maxCnt) * 60)}px` : 0,
-                      background: RED,
-                      borderRadius: 2,
-                      opacity: 0.8,
-                      minWidth: upCnt > 0 ? 4 : 0,
-                    }}
-                  />
-                  <span className="text-xs font-bold" style={{ color: RED, minWidth: 20 }}>
+                {/* 涨：数字在左，进度条靠右对齐到中间 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                  <span className="text-xs font-bold" style={{ color: upCnt > 0 ? RED : MUTED, minWidth: 28, textAlign: 'right' }}>
                     {upCnt > 0 ? `${upCnt}次` : '—'}
                   </span>
+                  <div style={{ width: upW, height: 8, background: RED, borderRadius: '2px 0 0 2px', opacity: 0.85, flexShrink: 0 }} />
                 </div>
-                {/* 跌：右对齐进度条 */}
-                <div className="flex items-center gap-1 justify-end">
-                  <span className="text-xs font-bold" style={{ color: GREEN_A, minWidth: 20, textAlign: 'right' }}>
+                {/* 天数居中 */}
+                <span className="text-xs font-semibold text-center" style={{ color: MUTED }}>{n}天</span>
+                {/* 跌：进度条靠左对齐到中间，数字在右 */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 4 }}>
+                  <div style={{ width: downW, height: 8, background: GREEN_A, borderRadius: '0 2px 2px 0', opacity: 0.85, flexShrink: 0 }} />
+                  <span className="text-xs font-bold" style={{ color: downCnt > 0 ? GREEN_A : MUTED, minWidth: 28 }}>
                     {downCnt > 0 ? `${downCnt}次` : '—'}
                   </span>
-                  <div
-                    style={{
-                      height: 8,
-                      width: downCnt > 0 ? `${Math.round((downCnt / maxCnt) * 60)}px` : 0,
-                      background: GREEN_A,
-                      borderRadius: 2,
-                      opacity: 0.8,
-                      minWidth: downCnt > 0 ? 4 : 0,
-                    }}
-                  />
                 </div>
               </div>
             );
