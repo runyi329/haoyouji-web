@@ -152,23 +152,7 @@ function ZhuPanLu({
             </div>
           ))}
         </div>
-        {/* 涨跌天率进度条对比 */}
-        <div className="mt-2.5 space-y-1.5">
-          <div>
-            <div className="flex justify-between text-xs mb-0.5">
-              <span style={{ color: MUTED }}>涨天率 vs 历史</span>
-              <span style={{ color: RED }}>{recentUpRate.toFixed(1)}% <span style={{ color: MUTED }}>/ {lifetimeUpRate.toFixed(1)}%</span></span>
-            </div>
-            <Bar val={recentUpRate} hist={lifetimeUpRate} color={RED} />
-          </div>
-          <div>
-            <div className="flex justify-between text-xs mb-0.5">
-              <span style={{ color: MUTED }}>跌天率 vs 历史</span>
-              <span style={{ color: GREEN_A }}>{recentDownRate.toFixed(1)}% <span style={{ color: MUTED }}>/ {lifetimeDownRate.toFixed(1)}%</span></span>
-            </div>
-            <Bar val={recentDownRate} hist={lifetimeDownRate} color={GREEN_A} />
-          </div>
-        </div>
+
       </div>
 
       {/* 间隙 */}
@@ -213,10 +197,37 @@ function ZhuPanLu({
           </div>
         </div>
         {deviationAbs >= 3 && (
-          <div className="mt-1.5 text-xs" style={{ color: deviationColor }}>
+          <div className="mt-1 text-xs" style={{ color: deviationColor }}>
             {deviation < 0 ? "近期跌天偏多，历史均值回归信号，可关注反弹机会" : "近期涨天偏多，注意高位风险，可关注回调压力"}
           </div>
         )}
+        {/* 三段式对比进度条 */}
+        <div className="mt-3 space-y-2">
+          {/* 近期 */}
+          <div>
+            <div className="flex justify-between text-xs mb-1" style={{ color: MUTED }}>
+              <span>近{tab}天</span>
+              <span><span style={{ color: RED }}>{recentUpRate.toFixed(1)}%涨</span> · <span>{(displayed.length > 0 ? flatItems.length / displayed.length * 100 : 0).toFixed(1)}%平</span> · <span style={{ color: GREEN_A }}>{recentDownRate.toFixed(1)}%跌</span></span>
+            </div>
+            <div className="flex rounded-full overflow-hidden" style={{ height: 8 }}>
+              <div style={{ width: `${recentUpRate}%`, background: RED }} />
+              <div style={{ width: `${displayed.length > 0 ? flatItems.length / displayed.length * 100 : 0}%`, background: "#D0D0D0" }} />
+              <div style={{ flex: 1, background: GREEN_A }} />
+            </div>
+          </div>
+          {/* 历史 */}
+          <div>
+            <div className="flex justify-between text-xs mb-1" style={{ color: MUTED }}>
+              <span>历史全期</span>
+              <span><span style={{ color: RED }}>{lifetimeUpRate.toFixed(1)}%涨</span> · <span>{(lifetimeTotalDays > 0 ? lifetimeFlatDays / lifetimeTotalDays * 100 : 0).toFixed(1)}%平</span> · <span style={{ color: GREEN_A }}>{lifetimeDownRate.toFixed(1)}%跌</span></span>
+            </div>
+            <div className="flex rounded-full overflow-hidden" style={{ height: 8 }}>
+              <div style={{ width: `${lifetimeUpRate}%`, background: RED }} />
+              <div style={{ width: `${lifetimeTotalDays > 0 ? lifetimeFlatDays / lifetimeTotalDays * 100 : 0}%`, background: "#D0D0D0" }} />
+              <div style={{ flex: 1, background: GREEN_A }} />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* 底部收尾 */}
