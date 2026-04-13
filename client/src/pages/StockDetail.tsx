@@ -58,7 +58,36 @@ function shortDate(dateStr: string): string {
 // ─── 珠路图组件（百家乐大路风格）────────────────────────────
 type StreakStats = { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number; totalDays: number } | undefined;
 
+function calcStreakFromItems(data: { pct: number }[]): { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number } {
+  const upMap: Record<number, number> = {};
+  const downMap: Record<number, number> = {};
+  let streak = 0;
+  let dir: 'up' | 'down' | null = null;
+  for (const item of data) {
+    const d = item.pct > 0 ? 'up' : item.pct < 0 ? 'down' : null;
+    if (d === null) { streak = 0; dir = null; continue; }
+    if (d === dir) {
+      streak++;
+    } else {
+      if (dir !== null && streak > 0) {
+        if (dir === 'up') upMap[streak] = (upMap[streak] || 0) + 1;
+        else downMap[streak] = (downMap[streak] || 0) + 1;
+      }
+      streak = 1;
+      dir = d;
+    }
+  }
+  if (dir !== null && streak > 0) {
+    if (dir === 'up') upMap[streak] = (upMap[streak] || 0) + 1;
+    else downMap[streak] = (downMap[streak] || 0) + 1;
+  }
+  const maxUp = Math.max(0, ...Object.keys(upMap).map(Number));
+  const maxDown = Math.max(0, ...Object.keys(downMap).map(Number));
+  return { upStreakMap: upMap, downStreakMap: downMap, maxUpStreak: maxUp, maxDownStreak: maxDown };
+}
+
 function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: number }[]; streakStats?: StreakStats }) {
+  const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | 'all'>(60);
   // 按日期正序排列（旧到新）
   const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
 
@@ -115,11 +144,30 @@ function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: num
     }
   }
 
-  // 连涨/连跌统计：使用后端全生命周期统计结果，加载中则显示占位符
-  const upStreakMap: Record<number, number> = streakStats?.upStreakMap ?? {};
-  const downStreakMap: Record<number, number> = streakStats?.downStreakMap ?? {};
-  const maxUpStreak = streakStats?.maxUpStreak ?? 0;
-  const maxDownStreak = streakStats?.maxDownStreak ?? 0;
+  // 连涨/连跌统计：全量来自后端 streakStats，近期各档前端计算
+  const allUpStreakMap: Record<number, number> = streakStats?.upStreakMap ?? {};
+  const allDownStreakMap: Record<number, number> = streakStats?.downStreakMap ?? {};
+  const allMaxUpStreak = streakStats?.maxUpStreak ?? 0;
+  const allMaxDownStreak = streakStats?.maxDownStreak ?? 0;
+
+  // 近期各档前端计算
+  const recentStreakData30 = calcStreakFromItems(sorted.slice(-30));
+  const recentStreakData60 = calcStreakFromItems(sorted.slice(-60));
+  const recentStreakData90 = calcStreakFromItems(sorted.slice(-90));
+  const recentStreakData180 = calcStreakFromItems(sorted.slice(-180));
+
+  // 当前 Tab 对应的统计数据
+  const curStreakData = streakTab === 'all'
+    ? { upStreakMap: allUpStreakMap, downStreakMap: allDownStreakMap, maxUpStreak: allMaxUpStreak, maxDownStreak: allMaxDownStreak }
+    : streakTab === 30 ? recentStreakData30
+    : streakTab === 60 ? recentStreakData60
+    : streakTab === 90 ? recentStreakData90
+    : recentStreakData180;
+
+  const upStreakMap = curStreakData.upStreakMap;
+  const downStreakMap = curStreakData.downStreakMap;
+  const maxUpStreak = curStreakData.maxUpStreak;
+  const maxDownStreak = curStreakData.maxDownStreak;
   const maxStreak = Math.max(maxUpStreak, maxDownStreak);
 
   // 格子放大以内嵌数字
@@ -206,10 +254,19 @@ function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: num
       </div>
 
       {/* 连涨/连跌统计列表 */}
-      {maxStreak > 0 && (
-        <div style={{ background: CARD, marginTop: 8, borderTop: `8px solid ${BG}` }}>
-          <div className="px-4 pt-3 pb-1">
-            <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计（全历史）</span>
+      <div style={{ background: CARD, marginTop: 8, borderTop: `8px solid ${BG}` }}>
+          <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+            <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计</span>
+            <div className="flex items-center gap-1">
+              {([30, 60, 90, 180, 'all'] as const).map(n => (
+                <button
+                  key={n}
+                  onClick={() => setStreakTab(n)}
+                  className="text-xs px-2 py-0.5 rounded-full"
+                  style={{ background: streakTab === n ? RED : '#F0F0F0', color: streakTab === n ? '#fff' : MUTED, fontWeight: streakTab === n ? 700 : 400 }}
+                >{n === 'all' ? '全量' : `${n}天`}</button>
+              ))}
+            </div>
           </div>
           {/* 表头 */}
           <div className="px-4 pb-1" style={{ display: 'grid', gridTemplateColumns: '1fr 36px 1fr', gap: 0 }}>
@@ -253,11 +310,17 @@ function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: num
               </div>
             );
           })}
-          <div className="px-4 py-2 text-xs" style={{ color: MUTED }}>
-            最长连涨{maxUpStreak}天 · 最长连跌{maxDownStreak}天
-          </div>
+          {maxStreak === 0 && (
+            <div className="px-4 py-3 text-xs" style={{ color: MUTED }}>暂无连涨/连跌数据</div>
+          )}
+          {maxStreak > 0 && (
+            <div className="px-4 py-2 text-xs" style={{ color: MUTED }}>
+              最长连涨{maxUpStreak}天 · 最长连跌{maxDownStreak}天
+              {streakTab === 'all' && <span style={{ marginLeft: 6, color: MUTED }}>（全历史）</span>}
+              {streakTab !== 'all' && <span style={{ marginLeft: 6, color: MUTED }}>（近{streakTab}天）</span>}
+            </div>
+          )}
         </div>
-      )}
     </div>
   );
 }
