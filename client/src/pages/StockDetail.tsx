@@ -55,6 +55,109 @@ function shortDate(dateStr: string): string {
   return dateStr;
 }
 
+// ─── 珠路图组件（百家乐大路风格）────────────────────────────
+function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
+  // 按日期正序排列（旧到新）
+  const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+
+  // 构建列结构：同向堆列，换向开新列
+  const columns: { pct: number; date: string }[][] = [];
+  let curDir: 'up' | 'down' | 'flat' | null = null;
+
+  for (const item of sorted) {
+    const dir = item.pct > 0 ? 'up' : item.pct < 0 ? 'down' : 'flat';
+    // 平天并入上一列（不开新列）
+    if (dir === 'flat' && columns.length > 0) {
+      columns[columns.length - 1].push({ pct: item.pct, date: item.tradeDate });
+    } else if (dir !== curDir) {
+      columns.push([{ pct: item.pct, date: item.tradeDate }]);
+      curDir = dir;
+    } else {
+      columns[columns.length - 1].push({ pct: item.pct, date: item.tradeDate });
+    }
+  }
+
+  // 每格大小
+  const CELL = 16;
+  const GAP = 1;
+  // 最大列高
+  const maxRows = Math.max(...columns.map(c => c.length), 1);
+  const totalH = maxRows * (CELL + GAP);
+
+  // 涨跌幅映射到颜色深浅（最大幅度用于归一化）
+  const maxAbs = Math.max(...sorted.map(d => Math.abs(d.pct)), 1);
+  function getColor(pct: number): string {
+    if (pct === 0) return "#D0D0D0";
+    const intensity = Math.min(Math.abs(pct) / maxAbs, 1);
+    if (pct > 0) {
+      // 涨：深红 → 浅红
+      const r = Math.round(211 - intensity * 60);
+      const g = Math.round(47 + intensity * 30);
+      const b = Math.round(47 + intensity * 30);
+      return `rgb(${r},${g},${b})`;
+    } else {
+      // 跌：深绿 → 浅绿
+      const r = Math.round(0 + (1 - intensity) * 160);
+      const g = Math.round(176 - (1 - intensity) * 80);
+      const b = Math.round(80 + (1 - intensity) * 40);
+      return `rgb(${r},${g},${b})`;
+    }
+  }
+
+  return (
+    <div style={{ background: CARD, paddingBottom: 12 }}>
+      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+        <span className="text-xs font-semibold" style={{ color: MUTED }}>珠路图</span>
+        <span className="text-xs" style={{ color: MUTED }}>涨幅越大色越深 · 列内同向连续</span>
+      </div>
+      <div className="px-4 overflow-x-auto">
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: GAP,
+            minWidth: columns.length * (CELL + GAP),
+            height: totalH,
+          }}
+        >
+          {columns.map((col, ci) => (
+            <div
+              key={ci}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: GAP,
+                width: CELL,
+                flexShrink: 0,
+              }}
+            >
+              {col.map((cell, ri) => (
+                <div
+                  key={ri}
+                  title={`${cell.date} ${cell.pct > 0 ? '+' : ''}${cell.pct.toFixed(2)}%`}
+                  style={{
+                    width: CELL,
+                    height: CELL,
+                    borderRadius: 3,
+                    background: getColor(cell.pct),
+                    flexShrink: 0,
+                  }}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="px-4 mt-1.5 flex gap-3 text-xs" style={{ color: MUTED }}>
+        <span>█ 涨（红）</span>
+        <span>█ 跌（绿）</span>
+        <span>█ 平（灰）</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── 珠盘路组件（统计数字主体 + 弹出框明细）────────────────────
 function ZhuPanLu({
   items,
@@ -229,6 +332,11 @@ function ZhuPanLu({
           </div>
         </div>
       </div>
+
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
+      {/* ── 珠路图（百家乐大路风格）── */}
+      <ZhuLuMap items={displayed} />
 
       {/* 底部收尾 */}
       <div className="pb-4" style={{ background: CARD }} />
