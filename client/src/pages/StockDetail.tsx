@@ -544,8 +544,14 @@ export default function StockDetail() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const handleRefresh = async () => {
+    if (isRefreshing) return;
     setIsRefreshing(true);
-    await Promise.all([refetchDetail(), refetchDaily(), refetchStreak()]);
+    // 强制刷新：先清除缓存，再重新拉取
+    await Promise.all([
+      refetchDetail({ cancelRefetch: true }),
+      refetchDaily({ cancelRefetch: true }),
+      refetchStreak({ cancelRefetch: true }),
+    ]);
     setIsRefreshing(false);
   };
 
@@ -624,10 +630,11 @@ export default function StockDetail() {
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0"
-          style={{ background: "rgba(255,255,255,0.2)", opacity: isRefreshing ? 0.5 : 1 }}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full flex-shrink-0 text-xs font-medium"
+          style={{ background: "rgba(255,255,255,0.2)", opacity: isRefreshing ? 0.6 : 1, color: '#fff' }}
         >
-          <RefreshCw className={`w-3.5 h-3.5 text-white ${isRefreshing ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? '刷新中...' : '刷新'}
         </button>
       </div>
 
@@ -685,31 +692,6 @@ export default function StockDetail() {
             )}
           </div>
         </div>
-
-        {/* ── 同花顺 K 线图 ── */}
-        <div className="mt-3" style={{ background: CARD }}>
-          <div className="px-4 pt-4 pb-1 flex items-center justify-between">
-            <div className="text-xs font-semibold" style={{ color: RED }}>行情走势</div>
-            <a
-              href={`https://stockpage.10jqka.com.cn/${tsCode.replace('.', '')}/`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs"
-              style={{ color: MUTED }}
-            >
-              同花顺 ↗
-            </a>
-          </div>
-          <div style={{ height: 260, overflow: 'hidden' }}>
-            <iframe
-              src={`https://stockpage.10jqka.com.cn/HQ_v4.html#hs_${tsCode.replace('.', '')}`}
-              style={{ width: '100%', height: '100%', border: 'none' }}
-              scrolling="no"
-              title="K线图"
-            />
-          </div>
-        </div>
-
         {/* ── 珠盘路卡片 ── */}
         <div className="mt-3" style={{ background: CARD }}>
           <div className="px-4 pt-4 pb-1">
