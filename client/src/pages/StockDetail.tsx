@@ -73,18 +73,17 @@ function ZhuLuScrollArea({
   getColorAndText: (pct: number) => { bg: string; fg: string; label: string };
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [rightPad, setRightPad] = useState(80); // 初始默认占位宽度
+  // 右侧空白列数：初始默认 4 列，第一帧根据容器宽度计算实际列数
+  const [emptyCols, setEmptyCols] = useState(4);
 
   useEffect(() => {
-    // 第一帧计算容器宽度，设置右侧留白 = 1/3 容器宽
     const raf = requestAnimationFrame(() => {
       const el = scrollRef.current;
       if (!el) return;
       const containerW = el.clientWidth;
-      const pad = Math.round(containerW / 3);
-      setRightPad(pad);
-      // 内容末尾有了 pad 宽度的空白，滚动到底部即可让最新列停在 2/3 处
-      // 用 setTimeout 等 setRightPad 渲染后再滚动
+      // 右侧留白 = 1/3 容器宽，计算需要几列空白格子
+      const cols = Math.max(2, Math.round((containerW / 3) / (CELL + GAP)));
+      setEmptyCols(cols);
       setTimeout(() => {
         const el2 = scrollRef.current;
         if (el2) el2.scrollLeft = el2.scrollWidth;
@@ -105,9 +104,8 @@ function ZhuLuScrollArea({
           flexDirection: "row",
           alignItems: "flex-start",
           gap: GAP,
-          minWidth: columns.length * (CELL + GAP) + rightPad,
+          minWidth: (columns.length + emptyCols) * (CELL + GAP),
           height: totalH,
-          paddingRight: rightPad,
         }}
       >
         {columns.map((col, ci) => (
@@ -152,6 +150,33 @@ function ZhuLuScrollArea({
             {Array.from({ length: Math.max(0, FIXED_ROWS - col.length) }).map((_, ei) => (
               <div
                 key={`empty-${ei}`}
+                style={{
+                  width: CELL,
+                  height: CELL,
+                  borderRadius: 2,
+                  background: "transparent",
+                  border: "1px solid #E0E0E0",
+                  flexShrink: 0,
+                }}
+              />
+            ))}
+          </div>
+        ))}
+        {/* 右侧空白格子列（有边框无数据，给用户“后续还会有新数据”的视觉暗示） */}
+        {Array.from({ length: emptyCols }).map((_, ci) => (
+          <div
+            key={`right-empty-col-${ci}`}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: GAP,
+              width: CELL,
+              flexShrink: 0,
+            }}
+          >
+            {Array.from({ length: FIXED_ROWS }).map((_, ri) => (
+              <div
+                key={ri}
                 style={{
                   width: CELL,
                   height: CELL,
