@@ -207,7 +207,7 @@ function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: num
 
       {/* 连涨/连跌统计列表 */}
       {maxStreak > 0 && (
-        <div style={{ background: CARD }}>
+        <div style={{ background: CARD, marginTop: 8, borderTop: `8px solid ${BG}` }}>
           <div className="px-4 pt-3 pb-1">
             <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计（全历史）</span>
           </div>
