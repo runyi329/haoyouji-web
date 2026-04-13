@@ -17260,7 +17260,38 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         if (streakDir === 'down' && streak > 0) downStreakMap[streak] = (downStreakMap[streak] || 0) + 1;
         const maxUpStreak = Math.max(...Object.keys(upStreakMap).map(Number), 0);
         const maxDownStreak = Math.max(...Object.keys(downStreakMap).map(Number), 0);
-        return { upStreakMap, downStreakMap, maxUpStreak, maxDownStreak, totalDays: rows.length };
+
+        // 条件概率表：对每个「连涨/连跌 N 天」节点，统计下一天涨/跌/平次数
+        // condProbTable[dir][n] = { up, down, flat, total }
+        const condProbTable: Record<string, Record<number, { up: number; down: number; flat: number; total: number }>> = {
+          up: {},
+          down: {},
+        };
+        let cpStreak = 0;
+        let cpDir: 'up' | 'down' | null = null;
+        for (let i = 0; i < rows.length; i++) {
+          const pct = Number(rows[i][pctIdx]);
+          const d = pct > 0 ? 'up' : pct < 0 ? 'down' : null;
+          if (d === null) { cpStreak = 0; cpDir = null; continue; }
+          if (d === cpDir) {
+            cpStreak++;
+          } else {
+            cpStreak = 1;
+            cpDir = d;
+          }
+          // 当前已连续 cpDir 方向 cpStreak 天，看下一天
+          if (i + 1 < rows.length) {
+            const nextPct = Number(rows[i + 1][pctIdx]);
+            const nextResult = nextPct > 0 ? 'up' : nextPct < 0 ? 'down' : 'flat';
+            if (!condProbTable[cpDir][cpStreak]) {
+              condProbTable[cpDir][cpStreak] = { up: 0, down: 0, flat: 0, total: 0 };
+            }
+            condProbTable[cpDir][cpStreak][nextResult]++;
+            condProbTable[cpDir][cpStreak].total++;
+          }
+        }
+
+        return { upStreakMap, downStreakMap, maxUpStreak, maxDownStreak, totalDays: rows.length, condProbTable };
       } catch (e) {
         return { upStreakMap: {}, downStreakMap: {}, maxUpStreak: 0, maxDownStreak: 0, totalDays: 0 };
       }

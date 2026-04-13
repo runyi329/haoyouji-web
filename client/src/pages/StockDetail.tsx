@@ -360,7 +360,8 @@ function ZhuLuScrollArea({
 }
 
 // ─── 珠路图组件（百家乐大路风格）────────────────────────────
-type StreakStats = { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number; totalDays: number } | undefined;
+type CondProbEntry = { up: number; down: number; flat: number; total: number };
+type StreakStats = { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number; totalDays: number; condProbTable?: Record<string, Record<number, CondProbEntry>> } | undefined;
 
 function calcStreakFromItems(data: { pct: number }[]): { upStreakMap: Record<number, number>; downStreakMap: Record<number, number>; maxUpStreak: number; maxDownStreak: number } {
   const upMap: Record<number, number> = {};
@@ -507,6 +508,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
   // 计算当前最后一段连涨/连跌的方向和天数
   const lastProb = (() => {
     if (allSorted.length === 0) return null;
+    // 计算当前最后一段连涨/连跌的方向和天数
     let curLen = 0;
     let curDir: 'up' | 'down' | null = null;
     for (let i = allSorted.length - 1; i >= 0; i--) {
@@ -518,6 +520,24 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
       else break;
     }
     if (!curDir || curLen === 0) return null;
+    // 从后端 condProbTable 查表（基于全量历史数据）
+    const condProbTable = streakStats?.condProbTable;
+    const entry = condProbTable?.[curDir]?.[curLen];
+    if (entry && entry.total > 0) {
+      return {
+        upPct: Math.round((entry.up / entry.total) * 100),
+        downPct: Math.round((entry.down / entry.total) * 100),
+        flatPct: Math.round((entry.flat / entry.total) * 100),
+        total: entry.total,
+        upCnt: entry.up,
+        downCnt: entry.down,
+        flatCnt: entry.flat,
+        curDir,
+        curLen,
+        totalDays: streakStats?.totalDays ?? allSorted.length,
+      };
+    }
+    // 后端数据未就绪时回落到前端计算
     const prob = calcNextDayProb(allSorted, curDir, curLen);
     if (prob.total === 0) return null;
     return { ...prob, curDir, curLen, totalDays: streakStats?.totalDays ?? allSorted.length };
