@@ -554,6 +554,161 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   );
 }
 
+// ─── 涨天率正态分布 ──────────────────────────────────────────
+function UpRateDistSection() {
+  const [market, setMarket] = useState<"all" | "SH" | "SZ" | "GEM" | "STAR">("all");
+  const { data, isLoading } = trpc.aiDashboardUpRateDist.useQuery({ market });
+
+  // 正态曲线叠加数据
+  const chartData = (data?.buckets ?? []).map((b: any) => {
+    // 正态曲线值（高斯函数，用于叠加显示）
+    const x = b.min + 2.5; // 桶中心值
+    const mean = data?.mean ?? 50;
+    const std = data?.stdDev ?? 5;
+    const normalY = std > 0
+      ? Math.round((data?.totalCount ?? 0) * 5 / (std * Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * Math.pow((x - mean) / std, 2)))
+      : 0;
+    return { ...b, normalY };
+  });
+
+  const MARKET_TABS = [
+    { key: "all" as const, label: "全市场" },
+    { key: "SH" as const, label: "沪市" },
+    { key: "SZ" as const, label: "深市" },
+    { key: "GEM" as const, label: "创业板" },
+    { key: "STAR" as const, label: "科创板" },
+  ];
+
+  return (
+    <div>
+      <SectionTitle title="涨天率分布" sub="全市场在市股票历史涨天率正态分布" />
+      <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
+        {/* Tab */}
+        <div className="flex border-b" style={{ borderColor: BORDER }}>
+          {MARKET_TABS.map((m, idx) => {
+            const active = market === m.key;
+            return (
+              <button
+                key={m.key}
+                onClick={() => setMarket(m.key)}
+                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
+                style={{
+                  background: active ? "#F5EDED" : "transparent",
+                  borderRight: idx < MARKET_TABS.length - 1 ? `1px solid ${BORDER}` : "none",
+                }}
+              >
+                {active && <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: RED }} />}
+                <span className="text-[13px] font-semibold" style={{ color: active ? RED : "#555" }}>{m.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {/* 内容 */}
+        <div className="p-3">
+          {isLoading ? (
+            <><Skeleton /><Skeleton /></>
+          ) : !data ? (
+            <EmptyState label="数据加载中..." />
+          ) : (
+            <>
+              {/* 统计摘要 */}
+              <div className="flex items-center gap-4 mb-3">
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FFF5F5", border: `1px solid ${BORDER}` }}>
+                  <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>样本股票数</p>
+                  <p className="text-lg font-bold" style={{ color: RED }}>{fmt(data.totalCount)}</p>
+                </div>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FFF5F5", border: `1px solid ${BORDER}` }}>
+                  <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>平均涨天率</p>
+                  <p className="text-lg font-bold" style={{ color: RED }}>{data.mean}%</p>
+                </div>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#F5F5F5", border: `1px solid ${BORDER}` }}>
+                  <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>标准差</p>
+                  <p className="text-lg font-bold" style={{ color: TEXT }}>±{data.stdDev}%</p>
+                </div>
+              </div>
+              {/* 说明文字 */}
+              <p className="text-[11px] mb-2" style={{ color: DIM }}>
+                X轴：涨天率区间（0%~100%）· Y轴：股票数量 · 红线：正态曲线拟合
+              </p>
+              {/* 柱状图 + 正态曲线 */}
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={chartData} margin={{ top: 10, right: 4, left: -20, bottom: 0 }} barCategoryGap="8%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                  <XAxis
+                    dataKey="min"
+                    tick={{ fill: MUTED, fontSize: 9 }}
+                    axisLine={{ stroke: BORDER }}
+                    tickLine={false}
+                    tickFormatter={(v) => `${v}%`}
+                    interval={3}
+                  />
+                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    formatter={(value: any, name: string) => [
+                      name === 'count' ? `${value} 只` : `${value} 只（拟合）`,
+                      name === 'count' ? '实际数量' : '正态拟合'
+                    ]}
+                    labelFormatter={(label) => `涨天率 ${label}%-${Number(label)+5}%`}
+                    contentStyle={{ fontSize: 11, background: CARD, border: `1px solid ${BORDER}` }}
+                  />
+                  <Bar dataKey="count" name="count" radius={[2, 2, 0, 0]}>
+                    {chartData.map((entry: any, i: number) => {
+                      // 50% 附近（45-55%）用红色，其余用灰色渐变
+                      const isNear50 = entry.min >= 45 && entry.min < 55;
+                      const isMean = data.mean >= entry.min && data.mean < entry.max;
+                      return (
+                        <Cell
+                          key={i}
+                          fill={isMean ? RED : isNear50 ? "#EF9A9A" : entry.min < 50 ? "#A5D6A7" : "#EF9A9A"}
+                          opacity={0.85}
+                        />
+                      );
+                    })}
+                  </Bar>
+                  <Line
+                    type="monotone"
+                    dataKey="normalY"
+                    stroke={RED}
+                    strokeWidth={2}
+                    dot={false}
+                    name="normalY"
+                  />
+                  <ReferenceLine
+                    x={Math.floor(data.mean / 5) * 5}
+                    stroke={RED}
+                    strokeDasharray="4 3"
+                    strokeWidth={1.5}
+                    label={{ value: `均值${data.mean}%`, position: 'top', fill: RED, fontSize: 9 }}
+                  />
+                  <ReferenceLine
+                    x={50}
+                    stroke="#9E9E9E"
+                    strokeDasharray="3 3"
+                    strokeWidth={1}
+                    label={{ value: '50%', position: 'insideTopRight', fill: MUTED, fontSize: 9 }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+              {/* 分布解读 */}
+              <div className="mt-2 px-2 py-2 rounded-lg" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
+                <p className="text-[11px] leading-relaxed" style={{ color: DIM }}>
+                  {data.mean > 50
+                    ? `全市场平均涨天率 ${data.mean}%，高于50%基准，说明A股整体偏多头市场结构。`
+                    : data.mean < 50
+                    ? `全市场平均涨天率 ${data.mean}%，低于50%基准，说明A股整体偏空头市场结构。`
+                    : `全市场平均涨天率接近50%，多空力量基本均衡。`
+                  }
+                  {` 标准差 ${data.stdDev}%，分布${data.stdDev < 5 ? '集中' : data.stdDev < 8 ? '适中' : '分散'}，个股涨天率差异${data.stdDev < 5 ? '较小' : data.stdDev < 8 ? '适中' : '较大'}。`}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // 估值分布和涨跌统计专用 Tab（不含退市）
 type MarketNoDelisted = "all" | "SH" | "SZ" | "GEM" | "STAR";
 const MARKET_KEYS_NO_DELISTED: { key: MarketNoDelisted; label: string }[] = [
@@ -1082,6 +1237,8 @@ export default function LedgerAIDatabase() {
       {/* 全部内容单页展开，上下滚动 */}
       <div className="flex-1 overflow-y-auto pb-8">
         <SurvivalSection counts={counts} />
+        <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
+        <UpRateDistSection />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <ValuationSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
