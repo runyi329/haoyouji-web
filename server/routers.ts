@@ -17003,6 +17003,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       sortDir: z.enum(['asc', 'desc']).default('desc'),
       keyword: z.string().optional(),
       market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR', 'DELISTED']).default('all'),
+      minTotalDays: z.number().int().min(0).default(0),
     }))
     .query(async ({ input }) => {
       const dbConn = await getDbConnection();
@@ -17017,6 +17018,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           DELISTED: "AND b.list_status = 'D'",
         };
         const mf = marketCond[input.market] || marketCond.all;
+        const minDaysCond = input.minTotalDays > 0 ? `AND COALESCE(l.total_days, 0) >= ${Number(input.minTotalDays)}` : '';
         const kwCond = input.keyword ? `AND (b.ts_code LIKE ? OR b.name LIKE ?)` : '';
         const kwParams: string[] = input.keyword ? [`%${input.keyword}%`, `%${input.keyword}%`] : [];
         const sortColMap: Record<string, string> = {
@@ -17029,7 +17031,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const [countRows] = await dbConn.execute(
           `SELECT COUNT(*) AS cnt FROM ts_stock_basic b
            LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
-           WHERE 1=1 ${mf} ${kwCond}`,
+           WHERE 1=1 ${mf} ${minDaysCond} ${kwCond}`,
           kwParams
         ) as any[];
         const total = Number((countRows as any[])[0]?.cnt) || 0;
@@ -17045,7 +17047,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             COALESCE(l.up_rate, 0) AS up_rate
           FROM ts_stock_basic b
           LEFT JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
-          WHERE 1=1 ${mf} ${kwCond}
+          WHERE 1=1 ${mf} ${minDaysCond} ${kwCond}
           ORDER BY ${sortCol} ${sortDir}, b.ts_code ASC
           LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`,
           kwParams
