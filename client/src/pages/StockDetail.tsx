@@ -84,24 +84,29 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
   const maxRows = Math.max(...columns.map(c => c.length), 1);
   const totalH = maxRows * (CELL + GAP);
 
-  // 涨跌幅映射到颜色深浅（最大幅度用于归一化）
-  const maxAbs = Math.max(...sorted.map(d => Math.abs(d.pct)), 1);
+  // 分档热力图配色
+  // 涨：6档由浅红到深红  跌：6档由浅绿到深绿  平：灰色
+  const UP_COLORS = [
+    "#FFCDD2", // <0.5%  最浅红
+    "#EF9A9A", // 0.5-1%
+    "#E57373", // 1-2%
+    "#EF5350", // 2-3%
+    "#E53935", // 3-5%
+    "#B71C1C", // >5%   最深红
+  ];
+  const DOWN_COLORS = [
+    "#C8E6C9", // <0.5%  最浅绿
+    "#A5D6A7", // 0.5-1%
+    "#66BB6A", // 1-2%
+    "#43A047", // 2-3%
+    "#2E7D32", // 3-5%
+    "#1B5E20", // >5%   最深绿
+  ];
   function getColor(pct: number): string {
     if (pct === 0) return "#D0D0D0";
-    const intensity = Math.min(Math.abs(pct) / maxAbs, 1);
-    if (pct > 0) {
-      // 涨：深红 → 浅红
-      const r = Math.round(211 - intensity * 60);
-      const g = Math.round(47 + intensity * 30);
-      const b = Math.round(47 + intensity * 30);
-      return `rgb(${r},${g},${b})`;
-    } else {
-      // 跌：深绿 → 浅绿
-      const r = Math.round(0 + (1 - intensity) * 160);
-      const g = Math.round(176 - (1 - intensity) * 80);
-      const b = Math.round(80 + (1 - intensity) * 40);
-      return `rgb(${r},${g},${b})`;
-    }
+    const abs = Math.abs(pct);
+    const idx = abs < 0.5 ? 0 : abs < 1 ? 1 : abs < 2 ? 2 : abs < 3 ? 3 : abs < 5 ? 4 : 5;
+    return pct > 0 ? UP_COLORS[idx] : DOWN_COLORS[idx];
   }
 
   return (
@@ -149,10 +154,25 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
           ))}
         </div>
       </div>
-      <div className="px-4 mt-1.5 flex gap-3 text-xs" style={{ color: MUTED }}>
-        <span>█ 涨（红）</span>
-        <span>█ 跌（绿）</span>
-        <span>█ 平（灰）</span>
+      <div className="px-4 mt-2">
+        <div className="flex items-center gap-1 text-xs" style={{ color: MUTED }}>
+          <span style={{ marginRight: 2 }}>涨</span>
+          {UP_COLORS.map((c, i) => (
+            <div key={i} style={{ width: 14, height: 14, borderRadius: 2, background: c }} title={["<0.5%","0.5-1%","1-2%","2-3%","3-5%",">5%"][i]} />
+          ))}
+          <span style={{ margin: "0 4px" }}>平</span>
+          <div style={{ width: 14, height: 14, borderRadius: 2, background: "#D0D0D0" }} />
+          <span style={{ margin: "0 4px" }}>跌</span>
+          {DOWN_COLORS.map((c, i) => (
+            <div key={i} style={{ width: 14, height: 14, borderRadius: 2, background: c }} title={["<0.5%","0.5-1%","1-2%","2-3%","3-5%",">5%"][i]} />
+          ))}
+        </div>
+        <div className="flex items-center gap-1 text-xs mt-0.5" style={{ color: MUTED }}>
+          <span style={{ marginRight: 2, opacity: 0 }}>涨</span>
+          {["<0.5","0.5-1","1-2","2-3","3-5",">5"].map((l, i) => (
+            <div key={i} style={{ width: 14, textAlign: "center", fontSize: 9, color: MUTED, overflow: "hidden" }}>{l}</div>
+          ))}
+        </div>
       </div>
     </div>
   );
