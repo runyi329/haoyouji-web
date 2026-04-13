@@ -7,7 +7,7 @@ import { useParams } from "wouter";
 import { ChevronLeft, Calendar, Building2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 // ─── 配色 ────────────────────────────────────────────────
 const RED = "#D32F2F";
@@ -53,6 +53,111 @@ function shortDate(dateStr: string): string {
     return `${m}/${d}`;
   }
   return dateStr;
+}
+
+// ─── 珠路图滚动区域子组件（默认右对齐，右边留1/3空白）────────────
+
+function ZhuLuScrollArea({
+  columns,
+  CELL,
+  GAP,
+  totalH,
+  FIXED_ROWS,
+  getColorAndText,
+}: {
+  columns: { pct: number; date: string }[][];
+  CELL: number;
+  GAP: number;
+  totalH: number;
+  FIXED_ROWS: number;
+  getColorAndText: (pct: number) => { bg: string; fg: string; label: string };
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // 容器宽度的 1/3 作为右侧留白
+    const rightPad = el.clientWidth / 3;
+    // 滚动到：内容总宽 - 容器宽 + 右侧留白
+    const contentW = columns.length * (CELL + GAP);
+    const scrollTarget = Math.max(0, contentW - el.clientWidth + rightPad);
+    el.scrollLeft = scrollTarget;
+  }, [columns.length, CELL, GAP]);
+
+  return (
+    <div
+      ref={scrollRef}
+      className="px-2 overflow-x-auto"
+      style={{ paddingTop: 8 }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "flex-start",
+          gap: GAP,
+          minWidth: columns.length * (CELL + GAP),
+          height: totalH,
+        }}
+      >
+        {columns.map((col, ci) => (
+          <div
+            key={ci}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: GAP,
+              width: CELL,
+              flexShrink: 0,
+            }}
+          >
+            {/* 实际数据格子 */}
+            {col.map((cell, ri) => {
+              const { bg, fg, label } = getColorAndText(cell.pct);
+              return (
+                <div
+                  key={ri}
+                  title={`${cell.date} ${cell.pct > 0 ? '+' : ''}${cell.pct.toFixed(2)}%`}
+                  style={{
+                    width: CELL,
+                    height: CELL,
+                    borderRadius: 2,
+                    background: bg,
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 8,
+                    fontWeight: 600,
+                    color: fg,
+                    lineHeight: 1,
+                    letterSpacing: "-0.3px",
+                  }}
+                >
+                  {label}
+                </div>
+              );
+            })}
+            {/* 补充空白格子，确保每列总是6行，显示边框 */}
+            {Array.from({ length: Math.max(0, FIXED_ROWS - col.length) }).map((_, ei) => (
+              <div
+                key={`empty-${ei}`}
+                style={{
+                  width: CELL,
+                  height: CELL,
+                  borderRadius: 2,
+                  background: "transparent",
+                  border: "1px solid #E0E0E0",
+                  flexShrink: 0,
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ─── 珠路图组件（百家乐大路风格）────────────────────────────
@@ -180,73 +285,14 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
 
   return (
     <div style={{ background: CARD, paddingBottom: 12 }}>
-      <div className="px-2 overflow-x-auto" style={{ paddingTop: 8 }}>
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "flex-start",
-            gap: GAP,
-            minWidth: columns.length * (CELL + GAP),
-            height: totalH,
-          }}
-        >
-          {columns.map((col, ci) => (
-            <div
-              key={ci}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: GAP,
-                width: CELL,
-                flexShrink: 0,
-              }}
-            >
-              {/* 实际数据格子 */}
-              {col.map((cell, ri) => {
-                const { bg, fg, label } = getColorAndText(cell.pct);
-                return (
-                  <div
-                    key={ri}
-                    title={`${cell.date} ${cell.pct > 0 ? '+' : ''}${cell.pct.toFixed(2)}%`}
-                    style={{
-                      width: CELL,
-                      height: CELL,
-                      borderRadius: 2,
-                      background: bg,
-                      flexShrink: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 8,
-                      fontWeight: 600,
-                      color: fg,
-                      lineHeight: 1,
-                      letterSpacing: "-0.3px",
-                    }}
-                  >
-                    {label}
-                  </div>
-                );
-              })}
-              {/* 补充空白格子，确保每列总是6行，显示边框 */}
-              {Array.from({ length: Math.max(0, FIXED_ROWS - col.length) }).map((_, ei) => (
-                <div
-                  key={`empty-${ei}`}
-                  style={{
-                    width: CELL,
-                    height: CELL,
-                    borderRadius: 2,
-                    background: "transparent",
-                    border: "1px solid #E0E0E0",
-                    flexShrink: 0,
-                  }}
-                />
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
+      <ZhuLuScrollArea
+        columns={columns}
+        CELL={CELL}
+        GAP={GAP}
+        totalH={totalH}
+        FIXED_ROWS={FIXED_ROWS}
+        getColorAndText={getColorAndText}
+      />
       {/* 图例 */}
       <div className="px-4 mt-2">
         <div className="flex items-center gap-1 flex-wrap" style={{ color: MUTED }}>
