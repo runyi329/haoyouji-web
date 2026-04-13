@@ -17444,6 +17444,120 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       }
     }),
 
+  // 散户信号站：每日信号列表
+  retailSignalList: publicProcedure
+    .input(z.object({ tab: z.enum(["hot", "rising", "cooling"]) }))
+    .query(async ({ input }) => {
+      const dbConn = getDbConnection();
+      try {
+        // 查询在市股票（上市满250天），计算综合信号评分
+        const [rows] = await dbConn.query(`
+          SELECT
+            b.ts_code AS code,
+            b.name AS name,
+            l.rise_days,
+            l.fall_days,
+            l.flat_days,
+            l.total_days,
+            ROUND(l.rise_days * 100.0 / GREATEST(l.total_days, 1), 1) AS hist_rise_rate,
+            (
+              SELECT ROUND(SUM(CASE WHEN d2.close > d2.pre_close THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1)
+              FROM (SELECT close, pre_close FROM ts_daily WHERE ts_code = b.ts_code ORDER BY trade_date DESC LIMIT 30) d2
+            ) AS recent30_rise_rate,
+            (
+              SELECT ROUND(AVG(vol_ratio_val), 2)
+              FROM (
+                SELECT d3.vol / GREATEST(
+                  (SELECT AVG(d4.vol) FROM ts_daily d4 WHERE d4.ts_code = b.ts_code AND d4.trade_date < d3.trade_date ORDER BY d4.trade_date DESC LIMIT 5),
+                  1
+                ) AS vol_ratio_val
+                FROM ts_daily d3
+                WHERE d3.ts_code = b.ts_code
+                ORDER BY d3.trade_date DESC
+                LIMIT 20
+              ) vr
+            ) AS avg_vol_ratio,
+            (
+              SELECT ROUND(
+                SUM(CASE WHEN (d5.close - d5.pre_close) / GREATEST(d5.pre_close, 0.01) >= 0.02 THEN 1 ELSE 0 END) * 100.0
+                / GREATEST(SUM(CASE WHEN (d5.pre_close - d5.close) / GREATEST(d5.pre_close, 0.01) >= 0.02 THEN 1 ELSE 0 END), 1),
+                1
+              )
+              FROM (SELECT close, pre_close FROM ts_daily WHERE ts_code = b.ts_code ORDER BY trade_date DESC LIMIT 10) d5
+            ) AS strong_bull_bear_ratio
+          FROM ts_stock_basic b
+          JOIN ts_stock_lifecycle l ON l.ts_code = b.ts_code
+          WHERE b.list_status = 'L'
+            AND l.total_days >= 250
+          LIMIT 500
+        `) as [any[], any];
+
+        // 计算综合评分
+        const scored = (rows as any[])
+          .filter(r => r.recent30_rise_rate !== null)
+          .map(r => {
+            const histRate = parseFloat(r.hist_rise_rate) || 50;
+            const recentRate = parseFloat(r.recent30_rise_rate) || 50;
+            const volRatio = parseFloat(r.avg_vol_ratio) || 1;
+            const bullBearRatio = parseFloat(r.strong_bull_bear_ratio) || 100;
+
+            // 近期涨天率偏离历史（-20~+20 → 0~40分）
+            const rateScore = Math.min(40, Math.max(0, (recentRate - histRate + 20) * 1.0));
+            // 量比得分（0.5~2.0 → 0~30分）
+            const volScore = Math.min(30, Math.max(0, (volRatio - 0.5) * 20));
+            // 强阳/强阴比（50~200 → 0~30分）
+            const bbScore = Math.min(30, Math.max(0, (bullBearRatio - 50) * 0.2));
+
+            const score = Math.round(rateScore + volScore + bbScore);
+
+            // 生成一句话理由
+            let reason = "";
+            if (recentRate > histRate + 5) {
+              reason += `近30日涨天率${recentRate}%，高于历史均值${histRate}%，近期偏强。`;
+            } else if (recentRate < histRate - 5) {
+              reason += `近30日涨天率${recentRate}%，低于历史均值${histRate}%，近期偏弱。`;
+            } else {
+              reason += `近30日涨天率${recentRate}%，与历史均值${histRate}%接近，走势中性。`;
+            }
+            if (volRatio >= 1.5) {
+              reason += `量能明显放大（量比${volRatio.toFixed(1)}x），资金活跃。`;
+            } else if (volRatio <= 0.7) {
+              reason += `量能明显萎缩（量比${volRatio.toFixed(1)}x），市场观望。`;
+            }
+            if (bullBearRatio >= 150) {
+              reason += `近10日强阳明显多于强阴，买方力量占优。`;
+            } else if (bullBearRatio <= 60) {
+              reason += `近10日强阴明显多于强阳，卖方压力较大。`;
+            }
+
+            return {
+              code: r.code,
+              name: r.name,
+              score,
+              reason,
+              stats: [
+                { label: "历史涨天率", value: `${histRate}%`, color: histRate >= 50 ? "#C62828" : "#388E3C" },
+                { label: "近30日涨天率", value: `${recentRate}%`, color: recentRate >= 50 ? "#C62828" : "#388E3C" },
+                { label: "量比均值", value: `${volRatio.toFixed(1)}x`, color: volRatio >= 1.5 ? "#C62828" : volRatio <= 0.7 ? "#388E3C" : "#666" },
+              ],
+            };
+          });
+
+        // 按 tab 排序
+        let result = scored;
+        if (input.tab === "hot") {
+          result = scored.sort((a, b) => b.score - a.score).slice(0, 30);
+        } else if (input.tab === "rising") {
+          result = scored.filter(s => s.score >= 55).sort((a, b) => b.score - a.score).slice(0, 30);
+        } else {
+          result = scored.filter(s => s.score <= 40).sort((a, b) => a.score - b.score).slice(0, 30);
+        }
+
+        return { stocks: result };
+      } finally {
+        // 不关闭共享连接池
+      }
+    }),
 });;
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({

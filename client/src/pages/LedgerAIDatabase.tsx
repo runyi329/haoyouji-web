@@ -1238,6 +1238,18 @@ export default function LedgerAIDatabase() {
           <p className="font-bold text-lg">A股追踪</p>
         </div>
         <button
+          onClick={() => setLocation(`/ledger/${ledgerId}/retail-investor`)}
+          className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-bold"
+          style={{
+            backgroundColor: "#FFD600",
+            color: "#B71C1C",
+            border: "none",
+            minWidth: "52px",
+          }}
+        >
+          散户入口
+        </button>
+        <button
           onClick={() => setLocation(`/ledger/${ledgerId}/stock-lifecycle`)}
           className="flex items-center justify-center px-3 h-7 rounded-full text-sm font-medium"
           style={{
