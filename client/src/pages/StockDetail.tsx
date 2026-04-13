@@ -173,18 +173,14 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
   const maxStreak = Math.max(maxUpStreak, maxDownStreak);
 
   // 格子放大以内嵌数字
-  const CELL = 28;
+  const CELL = 21; // 28px 缩小 25% = 21px
   const GAP = 1;
-  const maxRows = Math.max(...columns.map(c => c.length), 1);
-  const totalH = maxRows * (CELL + GAP);
+  const FIXED_ROWS = 6; // 固定6行，类似百家乐大路图
+  const totalH = FIXED_ROWS * (CELL + GAP);
 
   return (
     <div style={{ background: CARD, paddingBottom: 12 }}>
-      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
-        <span className="text-xs font-semibold" style={{ color: MUTED }}>珠路图</span>
-        <span className="text-xs" style={{ color: MUTED }}>涨跌幅越大色越深 · 每{STEP}%一档</span>
-      </div>
-      <div className="px-2 overflow-x-auto">
+      <div className="px-2 overflow-x-auto" style={{ paddingTop: 8 }}>
         <div
           style={{
             display: "flex",
@@ -206,6 +202,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
                 flexShrink: 0,
               }}
             >
+              {/* 实际数据格子 */}
               {col.map((cell, ri) => {
                 const { bg, fg, label } = getColorAndText(cell.pct);
                 return (
@@ -215,7 +212,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
                     style={{
                       width: CELL,
                       height: CELL,
-                      borderRadius: 3,
+                      borderRadius: 2,
                       background: bg,
                       flexShrink: 0,
                       display: "flex",
@@ -232,6 +229,20 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
                   </div>
                 );
               })}
+              {/* 补充空白格子，确保每列总是6行，显示边框 */}
+              {Array.from({ length: Math.max(0, FIXED_ROWS - col.length) }).map((_, ei) => (
+                <div
+                  key={`empty-${ei}`}
+                  style={{
+                    width: CELL,
+                    height: CELL,
+                    borderRadius: 2,
+                    background: "transparent",
+                    border: "1px solid #E0E0E0",
+                    flexShrink: 0,
+                  }}
+                />
+              ))}
             </div>
           ))}
         </div>
@@ -250,9 +261,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
             <div key={i} style={{ width: 14, height: 14, borderRadius: 2, background: c }} title={LABELS[i]} />
           ))}
         </div>
-        <div className="text-xs mt-0.5" style={{ color: MUTED }}>
-          每{STEP}%一档，共6档（最大涨跌幅{maxAbs.toFixed(1)}%）
-        </div>
+
       </div>
 
       {/* 连涨/连跌统计列表 */}
