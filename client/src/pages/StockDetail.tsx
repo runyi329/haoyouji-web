@@ -55,7 +55,7 @@ function shortDate(dateStr: string): string {
   return dateStr;
 }
 
-// ─── 珠盘路组件（方格横排 + 近期/历史对比）────────────────────
+// ─── 珠盘路组件（统计数字主体 + 弹出框明细）────────────────────
 function ZhuPanLu({
   items,
   lifetimeUpRate,
@@ -72,6 +72,7 @@ function ZhuPanLu({
   lifetimeTotalDays: number;
 }) {
   const [tab, setTab] = useState<30 | 60 | 90 | 180>(60);
+  const [showDetail, setShowDetail] = useState(false);
 
   const displayed = items.slice(-tab);
   const upItems = displayed.filter(d => d.pct > 0);
@@ -80,10 +81,7 @@ function ZhuPanLu({
 
   const recentUpRate = displayed.length > 0 ? (upItems.length / displayed.length) * 100 : 0;
   const recentDownRate = displayed.length > 0 ? (downItems.length / displayed.length) * 100 : 0;
-  const recentFlatRate = displayed.length > 0 ? (flatItems.length / displayed.length) * 100 : 0;
   const deviation = recentUpRate - lifetimeUpRate;
-
-  // 偏离状态
   const deviationAbs = Math.abs(deviation);
   const deviationColor = deviationAbs < 3 ? MUTED : deviation < 0 ? GREEN_A : RED;
   const deviationLabel =
@@ -93,270 +91,202 @@ function ZhuPanLu({
       ? `近期偏空 ${deviationAbs.toFixed(1)}%`
       : `近期偏多 ${deviationAbs.toFixed(1)}%`;
 
-  // 渲染方格行
-  const renderRow = (
-    list: { tradeDate: string; pct: number }[],
-    isUp: boolean,
-    label: string,
-    count: number
-  ) => {
-    const color = isUp ? RED : GREEN_A;
-    const bgFill = isUp ? "#FFF0F0" : "#F0FFF4";
-    const bgEmpty = isUp ? "#FFF8F8" : "#F8FFF8";
-    return (
-      <div className="mb-3">
-        {/* 行标题 */}
-        <div className="flex items-center gap-2 mb-1.5">
-          <span
-            className="text-xs font-bold px-2 py-0.5 rounded-full"
-            style={{ background: color, color: "#fff", letterSpacing: 1 }}
-          >
-            {label}
-          </span>
-          <span className="text-sm font-bold" style={{ color }}>
-            {count} 天
-          </span>
-          <span className="text-xs" style={{ color: MUTED }}>
-            ({((count / (displayed.length || 1)) * 100).toFixed(1)}%)
-          </span>
-        </div>
-        {/* 方格横排，每行10格，无间隙 */}
-        {list.length === 0 ? (
-          <div
-            className="flex items-center justify-center rounded"
-            style={{
-              width: 32, height: 22,
-              background: bgEmpty,
-              border: `1px dashed ${color}`,
-              fontSize: 9, color: MUTED,
-            }}
-          >
-            无
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)' }}>
-            {list.map((d, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-center"
-                style={{
-                  height: 22,
-                  background: bgFill,
-                  border: `0.5px solid ${color}`,
-                  fontSize: 9,
-                  color,
-                  fontWeight: 700,
-                }}
-              >
-                {shortDate(d.tradeDate)}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+  const lifetimeDownRate = lifetimeTotalDays > 0 ? (lifetimeDownDays / lifetimeTotalDays) * 100 : 0;
 
-  // 进度条（双行对比）
-  const CompareBar = ({
-    recentVal,
-    histVal,
-    color,
-    label,
-  }: {
-    recentVal: number;
-    histVal: number;
-    color: string;
-    label: string;
-  }) => (
-    <div className="mb-2">
-      <div className="flex items-center justify-between mb-0.5">
-        <span className="text-xs" style={{ color: MUTED }}>{label}</span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold" style={{ color }}>近{tab}天 {recentVal.toFixed(1)}%</span>
-          <span className="text-xs" style={{ color: MUTED }}>历史 {histVal.toFixed(1)}%</span>
-        </div>
-      </div>
-      <div className="relative h-3 rounded-full overflow-hidden" style={{ background: "#F0F0F0" }}>
-        {/* 历史基准（半透明底色） */}
-        <div
-          className="absolute top-0 left-0 h-full rounded-full"
-          style={{ width: `${Math.max(histVal, 1)}%`, background: `${color}33` }}
-        />
-        {/* 近期实际 */}
-        <div
-          className="absolute top-0 left-0 h-full rounded-full"
-          style={{ width: `${Math.max(recentVal, 1)}%`, background: color }}
-        />
-        {/* 历史基准刻度线 */}
-        <div
-          className="absolute top-0 h-full"
-          style={{
-            left: `${Math.max(histVal, 1)}%`,
-            width: 2,
-            background: "#fff",
-            opacity: 0.9,
-          }}
-        />
-      </div>
+  // 进度条
+  const Bar = ({ val, hist, color }: { val: number; hist: number; color: string }) => (
+    <div className="relative h-2.5 rounded-full overflow-hidden" style={{ background: "#F0F0F0" }}>
+      <div className="absolute top-0 left-0 h-full rounded-full" style={{ width: `${Math.max(hist, 1)}%`, background: `${color}33` }} />
+      <div className="absolute top-0 left-0 h-full rounded-full" style={{ width: `${Math.max(val, 1)}%`, background: color }} />
+      <div className="absolute top-0 h-full" style={{ left: `${Math.max(hist, 1)}%`, width: 2, background: "#fff", opacity: 0.85 }} />
     </div>
   );
 
-  const lifetimeDownRate = lifetimeTotalDays > 0 ? (lifetimeDownDays / lifetimeTotalDays) * 100 : 0;
-  const lifetimeFlatRate = lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0;
-
   return (
     <div>
-      {/* Tab 切换 */}
+      {/* ── 顶部：Tab切换 + 报告图标 ── */}
       <div className="flex items-center gap-1.5 mb-4">
         {([30, 60, 90, 180] as const).map(n => (
           <button
             key={n}
             onClick={() => setTab(n)}
             className="px-2.5 py-1 rounded-full text-xs font-medium"
-            style={{
-              background: tab === n ? RED : "#F0F0F0",
-              color: tab === n ? "#fff" : MUTED,
-            }}
+            style={{ background: tab === n ? RED : "#F0F0F0", color: tab === n ? "#fff" : MUTED }}
           >
             {n}天
           </button>
         ))}
+        <button
+          onClick={() => setShowDetail(true)}
+          className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+          style={{ background: "#F0F0F0", color: MUTED }}
+          title="查看每日明细"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          明细
+        </button>
       </div>
 
-      {/* 涨天方格行 */}
-      {renderRow(upItems, true, "涨", upItems.length)}
-
-      {/* 跌天方格行 */}
-      {renderRow(downItems, false, "跌", downItems.length)}
-
-      {/* 平天（若有） */}
-      {flatItems.length > 0 && (
-        <div className="mb-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span
-              className="text-xs font-bold px-2 py-0.5 rounded-full"
-              style={{ background: "#9E9E9E", color: "#fff", letterSpacing: 1 }}
-            >
-              平
-            </span>
-            <span className="text-sm font-bold" style={{ color: MUTED }}>
-              {flatItems.length} 天
-            </span>
+      {/* ── 近期统计主体 ── */}
+      <div className="rounded-xl p-3 mb-2" style={{ background: "#FFF8F2", border: `1px solid #F5E0C8` }}>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs font-semibold" style={{ color: RED }}>近{tab}天（{displayed.length}个交易日）</span>
+        </div>
+        {/* 大数字展示 */}
+        <div className="grid grid-cols-3 gap-2 text-center mb-3">
+          <div className="rounded-xl py-3" style={{ background: "#FFF0F0" }}>
+            <div className="text-2xl font-bold" style={{ color: RED }}>{upItems.length}</div>
+            <div className="text-xs mt-0.5" style={{ color: MUTED }}>涨天</div>
+            <div className="text-sm font-semibold mt-0.5" style={{ color: RED }}>{recentUpRate.toFixed(1)}%</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)' }}>
-            {flatItems.map((d, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-center"
-                style={{
-                  height: 22,
-                  background: "#F5F5F5",
-                  border: "0.5px solid #BDBDBD",
-                  fontSize: 9, color: MUTED, fontWeight: 700,
-                }}
-              >
-                {shortDate(d.tradeDate)}
-              </div>
-            ))}
+          <div className="rounded-xl py-3" style={{ background: "#F0FFF4" }}>
+            <div className="text-2xl font-bold" style={{ color: GREEN_A }}>{downItems.length}</div>
+            <div className="text-xs mt-0.5" style={{ color: MUTED }}>跌天</div>
+            <div className="text-sm font-semibold mt-0.5" style={{ color: GREEN_A }}>{recentDownRate.toFixed(1)}%</div>
+          </div>
+          <div className="rounded-xl py-3" style={{ background: "#F5F5F5" }}>
+            <div className="text-2xl font-bold" style={{ color: MUTED }}>{flatItems.length}</div>
+            <div className="text-xs mt-0.5" style={{ color: MUTED }}>平天</div>
+            <div className="text-sm font-semibold mt-0.5" style={{ color: MUTED }}>-</div>
           </div>
         </div>
-      )}
-
-      {/* 分隔线 */}
-      <div className="my-3" style={{ borderTop: `1px dashed ${BORDER}` }} />
-
-      {/* 近期小结 */}
-      <div
-        className="rounded-xl p-3 mb-2"
-        style={{ background: "#FFF8F2", border: `1px solid #F5E0C8` }}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-semibold" style={{ color: RED }}>近{tab}天小结</span>
-          <span className="text-xs" style={{ color: MUTED }}>
-            {displayed.length} 个交易日
-          </span>
-        </div>
-        <div className="grid grid-cols-3 gap-2 text-center mb-2">
-          <div className="rounded-lg py-1.5" style={{ background: "#FFF0F0" }}>
-            <div className="text-base font-bold" style={{ color: RED }}>{upItems.length}</div>
-            <div className="text-xs" style={{ color: MUTED }}>涨天</div>
+        {/* 进度条：近期 vs 历史 */}
+        <div className="space-y-2">
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span style={{ color: MUTED }}>涨天率</span>
+              <span style={{ color: RED }}>{recentUpRate.toFixed(1)}% <span style={{ color: MUTED }}>vs 历史 {lifetimeUpRate.toFixed(1)}%</span></span>
+            </div>
+            <Bar val={recentUpRate} hist={lifetimeUpRate} color={RED} />
           </div>
-          <div className="rounded-lg py-1.5" style={{ background: "#F0FFF4" }}>
-            <div className="text-base font-bold" style={{ color: GREEN_A }}>{downItems.length}</div>
-            <div className="text-xs" style={{ color: MUTED }}>跌天</div>
-          </div>
-          <div className="rounded-lg py-1.5" style={{ background: "#F5F5F5" }}>
-            <div className="text-base font-bold" style={{ color: MUTED }}>{flatItems.length}</div>
-            <div className="text-xs" style={{ color: MUTED }}>平天</div>
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span style={{ color: MUTED }}>跌天率</span>
+              <span style={{ color: GREEN_A }}>{recentDownRate.toFixed(1)}% <span style={{ color: MUTED }}>vs 历史 {lifetimeDownRate.toFixed(1)}%</span></span>
+            </div>
+            <Bar val={recentDownRate} hist={lifetimeDownRate} color={GREEN_A} />
           </div>
         </div>
-        {/* 进度条对比（近期 vs 历史） */}
-        <CompareBar recentVal={recentUpRate} histVal={lifetimeUpRate} color={RED} label="涨天率" />
-        <CompareBar recentVal={recentDownRate} histVal={lifetimeDownRate} color={GREEN_A} label="跌天率" />
       </div>
 
-      {/* 全生命周期小结（与近期小结对齐） */}
-      <div
-        className="rounded-xl p-3 mb-2"
-        style={{ background: "#F5F0FF", border: `1px solid #DDD0F0` }}
-      >
+      {/* ── 全生命周期 ── */}
+      <div className="rounded-xl p-3 mb-2" style={{ background: "#F5F0FF", border: `1px solid #DDD0F0` }}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold" style={{ color: "#7B1FA2" }}>全生命周期</span>
-          <span className="text-xs" style={{ color: MUTED }}>
-            {lifetimeTotalDays} 个交易日
-          </span>
+          <span className="text-xs" style={{ color: MUTED }}>{lifetimeTotalDays} 个交易日</span>
         </div>
         <div className="grid grid-cols-4 gap-2 text-center">
-          <div className="rounded-lg py-1.5" style={{ background: "#FFF0F0" }}>
-            <div className="text-base font-bold" style={{ color: RED }}>{lifetimeUpDays}</div>
-            <div className="text-xs" style={{ color: MUTED }}>涨天</div>
-          </div>
-          <div className="rounded-lg py-1.5" style={{ background: "#F0FFF4" }}>
-            <div className="text-base font-bold" style={{ color: GREEN_A }}>{lifetimeDownDays}</div>
-            <div className="text-xs" style={{ color: MUTED }}>跌天</div>
-          </div>
-          <div className="rounded-lg py-1.5" style={{ background: "#F5F5F5" }}>
-            <div className="text-base font-bold" style={{ color: MUTED }}>{lifetimeFlatDays}</div>
-            <div className="text-xs" style={{ color: MUTED }}>平天</div>
-          </div>
-          <div className="rounded-lg py-1.5" style={{ background: "#EEE8FF" }}>
-            <div className="text-base font-bold" style={{ color: "#7B1FA2" }}>{lifetimeTotalDays}</div>
-            <div className="text-xs" style={{ color: MUTED }}>总天</div>
-          </div>
+          {[
+            { label: "涨天", val: lifetimeUpDays, rate: lifetimeUpRate, color: RED, bg: "#FFF0F0" },
+            { label: "跌天", val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A, bg: "#F0FFF4" },
+            { label: "平天", val: lifetimeFlatDays, rate: lifetimeTotalDays > 0 ? (lifetimeFlatDays / lifetimeTotalDays) * 100 : 0, color: MUTED, bg: "#F5F5F5" },
+            { label: "总天", val: lifetimeTotalDays, rate: 100, color: "#7B1FA2", bg: "#EEE8FF" },
+          ].map((item, i) => (
+            <div key={i} className="rounded-lg py-2" style={{ background: item.bg }}>
+              <div className="text-base font-bold" style={{ color: item.color }}>{item.val}</div>
+              <div className="text-xs" style={{ color: MUTED }}>{item.label}</div>
+              {i < 3 && <div className="text-xs font-medium" style={{ color: item.color }}>{item.rate.toFixed(1)}%</div>}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* 偏离值指示器 */}
+      {/* ── 偏离值 ── */}
       <div
         className="rounded-xl p-3"
-        style={{
-          background: deviationAbs < 3 ? "#F8F8F8" : deviation < 0 ? "#F0FFF4" : "#FFF5F5",
-          border: `1.5px solid ${deviationColor}`,
-        }}
+        style={{ background: deviationAbs < 3 ? "#F8F8F8" : deviation < 0 ? "#F0FFF4" : "#FFF5F5", border: `1.5px solid ${deviationColor}` }}
       >
         <div className="flex items-center justify-between">
           <div>
             <div className="text-xs" style={{ color: MUTED }}>偏离值（近{tab}天 vs 历史）</div>
-            <div className="text-lg font-bold mt-0.5" style={{ color: deviationColor }}>
+            <div className="text-2xl font-bold mt-0.5" style={{ color: deviationColor }}>
               {deviation >= 0 ? "+" : ""}{deviation.toFixed(1)}%
             </div>
           </div>
-          <div
-            className="px-3 py-1.5 rounded-full text-xs font-semibold"
-            style={{ background: deviationColor, color: "#fff" }}
-          >
+          <div className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: deviationColor, color: "#fff" }}>
             {deviationLabel}
           </div>
         </div>
         {deviationAbs >= 3 && (
           <div className="mt-1.5 text-xs" style={{ color: deviationColor }}>
-            {deviation < 0
-              ? `近期跌天偏多，历史均值回归信号，可关注反弹机会`
-              : `近期涨天偏多，注意高位风险，可关注回调压力`}
+            {deviation < 0 ? "近期跌天偏多，历史均值回归信号，可关注反弹机会" : "近期涨天偏多，注意高位风险，可关注回调压力"}
           </div>
         )}
       </div>
+
+      {/* ── 每日明细弹出框 ── */}
+      {showDetail && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.45)" }}
+          onClick={() => setShowDetail(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-t-2xl overflow-hidden"
+            style={{ background: CARD, maxHeight: "80vh" }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 弹出框标题栏 */}
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <span className="text-sm font-semibold" style={{ color: TEXT }}>近{tab}天每日涨跌明细</span>
+              <button onClick={() => setShowDetail(false)} style={{ color: MUTED, fontSize: 20, lineHeight: 1 }}>×</button>
+            </div>
+            {/* 汇总行 */}
+            <div className="flex items-center gap-3 px-4 py-2" style={{ background: "#FFF8F2", borderBottom: `1px solid ${BORDER}` }}>
+              <span className="text-xs" style={{ color: MUTED }}>共 {displayed.length} 个交易日</span>
+              <span className="text-xs font-semibold" style={{ color: RED }}>涨 {upItems.length} 天（{recentUpRate.toFixed(1)}%）</span>
+              <span className="text-xs font-semibold" style={{ color: GREEN_A }}>跌 {downItems.length} 天（{recentDownRate.toFixed(1)}%）</span>
+              {flatItems.length > 0 && <span className="text-xs" style={{ color: MUTED }}>平 {flatItems.length} 天</span>}
+            </div>
+            {/* 明细列表 */}
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(80vh - 100px)" }}>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: "#F8F8F8", borderBottom: `1px solid ${BORDER}` }}>
+                    <th className="text-left px-4 py-2" style={{ color: MUTED, fontWeight: 500 }}>日期</th>
+                    <th className="text-right px-4 py-2" style={{ color: MUTED, fontWeight: 500 }}>涨跌幅</th>
+                    <th className="text-right px-4 py-2" style={{ color: MUTED, fontWeight: 500 }}>结果</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...displayed].reverse().map((d, i) => {
+                    const isUp = d.pct > 0;
+                    const isDown = d.pct < 0;
+                    const rowColor = isUp ? RED : isDown ? GREEN_A : MUTED;
+                    const rowBg = i % 2 === 0 ? "#FFFFFF" : "#FAFAFA";
+                    return (
+                      <tr key={i} style={{ background: rowBg, borderBottom: `1px solid #F0F0F0` }}>
+                        <td className="px-4 py-2" style={{ color: TEXT }}>
+                          {d.tradeDate.length === 8
+                            ? `${d.tradeDate.slice(0, 4)}-${d.tradeDate.slice(4, 6)}-${d.tradeDate.slice(6, 8)}`
+                            : d.tradeDate}
+                        </td>
+                        <td className="px-4 py-2 text-right font-semibold" style={{ color: rowColor }}>
+                          {d.pct > 0 ? "+" : ""}{d.pct.toFixed(2)}%
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <span
+                            className="px-1.5 py-0.5 rounded text-xs font-bold"
+                            style={{ background: isUp ? "#FFF0F0" : isDown ? "#F0FFF4" : "#F5F5F5", color: rowColor }}
+                          >
+                            {isUp ? "涨" : isDown ? "跌" : "平"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
