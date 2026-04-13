@@ -17075,35 +17075,32 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const TUSHARE_URL = 'http://api.tushare.pro';
 
       try {
-        // 1. 调 Tushare stock_basic 拉取基本信息（先查上市，再查退市）
+        // 1. 调 Tushare stock_basic 拉取基本信息（不传 list_status，直接用 ts_code 查）
         let basicInfo: { tsCode: string; name: string; listStatus: string; listDate: string | null; delistDate: string | null; exchange: string; industry: string | null } | null = null;
-        for (const status of ['L', 'D', 'P']) {
-          const resp = await fetch(TUSHARE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              api_name: 'stock_basic',
-              token: TUSHARE_TOKEN,
-              params: { ts_code: input.tsCode, list_status: status },
-              fields: 'ts_code,name,list_status,list_date,delist_date,exchange,industry',
-            }),
-            signal: AbortSignal.timeout(10000),
-          });
-          const json = await resp.json() as any;
-          if (json.code === 0 && json.data?.items?.length) {
-            const fields: string[] = json.data.fields;
-            const row = json.data.items[0];
-            basicInfo = {
-              tsCode: String(row[fields.indexOf('ts_code')]),
-              name: String(row[fields.indexOf('name')]),
-              listStatus: String(row[fields.indexOf('list_status')] || status),
-              listDate: row[fields.indexOf('list_date')] ? String(row[fields.indexOf('list_date')]) : null,
-              delistDate: row[fields.indexOf('delist_date')] ? String(row[fields.indexOf('delist_date')]) : null,
-              exchange: String(row[fields.indexOf('exchange')] || ''),
-              industry: row[fields.indexOf('industry')] ? String(row[fields.indexOf('industry')]) : null,
-            };
-            break;
-          }
+        const resp = await fetch(TUSHARE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_name: 'stock_basic',
+            token: TUSHARE_TOKEN,
+            params: { ts_code: input.tsCode },
+            fields: 'ts_code,name,list_status,list_date,delist_date,exchange,industry',
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const json = await resp.json() as any;
+        if (json.code === 0 && json.data?.items?.length) {
+          const fields: string[] = json.data.fields;
+          const row = json.data.items[0];
+          basicInfo = {
+            tsCode: String(row[fields.indexOf('ts_code')]),
+            name: String(row[fields.indexOf('name')]),
+            listStatus: String(row[fields.indexOf('list_status')] || 'L'),
+            listDate: row[fields.indexOf('list_date')] ? String(row[fields.indexOf('list_date')]) : null,
+            delistDate: row[fields.indexOf('delist_date')] ? String(row[fields.indexOf('delist_date')]) : null,
+            exchange: String(row[fields.indexOf('exchange')] || ''),
+            industry: row[fields.indexOf('industry')] ? String(row[fields.indexOf('industry')]) : null,
+          };
         }
 
         if (!basicInfo) {
