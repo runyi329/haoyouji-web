@@ -114,6 +114,7 @@ function ZhuLuScrollArea({
   const scrollRef = useRef<HTMLDivElement>(null);
   // 右侧空白列数：初始默认 4 列，第一帧根据容器宽度计算实际列数
   const [emptyCols, setEmptyCols] = useState(4);
+  const [showProbDetail, setShowProbDetail] = useState(false);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
@@ -131,7 +132,7 @@ function ZhuLuScrollArea({
     return () => cancelAnimationFrame(raf);
   }, [columns.length, CELL, GAP]);
 
-  return (
+  return (<>
     <div
       ref={scrollRef}
       className="px-2 overflow-x-auto"
@@ -218,36 +219,38 @@ function ZhuLuScrollArea({
             >
               {Array.from({ length: FIXED_ROWS }).map((_, ri) => {
                 if (isProb && nextDayProb) {
-                  // 第1格：涨的概率（红色底，金黄边框）
+                  // 第1格：涨的概率（金黄底，可点击）
                   if (ri === 0) return (
-                    <div key={ri} title={`历史涨概率（共${nextDayProb.total}次）`} style={{
+                    <div key={ri} onClick={() => setShowProbDetail(true)} style={{
                       width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
                       background: "#FFF3CD", border: "1.5px solid #F59E0B",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
+                      cursor: "pointer",
                     }}>
                       涨{nextDayProb.upPct}%
                     </div>
                   );
-                  // 第2格：跌的概率
+                  // 第2格：跌的概率（可点击）
                   if (ri === 1) return (
-                    <div key={ri} title={`历史跌概率（共${nextDayProb.total}次）`} style={{
+                    <div key={ri} onClick={() => setShowProbDetail(true)} style={{
                       width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
                       background: "#FFF3CD", border: "1.5px solid #F59E0B",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
+                      cursor: "pointer",
                     }}>
                       跌{nextDayProb.downPct}%
                     </div>
                   );
-                  // 第3格：当前状态说明（连涨/连跌 N 天）
+                  // 第3格：当前状态说明（连涨/连跌 N 天，可点击）
                   if (ri === 2) return (
-                    <div key={ri} title={`当前已连${nextDayProb.curDir === 'up' ? '涨' : '跌'}${nextDayProb.curLen}天`} style={{
+                    <div key={ri} onClick={() => setShowProbDetail(true)} style={{
                       width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
                       background: "#FFFBEB", border: "1px dashed #F59E0B",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 6, fontWeight: 600, color: "#92400E", lineHeight: 1,
-                      textAlign: "center",
+                      textAlign: "center", cursor: "pointer",
                     }}>
                       {nextDayProb.curDir === 'up' ? '连涨' : '连跌'}{nextDayProb.curLen}天
                     </div>
@@ -268,7 +271,102 @@ function ZhuLuScrollArea({
         })}
       </div>
     </div>
-  );
+
+    {/* 条件概率详情弹出框 */}
+    {showProbDetail && nextDayProb && (
+      <div
+        style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "flex-end", justifyContent: "center",
+        }}
+        onClick={() => setShowProbDetail(false)}
+      >
+        <div
+          style={{
+            background: "#fff", borderRadius: "16px 16px 0 0",
+            padding: "20px 20px 32px", width: "100%", maxWidth: 480,
+            boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* 标题 */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a1a" }}>次日涨跌历史统计概率</div>
+            <div onClick={() => setShowProbDetail(false)} style={{ fontSize: 20, color: "#999", cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</div>
+          </div>
+
+          {/* 当前状态 */}
+          <div style={{
+            background: "#FFFBEB", border: "1px solid #F59E0B", borderRadius: 8,
+            padding: "10px 14px", marginBottom: 16,
+          }}>
+            <div style={{ fontSize: 13, color: "#92400E", fontWeight: 600 }}>
+              当前已连{nextDayProb.curDir === 'up' ? '涨' : '跌'} {nextDayProb.curLen} 天
+            </div>
+            <div style={{ fontSize: 12, color: "#B45309", marginTop: 4 }}>
+              基于全量历史数据，统计在同样情况下（连{nextDayProb.curDir === 'up' ? '涨' : '跌'} {nextDayProb.curLen} 天后），
+              下一个交易日的涨跌分布。
+            </div>
+          </div>
+
+          {/* 计算公式说明 */}
+          <div style={{ fontSize: 12, color: "#666", marginBottom: 14, lineHeight: 1.7 }}>
+            <span style={{ fontWeight: 600, color: "#333" }}>统计方法：</span>
+            遍历全量历史日线数据，找出所有「连续{nextDayProb.curDir === 'up' ? '上涨' : '下跌'} {nextDayProb.curLen} 天」的时间节点，
+            记录其后一个交易日的涨跌情况，汇总得出概率分布。
+          </div>
+
+          {/* 概率条形图 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+            {/* 涨 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: "#C62828", flexShrink: 0 }}>涨</div>
+              <div style={{ flex: 1, background: "#F5F5F5", borderRadius: 4, height: 20, overflow: "hidden" }}>
+                <div style={{ width: `${nextDayProb.upPct}%`, height: "100%", background: "#EF5350", borderRadius: 4, transition: "width 0.4s" }} />
+              </div>
+              <div style={{ width: 40, fontSize: 13, fontWeight: 700, color: "#C62828", textAlign: "right", flexShrink: 0 }}>{nextDayProb.upPct}%</div>
+            </div>
+            {/* 平 */}
+            {nextDayProb.flatPct > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: "#888", flexShrink: 0 }}>平</div>
+                <div style={{ flex: 1, background: "#F5F5F5", borderRadius: 4, height: 20, overflow: "hidden" }}>
+                  <div style={{ width: `${nextDayProb.flatPct}%`, height: "100%", background: "#BDBDBD", borderRadius: 4, transition: "width 0.4s" }} />
+                </div>
+                <div style={{ width: 40, fontSize: 13, fontWeight: 700, color: "#888", textAlign: "right", flexShrink: 0 }}>{nextDayProb.flatPct}%</div>
+              </div>
+            )}
+            {/* 跌 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 28, fontSize: 12, fontWeight: 600, color: "#2E7D32", flexShrink: 0 }}>跌</div>
+              <div style={{ flex: 1, background: "#F5F5F5", borderRadius: 4, height: 20, overflow: "hidden" }}>
+                <div style={{ width: `${nextDayProb.downPct}%`, height: "100%", background: "#43A047", borderRadius: 4, transition: "width 0.4s" }} />
+              </div>
+              <div style={{ width: 40, fontSize: 13, fontWeight: 700, color: "#2E7D32", textAlign: "right", flexShrink: 0 }}>{nextDayProb.downPct}%</div>
+            </div>
+          </div>
+
+          {/* 样本数量 */}
+          <div style={{
+            background: "#F8F8F8", borderRadius: 8, padding: "10px 14px",
+            fontSize: 12, color: "#666", lineHeight: 1.8,
+          }}>
+            <div><span style={{ color: "#333", fontWeight: 600 }}>样本数量：</span>{nextDayProb.total} 次</div>
+            <div><span style={{ color: "#333", fontWeight: 600 }}>计算公式：</span></div>
+            <div style={{ fontFamily: "monospace", background: "#EFEFEF", borderRadius: 4, padding: "6px 10px", marginTop: 4, fontSize: 11, color: "#444", lineHeight: 1.9 }}>
+              P(涨) = 连{nextDayProb.curDir === 'up' ? '涨' : '跌'}{nextDayProb.curLen}天后次日上涨次数 ÷ 样本总数<br/>
+              P(跌) = 连{nextDayProb.curDir === 'up' ? '涨' : '跌'}{nextDayProb.curLen}天后次日下跌次数 ÷ 样本总数<br/>
+              P(平) = 连{nextDayProb.curDir === 'up' ? '涨' : '跌'}{nextDayProb.curLen}天后次日平盘次数 ÷ 样本总数
+            </div>
+            <div style={{ marginTop: 8, color: "#999", fontSize: 11 }}>
+              ⚠️ 本统计仅反映历史规律，不构成投资建议，市场存在不确定性。
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </>);
 }
 
 // ─── 珠路图组件（百家乐大路风格）────────────────────────────
