@@ -105,7 +105,7 @@ function ZhuPanLu({
   return (
     <div>
       {/* ── 顶部：Tab切换 + 报告图标 ── */}
-      <div className="flex items-center gap-1.5 mb-4">
+      <div className="flex items-center gap-1.5 px-4 mb-3">
         {([30, 60, 90, 180] as const).map(n => (
           <button
             key={n}
@@ -135,7 +135,7 @@ function ZhuPanLu({
 
       {/* ── 统计对比区：上行近期 / 下行全生命周期，4格完全对齐 ── */}
       {/* 列标题 */}
-      <div className="grid grid-cols-4 gap-1.5 text-center mb-1 px-0.5">
+      <div className="grid grid-cols-4 gap-1.5 text-center mb-1 px-4">
         {[
           { label: "涨天", color: RED },
           { label: "跌天", color: GREEN_A },
@@ -147,7 +147,7 @@ function ZhuPanLu({
       </div>
 
       {/* 近期行 */}
-      <div className="rounded-xl p-3 mb-1.5" style={{ background: "#FFF8F2", border: `1px solid #F5E0C8` }}>
+      <div className="p-4 pb-3" style={{ background: "#FFF8F2" }}>
         <div className="text-xs font-semibold mb-2" style={{ color: RED }}>近{tab}天（{displayed.length}个交易日）</div>
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {[
@@ -183,8 +183,10 @@ function ZhuPanLu({
         </div>
       </div>
 
+      {/* 间隙 */}
+      <div style={{ height: 8, background: BG }} />
       {/* 全生命周期行 */}
-      <div className="rounded-xl p-3 mb-2" style={{ background: "#F5F0FF", border: `1px solid #DDD0F0` }}>
+      <div className="p-4 pb-3" style={{ background: "#F5F0FF" }}>
         <div className="text-xs font-semibold mb-2" style={{ color: "#7B1FA2" }}>全生命周期（{lifetimeTotalDays}个交易日）</div>
         <div className="grid grid-cols-4 gap-1.5 text-center">
           {[
@@ -203,10 +205,12 @@ function ZhuPanLu({
         </div>
       </div>
 
+      {/* 间隙 */}
+      <div style={{ height: 8, background: BG }} />
       {/* ── 偏离值 ── */}
       <div
-        className="rounded-xl p-3"
-        style={{ background: deviationAbs < 3 ? "#F8F8F8" : deviation < 0 ? "#F0FFF4" : "#FFF5F5", border: `1.5px solid ${deviationColor}` }}
+        className="p-4"
+        style={{ background: deviationAbs < 3 ? "#F8F8F8" : deviation < 0 ? "#F0FFF4" : "#FFF5F5" }}
       >
         <div className="flex items-center justify-between">
           <div>
@@ -225,6 +229,9 @@ function ZhuPanLu({
           </div>
         )}
       </div>
+
+      {/* 底部收尾 */}
+      <div className="pb-4" style={{ background: CARD }} />
 
       {/* ── 每日明细弹出框 ── */}
       {showDetail && (
@@ -445,8 +452,8 @@ export default function StockDetail() {
         </div>
 
         {/* ── 珠盘路卡片 ── */}
-        <div className="mx-4 mt-3 rounded-xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
-          <div className="mb-1">
+        <div className="mt-3" style={{ background: CARD }}>
+          <div className="px-4 pt-4 pb-1">
             <div className="text-xs font-semibold" style={{ color: RED }}>珠盘路</div>
           </div>
           {dailyLoading ? (
@@ -468,6 +475,7 @@ export default function StockDetail() {
             </div>
           )}
         </div>
+        <div style={{ height: 8, background: BG }} />
 
         {/* 七条路预告卡片 */}
         <div className="mx-4 mt-3 rounded-xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
