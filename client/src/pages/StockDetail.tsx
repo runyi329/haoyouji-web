@@ -57,6 +57,43 @@ function shortDate(dateStr: string): string {
 
 // ─── 珠路图滚动区域子组件（默认右对齐，右边留1/3空白）────────────
 
+// 计算条件概率：给定当前连涨/连跌方向和天数，统计全量历史中下一天涨/跌/平的概率
+function calcNextDayProb(
+  allSorted: { pct: number }[],
+  curDir: 'up' | 'down',
+  curLen: number
+): { upPct: number; downPct: number; flatPct: number; total: number } {
+  let upCnt = 0, downCnt = 0, flatCnt = 0;
+  // 遍历历史，找所有「连续 curDir 方向 curLen 天」后的下一天
+  let streak = 0;
+  let dir: 'up' | 'down' | null = null;
+  for (let i = 0; i < allSorted.length; i++) {
+    const d = allSorted[i].pct > 0 ? 'up' : allSorted[i].pct < 0 ? 'down' : null;
+    if (d === null) { streak = 0; dir = null; continue; }
+    if (d === dir) {
+      streak++;
+    } else {
+      streak = 1;
+      dir = d;
+    }
+    // 当前已连续 curDir 方向 curLen 天，看下一天
+    if (dir === curDir && streak === curLen && i + 1 < allSorted.length) {
+      const next = allSorted[i + 1].pct;
+      if (next > 0) upCnt++;
+      else if (next < 0) downCnt++;
+      else flatCnt++;
+    }
+  }
+  const total = upCnt + downCnt + flatCnt;
+  if (total === 0) return { upPct: 0, downPct: 0, flatPct: 0, total: 0 };
+  return {
+    upPct: Math.round((upCnt / total) * 100),
+    downPct: Math.round((downCnt / total) * 100),
+    flatPct: Math.round((flatCnt / total) * 100),
+    total,
+  };
+}
+
 function ZhuLuScrollArea({
   columns,
   CELL,
@@ -64,6 +101,7 @@ function ZhuLuScrollArea({
   totalH,
   FIXED_ROWS,
   getColorAndText,
+  nextDayProb,
 }: {
   columns: { pct: number; date: string }[][];
   CELL: number;
@@ -71,6 +109,7 @@ function ZhuLuScrollArea({
   totalH: number;
   FIXED_ROWS: number;
   getColorAndText: (pct: number) => { bg: string; fg: string; label: string };
+  nextDayProb?: { upPct: number; downPct: number; flatPct: number; total: number; curDir: 'up' | 'down'; curLen: number } | null;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   // 右侧空白列数：初始默认 4 列，第一帧根据容器宽度计算实际列数
@@ -163,32 +202,70 @@ function ZhuLuScrollArea({
           </div>
         ))}
         {/* 右侧空白格子列（有边框无数据，给用户“后续还会有新数据”的视觉暗示） */}
-        {Array.from({ length: emptyCols }).map((_, ci) => (
-          <div
-            key={`right-empty-col-${ci}`}
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: GAP,
-              width: CELL,
-              flexShrink: 0,
-            }}
-          >
-            {Array.from({ length: FIXED_ROWS }).map((_, ri) => (
-              <div
-                key={ri}
-                style={{
-                  width: CELL,
-                  height: CELL,
-                  borderRadius: 2,
-                  background: "transparent",
-                  border: "1px solid #E0E0E0",
-                  flexShrink: 0,
-                }}
-              />
-            ))}
-          </div>
-        ))}
+        {Array.from({ length: emptyCols }).map((_, ci) => {
+          // 第一列：显示条件概率（金黄色）
+          const isProb = ci === 0 && nextDayProb && nextDayProb.total > 0;
+          return (
+            <div
+              key={`right-empty-col-${ci}`}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: GAP,
+                width: CELL,
+                flexShrink: 0,
+              }}
+            >
+              {Array.from({ length: FIXED_ROWS }).map((_, ri) => {
+                if (isProb && nextDayProb) {
+                  // 第1格：涨的概率（红色底，金黄边框）
+                  if (ri === 0) return (
+                    <div key={ri} title={`历史涨概率（共${nextDayProb.total}次）`} style={{
+                      width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
+                      background: "#FFF3CD", border: "1.5px solid #F59E0B",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
+                    }}>
+                      涨{nextDayProb.upPct}%
+                    </div>
+                  );
+                  // 第2格：跌的概率
+                  if (ri === 1) return (
+                    <div key={ri} title={`历史跌概率（共${nextDayProb.total}次）`} style={{
+                      width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
+                      background: "#FFF3CD", border: "1.5px solid #F59E0B",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 7, fontWeight: 700, color: "#B45309", lineHeight: 1,
+                    }}>
+                      跌{nextDayProb.downPct}%
+                    </div>
+                  );
+                  // 第3格：当前状态说明（连涨/连跌 N 天）
+                  if (ri === 2) return (
+                    <div key={ri} title={`当前已连${nextDayProb.curDir === 'up' ? '涨' : '跌'}${nextDayProb.curLen}天`} style={{
+                      width: CELL, height: CELL, borderRadius: 2, flexShrink: 0,
+                      background: "#FFFBEB", border: "1px dashed #F59E0B",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 6, fontWeight: 600, color: "#92400E", lineHeight: 1,
+                      textAlign: "center",
+                    }}>
+                      {nextDayProb.curDir === 'up' ? '连涨' : '连跌'}{nextDayProb.curLen}天
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    key={ri}
+                    style={{
+                      width: CELL, height: CELL, borderRadius: 2,
+                      background: "transparent", border: "1px solid #E0E0E0", flexShrink: 0,
+                    }}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -317,6 +394,25 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
   const FIXED_ROWS = 6; // 固定6行，类似百家乐大路图
   const totalH = FIXED_ROWS * (CELL + GAP);
 
+  // 计算当前最后一段连涨/连跌的方向和天数
+  const lastProb = (() => {
+    if (allSorted.length === 0) return null;
+    let curLen = 0;
+    let curDir: 'up' | 'down' | null = null;
+    for (let i = allSorted.length - 1; i >= 0; i--) {
+      const pct = allSorted[i].pct;
+      if (pct === 0) break; // 平盘打断
+      const d = pct > 0 ? 'up' : 'down';
+      if (curDir === null) { curDir = d; curLen = 1; }
+      else if (d === curDir) { curLen++; }
+      else break;
+    }
+    if (!curDir || curLen === 0) return null;
+    const prob = calcNextDayProb(allSorted, curDir, curLen);
+    if (prob.total === 0) return null;
+    return { ...prob, curDir, curLen };
+  })();
+
   return (
     <div style={{ background: CARD, paddingBottom: 12 }}>
       <ZhuLuScrollArea
@@ -326,6 +422,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
         totalH={totalH}
         FIXED_ROWS={FIXED_ROWS}
         getColorAndText={getColorAndText}
+        nextDayProb={lastProb}
       />
       {/* 图例 */}
       <div className="px-4 mt-2">
