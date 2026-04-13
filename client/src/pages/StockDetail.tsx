@@ -60,13 +60,49 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
   // 按日期正序排列（旧到新）
   const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
 
+  // 动态档位：根据该股最大涨跌幅判断
+  const maxAbs = Math.max(...sorted.map(d => Math.abs(d.pct)), 1);
+  // 最大幅 >10% 则以 4% 一档，否则以 2% 一档，共 5 档
+  const STEP = maxAbs > 10 ? 4 : 2;
+  // 分档阈値：[STEP, 2*STEP, 3*STEP, 4*STEP, 5*STEP]，超过最后一档算最深
+  const THRESHOLDS = [STEP, STEP * 2, STEP * 3, STEP * 4, STEP * 5];
+  const LABELS = THRESHOLDS.map((t, i) => i === 0 ? `<${t}%` : `${THRESHOLDS[i-1]}-${t}%`).concat([`>${STEP * 5}%`]);
+
+  const UP_COLORS = [
+    "#FFCDD2", // 最浅红
+    "#EF9A9A",
+    "#E57373",
+    "#EF5350",
+    "#E53935",
+    "#B71C1C", // 最深红
+  ];
+  const DOWN_COLORS = [
+    "#C8E6C9", // 最浅绿
+    "#A5D6A7",
+    "#66BB6A",
+    "#43A047",
+    "#2E7D32",
+    "#1B5E20", // 最深绿
+  ];
+
+  function getColorAndText(pct: number): { bg: string; fg: string; label: string } {
+    if (pct === 0) return { bg: "#D0D0D0", fg: "#666", label: "0" };
+    const abs = Math.abs(pct);
+    const idx = THRESHOLDS.findIndex(t => abs < t);
+    const colorIdx = idx === -1 ? 5 : idx;
+    const bg = pct > 0 ? UP_COLORS[colorIdx] : DOWN_COLORS[colorIdx];
+    // 深色格子用白字，浅色格子用深色字
+    const fg = colorIdx >= 3 ? "#fff" : (pct > 0 ? "#8B0000" : "#1B5E20");
+    // 数字显示：一位小数，去掉小数点前的负号（用颜色区分涨跌）
+    const label = abs.toFixed(1);
+    return { bg, fg, label };
+  }
+
   // 构建列结构：同向堆列，换向开新列
   const columns: { pct: number; date: string }[][] = [];
   let curDir: 'up' | 'down' | 'flat' | null = null;
-
   for (const item of sorted) {
     const dir = item.pct > 0 ? 'up' : item.pct < 0 ? 'down' : 'flat';
-    // 平天并入上一列（不开新列）
     if (dir === 'flat' && columns.length > 0) {
       columns[columns.length - 1].push({ pct: item.pct, date: item.tradeDate });
     } else if (dir !== curDir) {
@@ -77,45 +113,19 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
     }
   }
 
-  // 每格大小
-  const CELL = 16;
+  // 格子放大以内嵌数字
+  const CELL = 28;
   const GAP = 1;
-  // 最大列高
   const maxRows = Math.max(...columns.map(c => c.length), 1);
   const totalH = maxRows * (CELL + GAP);
-
-  // 分档热力图配色
-  // 涨：6档由浅红到深红  跌：6档由浅绿到深绿  平：灰色
-  const UP_COLORS = [
-    "#FFCDD2", // <0.5%  最浅红
-    "#EF9A9A", // 0.5-1%
-    "#E57373", // 1-2%
-    "#EF5350", // 2-3%
-    "#E53935", // 3-5%
-    "#B71C1C", // >5%   最深红
-  ];
-  const DOWN_COLORS = [
-    "#C8E6C9", // <0.5%  最浅绿
-    "#A5D6A7", // 0.5-1%
-    "#66BB6A", // 1-2%
-    "#43A047", // 2-3%
-    "#2E7D32", // 3-5%
-    "#1B5E20", // >5%   最深绿
-  ];
-  function getColor(pct: number): string {
-    if (pct === 0) return "#D0D0D0";
-    const abs = Math.abs(pct);
-    const idx = abs < 0.5 ? 0 : abs < 1 ? 1 : abs < 2 ? 2 : abs < 3 ? 3 : abs < 5 ? 4 : 5;
-    return pct > 0 ? UP_COLORS[idx] : DOWN_COLORS[idx];
-  }
 
   return (
     <div style={{ background: CARD, paddingBottom: 12 }}>
       <div className="px-4 pt-3 pb-1 flex items-center justify-between">
         <span className="text-xs font-semibold" style={{ color: MUTED }}>珠路图</span>
-        <span className="text-xs" style={{ color: MUTED }}>涨幅越大色越深 · 列内同向连续</span>
+        <span className="text-xs" style={{ color: MUTED }}>涨跌幅越大色越深 · 每{STEP}%一档</span>
       </div>
-      <div className="px-4 overflow-x-auto">
+      <div className="px-2 overflow-x-auto">
         <div
           style={{
             display: "flex",
@@ -137,41 +147,52 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
                 flexShrink: 0,
               }}
             >
-              {col.map((cell, ri) => (
-                <div
-                  key={ri}
-                  title={`${cell.date} ${cell.pct > 0 ? '+' : ''}${cell.pct.toFixed(2)}%`}
-                  style={{
-                    width: CELL,
-                    height: CELL,
-                    borderRadius: 3,
-                    background: getColor(cell.pct),
-                    flexShrink: 0,
-                  }}
-                />
-              ))}
+              {col.map((cell, ri) => {
+                const { bg, fg, label } = getColorAndText(cell.pct);
+                return (
+                  <div
+                    key={ri}
+                    title={`${cell.date} ${cell.pct > 0 ? '+' : ''}${cell.pct.toFixed(2)}%`}
+                    style={{
+                      width: CELL,
+                      height: CELL,
+                      borderRadius: 3,
+                      background: bg,
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 8,
+                      fontWeight: 600,
+                      color: fg,
+                      lineHeight: 1,
+                      letterSpacing: "-0.3px",
+                    }}
+                  >
+                    {label}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
       </div>
+      {/* 图例 */}
       <div className="px-4 mt-2">
-        <div className="flex items-center gap-1 text-xs" style={{ color: MUTED }}>
-          <span style={{ marginRight: 2 }}>涨</span>
+        <div className="flex items-center gap-1 flex-wrap" style={{ color: MUTED }}>
+          <span className="text-xs" style={{ marginRight: 2 }}>涨</span>
           {UP_COLORS.map((c, i) => (
-            <div key={i} style={{ width: 14, height: 14, borderRadius: 2, background: c }} title={["<0.5%","0.5-1%","1-2%","2-3%","3-5%",">5%"][i]} />
+            <div key={i} style={{ width: 14, height: 14, borderRadius: 2, background: c }} title={LABELS[i]} />
           ))}
-          <span style={{ margin: "0 4px" }}>平</span>
+          <span className="text-xs" style={{ margin: "0 4px" }}>平</span>
           <div style={{ width: 14, height: 14, borderRadius: 2, background: "#D0D0D0" }} />
-          <span style={{ margin: "0 4px" }}>跌</span>
+          <span className="text-xs" style={{ margin: "0 4px" }}>跌</span>
           {DOWN_COLORS.map((c, i) => (
-            <div key={i} style={{ width: 14, height: 14, borderRadius: 2, background: c }} title={["<0.5%","0.5-1%","1-2%","2-3%","3-5%",">5%"][i]} />
+            <div key={i} style={{ width: 14, height: 14, borderRadius: 2, background: c }} title={LABELS[i]} />
           ))}
         </div>
-        <div className="flex items-center gap-1 text-xs mt-0.5" style={{ color: MUTED }}>
-          <span style={{ marginRight: 2, opacity: 0 }}>涨</span>
-          {["<0.5","0.5-1","1-2","2-3","3-5",">5"].map((l, i) => (
-            <div key={i} style={{ width: 14, textAlign: "center", fontSize: 9, color: MUTED, overflow: "hidden" }}>{l}</div>
-          ))}
+        <div className="text-xs mt-0.5" style={{ color: MUTED }}>
+          每{STEP}%一档，共6档（最大涨跌幅{maxAbs.toFixed(1)}%）
         </div>
       </div>
     </div>
