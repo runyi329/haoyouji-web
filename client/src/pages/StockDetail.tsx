@@ -1019,7 +1019,7 @@ export default function StockDetail() {
         {/* 基本信息卡片 - 股票档案样式，与珠盘路容器一致（两边无边界，上下有间隙）*/}
         <div className="mt-3" style={{ background: CARD }}>
           <div className="px-4 pt-4 pb-3">
-            <div className="text-xs font-semibold mb-3" style={{ color: RED }}>股票档案</div>
+            <div className="text-xs font-semibold mb-3" style={{ color: MUTED }}>股票档案</div>
 
             {/* 主区域：左侧价格大字，右侧次要信息 */}
             <div className="flex items-start gap-4">
@@ -1106,7 +1106,7 @@ export default function StockDetail() {
         {/* ── 珠盘路卡片 ── */}
         <div className="mt-3" style={{ background: CARD }}>
           <div className="px-4 pt-4 pb-1">
-            <div className="text-xs font-semibold" style={{ color: RED }}>涨跌概率</div>
+            <div className="text-xs font-semibold" style={{ color: MUTED }}>涨跌概率</div>
           </div>
           {dailyLoading ? (
             <div className="flex items-center justify-center h-16" style={{ color: MUTED }}>
