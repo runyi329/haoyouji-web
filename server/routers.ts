@@ -17871,7 +17871,7 @@ export const adminFeatureRouter = router({
             l.up_days,
             l.total_days,
             ROUND(l.up_days * 100.0 / NULLIF(l.total_days, 0), 1) AS up_rate
-          FROM ts_stock_lifetime_stats l
+          FROM ts_stock_lifecycle l
           INNER JOIN ts_stock_basic b ON b.ts_code = l.ts_code
           WHERE b.list_status = 'L'
             AND l.total_days >= 60
