@@ -686,6 +686,30 @@ export default function StockDetail() {
           </div>
         </div>
 
+        {/* ── 同花顺 K 线图 ── */}
+        <div className="mt-3" style={{ background: CARD }}>
+          <div className="px-4 pt-4 pb-1 flex items-center justify-between">
+            <div className="text-xs font-semibold" style={{ color: RED }}>行情走势</div>
+            <a
+              href={`https://stockpage.10jqka.com.cn/${tsCode.replace('.', '')}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs"
+              style={{ color: MUTED }}
+            >
+              同花顺 ↗
+            </a>
+          </div>
+          <div style={{ height: 260, overflow: 'hidden' }}>
+            <iframe
+              src={`https://stockpage.10jqka.com.cn/HQ_v4.html#hs_${tsCode.replace('.', '')}`}
+              style={{ width: '100%', height: '100%', border: 'none' }}
+              scrolling="no"
+              title="K线图"
+            />
+          </div>
+        </div>
+
         {/* ── 珠盘路卡片 ── */}
         <div className="mt-3" style={{ background: CARD }}>
           <div className="px-4 pt-4 pb-1">
