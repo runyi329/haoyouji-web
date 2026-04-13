@@ -17337,6 +17337,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           .map((row: any[]) => ({
             tradeDate: String(row[dateIdx]),
             pct: Number(row[pctIdx]),
+            close: Number(row[closeIdx]),
             // 实心：收盘 >= 开盘（阳线或十字星）
             solid: Number(row[closeIdx]) >= Number(row[openIdx]),
           }));
