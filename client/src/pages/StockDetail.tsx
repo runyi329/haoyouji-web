@@ -71,7 +71,7 @@ function ZhuPanLu({
   lifetimeFlatDays: number;
   lifetimeTotalDays: number;
 }) {
-  const [tab, setTab] = useState<30 | 60>(60);
+  const [tab, setTab] = useState<30 | 60 | 90 | 180>(60);
 
   const displayed = items.slice(-tab);
   const upItems = displayed.filter(d => d.pct > 0);
@@ -210,23 +210,20 @@ function ZhuPanLu({
   return (
     <div>
       {/* Tab 切换 */}
-      <div className="flex items-center gap-2 mb-4">
-        {([30, 60] as const).map(n => (
+      <div className="flex items-center gap-1.5 mb-4">
+        {([30, 60, 90, 180] as const).map(n => (
           <button
             key={n}
             onClick={() => setTab(n)}
-            className="px-3 py-1 rounded-full text-xs font-medium"
+            className="px-2.5 py-1 rounded-full text-xs font-medium"
             style={{
               background: tab === n ? RED : "#F0F0F0",
               color: tab === n ? "#fff" : MUTED,
             }}
           >
-            近{n}天
+            {n}天
           </button>
         ))}
-        <span className="ml-auto text-xs" style={{ color: MUTED }}>
-          共 {displayed.length} 个交易日
-        </span>
       </div>
 
       {/* 涨天方格行 */}
@@ -380,7 +377,7 @@ export default function StockDetail() {
 
   // 日线数据（珠盘路）
   const { data: dailyData, isLoading: dailyLoading } = trpc.aiStockDailyData.useQuery(
-    { tsCode, limit: 60 },
+    { tsCode, limit: 180 },
     { enabled: !!tsCode, staleTime: 300_000 }
   );
 
@@ -515,11 +512,8 @@ export default function StockDetail() {
 
         {/* ── 珠盘路卡片 ── */}
         <div className="mx-4 mt-3 rounded-xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
-          <div className="flex items-center justify-between mb-1">
+          <div className="mb-1">
             <div className="text-xs font-semibold" style={{ color: RED }}>珠盘路</div>
-            <div className="text-xs" style={{ color: MUTED }}>
-              红格=涨天 · 绿格=跌天
-            </div>
           </div>
           {dailyLoading ? (
             <div className="flex items-center justify-center h-16" style={{ color: MUTED }}>
