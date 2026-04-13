@@ -510,7 +510,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
     if (!curDir || curLen === 0) return null;
     const prob = calcNextDayProb(allSorted, curDir, curLen);
     if (prob.total === 0) return null;
-    return { ...prob, curDir, curLen, totalDays: allSorted.length };
+    return { ...prob, curDir, curLen, totalDays: streakStats?.totalDays ?? allSorted.length };
   })();
 
   return (
