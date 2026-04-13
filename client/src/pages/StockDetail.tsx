@@ -86,10 +86,12 @@ function calcStreakFromItems(data: { pct: number }[]): { upStreakMap: Record<num
   return { upStreakMap: upMap, downStreakMap: downMap, maxUpStreak: maxUp, maxDownStreak: maxDown };
 }
 
-function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: number }[]; streakStats?: StreakStats }) {
+function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string; pct: number }[]; allItems: { tradeDate: string; pct: number }[]; streakStats?: StreakStats }) {
   const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | 'all'>(60);
   // 按日期正序排列（旧到新）
   const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+  // 全量数据正序（用于连涨/连跌统计各档位切片）
+  const allSorted = [...allItems].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
 
   // 动态档位：根据该股最大涨跌幅判断
   const maxAbs = Math.max(...sorted.map(d => Math.abs(d.pct)), 1);
@@ -150,11 +152,11 @@ function ZhuLuMap({ items, streakStats }: { items: { tradeDate: string; pct: num
   const allMaxUpStreak = streakStats?.maxUpStreak ?? 0;
   const allMaxDownStreak = streakStats?.maxDownStreak ?? 0;
 
-  // 近期各档前端计算
-  const recentStreakData30 = calcStreakFromItems(sorted.slice(-30));
-  const recentStreakData60 = calcStreakFromItems(sorted.slice(-60));
-  const recentStreakData90 = calcStreakFromItems(sorted.slice(-90));
-  const recentStreakData180 = calcStreakFromItems(sorted.slice(-180));
+  // 近期各档前端计算（基于全量数据 allSorted 切片，确保各档位独立正确）
+  const recentStreakData30 = calcStreakFromItems(allSorted.slice(-30));
+  const recentStreakData60 = calcStreakFromItems(allSorted.slice(-60));
+  const recentStreakData90 = calcStreakFromItems(allSorted.slice(-90));
+  const recentStreakData180 = calcStreakFromItems(allSorted.slice(-180));
 
   // 当前 Tab 对应的统计数据
   const curStreakData = streakTab === 'all'
@@ -505,7 +507,8 @@ function ZhuPanLu({
       {/* 间隙 */}
       <div style={{ height: 6, background: BG }} />
       {/* ── 珠路图（百家乐大路风格）── */}
-      <ZhuLuMap items={displayed} streakStats={streakStats} />
+      {/* 珠路图用 displayed（受 ZhuPanLu tab 控制），连涨/连跌统计用全量 items 自行切片 */}
+      <ZhuLuMap items={displayed} allItems={items} streakStats={streakStats} />
 
       {/* 底部收尾 */}
       <div className="pb-4" style={{ background: CARD }} />
