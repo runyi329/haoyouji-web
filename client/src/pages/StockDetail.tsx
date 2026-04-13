@@ -661,7 +661,7 @@ function ZhuPanLu({
   lifetimeTotalDays: number;
   streakStats?: StreakStats;
 }) {
-  const [tab, setTab] = useState<30 | 60 | 90 | 180>(60);
+  const [tab, setTab] = useState<30 | 60 | 90 | 180 | 365>(60);
   const [showDetail, setShowDetail] = useState(false);
 
   const displayed = items.slice(-tab);
@@ -698,21 +698,29 @@ function ZhuPanLu({
       <div className="px-4 pt-3 pb-4" style={{ background: CARD }}>
 
         {/* Tab切换 + 明细按钮 */}
-        <div className="flex items-center gap-1 mb-3">
-          {([30, 60, 90, 180] as const).map(n => (
-            <button
-              key={n}
-              onClick={() => setTab(n)}
-              className="px-2.5 py-0.5 text-xs font-medium"
-              style={{ background: tab === n ? RED : "#F0F0F0", color: tab === n ? "#fff" : MUTED, borderRadius: 2 }}
-            >
-              {n}天
-            </button>
-          ))}
+        <div className="flex items-center mb-3">
+          {/* 连体分段控件 */}
+          <div className="flex" style={{ border: `1px solid ${BORDER}`, borderRadius: 4, overflow: "hidden" }}>
+            {([30, 60, 90, 180, 365] as const).map((n, idx) => (
+              <button
+                key={n}
+                onClick={() => setTab(n)}
+                className="px-3 py-1 text-sm font-medium"
+                style={{
+                  background: tab === n ? RED : "#fff",
+                  color: tab === n ? "#fff" : MUTED,
+                  borderRight: idx < 4 ? `1px solid ${BORDER}` : "none",
+                  minWidth: "2.8rem",
+                }}
+              >
+                {n}天
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setShowDetail(true)}
-            className="ml-auto flex items-center gap-1 px-2.5 py-0.5 text-xs font-medium"
-            style={{ background: "#F0F0F0", color: MUTED, borderRadius: 2 }}
+            className="ml-auto flex items-center gap-1 px-2.5 py-1 text-xs font-medium"
+            style={{ background: "#F0F0F0", color: MUTED, borderRadius: 4 }}
             title="查看每日明细"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -738,7 +746,7 @@ function ZhuPanLu({
           <tbody>
             {/* 近N天行 */}
             <tr style={{ background: "#FAFAFA" }}>
-              <td className="py-2 text-left pl-0.5 whitespace-nowrap" style={{ color: MUTED, borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>近{tab}天</td>
+              <td className="py-2 text-center whitespace-nowrap" style={{ color: MUTED, borderBottom: `1px solid ${BORDER}`, borderRight: `1px solid ${BORDER}` }}>近{tab}天</td>
               {[
                 { val: upItems.length, rate: recentUpRate, color: RED },
                 { val: downItems.length, rate: recentDownRate, color: GREEN_A },
@@ -755,7 +763,7 @@ function ZhuPanLu({
             </tr>
             {/* 全量行 */}
             <tr style={{ background: "#fff" }}>
-              <td className="py-2 text-left pl-0.5 whitespace-nowrap" style={{ color: MUTED, borderRight: `1px solid ${BORDER}` }}>全量</td>
+              <td className="py-2 text-center whitespace-nowrap" style={{ color: MUTED, borderRight: `1px solid ${BORDER}` }}>全量</td>
               {[
                 { val: lifetimeUpDays, rate: lifetimeUpRate, color: RED },
                 { val: lifetimeDownDays, rate: lifetimeDownRate, color: GREEN_A },
