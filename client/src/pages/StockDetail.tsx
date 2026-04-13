@@ -588,33 +588,25 @@ export default function StockDetail() {
   // wouter 路由不支持含 . 的参数，跳转时 . 被替换为 -，这里还原
   const tsCode = (params.tsCode || "").replace(/-(?=[A-Z]{2}$)/g, ".");
 
-  const { data, isLoading, error, refetch: refetchDetail } = trpc.aiStockDetail.useQuery(
+  const { data, isLoading, error } = trpc.aiStockDetail.useQuery(
     { tsCode },
     { enabled: !!tsCode, staleTime: 0 }
   );
 
   // 日线数据（珠盘路近期展示，最多180条）
-  const { data: dailyData, isLoading: dailyLoading, refetch: refetchDaily } = trpc.aiStockDailyData.useQuery(
+  const { data: dailyData, isLoading: dailyLoading } = trpc.aiStockDailyData.useQuery(
     { tsCode, limit: 180 },
     { enabled: !!tsCode, staleTime: 0 }
   );
 
   // 全生命周期连涨/连跌统计（后端拉取全量日线并计算）
-  const { data: streakStats, refetch: refetchStreak } = trpc.aiStockStreakStats.useQuery(
+  const { data: streakStats } = trpc.aiStockStreakStats.useQuery(
     { tsCode },
     { enabled: !!tsCode, staleTime: 0 }
   );
 
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const handleRefresh = async () => {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
-    try {
-      await Promise.all([refetchDetail(), refetchDaily(), refetchStreak()]);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+  // 整页刷新（浏览器级别 F5）
+  const handleRefresh = () => window.location.reload();
 
   // 兜底数据：即使后端报错也能显示页面框架
   const fallback = {
@@ -690,11 +682,10 @@ export default function StockDetail() {
         </span>
         <button
           onClick={handleRefresh}
-          disabled={isRefreshing}
           className="px-2.5 py-1 rounded-full flex-shrink-0 text-xs font-medium"
-          style={{ background: "rgba(255,255,255,0.2)", opacity: isRefreshing ? 0.6 : 1, color: '#fff' }}
+          style={{ background: "rgba(255,255,255,0.2)", color: '#fff' }}
         >
-          {isRefreshing ? '刷新中...' : '刷新'}
+          刷新
         </button>
       </div>
 
