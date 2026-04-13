@@ -120,41 +120,39 @@ function ZhuPanLu({
             ({((count / (displayed.length || 1)) * 100).toFixed(1)}%)
           </span>
         </div>
-        {/* 方格横排，自动换行 */}
-        <div className="flex flex-wrap gap-1">
-          {list.length === 0 ? (
-            <div
-              className="flex items-center justify-center rounded"
-              style={{
-                width: 36, height: 26,
-                background: bgEmpty,
-                border: `1px dashed ${color}`,
-                fontSize: 10, color: MUTED,
-              }}
-            >
-              无
-            </div>
-          ) : (
-            list.map((d, i) => (
+        {/* 方格横排，每行10格，无间隙 */}
+        {list.length === 0 ? (
+          <div
+            className="flex items-center justify-center rounded"
+            style={{
+              width: 32, height: 22,
+              background: bgEmpty,
+              border: `1px dashed ${color}`,
+              fontSize: 9, color: MUTED,
+            }}
+          >
+            无
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)' }}>
+            {list.map((d, i) => (
               <div
                 key={i}
-                className="flex items-center justify-center rounded"
+                className="flex items-center justify-center"
                 style={{
-                  width: 36,
-                  height: 26,
+                  height: 22,
                   background: bgFill,
-                  border: `1.5px solid ${color}`,
-                  fontSize: 10,
+                  border: `0.5px solid ${color}`,
+                  fontSize: 9,
                   color,
                   fontWeight: 700,
-                  flexShrink: 0,
                 }}
               >
                 {shortDate(d.tradeDate)}
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -246,16 +244,16 @@ function ZhuPanLu({
               {flatItems.length} 天
             </span>
           </div>
-          <div className="flex flex-wrap gap-1">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)' }}>
             {flatItems.map((d, i) => (
               <div
                 key={i}
-                className="flex items-center justify-center rounded"
+                className="flex items-center justify-center"
                 style={{
-                  width: 36, height: 26,
+                  height: 22,
                   background: "#F5F5F5",
-                  border: "1.5px solid #BDBDBD",
-                  fontSize: 10, color: MUTED, fontWeight: 700,
+                  border: "0.5px solid #BDBDBD",
+                  fontSize: 9, color: MUTED, fontWeight: 700,
                 }}
               >
                 {shortDate(d.tradeDate)}
