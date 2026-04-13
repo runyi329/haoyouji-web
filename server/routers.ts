@@ -17124,28 +17124,45 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           };
         }
 
-        // 2. 调 Tushare daily 拉取全部日线数据，实时计算涨跌天数
+        // 2. 分段拉取全量日线数据（按10年一段），实时计算涨跌天数
         let upDays = 0, downDays = 0, flatDays = 0, totalDays = 0;
-        const dailyResp = await fetch(TUSHARE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            api_name: 'daily',
-            token: TUSHARE_TOKEN,
-            params: { ts_code: input.tsCode },
-            fields: 'pct_chg',
-          }),
-          signal: AbortSignal.timeout(30000),
-        });
-        const dailyJson = await dailyResp.json() as any;
-        if (dailyJson.code === 0 && dailyJson.data?.items?.length) {
-          const pctIdx = (dailyJson.data.fields as string[]).indexOf('pct_chg');
-          for (const row of dailyJson.data.items) {
-            const pct = Number(row[pctIdx]) || 0;
-            totalDays++;
-            if (pct > 0) upDays++;
-            else if (pct < 0) downDays++;
-            else flatDays++;
+        // 确定起始年份（上市日期年份，默认1990）
+        const listYear = basicInfo.listDate ? parseInt(basicInfo.listDate.slice(0, 4)) : 1990;
+        const currentYear = new Date().getFullYear();
+        // 按10年分段
+        const segments: Array<{ start: string; end: string }> = [];
+        for (let y = listYear; y <= currentYear; y += 10) {
+          segments.push({
+            start: `${y}0101`,
+            end: `${Math.min(y + 9, currentYear)}1231`,
+          });
+        }
+        // 并发拉取各段（最多5个并发）
+        const fetchSegment = async (seg: { start: string; end: string }) => {
+          const r = await fetch(TUSHARE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_name: 'daily',
+              token: TUSHARE_TOKEN,
+              params: { ts_code: input.tsCode, start_date: seg.start, end_date: seg.end },
+              fields: 'pct_chg',
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          return r.json() as Promise<any>;
+        };
+        const results = await Promise.all(segments.map(fetchSegment));
+        for (const dailyJson of results) {
+          if (dailyJson.code === 0 && dailyJson.data?.items?.length) {
+            const pctIdx = (dailyJson.data.fields as string[]).indexOf('pct_chg');
+            for (const row of dailyJson.data.items) {
+              const pct = Number(row[pctIdx]) || 0;
+              totalDays++;
+              if (pct > 0) upDays++;
+              else if (pct < 0) downDays++;
+              else flatDays++;
+            }
           }
         }
         const upRate = totalDays > 0 ? ((upDays / totalDays) * 100).toFixed(2) : '0.00';
