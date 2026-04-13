@@ -1364,6 +1364,289 @@ function ComboPath({
   );
 }
 
+// ─── AI翻译路组件（深度学习状态分类）────────────────────
+type MarketState =
+  | 'strong_bull'   // 强势上攻
+  | 'mild_bull'     // 温和上行
+  | 'coil'          // 震荡蓄势
+  | 'sideways'      // 横盘整理
+  | 'mild_bear'     // 温和下行
+  | 'strong_bear'   // 弱势下探
+  | 'surge_vol'     // 异常放量
+  | 'rebound';      // 超跌反弹
+
+interface StateConfig {
+  label: string;
+  color: string;       // 色块颜色
+  textColor: string;   // 文字颜色
+  desc: string;
+}
+
+const STATE_CONFIG: Record<MarketState, StateConfig> = {
+  strong_bull:  { label: '强势上攻', color: '#D32F2F', textColor: '#fff',    desc: '连涨+放量+强阳+看涨形态' },
+  mild_bull:    { label: '温和上行', color: '#FF7043', textColor: '#fff',    desc: '涨多跌少，量能平稳' },
+  coil:         { label: '震荡蓄势', color: '#FFC107', textColor: '#333',    desc: '多空均衡，量能收缩' },
+  sideways:     { label: '横盘整理', color: '#BDBDBD', textColor: '#555',    desc: '偏离值接近0，缩量' },
+  mild_bear:    { label: '温和下行', color: '#66BB6A', textColor: '#fff',    desc: '跌多涨少，量能平稳' },
+  strong_bear:  { label: '弱势下探', color: '#00B050', textColor: '#fff',    desc: '连跌+放量+强阴+看跌形态' },
+  surge_vol:    { label: '异常放量', color: '#7B1FA2', textColor: '#fff',    desc: '量比极高，方向待确认' },
+  rebound:      { label: '超跌反弹', color: '#1565C0', textColor: '#fff',    desc: '前期强阴后出现看涨信号' },
+};
+
+function classifyDayState(
+  day: { tradeDate: string; pct: number; open?: number | null; high?: number | null; low?: number | null; close?: number | null; vol?: number | null },
+  prev5: { pct: number; vol?: number | null }[],
+  prevDay?: { pct: number; open?: number | null; close?: number | null; high?: number | null; low?: number | null } | null,
+  prev2Day?: { pct: number; open?: number | null; close?: number | null } | null,
+): MarketState {
+  const { pct, open, high, low, close, vol } = day;
+
+  // 量比计算
+  const avg5Vol = prev5.length >= 3
+    ? prev5.slice(-5).reduce((s, d) => s + (d.vol ?? 0), 0) / Math.min(prev5.length, 5)
+    : 0;
+  const volRatio = avg5Vol > 0 && vol != null ? vol / avg5Vol : 1;
+
+  // K线强度
+  const range = (high ?? 0) - (low ?? 0);
+  const body = Math.abs((close ?? 0) - (open ?? 0));
+  const bodyRatio = range > 0 ? body / range : 0;
+  const isStrongBull = pct > 0 && bodyRatio >= 0.65;
+  const isStrongBear = pct < 0 && bodyRatio >= 0.65;
+
+  // 前期连跌（prev5中跌天数）
+  const prev5DownCount = prev5.filter(d => d.pct < 0).length;
+  const prev5UpCount = prev5.filter(d => d.pct > 0).length;
+
+  // 异常放量（量比>2.5，方向不明确）
+  if (volRatio >= 2.5 && bodyRatio < 0.4) {
+    return 'surge_vol';
+  }
+
+  // 超跌反弹：前5天跌多（>=3天跌），今日强阳
+  if (prev5DownCount >= 3 && pct > 1.5 && isStrongBull) {
+    return 'rebound';
+  }
+
+  // 强势上攻：涨+放量+强阳
+  if (pct > 0 && volRatio >= 1.4 && isStrongBull) {
+    return 'strong_bull';
+  }
+
+  // 弱势下探：跌+放量+强阴
+  if (pct < 0 && volRatio >= 1.4 && isStrongBear) {
+    return 'strong_bear';
+  }
+
+  // 温和上行
+  if (pct > 0 && prev5UpCount >= 3) {
+    return 'mild_bull';
+  }
+
+  // 温和下行
+  if (pct < 0 && prev5DownCount >= 3) {
+    return 'mild_bear';
+  }
+
+  // 震荡蓄势：量能收缩 + 涨跌接近均衡
+  if (volRatio <= 0.8 && Math.abs(pct) < 1.5 && prev5UpCount >= 2 && prev5DownCount >= 2) {
+    return 'coil';
+  }
+
+  // 横盘整理：量能收缩 + 小幅波动
+  if (volRatio <= 0.9 && Math.abs(pct) < 1.0) {
+    return 'sideways';
+  }
+
+  // 默认：根据涨跌方向归类
+  if (pct > 0.5) return 'mild_bull';
+  if (pct < -0.5) return 'mild_bear';
+  return 'sideways';
+}
+
+function AiTranslatePath({
+  items,
+  tab,
+}: {
+  items: { tradeDate: string; pct: number; open?: number | null; high?: number | null; low?: number | null; close?: number | null; vol?: number | null }[];
+  tab: 30 | 60 | 90 | 180 | 365;
+}) {
+  const [showList, setShowList] = useState(false);
+
+  const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+  const displayed = sorted.slice(-tab);
+
+  // 为每天分类状态
+  const stateList = displayed.map((day, i) => {
+    const prev5 = displayed.slice(Math.max(0, i - 5), i);
+    const prevDay = i > 0 ? displayed[i - 1] : null;
+    const prev2Day = i > 1 ? displayed[i - 2] : null;
+    return {
+      ...day,
+      state: classifyDayState(day, prev5, prevDay, prev2Day),
+    };
+  });
+
+  // 当前状态（最新一天）
+  const currentState = stateList.length > 0 ? stateList[stateList.length - 1].state : 'sideways';
+  const cfg = STATE_CONFIG[currentState];
+
+  // 各状态统计
+  const stateCounts: Partial<Record<MarketState, number>> = {};
+  for (const s of stateList) {
+    stateCounts[s.state] = (stateCounts[s.state] ?? 0) + 1;
+  }
+  const stateOrder: MarketState[] = ['strong_bull', 'mild_bull', 'rebound', 'coil', 'sideways', 'surge_vol', 'mild_bear', 'strong_bear'];
+
+  // 近20日列表（倒序）
+  const recent20 = stateList.slice(-20).reverse();
+
+  // 时间轴色带：最近60天（固定显示，不随tab变化，避免太密）
+  const timelineItems = sorted.slice(-60).map((day, i) => {
+    const base = sorted.slice(0, sorted.indexOf(day));
+    const prev5 = base.slice(-5);
+    const prevDay = base.length > 0 ? base[base.length - 1] : null;
+    const prev2Day = base.length > 1 ? base[base.length - 2] : null;
+    return {
+      ...day,
+      state: classifyDayState(day, prev5, prevDay, prev2Day),
+    };
+  });
+
+  // 月份刻度（每月第一天的索引）
+  const monthTicks: { idx: number; label: string }[] = [];
+  let lastMonth = '';
+  timelineItems.forEach((d, i) => {
+    const month = d.tradeDate.slice(0, 6);
+    if (month !== lastMonth) {
+      monthTicks.push({ idx: i, label: `${d.tradeDate.slice(4, 6)}月` });
+      lastMonth = month;
+    }
+  });
+
+  return (
+    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+      {/* 标题行 */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold" style={{ color: '#444' }}>AI翻译路</span>
+        <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ background: cfg.color, color: cfg.textColor }}>
+          {cfg.label}
+        </span>
+      </div>
+
+      {/* 当前状态大标签 */}
+      <div className="flex items-center gap-3 px-4 pb-3">
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg"
+          style={{ background: cfg.color + '18', border: `1.5px solid ${cfg.color}40` }}
+        >
+          <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: cfg.color }} />
+          <span className="text-base font-bold" style={{ color: cfg.color }}>{cfg.label}</span>
+        </div>
+        <span className="text-xs" style={{ color: MUTED }}>{cfg.desc}</span>
+      </div>
+
+      {/* 时间轴色带 */}
+      <div className="px-4 pb-1">
+        <div className="text-xs mb-1" style={{ color: MUTED }}>近60日状态色带</div>
+        <div className="flex gap-px overflow-hidden" style={{ height: 18 }}>
+          {timelineItems.map((d, i) => (
+            <div
+              key={i}
+              className="flex-1 min-w-0 rounded-sm"
+              style={{ background: STATE_CONFIG[d.state].color, opacity: 0.85 }}
+              title={`${d.tradeDate.slice(4,6)}/${d.tradeDate.slice(6,8)} ${STATE_CONFIG[d.state].label}`}
+            />
+          ))}
+        </div>
+        {/* 月份刻度 */}
+        <div className="relative" style={{ height: 14 }}>
+          {monthTicks.map((tick, i) => (
+            <span
+              key={i}
+              className="absolute text-xs"
+              style={{
+                left: `${(tick.idx / Math.max(timelineItems.length - 1, 1)) * 100}%`,
+                color: MUTED,
+                fontSize: '0.6rem',
+                transform: 'translateX(-50%)',
+                top: 0,
+              }}
+            >
+              {tick.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 各状态统计 */}
+      <div className="px-4 pb-3 pt-1">
+        <div className="flex flex-wrap gap-1.5">
+          {stateOrder.map(s => {
+            const count = stateCounts[s] ?? 0;
+            if (count === 0) return null;
+            const c = STATE_CONFIG[s];
+            return (
+              <div
+                key={s}
+                className="flex items-center gap-1 px-2 py-0.5 rounded text-xs"
+                style={{ background: c.color + '18', border: `1px solid ${c.color}40` }}
+              >
+                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
+                <span style={{ color: c.color, fontWeight: 600 }}>{c.label}</span>
+                <span style={{ color: MUTED }}>{count}天</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 近20日状态列表（可折叠）*/}
+      <div className="border-t" style={{ borderColor: BORDER }}>
+        <button
+          className="w-full flex items-center justify-between px-4 py-2"
+          onClick={() => setShowList(v => !v)}
+        >
+          <span className="text-xs font-medium" style={{ color: '#444' }}>近20日状态明细</span>
+          <span className="text-xs" style={{ color: MUTED }}>{showList ? '收起 ▲' : '展开 ▼'}</span>
+        </button>
+        {showList && (
+          <div>
+            {recent20.map((d, i) => {
+              const c = STATE_CONFIG[d.state];
+              return (
+                <div
+                  key={i}
+                  className="flex items-center px-4 py-1.5"
+                  style={{ borderTop: `1px solid ${BORDER}` }}
+                >
+                  <span className="text-xs w-12 flex-shrink-0" style={{ color: MUTED }}>
+                    {d.tradeDate.slice(4, 6)}/{d.tradeDate.slice(6, 8)}
+                  </span>
+                  <div
+                    className="flex items-center gap-1 px-2 py-0.5 rounded text-xs mr-2 flex-shrink-0"
+                    style={{ background: c.color + '18', border: `1px solid ${c.color}40` }}
+                  >
+                    <div className="w-2 h-2 rounded-full" style={{ background: c.color }} />
+                    <span style={{ color: c.color, fontWeight: 600 }}>{c.label}</span>
+                  </div>
+                  <span className="text-xs truncate" style={{ color: MUTED }}>{c.desc}</span>
+                  <span
+                    className="ml-auto text-xs flex-shrink-0"
+                    style={{ color: d.pct > 0 ? RED : d.pct < 0 ? GREEN_A : MUTED }}
+                  >
+                    {d.pct > 0 ? '+' : ''}{d.pct.toFixed(2)}%
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── 珠盘路组件（统计数字主体 + 弹出框明细）────────────────────
 function ZhuPanLu({
   items,
@@ -1533,6 +1816,11 @@ function ZhuPanLu({
       <div style={{ height: 6, background: BG }} />
       {/* ── 组合路 ── */}
       <ComboPath items={items} tab={tab} />
+
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
+      {/* ── AI翻译路 ── */}
+      <AiTranslatePath items={items} tab={tab} />
 
       {/* 底部收尾 */}
       <div className="pb-4" style={{ background: CARD }} />
