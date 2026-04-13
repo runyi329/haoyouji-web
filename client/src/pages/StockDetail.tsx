@@ -830,6 +830,188 @@ function VolSignal({
   );
 }
 
+// ─── 强度路组件（强弱阳/强弱阴 K线强度分析）────────────────────
+type StrengthType = 'strong_up' | 'mid_up' | 'weak_up' | 'doji' | 'weak_down' | 'mid_down' | 'strong_down';
+
+function calcStrength(open: number, high: number, low: number, close: number): StrengthType {
+  const range = high - low;
+  if (range < 0.0001) return 'doji';
+  const body = Math.abs(close - open);
+  const bodyRatio = body / range;
+  const isUp = close >= open;
+  if (bodyRatio >= 0.7) return isUp ? 'strong_up' : 'strong_down';
+  if (bodyRatio >= 0.4) return isUp ? 'mid_up' : 'mid_down';
+  if (bodyRatio >= 0.15) return isUp ? 'weak_up' : 'weak_down';
+  return 'doji';
+}
+
+const STRENGTH_CONFIG: Record<StrengthType, { label: string; color: string; bg: string }> = {
+  strong_up:   { label: '强阳', color: '#C62828', bg: '#FFEBEE' },
+  mid_up:      { label: '中阳', color: '#E53935', bg: '#FFF3F3' },
+  weak_up:     { label: '弱阳', color: '#EF9A9A', bg: '#FFF8F8' },
+  doji:        { label: '十字', color: '#9E9E9E', bg: '#F5F5F5' },
+  weak_down:   { label: '弱阴', color: '#A5D6A7', bg: '#F8FFF8' },
+  mid_down:    { label: '中阴', color: '#43A047', bg: '#F1F8F1' },
+  strong_down: { label: '强阴', color: '#1B5E20', bg: '#E8F5E9' },
+};
+
+const STRENGTH_ORDER: StrengthType[] = ['strong_up','mid_up','weak_up','doji','weak_down','mid_down','strong_down'];
+
+function StrengthPath({
+  items,
+  tab,
+}: {
+  items: { tradeDate: string; pct: number; open?: number | null; high?: number | null; low?: number | null; close?: number | null }[];
+  tab: 30 | 60 | 90 | 180 | 365;
+}) {
+  const sorted = [...items].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate));
+  const displayed = sorted.slice(-tab);
+  const withOHLC = displayed.filter(d => d.open != null && d.high != null && d.low != null && d.close != null);
+
+  if (withOHLC.length < 5) {
+    return (
+      <div className="mx-0 rounded-none p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        <div className="text-xs font-semibold mb-2" style={{ color: '#444' }}>强度路</div>
+        <div className="text-xs" style={{ color: MUTED }}>K线数据不足</div>
+      </div>
+    );
+  }
+
+  // 计算每日强度
+  const strengthItems = withOHLC.map(d => ({
+    ...d,
+    strength: calcStrength(d.open!, d.high!, d.low!, d.close!),
+    bodyRatio: (d.high! - d.low!) > 0.0001 ? Math.abs(d.close! - d.open!) / (d.high! - d.low!) : 0,
+  }));
+
+  // 统计各强度次数
+  const countMap: Record<StrengthType, number> = {
+    strong_up: 0, mid_up: 0, weak_up: 0, doji: 0, weak_down: 0, mid_down: 0, strong_down: 0,
+  };
+  strengthItems.forEach(d => countMap[d.strength]++);
+
+  // 最新一条
+  const latest = strengthItems[strengthItems.length - 1];
+  const latestCfg = STRENGTH_CONFIG[latest.strength];
+
+  // 近期强度趋势：最近20日强阳+中阳 vs 强阴+中阴
+  const recent20 = strengthItems.slice(-20);
+  const recentBull = recent20.filter(d => d.strength === 'strong_up' || d.strength === 'mid_up').length;
+  const recentBear = recent20.filter(d => d.strength === 'strong_down' || d.strength === 'mid_down').length;
+  const trendLabel = recentBull > recentBear ? '近期偏强势' : recentBull < recentBear ? '近期偏弱势' : '多空均衡';
+  const trendColor = recentBull > recentBear ? RED : recentBull < recentBear ? GREEN_A : MUTED;
+
+  // 强度路小K线图（最近60条）
+  const chartItems = strengthItems.slice(-60);
+
+  return (
+    <div className="mx-0 rounded-none" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+      {/* 标题行 */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-2">
+        <span className="text-sm font-semibold" style={{ color: '#444' }}>强度路</span>
+        <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F5F5F5', color: trendColor, fontWeight: 600 }}>
+          {trendLabel}
+        </span>
+      </div>
+
+      {/* 最新强度大字 */}
+      <div className="flex items-baseline gap-2 px-4 pb-3">
+        <span className="text-2xl font-bold" style={{ color: latestCfg.color }}>{latestCfg.label}</span>
+        <span className="text-xs" style={{ color: MUTED }}>最新 {latest.tradeDate}</span>
+        <span className="text-xs ml-auto" style={{ color: MUTED }}>实体比 {(latest.bodyRatio * 100).toFixed(0)}%</span>
+      </div>
+
+      {/* 强度路小K线图 */}
+      <div className="px-4 pb-3">
+        <div className="flex items-end gap-px" style={{ height: 56 }}>
+          {chartItems.map((item, i) => {
+            const range = item.high! - item.low!;
+            const totalH = 52;
+            // 上影线、实体、下影线高度（按比例）
+            const bodyH = range > 0 ? Math.max(2, (Math.abs(item.close! - item.open!) / range) * totalH) : 2;
+            const upperH = range > 0 ? ((item.high! - Math.max(item.open!, item.close!)) / range) * totalH : 0;
+            const lowerH = range > 0 ? ((Math.min(item.open!, item.close!) - item.low!) / range) * totalH : 0;
+            const cfg = STRENGTH_CONFIG[item.strength];
+            return (
+              <div
+                key={i}
+                title={`${item.tradeDate} ${cfg.label} 实体${(item.bodyRatio * 100).toFixed(0)}%`}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 2, height: totalH + 4 }}
+              >
+                {/* 上影线 */}
+                <div style={{ width: 1, height: upperH, background: cfg.color, opacity: 0.5 }} />
+                {/* 实体 */}
+                <div style={{ width: '100%', height: bodyH, background: cfg.color, borderRadius: 1 }} />
+                {/* 下影线 */}
+                <div style={{ width: 1, height: lowerH, background: cfg.color, opacity: 0.5 }} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 强度统计表格 */}
+      <div className="border-t" style={{ borderColor: BORDER }}>
+        <div className="grid grid-cols-7">
+          {STRENGTH_ORDER.map((type, i) => {
+            const cfg = STRENGTH_CONFIG[type];
+            const count = countMap[type];
+            const rate = withOHLC.length > 0 ? (count / withOHLC.length) * 100 : 0;
+            return (
+              <div
+                key={type}
+                className="flex flex-col items-center py-2"
+                style={{
+                  borderRight: i < 6 ? `1px solid ${BORDER}` : 'none',
+                  background: cfg.bg,
+                }}
+              >
+                <span className="text-xs font-bold" style={{ color: cfg.color }}>{count}</span>
+                <span className="text-xs mt-0.5" style={{ color: cfg.color, fontSize: '0.65rem' }}>{cfg.label}</span>
+                <span className="text-xs mt-0.5" style={{ color: MUTED, fontSize: '0.6rem' }}>{rate.toFixed(0)}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 近期强弱对比进度条 */}
+      <div className="px-4 py-3 border-t" style={{ borderColor: BORDER }}>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs" style={{ color: MUTED }}>近20日强中阳</span>
+          <span className="text-xs font-bold" style={{ color: RED }}>{recentBull}次</span>
+        </div>
+        <div className="w-full rounded-full overflow-hidden" style={{ height: 8, background: '#F5F5F5' }}>
+          <div
+            style={{
+              height: '100%',
+              width: `${recent20.length > 0 ? (recentBull / recent20.length) * 100 : 0}%`,
+              background: RED,
+              borderRadius: 4,
+              transition: 'width 0.3s',
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between mt-2 mb-1">
+          <span className="text-xs" style={{ color: MUTED }}>近20日强中阴</span>
+          <span className="text-xs font-bold" style={{ color: GREEN_A }}>{recentBear}次</span>
+        </div>
+        <div className="w-full rounded-full overflow-hidden" style={{ height: 8, background: '#F5F5F5' }}>
+          <div
+            style={{
+              height: '100%',
+              width: `${recent20.length > 0 ? (recentBear / recent20.length) * 100 : 0}%`,
+              background: GREEN_A,
+              borderRadius: 4,
+              transition: 'width 0.3s',
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── 珠盘路组件（统计数字主体 + 弹出框明细）────────────────────
 function ZhuPanLu({
   items,
@@ -840,7 +1022,7 @@ function ZhuPanLu({
   lifetimeTotalDays,
   streakStats,
 }: {
-  items: { tradeDate: string; pct: number; solid: boolean; vol?: number | null; amount?: number | null }[];
+  items: { tradeDate: string; pct: number; open?: number | null; high?: number | null; low?: number | null; close?: number | null; solid: boolean; vol?: number | null; amount?: number | null }[];
   lifetimeUpRate: number;
   lifetimeUpDays: number;
   lifetimeDownDays: number;
@@ -984,6 +1166,11 @@ function ZhuPanLu({
       <div style={{ height: 6, background: BG }} />
       {/* ── 放量缩量信号 ── */}
       <VolSignal items={items} tab={tab} />
+
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
+      {/* ── 强度路 ── */}
+      <StrengthPath items={items} tab={tab} />
 
       {/* 底部收尾 */}
       <div className="pb-4" style={{ background: CARD }} />
