@@ -75,14 +75,19 @@ function ZhuLuScrollArea({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    // 容器宽度的 1/3 作为右侧留白
-    const rightPad = el.clientWidth / 3;
-    // 滚动到：内容总宽 - 容器宽 + 右侧留白
-    const contentW = columns.length * (CELL + GAP);
-    const scrollTarget = Math.max(0, contentW - el.clientWidth + rightPad);
-    el.scrollLeft = scrollTarget;
+    // 用 requestAnimationFrame 确保 DOM 布局完成后再计算滚动位置
+    const raf = requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      if (!el) return;
+      // 容器宽度的 1/3 作为右侧留白（最新列停在 2/3 处）
+      const containerW = el.clientWidth;
+      const contentW = columns.length * (CELL + GAP);
+      // 目标：最新列右边缘 = 容器 2/3 处
+      // 即 scrollLeft = contentW - containerW * (2/3)
+      const scrollTarget = Math.max(0, contentW - containerW * (2 / 3));
+      el.scrollLeft = scrollTarget;
+    });
+    return () => cancelAnimationFrame(raf);
   }, [columns.length, CELL, GAP]);
 
   return (
