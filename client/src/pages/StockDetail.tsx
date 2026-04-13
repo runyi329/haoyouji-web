@@ -1,6 +1,6 @@
 /**
  * StockDetail.tsx
- * 个股详情页 — 基本信息 + 珠盘路（方格横排+近期/历史对比）+ 全生命周期统计
+ * 个股详情页 - 基本信息 + 珠盘路（方格横排+近期/历史对比）+ 全生命周期统计
  * 路径: /stock/:tsCode
  */
 import { useParams } from "wouter";
@@ -21,7 +21,7 @@ const CARD_SHADOW = "0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)";
 
 // ─── 工具函数 ────────────────────────────────────────────
 function formatDate(dateStr: string | null | undefined) {
-  if (!dateStr) return "—";
+  if (!dateStr) return "-";
   if (dateStr.length === 8) {
     return `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
   }
@@ -30,7 +30,7 @@ function formatDate(dateStr: string | null | undefined) {
 function exchangeLabel(exchange: string) {
   if (exchange === "SSE") return "上交所";
   if (exchange === "SZSE") return "深交所";
-  return exchange || "—";
+  return exchange || "-";
 }
 function marketLabel(tsCode: string) {
   if (tsCode.startsWith("688")) return "科创板";
@@ -351,7 +351,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
                 {/* 涨：数字在左，进度条靠右对齐到中间 */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                   <span className="text-xs font-bold" style={{ color: upCnt > 0 ? RED : MUTED, minWidth: 28, textAlign: 'right' }}>
-                    {upCnt > 0 ? `${upCnt}次` : '—'}
+                    {upCnt > 0 ? `${upCnt}次` : '-'}
                   </span>
                   <div style={{ width: upW, height: 8, background: RED, borderRadius: '2px 0 0 2px', opacity: 0.85, flexShrink: 0 }} />
                 </div>
@@ -361,7 +361,7 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 4 }}>
                   <div style={{ width: downW, height: 8, background: GREEN_A, borderRadius: '0 2px 2px 0', opacity: 0.85, flexShrink: 0 }} />
                   <span className="text-xs font-bold" style={{ color: downCnt > 0 ? GREEN_A : MUTED, minWidth: 28 }}>
-                    {downCnt > 0 ? `${downCnt}次` : '—'}
+                    {downCnt > 0 ? `${downCnt}次` : '-'}
                   </span>
                 </div>
               </div>
