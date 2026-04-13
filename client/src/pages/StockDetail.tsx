@@ -287,6 +287,12 @@ export default function StockDetail() {
     { enabled: !!tsCode, staleTime: 300_000 }
   );
 
+  // 日线数据（珠盘路）
+  const { data: dailyData, isLoading: dailyLoading } = trpc.aiStockDailyData.useQuery(
+    { tsCode, limit: 60 },
+    { enabled: !!tsCode, staleTime: 300_000 }
+  );
+
   if (isLoading) {
     return (
       <div className="h-screen flex flex-col" style={{ background: BG }}>
@@ -509,13 +515,23 @@ export default function StockDetail() {
               className="text-xs px-2 py-0.5 rounded-full"
               style={{ background: "#FFF5F5", color: RED }}
             >
-              模拟数据 · 最近50日
+              {dailyLoading ? "加载中..." : dailyData?.items?.length ? `最近 ${dailyData.items.length} 日` : "暂无数据"}
             </div>
           </div>
           <div className="text-xs mb-3" style={{ color: MUTED }}>
             上层：方向柱（实心=收&gt;开，空心=收&lt;开）&nbsp;|&nbsp;下层：力度热图（颜色越深涨跌幅越大）
           </div>
-          <ZhuPanLu data={MOCK_DAILY} />
+          {dailyLoading ? (
+            <div className="flex items-center justify-center h-16" style={{ color: MUTED }}>
+              <span className="text-xs">日线数据加载中...</span>
+            </div>
+          ) : dailyData?.items?.length ? (
+            <ZhuPanLu data={dailyData.items} />
+          ) : (
+            <div className="flex items-center justify-center h-16" style={{ color: MUTED }}>
+              <span className="text-xs">暂无日线数据</span>
+            </div>
+          )}
         </div>
 
         {/* 七条路预告卡片 */}
