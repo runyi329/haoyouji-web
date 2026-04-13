@@ -593,9 +593,9 @@ export default function StockDetail() {
     { enabled: !!tsCode, staleTime: 0 }
   );
 
-  // 日线数据（珠盘路近期展示，最多180条）
+  // 日线数据（珠盘路 + 连涨/连跌统计各档位计算，最多500条）
   const { data: dailyData, isLoading: dailyLoading } = trpc.aiStockDailyData.useQuery(
-    { tsCode, limit: 180 },
+    { tsCode, limit: 500 },
     { enabled: !!tsCode, staleTime: 0 }
   );
 
