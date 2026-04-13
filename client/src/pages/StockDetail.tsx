@@ -269,7 +269,7 @@ function ZhuLuMap({ items }: { items: { tradeDate: string; pct: number }[] }) {
                 {/* 跌：右对齐进度条 */}
                 <div className="flex items-center gap-1 justify-end">
                   <span className="text-xs font-bold" style={{ color: GREEN_A, minWidth: 20, textAlign: 'right' }}>
-                    {downCnt > 0 ? `${downCnt}次` : ‘—’}
+                    {downCnt > 0 ? `${downCnt}次` : '—'}
                   </span>
                   <div
                     style={{
