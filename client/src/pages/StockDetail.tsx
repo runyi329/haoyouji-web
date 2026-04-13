@@ -294,19 +294,35 @@ export default function StockDetail() {
     { enabled: !!tsCode, staleTime: 300_000 }
   );
 
+  // 兜底数据：即使后端报错也能显示页面框架
+  const fallback = {
+    tsCode,
+    name: tsCode,
+    listStatus: 'L',
+    listDate: null as string | null,
+    delistDate: null as string | null,
+    exchange: '',
+    industry: null as string | null,
+    upDays: 0,
+    downDays: 0,
+    flatDays: 0,
+    totalDays: 0,
+    upRate: '0.00',
+    updatedAt: null as string | null,
+  };
+  const displayData = data ?? fallback;
+
   if (isLoading) {
     return (
       <div className="h-screen flex flex-col" style={{ background: BG }}>
         <div className="px-4 py-3 flex items-center gap-3" style={{ background: RED, color: "#fff" }}>
-          {user && (
-            <button
-              onClick={() => window.history.back()}
-              className="w-7 h-7 flex items-center justify-center rounded-full"
-              style={{ background: "rgba(255,255,255,0.2)" }}
-            >
-              <ChevronLeft className="w-4 h-4 text-white" />
-            </button>
-          )}
+          <button
+            onClick={() => window.history.back()}
+            className="w-7 h-7 flex items-center justify-center rounded-full"
+            style={{ background: "rgba(255,255,255,0.2)" }}
+          >
+            <ChevronLeft className="w-4 h-4 text-white" />
+          </button>
           <p className="font-bold text-base">个股详情</p>
         </div>
         <div className="flex-1 flex items-center justify-center">
@@ -316,38 +332,13 @@ export default function StockDetail() {
     );
   }
 
-  if (error || !data) {
-    return (
-      <div className="h-screen flex flex-col" style={{ background: BG }}>
-        <div className="px-4 py-3 flex items-center gap-3" style={{ background: RED, color: "#fff" }}>
-          {user && (
-            <button
-              onClick={() => window.history.back()}
-              className="w-7 h-7 flex items-center justify-center rounded-full"
-              style={{ background: "rgba(255,255,255,0.2)" }}
-            >
-              <ChevronLeft className="w-4 h-4 text-white" />
-            </button>
-          )}
-          <p className="font-bold text-base">个股详情</p>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center" style={{ color: MUTED }}>
-            <div className="text-sm">未找到该股票数据</div>
-            <div className="text-xs mt-1">{tsCode}</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const upRate = parseFloat(data.upRate || "0");
-  const downRate = data.totalDays > 0 ? ((data.downDays / data.totalDays) * 100) : 0;
-  const flatRate = data.totalDays > 0 ? ((data.flatDays / data.totalDays) * 100) : 0;
-  const statusInfo = listStatusLabel(data.listStatus);
+  const upRate = parseFloat(displayData.upRate || "0");
+  const downRate = displayData.totalDays > 0 ? ((displayData.downDays / displayData.totalDays) * 100) : 0;
+  const flatRate = displayData.totalDays > 0 ? ((displayData.flatDays / displayData.totalDays) * 100) : 0;
+  const statusInfo = listStatusLabel(displayData.listStatus);
   const listYears = (() => {
-    if (!data.listDate || data.listDate.length < 8) return null;
-    const y = parseInt(data.listDate.slice(0, 4));
+    if (!displayData.listDate || displayData.listDate.length < 8) return null;
+    const y = parseInt(displayData.listDate.slice(0, 4));
     return new Date().getFullYear() - y;
   })();
 
@@ -368,8 +359,8 @@ export default function StockDetail() {
           </button>
         )}
         <div className="flex-1 min-w-0">
-          <p className="font-bold text-base truncate">{data.name}</p>
-          <p className="text-xs opacity-70">{data.tsCode}</p>
+          <p className="font-bold text-base truncate">{displayData.name}</p>
+          <p className="text-xs opacity-70">{displayData.tsCode}</p>
         </div>
         <span
           className="px-2 py-0.5 rounded-full text-xs font-medium"
@@ -390,14 +381,14 @@ export default function StockDetail() {
               <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: MUTED }} />
               <div>
                 <div className="text-xs" style={{ color: MUTED }}>上市日期</div>
-                <div className="text-sm font-medium" style={{ color: TEXT }}>{formatDate(data.listDate)}</div>
+                <div className="text-sm font-medium" style={{ color: TEXT }}>{formatDate(displayData.listDate)}</div>
               </div>
             </div>
             <div className="flex items-start gap-2">
               <Building2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: MUTED }} />
               <div>
                 <div className="text-xs" style={{ color: MUTED }}>交易所</div>
-                <div className="text-sm font-medium" style={{ color: TEXT }}>{exchangeLabel(data.exchange)}</div>
+                <div className="text-sm font-medium" style={{ color: TEXT }}>{exchangeLabel(displayData.exchange)}</div>
               </div>
             </div>
             <div className="flex items-start gap-2">
@@ -406,7 +397,7 @@ export default function StockDetail() {
               </div>
               <div>
                 <div className="text-xs" style={{ color: MUTED }}>板块</div>
-                <div className="text-sm font-medium" style={{ color: TEXT }}>{marketLabel(data.tsCode)}</div>
+                <div className="text-sm font-medium" style={{ color: TEXT }}>{marketLabel(displayData.tsCode)}</div>
               </div>
             </div>
             {listYears !== null && (
@@ -420,14 +411,14 @@ export default function StockDetail() {
                 </div>
               </div>
             )}
-            {data.industry && (
+            {displayData.industry && (
               <div className="flex items-start gap-2 col-span-2">
                 <div className="w-4 h-4 mt-0.5 flex-shrink-0 flex items-center justify-center">
                   <span className="text-xs" style={{ color: MUTED }}>行</span>
                 </div>
                 <div>
                   <div className="text-xs" style={{ color: MUTED }}>所属行业</div>
-                  <div className="text-sm font-medium" style={{ color: TEXT }}>{data.industry}</div>
+                  <div className="text-sm font-medium" style={{ color: TEXT }}>{displayData.industry}</div>
                 </div>
               </div>
             )}
@@ -437,22 +428,22 @@ export default function StockDetail() {
         {/* 全生命周期涨跌统计卡片 */}
         <div className="mx-4 mt-3 rounded-xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
           <div className="text-xs font-semibold mb-1" style={{ color: RED }}>全生命周期涨跌统计</div>
-          <div className="text-xs mb-3" style={{ color: MUTED }}>自上市以来共 {data.totalDays} 个交易日</div>
+          <div className="text-xs mb-3" style={{ color: MUTED }}>自上市以来共 {displayData.totalDays} 个交易日</div>
           <div className="grid grid-cols-4 gap-2 mb-4">
             <div className="text-center rounded-lg py-2" style={{ background: "#FFF5F5" }}>
-              <div className="text-lg font-bold" style={{ color: RED }}>{data.upDays}</div>
+              <div className="text-lg font-bold" style={{ color: RED }}>{displayData.upDays}</div>
               <div className="text-xs mt-0.5" style={{ color: MUTED }}>涨天</div>
             </div>
             <div className="text-center rounded-lg py-2" style={{ background: "#F0FFF4" }}>
-              <div className="text-lg font-bold" style={{ color: GREEN_A }}>{data.downDays}</div>
+              <div className="text-lg font-bold" style={{ color: GREEN_A }}>{displayData.downDays}</div>
               <div className="text-xs mt-0.5" style={{ color: MUTED }}>跌天</div>
             </div>
             <div className="text-center rounded-lg py-2" style={{ background: "#F8F8F8" }}>
-              <div className="text-lg font-bold" style={{ color: "#888" }}>{data.flatDays}</div>
+              <div className="text-lg font-bold" style={{ color: "#888" }}>{displayData.flatDays}</div>
               <div className="text-xs mt-0.5" style={{ color: MUTED }}>平天</div>
             </div>
             <div className="text-center rounded-lg py-2" style={{ background: "#F5F0FF" }}>
-              <div className="text-lg font-bold" style={{ color: "#7B1FA2" }}>{data.totalDays}</div>
+              <div className="text-lg font-bold" style={{ color: "#7B1FA2" }}>{displayData.totalDays}</div>
               <div className="text-xs mt-0.5" style={{ color: MUTED }}>总天</div>
             </div>
           </div>
@@ -502,8 +493,8 @@ export default function StockDetail() {
           </div>
           <div className="mt-4 p-3 rounded-lg flex items-center justify-between" style={{ background: "#F8F4F0" }}>
             <div className="text-xs" style={{ color: MUTED }}>涨跌比（涨天/跌天）</div>
-            <div className="text-sm font-bold" style={{ color: data.upDays >= data.downDays ? RED : GREEN_A }}>
-              {data.downDays > 0 ? (data.upDays / data.downDays).toFixed(2) : "∞"}
+            <div className="text-sm font-bold" style={{ color: displayData.upDays >= displayData.downDays ? RED : GREEN_A }}>
+              {displayData.downDays > 0 ? (displayData.upDays / displayData.downDays).toFixed(2) : "∞"}
             </div>
           </div>
         </div>
@@ -571,9 +562,9 @@ export default function StockDetail() {
           </div>
         </div>
 
-        {data.updatedAt && (
+        {displayData.updatedAt && (
           <div className="mx-4 mt-3 mb-4 text-center text-xs" style={{ color: MUTED }}>
-            数据更新时间：{data.updatedAt.slice(0, 10)}
+            数据更新时间：{displayData.updatedAt?.slice(0, 10)}
           </div>
         )}
       </div>
