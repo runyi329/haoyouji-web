@@ -17317,7 +17317,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
               ts_code: input.tsCode,
               limit: input.limit,
             },
-            fields: 'trade_date,open,close,pct_chg,vol,amount',
+            fields: 'trade_date,open,high,low,close,pct_chg,vol,amount',
           }),
           signal: AbortSignal.timeout(10000),
         });
@@ -17329,6 +17329,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const fields: string[] = json.data.fields;
         const dateIdx = fields.indexOf('trade_date');
         const openIdx = fields.indexOf('open');
+        const highIdx = fields.indexOf('high');
+        const lowIdx = fields.indexOf('low');
         const closeIdx = fields.indexOf('close');
         const pctIdx = fields.indexOf('pct_chg');
         const volIdx = fields.indexOf('vol');
@@ -17339,9 +17341,12 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           .map((row: any[]) => ({
             tradeDate: String(row[dateIdx]),
             pct: Number(row[pctIdx]),
+            open: Number(row[openIdx]),
+            high: highIdx >= 0 ? Number(row[highIdx]) : null,
+            low: lowIdx >= 0 ? Number(row[lowIdx]) : null,
             close: Number(row[closeIdx]),
-            vol: volIdx >= 0 ? Number(row[volIdx]) : null,       // 成交量（手）
-            amount: amountIdx >= 0 ? Number(row[amountIdx]) : null, // 成交额（千元）
+            vol: volIdx >= 0 ? Number(row[volIdx]) : null,
+            amount: amountIdx >= 0 ? Number(row[amountIdx]) : null,
             // 实心：收盘 >= 开盘（阳线或十字星）
             solid: Number(row[closeIdx]) >= Number(row[openIdx]),
           }));
