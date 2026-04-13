@@ -652,14 +652,19 @@ function UpRateDistSection() {
                   />
                   <Bar dataKey="count" name="count" radius={[2, 2, 0, 0]}>
                     {chartData.map((entry: any, i: number) => {
-                      // 50% 附近（45-55%）用红色，其余用灰色渐变
-                      const isNear50 = entry.min >= 45 && entry.min < 55;
+                      // 涨天率 ≥ 50% → 红色（偏涨），< 50% → 绿色（偏跌）
+                      // 均值所在桶加深色加粗边框标注
                       const isMean = data.mean >= entry.min && data.mean < entry.max;
+                      const isUp = entry.min >= 50;
+                      const baseColor = isUp ? "#EF9A9A" : "#A5D6A7";
+                      const deepColor = isUp ? RED : "#388E3C";
                       return (
                         <Cell
                           key={i}
-                          fill={isMean ? RED : isNear50 ? "#EF9A9A" : entry.min < 50 ? "#A5D6A7" : "#EF9A9A"}
-                          opacity={0.85}
+                          fill={isMean ? deepColor : baseColor}
+                          opacity={isMean ? 1 : 0.8}
+                          stroke={isMean ? deepColor : "none"}
+                          strokeWidth={isMean ? 2 : 0}
                         />
                       );
                     })}
@@ -688,8 +693,23 @@ function UpRateDistSection() {
                   />
                 </BarChart>
               </ResponsiveContainer>
+              {/* 颜色图例 */}
+              <div className="flex items-center gap-3 mt-2 mb-1 px-1">
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#A5D6A7" }} />
+                  <span className="text-[10px]" style={{ color: DIM }}>涨天率 &lt; 50%（偏空）</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#EF9A9A" }} />
+                  <span className="text-[10px]" style={{ color: DIM }}>涨天率 ≥ 50%（偏多）</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: RED }} />
+                  <span className="text-[10px]" style={{ color: DIM }}>均值所在桶</span>
+                </div>
+              </div>
               {/* 分布解读 */}
-              <div className="mt-2 px-2 py-2 rounded-lg" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
+              <div className="mt-1 px-2 py-2 rounded-lg" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
                 <p className="text-[11px] leading-relaxed" style={{ color: DIM }}>
                   {data.mean > 50
                     ? `全市场平均涨天率 ${data.mean}%，高于50%基准，说明A股整体偏多头市场结构。`
