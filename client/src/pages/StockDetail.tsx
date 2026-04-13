@@ -1011,57 +1011,90 @@ export default function StockDetail() {
       {/* 内容区域 */}
       <div className="flex-1 overflow-y-auto pb-8">
 
-        {/* 基本信息卡片 */}
-        <div className="mx-4 mt-4 rounded-xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
-          <div className="text-xs font-semibold mb-3" style={{ color: RED }}>基本信息</div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-start gap-2">
-              <Calendar className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: MUTED }} />
-              <div>
-                <div className="text-xs" style={{ color: MUTED }}>上市日期</div>
-                <div className="text-sm font-medium" style={{ color: TEXT }}>{formatDate(displayData.listDate)}</div>
+        {/* 基本信息卡片 - 股票档案样式，与珠盘路容器一致（两边无边界，上下有间隙）*/}
+        <div className="mt-3" style={{ background: CARD }}>
+          <div className="px-4 pt-4 pb-3">
+            <div className="text-xs font-semibold mb-3" style={{ color: RED }}>股票档案</div>
+
+            {/* 主区域：左侧价格大字，右侧次要信息 */}
+            <div className="flex items-start gap-4">
+              {/* 左侧：最新价格 */}
+              <div className="flex-shrink-0">
+                {(() => {
+                  const latestItem = dailyData?.items?.[dailyData.items.length - 1];
+                  const pct = latestItem?.pct ?? null;
+                  const isUp = pct !== null && pct > 0;
+                  const isDown = pct !== null && pct < 0;
+                  const priceColor = isUp ? RED : isDown ? GREEN_A : TEXT;
+                  const tradeDate = latestItem?.tradeDate;
+                  return (
+                    <div>
+                      {/* 涨跌幅大字 */}
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-bold" style={{ color: priceColor }}>
+                          {pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(2)}%` : '--'}
+                        </span>
+                      </div>
+                      <div className="text-xs mt-0.5" style={{ color: MUTED }}>
+                        {tradeDate ? `${tradeDate.slice(0,4)}-${tradeDate.slice(4,6)}-${tradeDate.slice(6,8)} 收盘` : '最新涨跌幅'}
+                      </div>
+                      {/* 涨/跌标签 */}
+                      {pct !== null && (
+                        <div
+                          className="inline-block mt-1.5 px-2 py-0.5 rounded text-xs font-medium"
+                          style={{
+                            background: isUp ? 'rgba(211,47,47,0.08)' : isDown ? 'rgba(0,176,80,0.08)' : 'rgba(0,0,0,0.05)',
+                            color: priceColor
+                          }}
+                        >
+                          {isUp ? '上涨' : isDown ? '下跌' : '平盘'}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <Building2 className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: MUTED }} />
-              <div>
-                <div className="text-xs" style={{ color: MUTED }}>交易所</div>
-                <div className="text-sm font-medium" style={{ color: TEXT }}>{exchangeLabel(displayData.exchange)}</div>
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <div className="w-4 h-4 mt-0.5 flex-shrink-0 flex items-center justify-center">
-                <span className="text-xs" style={{ color: MUTED }}>板</span>
-              </div>
-              <div>
-                <div className="text-xs" style={{ color: MUTED }}>板块</div>
-                <div className="text-sm font-medium" style={{ color: TEXT }}>{marketLabel(displayData.tsCode)}</div>
-              </div>
-            </div>
-            {listYears !== null && (
-              <div className="flex items-start gap-2">
-                <div className="w-4 h-4 mt-0.5 flex-shrink-0 flex items-center justify-center">
-                  <span className="text-xs" style={{ color: MUTED }}>年</span>
+
+              {/* 分隔线 */}
+              <div className="w-px self-stretch" style={{ background: BORDER }} />
+
+              {/* 右侧：次要信息网格 */}
+              <div className="flex-1 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                <div>
+                  <div className="text-xs" style={{ color: MUTED }}>股票代码</div>
+                  <div className="text-xs font-medium" style={{ color: TEXT }}>{displayData.tsCode}</div>
+                </div>
+                <div>
+                  <div className="text-xs" style={{ color: MUTED }}>板块</div>
+                  <div className="text-xs font-medium" style={{ color: TEXT }}>{marketLabel(displayData.tsCode)}</div>
+                </div>
+                <div>
+                  <div className="text-xs" style={{ color: MUTED }}>上市日期</div>
+                  <div className="text-xs font-medium" style={{ color: TEXT }}>{formatDate(displayData.listDate)}</div>
                 </div>
                 <div>
                   <div className="text-xs" style={{ color: MUTED }}>上市年数</div>
-                  <div className="text-sm font-medium" style={{ color: TEXT }}>{listYears} 年</div>
+                  <div className="text-xs font-medium" style={{ color: TEXT }}>{listYears !== null ? `${listYears} 年` : '-'}</div>
                 </div>
-              </div>
-            )}
-            {displayData.industry && (
-              <div className="flex items-start gap-2 col-span-2">
-                <div className="w-4 h-4 mt-0.5 flex-shrink-0 flex items-center justify-center">
-                  <span className="text-xs" style={{ color: MUTED }}>行</span>
+                {displayData.industry && (
+                  <div className="col-span-2">
+                    <div className="text-xs" style={{ color: MUTED }}>所属行业</div>
+                    <div className="text-xs font-medium" style={{ color: TEXT }}>{displayData.industry}</div>
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs" style={{ color: MUTED }}>交易所</div>
+                  <div className="text-xs font-medium" style={{ color: TEXT }}>{exchangeLabel(displayData.exchange)}</div>
                 </div>
                 <div>
-                  <div className="text-xs" style={{ color: MUTED }}>所属行业</div>
-                  <div className="text-sm font-medium" style={{ color: TEXT }}>{displayData.industry}</div>
+                  <div className="text-xs" style={{ color: MUTED }}>状态</div>
+                  <div className="text-xs font-medium" style={{ color: statusInfo.color ?? TEXT }}>{statusInfo.text}</div>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
+        <div style={{ height: 8, background: BG }} />
         {/* ── 珠盘路卡片 ── */}
         <div className="mt-3" style={{ background: CARD }}>
           <div className="px-4 pt-4 pb-1">
