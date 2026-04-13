@@ -17371,7 +17371,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           STAR: "AND b.ts_code LIKE '688%'",
         };
         const mf = marketCond[input.market] || '';
-        const [rows] = await dbConn.execute(`
+        // 使用 query() 而非 execute()，避免 prepared statement 对 SQL 片段插入的限制
+        const sql = `
           SELECT
             l.ts_code,
             l.up_days,
@@ -17382,7 +17383,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           WHERE b.list_status = 'L'
             AND l.total_days >= 60
             ${mf}
-        `) as any[];
+        `;
+        const [rows] = await (dbConn as any).query(sql) as any[];
         const stocks = rows as any[];
         // 聚焦区间：30%~70%，共 20 个桶，每桶 2%
         const RANGE_MIN = 30;
