@@ -580,8 +580,8 @@ function ZhuLuMap({ items, allItems, streakStats }: { items: { tradeDate: string
                 <button
                   key={n}
                   onClick={() => setStreakTab(n)}
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{ background: streakTab === n ? RED : '#F0F0F0', color: streakTab === n ? '#fff' : MUTED, fontWeight: streakTab === n ? 700 : 400 }}
+                  className="text-xs px-2 py-0.5"
+                  style={{ background: streakTab === n ? RED : '#F0F0F0', color: streakTab === n ? '#fff' : MUTED, fontWeight: streakTab === n ? 700 : 400, borderRadius: 2 }}
                 >{n === 'all' ? '全量' : `${n}天`}</button>
               ))}
             </div>
@@ -1106,7 +1106,7 @@ export default function StockDetail() {
         {/* ── 珠盘路卡片 ── */}
         <div className="mt-3" style={{ background: CARD }}>
           <div className="px-4 pt-4 pb-1">
-            <div className="text-xs font-semibold" style={{ color: RED }}>珠盘路</div>
+            <div className="text-xs font-semibold" style={{ color: RED }}>涨跌概率</div>
           </div>
           {dailyLoading ? (
             <div className="flex items-center justify-center h-16" style={{ color: MUTED }}>
@@ -1136,7 +1136,7 @@ export default function StockDetail() {
           <div className="text-xs mb-3" style={{ color: MUTED }}>基于全生命周期数据的多维度信号分析</div>
           <div className="space-y-2">
             {[
-              { name: "珠盘路", desc: "原始K线胜负记录", done: true },
+              { name: "涨跌概率", desc: "原始K线胜负记录", done: true },
               { name: "大路", desc: "连续涨跌方向" },
               { name: "量能路", desc: "放量/缩量信号" },
               { name: "强度路", desc: "强弱阳/强弱阴" },
