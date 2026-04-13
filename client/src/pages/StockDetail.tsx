@@ -73,19 +73,22 @@ function ZhuLuScrollArea({
   getColorAndText: (pct: number) => { bg: string; fg: string; label: string };
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [rightPad, setRightPad] = useState(80); // 初始默认占位宽度
 
   useEffect(() => {
-    // 用 requestAnimationFrame 确保 DOM 布局完成后再计算滚动位置
+    // 第一帧计算容器宽度，设置右侧留白 = 1/3 容器宽
     const raf = requestAnimationFrame(() => {
       const el = scrollRef.current;
       if (!el) return;
-      // 容器宽度的 1/3 作为右侧留白（最新列停在 2/3 处）
       const containerW = el.clientWidth;
-      const contentW = columns.length * (CELL + GAP);
-      // 目标：最新列右边缘 = 容器 2/3 处
-      // 即 scrollLeft = contentW - containerW * (2/3)
-      const scrollTarget = Math.max(0, contentW - containerW * (2 / 3));
-      el.scrollLeft = scrollTarget;
+      const pad = Math.round(containerW / 3);
+      setRightPad(pad);
+      // 内容末尾有了 pad 宽度的空白，滚动到底部即可让最新列停在 2/3 处
+      // 用 setTimeout 等 setRightPad 渲染后再滚动
+      setTimeout(() => {
+        const el2 = scrollRef.current;
+        if (el2) el2.scrollLeft = el2.scrollWidth;
+      }, 0);
     });
     return () => cancelAnimationFrame(raf);
   }, [columns.length, CELL, GAP]);
@@ -102,8 +105,9 @@ function ZhuLuScrollArea({
           flexDirection: "row",
           alignItems: "flex-start",
           gap: GAP,
-          minWidth: columns.length * (CELL + GAP),
+          minWidth: columns.length * (CELL + GAP) + rightPad,
           height: totalH,
+          paddingRight: rightPad,
         }}
       >
         {columns.map((col, ci) => (
