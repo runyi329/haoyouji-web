@@ -697,38 +697,34 @@ function ZhuPanLu({
       {/* ── 单一容器：Tab + 统计格子 + 偏离值 + 进度条 ── */}
       <div className="px-4 pt-3 pb-4" style={{ background: CARD }}>
 
-        {/* Tab切换 + 明细按钮 */}
-        <div className="flex items-center mb-3">
-          {/* 连体分段控件 */}
-          <div className="flex" style={{ border: `1px solid ${BORDER}`, borderRadius: 4, overflow: "hidden" }}>
-            {([30, 60, 90, 180, 365] as const).map((n, idx) => (
+        {/* Tab切换 + 明细按钮（样式与个股涨跌天数页面一致） */}
+        <div className="flex" style={{ borderBottom: `1px solid ${BORDER}`, marginLeft: -16, marginRight: -16, marginTop: -12, marginBottom: 12 }}>
+          {([30, 60, 90, 180, 365] as const).map((n, idx) => {
+            const active = tab === n;
+            return (
               <button
                 key={n}
                 onClick={() => setTab(n)}
-                className="px-3 py-1 text-sm font-medium"
+                className="relative flex-shrink-0 text-xs font-medium py-2.5 px-4 transition-colors"
                 style={{
-                  background: tab === n ? RED : "#fff",
-                  color: tab === n ? "#fff" : MUTED,
+                  color: active ? RED : MUTED,
+                  background: active ? "#F5EDED" : "transparent",
                   borderRight: idx < 4 ? `1px solid ${BORDER}` : "none",
-                  minWidth: "2.8rem",
                 }}
               >
                 {n}天
+                {active && (
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: RED }} />
+                )}
               </button>
-            ))}
-          </div>
+            );
+          })}
           <button
             onClick={() => setShowDetail(true)}
-            className="ml-auto flex items-center gap-1 px-2.5 py-1 text-xs font-medium"
-            style={{ background: "#F0F0F0", color: MUTED, borderRadius: 4 }}
+            className="relative flex-shrink-0 text-xs font-medium py-2.5 px-3 ml-auto transition-colors"
+            style={{ color: MUTED, background: "transparent" }}
             title="查看每日明细"
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-            </svg>
             明细
           </button>
         </div>
