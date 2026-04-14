@@ -52,11 +52,45 @@ export default function AfWithdrawPage() {
     { enabled: amountNum >= 10 }
   );
 
-  // 获取提现历史
-  const { data: withdrawals = [], refetch: refetchWithdrawals, error: withdrawalsError, status: withdrawalsStatus, isLoading: withdrawalsLoading } = trpc.recharge.getMySntWithdrawals.useQuery(
-    { ledgerId, limit: 20 },
-    { enabled: !!user }
-  );
+  // 获取提现历史 - 使用直接 fetch 调用来绕过 tRPC batch 问题
+  const [withdrawals, setWithdrawals] = useState<any[]>([]);
+  const [withdrawalsStatus, setWithdrawalsStatus] = useState('idle');
+  const [withdrawalsError, setWithdrawalsError] = useState<any>(null);
+  const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
+
+  const refetchWithdrawals = async () => {
+    if (!user) return;
+    setWithdrawalsLoading(true);
+    setWithdrawalsStatus('loading');
+    try {
+      const input = encodeURIComponent(JSON.stringify({ json: { ledgerId, limit: 20 } }));
+      const res = await fetch(`/api/trpc/recharge.getMySntWithdrawals?input=${input}`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      console.log('[withdrawals fetch]', data);
+      if (data?.result?.data?.json) {
+        setWithdrawals(data.result.data.json);
+        setWithdrawalsStatus('success');
+      } else if (data?.error) {
+        setWithdrawalsError(data.error);
+        setWithdrawalsStatus('error');
+      } else {
+        setWithdrawals([]);
+        setWithdrawalsStatus('success');
+      }
+    } catch (err: any) {
+      console.error('[withdrawals fetch error]', err);
+      setWithdrawalsError(err);
+      setWithdrawalsStatus('error');
+    } finally {
+      setWithdrawalsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) refetchWithdrawals();
+  }, [user, ledgerId]);
 
   // 提交提现申请
   const withdrawMutation = trpc.recharge.requestSntWithdraw.useMutation({
