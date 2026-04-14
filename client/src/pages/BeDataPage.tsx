@@ -11,14 +11,8 @@ const SYMBOLS = [
 const PAGE_SIZE = 60;
 
 function formatPrice(val: number, symbol: string): string {
-  if (symbol === "BTCUSDT") {
-    return val >= 1000
-      ? val.toLocaleString("en-US", { maximumFractionDigits: 0 })
-      : val.toFixed(2);
-  }
-  return val >= 100
-    ? val.toLocaleString("en-US", { maximumFractionDigits: 1 })
-    : val.toFixed(2);
+  // BTC 和 ETH 统一保留2位小数
+  return val.toFixed(2);
 }
 
 function formatPct(val: number | null): string {
@@ -189,13 +183,13 @@ export default function BeDataPage() {
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 z-10">
               <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-1.5 py-2 text-left text-gray-500 font-medium w-[68px]">日期</th>
-                <th className="border border-gray-300 px-1 py-2 text-right text-gray-500 font-medium">开盘</th>
-                <th className="border border-gray-300 px-1 py-2 text-right text-gray-500 font-medium">收盘</th>
-                <th className="border border-gray-300 px-1 py-2 text-right text-gray-500 font-medium">最高</th>
-                <th className="border border-gray-300 px-1 py-2 text-right text-gray-500 font-medium">最低</th>
-                <th className="border border-gray-300 px-1 py-2 text-right text-gray-500 font-medium w-[58px]">涨跌</th>
-                <th className="border border-gray-300 px-1 py-2 text-right text-gray-500 font-medium w-[52px]">振幅</th>
+                <th className="border border-gray-300 px-1.5 py-2 text-center text-gray-500 font-medium w-[68px]">日期</th>
+                <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium">开盘</th>
+                <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium">收盘</th>
+                <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium">最高</th>
+                <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium">最低</th>
+                <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium w-[58px]">涨跌</th>
+                <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium w-[52px]">振幅</th>
               </tr>
             </thead>
             <tbody>
