@@ -398,9 +398,31 @@ export default function FinanceManagement() {
                 return (
                   <div
                     key={order.id}
-                    className="bg-white rounded-2xl shadow-sm overflow-hidden"
+                    className="bg-white rounded-2xl shadow-sm overflow-hidden relative"
                     style={{ border: '1px solid #E8EDFF' }}
                   >
+                    {(order.status === 'completed' || order.status === 'cancelled') && (
+                      <div
+                        className="absolute bottom-4 right-4 pointer-events-none select-none"
+                        style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
+                      >
+                        <div
+                          style={{
+                            border: '2px solid rgba(220,38,38,0.5)',
+                            color: 'rgba(220,38,38,0.5)',
+                            borderRadius: '4px',
+                            padding: '2px 8px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            letterSpacing: '3px',
+                            lineHeight: '1.4',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          结清
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
                       <div className="flex items-center gap-2">
                         <div
