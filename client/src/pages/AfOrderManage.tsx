@@ -293,7 +293,9 @@ export default function AfOrderManage() {
   const formatDate = (d: any) => {
     if (!d) return "-";
     const dt = new Date(d);
-    return `${(dt.getMonth() + 1).toString().padStart(2, "0")}-${dt.getDate().toString().padStart(2, "0")} ${dt.getHours().toString().padStart(2, "0")}:${dt.getMinutes().toString().padStart(2, "0")}`;
+    // 强制转换为北京时间 UTC+8，不依赖浏览器时区
+    const bjTime = new Date(dt.getTime() + 8 * 60 * 60 * 1000);
+    return `${(bjTime.getUTCMonth() + 1).toString().padStart(2, "0")}-${bjTime.getUTCDate().toString().padStart(2, "0")} ${bjTime.getUTCHours().toString().padStart(2, "0")}:${bjTime.getUTCMinutes().toString().padStart(2, "0")}`;
   };
 
   return (
