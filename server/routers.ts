@@ -11269,9 +11269,14 @@ export const appRouter = router({
           const managementFee = dailyFee * holdDays;
           console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 持有天数=${holdDays}, 累计管理费=${managementFee.toFixed(4)}`);
           
-          const grossReturn = principal + Math.max(0, profit);
+          // 赠予订单买入时未扣本金，卖出时只结算纯利润，不加回本金
+          const grossReturn = isGift ? Math.max(0, profit) : (principal + Math.max(0, profit));
           balanceAdjust = Math.max(0, grossReturn - managementFee);
-          balanceNote = `卖出成交 ${coin} 本金${principal.toFixed(2)}+收益${Math.max(0, profit).toFixed(4)}-管理费${managementFee.toFixed(4)} USDT`;
+          if (isGift) {
+            balanceNote = `卖出成交 ${coin} 收益${Math.max(0, profit).toFixed(4)}-管理费${managementFee.toFixed(4)} USDT`;
+          } else {
+            balanceNote = `卖出成交 ${coin} 本金${principal.toFixed(2)}+收益${Math.max(0, profit).toFixed(4)}-管理费${managementFee.toFixed(4)} USDT`;
+          }
           
           if (Math.abs(balanceAdjust) > 0.001) {
             await db.execute(
