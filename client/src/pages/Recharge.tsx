@@ -335,6 +335,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
 
   // ========== 默认显示充值金额选择页面 ==========
   return (
+    <>
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 顶部导航 */}
       {!hideHeader && (<div className="bg-white border-b sticky top-0 z-10">
@@ -503,5 +504,6 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
         </div>
       </div>
     )}
+    </>
   );
 }
