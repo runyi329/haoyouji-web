@@ -1404,20 +1404,14 @@ export default function ContactsList() {
             <Plus className="h-4 w-4" />
           </button>
           
-          {/* 刷新按钮 */}
+          {/* 强制刷新按钮 */}
           <button
             onClick={() => {
-              refetch();
-              refetchCompanyList();
-              refetchTags();
-              toast.success('已刷新');
+              window.location.reload();
             }}
-            className="flex items-center justify-center h-9 w-9 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all shadow-sm"
-            title="刷新页面"
+            className="flex items-center justify-center h-9 px-3 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all shadow-sm text-xs font-medium"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            刷新
           </button>
         </div>
       </div>
