@@ -19,74 +19,35 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: 💰 补入提现申请
+      - name: 💰 补入100 USDT提现申请（测试）
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -s' << 'ENDSSH'
             source /root/haoyouji-web/.env 2>/dev/null || true
-            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
-            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP '(?<=:)[0-9]{4,5}(?=/)' | tail -1 || echo '4000')
-            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://)[^:]+' || echo '')
-            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://[^:]+:)[^@]+' || echo '')
-            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP '(?<=/)[^?]+$' || echo '')
+            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP "(?<=@)[^:/]+" || echo "")
+            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP "(?<=:)[0-9]{4,5}(?=/)" | tail -1 || echo "4000")
+            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP "(?<=://)[^:]+" || echo "")
+            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP "(?<=://[^:]+:)[^@]+" || echo "")
+            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP "(?<=/)[^?]+$" || echo "")
 
             USER_ID=4957150
             LEDGER_ID=52
-            AMOUNT=500
+            AMOUNT=100
             ADDRESS="0xf96505b0d41054455e904af175a74993a98137802578672864f6020b7f8a2587"
 
-            echo "=== 检查用户是否存在 ==="
+            echo "=== 直接写入 snt_withdrawals（不检查余额，测试用）==="
             mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-            SELECT id, username, name FROM users WHERE id = $USER_ID;
+            INSERT INTO snt_withdrawals (user_id, ledger_id, snt_amount, bsc_address, status, created_at, updated_at)
+            VALUES ($USER_ID, $LEDGER_ID, $AMOUNT, '$ADDRESS', 'pending', NOW(), NOW());
             " 2>&1
 
-            echo "=== 检查是否已有pending提现申请 ==="
-            PENDING=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "
-            SELECT COUNT(*) FROM snt_withdrawals WHERE user_id = $USER_ID AND ledger_id = $LEDGER_ID AND status IN ('pending','processing');
-            " 2>/dev/null || echo '0')
-            echo "已有pending申请数: $PENDING"
+            WITHDRAW_ID=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "
+            SELECT LAST_INSERT_ID();
+            " 2>/dev/null || echo "0")
+            echo "写入的 ID: $WITHDRAW_ID"
 
-            if [ "$PENDING" -gt "0" ]; then
-              echo "⚠️ 已有未处理的提现申请，跳过补入"
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-              SELECT id, user_id, ledger_id, snt_amount, bsc_address, status, created_at FROM snt_withdrawals WHERE user_id = $USER_ID ORDER BY id DESC LIMIT 5;
-              " 2>&1
-            else
-              echo "=== 查询当前余额 ==="
-              BALANCE=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "
-              SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = $USER_ID AND ledger_id = $LEDGER_ID;
-              " 2>/dev/null || echo '0')
-              echo "当前账本余额: $BALANCE"
-
-              echo "=== 1. 写入 snt_withdrawals ==="
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-              INSERT INTO snt_withdrawals (user_id, ledger_id, snt_amount, bsc_address, status, created_at, updated_at)
-              VALUES ($USER_ID, $LEDGER_ID, $AMOUNT, '$ADDRESS', 'pending', NOW(), NOW());
-              " 2>&1
-
-              WITHDRAW_ID=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "
-              SELECT LAST_INSERT_ID();
-              " 2>/dev/null || echo '0')
-              echo "✅ snt_withdrawals 写入成功，ID: $WITHDRAW_ID"
-
-              echo "=== 2. 写入 af_manual_balances（冻结余额）==="
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-              INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-              VALUES ($LEDGER_ID, $USER_ID, -$AMOUNT, '提现申请冻结 #$WITHDRAW_ID $AMOUNT USDT → 0xf96505b0...', NOW(), NOW());
-              " 2>&1
-              echo "✅ af_manual_balances 写入成功"
-
-              echo "=== 3. 写入 balance_history ==="
-              NEW_BALANCE=$(echo "$BALANCE - $AMOUNT" | bc)
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-              INSERT INTO balance_history (user_id, amount, type, related_id, balance, description)
-              VALUES ($USER_ID, -$AMOUNT, 'withdraw', $WITHDRAW_ID, $NEW_BALANCE, '提现申请 $AMOUNT USDT → 0xf96505b0...');
-              " 2>&1
-              echo "✅ balance_history 写入成功"
-
-              echo "=== 验证最终结果 ==="
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-              SELECT id, user_id, ledger_id, snt_amount, LEFT(bsc_address,12) as addr_prefix, status, created_at
-              FROM snt_withdrawals WHERE user_id = $USER_ID ORDER BY id DESC LIMIT 5;
-              " 2>&1
-            fi
+            echo "=== 验证：查询 snt_withdrawals 中用户4957150的所有记录 ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+            SELECT id, user_id, ledger_id, snt_amount, LEFT(bsc_address,20) as addr, status, created_at
+            FROM snt_withdrawals WHERE user_id = $USER_ID ORDER BY id DESC LIMIT 10;
+            " 2>&1
           ENDSSH
