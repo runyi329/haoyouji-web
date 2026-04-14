@@ -53,7 +53,7 @@ export default function AfWithdrawPage() {
   );
 
   // 获取提现历史
-  const { data: withdrawals = [], refetch: refetchWithdrawals } = trpc.recharge.getMySntWithdrawals.useQuery(
+  const { data: withdrawals = [], refetch: refetchWithdrawals, error: withdrawalsError, status: withdrawalsStatus, isLoading: withdrawalsLoading } = trpc.recharge.getMySntWithdrawals.useQuery(
     { ledgerId, limit: 20 },
     { enabled: !!user }
   );
@@ -277,6 +277,10 @@ export default function AfWithdrawPage() {
       <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden" style={{ wordBreak: 'break-all' }}>
         <div className="px-5 py-3 border-b border-gray-100">
           <span className="text-sm font-semibold text-gray-700">提现记录</span>
+        </div>
+        {/* 调试信息 - 上线后删除 */}
+        <div className="px-5 py-2 text-xs text-blue-500 bg-blue-50">
+          [DEBUG] status={withdrawalsStatus} | user={user?.id} | ledgerId={ledgerId} | count={withdrawals.length} | loading={String(withdrawalsLoading)} | error={withdrawalsError?.message || 'none'}
         </div>
         {withdrawals.length === 0 ? (
           <div className="py-8 text-center text-sm text-gray-400">暂无提现记录</div>
