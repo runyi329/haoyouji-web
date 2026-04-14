@@ -80,6 +80,9 @@ jobs:
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
             echo "ubuntu PM2错误日志（最后30行）："
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --err --nostream --lines 30' 2>&1 || true
+            echo "🔍 检查构建产物中是否还有提现管理..."
+            grep -r '提现管理' /root/haoyouji-web/dist/public/ 2>/dev/null && echo '⚠️ 构建产物中仍有提现管理' || echo '✅ 构建产物中已无提现管理'
+            grep -r '提现管理' /home/ubuntu/haoyouji-web/dist/public/ 2>/dev/null && echo '⚠️ 服务目录中仍有提现管理' || echo '✅ 服务目录中已无提现管理'
             echo "✅ 部署完成！"
             echo "🔒 同步Nginx配置并重载Nginx..."
             cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
