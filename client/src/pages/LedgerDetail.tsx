@@ -467,9 +467,14 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
-  const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消';
+  const isEnded = order.status === 'ended';
+  const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : isEnded ? '已结束' : '已取消';
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
-  const accrued = useAccruedInterest(order.interest_base, order.interest_rate_annual, order.interest_start_date);
+  const accrued = useAccruedInterest(
+    isEnded ? null : order.interest_base,
+    isEnded ? null : order.interest_rate_annual,
+    isEnded ? null : order.interest_start_date
+  );
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
   const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
@@ -478,11 +483,11 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
   return (
     <div
       className="rounded-2xl shadow-sm"
-      style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', cursor: canClick ? 'pointer' : 'default', overflow: 'hidden' }}
+      style={{ backgroundColor: isEnded ? '#F3F4F6' : '#FFFFFF', border: isEnded ? '1px solid #D1D5DB' : '1px solid #E0E8FF', boxShadow: isEnded ? 'none' : '0 2px 8px rgba(26,86,219,0.08)', cursor: canClick ? 'pointer' : 'default', overflow: 'hidden', opacity: isEnded ? 0.7 : 1 }}
       onClick={onClick}
     >
       {/* 顶部色条 */}
-      <div className="h-1" style={{ background: `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
+      <div className="h-1" style={{ background: isEnded ? '#D1D5DB' : `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
 
       {/* 主体：左右两栏 */}
       <div className="flex" style={{ minHeight: '100px' }}>
@@ -519,15 +524,19 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
               </div>
             )}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400 shrink-0">今日币价</span>
+              <span className="text-gray-400 shrink-0">{isEnded ? '结束币价' : '今日币价'}</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
-                {livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
+                {isEnded
+                  ? (order.end_price ? parseFloat(order.end_price).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
+                  : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400 shrink-0">当前价值</span>
+              <span className="text-gray-400 shrink-0">{isEnded ? '结束价值' : '当前价值'}</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
-                {livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
+                {isEnded
+                  ? (order.end_price && qty ? (qty * parseFloat(order.end_price)).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
+                  : (livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
               </span>
             </div>
             {order.buy_date && order.status === 'active' && (() => {
