@@ -5,115 +5,99 @@ on:
 
 jobs:
   fix:
+    name: 补入SOL订单46和56的卖出结算余额
     runs-on: ubuntu-latest
     steps:
-      - name: 查询tier并补入SOL卖出结算
+      - name: 配置SSH密钥
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 查询tier档位并计算结算金额
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e \"
+              SELECT '=== 订单46和56的tier档位 ===' as info;
+              SELECT order_id, MAX(tier) as max_tier, COUNT(*) as tier_count
+              FROM af_order_tier_triggers
+              WHERE order_id IN (46, 56)
+              GROUP BY order_id;
+
+              SELECT '=== 检查是否已有SOL卖出结算记录 ===' as info;
+              SELECT id, amount, note, created_at
+              FROM af_manual_balances
+              WHERE user_id = 4957289 AND note LIKE '%卖出成交%SOL%'
+              ORDER BY id DESC;
+            \""
+
+      - name: 补入两笔SOL卖出结算余额
+        run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db << 'SQLEOF'
 
-          echo "=== 查询两笔订单的最高tier档位 ==="
-          mysql -u root -pMiao@20190603 crm_db -e "
-          SELECT order_id, MAX(tier) as max_tier, COUNT(*) as tier_count
-          FROM af_order_tier_triggers
-          WHERE order_id IN (46, 56)
-          GROUP BY order_id;
-          "
+          -- 订单46: 正常单，本金1000，买入价80，B数65.625，卖出价85，持有19天
+          -- 订单56: 赠单，本金1498.5，买入价80，B数18.73125，卖出价85，持有16天
 
-          echo "=== 检查是否已有结算记录（避免重复补入）==="
-          mysql -u root -pMiao@20190603 crm_db -e "
-          SELECT id, amount, note, created_at
-          FROM af_manual_balances
-          WHERE user_id = 4957289 AND note LIKE '%卖出成交%SOL%'
-          ORDER BY id DESC;
-          "
+          SET @tier46 = (SELECT COALESCE(MAX(tier), 0) FROM af_order_tier_triggers WHERE order_id = 46);
+          SET @tier56 = (SELECT COALESCE(MAX(tier), 0) FROM af_order_tier_triggers WHERE order_id = 56);
 
-          echo "=== 执行结算补入 ==="
-          mysql -u root -pMiao@20190603 crm_db << 'SQLEOF'
-
-          -- 订单46: 正常单，1000 USDT，买入价80，B数65.625，卖出价85，持有19天
-          -- 订单56: 赠单，1498.5 USDT，买入价80，B数18.73125，卖出价85，持有16天
-          -- 折扣率根据 maxTier 决定：tier=0 → 1.0, tier=1 → 0.6667, tier=2 → 0.4444...
-
-          SET @order46_principal = 1000.00;
-          SET @order46_qty = 65.625;
-          SET @order46_buy = 80;
-          SET @order46_sell = 85;
-          SET @order46_is_gift = 0;
-          SET @order46_hold_days = 19;
-          SET @order46_max_tier = (SELECT COALESCE(MAX(tier), 0) FROM af_order_tier_triggers WHERE order_id = 46);
-
-          SET @order56_principal = 1498.50;
-          SET @order56_qty = 18.73125;
-          SET @order56_buy = 80;
-          SET @order56_sell = 85;
-          SET @order56_is_gift = 1;
-          SET @order56_hold_days = 16;
-          SET @order56_max_tier = (SELECT COALESCE(MAX(tier), 0) FROM af_order_tier_triggers WHERE order_id = 56);
-
-          -- 折扣率映射（与代码一致）
-          -- tier=0:1.0, 1:0.6667, 2:0.4444, 3:0.3333, 4:0.2667, 5:0.2222, 6:0.1905, 7:0.1667, 8:0.1481, 9:0.1333
-          SET @rate46 = CASE @order46_max_tier
+          SET @rate46 = CASE @tier46
             WHEN 0 THEN 1.0 WHEN 1 THEN 0.6667 WHEN 2 THEN 0.4444 WHEN 3 THEN 0.3333
             WHEN 4 THEN 0.2667 WHEN 5 THEN 0.2222 WHEN 6 THEN 0.1905 WHEN 7 THEN 0.1667
             WHEN 8 THEN 0.1481 WHEN 9 THEN 0.1333 ELSE 1.0 END;
 
-          SET @rate56 = CASE @order56_max_tier
+          SET @rate56 = CASE @tier56
             WHEN 0 THEN 1.0 WHEN 1 THEN 0.6667 WHEN 2 THEN 0.4444 WHEN 3 THEN 0.3333
             WHEN 4 THEN 0.2667 WHEN 5 THEN 0.2222 WHEN 6 THEN 0.1905 WHEN 7 THEN 0.1667
             WHEN 8 THEN 0.1481 WHEN 9 THEN 0.1333 ELSE 1.0 END;
 
           -- 有效B数
-          SET @eff46 = @order46_qty * @rate46;
-          SET @eff56 = @order56_qty * @rate56;
+          SET @eff46 = 65.625 * @rate46;
+          SET @eff56 = 18.73125 * @rate56;
 
           -- 差价收益
-          SET @profit46 = @eff46 * (@order46_sell - @order46_buy);
-          SET @profit56 = @eff56 * (@order56_sell - @order56_buy);
+          SET @profit46 = @eff46 * (85 - 80);
+          SET @profit56 = @eff56 * (85 - 80);
 
           -- 管理费（正常单：本金×5.25/0.75×0.12/365×天数；赠单：本金/0.75×0.12/365×天数）
-          SET @fee46 = (@order46_principal * 5.25 / 0.75 * 0.12 / 365) * @order46_hold_days;
-          SET @fee56 = (@order56_principal / 0.75 * 0.12 / 365) * @order56_hold_days;
+          SET @fee46 = (1000.00 * 5.25 / 0.75 * 0.12 / 365) * 19;
+          SET @fee56 = (1498.50 / 0.75 * 0.12 / 365) * 16;
 
           -- 到账金额 = 本金 + max(0, 收益) - 管理费
-          SET @balance46 = GREATEST(0, @order46_principal + GREATEST(0, @profit46) - @fee46);
-          SET @balance56 = GREATEST(0, @order56_principal + GREATEST(0, @profit56) - @fee56);
+          SET @balance46 = GREATEST(0, 1000.00 + GREATEST(0, @profit46) - @fee46);
+          SET @balance56 = GREATEST(0, 1498.50 + GREATEST(0, @profit56) - @fee56);
 
-          -- 打印计算结果
-          SELECT 
-            @order46_max_tier as tier46, @rate46 as rate46, @eff46 as eff_qty46,
-            @profit46 as profit46, @fee46 as fee46, @balance46 as balance46;
-          SELECT 
-            @order56_max_tier as tier56, @rate56 as rate56, @eff56 as eff_qty56,
-            @profit56 as profit56, @fee56 as fee56, @balance56 as balance56;
+          SELECT '=== 计算结果 ===' as info;
+          SELECT
+            @tier46 as tier46, @rate46 as rate46, @eff46 as eff_qty46,
+            @profit46 as profit46, @fee46 as fee46, @balance46 as balance46_到账;
+          SELECT
+            @tier56 as tier56, @rate56 as rate56, @eff56 as eff_qty56,
+            @profit56 as profit56, @fee56 as fee56, @balance56 as balance56_到账;
 
           -- 插入结算记录（仅当不存在时）
           INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
           SELECT 52, 4957289, @balance46,
-            CONCAT('卖出成交 SOL 本金', FORMAT(@order46_principal,2), '+收益', FORMAT(GREATEST(0,@profit46),4), '-管理费', FORMAT(@fee46,4), ' USDT'),
+            CONCAT('卖出成交 SOL 本金1000.00+收益', FORMAT(GREATEST(0,@profit46),4), '-管理费', FORMAT(@fee46,4), ' USDT'),
             '2026-04-14 11:52:09', NOW()
           WHERE NOT EXISTS (
-            SELECT 1 FROM af_manual_balances WHERE user_id=4957289 AND note LIKE '%卖出成交 SOL%' AND created_at='2026-04-14 11:52:09'
+            SELECT 1 FROM af_manual_balances
+            WHERE user_id=4957289 AND note LIKE '%卖出成交 SOL%' AND created_at='2026-04-14 11:52:09'
           );
 
           INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
           SELECT 52, 4957289, @balance56,
-            CONCAT('卖出成交 SOL 本金', FORMAT(@order56_principal,2), '+收益', FORMAT(GREATEST(0,@profit56),4), '-管理费', FORMAT(@fee56,4), ' USDT'),
+            CONCAT('卖出成交 SOL 本金1498.50+收益', FORMAT(GREATEST(0,@profit56),4), '-管理费', FORMAT(@fee56,4), ' USDT'),
             '2026-04-14 11:51:53', NOW()
           WHERE NOT EXISTS (
-            SELECT 1 FROM af_manual_balances WHERE user_id=4957289 AND note LIKE '%卖出成交 SOL%' AND created_at='2026-04-14 11:51:53'
+            SELECT 1 FROM af_manual_balances
+            WHERE user_id=4957289 AND note LIKE '%卖出成交 SOL%' AND created_at='2026-04-14 11:51:53'
           );
 
-          SELECT '补入完成' as status;
-          SQLEOF
-
-          echo "=== 补入后余额汇总 ==="
-          mysql -u root -pMiao@20190603 crm_db -e "
+          SELECT '=== 补入完成，最新余额流水 ===' as info;
           SELECT id, amount, note, created_at FROM af_manual_balances WHERE user_id=4957289 ORDER BY id DESC LIMIT 10;
-          SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))),0) as 当前余额 FROM af_manual_balances WHERE user_id=4957289;
-          "
-
+          SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))),0) as 当前余额合计 FROM af_manual_balances WHERE user_id=4957289;
+          SQLEOF
           ENDSSH
