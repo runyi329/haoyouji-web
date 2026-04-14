@@ -39,7 +39,8 @@ export async function getUserSessions(userId: number, page: number = 1, limit: n
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const offset = (page - 1) * limit;
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 200));
+  const offset = (page - 1) * safeLimit;
 
   // 查询会话列表
   const sessions = await db.execute(
@@ -47,8 +48,8 @@ export async function getUserSessions(userId: number, page: number = 1, limit: n
      FROM ai_sessions
      WHERE user_id = ?
      ORDER BY updated_at DESC
-     LIMIT ? OFFSET ?`,
-    [userId, limit, offset]
+     LIMIT ${safeLimit} OFFSET ${offset}`,
+    [userId]
   );
 
   // 查询总数
@@ -216,12 +217,13 @@ export async function getSessionHistory(sessionId: number, limit: number = 20) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 200));
   const messagesResult = await db.execute(
     `SELECT role, content FROM ai_messages 
      WHERE session_id = ? AND role IN ('user', 'assistant')
      ORDER BY created_at DESC
-     LIMIT ?`,
-    [sessionId, limit]
+     LIMIT ${safeLimit}`,
+    [sessionId]
   );
 
   const messages = Array.isArray(messagesResult) ? messagesResult : (messagesResult.rows || []);

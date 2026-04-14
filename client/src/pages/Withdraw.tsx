@@ -237,7 +237,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
                         {wallet.walletAddress}
                       </div>
                       {wallet.notes && (
-                        <div className="text-xs text-gray-400 mt-1">{wallet.notes}</div>
+                        <div className="text-xs text-gray-400 mt-1 break-all">{wallet.notes}</div>
                       )}
                     </button>
                   );
