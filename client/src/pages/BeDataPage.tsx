@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const SYMBOLS = [
@@ -43,23 +43,40 @@ export default function BeDataPage() {
 
   const [activeSymbol, setActiveSymbol] = useState(SYMBOLS[0].key);
   const [page, setPage] = useState(1);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  const utils = trpc.useUtils();
 
   const { data, isLoading, isFetching } = trpc.cryptoData.getKlines.useQuery(
     { symbol: activeSymbol, page, pageSize: PAGE_SIZE },
     { keepPreviousData: true } as any
   );
 
+  const syncMutation = trpc.cryptoData.syncLatest.useMutation({
+    onSuccess: (result) => {
+      if (result.added > 0) {
+        setSyncMsg(`已更新 ${result.added} 条，最新至 ${result.latestDate ?? "-"}`);
+      } else {
+        setSyncMsg("数据已是最新，无需更新");
+      }
+      // 刷新表格数据
+      utils.cryptoData.getKlines.invalidate();
+      setTimeout(() => setSyncMsg(null), 4000);
+    },
+    onError: (err) => {
+      setSyncMsg(`更新失败：${err.message}`);
+      setTimeout(() => setSyncMsg(null), 5000);
+    },
+  });
+
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  // 统计信息：最新一条（第1页第1行）和最早一条（最后一页最后一行）
-  // 第1页数据是最新的，所以 rows[0] 是最新日期
   const latestRow = page === 1 ? rows[0] : null;
-  const oldestDate = total > 0 ? "17/08/17" : "-"; // BTC/ETH 数据从 2017-08-17 开始
-  const latestDate = latestRow ? formatDate(latestRow.date) : "-";
+  const oldestDate = total > 0 ? "17/08/17" : "-";
+  const latestDate = latestRow ? latestRow.date : "-"; // 已是 YY/MM/DD 格式
 
-  // 最新收盘价和涨跌幅（第1页第1行）
   const latestClose = latestRow ? latestRow.close : null;
   const latestChangePct = latestRow ? latestRow.changePct : null;
   const isUp = latestChangePct != null && latestChangePct > 0;
@@ -71,7 +88,11 @@ export default function BeDataPage() {
     setPage(1);
   };
 
-  const symbolLabel = SYMBOLS.find((s) => s.key === activeSymbol)?.label ?? "";
+  const handleSync = () => {
+    if (syncMutation.isLoading) return;
+    setSyncMsg(null);
+    syncMutation.mutate({ symbol: activeSymbol });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -84,7 +105,16 @@ export default function BeDataPage() {
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-semibold text-gray-800 text-base">BE数据</span>
+          <span className="font-semibold text-gray-800 text-base flex-1">BE数据</span>
+          {/* 更新数据按钮 */}
+          <button
+            onClick={handleSync}
+            disabled={syncMutation.isLoading}
+            className="flex items-center gap-1 text-sm text-[#D32F2F] font-medium disabled:opacity-50 px-2 py-1"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isLoading ? "animate-spin" : ""}`} />
+            {syncMutation.isLoading ? "更新中..." : "更新数据"}
+          </button>
         </div>
 
         {/* Tab 切换 */}
@@ -105,32 +135,35 @@ export default function BeDataPage() {
         </div>
       </div>
 
+      {/* 更新结果提示 */}
+      {syncMsg && (
+        <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 text-xs text-blue-600 text-center">
+          {syncMsg}
+        </div>
+      )}
+
       {/* 统计栏 */}
       {!isLoading && total > 0 && (
         <div className="bg-white border-b border-gray-200 px-3 py-3">
           <div className="grid grid-cols-2 gap-2">
-            {/* 左上：数据范围 */}
             <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
               <div className="text-xs text-gray-400 mb-0.5">数据范围</div>
               <div className="text-sm font-medium text-gray-700 font-mono">
                 {oldestDate} ~ {latestDate}
               </div>
             </div>
-            {/* 右上：数据条数 */}
             <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
               <div className="text-xs text-gray-400 mb-0.5">历史数据</div>
               <div className="text-sm font-medium text-gray-700">
                 共 <span className="text-[#D32F2F] font-bold">{total}</span> 条日线
               </div>
             </div>
-            {/* 左下：最新收盘价 */}
             <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
               <div className="text-xs text-gray-400 mb-0.5">最新收盘</div>
               <div className={`text-sm font-bold font-mono ${pctColor}`}>
                 {latestClose != null ? formatPrice(latestClose, activeSymbol) : "-"} USDT
               </div>
             </div>
-            {/* 右下：最新涨跌幅 */}
             <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
               <div className="text-xs text-gray-400 mb-0.5">当日涨跌</div>
               <div className={`text-sm font-bold font-mono ${pctColor}`}>
@@ -154,7 +187,6 @@ export default function BeDataPage() {
           </div>
         ) : (
           <table className="w-full border-collapse text-xs">
-            {/* 表头 */}
             <thead className="sticky top-0 z-10">
               <tr className="bg-gray-100">
                 <th className="border border-gray-300 px-1.5 py-2 text-left text-gray-500 font-medium w-[68px]">日期</th>
@@ -176,7 +208,7 @@ export default function BeDataPage() {
                 return (
                   <tr key={row.date} className={rowBg}>
                     <td className="border border-gray-200 px-1.5 py-2 text-gray-500 font-mono">
-                      {formatDate(row.date)}
+                      {row.date}
                     </td>
                     <td className="border border-gray-200 px-1 py-2 text-right text-gray-700 font-mono">
                       {formatPrice(row.open, activeSymbol)}

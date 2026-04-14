@@ -138,3 +138,86 @@ export async function getLatestCryptoDate(symbol: string): Promise<string | null
   ) as any[];
   return (rows as any[])[0]?.latest ?? null;
 }
+
+/**
+ * 从 Binance 拉取增量日线数据并写入数据库
+ * 自动从最新日期之后开始拉取，最多拉取 1000 条
+ */
+export async function syncLatestFromBinance(symbol: string): Promise<{ added: number; latestDate: string | null }> {
+  // 1. 查最新日期
+  const latestDate = await getLatestCryptoDate(symbol);
+  
+  // 计算起始时间（最新日期的下一天，或默认从2017-08-17开始）
+  let startTime: number;
+  if (latestDate) {
+    const d = new Date(latestDate);
+    d.setDate(d.getDate() + 1); // 从下一天开始
+    startTime = d.getTime();
+  } else {
+    startTime = new Date('2017-08-17').getTime();
+  }
+
+  const now = Date.now();
+  if (startTime > now) {
+    return { added: 0, latestDate };
+  }
+
+  // 2. 从 Binance 拉取数据（每次最多1000条）
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
+  
+  let klines: any[];
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!resp.ok) throw new Error(`Binance API error: ${resp.status}`);
+    klines = await resp.json();
+  } catch (e: any) {
+    // 尝试备用域名
+    try {
+      const url2 = `https://api1.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
+      const resp2 = await fetch(url2, { signal: AbortSignal.timeout(15000) });
+      if (!resp2.ok) throw new Error(`Binance API error: ${resp2.status}`);
+      klines = await resp2.json();
+    } catch (e2: any) {
+      throw new Error(`无法连接 Binance API: ${e2.message}`);
+    }
+  }
+
+  if (!klines || klines.length === 0) {
+    return { added: 0, latestDate };
+  }
+
+  // 3. 转换格式
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const records: CryptoKline[] = klines
+    .filter((k: any) => {
+      // 排除今天（当天K线未收盘）
+      const kDate = new Date(k[0]);
+      kDate.setHours(0, 0, 0, 0);
+      return kDate.getTime() < today.getTime();
+    })
+    .map((k: any) => {
+      const open = parseFloat(k[1]);
+      const high = parseFloat(k[2]);
+      const low = parseFloat(k[3]);
+      const close = parseFloat(k[4]);
+      const volume = parseFloat(k[5]);
+      const quoteVolume = parseFloat(k[7]);
+      const changePct = open > 0 ? parseFloat(((close - open) / open * 100).toFixed(4)) : null;
+      const amplitudePct = open > 0 ? parseFloat(((high - low) / open * 100).toFixed(4)) : null;
+      const dateObj = new Date(k[0]);
+      const dateStr = `${dateObj.getUTCFullYear()}-${String(dateObj.getUTCMonth() + 1).padStart(2, '0')}-${String(dateObj.getUTCDate()).padStart(2, '0')}`;
+      return { symbol, date: dateStr, open, high, low, close, volume, quoteVolume, changePct, amplitudePct };
+    });
+
+  if (records.length === 0) {
+    return { added: 0, latestDate };
+  }
+
+  // 4. 写入数据库
+  await batchUpsertCryptoKlines(records);
+
+  const newLatest = records[records.length - 1].date;
+  return { added: records.length, latestDate: newLatest };
+}
