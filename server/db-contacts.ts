@@ -887,7 +887,8 @@ export async function getLastInteractionDate(contactId: number): Promise<number 
     return interactionDate.getTime();
   } else if (typeof interactionDate === 'string') {
     // 如果是字符串格式,转换为Date再获取时间戳
-    return new Date(interactionDate).getTime();
+    const ts = new Date(interactionDate).getTime();
+    return isNaN(ts) ? null : ts;
   } else if (typeof interactionDate === 'number') {
     // 如果已经是时间戳,直接返回
     return interactionDate;
@@ -2671,9 +2672,10 @@ export async function getInteractionInfoForContacts(contactIds: number[]): Promi
     
     // 检查每个联络记录是否在各时间段内
     for (const interaction of interactions) {
-      const interactionTimestamp = typeof interaction.interactionDate === 'number' 
+      const rawTs = typeof interaction.interactionDate === 'number' 
         ? interaction.interactionDate 
         : new Date(interaction.interactionDate).getTime();
+      const interactionTimestamp = isNaN(rawTs) ? 0 : rawTs;
       
       if (interactionTimestamp >= startOfTodayTimestamp) {
         hasInteractionToday = true;
@@ -3466,9 +3468,10 @@ export async function getContactsByParentPaginated(
       
       // 检查每个联络记录是否在各时间段内
       for (const interaction of interactions) {
-        const interactionTimestamp = typeof interaction.interactionDate === 'number' 
+        const rawTs2 = typeof interaction.interactionDate === 'number' 
           ? interaction.interactionDate 
           : new Date(interaction.interactionDate).getTime();
+        const interactionTimestamp = isNaN(rawTs2) ? 0 : rawTs2;
         
         if (interactionTimestamp >= startOfTodayTimestamp) {
           hasInteractionToday = true;

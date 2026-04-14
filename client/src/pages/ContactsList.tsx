@@ -164,10 +164,16 @@ function getInteractionStatusColor(days: number | null): string {
 }
 
 // 格式化日期为"2025年1月10日"
-function formatDate(timestamp: number | null): string {
-  if (!timestamp) return '从未联络';
-  const date = new Date(timestamp);
-  return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+function formatDate(timestamp: number | null | undefined): string {
+  if (!timestamp || timestamp <= 0) return '从未联络';
+  try {
+    const date = new Date(timestamp);
+    // 检查日期是否有效
+    if (isNaN(date.getTime())) return '从未联络';
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+  } catch {
+    return '从未联络';
+  }
 }
 
 export default function ContactsList() {
