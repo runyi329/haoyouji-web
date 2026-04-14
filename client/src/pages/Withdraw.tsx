@@ -41,10 +41,10 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
 
   const balance = useMemo(() => parseFloat(String(balanceQuery.data || 0)), [balanceQuery.data]);
 
-  // 筛选出区块链钱包（wallet_type === 'blockchain'）
+  // 获取所有绑定的收款地址（不限类型，手动打款支持任意链）
   const blockchainWallets = useMemo(() => {
     if (!walletsQuery.data) return [];
-    return (walletsQuery.data as any[]).filter((w: any) => w.walletType === 'blockchain' && w.walletAddress);
+    return (walletsQuery.data as any[]).filter((w: any) => w.walletAddress);
   }, [walletsQuery.data]);
 
   // 获取选中的钱包
@@ -86,7 +86,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
     }
 
     if (!selectedWallet) {
-      toast.error("请先在个人中心绑定区块链钱包地址");
+      toast.error("请先在个人中心绑定收款地址");
       return;
     }
 
@@ -200,13 +200,13 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
             ) : blockchainWallets.length === 0 ? (
               <div className="text-center py-6 text-gray-400">
                 <AlertCircle className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">尚未绑定区块链钱包</p>
-                <p className="text-xs text-gray-400 mt-1">请在个人中心 → 收款账户中添加区块链钱包</p>
+                <p className="text-sm">尚未绑定收款地址</p>
+                <p className="text-xs text-gray-400 mt-1">请在个人中心 → 收款账户中添加收款地址</p>
                 <button
                   onClick={() => setLocation('/payment-accounts')}
                   className="mt-3 px-4 py-1.5 bg-[#D32F2F] text-white text-xs rounded-lg"
                 >
-                  去绑定钱包
+                  去绑定地址
                 </button>
               </div>
             ) : (
@@ -227,7 +227,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                           isSelected ? "bg-[#D32F2F] text-white" : "bg-gray-200 text-gray-600"
                         }`}>
-                          {wallet.network || '区块链'}
+                          {wallet.network || wallet.walletType || '收款地址'}
                         </span>
                         {wallet.currency && (
                           <span className="text-xs text-gray-500">{wallet.currency}</span>
