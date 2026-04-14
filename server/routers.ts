@@ -218,6 +218,13 @@ export const appRouter = router({
         return { date };
       }),
 
+    // 涨跌统计分析
+    getStats: protectedProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getCryptoStats(input.symbol);
+      }),
+
     // 从 Binance 拉取增量数据（管理员可操作）
     syncLatest: protectedProcedure
       .input(z.object({ symbol: z.string() }))
