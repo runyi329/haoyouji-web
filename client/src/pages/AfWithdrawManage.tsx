@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -45,12 +45,27 @@ export default function AfWithdrawManage() {
 
   const utils = trpc.useUtils();
 
-  // 获取提现订单列表
+  // 获取提现订单列表（当前筛选）
   const { data: withdrawals = [], isLoading } = trpc.recharge.adminGetAllSntWithdrawals.useQuery({
     ledgerId,
     status: statusFilter || undefined,
     limit: 100,
   });
+
+  // 额外请求全量数据用于统计各状态数量
+  const { data: allWithdrawals = [] } = trpc.recharge.adminGetAllSntWithdrawals.useQuery({
+    ledgerId,
+    limit: 500,
+  });
+
+  // 统计各状态数量
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { '': allWithdrawals.length };
+    for (const w of allWithdrawals as any[]) {
+      counts[w.status] = (counts[w.status] || 0) + 1;
+    }
+    return counts;
+  }, [allWithdrawals]);
 
   // 获取手续费规则
   const { data: feeRules = [] } = trpc.recharge.adminGetFeeRules.useQuery({ ledgerId });
@@ -211,6 +226,15 @@ export default function AfWithdrawManage() {
                 }`}
               >
                 {s.label}
+                {statusCounts[s.key] !== undefined && statusCounts[s.key] > 0 && (
+                  <span className={`ml-1 text-[10px] font-bold px-1 py-0.5 rounded-full ${
+                    statusFilter === s.key
+                      ? 'bg-white/30 text-white'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {statusCounts[s.key]}
+                  </span>
+                )}
               </button>
             ))}
           </div>
