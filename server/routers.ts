@@ -11235,7 +11235,9 @@ export const appRouter = router({
         if (input.sellStatus === 'sold' && order.sell_status !== 'sold') {
           // 确认卖出成交：从同一订单取买入信息
           const actualSellPrice = input.sellPrice ? parseFloat(input.sellPrice) : parseFloat(order.sell_price || '0');
-          const principal = oldAmount; // 买入本金
+          const isGift = parseInt(order.is_gift || '0') === 1;
+          // 赠予订单买入时未扣本金，本金为0；普通订单本金为实际买入金额
+          const principal = isGift ? 0 : oldAmount;
           const buyPrice = parseFloat(order.limit_price || '0');
           const originalQty = parseFloat(order.quantity || '0');
           
@@ -11263,8 +11265,8 @@ export const appRouter = router({
           const todayNow = new Date();
           const todayDay = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate());
           const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-          const isGift = parseInt(order.is_gift || '0') === 1;
-          const tradeValue = isGift ? principal : principal * 5.25;
+          // 管理费基数：赠予订单用订单价值(oldAmount)，普通订单用本金*5.25
+          const tradeValue = isGift ? oldAmount : oldAmount * 5.25;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
           const managementFee = dailyFee * holdDays;
           console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 持有天数=${holdDays}, 累计管理费=${managementFee.toFixed(4)}`);
