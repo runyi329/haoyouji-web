@@ -728,7 +728,7 @@ function ReminderCard({ contactId, contactName }: { contactId: number; contactNa
                       {reminder.reminderType === "birthday" ? (
                         `${reminder.birthMonth}月${reminder.birthDay}日`
                       ) : (
-                        format(new Date(reminder.reminderDate), "yyyy年MM月dd日", { locale: zhCN })
+                        safeFormat(reminder.reminderDate, "yyyy年MM月dd日", { locale: zhCN })
                       )}
                     </div>
                   </div>
@@ -860,6 +860,18 @@ function ReminderCard({ contactId, contactName }: { contactId: number; contactNa
       </Dialog>
     </>
   );
+}
+
+// 安全格式化日期，防止无效时间值导致崩溃
+function safeFormat(dateInput: any, fmt: string, options?: any): string {
+  try {
+    const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (isNaN(d.getTime())) return '未知时间';
+    // 使用已导入的 format 函数
+    return format(d, fmt, options);
+  } catch {
+    return '未知时间';
+  }
 }
 
 export default function ContactDetail() {
@@ -1892,7 +1904,7 @@ export default function ContactDetail() {
                       <Clock className="h-4 w-4 mt-1 text-muted-foreground flex-shrink-0" />
                       <div className="flex-1">
                         <div className="text-sm font-medium">
-                          {format(new Date(interaction.interactionDate), "yyyy年MM月dd日 HH:mm", { locale: zhCN })}
+                          {safeFormat(interaction.interactionDate, "yyyy年MM月dd日 HH:mm", { locale: zhCN })}
                         </div>
                         <div className="text-sm text-muted-foreground mt-1">
                           {interaction.note || "快捷联络"}
@@ -1914,7 +1926,7 @@ export default function ContactDetail() {
                               setInteractionToEdit(interaction);
                               // 如果备注是"快捷联络",输入框为空,否则显示原值
                               setEditInteractionNote(interaction.note === "快捷联络" ? "" : (interaction.note || ""));
-                              setEditInteractionDate(format(new Date(interaction.interactionDate), "yyyy-MM-dd'T'HH:mm"));
+                              setEditInteractionDate(safeFormat(interaction.interactionDate, "yyyy-MM-dd'T'HH:mm"));
                               setShowEditNoteDialog(true);
                             }}
                           >
@@ -1924,7 +1936,7 @@ export default function ContactDetail() {
                             onClick={() => {
                               setInteractionToEdit(interaction);
                               setEditInteractionNote(interaction.note || "");
-                              setEditInteractionDate(format(new Date(interaction.interactionDate), "yyyy-MM-dd'T'HH:mm"));
+                              setEditInteractionDate(safeFormat(interaction.interactionDate, "yyyy-MM-dd'T'HH:mm"));
                               setShowEditDateDialog(true);
                             }}
                           >
