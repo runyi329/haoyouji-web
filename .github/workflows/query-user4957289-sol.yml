@@ -8,54 +8,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 查询 SOL 卖出订单详情
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            mysql -u root -pMiao@20190603 crm_db -e "
-            -- 查询用户4957289的SOL已卖出订单
-            SELECT 
-              o.id,
-              CONCAT('AF', DATE_FORMAT(o.created_at, '%y%m%d'), LPAD(o.id, 6, '0')) as order_no,
-              o.coin,
-              o.amount as 实际投入,
-              o.limit_price as 买入价,
-              o.quantity as B数,
-              o.sell_price as 卖出价,
-              o.sell_status,
-              o.created_at as 买入时间,
-              o.sell_confirmed_at as 卖出时间,
-              o.is_gift,
-              -- 权益档位（最高tier）
-              (SELECT MAX(t.discount_rate) FROM af_order_tier_triggers t WHERE t.order_id = o.id) as 权益折扣,
-              -- 有效B数
-              o.quantity * COALESCE((SELECT MAX(t.discount_rate) FROM af_order_tier_triggers t WHERE t.order_id = o.id), 1) as 有效B数,
-              -- 毛利润
-              o.quantity * COALESCE((SELECT MAX(t.discount_rate) FROM af_order_tier_triggers t WHERE t.order_id = o.id), 1) * (o.sell_price - o.limit_price) as 毛利润
-            FROM af_orders o
-            WHERE o.user_id = 4957289 
-              AND o.coin = 'SOL' 
-              AND o.sell_status = 'sold'
-              AND o.side = 'buy'
-            ORDER BY o.sell_confirmed_at DESC;
-            "
-            
-            echo "--- 余额流水（卖出成交相关）---"
-            mysql -u root -pMiao@20190603 crm_db -e "
-            SELECT id, amount, note, created_at 
-            FROM af_manual_balances 
-            WHERE user_id = 4957289 
-              AND note LIKE '%卖出成交%SOL%'
-            ORDER BY id DESC LIMIT 10;
-            "
-            
-            echo "--- 当前余额汇总 ---"
-            mysql -u root -pMiao@20190603 crm_db -e "
-            SELECT 
-              COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as 当前余额,
-              COUNT(*) as 流水笔数
-            FROM af_manual_balances 
-            WHERE user_id = 4957289;
-            "
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          echo "=== 用户4957289 SOL已卖出订单 ==="
+          mysql -u root -pMiao@20190603 crm_db -e "
+          SELECT 
+            o.id,
+            CONCAT('AF', DATE_FORMAT(o.created_at, '%y%m%d'), LPAD(o.id, 6, '0')) as order_no,
+            o.amount as 实际投入,
+            o.limit_price as 买入价,
+            o.quantity as B数,
+            o.sell_price as 卖出价,
+            o.created_at as 买入时间,
+            o.sell_confirmed_at as 卖出时间,
+            o.is_gift,
+            COALESCE((SELECT MAX(t.discount_rate) FROM af_order_tier_triggers t WHERE t.order_id = o.id), 1) as 权益折扣,
+            o.quantity * COALESCE((SELECT MAX(t.discount_rate) FROM af_order_tier_triggers t WHERE t.order_id = o.id), 1) as 有效B数,
+            o.quantity * COALESCE((SELECT MAX(t.discount_rate) FROM af_order_tier_triggers t WHERE t.order_id = o.id), 1) * (o.sell_price - o.limit_price) as 毛利润
+          FROM af_orders o
+          WHERE o.user_id = 4957289 
+            AND o.coin = 'SOL' 
+            AND o.sell_status = 'sold'
+            AND o.side = 'buy'
+          ORDER BY o.sell_confirmed_at DESC;
+          "
+
+          echo "=== 余额流水（卖出成交相关）==="
+          mysql -u root -pMiao@20190603 crm_db -e "
+          SELECT id, amount, note, created_at 
+          FROM af_manual_balances 
+          WHERE user_id = 4957289 
+          ORDER BY id DESC LIMIT 15;
+          "
+
+          echo "=== 当前余额汇总 ==="
+          mysql -u root -pMiao@20190603 crm_db -e "
+          SELECT 
+            COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as 当前余额,
+            COUNT(*) as 流水笔数
+          FROM af_manual_balances 
+          WHERE user_id = 4957289;
+          "
+          ENDSSH
