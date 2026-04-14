@@ -180,7 +180,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
           </div>
 
           {/* 收款钱包选择 */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
+          <div className="bg-white rounded-lg p-4 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between mb-3">
               <label className="text-sm font-medium text-gray-700">收款钱包</label>
               <button
@@ -217,7 +217,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
                     <button
                       key={wallet.id}
                       onClick={() => setSelectedWalletId(wallet.id)}
-                      className={`w-full text-left rounded-lg p-3 border-2 transition-colors ${
+                      className={`w-full min-w-0 text-left rounded-lg p-3 border-2 transition-colors overflow-hidden ${
                         isSelected
                           ? "border-[#D32F2F] bg-red-50"
                           : "border-gray-200 bg-gray-50 hover:border-gray-300"
@@ -233,7 +233,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
                           <span className="text-xs text-gray-500">{wallet.currency}</span>
                         )}
                       </div>
-                      <div className="font-mono text-sm text-gray-800 break-all mt-1">
+                      <div className="font-mono text-xs text-gray-800 break-all mt-1 w-full overflow-hidden">
                         {wallet.walletAddress}
                       </div>
                       {wallet.notes && (
