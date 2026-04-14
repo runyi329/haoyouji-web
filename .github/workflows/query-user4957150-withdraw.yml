@@ -1,0 +1,45 @@
+name: 查询用户4957150提现记录
+
+on:
+  workflow_dispatch:
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 查询提现数据
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            echo "--- snt_withdrawals 表中用户4957150的记录 ---"
+            mysql -u root -pMiao@20190603 crm_db -e "
+            SELECT id, user_id, ledger_id, snt_amount, bsc_address, status, admin_note, created_at
+            FROM snt_withdrawals
+            WHERE user_id = 4957150
+            ORDER BY id DESC LIMIT 20;
+            "
+
+            echo "--- balance_history 表中用户4957150的提现记录 ---"
+            mysql -u root -pMiao@20190603 crm_db -e "
+            SELECT id, user_id, amount, type, description, created_at
+            FROM balance_history
+            WHERE user_id = 4957150 AND type = 'withdraw'
+            ORDER BY id DESC LIMIT 20;
+            "
+
+            echo "--- af_manual_balances 表中用户4957150的提现冻结记录 ---"
+            mysql -u root -pMiao@20190603 crm_db -e "
+            SELECT id, ledger_id, user_id, amount, note, created_at
+            FROM af_manual_balances
+            WHERE user_id = 4957150 AND note LIKE '%提现%'
+            ORDER BY id DESC LIMIT 20;
+            "
+
+            echo "--- 用户4957150基本信息 ---"
+            mysql -u root -pMiao@20190603 crm_db -e "
+            SELECT id, username, name, balance FROM users WHERE id = 4957150;
+            "
