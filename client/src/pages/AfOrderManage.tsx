@@ -217,11 +217,19 @@ export default function AfOrderManage() {
     const isGiftOrder = order.isGift === true || order.isGift === 1;
     const tradeValue = isGiftOrder ? principal : principal * 5.25;
     const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-    const confirmedDate = order.updatedAt ? new Date(order.updatedAt) : new Date(order.createdAt);
+    // 开始日期：用 createdAt（买入成交时间），不用 updatedAt（委卖操作会更新它）
+    const confirmedDate = new Date(order.createdAt);
     const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
-    const todayDay = new Date();
-    todayDay.setHours(0, 0, 0, 0);
-    const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    // 结束日期：已卖出用 sellConfirmedAt，其他状态用今天
+    let endDay: Date;
+    if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
+      const sellDate = new Date(order.sellConfirmedAt);
+      endDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
+    } else {
+      endDay = new Date();
+      endDay.setHours(0, 0, 0, 0);
+    }
+    const holdDays = Math.max(1, Math.floor((endDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     const managementFee = dailyFee * holdDays;
     const actualRefund = Math.max(0, totalRefund - managementFee);
 
@@ -564,10 +572,18 @@ export default function AfOrderManage() {
                       const amount = parseFloat(order.amount);
                       const tradeValue = order.isGift ? amount : amount * 5.25;
                       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                      const confirmedDate = new Date(order.updatedAt || order.createdAt);
+                      // 开始日期：用 createdAt（买入成交时间），不用 updatedAt（委卖操作会更新它）
+                      const confirmedDate = new Date(order.createdAt);
                       const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
-                      const todayDay = new Date(); todayDay.setHours(0,0,0,0);
-                      const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
+                      // 结束日期：已卖出用 sellConfirmedAt，其他状态用今天
+                      let endDay: Date;
+                      if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
+                        const sellDate = new Date(order.sellConfirmedAt);
+                        endDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
+                      } else {
+                        endDay = new Date(); endDay.setHours(0,0,0,0);
+                      }
+                      const holdDays = Math.max(1, Math.floor((endDay.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
                       const totalFee = dailyFee * holdDays;
                       return (
                         <div className="flex items-center gap-1 col-span-2">
@@ -686,8 +702,11 @@ export default function AfOrderManage() {
                               </div>
                               <div className="text-[10px] text-red-400">
                                 {(() => {
-                                  const startDate = new Date(order.updatedAt || order.createdAt);
-                                  const endDate = new Date();
+                                  const startDate = new Date(order.createdAt);
+                                  // 已卖出用 sellConfirmedAt，其他用今天
+                                  const endDate = (order.sellStatus === 'sold' && order.sellConfirmedAt)
+                                    ? new Date(order.sellConfirmedAt)
+                                    : new Date();
                                   const fmt = (d: Date) => `${d.getMonth()+1}月${d.getDate()}日`;
                                   return `计费区间：${fmt(startDate)} → ${fmt(endDate)}（共${calc.holdDays}天，${calc.dailyFee.toFixed(4)} USDT/天）`;
                                 })()}
