@@ -401,9 +401,9 @@ export default function FinanceManagement() {
                     className="bg-white rounded-2xl shadow-sm overflow-hidden relative"
                     style={{ border: '1px solid #E8EDFF' }}
                   >
-                    {(order.status === 'completed' || order.status === 'cancelled') && (
+                    {String(order.admin_note || '').includes('[已卖出]') && (
                       <div
-                        className="absolute bottom-4 right-4 pointer-events-none select-none"
+                        className="absolute bottom-4 left-4 pointer-events-none select-none"
                         style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
                       >
                         <div
@@ -419,7 +419,7 @@ export default function FinanceManagement() {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          结清
+                          已卖出
                         </div>
                       </div>
                     )}
@@ -449,6 +449,26 @@ export default function FinanceManagement() {
                             {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
                           </span>
                         </div>
+                        <button
+                          title={String(order.admin_note || '').includes('[已卖出]') ? '取消已卖出标记' : '标记已卖出'}
+                          onClick={() => {
+                            const note = String(order.admin_note || '');
+                            const isSold = note.includes('[已卖出]');
+                            const newNote = isSold
+                              ? note.replace('[已卖出]', '').trim()
+                              : (note ? note + ' [已卖出]' : '[已卖出]');
+                            updateMutation.mutate({ id: order.id, ledgerId, adminNote: newNote });
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-orange-50"
+                        >
+                          <span style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            color: String(order.admin_note || '').includes('[已卖出]') ? '#DC2626' : '#9CA3AF',
+                            letterSpacing: '0px',
+                            lineHeight: 1,
+                          }}>卖</span>
+                        </button>
                         <button
                           onClick={() => openEdit(order)}
                           className="p-1.5 rounded-lg hover:bg-blue-50"
