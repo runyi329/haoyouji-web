@@ -11506,7 +11506,7 @@ export const appRouter = router({
         const targetUserId = input.viewAsUserId || ctx.user.id;
         // 查询目标用户所有买单（委托中 + 已成交 + 委卖中 + 已卖出，不含已撤销）
         const orderRows = await db.execute(
-          sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.status, o.sell_status, o.sell_price, o.is_gift
+          sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.status, o.sell_status, o.sell_price, o.is_gift, o.sell_confirmed_at, o.created_at, o.updated_at
               FROM af_orders o
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
                 AND o.side = 'buy' AND o.status IN ('pending', 'completed')
@@ -11562,10 +11562,25 @@ export const appRouter = router({
             coinPnl[coin].totalQty += originalQty;
           }
           if (order.sell_status === 'sold') {
-            // 已卖出：用实际卖出价计算已实现盈亏
+            // 已卖出：用实际卖出价计算已实现盈亏，并扣除管理费（与结算逻辑保持一致）
             const sellPrice = parseFloat(order.sell_price || '0');
             if (sellPrice > 0 && buyPrice > 0) {
-              coinPnl[coin].pnl += effectiveQty * (sellPrice - buyPrice);
+              const grossProfit = effectiveQty * (sellPrice - buyPrice);
+              // 计算管理费
+              const principal = parseFloat(order.amount || '0');
+              const isGift = parseInt(order.is_gift || '0') === 1;
+              const confirmedDate = order.sell_confirmed_at
+                ? new Date(order.sell_confirmed_at)
+                : (order.updated_at ? new Date(order.updated_at) : new Date(order.created_at));
+              const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+              const todayDayOnly = new Date();
+              const todayDay = new Date(todayDayOnly.getFullYear(), todayDayOnly.getMonth(), todayDayOnly.getDate());
+              const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+              const tradeValue = isGift ? principal : principal * 5.25;
+              const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+              const managementFee = dailyFee * holdDays;
+              const netProfit = Math.max(0, grossProfit) - managementFee;
+              coinPnl[coin].pnl += Math.max(0, netProfit);
             }
             coinPnl[coin].soldCount++;
           } else {
