@@ -503,6 +503,10 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           return (
             <>
               <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">利润</span>
+                <span className={`font-bold ${grossProfit >= 0 ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{grossProfit >= 0 ? '+' : ''}{grossProfit.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} USDT</span>
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="text-[#9CA3AF]">净利润</span>
                 <span className={`font-bold ${isPositive ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{isPositive ? '+' : ''}{netProfit.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} USDT</span>
               </div>
