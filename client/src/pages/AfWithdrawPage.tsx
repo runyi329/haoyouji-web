@@ -76,15 +76,20 @@ export default function AfWithdrawPage() {
     },
   });
 
+  // 只显示 APTOS 和 TRC20 区块链钱包
+  const blockchainWallets = wallets.filter(
+    (w: any) => w.walletType === "blockchain" && (w.network === "APTOS" || w.network === "TRC20")
+  );
+
   // 自动选择默认钱包
   useEffect(() => {
-    if (wallets.length > 0 && !selectedWalletId) {
-      const defaultWallet = wallets.find((w: any) => w.isDefault) || wallets[0];
+    if (blockchainWallets.length > 0 && !selectedWalletId) {
+      const defaultWallet = blockchainWallets.find((w: any) => w.isDefault) || blockchainWallets[0];
       if (defaultWallet) setSelectedWalletId(defaultWallet.id);
     }
-  }, [wallets, selectedWalletId]);
+  }, [blockchainWallets.length, selectedWalletId]);
 
-  const selectedWallet = wallets.find((w: any) => w.id === selectedWalletId);
+  const selectedWallet = blockchainWallets.find((w: any) => w.id === selectedWalletId);
   const feeAmount = feePreview?.feeAmount ?? 0;
   const actualAmount = Math.max(0, amountNum - feeAmount);
 
@@ -197,55 +202,58 @@ export default function AfWithdrawPage() {
             </button>
           </div>
 
-          {wallets.length === 0 ? (
+          {blockchainWallets.length === 0 ? (
             <div
               onClick={() => setLocation("/profile/wallets")}
               className="border border-dashed border-gray-300 rounded-xl p-4 text-center text-sm text-gray-400 cursor-pointer hover:border-red-300"
             >
-              暂无提现地址，点击前往个人中心添加
+              暂无 APTOS / TRC20 提现地址，点击前往个人中心添加
             </div>
           ) : (
             <div className="space-y-2">
-              {wallets.map((w: any) => (
-                <div
-                  key={w.id}
-                  onClick={() => setSelectedWalletId(w.id)}
-                  className={`border rounded-xl p-3 cursor-pointer transition-colors ${
-                    selectedWalletId === w.id
-                      ? "border-red-400 bg-red-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                          selectedWalletId === w.id ? "border-red-500" : "border-gray-300"
-                        }`}
-                      >
-                        {selectedWalletId === w.id && (
-                          <div className="w-2 h-2 rounded-full bg-red-500" />
+              {blockchainWallets.map((w: any) => {
+                const networkLabel = w.network === "APTOS" ? "Aptos" : w.network === "TRC20" ? "Tron (TRC20)" : w.network;
+                return (
+                  <div
+                    key={w.id}
+                    onClick={() => setSelectedWalletId(w.id)}
+                    className={`border rounded-xl p-3 cursor-pointer transition-colors ${
+                      selectedWalletId === w.id
+                        ? "border-red-400 bg-red-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            selectedWalletId === w.id ? "border-red-500" : "border-gray-300"
+                          }`}
+                        >
+                          {selectedWalletId === w.id && (
+                            <div className="w-2 h-2 rounded-full bg-red-500" />
+                          )}
+                        </div>
+                        <span className="text-xs font-semibold text-gray-800">
+                          {networkLabel}
+                        </span>
+                        {w.isDefault === 1 && (
+                          <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded">默认</span>
                         )}
                       </div>
-                      <span className="text-xs font-medium text-gray-700">
-                        {w.network || w.walletType || "区块链钱包"}
-                      </span>
-                      {w.isDefault && (
-                        <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded">默认</span>
+                      {w.currency && (
+                        <span className="text-xs text-gray-400">{w.currency}</span>
                       )}
                     </div>
-                    {w.currency && (
-                      <span className="text-xs text-gray-400">{w.currency}</span>
+                    <div className="mt-1.5 text-xs text-gray-500 font-mono break-all pl-6">
+                      {w.walletAddress || "—"}
+                    </div>
+                    {w.notes && (
+                      <div className="mt-1 text-xs text-gray-400 pl-6 break-all">{w.notes}</div>
                     )}
                   </div>
-                  <div className="mt-1.5 text-xs text-gray-500 font-mono break-all pl-6 overflow-hidden">
-                    {w.walletAddress || w.account || "—"}
-                  </div>
-                  {w.notes && (
-                    <div className="mt-1 text-xs text-gray-400 pl-6 break-all overflow-hidden">{w.notes}</div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
