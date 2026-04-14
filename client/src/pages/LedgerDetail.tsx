@@ -4009,7 +4009,12 @@ export default function LedgerDetail() {
                 <div className="text-center py-10 text-gray-400 text-sm">暂无邀请记录</div>
               ) : (
                 <div className="space-y-2">
-                  {inviteTreeData.users.map((u: any) => (
+                  {[...inviteTreeData.users].sort((a: any, b: any) => {
+                    // 按总资产（充值+余额）降序排列，有资产的用户排前面
+                    const assetA = Number(a.totalRecharge ?? 0) + Number(a.balance ?? 0);
+                    const assetB = Number(b.totalRecharge ?? 0) + Number(b.balance ?? 0);
+                    return assetB - assetA;
+                  }).map((u: any) => (
                     <div key={u.id} className="rounded-xl overflow-hidden" style={{ backgroundColor: '#F9F9F9', border: '1px solid #EEEEEE' }}>
                       {/* 上层：头像 + 基本信息 */}
                       <div className="flex items-start gap-3 pt-3 pb-2.5 px-3">
