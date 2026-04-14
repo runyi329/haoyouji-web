@@ -1,0 +1,55 @@
+name: 补入用户4957289 SOL卖出结算
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 查询并补入SOL卖出结算
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+
+          echo "=== 查询用户4957289 SOL已卖出订单详情 ==="
+          mysql -u root -pMiao@20190603 crm_db -e "
+          SELECT 
+            o.id,
+            CONCAT('AF', DATE_FORMAT(o.created_at, '%y%m%d'), LPAD(o.id, 6, '0')) as order_no,
+            o.ledger_id,
+            o.user_id,
+            o.amount as 实际投入,
+            o.limit_price as 买入价,
+            o.quantity as B数,
+            o.sell_price as 卖出价,
+            o.is_gift,
+            o.created_at as 买入时间,
+            o.sell_confirmed_at as 卖出时间,
+            DATEDIFF(COALESCE(o.sell_confirmed_at, NOW()), o.created_at) + 1 as 持有天数
+          FROM af_orders o
+          WHERE o.user_id = 4957289 
+            AND o.coin = 'SOL' 
+            AND o.sell_status = 'sold'
+            AND o.side = 'buy'
+          ORDER BY o.id ASC;
+          "
+
+          echo "=== 查询权益档位 ==="
+          mysql -u root -pMiao@20190603 crm_db -e "
+          SELECT t.order_id, t.tier_level, t.trigger_amount, t.coins_added
+          FROM af_order_tier_triggers t
+          WHERE t.order_id IN (
+            SELECT id FROM af_orders 
+            WHERE user_id = 4957289 AND coin = 'SOL' AND sell_status = 'sold'
+          )
+          ORDER BY t.order_id, t.tier_level;
+          "
+
+          echo "=== 查询af_order_tier_triggers表结构 ==="
+          mysql -u root -pMiao@20190603 crm_db -e "DESCRIBE af_order_tier_triggers;"
+
+          ENDSSH
