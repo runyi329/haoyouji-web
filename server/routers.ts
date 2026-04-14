@@ -217,6 +217,21 @@ export const appRouter = router({
         const date = await dbCrypto.getLatestCryptoDate(input.symbol);
         return { date };
       }),
+
+    // 从 Binance 拉取增量数据（管理员可操作）
+    syncLatest: protectedProcedure
+      .input(z.object({ symbol: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const memberRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = 52 AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (memberRows[0]?.[0]?.role ?? memberRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin' && ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const result = await dbCrypto.syncLatestFromBinance(input.symbol);
+        return result;
+      }),
   }),
 
   // 支付账户管理
