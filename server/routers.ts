@@ -10558,6 +10558,61 @@ export const appRouter = router({
               console.error('[AF] 挂单查询失败:', e);
             }
           }
+          // 查询每个用户已卖出成交订单的净利润总和
+          let profitMap = new Map<number, number>();
+          if (result.length > 0) {
+            try {
+              const userIds6 = result.map(u => u.id);
+              const placeholders7 = userIds6.map(() => '?').join(',');
+              const PROFIT_EQUITY_RATES: Record<number, number> = {
+                0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+                5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+              };
+              // 取所有已卖出订单及其最高tier
+              const [soldProfitRows] = await rawDb.execute(
+                `SELECT o.id, o.user_id, o.coin,
+                        CAST(o.limit_price AS DECIMAL(20,8)) as buy_price,
+                        CAST(o.sell_price AS DECIMAL(20,8)) as sell_price,
+                        CAST(o.quantity AS DECIMAL(30,8)) as qty,
+                        CAST(o.amount AS DECIMAL(20,8)) as principal,
+                        COALESCE(o.is_gift, 0) as is_gift,
+                        COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) as confirmed_at,
+                        COALESCE(o.created_at, NOW()) as created_at,
+                        COALESCE(MAX(t.tier), 0) as max_tier
+                 FROM af_orders o
+                 LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
+                 WHERE o.ledger_id = ? AND o.user_id IN (${placeholders7})
+                   AND o.sell_status = 'sold'
+                 GROUP BY o.id, o.user_id, o.coin, o.limit_price, o.sell_price, o.quantity, o.amount, o.is_gift, o.sell_confirmed_at, o.updated_at, o.created_at`,
+                [input.ledgerId, ...userIds6]
+              ) as any[];
+              for (const row of (soldProfitRows as any[])) {
+                const buyPrice = parseFloat(row.buy_price?.toString() || '0');
+                const sellPrice = parseFloat(row.sell_price?.toString() || '0');
+                const rawQty = parseFloat(row.qty?.toString() || '0');
+                const principal = parseFloat(row.principal?.toString() || '0');
+                const isGift = parseInt(row.is_gift?.toString() || '0') === 1;
+                const tier = parseInt((row.max_tier ?? '0').toString()) || 0;
+                const discountRate = PROFIT_EQUITY_RATES[tier] ?? 1.0;
+                const effectiveQty = rawQty * discountRate;
+                const grossProfit = buyPrice > 0 && sellPrice > 0 ? effectiveQty * (sellPrice - buyPrice) : 0;
+                // 管理费计算
+                const confirmedDate = row.confirmed_at ? new Date(row.confirmed_at) : new Date(row.created_at);
+                const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+                const createdDay = new Date(new Date(row.created_at).getFullYear(), new Date(row.created_at).getMonth(), new Date(row.created_at).getDate());
+                const holdDays = Math.max(1, Math.floor((confirmedDay.getTime() - createdDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                const tradeValue = isGift ? principal : principal * 5.25;
+                const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+                const managementFee = dailyFee * holdDays;
+                const netProfit = Math.max(0, grossProfit) - managementFee;
+                const prev = profitMap.get(row.user_id) ?? 0;
+                profitMap.set(row.user_id, prev + netProfit);
+              }
+            } catch (e) {
+              console.error('[AF] 利润查询失败:', e);
+            }
+          }
+
           // 获取实时币价用于计算账户总值
           const { getLatestPrice } = await import('./price-scanner');
           const btcPrice = getLatestPrice('BTC') ?? 0;
@@ -10593,6 +10648,7 @@ export const appRouter = router({
               hasWallet: walletBoundSet.has(u.id),
               totalValue,
               totalRecharge: totalRechargeMap.get(u.id) ?? 0,
+              totalProfit: profitMap.get(u.id) ?? 0,
             };
           });
           // 按账户总值降序排列
