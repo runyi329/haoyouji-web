@@ -1817,6 +1817,15 @@ export default function LedgerDetail() {
               )}
               {isCustomAF && !effectiveIsFunder && (
                 <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                  className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                >
+                  提现
+                </button>
+              )}
+              {isCustomAF && !effectiveIsFunder && (
+                <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
                   style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}

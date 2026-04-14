@@ -931,6 +931,43 @@ export const appRouter = router({
           input.adminNote,
         );
       }),
+    // 获取提现手续费预览（用户端）
+    getWithdrawFeePreview: protectedProcedure
+      .input(z.object({ sntAmount: z.number(), ledgerId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        return await dbRecharge.getWithdrawFeePreview(ctx.user.id, input.sntAmount, input.ledgerId ?? 52);
+      }),
+    // 获取所有手续费规则（管理员）
+    adminGetFeeRules: protectedProcedure
+      .input(z.object({ ledgerId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
+        return await dbRecharge.getAllFeeRules(input.ledgerId);
+      }),
+    // 创建或更新手续费规则（管理员）
+    adminUpsertFeeRule: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        ledgerId: z.number().nullable().optional(),
+        scope: z.enum(['global', 'user', 'user_and_downlines']),
+        targetUserId: z.number().nullable().optional(),
+        feeRate: z.number().min(0).max(1),
+        feeFixed: z.number().min(0),
+        minFee: z.number().min(0),
+        maxFee: z.number().nullable().optional(),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
+        return await dbRecharge.upsertFeeRule({ ...input, createdBy: ctx.user.id });
+      }),
+    // 删除手续费规则（管理员）
+    adminDeleteFeeRule: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
+        return await dbRecharge.deleteFeeRule(input.id);
+      }),
   }),
 
   // 卡券系统
