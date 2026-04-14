@@ -126,7 +126,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-20 overflow-x-hidden">
       {/* 顶部导航 */}
       {!hideHeader && (
         <div className="bg-white border-b sticky top-0 z-10">
@@ -265,11 +265,11 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
                 USDT
               </div>
             </div>
-            <div className="mt-2 flex items-center justify-between text-sm">
-              <span className="text-gray-500">最低提现：10 USDT</span>
+            <div className="mt-2 flex items-center justify-between text-sm gap-2">
+              <span className="text-gray-500 flex-shrink-0">最低提现：10 USDT</span>
               <button
-                onClick={() => setAmount(balance.toString())}
-                className="text-[#D32F2F] font-medium"
+                onClick={() => setAmount(balance.toFixed(2))}
+                className="text-[#D32F2F] font-medium flex-shrink-0"
               >
                 全部提现
               </button>
