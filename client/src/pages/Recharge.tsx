@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
-import { ArrowLeft, Copy, Check, Clock, Wallet, AlertCircle, CheckCircle2, History, ArrowUpCircle } from "lucide-react";
+import { ArrowLeft, Copy, Check, Clock, Wallet, AlertCircle, CheckCircle2, History } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
 
@@ -345,13 +345,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
               <History className="w-3.5 h-3.5 mr-1" />
               充值记录
             </button>
-            <button
-              onClick={() => setLocation(fromLedgerId ? `/withdraw?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/withdraw')}
-              className="flex items-center text-xs px-2.5 py-1.5 rounded-full bg-[#D32F2F] text-white hover:bg-[#B71C1C] transition-colors"
-            >
-              <ArrowUpCircle className="w-3.5 h-3.5 mr-1" />
-              提现
-            </button>
+
           </div>
         </div>
       </div>)}
