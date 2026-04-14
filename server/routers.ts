@@ -10441,9 +10441,9 @@ export const appRouter = router({
                 const prev = balanceMap.get(row.user_id) ?? 0;
                 balanceMap.set(row.user_id, prev + manualAmt);
               }
-              // 手动正向调账（管理员手动加款）→ 计入累计充值，但排除撤单退款
+              // 手动正向调账（管理员手动加款）→ 计入累计充値，但排除撤单退款和卖出结算流水
               const [manualPositiveRows] = await rawDb.execute(
-                `SELECT user_id, COALESCE(SUM(amount), 0) as manual_positive FROM af_manual_balances WHERE user_id IN (${placeholders4}) AND ledger_id = ? AND amount > 0 AND note NOT LIKE '%撤单%' GROUP BY user_id`,
+                `SELECT user_id, COALESCE(SUM(amount), 0) as manual_positive FROM af_manual_balances WHERE user_id IN (${placeholders4}) AND ledger_id = ? AND amount > 0 AND note NOT LIKE '%撤单%' AND note NOT LIKE '%卖出成交%' GROUP BY user_id`,
                 [...userIds3, input.ledgerId]
               ) as any[];
               for (const row of (manualPositiveRows as any[])) {
