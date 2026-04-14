@@ -19,57 +19,25 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: 🔍 查询用户4957150完整数据
+      - name: 🔍 查询用户4957150所有相关数据
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -s' << 'ENDSSH'
             source /root/haoyouji-web/.env 2>/dev/null || true
-            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
-            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP '(?<=:)[0-9]{4,5}(?=/)' | tail -1 || echo '4000')
-            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://)[^:]+' || echo '')
-            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://[^:]+:)[^@]+' || echo '')
-            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP '(?<=/)[^?]+$' || echo '')
+            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP "(?<=@)[^:/]+" || echo "")
+            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP "(?<=:)[0-9]{4,5}(?=/)" | tail -1 || echo "4000")
+            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP "(?<=://)[^:]+" || echo "")
+            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP "(?<=://[^:]+:)[^@]+" || echo "")
+            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP "(?<=/)[^?]+$" || echo "")
 
-            echo "=== 用户4957150基本信息 ==="
-            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-            SELECT id, username, name, balance FROM users WHERE id = 4957150;
-            " 2>&1
+            echo "=== snt_withdrawals 中用户4957150的所有记录 ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, user_id, ledger_id, snt_amount, LEFT(bsc_address,20) as addr, status, created_at FROM snt_withdrawals WHERE user_id = 4957150 ORDER BY id DESC LIMIT 10;" 2>&1
 
-            echo "=== 用户4957150绑定的区块链钱包地址 ==="
-            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-            SELECT id, user_id, wallet_type, wallet_address, label, created_at
-            FROM digital_wallets
-            WHERE user_id = 4957150
-            ORDER BY id DESC LIMIT 10;
-            " 2>&1
+            echo "=== af_manual_balances 中用户4957150最近20条记录 ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, ledger_id, user_id, amount, note, created_at FROM af_manual_balances WHERE user_id = 4957150 ORDER BY id DESC LIMIT 20;" 2>&1
 
-            echo "=== snt_withdrawals 表中用户4957150的所有记录 ==="
-            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-            SELECT id, user_id, ledger_id, snt_amount, bsc_address, status, admin_note, created_at
-            FROM snt_withdrawals
-            WHERE user_id = 4957150
-            ORDER BY id DESC LIMIT 20;
-            " 2>&1
+            echo "=== digital_wallets 中用户4957150的钱包 ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, user_id, wallet_type, network, LEFT(wallet_address,30) as addr, currency, created_at FROM digital_wallets WHERE user_id = 4957150 ORDER BY id DESC;" 2>&1
 
-            echo "=== snt_withdrawals 最近10条（全部用户）==="
-            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-            SELECT id, user_id, ledger_id, snt_amount, bsc_address, status, created_at
-            FROM snt_withdrawals
-            ORDER BY id DESC LIMIT 10;
-            " 2>&1
-
-            echo "=== af_manual_balances 表中用户4957150的提现冻结记录 ==="
-            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-            SELECT id, ledger_id, user_id, amount, note, created_at
-            FROM af_manual_balances
-            WHERE user_id = 4957150 AND note LIKE '%提现%'
-            ORDER BY id DESC LIMIT 20;
-            " 2>&1
-
-            echo "=== balance_history 表中用户4957150的提现记录 ==="
-            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-            SELECT id, user_id, amount, type, description, created_at
-            FROM balance_history
-            WHERE user_id = 4957150 AND type = 'withdraw'
-            ORDER BY id DESC LIMIT 20;
-            " 2>&1
+            echo "=== snt_withdrawals 最近5条（全部用户）==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, user_id, ledger_id, snt_amount, status, created_at FROM snt_withdrawals ORDER BY id DESC LIMIT 5;" 2>&1
           ENDSSH
