@@ -2108,17 +2108,12 @@ export default function LedgerDetail() {
                   const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
                   const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
                   const activeCount = (coinData?.holdingCount ?? 0) + (coinData?.pendingCount ?? 0);
-                  const soldCount = coinData?.soldCount ?? 0;
-                  const totalOrderCount = activeCount + soldCount;
-                  // 没有任何订单记录的币种不显示
-                  if (totalOrderCount === 0) return null;
                   const avgCost = coinData?.avgCost ?? 0;
                   // 实时浮盈 = 持仓数量 × (实时价格 - 均价)
                   const livePrice = funderLivePrices[coin] || 0;
                   const unrealizedPnl = qty > 0 && livePrice > 0 && avgCost > 0
                     ? qty * (livePrice - avgCost)
                     : 0;
-                  const pnlColor = unrealizedPnl >= 0 ? 'text-red-400' : 'text-green-400';
                   const pnlSign = unrealizedPnl >= 0 ? '+' : '';
                   // 智能去尾零
                   const fmtQty = (() => {
@@ -2136,7 +2131,7 @@ export default function LedgerDetail() {
                       <span className={`flex-1 text-right text-xs font-bold ${qty > 0 ? 'text-white' : 'text-white/40'}`}>{fmtQty}</span>
                       <span className="w-10 text-right text-[10px] text-white/50">{activeCount}笔</span>
                       <span className="flex-1 text-right text-[11px] text-white/60">{avgCost > 0 ? avgCost.toLocaleString() : '-'}</span>
-                      <span className={`flex-1 text-right text-xs font-medium ${qty > 0 && livePrice > 0 ? pnlColor : 'text-white/30'}`}>
+                      <span className={`flex-1 text-right text-xs font-medium ${qty > 0 && livePrice > 0 ? 'text-green-400' : 'text-white/30'}`}>
                         {qty > 0 && livePrice > 0 ? `${pnlSign}${unrealizedPnl.toFixed(2)}` : '-'}
                       </span>
                     </div>
@@ -2155,7 +2150,6 @@ export default function LedgerDetail() {
                     return sum;
                   }, 0);
                   const hasLivePrices = Object.keys(funderLivePrices).length > 0;
-                  const totalColor = totalUnrealized >= 0 ? 'text-red-400' : 'text-green-400';
                   const totalSign = totalUnrealized >= 0 ? '+' : '';
                   return (
                     <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline">
@@ -2163,7 +2157,7 @@ export default function LedgerDetail() {
                       <span className="flex-1"></span>
                       <span className="w-10"></span>
                       <span className="flex-1"></span>
-                      <span className={`flex-1 text-right text-sm font-bold whitespace-nowrap ${hasLivePrices ? totalColor : 'text-white/30'}`}>
+                      <span className={`flex-1 text-right text-sm font-bold whitespace-nowrap ${hasLivePrices ? 'text-green-400' : 'text-white/30'}`}>
                         {hasLivePrices ? `${totalSign}${totalUnrealized.toFixed(2)} U` : '加载中...'}
                       </span>
                     </div>
