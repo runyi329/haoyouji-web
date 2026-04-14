@@ -103,31 +103,31 @@ export default function BeDataPage() {
 
       {/* 统计栏 */}
       {!isLoading && total > 0 && (
-        <div className="bg-white border-b border-gray-200 px-3 py-3">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-              <div className="text-xs text-gray-400 mb-0.5">数据范围</div>
-              <div className="text-sm font-medium text-gray-700 font-mono">
+        <div className="bg-white border-b border-gray-200 px-3 py-2.5">
+          <div className="flex flex-col gap-1.5">
+            {/* 第一行：数据范围 */}
+            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
+              <span className="text-xs text-gray-400 shrink-0">数据范围</span>
+              <span className="text-xs font-medium text-gray-700 font-mono ml-2">
                 {oldestDate} ~ {latestDate}
-              </div>
+              </span>
             </div>
-            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-              <div className="text-xs text-gray-400 mb-0.5">历史数据</div>
-              <div className="text-sm font-medium text-gray-700">
-                共 <span className="text-[#D32F2F] font-bold">{total}</span> 条日线
-              </div>
+            {/* 第二行：历史数据 */}
+            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
+              <span className="text-xs text-gray-400 shrink-0">历史数据</span>
+              <span className="text-xs font-medium text-gray-700 ml-2">
+                <span className="text-[#D32F2F] font-bold">{total}</span> 天 &nbsp;
+                <span className="text-[#D32F2F] font-bold">{total}</span> 条日线
+              </span>
             </div>
-            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-              <div className="text-xs text-gray-400 mb-0.5">最新收盘</div>
-              <div className={`text-sm font-bold font-mono ${pctColor}`}>
-                {latestClose != null ? formatPrice(latestClose, activeSymbol) : "-"} USDT
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-              <div className="text-xs text-gray-400 mb-0.5">当日涨跌</div>
-              <div className={`text-sm font-bold font-mono ${pctColor}`}>
-                {formatPct(latestChangePct)}
-              </div>
+            {/* 第三行：最新收盘 + 涨跌 */}
+            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
+              <span className="text-xs text-gray-400 shrink-0">最新收盘</span>
+              <span className="text-xs text-gray-400 font-mono ml-2 mr-auto pl-1.5">{latestDate}</span>
+              <span className={`text-xs font-bold font-mono ${pctColor}`}>
+                {latestClose != null ? formatPrice(latestClose, activeSymbol) : "-"}
+                <span className="ml-1.5 font-normal">{formatPct(latestChangePct)}</span>
+              </span>
             </div>
           </div>
         </div>
