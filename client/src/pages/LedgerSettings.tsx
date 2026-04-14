@@ -562,6 +562,14 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/market-eval-settings`)}
  />
  )}
+ {/* BE数据：BTC/ETH历史K线，custom_af 所有成员可见 */}
+ {ledgerData?.type === 'custom_af' && (
+ <SettingItem
+ label="BE数据"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/be-data`)}
+ />
+ )}
  {(ledgerData?.type === 'custom_ae' || ledgerData?.type === 'custom_af') && ledgerData?.userRole !== 'owner' && ledgerData?.userRole !== 'admin' && (
  <SettingItem
  label="我的抽奖"

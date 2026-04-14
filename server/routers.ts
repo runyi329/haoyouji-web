@@ -24,6 +24,7 @@ import * as dbCoupon from "./db-coupon";
 import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
+import * as dbCrypto from "./db-crypto";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations, ahCompanyMembers } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
@@ -161,6 +162,62 @@ export const appRouter = router({
   lottery: lotteryRouter,
   prediction: predictionRouter,
   okxTrader: okxTraderRouter,
+
+  // BE数据：BTC/ETH历史K线
+  cryptoData: router({
+    // 初始化建表（超级管理员）
+    ensureTable: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        await dbCrypto.ensureCryptoKlinesTable();
+        return { success: true };
+      }),
+
+    // 批量导入K线数据（超级管理员）
+    batchImport: protectedProcedure
+      .input(z.object({
+        records: z.array(z.object({
+          symbol: z.string(),
+          date: z.string(),
+          open: z.number(),
+          high: z.number(),
+          low: z.number(),
+          close: z.number(),
+          volume: z.number(),
+          quoteVolume: z.number(),
+          changePct: z.number().nullable(),
+          amplitudePct: z.number().nullable(),
+        }))
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const count = await dbCrypto.batchUpsertCryptoKlines(input.records);
+        return { success: true, count };
+      }),
+
+    // 查询K线数据（账本成员可访问）
+    getKlines: protectedProcedure
+      .input(z.object({
+        symbol: z.string(),
+        page: z.number().optional().default(1),
+        pageSize: z.number().optional().default(50),
+      }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getCryptoKlines(input.symbol, input.page, input.pageSize);
+      }),
+
+    // 获取最新日期（用于增量更新）
+    getLatestDate: protectedProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        const date = await dbCrypto.getLatestCryptoDate(input.symbol);
+        return { date };
+      }),
+  }),
 
   // 支付账户管理
   paymentAccounts: router({
