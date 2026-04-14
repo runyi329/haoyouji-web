@@ -292,10 +292,13 @@ export default function AfOrderManage() {
 
   const formatDate = (d: any) => {
     if (!d) return "-";
-    const dt = new Date(d);
-    // 强制转换为北京时间 UTC+8，不依赖浏览器时区
-    const bjTime = new Date(dt.getTime() + 8 * 60 * 60 * 1000);
-    return `${(bjTime.getUTCMonth() + 1).toString().padStart(2, "0")}-${bjTime.getUTCDate().toString().padStart(2, "0")} ${bjTime.getUTCHours().toString().padStart(2, "0")}:${bjTime.getUTCMinutes().toString().padStart(2, "0")}`;
+    // 后端已返回北京时间字符串（如 "2026-04-14 06:30:00"），直接截取显示
+    const s = typeof d === 'string' ? d : new Date(d).toISOString();
+    // 取 MM-DD HH:mm 格式
+    const parts = s.replace('T', ' ').substring(0, 16); // "2026-04-14 06:30"
+    const [datePart, timePart] = parts.split(' ');
+    const [, mm, dd] = (datePart || '').split('-');
+    return `${mm || ''}-${dd || ''} ${timePart || ''}`;
   };
 
   return (
