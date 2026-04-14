@@ -13271,15 +13271,16 @@ export const appRouter = router({
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
         const JIANG_USER_ID = 870413;
+        // 按卖出成交时间排序，只显示 sell_status=sold 的订单
         const [rows] = await (conn as any).execute(
-          `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.order_type,
-                  o.created_at as eventTime,
+          `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
+                  COALESCE(o.sell_confirmed_at, o.updated_at) as eventTime,
                   u.name as userName, u.username
            FROM af_orders o
            INNER JOIN ledger_members lm ON lm.userId = o.user_id AND lm.ledgerId = ?
            LEFT JOIN users u ON u.id = o.user_id
-           WHERE o.ledger_id=? AND o.status='completed' AND o.is_gift=0 AND o.user_id != ?
-           ORDER BY o.created_at DESC LIMIT 10`,
+           WHERE o.ledger_id=? AND o.sell_status='sold' AND o.is_gift=0 AND o.user_id != ?
+           ORDER BY COALESCE(o.sell_confirmed_at, o.updated_at) DESC LIMIT 10`,
           [input.ledgerId, input.ledgerId, JIANG_USER_ID]
         );
         return (rows as any[]).map((r: any) => ({
@@ -13290,6 +13291,7 @@ export const appRouter = router({
           side: r.side || '',
           amount: parseFloat(r.amount || 0).toFixed(0),
           limitPrice: r.limit_price ? String(r.limit_price) : '',
+          sellPrice: r.sell_price ? String(r.sell_price) : '',
           orderType: r.order_type || '',
           eventTime: r.eventTime ? String(r.eventTime) : '',
         }));
