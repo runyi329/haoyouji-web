@@ -1181,3 +1181,161 @@ export async function adminProcessingSntWithdrawal(
     message: `提现申请 #${withdrawalId} 已标记为处理中`,
   };
 }
+
+// ===== 提现手续费规则管理 =====
+
+/** 确保手续费规则表存在 */
+async function ensureFeeRuleTable() {
+  const conn = await getDbConnection();
+  if (!conn) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS snt_withdrawal_fee_rules (
+      id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+      ledger_id int DEFAULT NULL,
+      scope enum('global','user','user_and_downlines') DEFAULT 'global' NOT NULL,
+      target_user_id int DEFAULT NULL,
+      fee_rate decimal(5,4) DEFAULT 0.0000 NOT NULL,
+      fee_fixed decimal(20,4) DEFAULT 0.0000 NOT NULL,
+      min_fee decimal(20,4) DEFAULT 0.0000 NOT NULL,
+      max_fee decimal(20,4) DEFAULT NULL,
+      note varchar(255) DEFAULT NULL,
+      created_by int DEFAULT NULL,
+      created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+      INDEX snt_fee_rules_ledger_idx (ledger_id),
+      INDEX snt_fee_rules_target_user_idx (target_user_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+  await conn.execute(`
+    INSERT IGNORE INTO snt_withdrawal_fee_rules (id, ledger_id, scope, target_user_id, fee_rate, fee_fixed, min_fee, note)
+    VALUES (1, NULL, 'global', NULL, 0.0000, 0.0000, 0.0000, '全局默认手续费（0%）');
+  `);
+}
+
+function calcFeeFromRule(rule: any, sntAmount: number, ruleDesc: string) {
+  const feeRate = parseFloat(rule.fee_rate || '0');
+  const feeFixed = parseFloat(rule.fee_fixed || '0');
+  const minFee = parseFloat(rule.min_fee || '0');
+  const maxFee = rule.max_fee !== null && rule.max_fee !== undefined ? parseFloat(rule.max_fee) : null;
+  let fee = sntAmount * feeRate + feeFixed;
+  if (fee < minFee) fee = minFee;
+  if (maxFee !== null && fee > maxFee) fee = maxFee;
+  fee = Math.round(fee * 10000) / 10000;
+  return { feeAmount: fee, feeRate, feeFixed, ruleDesc };
+}
+
+/** 计算某用户的提现手续费 */
+export async function calculateWithdrawFee(
+  userId: number,
+  sntAmount: number,
+  ledgerId: number = 52
+): Promise<{ feeAmount: number; feeRate: number; feeFixed: number; ruleDesc: string }> {
+  await ensureFeeRuleTable();
+  const conn = await getDbConnection();
+  if (!conn) return { feeAmount: 0, feeRate: 0, feeFixed: 0, ruleDesc: '无手续费' };
+
+  // 1. 查找直接针对该用户的规则
+  const [userRows] = await conn.execute(
+    `SELECT * FROM snt_withdrawal_fee_rules WHERE scope = 'user' AND target_user_id = ? AND (ledger_id = ? OR ledger_id IS NULL) ORDER BY ledger_id DESC LIMIT 1`,
+    [userId, ledgerId]
+  );
+  const userRules = userRows as any[];
+  if (userRules.length > 0) return calcFeeFromRule(userRules[0], sntAmount, '个人专属规则');
+
+  // 2. 查找该用户的上线是否设置了 user_and_downlines 规则
+  const [inviterRows] = await conn.execute(
+    `SELECT inviter_id FROM user_invitations WHERE invitee_id = ? LIMIT 1`,
+    [userId]
+  );
+  const inviterArr = inviterRows as any[];
+  if (inviterArr.length > 0) {
+    const inviterId = inviterArr[0].inviter_id;
+    const [inviterRuleRows] = await conn.execute(
+      `SELECT * FROM snt_withdrawal_fee_rules WHERE scope = 'user_and_downlines' AND target_user_id = ? AND (ledger_id = ? OR ledger_id IS NULL) ORDER BY ledger_id DESC LIMIT 1`,
+      [inviterId, ledgerId]
+    );
+    const inviterRules = inviterRuleRows as any[];
+    if (inviterRules.length > 0) return calcFeeFromRule(inviterRules[0], sntAmount, '团队规则');
+  }
+
+  // 3. 全局默认规则
+  const [globalRows] = await conn.execute(
+    `SELECT * FROM snt_withdrawal_fee_rules WHERE scope = 'global' AND (ledger_id = ? OR ledger_id IS NULL) ORDER BY ledger_id DESC LIMIT 1`,
+    [ledgerId]
+  );
+  const globalRules = globalRows as any[];
+  if (globalRules.length > 0) return calcFeeFromRule(globalRules[0], sntAmount, '默认规则');
+
+  return { feeAmount: 0, feeRate: 0, feeFixed: 0, ruleDesc: '无手续费' };
+}
+
+/** 获取用户提现手续费预览 */
+export async function getWithdrawFeePreview(
+  userId: number,
+  sntAmount: number,
+  ledgerId: number = 52
+): Promise<{ feeAmount: number; actualAmount: number; ruleDesc: string }> {
+  const { feeAmount, ruleDesc } = await calculateWithdrawFee(userId, sntAmount, ledgerId);
+  return { feeAmount, actualAmount: Math.max(0, sntAmount - feeAmount), ruleDesc };
+}
+
+/** 获取所有手续费规则（管理员） */
+export async function getAllFeeRules(ledgerId?: number) {
+  await ensureFeeRuleTable();
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  let query = `
+    SELECT r.*, u.username as targetUserName, u.name as targetUserDisplayName
+    FROM snt_withdrawal_fee_rules r
+    LEFT JOIN users u ON r.target_user_id = u.id
+  `;
+  const params: any[] = [];
+  if (ledgerId !== undefined) {
+    query += ` WHERE r.ledger_id = ? OR r.ledger_id IS NULL`;
+    params.push(ledgerId);
+  }
+  query += ` ORDER BY r.scope ASC, r.id ASC`;
+  const [rows] = await conn.execute(query, params);
+  return rows as any[];
+}
+
+/** 创建或更新手续费规则（管理员） */
+export async function upsertFeeRule(params: {
+  id?: number;
+  ledgerId?: number | null;
+  scope: 'global' | 'user' | 'user_and_downlines';
+  targetUserId?: number | null;
+  feeRate: number;
+  feeFixed: number;
+  minFee: number;
+  maxFee?: number | null;
+  note?: string;
+  createdBy: number;
+}): Promise<{ success: boolean; id: number }> {
+  await ensureFeeRuleTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  if (params.id) {
+    await conn.execute(
+      `UPDATE snt_withdrawal_fee_rules SET ledger_id=?, scope=?, target_user_id=?, fee_rate=?, fee_fixed=?, min_fee=?, max_fee=?, note=? WHERE id=?`,
+      [params.ledgerId ?? null, params.scope, params.targetUserId ?? null, params.feeRate, params.feeFixed, params.minFee, params.maxFee ?? null, params.note ?? null, params.id]
+    );
+    return { success: true, id: params.id };
+  } else {
+    const [result] = await conn.execute(
+      `INSERT INTO snt_withdrawal_fee_rules (ledger_id, scope, target_user_id, fee_rate, fee_fixed, min_fee, max_fee, note, created_by) VALUES (?,?,?,?,?,?,?,?,?)`,
+      [params.ledgerId ?? null, params.scope, params.targetUserId ?? null, params.feeRate, params.feeFixed, params.minFee, params.maxFee ?? null, params.note ?? null, params.createdBy]
+    );
+    return { success: true, id: (result as any).insertId };
+  }
+}
+
+/** 删除手续费规则（不能删除 id=1 的全局默认规则） */
+export async function deleteFeeRule(id: number): Promise<{ success: boolean }> {
+  if (id === 1) throw new Error('不能删除全局默认规则');
+  await ensureFeeRuleTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  await conn.execute(`DELETE FROM snt_withdrawal_fee_rules WHERE id = ?`, [id]);
+  return { success: true };
+}

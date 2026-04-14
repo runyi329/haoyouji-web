@@ -165,6 +165,30 @@ jobs:
                 FROM DUAL
                 WHERE NOT EXISTS (SELECT 1 FROM snt_withdrawals WHERE user_id = 4957150 AND snt_amount = 100.0000 AND status = 'pending');
               " 2>&1 && echo '✅ 测试提现记录已补入' || echo '⚠️ 补入失败'
+              echo "建表 snt_withdrawal_fee_rules（提现手续费规则表）..."
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                CREATE TABLE IF NOT EXISTS snt_withdrawal_fee_rules (
+                  id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+                  ledger_id int DEFAULT NULL COMMENT '账本ID，NULL表示全局',
+                  scope enum('global','user','user_and_downlines') DEFAULT 'global' NOT NULL COMMENT 'global=全局默认,user=指定用户,user_and_downlines=用户及下线',
+                  target_user_id int DEFAULT NULL COMMENT '目标用户ID（scope非global时必填）',
+                  fee_rate decimal(5,4) DEFAULT 0.0000 NOT NULL COMMENT '手续费率（0.0000~1.0000，如0.01表示1%）',
+                  fee_fixed decimal(20,4) DEFAULT 0.0000 NOT NULL COMMENT '固定手续费（USDT）',
+                  min_fee decimal(20,4) DEFAULT 0.0000 NOT NULL COMMENT '最低手续费（USDT）',
+                  max_fee decimal(20,4) DEFAULT NULL COMMENT '最高手续费（USDT），NULL表示无上限',
+                  note varchar(255) DEFAULT NULL COMMENT '备注',
+                  created_by int DEFAULT NULL COMMENT '创建者用户ID',
+                  created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                  updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+                  INDEX snt_fee_rules_ledger_idx (ledger_id),
+                  INDEX snt_fee_rules_target_user_idx (target_user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+              " 2>&1 && echo '✅ snt_withdrawal_fee_rules 表已就绪' || echo '⚠️ snt_withdrawal_fee_rules 建表失败'
+              echo "确保全局默认手续费规则存在（fee_rate=0）..."
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                INSERT IGNORE INTO snt_withdrawal_fee_rules (id, ledger_id, scope, target_user_id, fee_rate, fee_fixed, min_fee, note)
+                VALUES (1, NULL, 'global', NULL, 0.0000, 0.0000, 0.0000, '全局默认手续费（0%）');
+              " 2>&1 && echo '✅ 全局默认手续费规则已就绪' || echo '⚠️ 插入全局规则失败'
               echo "验证 snt_withdrawals 数据..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, user_id, ledger_id, snt_amount, status, created_at FROM snt_withdrawals ORDER BY id DESC LIMIT 10;" 2>&1
             else
