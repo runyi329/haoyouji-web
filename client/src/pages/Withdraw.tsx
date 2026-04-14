@@ -247,33 +247,29 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
           </div>
 
           {/* 提现金额 */}
-          <div className="bg-white rounded-lg p-4 shadow-sm">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              提现金额
-            </label>
-            <div className="relative">
+          <div className="bg-white rounded-lg p-4 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">提现金额</label>
+              <button
+                onClick={() => setAmount(balance.toFixed(2))}
+                className="text-xs text-[#D32F2F] font-medium px-2 py-1 bg-red-50 rounded-full"
+              >
+                全部提现
+              </button>
+            </div>
+            <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#D32F2F] focus-within:border-transparent">
               <input
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="请输入提现金额"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#D32F2F] focus:border-transparent text-lg"
+                className="flex-1 min-w-0 px-4 py-3 text-lg outline-none bg-transparent"
                 step="0.01"
                 min="10"
               />
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500">
-                USDT
-              </div>
+              <span className="px-3 text-gray-500 text-sm flex-shrink-0">USDT</span>
             </div>
-            <div className="mt-2 flex items-center justify-between text-sm gap-2">
-              <span className="text-gray-500 flex-shrink-0">最低提现：10 USDT</span>
-              <button
-                onClick={() => setAmount(balance.toFixed(2))}
-                className="text-[#D32F2F] font-medium flex-shrink-0"
-              >
-                全部提现
-              </button>
-            </div>
+            <p className="mt-2 text-xs text-gray-400">最低提现：10 USDT</p>
           </div>
 
           {/* 提交按钮 */}
