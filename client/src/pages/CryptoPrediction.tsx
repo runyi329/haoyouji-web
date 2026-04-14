@@ -502,9 +502,12 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const isPositive = netProfit >= 0;
           return (
             <>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-start">
                 <span className="text-[#9CA3AF]">利润</span>
-                <span className={`font-bold ${grossProfit >= 0 ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{grossProfit >= 0 ? '+' : ''}{grossProfit.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} USDT</span>
+                <div className="flex flex-col items-end">
+                  <span className={`font-bold ${grossProfit >= 0 ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{grossProfit >= 0 ? '+' : ''}{grossProfit.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} USDT</span>
+                  <span className="text-[10px] text-[#9CA3AF] mt-0.5">({sellPrice.toLocaleString()} - {buyPrice.toLocaleString()}) × {quantity.toFixed(4)} B</span>
+                </div>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[#9CA3AF]">净利润</span>
