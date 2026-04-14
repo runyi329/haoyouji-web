@@ -1617,8 +1617,8 @@ export default function CryptoPrediction() {
                   const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
                   const isNegativeRate = true; // 融资付息页面用户均为付息方，利息一律显示为负数
                   const interestBaseRaw = parseFloat(order.interest_base || order.principal || '0');
-                  // 计息基数 = interest_base × 2（interest_base 仅为50%部分，利息按全额计算）
-                  const interestBase = interestBaseRaw * 2;
+                  // FG6127 特殊：interest_base 仅为50%部分，利息按全额（×2）计算；其他订单不变
+                  const interestBase = order.order_no === 'FG6127' ? interestBaseRaw * 2 : interestBaseRaw;
                   const startDate = order.interest_start_date || order.startDate || null;
                   const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
                   const buyPrice = parseFloat(order.buy_price || '0');
