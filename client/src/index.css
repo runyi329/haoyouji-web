@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
