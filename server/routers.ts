@@ -12660,19 +12660,19 @@ export const appRouter = router({
           const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
           targetIsManager = targetRole === 'owner' || targetRole === 'admin';
         }
-        // 管理员看所有，普通用户只看自己的
+        // 管理员看所有，普通用户只看自己的（active 排前，completed/cancelled 排后）
         const rows = await db.execute(
           targetIsManager
             ? sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
                   FROM finance_interest_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.status = 'active'
-                  ORDER BY fo.created_at DESC`
+                  WHERE fo.ledger_id = ${input.ledgerId}
+                  ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
             : sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
                   FROM finance_interest_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.user_id = ${targetUserId} AND fo.status = 'active'
-                  ORDER BY fo.created_at DESC`
+                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.user_id = ${targetUserId}
+                  ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
         return { orders };
