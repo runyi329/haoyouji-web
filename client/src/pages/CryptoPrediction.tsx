@@ -857,9 +857,6 @@ export default function CryptoPrediction() {
   const [selectedSellOrderIds, setSelectedSellOrderIds] = useState<Set<number>>(new Set());
   // 订单详情展开状态
   const [orderDetailId, setOrderDetailId] = useState<number | null>(null);
-  // 账目明细弹窗
-  const [showLedgerHistory, setShowLedgerHistory] = useState(false);
-
   // 账本信息（用于判断类型，定制 Tab 名称）
   const { data: ledgerInfo } = trpc.ledger.getById.useQuery(
     { ledgerId },
@@ -907,12 +904,6 @@ export default function CryptoPrediction() {
     { enabled: !!ledgerId, staleTime: 30000 }
   );
   const availableUsdt = (assetData as any)?.total ?? 0;
-  // 账目明细（充值+手动调账流水）
-  const { data: ledgerHistoryData, isLoading: ledgerHistoryLoading } = trpc.ledger.afGetMyRechargeHistory.useQuery(
-    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: !!ledgerId && showLedgerHistory, staleTime: 30000 }
-  );
-  const ledgerHistoryList: any[] = (ledgerHistoryData as any[]) || [];
   // 委托订单
   const utils = trpc.useUtils();
   const { data: ordersData, isLoading: ordersLoading } = trpc.ledger.afGetOrders.useQuery(
@@ -1190,10 +1181,7 @@ export default function CryptoPrediction() {
                       className="w-5 h-5 rounded-full flex items-center justify-center transition-colors" style={{ backgroundColor: '#E8EEFF', color: '#1A56DB' }} title="充值">
                       <span className="text-xs leading-none">+</span>
                     </button>
-                    <button onClick={() => setShowLedgerHistory(true)}
-                      className="h-5 px-1.5 rounded-full flex items-center justify-center transition-colors text-xs" style={{ backgroundColor: '#F0FDF4', color: '#16A34A' }} title="账目明细">
-                      明细
-                    </button>
+
                   </div>
                 </div>
                 {/* 可买数量 - 实时计算公式展示 */}
@@ -2081,50 +2069,5 @@ export default function CryptoPrediction() {
 
     </div>
 
-    {/* 账目明细弹窗 */}
-    {showLedgerHistory && (
-      <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
-        onClick={() => setShowLedgerHistory(false)}>
-        <div className="mt-auto bg-[#131722] rounded-t-2xl max-h-[80vh] flex flex-col"
-          onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#2A2E39]">
-            <span className="text-white font-semibold text-sm">账目明细</span>
-            <button onClick={() => setShowLedgerHistory(false)} className="text-gray-400 text-lg leading-none">×</button>
-          </div>
-          <div className="overflow-y-auto flex-1 px-4 py-2">
-            {ledgerHistoryLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-              </div>
-            ) : ledgerHistoryList.length === 0 ? (
-              <div className="text-center text-gray-500 text-sm py-8">暂无账目记录</div>
-            ) : (
-              <div className="space-y-0">
-                {ledgerHistoryList.map((item: any, idx: number) => {
-                  const amt = parseFloat(item.amount);
-                  const isPositive = amt >= 0;
-                  const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
-                  const rawNote = item.note || '';
-                  const typeLabel = item.sourceType === 'recharge'
-                    ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : rawNote || '充值')
-                    : (rawNote ? rawNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
-                  return (
-                    <div key={item.id || idx} className="flex items-center justify-between py-3 border-b border-[#1C2127]">
-                      <div className="flex-1 min-w-0 mr-3">
-                        <div className="text-white text-sm truncate">{typeLabel}</div>
-                        <div className="text-gray-500 text-xs mt-0.5">{dateStr}</div>
-                      </div>
-                      <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-[#26a69a]' : 'text-[#ef5350]'}`}>
-                        {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    )}
   );
 }
