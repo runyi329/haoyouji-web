@@ -81,9 +81,6 @@ jobs:
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
             echo "ubuntu PM2错误日志（最后30行）："
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --err --nostream --lines 30' 2>&1 || true
-            echo "🔍 检查构建产物中是否还有提现管理..."
-            grep -r '提现管理' /root/haoyouji-web/dist/public/ 2>/dev/null && echo '⚠️ 构建产物中仍有提现管理' || echo '✅ 构建产物中已无提现管理'
-            grep -r '提现管理' /home/ubuntu/haoyouji-web/dist/public/ 2>/dev/null && echo '⚠️ 服务目录中仍有提现管理' || echo '✅ 服务目录中已无提现管理'
             echo "✅ 部署完成！"
             echo "🔒 同步Nginx配置并重载Nginx..."
             cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
@@ -98,13 +95,13 @@ jobs:
             cd /root/haoyouji-web && node scripts/seed-crypto-prices.mjs || echo "⚠️ 数字币价格初始化失败（非致命）"
             # 首次部署时检查数据量，不足100条则全量导入
             source /root/haoyouji-web/.env 2>/dev/null || true
-            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
-            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP '(?<=:)[0-9]{4,5}(?=/)' | tail -1 || echo '4000')
-            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://)[^:]+' || echo '')
-            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://[^:]+:)[^@]+' || echo '')
-            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP '(?<=/)[^?]+$' || echo '')
+            DB_HOST=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'@([^:/]+)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
+            DB_PORT=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r':([0-9]{4,5})/', u); print(m.group(1) if m else '4000')" 2>/dev/null || echo "4000")
+            DB_USER=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'://([^:]+):', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
+            DB_PASS=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'://[^:]+:([^@]+)@', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
+            DB_NAME=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'/([^/?]+)(\?|$)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
             if [ -n "$DB_HOST" ]; then
-              GOLD_COUNT=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "SELECT COUNT(*) FROM gold_daily_kline;" 2>/dev/null || echo '0')
+              GOLD_COUNT=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "SELECT COUNT(*) FROM gold_daily_kline;" 2>/dev/null || echo "0")
               echo "当前黄金数据条数: $GOLD_COUNT"
               if [ "$GOLD_COUNT" -lt 100 ] 2>/dev/null; then
                 echo "数据不足，执行全量导入..."
@@ -113,7 +110,7 @@ jobs:
             fi
             # 设置每日凌晨2点自动更新黄金数据的cron任务
             CRON_JOB="0 2 * * * cd /root/haoyouji-web && node scripts/update-gold-daily.mjs >> /var/log/gold-update.log 2>&1"
-            (crontab -l 2>/dev/null | grep -v 'update-gold-daily'; echo "$CRON_JOB") | crontab -
+            (crontab -l 2>/dev/null | grep -v "update-gold-daily"; echo "$CRON_JOB") | crontab -
             echo "✅ 黄金数据每日更新cron任务已设置"
             echo "📤 上传同花顺股票图标到COS..."
             cd /root/haoyouji-web && node scripts/upload-ths-icon.mjs || echo "⚠️ 图标上传失败（非致命）"
@@ -121,11 +118,11 @@ jobs:
             bash /root/haoyouji-web/scripts/diagnose-cos.sh || true
             echo "=== 确保 snt_withdrawals 表存在 ==="
             source /root/haoyouji-web/.env 2>/dev/null || true
-            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
-            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP '(?<=:)[0-9]{4,5}(?=/)' | tail -1 || echo '4000')
-            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://)[^:]+' || echo '')
-            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://[^:]+:)[^@]+' || echo '')
-            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP '(?<=/)[^?]+$' || echo '')
+            DB_HOST=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'@([^:/]+)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
+            DB_PORT=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r':([0-9]{4,5})/', u); print(m.group(1) if m else '4000')" 2>/dev/null || echo "4000")
+            DB_USER=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'://([^:]+):', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
+            DB_PASS=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'://[^:]+:([^@]+)@', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
+            DB_NAME=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'/([^/?]+)(\?|$)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
             if [ -n "$DB_HOST" ]; then
               echo "建表 snt_withdrawals..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
@@ -144,7 +141,7 @@ jobs:
                   INDEX snt_withdrawals_status_idx (status),
                   INDEX snt_withdrawals_ledger_id_idx (ledger_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-              " 2>&1 && echo '✅ snt_withdrawals 表已就绪' || echo '⚠️ snt_withdrawals 建表失败'
+              " 2>&1 && echo "✅ snt_withdrawals 表已就绪" || echo "⚠️ snt_withdrawals 建表失败"
               echo "建表 user_bsc_wallets..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
                 CREATE TABLE IF NOT EXISTS user_bsc_wallets (
@@ -156,44 +153,36 @@ jobs:
                   UNIQUE KEY user_bsc_wallets_user_id_unique (user_id),
                   INDEX user_bsc_wallets_user_id_idx (user_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-              " 2>&1 && echo '✅ user_bsc_wallets 表已就绪' || echo '⚠️ user_bsc_wallets 建表失败'
+              " 2>&1 && echo "✅ user_bsc_wallets 表已就绪" || echo "⚠️ user_bsc_wallets 建表失败"
               echo "检查表是否存在..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SHOW TABLES LIKE 'snt%';" 2>&1
-              echo "补入用户4957150测试提现记录..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                INSERT INTO snt_withdrawals (user_id, ledger_id, snt_amount, bsc_address, status, created_at, updated_at)
-                SELECT 4957150, 52, 100.0000, '0xf96505b0d41054455e904af175a74993a98137802578672864f6020b7f8a2587', 'pending', NOW(), NOW()
-                FROM DUAL
-                WHERE NOT EXISTS (SELECT 1 FROM snt_withdrawals WHERE user_id = 4957150 AND snt_amount = 100.0000 AND status = 'pending');
-              " 2>&1 && echo '✅ 测试提现记录已补入' || echo '⚠️ 补入失败'
               echo "建表 snt_withdrawal_fee_rules（提现手续费规则表）..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
                 CREATE TABLE IF NOT EXISTS snt_withdrawal_fee_rules (
                   id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                  ledger_id int DEFAULT NULL COMMENT '账本ID，NULL表示全局',
-                  scope enum('global','user','user_and_downlines') DEFAULT 'global' NOT NULL COMMENT 'global=全局默认,user=指定用户,user_and_downlines=用户及下线',
-                  target_user_id int DEFAULT NULL COMMENT '目标用户ID（scope非global时必填）',
-                  fee_rate decimal(5,4) DEFAULT 0.0000 NOT NULL COMMENT '手续费率（0.0000~1.0000，如0.01表示1%）',
-                  fee_fixed decimal(20,4) DEFAULT 0.0000 NOT NULL COMMENT '固定手续费（USDT）',
-                  min_fee decimal(20,4) DEFAULT 0.0000 NOT NULL COMMENT '最低手续费（USDT）',
-                  max_fee decimal(20,4) DEFAULT NULL COMMENT '最高手续费（USDT），NULL表示无上限',
-                  note varchar(255) DEFAULT NULL COMMENT '备注',
-                  created_by int DEFAULT NULL COMMENT '创建者用户ID',
+                  ledger_id int DEFAULT NULL,
+                  scope enum('global','user','user_and_downlines') DEFAULT 'global' NOT NULL,
+                  target_user_id int DEFAULT NULL,
+                  fee_rate decimal(5,4) DEFAULT 0.0000 NOT NULL,
+                  fee_fixed decimal(20,4) DEFAULT 0.0000 NOT NULL,
+                  min_fee decimal(20,4) DEFAULT 0.0000 NOT NULL,
+                  max_fee decimal(20,4) DEFAULT NULL,
+                  note varchar(255) DEFAULT NULL,
+                  created_by int DEFAULT NULL,
                   created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
                   updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
                   INDEX snt_fee_rules_ledger_idx (ledger_id),
                   INDEX snt_fee_rules_target_user_idx (target_user_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-              " 2>&1 && echo '✅ snt_withdrawal_fee_rules 表已就绪' || echo '⚠️ snt_withdrawal_fee_rules 建表失败'
+              " 2>&1 && echo "✅ snt_withdrawal_fee_rules 表已就绪" || echo "⚠️ snt_withdrawal_fee_rules 建表失败"
               echo "确保全局默认手续费规则存在（fee_rate=0）..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
                 INSERT IGNORE INTO snt_withdrawal_fee_rules (id, ledger_id, scope, target_user_id, fee_rate, fee_fixed, min_fee, note)
-                VALUES (1, NULL, 'global', NULL, 0.0000, 0.0000, 0.0000, '全局默认手续费（0%）');
-              " 2>&1 && echo '✅ 全局默认手续费规则已就绪' || echo '⚠️ 插入全局规则失败'
+                VALUES (1, NULL, 'global', NULL, 0.0000, 0.0000, 0.0000, '全局默认手续费');
+              " 2>&1 && echo "✅ 全局默认手续费规则已就绪" || echo "⚠️ 插入全局规则失败"
               echo "验证 snt_withdrawals 数据..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, user_id, ledger_id, snt_amount, status, created_at FROM snt_withdrawals ORDER BY id DESC LIMIT 10;" 2>&1
             else
-              echo 'DATABASE_URL not found, 跳过建表'
+              echo "DATABASE_URL not found, 跳过建表"
             fi
           ENDSSH
-
