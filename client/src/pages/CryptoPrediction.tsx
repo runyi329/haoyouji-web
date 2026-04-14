@@ -1206,9 +1206,12 @@ export default function CryptoPrediction() {
             {/* 委卖模式：已成交买入订单列表选择 */}
             {orderSide === "sell" && (() => {
               const completedBuyOrders = (ordersData as any[] || []).filter(
-                (o: any) => (o.status === 'completed' || o.status === 'pending') && o.coin === coin.name && !o.sellStatus
+                (o: any) => (o.status === 'completed' || o.status === 'pending') && o.coin === coin.name
+                  && o.sellStatus !== 'selling'   // 排除委卖中（已挂单）
+                  && o.sellStatus !== 'sold'       // 排除已卖出
+                  // sell_cancelled（已撤销）和 null（未委卖过）都允许再次委卖
               );
-              // 显示未卖出且未委托卖的订单（包括委托中和已成交的买单）
+              // 显示未卖出且未委托卖的订单（包括委托中和已成交的买单，含撤销后可重新委卖的）
               return (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-1 mb-1">
