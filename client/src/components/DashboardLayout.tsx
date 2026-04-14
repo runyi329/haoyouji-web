@@ -131,7 +131,7 @@ function DashboardLayoutContent({
   const backPath = getBackPath();
   const { swipeProgress } = useSwipeBack({
     backPath: backPath || '/',
-    enabled: isMobile && backPath !== null, // 只在移动端且非首页启用
+    enabled: false, // 已禁用滑动返回手势，改用“返回”文字按钮
     threshold: 80,
   });
 

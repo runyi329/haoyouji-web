@@ -1413,6 +1413,16 @@ export default function ContactsList() {
           >
             刷新
           </button>
+          
+          {/* 返回按钮 */}
+          <button
+            onClick={() => {
+              window.history.back();
+            }}
+            className="flex items-center justify-center h-9 px-3 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all shadow-sm text-xs font-medium"
+          >
+            返回
+          </button>
         </div>
       </div>
 
