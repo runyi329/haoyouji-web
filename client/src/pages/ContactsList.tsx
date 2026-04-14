@@ -219,7 +219,13 @@ export default function ContactsList() {
   const [isTagAreaExpanded, setIsTagAreaExpanded] = useState(false);
   
   // 共享人脉筛选状态：'all' = 全部、'mine' = 我的、'shared' = 共享
-  const [shareFilter, setShareFilter] = useState<'all' | 'mine' | 'shared'>('all');
+  // 初始化时从URL参数读取tab状态，实现刷新后保留当前Tab
+  const [shareFilter, setShareFilter] = useState<'all' | 'mine' | 'shared'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    if (tab === 'mine' || tab === 'shared') return tab;
+    return 'all';
+  });
   
   // 共享人筛选状态：按共享人名字筛选
   const [sharerFilter, setSharerFilter] = useState<string>('all');
@@ -1407,7 +1413,16 @@ export default function ContactsList() {
           {/* 强制刷新按钮 */}
           <button
             onClick={() => {
-              window.location.reload();
+              // 刷新前将当前Tab写入URL参数，刷新后从URL恢复
+              const params = new URLSearchParams(window.location.search);
+              if (shareFilter === 'all') {
+                params.delete('tab');
+              } else {
+                params.set('tab', shareFilter);
+              }
+              const newSearch = params.toString();
+              const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '');
+              window.location.href = newUrl;
             }}
             className="flex items-center justify-center h-9 px-3 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all shadow-sm text-xs font-medium"
           >
