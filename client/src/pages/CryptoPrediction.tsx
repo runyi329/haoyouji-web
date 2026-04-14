@@ -479,21 +479,32 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           </div>
         )}
 
-        {/* 净利润和回报率（已卖出时显示） */}
+        {/* 净利润和回报率（已卖出时显示，净利润 = 差价收益 - 管理费） */}
         {order.sellStatus === 'sold' && order.sellPrice && order.limitPrice && (() => {
           const buyPrice = parseFloat(order.limitPrice);
           const sellPrice = parseFloat(order.sellPrice);
           const quantity = parseFloat(order.quantity);
           const actualInvestment = parseFloat(order.amount);
-          const profit = (sellPrice - buyPrice) * quantity;
-          const profitRatio = actualInvestment > 0 ? (profit / actualInvestment) * 100 : 0;
+          const grossProfit = (sellPrice - buyPrice) * quantity; // 差价收益（未扣管理费）
+          // 重新计算管理费（与上方管理费区块保持一致）
+          const tradeValue2 = order.isGift ? actualInvestment : actualInvestment * 5.25;
+          const dailyFee2 = tradeValue2 / 0.75 * 0.12 / 365;
+          const startDate2 = new Date(order.createdAt);
+          const startDay2 = new Date(startDate2.getFullYear(), startDate2.getMonth(), startDate2.getDate());
+          const endDate2 = order.sellConfirmedAt ? new Date(order.sellConfirmedAt) : new Date();
+          const endDay2 = new Date(endDate2.getFullYear(), endDate2.getMonth(), endDate2.getDate());
+          endDay2.setHours(0,0,0,0);
+          const holdDays2 = Math.max(1, Math.floor((endDay2.getTime() - startDay2.getTime()) / (1000*60*60*24)) + 1);
+          const totalFee2 = dailyFee2 * holdDays2;
+          const netProfit = grossProfit - totalFee2; // 净利润 = 差价收益 - 管理费
+          const profitRatio = actualInvestment > 0 ? (netProfit / actualInvestment) * 100 : 0;
           const priceGrowth = buyPrice > 0 ? ((sellPrice - buyPrice) / buyPrice) * 100 : 0;
-          const isPositive = profit >= 0;
+          const isPositive = netProfit >= 0;
           return (
             <>
               <div className="flex justify-between items-center">
                 <span className="text-[#9CA3AF]">净利润</span>
-                <span className={`font-bold ${isPositive ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{isPositive ? '+' : ''}{profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
+                <span className={`font-bold ${isPositive ? 'text-[#0EA56A]' : 'text-[#EF4444]'}`}>{isPositive ? '+' : ''}{netProfit.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} USDT</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-[#9CA3AF]">利润比</span>
