@@ -11135,7 +11135,8 @@ export const appRouter = router({
         let balanceNote = '';
         
         // ========== 卖出成交处理（订单合并模型） ==========
-        if (input.sellStatus === 'sold' && order.sell_status === 'selling') {
+        // 只要目标状态是 sold 且当前不是 sold，就触发结算（兼容 selling/sell_cancelled/null 等各种前置状态）
+        if (input.sellStatus === 'sold' && order.sell_status !== 'sold') {
           // 确认卖出成交：从同一订单取买入信息
           const actualSellPrice = input.sellPrice ? parseFloat(input.sellPrice) : parseFloat(order.sell_price || '0');
           const principal = oldAmount; // 买入本金
