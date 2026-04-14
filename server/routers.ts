@@ -851,7 +851,10 @@ export const appRouter = router({
     getMySntWithdrawals: protectedProcedure
       .input(z.object({ limit: z.number().optional(), ledgerId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        return await dbRecharge.getUserSntWithdrawals(ctx.user.id, input.limit, input.ledgerId);
+        console.log('[getMySntWithdrawals] userId=', ctx.user.id, 'ledgerId=', input.ledgerId, 'limit=', input.limit);
+        const result = await dbRecharge.getUserSntWithdrawals(ctx.user.id, input.limit, input.ledgerId);
+        console.log('[getMySntWithdrawals] result count=', result.length, 'data=', JSON.stringify(result.slice(0, 2)));
+        return result;
       }),
 
     // 管理员获取所有 SNT 提现申请
