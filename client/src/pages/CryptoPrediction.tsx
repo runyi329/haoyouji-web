@@ -1786,6 +1786,36 @@ export default function CryptoPrediction() {
                                   <span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span>
                                 </div>
                               )}
+                              {/* 已卖出：卖出价、卖出币数、订单利润 */}
+                              {(() => {
+                                const _an = String(order.admin_note || '');
+                                if (!_an.includes('[已卖出]')) return null;
+                                const sellPriceM = _an.match(/\[卖出价:([\d.]+)\]/);
+                                const sellQtyM = _an.match(/\[卖出币数:([^\]]+)\]/);
+                                const profitM = _an.match(/\[订单利润:([^\]]+)\]/);
+                                return (
+                                  <>
+                                    {sellPriceM && (
+                                      <div className="flex items-center justify-between mt-0.5 text-xs">
+                                        <span className="text-gray-400">卖出价</span>
+                                        <span className="font-medium" style={{ color: '#4B5563' }}>{sellPriceM[1]} U</span>
+                                      </div>
+                                    )}
+                                    {sellQtyM && (
+                                      <div className="flex items-center justify-between mt-0.5 text-xs">
+                                        <span className="text-gray-400">卖出币数</span>
+                                        <span className="font-medium" style={{ color: '#4B5563' }}>{sellQtyM[1]}</span>
+                                      </div>
+                                    )}
+                                    {profitM && (
+                                      <div className="flex items-center justify-between mt-0.5 text-xs">
+                                        <span className="text-gray-400">订单利润</span>
+                                        <span className="font-medium text-green-600">{profitM[1]}</span>
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
                               {(() => {
                                 const collCoin = order.collateral_coin;
                                 const collQty = parseFloat(order.collateral_qty || '0');
