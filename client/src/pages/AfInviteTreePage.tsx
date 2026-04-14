@@ -18,7 +18,7 @@ export default function AfInviteTreePage() {
   const { data: user } = trpc.auth.me.useQuery();
 
   // 账本基本信息（判断权限）
-  const { data: ledgerData, isLoading: ledgerLoading } = trpc.ledger.getById.useQuery({ id: ledgerId }, { enabled: !!ledgerId });
+  const { data: ledgerData, isLoading: ledgerLoading } = trpc.ledger.getById.useQuery({ ledgerId }, { enabled: !!ledgerId });
   const isOwner = (ledgerData as any)?.userRole === 'owner';
   const isAdmin = (ledgerData as any)?.userRole === 'admin';
   const isCustomAF = (ledgerData as any)?.type === 'custom_af';
