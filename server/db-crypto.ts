@@ -221,3 +221,110 @@ export async function syncLatestFromBinance(symbol: string): Promise<{ added: nu
   const newLatest = records[records.length - 1].date;
   return { added: records.length, latestDate: newLatest };
 }
+
+export interface CryptoStats {
+  total: number;
+  upDays: number;
+  downDays: number;
+  flatDays: number;
+  upPct: number;
+  downPct: number;
+  // 连涨分布：key=连涨天数, value=出现次数
+  consecutiveUp: Record<number, number>;
+  // 连跌分布：key=连跌天数, value=出现次数
+  consecutiveDown: Record<number, number>;
+  // 最长连涨/连跌
+  maxConsecUp: number;
+  maxConsecDown: number;
+}
+
+/**
+ * 计算某交易对的涨跌统计和连涨连跌分布
+ */
+export async function getCryptoStats(symbol: string): Promise<CryptoStats> {
+  const conn = await getDbConnection();
+  if (!conn) return {
+    total: 0, upDays: 0, downDays: 0, flatDays: 0,
+    upPct: 0, downPct: 0,
+    consecutiveUp: {}, consecutiveDown: {},
+    maxConsecUp: 0, maxConsecDown: 0,
+  };
+
+  // 按日期升序拉取所有 change_pct
+  const [rows] = await conn.execute(
+    `SELECT change_pct FROM crypto_klines WHERE symbol = ? ORDER BY date ASC`,
+    [symbol]
+  ) as any[];
+
+  const changes: (number | null)[] = (rows as any[]).map((r: any) =>
+    r.change_pct != null ? parseFloat(r.change_pct) : null
+  );
+
+  const total = changes.length;
+  let upDays = 0, downDays = 0, flatDays = 0;
+
+  // 连涨/连跌统计
+  const consecutiveUp: Record<number, number> = {};
+  const consecutiveDown: Record<number, number> = {};
+  let maxConsecUp = 0, maxConsecDown = 0;
+  let curUp = 0, curDown = 0;
+
+  for (const pct of changes) {
+    if (pct == null) continue;
+    if (pct > 0) {
+      upDays++;
+      // 结束连跌序列
+      if (curDown > 0) {
+        consecutiveDown[curDown] = (consecutiveDown[curDown] ?? 0) + 1;
+        if (curDown > maxConsecDown) maxConsecDown = curDown;
+        curDown = 0;
+      }
+      curUp++;
+    } else if (pct < 0) {
+      downDays++;
+      // 结束连涨序列
+      if (curUp > 0) {
+        consecutiveUp[curUp] = (consecutiveUp[curUp] ?? 0) + 1;
+        if (curUp > maxConsecUp) maxConsecUp = curUp;
+        curUp = 0;
+      }
+      curDown++;
+    } else {
+      flatDays++;
+      // 平盘结束两个序列
+      if (curUp > 0) {
+        consecutiveUp[curUp] = (consecutiveUp[curUp] ?? 0) + 1;
+        if (curUp > maxConsecUp) maxConsecUp = curUp;
+        curUp = 0;
+      }
+      if (curDown > 0) {
+        consecutiveDown[curDown] = (consecutiveDown[curDown] ?? 0) + 1;
+        if (curDown > maxConsecDown) maxConsecDown = curDown;
+        curDown = 0;
+      }
+    }
+  }
+  // 收尾
+  if (curUp > 0) {
+    consecutiveUp[curUp] = (consecutiveUp[curUp] ?? 0) + 1;
+    if (curUp > maxConsecUp) maxConsecUp = curUp;
+  }
+  if (curDown > 0) {
+    consecutiveDown[curDown] = (consecutiveDown[curDown] ?? 0) + 1;
+    if (curDown > maxConsecDown) maxConsecDown = curDown;
+  }
+
+  const validTotal = upDays + downDays + flatDays;
+  return {
+    total,
+    upDays,
+    downDays,
+    flatDays,
+    upPct: validTotal > 0 ? parseFloat((upDays / validTotal * 100).toFixed(1)) : 0,
+    downPct: validTotal > 0 ? parseFloat((downDays / validTotal * 100).toFixed(1)) : 0,
+    consecutiveUp,
+    consecutiveDown,
+    maxConsecUp,
+    maxConsecDown,
+  };
+}
