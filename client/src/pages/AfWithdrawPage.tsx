@@ -108,7 +108,7 @@ export default function AfWithdrawPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-10 max-w-md mx-auto">
+    <div className="min-h-screen bg-gray-50 pb-10 max-w-md mx-auto overflow-x-hidden" style={{ maxWidth: '100vw' }}>
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 flex items-center px-4 py-3"
@@ -127,7 +127,7 @@ export default function AfWithdrawPage() {
       </div>
 
       {/* 余额卡片 */}
-      <div className="mx-4 mt-4 rounded-2xl p-5 text-white" style={{ background: "linear-gradient(135deg, #A80000 0%, #7a0000 100%)" }}>
+      <div className="mx-4 mt-4 rounded-2xl p-5 text-white overflow-hidden" style={{ background: "linear-gradient(135deg, #A80000 0%, #7a0000 100%)" }}>
         <div className="text-sm text-white/70 mb-1">可提现余额</div>
         <div className="text-3xl font-bold">
           {balance.toFixed(2)} <span className="text-lg font-normal">USDT</span>
@@ -138,9 +138,9 @@ export default function AfWithdrawPage() {
       </div>
 
       {/* 提现表单 */}
-      <div className="mx-4 mt-4 bg-white rounded-2xl p-5 shadow-sm">
+      <div className="mx-4 mt-4 bg-white rounded-2xl p-5 shadow-sm overflow-hidden">
         <div className="text-sm font-semibold text-gray-700 mb-3">提现金额</div>
-        <div className="flex items-center border border-gray-200 rounded-xl px-4 py-3 focus-within:border-red-400">
+        <div className="flex items-center border border-gray-200 rounded-xl px-4 py-3 focus-within:border-red-400 overflow-hidden w-full box-border">
           <input
             type="number"
             value={amount}
@@ -150,14 +150,14 @@ export default function AfWithdrawPage() {
               setSuccessMsg("");
             }}
             placeholder="最低 10 USDT"
-            className="flex-1 text-lg font-semibold outline-none bg-transparent"
+            className="flex-1 min-w-0 text-lg font-semibold outline-none bg-transparent"
             min={10}
             max={balance}
           />
-          <span className="text-gray-400 text-sm ml-2">USDT</span>
+          <span className="text-gray-400 text-sm ml-2 flex-shrink-0">USDT</span>
           <button
             onClick={() => setAmount(balance.toFixed(2))}
-            className="ml-3 text-xs text-red-600 font-medium border border-red-200 rounded-lg px-2 py-1"
+            className="ml-2 text-xs text-red-600 font-medium border border-red-200 rounded-lg px-2 py-1 flex-shrink-0 whitespace-nowrap"
           >
             全部
           </button>
@@ -234,11 +234,11 @@ export default function AfWithdrawPage() {
                       <span className="text-xs text-gray-400">{w.currency}</span>
                     )}
                   </div>
-                  <div className="mt-1.5 text-xs text-gray-500 font-mono break-all pl-6">
+                  <div className="mt-1.5 text-xs text-gray-500 font-mono break-all pl-6 overflow-hidden">
                     {w.walletAddress || w.account || "—"}
                   </div>
                   {w.notes && (
-                    <div className="mt-1 text-xs text-gray-400 pl-6">{w.notes}</div>
+                    <div className="mt-1 text-xs text-gray-400 pl-6 break-all overflow-hidden">{w.notes}</div>
                   )}
                 </div>
               ))}
@@ -274,7 +274,7 @@ export default function AfWithdrawPage() {
       </div>
 
       {/* 提现记录 */}
-      <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden" style={{ wordBreak: 'break-all' }}>
         <div className="px-5 py-3 border-b border-gray-100">
           <span className="text-sm font-semibold text-gray-700">提现记录</span>
         </div>
