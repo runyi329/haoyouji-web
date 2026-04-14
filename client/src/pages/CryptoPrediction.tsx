@@ -515,7 +515,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
         {/* 卖出时间（已卖出时显示） */}
         {order.sellStatus === 'sold' && order.sellConfirmedAt && (
           <div className="flex justify-between items-center">
-            <span className="text-[#9CA3AF]">卖出时间</span>            <span className="text-[#64748B]">{(() => { const dt = new Date(order.sellConfirmedAt); const bjTime = new Date(dt.getTime() + 8 * 60 * 60 * 1000); const y = bjTime.getUTCFullYear(); const mo = String(bjTime.getUTCMonth()+1).padStart(2,'0'); const d = String(bjTime.getUTCDate()).padStart(2,'0'); const h = String(bjTime.getUTCHours()).padStart(2,'0'); const mi = String(bjTime.getUTCMinutes()).padStart(2,'0'); const s = String(bjTime.getUTCSeconds()).padStart(2,'0'); return `${y}-${mo}-${d} ${h}:${mi}:${s}`; })()}</span>         </div>
+            <span className="text-[#9CA3AF]">卖出时间</span>            <span className="text-[#64748B]">{order.sellConfirmedAt}</span>         </div>
         )}
         {/* 订单编号 */}
         <div className="flex justify-between items-center">

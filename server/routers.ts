@@ -134,6 +134,22 @@ const manusRouter = router({
     }),
 });
 
+
+// 将 Date 对象或 mysql2 返回的时间值转换为北京时间字符串（UTC+8）
+function toBeijingTimeStr(val: any): string | null {
+  if (!val) return null;
+  const dt = val instanceof Date ? val : new Date(val);
+  if (isNaN(dt.getTime())) return null;
+  const bjTime = new Date(dt.getTime() + 8 * 60 * 60 * 1000);
+  const y = bjTime.getUTCFullYear();
+  const mo = String(bjTime.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(bjTime.getUTCDate()).padStart(2, '0');
+  const h = String(bjTime.getUTCHours()).padStart(2, '0');
+  const mi = String(bjTime.getUTCMinutes()).padStart(2, '0');
+  const s = String(bjTime.getUTCSeconds()).padStart(2, '0');
+  return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+}
+
 export const appRouter = router({
   system: systemRouter,
   equity: equityRouter,
@@ -10806,7 +10822,7 @@ export const appRouter = router({
           sellPrice: r.sell_price || null,
           sellQuantity: r.sell_quantity || null,
           sellAt: r.sell_at || null,
-          sellConfirmedAt: r.sell_confirmed_at || null,
+          sellConfirmedAt: toBeijingTimeStr(r.sell_confirmed_at),
           sellStatus: r.sell_status || null,
           // 兼容旧字段：是否已在委托卖中
           hasPendingSell: r.sell_status === 'selling',
@@ -10893,7 +10909,7 @@ export const appRouter = router({
           sellPrice: r.sell_price || null,
           sellQuantity: r.sell_quantity || null,
           sellAt: r.sell_at || null,
-          sellConfirmedAt: r.sell_confirmed_at || null,
+          sellConfirmedAt: toBeijingTimeStr(r.sell_confirmed_at),
           sellStatus: r.sell_status || null,
           equityTier: 0,
         }));
