@@ -32,6 +32,14 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showLedgerHistory, setShowLedgerHistory] = useState(false);
+
+  // 账户明细流水
+  const { data: ledgerHistoryData, isLoading: ledgerHistoryLoading } = trpc.ledger.afGetMyRechargeHistory.useQuery(
+    { ledgerId: Number(fromLedgerId), ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}) },
+    { enabled: !!fromLedgerId && showLedgerHistory, staleTime: 30000 }
+  );
+  const ledgerHistoryList: any[] = (ledgerHistoryData as any[]) || [];
 
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
@@ -345,7 +353,14 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
               <History className="w-3.5 h-3.5 mr-1" />
               充值记录
             </button>
-
+            {fromLedgerId && (
+              <button
+                onClick={() => setShowLedgerHistory(true)}
+                className="flex items-center text-xs px-2.5 py-1.5 rounded-full bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+              >
+                账户明细
+              </button>
+            )}
           </div>
         </div>
       </div>)}
@@ -442,5 +457,51 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
         </div>
       </div>
     </div>
+
+    {/* 账户明细弹窗 */}
+    {showLedgerHistory && (
+      <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+        onClick={() => setShowLedgerHistory(false)}>
+        <div className="mt-auto bg-white rounded-t-2xl max-h-[80vh] flex flex-col"
+          onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <span className="font-semibold text-gray-900">账户明细</span>
+            <button onClick={() => setShowLedgerHistory(false)} className="text-gray-400 text-xl leading-none">×</button>
+          </div>
+          <div className="overflow-y-auto flex-1 px-4 py-2">
+            {ledgerHistoryLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <div className="w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+              </div>
+            ) : ledgerHistoryList.length === 0 ? (
+              <div className="text-center text-gray-400 text-sm py-10">暂无账目记录</div>
+            ) : (
+              <div>
+                {ledgerHistoryList.map((item: any, idx: number) => {
+                  const amt = parseFloat(item.amount);
+                  const isPositive = amt >= 0;
+                  const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
+                  const rawNote = item.note || '';
+                  const typeLabel = item.sourceType === 'recharge'
+                    ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : rawNote || '充值')
+                    : (rawNote ? rawNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
+                  return (
+                    <div key={item.id || idx} className="flex items-center justify-between py-3 border-b border-gray-100">
+                      <div className="flex-1 min-w-0 mr-3">
+                        <div className="text-gray-900 text-sm truncate">{typeLabel}</div>
+                        <div className="text-gray-400 text-xs mt-0.5">{dateStr}</div>
+                      </div>
+                      <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+                        {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
   );
 }
