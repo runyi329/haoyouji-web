@@ -1647,9 +1647,31 @@ export default function CryptoPrediction() {
                   return (
                     <div
                       key={order.id}
-                      className="rounded-2xl shadow-sm"
+                      className="rounded-2xl shadow-sm relative"
                       style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', overflow: 'hidden' }}
                     >
+                      {String(order.admin_note || '').includes('[已卖出]') && (
+                        <div
+                          className="absolute bottom-4 left-4 pointer-events-none select-none"
+                          style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
+                        >
+                          <div
+                            style={{
+                              border: '2px solid rgba(220,38,38,0.5)',
+                              color: 'rgba(220,38,38,0.5)',
+                              borderRadius: '4px',
+                              padding: '2px 8px',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              letterSpacing: '3px',
+                              lineHeight: '1.4',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            已卖出
+                          </div>
+                        </div>
+                      )}
                       {/* 顶部色条 */}
                       <div className="h-1" style={{ background: `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
 
