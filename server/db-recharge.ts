@@ -1035,9 +1035,11 @@ export async function adminGetAllSntWithdrawals(status?: string, limit: number =
   let query = `
     SELECT w.id, w.user_id as userId, u.username, u.name as userName, w.snt_amount as sntAmount, 
            w.bsc_address as bscAddress, w.status, w.admin_note as adminNote, 
-           w.txn_hash as txnHash, w.ledger_id as ledgerId, w.created_at as createdAt, w.updated_at as updatedAt
+           w.txn_hash as txnHash, w.ledger_id as ledgerId, w.created_at as createdAt, w.updated_at as updatedAt,
+           COALESCE(dw.network, '') as network
     FROM snt_withdrawals w
     LEFT JOIN users u ON w.user_id = u.id
+    LEFT JOIN digital_wallets dw ON dw.wallet_address = w.bsc_address AND dw.user_id = w.user_id AND dw.wallet_type = 'blockchain'
   `;
   const params: any[] = [];
   const conditions: string[] = [];

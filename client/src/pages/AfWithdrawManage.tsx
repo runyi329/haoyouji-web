@@ -248,6 +248,15 @@ export default function AfWithdrawManage() {
                           {parseFloat(w.sntAmount).toFixed(2)} USDT
                         </span>
                       </div>
+                      {w.network && (
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-400">网络</span>
+                          <span className="font-semibold px-2 py-0.5 rounded text-white text-[11px]"
+                            style={{ backgroundColor: w.network === 'APTOS' ? '#4f46e5' : '#0d9488' }}>
+                            {w.network === 'APTOS' ? 'Aptos' : w.network === 'TRC20' ? 'Tron (TRC20)' : w.network}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-400">提现地址</span>
                         <div className="flex items-center gap-1">
