@@ -1,4 +1,4 @@
-name: 补入用户4957150提现申请
+name: 建表并补入用户4957150提现申请
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: 💰 补入100 USDT提现申请（测试）
+      - name: 🏗️ 建表并补入提现记录
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -s' << 'ENDSSH'
             source /root/haoyouji-web/.env 2>/dev/null || true
@@ -29,25 +29,55 @@ jobs:
             DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP "(?<=://[^:]+:)[^@]+" || echo "")
             DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP "(?<=/)[^?]+$" || echo "")
 
-            USER_ID=4957150
-            LEDGER_ID=52
-            AMOUNT=100
-            ADDRESS="0xf96505b0d41054455e904af175a74993a98137802578672864f6020b7f8a2587"
+            echo "=== 1. 建表 snt_withdrawals ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+            CREATE TABLE IF NOT EXISTS \`snt_withdrawals\` (
+              \`id\` int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+              \`user_id\` int NOT NULL,
+              \`ledger_id\` int DEFAULT NULL COMMENT '关联账本ID',
+              \`snt_amount\` decimal(20, 4) NOT NULL,
+              \`bsc_address\` varchar(255) NOT NULL,
+              \`status\` enum('pending','processing','completed','rejected') DEFAULT 'pending' NOT NULL,
+              \`admin_note\` text,
+              \`txn_hash\` varchar(100),
+              \`created_at\` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+              \`updated_at\` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+              INDEX \`snt_withdrawals_user_id_idx\` (\`user_id\`),
+              INDEX \`snt_withdrawals_status_idx\` (\`status\`),
+              INDEX \`snt_withdrawals_ledger_id_idx\` (\`ledger_id\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            " 2>&1
+            echo "✅ 建表完成"
 
-            echo "=== 直接写入 snt_withdrawals（不检查余额，测试用）==="
+            echo "=== 2. 建表 user_bsc_wallets ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+            CREATE TABLE IF NOT EXISTS \`user_bsc_wallets\` (
+              \`id\` int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+              \`user_id\` int NOT NULL,
+              \`bsc_address\` varchar(255) NOT NULL,
+              \`created_at\` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+              \`updated_at\` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+              UNIQUE KEY \`user_bsc_wallets_user_id_unique\` (\`user_id\`),
+              INDEX \`user_bsc_wallets_user_id_idx\` (\`user_id\`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            " 2>&1
+            echo "✅ 建表完成"
+
+            echo "=== 3. 补入用户4957150的100 USDT测试提现记录 ==="
             mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
             INSERT INTO snt_withdrawals (user_id, ledger_id, snt_amount, bsc_address, status, created_at, updated_at)
-            VALUES ($USER_ID, $LEDGER_ID, $AMOUNT, '$ADDRESS', 'pending', NOW(), NOW());
+            VALUES (4957150, 52, 100, '0xf96505b0d41054455e904af175a74993a98137802578672864f6020b7f8a2587', 'pending', NOW(), NOW());
             " 2>&1
+            echo "✅ 补入完成"
 
-            WITHDRAW_ID=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "
-            SELECT LAST_INSERT_ID();
-            " 2>/dev/null || echo "0")
-            echo "写入的 ID: $WITHDRAW_ID"
-
-            echo "=== 验证：查询 snt_withdrawals 中用户4957150的所有记录 ==="
+            echo "=== 4. 验证结果 ==="
             mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
             SELECT id, user_id, ledger_id, snt_amount, LEFT(bsc_address,20) as addr, status, created_at
-            FROM snt_withdrawals WHERE user_id = $USER_ID ORDER BY id DESC LIMIT 10;
+            FROM snt_withdrawals WHERE user_id = 4957150 ORDER BY id DESC LIMIT 10;
+            " 2>&1
+
+            echo "=== 5. 检查表是否存在 ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+            SHOW TABLES LIKE 'snt%';
             " 2>&1
           ENDSSH
