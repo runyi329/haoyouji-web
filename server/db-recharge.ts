@@ -885,6 +885,7 @@ export async function getUserSntTransfers(userId: number, limit: number = 20) {
   await ensureSntTransfersTable();
   const conn = await getDbConnection();
   if (!conn) return [];
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 500));
   const [rows]: any = await conn.execute(
     `SELECT t.*, 
       u_from.username as from_username, u_from.name as from_name,
@@ -894,8 +895,8 @@ export async function getUserSntTransfers(userId: number, limit: number = 20) {
      LEFT JOIN users u_to ON t.to_user_id = u_to.id
      WHERE t.from_user_id = ? OR t.to_user_id = ?
      ORDER BY t.created_at DESC
-     LIMIT ?`,
-    [userId, userId, limit]
+     LIMIT ${safeLimit}`,
+    [userId, userId]
   );
   return rows;
 }
@@ -1020,8 +1021,8 @@ export async function getUserSntWithdrawals(userId: number, limit: number = 50, 
     query += ` AND (ledger_id = ? OR ledger_id IS NULL)`;
     params.push(ledgerId);
   }
-  query += ` ORDER BY created_at DESC LIMIT ?`;
-  params.push(limit);
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 500));
+  query += ` ORDER BY created_at DESC LIMIT ${safeLimit}`;
   const [rows] = await conn.execute(query, params);
   return rows as any[];
 }
@@ -1051,8 +1052,8 @@ export async function adminGetAllSntWithdrawals(status?: string, limit: number =
   if (conditions.length > 0) {
     query += ` WHERE ` + conditions.join(' AND ');
   }
-  query += ` ORDER BY w.created_at DESC LIMIT ?`;
-  params.push(limit);
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 500));
+  query += ` ORDER BY w.created_at DESC LIMIT ${safeLimit}`;
   const [rows] = await conn.execute(query, params);
   return rows as any[];
 }

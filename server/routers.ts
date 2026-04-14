@@ -16461,13 +16461,14 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         try {
           const conn = await getDbConnection();
           if (!conn) throw new Error("数据库连接失败");
+          const safeLimit = Math.max(1, Math.min(Number(input.limit) || 500, 5000));
           const [rows] = await (conn as any).execute(
             `SELECT symbol, funding_time, funding_rate
              FROM energy_funding_history
              WHERE symbol = ?
              ORDER BY funding_time ASC
-             LIMIT ?`,
-            [input.symbol, input.limit]
+             LIMIT ${safeLimit}`,
+            [input.symbol]
           );
           return rows as any[];
         } catch (err: any) {

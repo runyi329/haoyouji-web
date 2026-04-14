@@ -52,52 +52,15 @@ export default function AfWithdrawPage() {
     { enabled: amountNum >= 10 }
   );
 
-  // 获取提现历史 - 使用直接 fetch 调用来绕过 tRPC batch 问题
-  const [withdrawals, setWithdrawals] = useState<any[]>([]);
-  const [withdrawalsStatus, setWithdrawalsStatus] = useState('idle');
-  const [withdrawalsError, setWithdrawalsError] = useState<any>(null);
-  const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
-
-  const refetchWithdrawals = async () => {
-    if (!user) return;
-    setWithdrawalsLoading(true);
-    setWithdrawalsStatus('loading');
-    try {
-      const input = encodeURIComponent(JSON.stringify({ json: { ledgerId, limit: 20 } }));
-      const url = `/api/trpc/recharge.getMySntWithdrawals?input=${input}`;
-      const res = await fetch(url, { credentials: 'include' });
-      const text = await res.text();
-      console.log('[withdrawals fetch] status=', res.status, 'body=', text);
-      // 把完整响应存到 error 里显示
-      setWithdrawalsError(`HTTP ${res.status}: ${text.slice(0, 300)}`);
-      if (!res.ok) {
-        setWithdrawalsStatus('error');
-        return;
-      }
-      try {
-        const data = JSON.parse(text);
-        if (data?.result?.data?.json) {
-          setWithdrawals(data.result.data.json);
-          setWithdrawalsStatus('success');
-        } else {
-          setWithdrawals([]);
-          setWithdrawalsStatus('error');
-        }
-      } catch (parseErr: any) {
-        setWithdrawalsError(`Parse error: ${parseErr.message} | body: ${text.slice(0, 200)}`);
-        setWithdrawalsStatus('error');
-      }
-    } catch (err: any) {
-      setWithdrawalsError(`Fetch error: ${err.message}`);
-      setWithdrawalsStatus('error');
-    } finally {
-      setWithdrawalsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user) refetchWithdrawals();
-  }, [user, ledgerId]);
+  // 获取提现历史 - 使用标准 tRPC useQuery
+  const {
+    data: withdrawals = [],
+    isLoading: withdrawalsLoading,
+    refetch: refetchWithdrawals,
+  } = trpc.recharge.getMySntWithdrawals.useQuery(
+    { ledgerId, limit: 20 },
+    { enabled: !!user }
+  );
 
   // 提交提现申请
   const withdrawMutation = trpc.recharge.requestSntWithdraw.useMutation({
@@ -319,11 +282,9 @@ export default function AfWithdrawPage() {
         <div className="px-5 py-3 border-b border-gray-100">
           <span className="text-sm font-semibold text-gray-700">提现记录</span>
         </div>
-        {/* 调试信息 - 上线后删除 */}
-        <div className="px-5 py-2 text-xs text-blue-500 bg-blue-50">
-          [DEBUG] status={withdrawalsStatus} | user={user?.id} | ledgerId={ledgerId} | count={withdrawals.length} | loading={String(withdrawalsLoading)} | error={withdrawalsError?.message || 'none'}
-        </div>
-        {withdrawals.length === 0 ? (
+        {withdrawalsLoading ? (
+          <div className="py-8 text-center text-sm text-gray-400">加载中...</div>
+        ) : withdrawals.length === 0 ? (
           <div className="py-8 text-center text-sm text-gray-400">暂无提现记录</div>
         ) : (
           <div className="divide-y divide-gray-50">
