@@ -4056,22 +4056,41 @@ export default function LedgerDetail() {
                       </div>
                       {/* 分隔细线 */}
                       <div style={{ height: 1, backgroundColor: '#E8E8E8', marginLeft: 12, marginRight: 12 }} />
-                      {/* 下层：持仓情况表格（余额/持仓/挂单三行） */}
+                      {/* 财务数据行：充値 / 余额 / 利润 / 获利% */}
+                      {(() => {
+                        const recharge = Number((u as any).totalRecharge ?? 0);
+                        const balance = Number(u.balance ?? 0);
+                        const profit = Number((u as any).totalProfit ?? 0);
+                        const profitPct = recharge > 0 ? (profit / recharge * 100) : 0;
+                        const profitColor = profit > 0 ? '#C62828' : profit < 0 ? '#2E7D32' : '#9E9E9E';
+                        return (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid #F0F0F0', margin: '0 0' }}>
+                            <div style={{ padding: '6px 8px', textAlign: 'center', borderRight: '1px solid #F0F0F0' }}>
+                              <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>充値</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: recharge > 0 ? '#1565C0' : '#9E9E9E' }}>{recharge.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></div>
+                            </div>
+                            <div style={{ padding: '6px 8px', textAlign: 'center', borderRight: '1px solid #F0F0F0' }}>
+                              <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>余额</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: balance > 0 ? '#2E7D32' : '#9E9E9E' }}>{balance.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></div>
+                            </div>
+                            <div style={{ padding: '6px 8px', textAlign: 'center', borderRight: '1px solid #F0F0F0' }}>
+                              <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>利润</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: profitColor }}>{profit > 0 ? '+' : ''}{profit.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></div>
+                            </div>
+                            <div style={{ padding: '6px 8px', textAlign: 'center' }}>
+                              <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>获利%</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: profitColor }}>{profitPct > 0 ? '+' : ''}{profitPct.toFixed(1)}<span style={{ fontSize: 9, fontWeight: 400 }}>%</span></div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {/* 下层：持仓情况表格（持仓/挂单三行） */}
                       <div className="px-3 pt-2 pb-2">
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                           <thead>
                             <tr style={{ backgroundColor: '#F5F5F5' }}>
-                              {/* A1格：当前余额 + 累计充值 */}
-                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'left', color: '#9E9E9E', fontWeight: 400, width: 90 }}>
-                                <div style={{ fontSize: 10, color: '#9E9E9E', marginBottom: 2 }}>
-                                  <span>余额 </span>
-                                  <span style={{ fontWeight: 600, color: (u.balance ?? 0) > 0 ? '#2E7D32' : '#9E9E9E' }}>{Number(u.balance ?? 0).toFixed(2)}U</span>
-                                </div>
-                                <div style={{ fontSize: 10, color: '#9E9E9E' }}>
-                                  <span>充值 </span>
-                                  <span style={{ fontWeight: 600, color: (u as any).totalRecharge > 0 ? '#1565C0' : '#9E9E9E' }}>{Number((u as any).totalRecharge ?? 0).toFixed(2)}U</span>
-                                </div>
-                              </th>
+                              {/* A1格：持仓标题 */}
+                              <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'left', color: '#9E9E9E', fontWeight: 400, width: 50 }}>持仓</th>
                               <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>BTC</th>
                               <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>ETH</th>
                               <th style={{ border: '1px solid #E0E0E0', padding: '3px 6px', textAlign: 'center', color: '#9E9E9E', fontWeight: 500 }}>SOL</th>
