@@ -1,0 +1,59 @@
+name: 查询汉明用户刘仕干联系人数据
+
+on:
+  workflow_dispatch:
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH查询数据
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            source /root/haoyouji-web/.env 2>/dev/null || true
+            DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
+            DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP '(?<=:)[0-9]{4,5}(?=/)' | tail -1 || echo '4000')
+            DB_USER=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://)[^:]+' || echo '')
+            DB_PASS=$(echo ${DATABASE_URL:-} | grep -oP '(?<=://[^:]+:)[^@]+' || echo '')
+            DB_NAME=$(echo ${DATABASE_URL:-} | grep -oP '(?<=/)[^?]+$' || echo '')
+            
+            echo "=== 查找汉明用户 ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+              SELECT id, username, name, created_at FROM users 
+              WHERE username LIKE '%汉明%' OR name LIKE '%汉明%' 
+              LIMIT 5;
+            " 2>&1
+            
+            echo "=== 查找汉明用户ID ==="
+            HANMING_ID=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "
+              SELECT id FROM users WHERE username LIKE '%汉明%' OR name LIKE '%汉明%' LIMIT 1;
+            " 2>&1)
+            echo "汉明用户ID: $HANMING_ID"
+            
+            echo "=== 查找刘仕干联系人数据 ==="
+            mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+              SELECT id, user_id, name, created_at, updated_at, last_interaction_date, birthday, 
+                     LENGTH(name) as name_len
+              FROM contacts 
+              WHERE name LIKE '%刘仕干%' OR name LIKE '%刘士干%' OR name LIKE '%刘仕%'
+              LIMIT 10;
+            " 2>&1
+            
+            echo "=== 如果找到汉明ID，查其第一个联系人 ==="
+            if [ -n "$HANMING_ID" ] && [ "$HANMING_ID" != "0" ]; then
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                SELECT id, name, created_at, updated_at, last_interaction_date, birthday,
+                       UNIX_TIMESTAMP(created_at)*1000 as created_ts,
+                       UNIX_TIMESTAMP(updated_at)*1000 as updated_ts,
+                       UNIX_TIMESTAMP(last_interaction_date)*1000 as last_interaction_ts
+                FROM contacts 
+                WHERE user_id = $HANMING_ID 
+                ORDER BY id ASC 
+                LIMIT 3;
+              " 2>&1
+            fi
