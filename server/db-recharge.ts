@@ -903,55 +903,11 @@ export async function getUserSntTransfers(userId: number, limit: number = 20) {
 
 // ========== SNT 提现功能（基于 snt_withdrawals 表） ==========
 
-// 确保 snt_withdrawals 和 user_bsc_wallets 表存在
+// snt_withdrawals 和 user_bsc_wallets 表由部署脚本（deploy.yml）保证存在
+// 这里不再尝试建表，避免因权限问题阻塞查询
 async function ensureWithdrawalTables() {
-  const conn = await getDbConnection();
-  if (!conn) return;
-  await conn.execute(`
-    CREATE TABLE IF NOT EXISTS \`user_bsc_wallets\` (
-      \`id\` int AUTO_INCREMENT NOT NULL PRIMARY KEY,
-      \`user_id\` int NOT NULL,
-      \`bsc_address\` varchar(100) NOT NULL,
-      \`created_at\` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      \`updated_at\` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-      UNIQUE KEY \`user_bsc_wallets_user_id_unique\` (\`user_id\`),
-      INDEX \`user_bsc_wallets_user_id_idx\` (\`user_id\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `);
-  await conn.execute(`
-    CREATE TABLE IF NOT EXISTS \`snt_withdrawals\` (
-      \`id\` int AUTO_INCREMENT NOT NULL PRIMARY KEY,
-      \`user_id\` int NOT NULL,
-      \`ledger_id\` int DEFAULT NULL COMMENT '关联账本ID',
-      \`snt_amount\` decimal(20, 4) NOT NULL,
-      \`bsc_address\` varchar(100) NOT NULL,
-      \`status\` enum('pending','processing','completed','rejected') DEFAULT 'pending' NOT NULL,
-      \`admin_note\` text,
-      \`txn_hash\` varchar(100),
-      \`created_at\` timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-      \`updated_at\` timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-      INDEX \`snt_withdrawals_user_id_idx\` (\`user_id\`),
-      INDEX \`snt_withdrawals_status_idx\` (\`status\`),
-      INDEX \`snt_withdrawals_ledger_id_idx\` (\`ledger_id\`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  `);
-  // 安全添加 ledger_id 字段（如果表已存在但字段不存在，兼容 MySQL 5.x）
-  try {
-    const [cols] = await conn.execute(
-      `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='snt_withdrawals' AND COLUMN_NAME='ledger_id'`
-    );
-    if ((cols as any[])[0]?.cnt === 0) {
-      await conn.execute(`ALTER TABLE snt_withdrawals ADD COLUMN ledger_id INT DEFAULT NULL COMMENT '关联账本ID'`);
-    }
-  } catch (_e) { /* 忽略 */ }
-  try {
-    const [idxs] = await conn.execute(
-      `SELECT COUNT(*) as cnt FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='snt_withdrawals' AND INDEX_NAME='snt_withdrawals_ledger_id_idx'`
-    );
-    if ((idxs as any[])[0]?.cnt === 0) {
-      await conn.execute(`ALTER TABLE snt_withdrawals ADD INDEX snt_withdrawals_ledger_id_idx (ledger_id)`);
-    }
-  } catch (_e) { /* 忽略 */ }
+  // 表已由部署脚本创建，无需在应用代码中建表
+  return;
 }
 
 // 获取用户绑定的 BSC 钱包地址
