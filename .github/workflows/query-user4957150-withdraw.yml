@@ -15,13 +15,13 @@ jobs:
       - name: 🔑 配置SSH密钥
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
       - name: 🔍 查询用户4957150完整数据
         run: |
-          ssh -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
             source /root/haoyouji-web/.env 2>/dev/null || true
             DB_HOST=$(echo ${DATABASE_URL:-} | grep -oP '(?<=@)[^:/]+' || echo '')
             DB_PORT=$(echo ${DATABASE_URL:-} | grep -oP '(?<=:)[0-9]{4,5}(?=/)' | tail -1 || echo '4000')
