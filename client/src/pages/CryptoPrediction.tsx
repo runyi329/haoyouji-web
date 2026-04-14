@@ -1637,6 +1637,12 @@ export default function CryptoPrediction() {
                   // 持有时长
                   const holdingLabel = (() => {
                     if (!order.buy_date || order.status !== 'active') return null;
+                    // 已卖出标记：从 admin_note 中读取 [持有:xxx] 固定值，若无则默认"1个月"
+                    const adminNote = String(order.admin_note || '');
+                    if (adminNote.includes('[已卖出]')) {
+                      const m = adminNote.match(/\[持有:([^\]]+)\]/);
+                      return m ? m[1] : '1个月';
+                    }
                     const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
                     if (elapsed < 0) return null;
                     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
