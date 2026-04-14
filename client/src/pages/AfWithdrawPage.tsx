@@ -64,24 +64,31 @@ export default function AfWithdrawPage() {
     setWithdrawalsStatus('loading');
     try {
       const input = encodeURIComponent(JSON.stringify({ json: { ledgerId, limit: 20 } }));
-      const res = await fetch(`/api/trpc/recharge.getMySntWithdrawals?input=${input}`, {
-        credentials: 'include',
-      });
-      const data = await res.json();
-      console.log('[withdrawals fetch]', data);
-      if (data?.result?.data?.json) {
-        setWithdrawals(data.result.data.json);
-        setWithdrawalsStatus('success');
-      } else if (data?.error) {
-        setWithdrawalsError(data.error);
+      const url = `/api/trpc/recharge.getMySntWithdrawals?input=${input}`;
+      const res = await fetch(url, { credentials: 'include' });
+      const text = await res.text();
+      console.log('[withdrawals fetch] status=', res.status, 'body=', text);
+      // 把完整响应存到 error 里显示
+      setWithdrawalsError(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+      if (!res.ok) {
         setWithdrawalsStatus('error');
-      } else {
-        setWithdrawals([]);
-        setWithdrawalsStatus('success');
+        return;
+      }
+      try {
+        const data = JSON.parse(text);
+        if (data?.result?.data?.json) {
+          setWithdrawals(data.result.data.json);
+          setWithdrawalsStatus('success');
+        } else {
+          setWithdrawals([]);
+          setWithdrawalsStatus('error');
+        }
+      } catch (parseErr: any) {
+        setWithdrawalsError(`Parse error: ${parseErr.message} | body: ${text.slice(0, 200)}`);
+        setWithdrawalsStatus('error');
       }
     } catch (err: any) {
-      console.error('[withdrawals fetch error]', err);
-      setWithdrawalsError(err);
+      setWithdrawalsError(`Fetch error: ${err.message}`);
       setWithdrawalsStatus('error');
     } finally {
       setWithdrawalsLoading(false);
