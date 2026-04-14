@@ -11272,7 +11272,7 @@ export const appRouter = router({
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询原始订单信息
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id, sell_status, sell_price FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id, sell_status, sell_price, sell_confirmed_at FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -11288,8 +11288,9 @@ export const appRouter = router({
         let balanceNote = '';
         
         // ========== 卖出成交处理（订单合并模型） ==========
-        // 只要目标状态是 sold 且当前不是 sold，就触发结算（兼容 selling/sell_cancelled/null 等各种前置状态）
-        if (input.sellStatus === 'sold' && order.sell_status !== 'sold') {
+        // 方案一：以 sell_confirmed_at 是否为空判断是否已结算，防止 sell_status 已是 sold 但未结算的漏记
+        // 方案三：结算前查重，避免重复结算
+        if (input.sellStatus === 'sold' && !order.sell_confirmed_at) {
           // 确认卖出成交：从同一订单取买入信息
           const actualSellPrice = input.sellPrice ? parseFloat(input.sellPrice) : parseFloat(order.sell_price || '0');
           const isGift = parseInt(order.is_gift || '0') === 1;
@@ -11338,10 +11339,19 @@ export const appRouter = router({
           }
           
           if (Math.abs(balanceAdjust) > 0.001) {
-            await db.execute(
-              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-                  VALUES (${input.ledgerId}, ${userId}, ${balanceAdjust}, ${balanceNote}, NOW(), NOW())`
-            );
+            // 方案三：查重，防止重复结算（检查是否已有相同订单的卖出成交记录）
+            const dupRows = await db.execute(
+              sql`SELECT id FROM af_manual_balances WHERE user_id = ${userId} AND ledger_id = ${input.ledgerId} AND note LIKE ${`%卖出成交%`} AND note LIKE ${`%#${input.orderId}%`} LIMIT 1`
+            ) as any;
+            const alreadySettled = (dupRows[0]?.[0] ?? dupRows[0]);
+            if (!alreadySettled) {
+              await db.execute(
+                sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                    VALUES (${input.ledgerId}, ${userId}, ${balanceAdjust}, ${balanceNote}, NOW(), NOW())`
+              );
+            } else {
+              console.warn(`[AF卖出成交] 订单#${input.orderId} 已有结算记录，跳过重复结算`);
+            }
           }
           // 更新卖出状态
           const sellPriceUpdate = input.sellPrice ? `, sell_price = '${input.sellPrice.replace(/'/g, '')}'` : '';
