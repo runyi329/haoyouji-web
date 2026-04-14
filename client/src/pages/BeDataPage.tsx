@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronLeft, RefreshCw } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const SYMBOLS = [
@@ -37,31 +37,11 @@ export default function BeDataPage() {
 
   const [activeSymbol, setActiveSymbol] = useState(SYMBOLS[0].key);
   const [page, setPage] = useState(1);
-  const [syncMsg, setSyncMsg] = useState<string | null>(null);
-
-  const utils = trpc.useUtils();
 
   const { data, isLoading, isFetching } = trpc.cryptoData.getKlines.useQuery(
     { symbol: activeSymbol, page, pageSize: PAGE_SIZE },
     { keepPreviousData: true } as any
   );
-
-  const syncMutation = trpc.cryptoData.syncLatest.useMutation({
-    onSuccess: (result) => {
-      if (result.added > 0) {
-        setSyncMsg(`已更新 ${result.added} 条，最新至 ${result.latestDate ?? "-"}`);
-      } else {
-        setSyncMsg("数据已是最新，无需更新");
-      }
-      // 刷新表格数据
-      utils.cryptoData.getKlines.invalidate();
-      setTimeout(() => setSyncMsg(null), 4000);
-    },
-    onError: (err) => {
-      setSyncMsg(`更新失败：${err.message}`);
-      setTimeout(() => setSyncMsg(null), 5000);
-    },
-  });
 
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
@@ -82,12 +62,6 @@ export default function BeDataPage() {
     setPage(1);
   };
 
-  const handleSync = () => {
-    if (syncMutation.isLoading) return;
-    setSyncMsg(null);
-    syncMutation.mutate({ symbol: activeSymbol });
-  };
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 顶部导航 */}
@@ -100,14 +74,12 @@ export default function BeDataPage() {
             <ChevronLeft className="w-5 h-5" />
           </button>
           <span className="font-semibold text-gray-800 text-base flex-1">BE数据</span>
-          {/* 更新数据按钮 */}
+          {/* 更新按钮 - 胶囊标签样式 */}
           <button
-            onClick={handleSync}
-            disabled={syncMutation.isLoading}
-            className="flex items-center gap-1 text-sm text-[#D32F2F] font-medium disabled:opacity-50 px-2 py-1"
+            onClick={() => window.location.reload()}
+            className="text-xs font-medium text-white bg-[#D32F2F] rounded-full px-3 py-1 active:opacity-70"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncMutation.isLoading ? "animate-spin" : ""}`} />
-            {syncMutation.isLoading ? "更新中..." : "更新数据"}
+            更新
           </button>
         </div>
 
@@ -128,13 +100,6 @@ export default function BeDataPage() {
           ))}
         </div>
       </div>
-
-      {/* 更新结果提示 */}
-      {syncMsg && (
-        <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 text-xs text-blue-600 text-center">
-          {syncMsg}
-        </div>
-      )}
 
       {/* 统计栏 */}
       {!isLoading && total > 0 && (
