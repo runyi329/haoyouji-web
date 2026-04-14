@@ -2108,10 +2108,18 @@ export default function LedgerDetail() {
                   const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
                   const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
                   const activeCount = (coinData?.holdingCount ?? 0) + (coinData?.pendingCount ?? 0);
-                  // 权益为0且无持仓订单的币种不显示
-                  if ((!qty || qty <= 0) && activeCount === 0) return null;
-                  const displayPnl = Math.max(0, coinData?.pnl ?? 0);
+                  const soldCount = coinData?.soldCount ?? 0;
+                  const totalOrderCount = activeCount + soldCount;
+                  // 没有任何订单记录的币种不显示
+                  if (totalOrderCount === 0) return null;
                   const avgCost = coinData?.avgCost ?? 0;
+                  // 实时浮盈 = 持仓数量 × (实时价格 - 均价)
+                  const livePrice = funderLivePrices[coin] || 0;
+                  const unrealizedPnl = qty > 0 && livePrice > 0 && avgCost > 0
+                    ? qty * (livePrice - avgCost)
+                    : 0;
+                  const pnlColor = unrealizedPnl >= 0 ? 'text-red-400' : 'text-green-400';
+                  const pnlSign = unrealizedPnl >= 0 ? '+' : '';
                   // 智能去尾零
                   const fmtQty = (() => {
                     if (!qty || qty <= 0) return '0';
@@ -2125,21 +2133,42 @@ export default function LedgerDetail() {
                   return (
                     <div key={coin} className="flex items-baseline py-0.5">
                       <span className="w-9 text-xs text-white/70 font-medium">{coin}</span>
-                      <span className="flex-1 text-right text-xs font-bold text-white">{fmtQty}</span>
+                      <span className={`flex-1 text-right text-xs font-bold ${qty > 0 ? 'text-white' : 'text-white/40'}`}>{fmtQty}</span>
                       <span className="w-10 text-right text-[10px] text-white/50">{activeCount}笔</span>
                       <span className="flex-1 text-right text-[11px] text-white/60">{avgCost > 0 ? avgCost.toLocaleString() : '-'}</span>
-                      <span className="flex-1 text-right text-xs font-medium text-green-400">+{displayPnl.toFixed(2)}</span>
+                      <span className={`flex-1 text-right text-xs font-medium ${qty > 0 && livePrice > 0 ? pnlColor : 'text-white/30'}`}>
+                        {qty > 0 && livePrice > 0 ? `${pnlSign}${unrealizedPnl.toFixed(2)}` : '-'}
+                      </span>
                     </div>
                   );
                 })}
-                {/* 总计 */}
-                <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline">
-                  <span className="w-9 text-xs text-white/80 font-medium">总计</span>
-                  <span className="flex-1"></span>
-                  <span className="w-10"></span>
-                  <span className="flex-1"></span>
-                  <span className="flex-1 text-right text-sm font-bold text-green-400 whitespace-nowrap">+{Math.max(0, pnlData?.total ?? 0).toFixed(2)}&nbsp;U</span>
-                </div>
+                {/* 总计：当前持仓实时浮盈之和 */}
+                {(() => {
+                  const totalUnrealized = ['BTC', 'ETH', 'SOL'].reduce((sum, coin) => {
+                    const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
+                    const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
+                    const avgCost = coinData?.avgCost ?? 0;
+                    const livePrice = funderLivePrices[coin] || 0;
+                    if (qty > 0 && livePrice > 0 && avgCost > 0) {
+                      return sum + qty * (livePrice - avgCost);
+                    }
+                    return sum;
+                  }, 0);
+                  const hasLivePrices = Object.keys(funderLivePrices).length > 0;
+                  const totalColor = totalUnrealized >= 0 ? 'text-red-400' : 'text-green-400';
+                  const totalSign = totalUnrealized >= 0 ? '+' : '';
+                  return (
+                    <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline">
+                      <span className="w-9 text-xs text-white/80 font-medium">总计</span>
+                      <span className="flex-1"></span>
+                      <span className="w-10"></span>
+                      <span className="flex-1"></span>
+                      <span className={`flex-1 text-right text-sm font-bold whitespace-nowrap ${hasLivePrices ? totalColor : 'text-white/30'}`}>
+                        {hasLivePrices ? `${totalSign}${totalUnrealized.toFixed(2)} U` : '加载中...'}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
               )}
               {/* 管理员统计：累计订单（后端控制权限，代看模式下隐藏，资金方不显示） */}
