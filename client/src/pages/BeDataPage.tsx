@@ -364,10 +364,9 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
           const upCnt = upEntry?.count ?? 0;
           const downCnt = downEntry?.count ?? 0;
           if (upCnt === 0 && downCnt === 0) return null;
-          const totalUpDays = distData.filter(d => d.bucket >= 0).reduce((s, d) => s + d.count, 0);
-          const totalDownDays = distData.filter(d => d.bucket < 0).reduce((s, d) => s + d.count, 0);
-          const upPct = totalUpDays > 0 ? (upCnt / totalUpDays * 100).toFixed(2) : '0.00';
-          const downPct = totalDownDays > 0 ? (downCnt / totalDownDays * 100).toFixed(2) : '0.00';
+          const totalAllDaysForRow = distData.reduce((s, d) => s + d.count, 0);
+          const upPct = totalAllDaysForRow > 0 ? (upCnt / totalAllDaysForRow * 100).toFixed(2) : '0.00';
+          const downPct = totalAllDaysForRow > 0 ? (downCnt / totalAllDaysForRow * 100).toFixed(2) : '0.00';
           const rangeLabel = `≥${n}% <${n+1}%`;
           return (
             <div
@@ -387,7 +386,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
       {/* 赔率表 */}
       <div className="border-t border-gray-100 px-4 pt-2 pb-3">
         <div className="text-xs font-semibold text-gray-500 mb-1">赔率参考表
-          <span className="text-xs font-normal text-gray-400 ml-2">含本金 · 庄家优势百分比越高赔率越低</span>
+          <span className="text-xs font-normal text-gray-400 ml-2">含本金 · 绝对概率 · 庄家优势百分比越高赔率越低</span>
         </div>
         {/* 公用表头组件 */}
         {(() => {
@@ -403,14 +402,13 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
               ))}
             </div>
           );
-          // 条件概率：涨幅区间概率 = 该区间天数 ÷ 总涨天数，跌幅区间概率 = 该区间天数 ÷ 总跌天数
-          const totalUpDays = distData.filter(d => d.bucket >= 0).reduce((s, d) => s + d.count, 0);
-          const totalDownDays = distData.filter(d => d.bucket < 0).reduce((s, d) => s + d.count, 0);
+          // 绝对概率：每个区间天数 ÷ 总天数（涨跌所有天），所有区间概率之和 = 100%
+          const totalAllDays = distData.reduce((s, d) => s + d.count, 0);
           const upRows = Array.from({ length: 21 }, (_, i) => i).map(n => {
             const entry = distData.find(d => d.bucket === n);
             const cnt = entry?.count ?? 0;
             if (cnt === 0) return null;
-            const prob = totalUpDays > 0 ? cnt / totalUpDays : 0;
+            const prob = totalAllDays > 0 ? cnt / totalAllDays : 0;
             const fairOdds = prob > 0 ? 1 / prob : 0;
             return (
               <div key={`up-${n}`} style={rowStyle(n)}>
@@ -428,7 +426,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
           const upProbSum = Array.from({ length: 21 }, (_, i) => i).reduce((s, n) => {
             const entry = distData.find(d => d.bucket === n);
             const cnt = entry?.count ?? 0;
-            return s + (totalUpDays > 0 ? cnt / totalUpDays : 0);
+            return s + (totalAllDays > 0 ? cnt / totalAllDays : 0);
           }, 0);
           const upSumRow = (
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr', gap: 2, padding: '4px 4px', background: '#fef3c7', borderTop: '1px solid #d97706' }}>
@@ -443,7 +441,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             const entry = distData.find(d => d.bucket === -(n + 1));
             const cnt = entry?.count ?? 0;
             if (cnt === 0) return null;
-            const prob = totalDownDays > 0 ? cnt / totalDownDays : 0;
+            const prob = totalAllDays > 0 ? cnt / totalAllDays : 0;
             const fairOdds = prob > 0 ? 1 / prob : 0;
             return (
               <div key={`down-${n}`} style={rowStyle(n)}>
@@ -461,7 +459,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
           const downProbSum = Array.from({ length: 21 }, (_, i) => i).reduce((s, n) => {
             const entry = distData.find(d => d.bucket === -(n + 1));
             const cnt = entry?.count ?? 0;
-            return s + (totalDownDays > 0 ? cnt / totalDownDays : 0);
+            return s + (totalAllDays > 0 ? cnt / totalAllDays : 0);
           }, 0);
           const downSumRow = (
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr', gap: 2, padding: '4px 4px', background: '#f0fdf4', borderTop: '1px solid #16a34a' }}>
@@ -491,7 +489,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             </>
           );
         })()}
-        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。条件概率：涨幅区间 = 该区间天数 ÷ 总涨天数，跌幅区间 = 该区间天数 ÷ 总跌天数，各区间概率之和 = 100%。</div>
+        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。绝对概率：各区间天数 ÷ 总天数，所有涨跌区间概率之和 = 100%。</div>
       </div>
     </div>
   );
