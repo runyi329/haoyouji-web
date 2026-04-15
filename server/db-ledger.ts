@@ -57,6 +57,25 @@ async function ensureBackupPermissionColumn() {
 // 在模块加载时执行迁移
 ensureBackupPermissionColumn().catch(console.error);
 
+// ========== shortcut_buttons 字段迁移 ==========
+let _shortcutButtonsMigrated = false;
+async function ensureShortcutButtonsColumn() {
+  if (_shortcutButtonsMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    await db.execute(sql`ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL`);
+    console.log('[ensureShortcutButtonsColumn] shortcut_buttons 字段添加成功');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureShortcutButtonsColumn] error:', e.message);
+    }
+  }
+  _shortcutButtonsMigrated = true;
+}
+// 在模块加载时执行迁移
+ensureShortcutButtonsColumn().catch(console.error);
+
 // ========== 删除ledger_members的UNIQUE KEY约束（支持同一用户拥有real和ai两条记录） ==========
 let _uniqueKeyDropped = false;
 async function dropUniqueKeyConstraint() {
