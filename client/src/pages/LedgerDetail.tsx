@@ -2027,7 +2027,22 @@ export default function LedgerDetail() {
                     </div>
                   </>
                 )}
-                {/* AI账本：按钮移到第二行，此处不再渲染 */}
+                {/* 股票入口：应浩(4957303)专属，仅在52号AF账本显示 */}
+                {(user as any)?.id === 4957303 && isCustomAF && (
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                    style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
+                    onClick={() => setLocation('/ledger/37')}
+                    title="股票行情"
+                  >
+                    <img
+                      src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ths-stock-icon-circle.png"
+                      alt="股票"
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                  </div>
+                )}
+                {/* AI账本：按鈕移到第二行，此处不再渲染 */}
                 {effectiveIsManager && (
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
