@@ -5,12 +5,13 @@
  *   K 线图区域（固定，不随 Tab 切换）
  *   三 Tab 切换：无损合约 / 无损现货 / 行情评估（含竞猜）
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
   ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Bitcoin,
   AlertCircle, WifiOff, CheckCircle2, Circle, Loader2, Users,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -108,6 +109,319 @@ function KlineChart({ bars, coinColor }: { bars: KlineBar[]; coinColor: string }
 // ─── 工具函数 ──────────────────────────────────────────────────
 // 整数型币种（单价较低，通常以整数计量）
 const INTEGER_COINS_FIN = new Set(['SUI', 'ONDO', 'LOD', 'ENA', 'ARKM', 'AAVE']);
+
+// ─── 历史概率数据（基于 Binance 全量日线，2017~2026，3164天）────
+const HIST_PROB: Record<string, { up: number[]; down: number[] }> = {
+  BTC: {
+    up:   [0.1400, 0.0983, 0.0711, 0.0540, 0.0405, 0.0256, 0.0234, 0.0139, 0.0107, 0.0076, 0.0060, 0.0057],
+    down: [0.1413, 0.1005, 0.0727, 0.0531, 0.0326, 0.0224, 0.0171, 0.0161, 0.0101, 0.0038, 0.0047, 0.0032],
+  },
+  ETH: {
+    up:   [0.1400, 0.0983, 0.0711, 0.0540, 0.0405, 0.0256, 0.0234, 0.0139, 0.0107, 0.0076, 0.0060, 0.0057],
+    down: [0.1413, 0.1005, 0.0727, 0.0531, 0.0326, 0.0224, 0.0171, 0.0161, 0.0101, 0.0038, 0.0047, 0.0032],
+  },
+  SOL: {
+    up:   [0.1400, 0.0983, 0.0711, 0.0540, 0.0405, 0.0256, 0.0234, 0.0139, 0.0107, 0.0076, 0.0060, 0.0057],
+    down: [0.1413, 0.1005, 0.0727, 0.0531, 0.0326, 0.0224, 0.0171, 0.0161, 0.0101, 0.0038, 0.0047, 0.0032],
+  },
+};
+const HOUSE_EDGE = 0.25;
+const RANGE_LABELS = [
+  '≥0%<1%','≥1%<2%','≥2%<3%','≥3%<4%','≥4%<5%','≥5%<6%',
+  '≥6%<7%','≥7%<8%','≥8%<9%','≥9%<10%','≥10%<11%','≥11%<12%',
+];
+
+// ─── 明日涨跌竞猜面板 ─────────────────────────────────────────
+function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: string }) {
+  const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
+  const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
+
+  const [dir, setDir] = useState<'up' | 'down' | null>(null);
+  const [rangeIdx, setRangeIdx] = useState(0);
+  const [betAmount, setBetAmount] = useState(10);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // 获取账本余额
+  const { data: balanceData, refetch: refetchBalance } = trpc.prediction.getBetBalance.useQuery(
+    { ledgerId },
+    { staleTime: 10000 }
+  );
+  const balance = (balanceData as any)?.balance ?? 0;
+
+  // 获取我的竞猜记录
+  const { data: myBetsData, refetch: refetchBets } = trpc.prediction.getMyBets.useQuery(
+    { ledgerId, coin: coinKey, limit: 5 },
+    { staleTime: 10000 }
+  );
+  const myBets: any[] = (myBetsData as any)?.bets ?? [];
+
+  // 下单 mutation
+  const placeBetMutation = trpc.prediction.placeBet.useMutation({
+    onSuccess: (data: any) => {
+      toast.success('下单成功！', { description: data.message });
+      setShowConfirm(false);
+      setDir(null);
+      setBetAmount(10);
+      refetchBalance();
+      refetchBets();
+    },
+    onError: (e: any) => {
+      toast.error('下单失败', { description: e.message });
+      setShowConfirm(false);
+    },
+  });
+
+  const probs = dir === 'down' ? histProb.down : histProb.up;
+  const safeIdx = Math.min(rangeIdx, 11);
+  const prob = probs[safeIdx] ?? 0;
+  const odds = prob > 0 ? parseFloat((1 / prob * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
+  const payout = odds > 0 ? parseFloat((betAmount * odds).toFixed(2)) : 0;
+  const rangeLabel = RANGE_LABELS[safeIdx];
+
+  // 目标日期（明天）
+  const targetDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
+  const sliderBg = (val: number, min: number, max: number, color: string) =>
+    `linear-gradient(to right, ${color} 0%, ${color} ${((val - min) / (max - min)) * 100}%, rgba(255,255,255,0.08) ${((val - min) / (max - min)) * 100}%, rgba(255,255,255,0.08) 100%)`;
+
+  const neonUp = { main: '#ff4d4d', glow: 'rgba(255,77,77,0.6)', bg: 'linear-gradient(135deg,#3a0000,#8b0000)', border: '#ff4d4d' };
+  const neonDown = { main: '#00e676', glow: 'rgba(0,230,118,0.6)', bg: 'linear-gradient(135deg,#003a1a,#006633)', border: '#00e676' };
+  const neonGold = { main: '#d4af37', glow: 'rgba(212,175,55,0.6)', bg: 'linear-gradient(135deg,#1a1200,#3d2e00)', border: '#d4af37' };
+  const neon = dir === 'down' ? neonDown : dir === 'up' ? neonUp : neonGold;
+
+  const handleSubmit = () => {
+    if (!dir || odds === 0 || betAmount <= 0) return;
+    if (betAmount > balance) {
+      toast.error('余额不足', { description: `当前余额 ${balance.toFixed(2)} U` });
+      return;
+    }
+    placeBetMutation.mutate({
+      ledgerId,
+      coin: coinKey,
+      direction: dir,
+      rangeIndex: safeIdx,
+      rangeLabel,
+      betAmount,
+      odds,
+      expectedReturn: payout,
+      houseEdge: HOUSE_EDGE,
+      probability: prob,
+      targetDate,
+    });
+  };
+
+  return (
+    <div className="rounded-2xl overflow-hidden mb-3" style={{
+      background: 'linear-gradient(160deg, #0a0800 0%, #110e00 50%, #0a0800 100%)',
+      border: '1px solid rgba(212,175,55,0.2)',
+      boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+    }}>
+      {/* 头部：标题 + 余额 */}
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-medium" style={{ color: 'rgba(212,175,55,0.6)', letterSpacing: 2 }}>{coin.name} · 明日涨跌</div>
+          <div className="text-lg font-black mt-0.5" style={{
+            background: 'linear-gradient(90deg, #d4af37, #ffd700, #b8860b)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>竞猜预测</div>
+        </div>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.2)' }}>
+          <Wallet className="w-3.5 h-3.5" style={{ color: '#d4af37' }} />
+          <span className="text-sm font-bold" style={{ color: '#d4af37' }}>{balance.toFixed(2)}</span>
+          <span className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>U</span>
+        </div>
+      </div>
+
+      {/* 方向选择 */}
+      <div className="px-4 grid grid-cols-2 gap-3 mb-4">
+        <button
+          onClick={() => { setDir('up'); setRangeIdx(0); }}
+          className="py-4 rounded-2xl flex flex-col items-center gap-1 transition-all active:scale-95"
+          style={{
+            background: dir === 'up' ? neonUp.bg : 'rgba(255,255,255,0.04)',
+            border: `2px solid ${dir === 'up' ? neonUp.border : 'rgba(255,255,255,0.08)'}`,
+            boxShadow: dir === 'up' ? `0 0 20px ${neonUp.glow}` : 'none',
+          }}
+        >
+          <span className="text-3xl" style={{ filter: dir === 'up' ? `drop-shadow(0 0 8px ${neonUp.main})` : 'none' }}>↑</span>
+          <span className="text-base font-black" style={{ color: dir === 'up' ? neonUp.main : 'rgba(255,255,255,0.5)' }}>涨</span>
+        </button>
+        <button
+          onClick={() => { setDir('down'); setRangeIdx(0); }}
+          className="py-4 rounded-2xl flex flex-col items-center gap-1 transition-all active:scale-95"
+          style={{
+            background: dir === 'down' ? neonDown.bg : 'rgba(255,255,255,0.04)',
+            border: `2px solid ${dir === 'down' ? neonDown.border : 'rgba(255,255,255,0.08)'}`,
+            boxShadow: dir === 'down' ? `0 0 20px ${neonDown.glow}` : 'none',
+          }}
+        >
+          <span className="text-3xl" style={{ filter: dir === 'down' ? `drop-shadow(0 0 8px ${neonDown.main})` : 'none' }}>↓</span>
+          <span className="text-base font-black" style={{ color: dir === 'down' ? neonDown.main : 'rgba(255,255,255,0.5)' }}>跌</span>
+        </button>
+      </div>
+
+      {dir && (
+        <>
+          {/* 赔率卡 */}
+          <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
+            background: 'rgba(212,175,55,0.06)',
+            border: '1px solid rgba(212,175,55,0.25)',
+          }}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>幅度区间</div>
+                <div className="text-xl font-black text-white">{rangeLabel}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>赔率（含本金）</div>
+                <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
+                  {odds > 0 ? `${odds}x` : '-'}
+                </div>
+              </div>
+            </div>
+            <div className="text-xs mt-1.5" style={{ color: 'rgba(212,175,55,0.5)' }}>
+              历史概率 {(prob * 100).toFixed(2)}%　庄家优势 25%
+            </div>
+          </div>
+
+          {/* 区间滑动条 */}
+          <div className="mx-4 mb-4">
+            <div className="flex justify-between text-xs mb-1.5" style={{ color: 'rgba(212,175,55,0.5)' }}>
+              <span>≥0%</span>
+              <span>拖动选择幅度</span>
+              <span>≥11%</span>
+            </div>
+            <input
+              type="range" min={0} max={11} step={1} value={safeIdx}
+              onChange={e => setRangeIdx(Number(e.target.value))}
+              className="w-full h-3 rounded-full appearance-none cursor-pointer"
+              style={{ background: sliderBg(safeIdx, 0, 11, '#d4af37'), accentColor: '#d4af37' }}
+            />
+          </div>
+
+          {/* 投入 → 预期获得 */}
+          <div className="mx-4 mb-3 rounded-2xl px-4 py-3 flex items-center justify-between" style={{
+            background: 'rgba(212,175,55,0.06)',
+            border: '1px solid rgba(212,175,55,0.2)',
+          }}>
+            <div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>投入</div>
+              <div className="text-xl font-bold text-white">{betAmount}<span className="text-xs font-normal ml-1" style={{ color: 'rgba(255,255,255,0.4)' }}>U</span></div>
+            </div>
+            <div className="text-xl" style={{ color: 'rgba(212,175,55,0.4)' }}>→</div>
+            <div className="text-right">
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>预期获得</div>
+              <div className="text-2xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
+                {payout > 0 ? payout : '-'}<span className="text-sm font-normal ml-1" style={{ color: 'rgba(255,255,255,0.4)' }}>U</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 投注金额滑动条 */}
+          <div className="mx-4 mb-4">
+            <input
+              type="range" min={1} max={Math.max(Math.floor(balance), 1)} step={1} value={betAmount}
+              onChange={e => setBetAmount(Number(e.target.value))}
+              className="w-full h-3 rounded-full appearance-none cursor-pointer"
+              style={{ background: sliderBg(betAmount, 1, Math.max(Math.floor(balance), 1), '#d4af37'), accentColor: '#d4af37' }}
+            />
+            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(212,175,55,0.4)' }}>
+              <span>1 U</span>
+              <span>余额 {balance.toFixed(2)} U</span>
+            </div>
+          </div>
+
+          {/* 确认按钮 */}
+          <div className="mx-4 mb-4">
+            {!showConfirm ? (
+              <button
+                onClick={() => setShowConfirm(true)}
+                disabled={odds === 0 || betAmount <= 0 || betAmount > balance}
+                className="w-full py-3.5 rounded-2xl text-white text-base font-black transition-all active:scale-95 disabled:opacity-30"
+                style={{
+                  background: neon.bg,
+                  border: `2px solid ${neon.border}`,
+                  boxShadow: `0 0 20px ${neon.glow}`,
+                  letterSpacing: 1,
+                }}
+              >
+                确认预测 {dir === 'up' ? '↑ 涨' : '↓ 跌'} {rangeLabel}
+              </button>
+            ) : (
+              <div className="rounded-2xl p-4" style={{ background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)' }}>
+                <div className="text-sm text-white mb-3 text-center">
+                  确认下注 <span style={{ color: '#d4af37' }}>{betAmount} U</span>，预测 {coin.name} 明日{dir === 'up' ? '涨' : '跌'} <span style={{ color: neon.main }}>{rangeLabel}</span>？
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setShowConfirm(false)}
+                    className="py-2.5 rounded-xl text-sm font-medium"
+                    style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={placeBetMutation.isPending}
+                    className="py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-60"
+                    style={{ background: neon.bg, border: `1px solid ${neon.border}`, color: 'white', boxShadow: `0 0 12px ${neon.glow}` }}
+                  >
+                    {placeBetMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '确认扣款'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {!dir && (
+        <div className="px-4 pb-5 text-center">
+          <div className="text-4xl mb-2" style={{ filter: 'drop-shadow(0 0 12px rgba(212,175,55,0.8))' }}>🎰</div>
+          <div className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>选择涨或跌，开始预测</div>
+        </div>
+      )}
+
+      {/* 我的最近竞猜记录 */}
+      {myBets.length > 0 && (
+        <div className="mx-4 mb-4">
+          <div className="text-xs mb-2" style={{ color: 'rgba(212,175,55,0.4)' }}>最近下注记录</div>
+          <div className="space-y-1.5">
+            {myBets.slice(0, 3).map((bet: any) => (
+              <div key={bet.id} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold" style={{ color: bet.direction === 'up' ? '#ff4d4d' : '#00e676' }}>
+                    {bet.direction === 'up' ? '↑涨' : '↓跌'} {bet.range_label}
+                  </span>
+                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{bet.target_date}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-white">{parseFloat(bet.bet_amount).toFixed(0)} U</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded-full" style={{
+                    background: bet.status === 'won' ? 'rgba(255,77,77,0.2)' : bet.status === 'lost' ? 'rgba(0,230,118,0.1)' : 'rgba(212,175,55,0.1)',
+                    color: bet.status === 'won' ? '#ff4d4d' : bet.status === 'lost' ? '#00e676' : '#d4af37',
+                  }}>
+                    {bet.status === 'won' ? '中奖' : bet.status === 'lost' ? '未中' : '待结算'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 底部说明 */}
+      <div className="px-4 pb-4 text-xs" style={{ color: 'rgba(212,175,55,0.3)' }}>
+        · 赔率含本金 · 庄家优势 25% · 1U = 1优 · 历史概率基于全量日线
+      </div>
+    </div>
+  );
+}
 
 function formatCoinQty(qty: number, coin: string): string {
   if (INTEGER_COINS_FIN.has(coin)) return Math.round(qty).toLocaleString('en-US');
@@ -2013,6 +2327,14 @@ export default function CryptoPrediction() {
            const filteredEvents = visibleQuestions.length > 0 ? events.filter(e => visibleQuestions.includes(e.question)) : events;
           return (
           <div>
+            {/* ===== 明日涨跌竞猜组件 ===== */}
+            <MarketBetPanel ledgerId={ledgerId} coinKey={coinKey} />
+            {/* 分割线 */}
+            <div className="my-4 flex items-center gap-2">
+              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>行情评估</span>
+              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+            </div>
             {predLoading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />

@@ -1838,3 +1838,35 @@ export const goldDailyKline = mysqlTable("gold_daily_kline", {
   uniqueIndex("gold_date_uniq").on(table.tradeDate),
   index("gold_date_idx").on(table.tradeDate),
 ]);
+
+// ========== 加密货币竞猜下单表（行情评估Tab）==========
+// 用户对明日涨跌方向及幅度区间下注，1U = 1优
+export const cryptoBets = mysqlTable("crypto_bets", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),           // 所属账本ID
+  userId: int('user_id').notNull(),               // 下注用户ID
+  coin: varchar({ length: 10 }).notNull(),        // BTC / ETH / SOL
+  direction: varchar({ length: 10 }).notNull(),   // 'up' | 'down'
+  rangeIndex: int('range_index').notNull(),       // 区间档位 0~11（≥0%<1% ~ ≥11%<12%）
+  rangeLabel: varchar('range_label', { length: 20 }).notNull(), // 如 "≥0%<1%"
+  betAmount: decimal('bet_amount', { precision: 20, scale: 8 }).notNull(), // 下注U数
+  odds: decimal('odds', { precision: 10, scale: 4 }).notNull(),            // 赔率（含本金）
+  expectedReturn: decimal('expected_return', { precision: 20, scale: 8 }).notNull(), // 预期获得U数
+  houseEdge: decimal('house_edge', { precision: 5, scale: 4 }).notNull(), // 庄家优势（如0.20）
+  probability: decimal('probability', { precision: 10, scale: 6 }).notNull(), // 历史概率
+  // 结算相关
+  status: varchar({ length: 20 }).default('pending').notNull(), // pending=待结算, won=中奖, lost=未中, cancelled=已取消
+  settledAt: timestamp('settled_at', { mode: 'string' }),       // 结算时间
+  actualChangePct: decimal('actual_change_pct', { precision: 10, scale: 4 }), // 实际涨跌幅（结算时填入）
+  settleNote: text('settle_note'),                              // 结算备注
+  // 元数据
+  targetDate: varchar('target_date', { length: 10 }).notNull(), // 预测的目标日期 YYYY-MM-DD（通常是明天）
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("crypto_bets_ledger_idx").on(table.ledgerId),
+  index("crypto_bets_user_idx").on(table.userId),
+  index("crypto_bets_coin_idx").on(table.coin),
+  index("crypto_bets_status_idx").on(table.status),
+  index("crypto_bets_target_date_idx").on(table.targetDate),
+]);
