@@ -688,7 +688,127 @@ const AddTransaction = () => {
         </div>
       </div>}
 
-      {/* 金额输入 */}
+      {/* custom_aa 账本：一体化紧凑布局（金额+分类+日期合并为单卡片） */}
+      {isCustomAA ? (
+        <div className="flex-1 overflow-y-auto flex flex-col bg-[#FAF3ED]">
+          <div className="bg-white mx-3 mt-3 rounded-2xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
+
+            {/* 金额输入区 */}
+            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">金额</div>
+              <div className="inline-flex items-end w-full">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount || ""}
+                  placeholder="0.00"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (/^\d*\.?\d{0,2}$/.test(val) || val === "") {
+                      setAmount(val);
+                    }
+                  }}
+                  className="text-5xl font-light text-[#222222] bg-transparent border-none outline-none w-0 flex-1 placeholder-gray-200"
+                  style={{ caretColor: '#D32F2F' }}
+                  autoComplete="off"
+                />
+                <div className="text-base font-medium text-gray-400 mb-1.5 ml-2 flex-shrink-0">
+                  {(() => {
+                    const currencyMap: Record<string, string> = { CNY: "元", USD: "USD", JPY: "JPY", EUR: "EUR", HKD: "HKD", GBP: "GBP", USDT: "USDT" };
+                    const currency = (ledger as any)?.currency || "CNY";
+                    return currencyMap[currency] || currency;
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* 分类选择区 */}
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-3 font-medium tracking-widest uppercase">分类</div>
+              {categoryLevels.map((cats, level) => {
+                const filteredCats = (isCustomAA && level === 0)
+                  ? cats.filter((c: any) => !c.isDefault && c.id > 10)
+                  : cats;
+                if (filteredCats.length === 0) return null;
+                if (isCustomAA && level > 0) return null;
+                return (
+                  <div key={level} className="flex flex-wrap gap-2.5">
+                    {filteredCats.map((category: any, index: number) => {
+                      const isSelected = selectedCategoryPath[level] === category.id;
+                      const colorClass = themeColors[index % themeColors.length];
+                      return (
+                        <button
+                          key={category.id}
+                          className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                            isSelected
+                              ? `${colorClass} text-white shadow-sm scale-105`
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                          style={{ minWidth: '56px' }}
+                          onClick={() => handleCategorySelect(category.id, level)}
+                        >
+                          {category.name}
+                        </button>
+                      );
+                    })}
+                    {level === 0 && canManageCategories && (
+                      <button
+                        className="px-4 py-2.5 rounded-xl text-sm bg-white border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1"
+                        onClick={() => setLocation(`/ledger/${id}/categories`)}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {isLoadingTop && <div className="text-xs text-gray-400 mt-2">加载分类中...</div>}
+            </div>
+
+            {/* 日期选择区 */}
+            <button
+              className="w-full px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
+              onClick={() => setIsDateSheetOpen(true)}
+            >
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-5 h-5 text-[#D32F2F]" />
+                <span className="text-sm font-medium text-gray-500">日期</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-semibold text-[#222222]">
+                  {selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </span>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </div>
+            </button>
+          </div>
+
+          {/* 重复账目警告 */}
+          {duplicateWarnings.length > 0 && (
+            <div className="mx-3 mt-3">
+              {duplicateWarnings.map((w, idx) => (
+                <div
+                  key={idx}
+                  className="animate-warn-flash flex items-center gap-3 px-4 py-3 border-2 border-[#FFCDD2] rounded-2xl cursor-pointer bg-white"
+                  onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${w.id}`)}
+                >
+                  <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-[#FFEBEE]">
+                    <AlertTriangle className="animate-icon-pulse w-5 h-5 text-[#D32F2F]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-[#D32F2F] leading-snug">{w.text}</p>
+                    <p className="text-[11px] text-[#E57373] mt-0.5">点此查看该账目，仍可继续保存</p>
+                  </div>
+                  <div className="flex-shrink-0 text-[#E57373] text-lg font-light">›</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex-1" />
+        </div>
+      ) : (
+      <>
+      {/* 非custom_aa：原有金额输入 */}
       <div className="bg-white py-3 px-4 flex-shrink-0">
         <div className="inline-flex items-end w-full">
           <input
@@ -725,21 +845,19 @@ const AddTransaction = () => {
         </div>
       </div>
 
-      {/* 可滚动内容区域 */}
+      {/* 可滚动内容区域（非custom_aa） */}
       <div className="flex-1 overflow-y-auto">
-        {/* 多级分类选择 - custom_aa 只显示自定义分类（过滤默认购物等） */}
+        {/* 多级分类选择 */}
         <div className="bg-white mt-1">
           {/* 一级分类标题 */}
           <div className="bg-[#FAF3ED] px-3 py-2 text-xs text-gray-500">选择分类</div>
           
           {/* 渲染每一级分类 - 每级单独一行 */}
           {categoryLevels.map((cats, level) => {
-            // custom_aa 账本第一级过滤掉默认分类（isDefault=true 或 id<=10 的预设）
             const filteredCats = (isCustomAA && level === 0)
               ? cats.filter((c: any) => !c.isDefault && c.id > 10)
               : cats;
             if (filteredCats.length === 0) return null;
-            // custom_aa 账本不显示二级及以下分类
             if (isCustomAA && level > 0) return null;
             
             return (
@@ -765,7 +883,6 @@ const AddTransaction = () => {
                       );
                     })}
                     
-                    {/* 只在第一级显示"+"按鈕，custom_aa 的 owner/admin 也可以添加 */}
                     {level === 0 && canManageCategories && (
                       <button
                         className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1 hover:bg-[#D32F2F]-light"
@@ -1058,6 +1175,20 @@ const AddTransaction = () => {
           保存
         </button>
       </div>
+      </>
+      )}
+
+      {/* 底部保存按鈕（custom_aa 专用，固定在底部） */}
+      {isCustomAA && (
+        <div className="flex-shrink-0 p-4 bg-white" style={{ borderTop: '1px solid #F0E8E0' }}>
+          <button
+            className="w-full bg-[#D32F2F] text-white py-4 rounded-2xl text-base font-semibold active:bg-[#B71C1C] shadow-sm"
+            onClick={handleSave}
+          >
+            保存
+          </button>
+        </div>
+      )}
 
       {/* 日期选择抽屉 */}
       <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
