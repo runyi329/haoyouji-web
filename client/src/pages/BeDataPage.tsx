@@ -520,7 +520,9 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
   const isUp = dir !== 'down';
   const neonUp = { main: '#ff4d4d', glow: 'rgba(255,77,77,0.6)', bg: 'linear-gradient(135deg,#3a0000,#8b0000)', border: '#ff4d4d', card: 'rgba(255,77,77,0.08)' };
   const neonDown = { main: '#00e676', glow: 'rgba(0,230,118,0.6)', bg: 'linear-gradient(135deg,#003a1a,#006633)', border: '#00e676', card: 'rgba(0,230,118,0.08)' };
-  const neon = dir === 'down' ? neonDown : neonUp;
+  // 未选方向时用金色，选了方向后用对应的涨跌霸光色
+  const neonGold = { main: '#d4af37', glow: 'rgba(212,175,55,0.6)', bg: 'linear-gradient(135deg,#1a1200,#3d2e00)', border: '#d4af37', card: 'rgba(212,175,55,0.08)' };
+  const neon = dir === 'down' ? neonDown : dir === 'up' ? neonUp : neonGold;
 
   const handleConfirm = () => {
     if (!dir || points <= 0) return;
@@ -533,21 +535,22 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
 
   return (
     <div className="flex-1 overflow-auto pb-10" style={{
-      background: 'linear-gradient(160deg, #0a0015 0%, #000d1a 40%, #0a0015 100%)',
+      background: 'linear-gradient(160deg, #0a0800 0%, #110e00 50%, #0a0800 100%)',
       minHeight: '100%',
     }}>
-      {/* 霸光光晕背景装饰 */}
-      <div style={{ position: 'absolute', top: 60, left: '10%', width: 120, height: 120, borderRadius: '50%', background: 'radial-gradient(circle, rgba(138,43,226,0.25) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', top: 100, right: '5%', width: 80, height: 80, borderRadius: '50%', background: 'radial-gradient(circle, rgba(0,191,255,0.2) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      {/* 黑金光晕背景装饰 */}
+      <div style={{ position: 'absolute', top: 40, left: '5%', width: 160, height: 160, borderRadius: '50%', background: 'radial-gradient(circle, rgba(212,175,55,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: 80, right: '5%', width: 100, height: 100, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,215,0,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', top: 200, left: '40%', width: 80, height: 80, borderRadius: '50%', background: 'radial-gradient(circle, rgba(184,142,4,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
       {/* 头部 */}
-      <div className="px-4 pt-5 pb-4 relative">
-        <div className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.4)', letterSpacing: 2 }}>{symbolLabel.toUpperCase()}</div>
+      <div className="px-4 pt-5 pb-4 relative">        <div className="text-xs font-medium" style={{ color: 'rgba(212,175,55,0.6)', letterSpacing: 2 }}>{symbolLabel.toUpperCase()}</div>
         <div className="text-xl font-black mt-1" style={{
-          background: 'linear-gradient(90deg, #a78bfa, #60a5fa, #34d399)',
+          background: 'linear-gradient(90deg, #d4af37, #ffd700, #b8860b, #ffd700)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
           letterSpacing: 1,
+          textShadow: 'none',
         }}>明日涨跌预测</div>
       </div>
 
@@ -587,9 +590,9 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
         <>
           {/* 赔率展示卡 */}
           <div className="mx-4 mb-4 rounded-2xl px-5 py-4" style={{
-            background: neon.card,
-            border: `1px solid ${neon.main}44`,
-            boxShadow: `0 0 20px ${neon.main}22`,
+            background: 'rgba(212,175,55,0.06)',
+            border: '1px solid rgba(212,175,55,0.25)',
+            boxShadow: '0 0 20px rgba(212,175,55,0.1)',
           }}>
             <div className="flex items-center justify-between">
               <div>
@@ -605,36 +608,36 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
                 </div>
               </div>
             </div>
-            <div className="text-xs mt-2" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <div className="text-xs mt-2" style={{ color: 'rgba(212,175,55,0.5)' }}>
               历史概率 {currentRange ? (currentRange.prob * 100).toFixed(2) : '0.00'}%　共 {currentRange?.count ?? 0} 天
             </div>
           </div>
 
           {/* 区间滑动条 */}
           <div className="mx-4 mb-5">
-            <div className="flex justify-between text-xs mb-2" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            <div className="flex justify-between text-xs mb-2" style={{ color: 'rgba(212,175,55,0.5)' }}>
               <span>≥0%</span>
-              <span style={{ color: 'rgba(255,255,255,0.5)' }}>拖动选择幅度区间</span>
+              <span style={{ color: 'rgba(212,175,55,0.7)' }}>拖动选择幅度区间</span>
               <span>≥11%</span>
             </div>
             <input
               type="range" min={0} max={MAX_RANGE} step={1} value={safeRangeIdx}
               onChange={e => { setRangeIdx(Number(e.target.value)); setConfirmed(false); }}
               className="w-full h-3 rounded-full appearance-none cursor-pointer"
-              style={{ background: sliderBg(safeRangeIdx, 0, MAX_RANGE, neon.main), accentColor: neon.main }}
+              style={{ background: sliderBg(safeRangeIdx, 0, MAX_RANGE, '#d4af37'), accentColor: '#d4af37' }}
             />
           </div>
 
           {/* 预期获得数字展示 */}
           <div className="mx-4 mb-3 rounded-2xl px-5 py-4 flex items-center justify-between" style={{
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            background: 'rgba(212,175,55,0.06)',
+            border: '1px solid rgba(212,175,55,0.2)',
           }}>
             <div>
               <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>投入</div>
               <div className="text-xl font-bold text-white">{points}<span className="text-xs font-normal ml-1" style={{ color: 'rgba(255,255,255,0.4)' }}>分</span></div>
             </div>
-            <div className="text-2xl" style={{ color: 'rgba(255,255,255,0.2)' }}>→</div>
+            <div className="text-2xl" style={{ color: 'rgba(212,175,55,0.4)' }}>→</div>
             <div className="text-right">
               <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>预期获得</div>
               <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
@@ -649,9 +652,9 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
               type="range" min={MIN_POINTS} max={MAX_POINTS} step={10} value={points}
               onChange={e => { setPoints(Number(e.target.value)); setConfirmed(false); }}
               className="w-full h-3 rounded-full appearance-none cursor-pointer"
-              style={{ background: sliderBg(points, MIN_POINTS, MAX_POINTS, neon.main), accentColor: neon.main }}
+              style={{ background: sliderBg(points, MIN_POINTS, MAX_POINTS, '#d4af37'), accentColor: '#d4af37' }}
             />
-            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(212,175,55,0.4)' }}>
               <span>{MIN_POINTS}分</span>
               <span>{MAX_POINTS}分</span>
             </div>
@@ -681,7 +684,7 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
           </div>
 
           {/* 底部说明 */}
-          <div className="mx-4 mt-5 text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          <div className="mx-4 mt-5 text-xs leading-relaxed" style={{ color: 'rgba(212,175,55,0.35)' }}>
             · 赔率含本金 · 庄家优势 25% · 历史概率基于全量日线
           </div>
         </>
@@ -689,8 +692,8 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
 
       {!dir && (
         <div className="mx-4 text-center py-10">
-          <div className="text-5xl mb-4" style={{ filter: 'drop-shadow(0 0 12px rgba(138,43,226,0.8))' }}>🎰</div>
-          <div className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>选择涨或跌，开始预测</div>
+          <div className="text-5xl mb-4" style={{ filter: 'drop-shadow(0 0 12px rgba(212,175,55,0.8))' }}>🎰</div>
+          <div className="text-sm font-medium" style={{ color: 'rgba(212,175,55,0.6)' }}>选择涨或跌，开始预测</div>
         </div>
       )}
     </div>
