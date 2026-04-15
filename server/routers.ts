@@ -225,6 +225,13 @@ export const appRouter = router({
         return await dbCrypto.getCryptoStats(input.symbol);
       }),
 
+    // 获取全量涨跌幅数组（用于前端分段计算连涨连跌统计）
+    getAllChangePcts: protectedProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getAllChangePcts(input.symbol);
+      }),
+
     // 从 Binance 拉取增量数据（管理员可操作）
     syncLatest: protectedProcedure
       .input(z.object({ symbol: z.string() }))

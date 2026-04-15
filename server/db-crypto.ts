@@ -328,3 +328,20 @@ export async function getCryptoStats(symbol: string): Promise<CryptoStats> {
     maxConsecDown,
   };
 }
+
+/**
+ * 获取某交易对全量涨跌幅数组（按日期升序），用于前端分段计算连涨连跌统计
+ */
+export async function getAllChangePcts(symbol: string): Promise<{ date: string; changePct: number | null }[]> {
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await conn.execute(
+    `SELECT DATE_FORMAT(date, '%y/%m/%d') as date, change_pct as changePct
+     FROM crypto_klines WHERE symbol = ? ORDER BY date ASC`,
+    [symbol]
+  ) as any[];
+  return (rows as any[]).map((r: any) => ({
+    date: r.date,
+    changePct: r.changePct != null ? parseFloat(r.changePct) : null,
+  }));
+}
