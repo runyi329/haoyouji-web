@@ -321,58 +321,74 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
         <div className="text-xs font-semibold text-gray-500 mb-1">赔率参考表
           <span className="text-xs font-normal text-gray-400 ml-2">含本金 · 庄家优势百分比越高赔率越低</span>
         </div>
-        {/* 表头 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr 1fr 1fr 1fr', gap: 0 }} className="mb-1">
-          <span className="text-xs text-center font-medium text-gray-400">区间</span>
-          <span className="text-xs text-center font-medium text-gray-400">概率</span>
-          <span className="text-xs text-center font-medium" style={{ color: '#b45309' }}>10%优</span>
-          <span className="text-xs text-center font-medium" style={{ color: '#b45309' }}>15%优</span>
-          <span className="text-xs text-center font-medium" style={{ color: '#b45309' }}>20%优</span>
-          <span className="text-xs text-center font-medium" style={{ color: '#b45309' }}>25%优</span>
-        </div>
-        {/* 涨幅行 */}
-        <div className="text-xs font-medium text-gray-400 mt-1 mb-0.5 pl-1">↑ 涨幅</div>
-        {Array.from({ length: 21 }, (_, i) => i).map(n => {
-          const entry = distData.find(d => d.bucket === n);
-          const cnt = entry?.count ?? 0;
-          if (cnt === 0) return null;
-          const prob = totalDays > 0 ? cnt / totalDays : 0;
-          const fairOdds = prob > 0 ? 1 / prob : 0;
-          const label = `≥${n}% <${n+1}%`;
-          return (
-            <div key={`up-${n}`} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr 1fr 1fr 1fr', gap: 0, borderTop: '1px solid #f5f5f5', padding: '3px 0', alignItems: 'center' }}>
-              <span className="font-mono text-center" style={{ fontSize: 9, color: '#888' }}>{label}</span>
-              <span className="text-xs text-center font-mono text-gray-500">{(prob * 100).toFixed(2)}%</span>
-              {[0.10, 0.15, 0.20, 0.25].map(edge => (
-                <span key={edge} className="text-xs text-center font-mono font-semibold" style={{ color: '#92400e' }}>
-                  {(fairOdds * (1 - edge)).toFixed(2)}
-                </span>
+        {/* 公用表头组件 */}
+        {(() => {
+          const COL = '72px 1fr 1fr 1fr 1fr 1fr';
+          const headerStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: COL, gap: 0, background: '#fafafa', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '3px 0' };
+          const rowStyle = (i: number): React.CSSProperties => ({ display: 'grid', gridTemplateColumns: COL, gap: 0, borderBottom: '1px solid #f0f0f0', padding: '2px 0', alignItems: 'center', background: i % 2 === 0 ? '#fff' : '#fafafa' });
+          const Header = () => (
+            <div style={headerStyle}>
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#9ca3af', fontWeight: 600 }}>区间</span>
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#9ca3af', fontWeight: 600 }}>概率</span>
+              {['10%优', '15%优', '20%优', '25%优'].map(t => (
+                <span key={t} style={{ fontSize: 9, textAlign: 'center', color: '#b45309', fontWeight: 600 }}>{t}</span>
               ))}
             </div>
           );
-        })}
-        {/* 跌幅行 */}
-        <div className="text-xs font-medium text-gray-400 mt-2 mb-0.5 pl-1">↓ 跌幅</div>
-        {Array.from({ length: 21 }, (_, i) => i).map(n => {
-          const entry = distData.find(d => d.bucket === -(n + 1));
-          const cnt = entry?.count ?? 0;
-          if (cnt === 0) return null;
-          const prob = totalDays > 0 ? cnt / totalDays : 0;
-          const fairOdds = prob > 0 ? 1 / prob : 0;
-          const label = `≥${n}% <${n+1}%`;
+          const upRows = Array.from({ length: 21 }, (_, i) => i).map(n => {
+            const entry = distData.find(d => d.bucket === n);
+            const cnt = entry?.count ?? 0;
+            if (cnt === 0) return null;
+            const prob = totalDays > 0 ? cnt / totalDays : 0;
+            const fairOdds = prob > 0 ? 1 / prob : 0;
+            return (
+              <div key={`up-${n}`} style={rowStyle(n)}>
+                <span style={{ fontSize: 8, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>≥{n}% &lt;{n+1}%</span>
+                <span style={{ fontSize: 9, textAlign: 'center', color: '#6b7280', fontFamily: 'monospace' }}>{(prob * 100).toFixed(2)}%</span>
+                {[0.10, 0.15, 0.20, 0.25].map(edge => (
+                  <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontFamily: 'monospace', fontWeight: 600 }}>
+                    {(fairOdds * (1 - edge)).toFixed(2)}
+                  </span>
+                ))}
+              </div>
+            );
+          });
+          const downRows = Array.from({ length: 21 }, (_, i) => i).map(n => {
+            const entry = distData.find(d => d.bucket === -(n + 1));
+            const cnt = entry?.count ?? 0;
+            if (cnt === 0) return null;
+            const prob = totalDays > 0 ? cnt / totalDays : 0;
+            const fairOdds = prob > 0 ? 1 / prob : 0;
+            return (
+              <div key={`down-${n}`} style={rowStyle(n)}>
+                <span style={{ fontSize: 8, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>≥{n}% &lt;{n+1}%</span>
+                <span style={{ fontSize: 9, textAlign: 'center', color: '#6b7280', fontFamily: 'monospace' }}>{(prob * 100).toFixed(2)}%</span>
+                {[0.10, 0.15, 0.20, 0.25].map(edge => (
+                  <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontFamily: 'monospace', fontWeight: 600 }}>
+                    {(fairOdds * (1 - edge)).toFixed(2)}
+                  </span>
+                ))}
+              </div>
+            );
+          });
           return (
-            <div key={`down-${n}`} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr 1fr 1fr 1fr', gap: 0, borderTop: '1px solid #f5f5f5', padding: '3px 0', alignItems: 'center' }}>
-              <span className="font-mono text-center" style={{ fontSize: 9, color: '#888' }}>{label}</span>
-              <span className="text-xs text-center font-mono text-gray-500">{(prob * 100).toFixed(2)}%</span>
-              {[0.10, 0.15, 0.20, 0.25].map(edge => (
-                <span key={edge} className="text-xs text-center font-mono font-semibold" style={{ color: '#92400e' }}>
-                  {(fairOdds * (1 - edge)).toFixed(2)}
-                </span>
-              ))}
-            </div>
+            <>
+              {/* 涨幅区 */}
+              <div style={{ fontSize: 9, color: RED, fontWeight: 600, margin: '6px 0 2px 2px' }}>↑ 涨幅赔率</div>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
+                <Header />
+                {upRows}
+              </div>
+              {/* 跌幅区 */}
+              <div style={{ fontSize: 9, color: GREEN_A, fontWeight: 600, margin: '8px 0 2px 2px' }}>↓ 跌幅赔率</div>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
+                <Header />
+                {downRows}
+              </div>
+            </>
           );
-        })}
-        <div className="text-xs text-gray-400 mt-2">注：赔率含本金，如“1赔3”即投注1元返回3元（凈0元）。概率基于历史数据估算。</div>
+        })()}
+        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金，如“1赔3”即投注1元返回3元（凈0元）。概率基于历史数据估算。</div>
       </div>
     </div>
   );
