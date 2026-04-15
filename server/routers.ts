@@ -10214,6 +10214,7 @@ export const appRouter = router({
         userId: z.number(),
         amount: z.number(),
         note: z.string().optional(),
+        createdAt: z.string().optional(), // 自定义时间，格式 'YYYY-MM-DD HH:mm:ss'
       }))
       .mutation(async ({ ctx, input }) => {
         const dbLedger = await import('./db-ledger');
@@ -10225,13 +10226,21 @@ export const appRouter = router({
         const db = await getLedgerDb();
         if (input.id) {
           await db.execute(
-            sql`UPDATE af_manual_balances SET amount = ${input.amount}, note = ${input.note || ''}, updated_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+            input.createdAt
+              ? sql`UPDATE af_manual_balances SET amount = ${input.amount}, note = ${input.note || ''}, created_at = ${input.createdAt}, updated_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+              : sql`UPDATE af_manual_balances SET amount = ${input.amount}, note = ${input.note || ''}, updated_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
           );
         } else {
           // af_manual_balances 表已通过 deploy.yml 创建
-          await db.execute(
-            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${input.ledgerId}, ${input.userId}, ${input.amount}, ${input.note || ''}, NOW(), NOW())`
-          );
+          if (input.createdAt) {
+            await db.execute(
+              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${input.ledgerId}, ${input.userId}, ${input.amount}, ${input.note || ''}, ${input.createdAt}, NOW())`
+            );
+          } else {
+            await db.execute(
+              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${input.ledgerId}, ${input.userId}, ${input.amount}, ${input.note || ''}, NOW(), NOW())`
+            );
+          }
         }
         return { success: true };
       }),
