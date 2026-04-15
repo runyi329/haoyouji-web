@@ -1487,16 +1487,16 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF, refetchInterval: 60000 }
   );
-  // 资方专属：资产汇总（仅 funder 角色查询）
+  // 资方专属：资产汇总（仅 funder 角色查询，管理员视角切换时传目标用户ID）
   const { data: funderAssetSummary } = trpc.ledger.funderGetAssetSummary.useQuery(
-    { ledgerId: Number(ledgerId) },
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { userId: viewAsUserId } : {}) },
     { enabled: isCustomAF && effectiveIsFunder }
   );
-  // 资方专属：资产订单列表（仅 funder 角色查询）
+  // 资方专属：资产订单列表（funder 角色查询，管理员视角切换时传目标用户ID）
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const { data: funderAssetData } = trpc.ledger.funderGetAssetOrders.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && effectiveIsFunder, staleTime: 5 * 60 * 1000 }
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { userId: viewAsUserId } : {}) },
+    { enabled: isCustomAF && effectiveIsFunder }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
   // livePrices：优先用接口返回的最新价格，若还未加载则从 localStorage 读取上次缓存

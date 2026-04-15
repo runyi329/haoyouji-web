@@ -12343,7 +12343,7 @@ export const appRouter = router({
 
     // 获取资方资产汇总（资金方首页用）
     funderGetAssetSummary: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), userId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 查询当前用户在账本中的角色
@@ -12351,13 +12351,24 @@ export const appRouter = router({
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
-        if (role !== 'funder' && role !== 'owner' && role !== 'admin') {
+        const isManager = role === 'owner' || role === 'admin';
+        const isFunder = role === 'funder';
+        if (!isManager && !isFunder) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         }
-        // 查询该用户的所有活跃资产订单
+        // 资金方只能看自己的，管理员可以看指定用户
+        let targetUserId: number;
+        if (isFunder && !isManager) {
+          targetUserId = ctx.user.id;
+        } else if (input.userId) {
+          targetUserId = input.userId;
+        } else {
+          targetUserId = ctx.user.id;
+        }
+        // 查询目标用户的所有活跃资产订单
         const rows = await db.execute(
           sql`SELECT coin, amount, quantity, buy_price, status FROM funder_asset_orders
-              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND status = 'active'`
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} AND status = 'active'`
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
         // 汇总
