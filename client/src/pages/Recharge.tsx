@@ -478,26 +478,47 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
               <div className="text-center text-gray-400 text-sm py-10">暂无账目记录</div>
             ) : (
               <div>
-                {ledgerHistoryList.map((item: any, idx: number) => {
-                  const amt = parseFloat(item.amount);
-                  const isPositive = amt >= 0;
-                  const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
-                  const rawNote = item.note || '';
-                  const typeLabel = item.sourceType === 'recharge'
-                    ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : rawNote || '充值')
-                    : (rawNote ? rawNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
-                  return (
-                    <div key={item.id || idx} className="flex items-start justify-between py-3 border-b border-gray-100">
-                      <div className="flex-1 min-w-0 mr-3">
-                        <div className="text-gray-900 text-xs leading-snug" style={{wordBreak:'break-all',whiteSpace:'normal',overflowWrap:'anywhere'}}>{typeLabel}</div>
-                        <div className="text-gray-400 text-xs mt-0.5">{dateStr}</div>
+                {(() => {
+                  // 从最早到最新累加，计算每条记录后的余额（只计入已完成的充值和所有手动调账）
+                  const sorted = [...ledgerHistoryList].reverse(); // 时间正序
+                  let running = 0;
+                  const balances: number[] = [];
+                  for (const item of sorted) {
+                    const amt = parseFloat(item.amount);
+                    if (item.sourceType === 'recharge' && item.status === 'completed') {
+                      running += amt;
+                    } else if (item.sourceType === 'manual') {
+                      running += amt;
+                    }
+                    balances.push(running);
+                  }
+                  balances.reverse(); // 恢复倒序
+                  return ledgerHistoryList.map((item: any, idx: number) => {
+                    const amt = parseFloat(item.amount);
+                    const isPositive = amt >= 0;
+                    const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
+                    const rawNote = item.note || '';
+                    const typeLabel = item.sourceType === 'recharge'
+                      ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : rawNote || '充值')
+                      : (rawNote ? rawNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
+                    const balanceAfter = balances[idx];
+                    const showBalance = item.sourceType === 'manual' || (item.sourceType === 'recharge' && item.status === 'completed');
+                    return (
+                      <div key={item.id || idx} className="flex items-start justify-between py-3 border-b border-gray-100">
+                        <div className="flex-1 min-w-0 mr-3">
+                          <div className="text-gray-900 text-xs leading-snug" style={{wordBreak:'break-all',whiteSpace:'normal',overflowWrap:'anywhere'}}>{typeLabel}</div>
+                          <div className="text-gray-400 text-xs mt-0.5">{dateStr}</div>
+                          {showBalance && (
+                            <div className="text-gray-400 text-xs mt-0.5">余额 {balanceAfter.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</div>
+                          )}
+                        </div>
+                        <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+                          {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                        </div>
                       </div>
-                      <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
-                        {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
