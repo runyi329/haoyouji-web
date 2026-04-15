@@ -293,7 +293,6 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
         </div>
         {/* 表行：涨幅对称跌幅 */}
         {Array.from({ length: 21 }, (_, i) => i).map(n => {
-          // n=0: 0~1%, n=1: 1~2%, ...
           const upEntry = distData.find(d => d.bucket === n);
           const downEntry = distData.find(d => d.bucket === -(n + 1));
           const upCnt = upEntry?.count ?? 0;
@@ -301,9 +300,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
           if (upCnt === 0 && downCnt === 0) return null;
           const upPct = totalDays > 0 ? (upCnt / totalDays * 100).toFixed(2) : '0.0';
           const downPct = totalDays > 0 ? (downCnt / totalDays * 100).toFixed(2) : '0.0';
-          // 区间标注：涨幅和跌幅用同一行显示，使用 ≥ 和 < 符号
-          const upRangeLabel = `≥${n}% <${n+1}%`;
-          const downRangeLabel = `≥${n}% <${n+1}%`; // 跌幅绝对値同区间
+          const rangeLabel = `≥${n}% <${n+1}%`;
           return (
             <div
               key={n}
@@ -311,12 +308,71 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             >
               <span className="text-xs text-right pr-2 font-mono" style={{ color: upCnt > 0 ? RED : '#ccc' }}>{upCnt > 0 ? upCnt : '-'}</span>
               <span className="text-xs text-right pr-2 font-mono" style={{ color: upCnt > 0 ? '#ef9999' : '#ccc' }}>{upCnt > 0 ? `${upPct}%` : '-'}</span>
-              <span className="font-mono font-semibold text-center" style={{ fontSize: 9, color: '#888' }}>{upRangeLabel}</span>
+              <span className="font-mono font-semibold text-center" style={{ fontSize: 9, color: '#888' }}>{rangeLabel}</span>
               <span className="text-xs text-left pl-2 font-mono" style={{ color: downCnt > 0 ? GREEN_A : '#ccc' }}>{downCnt > 0 ? downCnt : '-'}</span>
               <span className="text-xs text-left pl-2 font-mono" style={{ color: downCnt > 0 ? '#6dba72' : '#ccc' }}>{downCnt > 0 ? `${downPct}%` : '-'}</span>
             </div>
           );
         })}
+      </div>
+
+      {/* 赔率表 */}
+      <div className="border-t border-gray-100 px-4 pt-2 pb-3">
+        <div className="text-xs font-semibold text-gray-500 mb-1">赔率参考表
+          <span className="text-xs font-normal text-gray-400 ml-2">含本金 · 庄家优势百分比越高赔率越低</span>
+        </div>
+        {/* 表头 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr 1fr 1fr 1fr', gap: 0 }} className="mb-1">
+          <span className="text-xs text-center font-medium text-gray-400">区间</span>
+          <span className="text-xs text-center font-medium text-gray-400">概率</span>
+          <span className="text-xs text-center font-medium" style={{ color: '#b45309' }}>10%优</span>
+          <span className="text-xs text-center font-medium" style={{ color: '#b45309' }}>15%优</span>
+          <span className="text-xs text-center font-medium" style={{ color: '#b45309' }}>20%优</span>
+          <span className="text-xs text-center font-medium" style={{ color: '#b45309' }}>25%优</span>
+        </div>
+        {/* 涨幅行 */}
+        <div className="text-xs font-medium text-gray-400 mt-1 mb-0.5 pl-1">↑ 涨幅</div>
+        {Array.from({ length: 21 }, (_, i) => i).map(n => {
+          const entry = distData.find(d => d.bucket === n);
+          const cnt = entry?.count ?? 0;
+          if (cnt === 0) return null;
+          const prob = totalDays > 0 ? cnt / totalDays : 0;
+          const fairOdds = prob > 0 ? 1 / prob : 0;
+          const label = `≥${n}% <${n+1}%`;
+          return (
+            <div key={`up-${n}`} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr 1fr 1fr 1fr', gap: 0, borderTop: '1px solid #f5f5f5', padding: '3px 0', alignItems: 'center' }}>
+              <span className="font-mono text-center" style={{ fontSize: 9, color: '#888' }}>{label}</span>
+              <span className="text-xs text-center font-mono text-gray-500">{(prob * 100).toFixed(2)}%</span>
+              {[0.10, 0.15, 0.20, 0.25].map(edge => (
+                <span key={edge} className="text-xs text-center font-mono font-semibold" style={{ color: '#92400e' }}>
+                  {(fairOdds * (1 - edge)).toFixed(2)}
+                </span>
+              ))}
+            </div>
+          );
+        })}
+        {/* 跌幅行 */}
+        <div className="text-xs font-medium text-gray-400 mt-2 mb-0.5 pl-1">↓ 跌幅</div>
+        {Array.from({ length: 21 }, (_, i) => i).map(n => {
+          const entry = distData.find(d => d.bucket === -(n + 1));
+          const cnt = entry?.count ?? 0;
+          if (cnt === 0) return null;
+          const prob = totalDays > 0 ? cnt / totalDays : 0;
+          const fairOdds = prob > 0 ? 1 / prob : 0;
+          const label = `≥${n}% <${n+1}%`;
+          return (
+            <div key={`down-${n}`} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 1fr 1fr 1fr 1fr', gap: 0, borderTop: '1px solid #f5f5f5', padding: '3px 0', alignItems: 'center' }}>
+              <span className="font-mono text-center" style={{ fontSize: 9, color: '#888' }}>{label}</span>
+              <span className="text-xs text-center font-mono text-gray-500">{(prob * 100).toFixed(2)}%</span>
+              {[0.10, 0.15, 0.20, 0.25].map(edge => (
+                <span key={edge} className="text-xs text-center font-mono font-semibold" style={{ color: '#92400e' }}>
+                  {(fairOdds * (1 - edge)).toFixed(2)}
+                </span>
+              ))}
+            </div>
+          );
+        })}
+        <div className="text-xs text-gray-400 mt-2">注：赔率含本金，如“1赔3”即投注1元返回3元（凈0元）。概率基于历史数据估算。</div>
       </div>
     </div>
   );
