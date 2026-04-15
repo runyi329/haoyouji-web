@@ -451,15 +451,15 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           <span className="text-xs text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
         </div>
         {/* 大数字 */}
-        <div className="flex items-baseline gap-0.5 mb-1">
+        <div className="flex items-baseline gap-0.5 mb-1 whitespace-nowrap overflow-hidden">
           <span
-            className="text-2xl font-bold tabular-nums leading-tight"
+            className="text-lg font-bold tabular-nums leading-tight"
             style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
           >
             {displayAccrued.toFixed(2)}
           </span>
-          <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
-          <span className="text-xs text-gray-400">({altAccrued.toFixed(2)}{altUnit})</span>
+          <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+          <span className="text-[10px] text-gray-400">({altAccrued.toFixed(2)}{altUnit})</span>
         </div>
         {/* 明细行：统一 space-y-0.5，和左栏一致 */}
         <div className="space-y-0.5">
@@ -578,29 +578,29 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           const profitU = isProfit ? (currentPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
           if (isProfit) {
             return (
-              <div className="flex items-baseline justify-between w-full mb-1">
+              <div className="flex items-baseline justify-between w-full mb-1 whitespace-nowrap overflow-hidden">
                 <div className="flex items-baseline gap-0.5">
                   <span
-                    className="text-2xl font-bold tabular-nums leading-tight"
+                    className="text-lg font-bold tabular-nums leading-tight"
                     style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                   >
                     +{profitU.toFixed(2)}
                   </span>
-                  <span className="text-sm font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                  <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
                 </div>
-                <span className="font-medium text-xs" style={{ color: '#4B5563' }}>{profitPct.toFixed(2)}%</span>
+                <span className="font-medium text-[10px]" style={{ color: '#4B5563' }}>{profitPct.toFixed(2)}%</span>
               </div>
             );
           }
           return (
-            <div className="flex items-baseline gap-0.5 mb-1">
+            <div className="flex items-baseline gap-0.5 mb-1 whitespace-nowrap overflow-hidden">
               <span
-                className="text-2xl font-bold tabular-nums leading-tight"
+                className="text-lg font-bold tabular-nums leading-tight"
                 style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
               >
                 {profitPct.toFixed(2)}
               </span>
-              <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>%</span>
+              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>%</span>
             </div>
           );
         })()}
