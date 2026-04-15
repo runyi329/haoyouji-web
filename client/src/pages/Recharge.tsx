@@ -508,12 +508,14 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
                         <div className="flex-1 min-w-0 mr-3">
                           <div className="text-gray-900 text-xs leading-snug" style={{wordBreak:'break-all',whiteSpace:'normal',overflowWrap:'anywhere'}}>{typeLabel}</div>
                           <div className="text-gray-400 text-xs mt-0.5">{dateStr}</div>
-                          {showBalance && (
-                            <div className="text-gray-400 text-xs mt-0.5">余额 {balanceAfter.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</div>
-                          )}
                         </div>
-                        <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
-                          {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                        <div className="flex flex-col items-end">
+                          <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+                            {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                          </div>
+                          {showBalance && (
+                            <div className="text-gray-400 text-xs mt-0.5 whitespace-nowrap">余额 {balanceAfter.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</div>
+                          )}
                         </div>
                       </div>
                     );
