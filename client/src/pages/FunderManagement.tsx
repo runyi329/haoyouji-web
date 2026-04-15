@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
@@ -148,6 +148,10 @@ export default function FunderManagement() {
     showProfitShare: true,
   });
 
+  // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
+  const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string }[]>([]);
+  const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT'];
+
   // 自动折算总金额
   const computedAmount = useMemo(() => {
     const price = parseFloat(formData.buyPrice);
@@ -158,6 +162,7 @@ export default function FunderManagement() {
     return '';
   }, [formData.buyPrice, formData.buyQuantity]);
 
+  // 担保价值（在 assetOrdersData 定义后使用）——放到这里是为了先定义类型，实际计算在下方的 derivedCollateral 中
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
     { ledgerId },
     { enabled: ledgerId > 0 }
@@ -169,6 +174,34 @@ export default function FunderManagement() {
   );
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
+  const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
+
+  // 担保价值（所有担保货币折算为 USDT 的总值）
+  const computedCollateralValue = useMemo(() => {
+    if (collateralAssets.length === 0) return null;
+    let total = 0;
+    let hasAny = false;
+    for (const item of collateralAssets) {
+      const qty = parseFloat(item.qty);
+      if (!item.coin || isNaN(qty) || qty <= 0) continue;
+      hasAny = true;
+      if (item.coin === 'USDT') {
+        total += qty;
+      } else {
+        const price = formLivePrices[item.coin];
+        if (price) total += qty * price;
+      }
+    }
+    return hasAny ? total : null;
+  }, [collateralAssets, formLivePrices]);
+
+  // 担保缺口 = 订单总金额 - 担保价值
+  const computedCollateralGap = useMemo(() => {
+    if (computedCollateralValue === null) return null;
+    const orderAmt = parseFloat(computedAmount || '0');
+    if (orderAmt <= 0) return null;
+    return orderAmt - computedCollateralValue;
+  }, [computedCollateralValue, computedAmount]);
 
   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: () => {
@@ -230,6 +263,7 @@ export default function FunderManagement() {
       interestStartDate: '',
       showProfitShare: true,
     });
+    setCollateralAssets([]);
     setEditingOrder(null);
     setShowDatePicker(false);
     setShowInterestDatePicker(false);
@@ -254,6 +288,16 @@ export default function FunderManagement() {
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
     });
+    // 加载担保货币
+    try {
+      const ca = order.collateral_assets;
+      if (ca) {
+        const parsed = typeof ca === 'string' ? JSON.parse(ca) : ca;
+        setCollateralAssets(Array.isArray(parsed) ? parsed : []);
+      } else {
+        setCollateralAssets([]);
+      }
+    } catch { setCollateralAssets([]); }
     setEditingOrder(order);
     setShowDatePicker(false);
     setShowInterestDatePicker(false);
@@ -281,6 +325,9 @@ export default function FunderManagement() {
       interestBaseCurrency: formData.interestBaseCurrency,
       interestStartDate: formData.interestStartDate || undefined,
       showProfitShare: formData.showProfitShare,
+      collateralAssets: collateralAssets.filter(a => a.coin && parseFloat(a.qty) > 0).length > 0
+        ? collateralAssets.filter(a => a.coin && parseFloat(a.qty) > 0)
+        : undefined,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
@@ -804,6 +851,74 @@ export default function FunderManagement() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* 分隔线：担保货币 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400 shrink-0">担保货币</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* 担保货币列表 */}
+              <div className="space-y-3">
+                {collateralAssets.map((item, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <div className="flex rounded-xl border border-gray-200 overflow-hidden shrink-0">
+                      {COLLATERAL_COINS.map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setCollateralAssets(prev => prev.map((a, i) => i === idx ? { ...a, coin: c } : a))}
+                          className={`px-2.5 py-2.5 text-xs font-medium transition-colors ${
+                            item.coin === c ? 'bg-blue-600 text-white' : 'bg-white text-gray-500'
+                          }`}
+                        >{c}</button>
+                      ))}
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={item.qty}
+                      onChange={e => setCollateralAssets(prev => prev.map((a, i) => i === idx ? { ...a, qty: e.target.value } : a))}
+                      className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="数量"
+                      style={{ width: '0' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCollateralAssets(prev => prev.filter((_, i) => i !== idx))}
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-400 text-lg shrink-0"
+                    >&times;</button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCollateralAssets(prev => [...prev, { coin: 'BTC', qty: '' }])}
+                  className="w-full py-2.5 rounded-xl border border-dashed border-blue-300 text-sm text-blue-500 font-medium flex items-center justify-center gap-1"
+                >
+                  <span className="text-base leading-none">+</span> 添加担保货币
+                </button>
+
+                {/* 担保价值和担保缺口实时预览 */}
+                {computedCollateralValue !== null && (
+                  <div className="bg-blue-50 rounded-xl px-4 py-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">担保价值</span>
+                      <span className="font-semibold text-blue-700">{computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                    </div>
+                    {computedCollateralGap !== null && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">担保缺口</span>
+                        <span className={`font-semibold ${
+                          computedCollateralGap > 0 ? 'text-red-500' : 'text-green-600'
+                        }`}>
+                          {computedCollateralGap > 0 ? '+' : ''}{computedCollateralGap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 分隔线：备注 */}
