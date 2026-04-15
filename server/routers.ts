@@ -12412,6 +12412,7 @@ export const appRouter = router({
         interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
         showProfitShare: z.boolean().optional(),
+        collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -12441,8 +12442,8 @@ export const appRouter = router({
           if (!exists) isUnique = true;
         }
         const insertResult = await db.execute(
-          sql`INSERT INTO funder_asset_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, show_profit_share, created_by)
-              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${ctx.user.id})`
+          sql`INSERT INTO funder_asset_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, show_profit_share, collateral_assets, created_by)
+              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -12472,6 +12473,7 @@ export const appRouter = router({
         interestBaseCurrency: z.string().optional(),
         interestStartDate: z.string().optional(),
         showProfitShare: z.boolean().optional(),
+        collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -12499,6 +12501,7 @@ export const appRouter = router({
         if (input.interestBaseCurrency !== undefined) { sets.push('interest_base_currency = ?'); vals.push(input.interestBaseCurrency || 'USDT'); }
         if (input.interestStartDate !== undefined) { sets.push('interest_start_date = ?'); vals.push(input.interestStartDate || null); }
         if (input.showProfitShare !== undefined) { sets.push('show_profit_share = ?'); vals.push(input.showProfitShare ? 1 : 0); }
+        if (input.collateralAssets !== undefined) { sets.push('collateral_assets = ?'); vals.push(input.collateralAssets ? JSON.stringify(input.collateralAssets) : null); }
         if (sets.length === 0) return { success: true };
         const setClause = sets.join(', ');
         const rawQuery = `UPDATE funder_asset_orders SET ${setClause} WHERE id = ? AND ledger_id = ?`;

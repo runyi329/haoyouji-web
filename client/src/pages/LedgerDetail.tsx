@@ -395,6 +395,58 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             </span>
           </div>
         )}
+        {/* 担保货币信息 */}
+        {(() => {
+          let collateral: { coin: string; qty: string }[] = [];
+          try {
+            const raw = order.collateral_assets;
+            if (raw) {
+              const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+              if (Array.isArray(parsed)) collateral = parsed;
+            }
+          } catch {}
+          if (collateral.length === 0) return null;
+          // 计算担保价值
+          let collateralValue = 0;
+          let hasValue = false;
+          for (const item of collateral) {
+            const qty = parseFloat(item.qty);
+            if (!item.coin || isNaN(qty) || qty <= 0) continue;
+            hasValue = true;
+            if (item.coin === 'USDT') {
+              collateralValue += qty;
+            } else {
+              const p = livePrices?.[item.coin];
+              if (p) collateralValue += qty * p;
+            }
+          }
+          const orderAmt = parseFloat(order.amount || '0');
+          const gap = hasValue && orderAmt > 0 ? orderAmt - collateralValue : null;
+          return (
+            <>
+              <div className="flex items-center justify-between text-xs mt-0.5">
+                <span className="text-gray-400">担保货币</span>
+                <span className="font-medium text-[10px]" style={{ color: '#4B5563' }}>
+                  {collateral.map(a => `${a.qty}${a.coin}`).join('+')}
+                </span>
+              </div>
+              {hasValue && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400">担保价值</span>
+                  <span className="font-medium" style={{ color: '#1A56DB' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}U</span>
+                </div>
+              )}
+              {gap !== null && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-400">担保缺口</span>
+                  <span className="font-medium" style={{ color: gap > 0 ? '#DC2626' : '#16A34A' }}>
+                    {gap > 0 ? '+' : ''}{gap.toLocaleString(undefined, { maximumFractionDigits: 2 })}U
+                  </span>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
       {/* 中间分隔线 - 只在收益分成开启时显示 */}
       {order.show_profit_share !== 0 && order.show_profit_share !== false && (
