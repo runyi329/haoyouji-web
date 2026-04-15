@@ -279,6 +279,43 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
         <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500"></span>下跌区间</span>
         <span className="ml-auto">众数：{modeEntry.label}（{modeEntry.count}天）</span>
       </div>
+
+      {/* 区间明细表格：涨幅 vs 跌幅对称展示 */}
+      <div className="border-t border-gray-100 px-4 pt-2 pb-3">
+        <div className="text-xs font-semibold text-gray-500 mb-2">区间明细统计</div>
+        {/* 表头 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 40px 1fr 1fr', gap: 0 }} className="mb-1">
+          <span className="text-xs text-right pr-2 font-medium" style={{ color: RED }}>天数</span>
+          <span className="text-xs text-right pr-2 font-medium" style={{ color: RED }}>占比</span>
+          <span className="text-xs text-center font-medium text-gray-400">区间</span>
+          <span className="text-xs text-left pl-2 font-medium" style={{ color: GREEN_A }}>天数</span>
+          <span className="text-xs text-left pl-2 font-medium" style={{ color: GREEN_A }}>占比</span>
+        </div>
+        {/* 表行：涨幅对称跌幅 */}
+        {Array.from({ length: 21 }, (_, i) => i).map(n => {
+          // n=0: 0~1%, n=1: 1~2%, ...
+          const upEntry = distData.find(d => d.bucket === n);
+          const downEntry = distData.find(d => d.bucket === -(n + 1));
+          const upCnt = upEntry?.count ?? 0;
+          const downCnt = downEntry?.count ?? 0;
+          if (upCnt === 0 && downCnt === 0) return null;
+          const upPct = totalDays > 0 ? (upCnt / totalDays * 100).toFixed(1) : '0.0';
+          const downPct = totalDays > 0 ? (downCnt / totalDays * 100).toFixed(1) : '0.0';
+          const rangeLabel = n === 0 ? '0~1%' : `${n}~${n + 1}%`;
+          return (
+            <div
+              key={n}
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 40px 1fr 1fr', gap: 0, borderTop: '1px solid #f5f5f5', padding: '4px 0' }}
+            >
+              <span className="text-xs text-right pr-2 font-mono" style={{ color: upCnt > 0 ? RED : '#ccc' }}>{upCnt > 0 ? upCnt : '-'}</span>
+              <span className="text-xs text-right pr-2 font-mono" style={{ color: upCnt > 0 ? '#ef9999' : '#ccc' }}>{upCnt > 0 ? `${upPct}%` : '-'}</span>
+              <span className="text-xs text-center font-medium text-gray-400">{rangeLabel}</span>
+              <span className="text-xs text-left pl-2 font-mono" style={{ color: downCnt > 0 ? GREEN_A : '#ccc' }}>{downCnt > 0 ? downCnt : '-'}</span>
+              <span className="text-xs text-left pl-2 font-mono" style={{ color: downCnt > 0 ? '#6dba72' : '#ccc' }}>{downCnt > 0 ? `${downPct}%` : '-'}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
