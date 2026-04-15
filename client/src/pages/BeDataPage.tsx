@@ -251,7 +251,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             />
             <Tooltip
               formatter={(val: any, _name: any, props: any) => {
-                const pct = totalDays > 0 ? ((val / totalDays) * 100).toFixed(1) : '0';
+                const pct = totalDays > 0 ? ((val / totalDays) * 100).toFixed(2) : '0';
                 const b = props?.payload?.bucket;
                 const rangeLabel = b != null ? (b >= 0 ? `+${b}% ~ +${b + 1}%` : `${b}% ~ ${b + 1}%`) : '';
                 return [`${val} 天 (${pct}%)`, rangeLabel];
@@ -299,8 +299,8 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
           const upCnt = upEntry?.count ?? 0;
           const downCnt = downEntry?.count ?? 0;
           if (upCnt === 0 && downCnt === 0) return null;
-          const upPct = totalDays > 0 ? (upCnt / totalDays * 100).toFixed(1) : '0.0';
-          const downPct = totalDays > 0 ? (downCnt / totalDays * 100).toFixed(1) : '0.0';
+          const upPct = totalDays > 0 ? (upCnt / totalDays * 100).toFixed(2) : '0.0';
+          const downPct = totalDays > 0 ? (downCnt / totalDays * 100).toFixed(2) : '0.0';
           // 区间标注：[n%, n+1%) 左闭右开，涨幅；(-n-1%, -n%] 左开右闭，跌幅
           const upRangeLabel = n === 0 ? '[0%, 1%)' : `[${n}%, ${n+1}%)`;
           const downRangeLabel = n === 0 ? '(-1%, 0%]' : `(-${n+1}%, -${n}%]`;
@@ -553,14 +553,14 @@ export default function BeDataPage() {
                     <span className="text-2xl font-bold text-gray-400">{stats.flatDays}</span>
                     <span className="text-xs text-gray-400 mt-1">平盘天数</span>
                     <span className="text-xs text-gray-400 font-medium mt-0.5">
-                      {stats.total > 0 ? (stats.flatDays / stats.total * 100).toFixed(1) : 0}%
+                      {stats.total > 0 ? (stats.flatDays / stats.total * 100).toFixed(2) : 0}%
                     </span>
                   </div>
                 </div>
                 {/* 涨跌比例条 */}
                 <div className="mx-4 mb-3 h-2 rounded-full overflow-hidden flex">
                   <div className="bg-red-400" style={{ width: `${stats.upPct}%` }} />
-                  <div className="bg-gray-200" style={{ width: `${(stats.flatDays / stats.total * 100).toFixed(1)}%` }} />
+                  <div className="bg-gray-200" style={{ width: `${(stats.flatDays / stats.total * 100).toFixed(2)}%` }} />
                   <div className="bg-green-500 flex-1" />
                 </div>
               </div>
