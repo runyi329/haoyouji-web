@@ -419,8 +419,16 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
     if (baseCur === 'CNY' && rateCur === 'USDT') return val / 7; // 元计息基数，U显示
     return val;
   };
+  const convertAlt = (val: number): number => {
+    // 返回另一种货币的折算值
+    if (rateCur === 'CNY') return val / 7; // 主显示元，副显示U
+    return val * 7; // 主显示U，副显示元
+  };
+  const altUnit = rateCur === 'CNY' ? 'U' : '元';
   const displayAccrued = convertAccrued(accrued);
   const displayPaid = convertAccrued(paidInterest);
+  const altAccrued = convertAlt(displayAccrued);
+  const altPaid = convertAlt(displayPaid);
   // 最低价：如果扫描到的最低价比买入价更低，就显示最低价；否则显示买入价
   const displayLowest = rawLowest && buyPrice && rawLowest < buyPrice ? rawLowest : buyPrice;
   const lowestAt = stats?.allTimeLowAt;
@@ -451,12 +459,13 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             {displayAccrued.toFixed(2)}
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+          <span className="text-xs text-gray-400">({altAccrued.toFixed(2)}{altUnit})</span>
         </div>
         {/* 明细行：统一 space-y-0.5，和左栏一致 */}
         <div className="space-y-0.5">
         <div className="flex items-center justify-between text-xs">
           <span className="text-gray-400">已结利息</span>
-          <span className="font-medium" style={{ color: '#4B5563' }}>{displayPaid.toFixed(2)}{interestUnit}</span>
+          <span className="font-medium" style={{ color: '#4B5563' }}>{displayPaid.toFixed(2)}{interestUnit}<span className="text-gray-400 font-normal">({altPaid.toFixed(2)}{altUnit})</span></span>
         </div>
         {order.interest_start_date && (
           <div className="flex items-center justify-between text-xs">
