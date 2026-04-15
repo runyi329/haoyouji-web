@@ -284,11 +284,11 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
       <div className="border-t border-gray-100 px-4 pt-2 pb-3">
         <div className="text-xs font-semibold text-gray-500 mb-2">区间明细统计</div>
         {/* 表头 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 72px 1fr 1fr', gap: 0 }} className="mb-1">
-          <span className="text-xs text-right pr-2 font-medium" style={{ color: RED }}>天数</span>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 1fr 1fr', gap: 0 }} className="mb-1">
+          <span className="text-xs text-right pr-2 font-medium" style={{ color: RED }}>涨天数</span>
           <span className="text-xs text-right pr-2 font-medium" style={{ color: RED }}>占比</span>
-          <span className="text-xs text-center font-medium text-gray-400">区间（涨↑/跌↓）</span>
-          <span className="text-xs text-left pl-2 font-medium" style={{ color: GREEN_A }}>天数</span>
+          <span className="text-xs text-center font-medium text-gray-400">区间</span>
+          <span className="text-xs text-left pl-2 font-medium" style={{ color: GREEN_A }}>跌天数</span>
           <span className="text-xs text-left pl-2 font-medium" style={{ color: GREEN_A }}>占比</span>
         </div>
         {/* 表行：涨幅对称跌幅 */}
@@ -301,21 +301,17 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
           if (upCnt === 0 && downCnt === 0) return null;
           const upPct = totalDays > 0 ? (upCnt / totalDays * 100).toFixed(2) : '0.0';
           const downPct = totalDays > 0 ? (downCnt / totalDays * 100).toFixed(2) : '0.0';
-          // 区间标注：[n%, n+1%) 左闭右开，涨幅；(-n-1%, -n%] 左开右闭，跌幅
-          const upRangeLabel = n === 0 ? '[0%, 1%)' : `[${n}%, ${n+1}%)`;
-          const downRangeLabel = n === 0 ? '(-1%, 0%]' : `(-${n+1}%, -${n}%]`;
-          // 中间显示涨幅区间 / 跌幅区间（两行）
+          // 区间标注：涨幅和跌幅用同一行显示，使用 ≥ 和 < 符号
+          const upRangeLabel = `≥${n}% <${n+1}%`;
+          const downRangeLabel = `≥${n}% <${n+1}%`; // 跌幅绝对値同区间
           return (
             <div
               key={n}
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 72px 1fr 1fr', gap: 0, borderTop: '1px solid #f5f5f5', padding: '4px 0' }}
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 1fr 1fr', gap: 0, borderTop: '1px solid #f5f5f5', padding: '4px 0', alignItems: 'center' }}
             >
               <span className="text-xs text-right pr-2 font-mono" style={{ color: upCnt > 0 ? RED : '#ccc' }}>{upCnt > 0 ? upCnt : '-'}</span>
               <span className="text-xs text-right pr-2 font-mono" style={{ color: upCnt > 0 ? '#ef9999' : '#ccc' }}>{upCnt > 0 ? `${upPct}%` : '-'}</span>
-              <div className="flex flex-col items-center justify-center" style={{ lineHeight: 1.3 }}>
-                <span className="font-mono font-semibold" style={{ fontSize: 9, color: RED }}>{upRangeLabel}</span>
-                <span className="font-mono font-semibold" style={{ fontSize: 9, color: GREEN_A }}>{downRangeLabel}</span>
-              </div>
+              <span className="font-mono font-semibold text-center" style={{ fontSize: 9, color: '#888' }}>{upRangeLabel}</span>
               <span className="text-xs text-left pl-2 font-mono" style={{ color: downCnt > 0 ? GREEN_A : '#ccc' }}>{downCnt > 0 ? downCnt : '-'}</span>
               <span className="text-xs text-left pl-2 font-mono" style={{ color: downCnt > 0 ? '#6dba72' : '#ccc' }}>{downCnt > 0 ? `${downPct}%` : '-'}</span>
             </div>
