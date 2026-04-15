@@ -609,8 +609,8 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/member-manage`)}
  />
  )}
- {/* 快捷按钮管理入口：37/52/59号账本且是owner/admin显示 */}
- {(ledgerId === 37 || ledgerId === 52 || ledgerId === 59) && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ {/* 快捷按钮管理入口：37/52/59号账本且是owner显示（admin不可操作） */}
+ {(ledgerId === 37 || ledgerId === 52 || ledgerId === 59) && ledgerData?.userRole === 'owner' && (
  <SettingItem
  label="快捷按钮管理"
  showIcon
