@@ -171,6 +171,67 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
           }
         </div>
       )}
+
+      {/* 连涨连跌赔率表 */}
+      {maxStreak > 0 && (() => {
+        const totalDays = allSorted.length;
+        const COL = '60px 1fr 1fr 1fr 1fr 1fr';
+        const hStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: COL, gap: 0, background: '#fafafa', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '3px 0' };
+        const rStyle = (i: number): React.CSSProperties => ({ display: 'grid', gridTemplateColumns: COL, gap: 0, borderBottom: '1px solid #f0f0f0', padding: '2px 0', alignItems: 'center', background: i % 2 === 0 ? '#fff' : '#fafafa' });
+        const Header = () => (
+          <div style={hStyle}>
+            <span style={{ fontSize: 9, textAlign: 'center', color: '#9ca3af', fontWeight: 600 }}>天数</span>
+            <span style={{ fontSize: 9, textAlign: 'center', color: '#9ca3af', fontWeight: 600 }}>概率</span>
+            {['10%优', '15%优', '20%优', '25%优'].map(t => (
+              <span key={t} style={{ fontSize: 9, textAlign: 'center', color: '#b45309', fontWeight: 600 }}>{t}</span>
+            ))}
+          </div>
+        );
+        const makeRows = (streakMap: Record<number, number>, maxN: number, keyPrefix: string) =>
+          Array.from({ length: maxN }, (_, i) => i + 1).map(n => {
+            const cnt = streakMap[n] ?? 0;
+            if (cnt === 0) return (
+              <div key={`${keyPrefix}-${n}`} style={rStyle(n)}>
+                <span style={{ fontSize: 9, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>{n}天</span>
+                <span style={{ fontSize: 9, textAlign: 'center', color: '#ccc', fontFamily: 'monospace' }}>-</span>
+                {[0.10, 0.15, 0.20, 0.25].map(edge => (
+                  <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#ccc', fontFamily: 'monospace' }}>-</span>
+                ))}
+              </div>
+            );
+            const prob = totalDays > 0 ? cnt / totalDays : 0;
+            const fairOdds = prob > 0 ? 1 / prob : 0;
+            return (
+              <div key={`${keyPrefix}-${n}`} style={rStyle(n)}>
+                <span style={{ fontSize: 9, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>{n}天</span>
+                <span style={{ fontSize: 9, textAlign: 'center', color: '#6b7280', fontFamily: 'monospace' }}>{(prob * 100).toFixed(2)}%</span>
+                {[0.10, 0.15, 0.20, 0.25].map(edge => (
+                  <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontFamily: 'monospace', fontWeight: 600 }}>
+                    {(fairOdds * (1 - edge)).toFixed(2)}
+                  </span>
+                ))}
+              </div>
+            );
+          });
+        return (
+          <div className="px-4 pb-3">
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', margin: '4px 0 4px 0' }}>赔率参考表
+              <span style={{ fontSize: 9, fontWeight: 400, color: '#9ca3af', marginLeft: 6 }}>含本金 · 概率基于当前时间段统计</span>
+            </div>
+            <div style={{ fontSize: 9, color: RED, fontWeight: 600, margin: '4px 0 2px 0' }}>↑ 连涨赔率</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
+              <Header />
+              {makeRows(upStreakMap, maxUpStreak, 'up')}
+            </div>
+            <div style={{ fontSize: 9, color: GREEN_A, fontWeight: 600, margin: '8px 0 2px 0' }}>↓ 连跌赔率</div>
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
+              <Header />
+              {makeRows(downStreakMap, maxDownStreak, 'down')}
+            </div>
+            <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。概率 = 该连涨/连跌天数出现次数 ÷ 统计总天数。</div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
