@@ -410,9 +410,10 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           let collateralValue = 0;
           let hasValue = false;
           for (const item of collateral) {
+            if (!item.coin) continue;
             const qty = parseFloat(item.qty);
-            if (!item.coin || item.qty === '' || isNaN(qty)) continue;
-            hasValue = true;
+            if (item.qty === '' || isNaN(qty)) continue;
+            hasValue = true; // qty=0 也算有效
             if (item.coin === 'USDT') {
               collateralValue += qty;
             } else {

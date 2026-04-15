@@ -183,14 +183,17 @@ export default function FunderManagement() {
     let total = 0;
     let hasAny = false;
     for (const item of collateralAssets) {
+      if (!item.coin) continue;
       const qty = parseFloat(item.qty);
-      if (!item.coin || item.qty === '' || isNaN(qty)) continue;
-      hasAny = true;
+      // qty 为空字符串时跳过，其他情况（包括 0）都算有效
+      if (item.qty === '' || isNaN(qty)) continue;
+      hasAny = true; // qty=0 也算有效填写
       if (item.coin === 'USDT') {
         total += qty;
       } else {
         const price = formLivePrices[item.coin];
         if (price) total += qty * price;
+        // 即使没有实时价格，qty=0 时也不影响 total（加 0）
       }
     }
     return hasAny ? total : null;
