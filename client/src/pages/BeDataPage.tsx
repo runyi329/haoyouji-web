@@ -468,12 +468,16 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
 // ===== 预测未来 Tab 组件 =====
 function PredictTab({ allData, symbol }: { allData: { date: string; changePct: number | null }[]; symbol: string }) {
   const symbolLabel = symbol === 'BTCUSDT' ? 'BTC 比特币' : 'ETH 以太坊';
+  const HOUSE_EDGE = 0.25;
+  const MAX_POINTS = 1000;
+  const MIN_POINTS = 10;
+
+  const [dir, setDir] = useState<'up' | 'down' | null>(null);
+  const [rangeIdx, setRangeIdx] = useState(0); // 0=≥0%<1%, 1=≥1%<2%, ...
   const [points, setPoints] = useState(100);
-  const [selectedDir, setSelectedDir] = useState<'up' | 'down' | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
-  // 计算条件概率和赔率（25%庄家优势）
-  const HOUSE_EDGE = 0.25;
+  // 构建涨跌幅分布 map
   const distMap = useMemo(() => {
     const m: Record<number, number> = {};
     for (const item of allData) {
@@ -486,157 +490,209 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
     return m;
   }, [allData]);
 
-  const totalUpDays = Object.entries(distMap).filter(([k]) => Number(k) >= 0).reduce((s, [, v]) => s + v, 0);
-  const totalDownDays = Object.entries(distMap).filter(([k]) => Number(k) < 0).reduce((s, [, v]) => s + v, 0);
+  const totalUpDays = useMemo(() => Object.entries(distMap).filter(([k]) => Number(k) >= 0).reduce((s, [, v]) => s + v, 0), [distMap]);
+  const totalDownDays = useMemo(() => Object.entries(distMap).filter(([k]) => Number(k) < 0).reduce((s, [, v]) => s + v, 0), [distMap]);
 
-  // 只取第一个区间（≥0% <1%）作为原型按钮
-  const upCnt = distMap[0] ?? 0;
-  const downCnt = distMap[-1] ?? 0;
-  const upProb = totalUpDays > 0 ? upCnt / totalUpDays : 0;
-  const downProb = totalDownDays > 0 ? downCnt / totalDownDays : 0;
-  const upOdds = upProb > 0 ? parseFloat((1 / upProb * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
-  const downOdds = downProb > 0 ? parseFloat((1 / downProb * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
+  // 涨幅区间列表：0~1, 1~2, ..., 最大到有数据的最大涨幅
+  const upRanges = useMemo(() => {
+    const maxBucket = Math.max(...Object.keys(distMap).map(Number).filter(k => k >= 0), 10);
+    return Array.from({ length: Math.min(maxBucket + 1, 21) }, (_, i) => ({
+      label: i < 20 ? `≥0${i > 0 ? '' : ''} ${i}% <${i + 1}%` : `≥20%`,
+      rangeLabel: i < 20 ? `≥${i}% <${i + 1}%` : `≥20%`,
+      bucket: i,
+      count: distMap[i] ?? 0,
+      prob: totalUpDays > 0 ? (distMap[i] ?? 0) / totalUpDays : 0,
+    }));
+  }, [distMap, totalUpDays]);
 
-  const activeOdds = selectedDir === 'up' ? upOdds : selectedDir === 'down' ? downOdds : 0;
-  const payout = activeOdds > 0 ? Math.floor(points * activeOdds) : 0;
+  const downRanges = useMemo(() => {
+    const maxBucket = Math.max(...Object.keys(distMap).map(Number).filter(k => k < 0).map(k => -k), 10);
+    return Array.from({ length: Math.min(maxBucket + 1, 21) }, (_, i) => ({
+      label: i < 20 ? `≥0${i > 0 ? '' : ''} ${i}% <${i + 1}%` : `≥20%`,
+      rangeLabel: i < 20 ? `≥${i}% <${i + 1}%` : `≥20%`,
+      bucket: -(i + 1),
+      count: distMap[-(i + 1)] ?? 0,
+      prob: totalDownDays > 0 ? (distMap[-(i + 1)] ?? 0) / totalDownDays : 0,
+    }));
+  }, [distMap, totalDownDays]);
+
+  const ranges = dir === 'up' ? upRanges : dir === 'down' ? downRanges : upRanges;
+  const maxRangeIdx = ranges.length - 1;
+  const safeRangeIdx = Math.min(rangeIdx, maxRangeIdx);
+  const currentRange = ranges[safeRangeIdx];
+  const currentOdds = currentRange && currentRange.prob > 0
+    ? parseFloat((1 / currentRange.prob * (1 - HOUSE_EDGE)).toFixed(2))
+    : 0;
+  const payout = currentOdds > 0 ? Math.floor(points * currentOdds) : 0;
   const profit = payout - points;
 
+  const accentColor = dir === 'down' ? GREEN_A : RED;
+  const accentBg = dir === 'down' ? 'linear-gradient(135deg, #1a4a1a 0%, #2d6a2d 100%)' : 'linear-gradient(135deg, #7a0000 0%, #c62828 100%)';
+
   const handleConfirm = () => {
-    if (!selectedDir || points <= 0) return;
+    if (!dir || points <= 0) return;
     setConfirmed(true);
     setTimeout(() => setConfirmed(false), 3000);
   };
 
   return (
-    <div className="flex-1 overflow-auto bg-gray-50 pb-8">
-      {/* 说明卡片 */}
-      <div className="mx-3 mt-3 bg-white rounded-xl border border-gray-200 px-4 py-3">
-        <div className="text-sm font-semibold text-gray-800 mb-1">{symbolLabel} · 明日涨跌预测</div>
-        <div className="text-xs text-gray-400">根据历史数据赔率，预测明日涨跌幅区间。庄家优势 25%。</div>
+    <div className="flex-1 overflow-auto pb-8" style={{ background: '#0f0f0f' }}>
+
+      {/* 头部标题 */}
+      <div className="px-4 pt-5 pb-3">
+        <div className="text-xs font-medium" style={{ color: '#888' }}>{symbolLabel}</div>
+        <div className="text-lg font-bold text-white mt-0.5">明日涨跌预测</div>
       </div>
 
-      {/* 预测按钮区 */}
-      <div className="mx-3 mt-3 bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 pt-3 pb-1">
-          <span className="text-xs font-semibold text-gray-500">选择预测方向</span>
-        </div>
-
-        {/* 涨按钮 */}
+      {/* 方向选择——两个大按钮 */}
+      <div className="px-4 grid grid-cols-2 gap-3 mb-5">
         <button
-          onClick={() => { setSelectedDir('up'); setConfirmed(false); }}
-          className="w-full px-4 py-3 flex items-center justify-between border-t border-gray-100 active:bg-red-50 transition-colors"
-          style={{ background: selectedDir === 'up' ? '#fff5f5' : '#fff' }}
+          onClick={() => { setDir('up'); setRangeIdx(0); setConfirmed(false); }}
+          className="py-5 rounded-2xl flex flex-col items-center gap-1 transition-all active:scale-95"
+          style={{
+            background: dir === 'up'
+              ? 'linear-gradient(135deg, #7a0000 0%, #c62828 100%)'
+              : '#1a1a1a',
+            border: dir === 'up' ? '2px solid #ef5350' : '2px solid #2a2a2a',
+            boxShadow: dir === 'up' ? '0 4px 20px rgba(198,40,40,0.4)' : 'none',
+          }}
         >
-          <div className="flex flex-col items-start gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold" style={{ color: RED }}>↑ 涨</span>
-              <span className="text-xs font-mono font-semibold text-gray-600">≥0% &lt;1%</span>
-            </div>
-            <div className="text-xs text-gray-400">
-              历史概率 {(upProb * 100).toFixed(2)}% · 共 {upCnt} 天
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-0.5">
-            <div className="text-xl font-bold" style={{ color: RED }}>{upOdds}x</div>
-            <div className="text-xs text-gray-400">赔率（含本金）</div>
-          </div>
-          {selectedDir === 'up' && (
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full" style={{ background: RED }} />
-          )}
+          <span className="text-3xl">↑</span>
+          <span className="text-base font-bold text-white">涨</span>
+          <span className="text-xs" style={{ color: dir === 'up' ? 'rgba(255,255,255,0.7)' : '#555' }}>预测上涨</span>
         </button>
-
-        {/* 跌按钮 */}
         <button
-          onClick={() => { setSelectedDir('down'); setConfirmed(false); }}
-          className="w-full px-4 py-3 flex items-center justify-between border-t border-gray-100 active:bg-green-50 transition-colors"
-          style={{ background: selectedDir === 'down' ? '#f0fdf4' : '#fff' }}
+          onClick={() => { setDir('down'); setRangeIdx(0); setConfirmed(false); }}
+          className="py-5 rounded-2xl flex flex-col items-center gap-1 transition-all active:scale-95"
+          style={{
+            background: dir === 'down'
+              ? 'linear-gradient(135deg, #1a4a1a 0%, #2d6a2d 100%)'
+              : '#1a1a1a',
+            border: dir === 'down' ? '2px solid #66bb6a' : '2px solid #2a2a2a',
+            boxShadow: dir === 'down' ? '0 4px 20px rgba(45,106,45,0.4)' : 'none',
+          }}
         >
-          <div className="flex flex-col items-start gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base font-bold" style={{ color: GREEN_A }}>↓ 跌</span>
-              <span className="text-xs font-mono font-semibold text-gray-600">≥0% &lt;1%</span>
-            </div>
-            <div className="text-xs text-gray-400">
-              历史概率 {(downProb * 100).toFixed(2)}% · 共 {downCnt} 天
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-0.5">
-            <div className="text-xl font-bold" style={{ color: GREEN_A }}>{downOdds}x</div>
-            <div className="text-xs text-gray-400">赔率（含本金）</div>
-          </div>
+          <span className="text-3xl">↓</span>
+          <span className="text-base font-bold text-white">跌</span>
+          <span className="text-xs" style={{ color: dir === 'down' ? 'rgba(255,255,255,0.7)' : '#555' }}>预测下跌</span>
         </button>
       </div>
 
-      {/* 积分输入区（选择方向后显示） */}
-      {selectedDir && (
-        <div className="mx-3 mt-3 bg-white rounded-xl border border-gray-200 px-4 py-4">
-          <div className="text-xs font-semibold text-gray-500 mb-3">投入积分</div>
-          <div className="flex items-center gap-3 mb-4">
-            <button
-              onClick={() => setPoints(p => Math.max(10, p - 50))}
-              className="w-9 h-9 rounded-full border border-gray-200 text-lg font-bold text-gray-500 flex items-center justify-center active:bg-gray-100"
-            >−</button>
+      {/* 选择方向后展开详细区 */}
+      {dir && (
+        <>
+          {/* 赔率展示卡 */}
+          <div className="mx-4 mb-4 rounded-2xl px-5 py-4" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+            <div className="flex items-end justify-between mb-1">
+              <div>
+                <div className="text-xs mb-1" style={{ color: '#888' }}>涨跌幅区间</div>
+                <div className="text-xl font-bold text-white">{currentRange?.rangeLabel ?? '-'}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs mb-1" style={{ color: '#888' }}>赔率（含本金）</div>
+                <div className="text-3xl font-bold" style={{ color: accentColor }}>
+                  {currentOdds > 0 ? `${currentOdds}x` : '-'}
+                </div>
+              </div>
+            </div>
+            <div className="text-xs mt-2" style={{ color: '#555' }}>
+              历史概率 {currentRange ? (currentRange.prob * 100).toFixed(2) : '0.00'}% · 共 {currentRange?.count ?? 0} 天
+            </div>
+          </div>
+
+          {/* 区间滑动条 */}
+          <div className="mx-4 mb-5">
+            <div className="flex justify-between text-xs mb-2" style={{ color: '#666' }}>
+              <span>≥{safeRangeIdx}%</span>
+              <span>拖动选择幅度区间</span>
+              <span>≥{maxRangeIdx}%</span>
+            </div>
             <input
-              type="number"
-              min={10}
-              value={points}
-              onChange={e => setPoints(Math.max(10, parseInt(e.target.value) || 10))}
-              className="flex-1 text-center text-xl font-bold text-gray-800 border border-gray-200 rounded-lg py-2 outline-none focus:border-red-300"
+              type="range"
+              min={0}
+              max={maxRangeIdx}
+              step={1}
+              value={safeRangeIdx}
+              onChange={e => { setRangeIdx(Number(e.target.value)); setConfirmed(false); }}
+              className="w-full h-2 rounded-full appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, ${accentColor} 0%, ${accentColor} ${(safeRangeIdx / maxRangeIdx) * 100}%, #2a2a2a ${(safeRangeIdx / maxRangeIdx) * 100}%, #2a2a2a 100%)`,
+                accentColor,
+              }}
             />
-            <button
-              onClick={() => setPoints(p => p + 50)}
-              className="w-9 h-9 rounded-full border border-gray-200 text-lg font-bold text-gray-500 flex items-center justify-center active:bg-gray-100"
-            >+</button>
           </div>
-          {/* 快捷金额 */}
-          <div className="flex gap-2 mb-4">
-            {[50, 100, 200, 500].map(v => (
-              <button
-                key={v}
-                onClick={() => setPoints(v)}
-                className="flex-1 py-1.5 text-xs rounded-lg border transition-colors"
-                style={{
-                  borderColor: points === v ? RED : '#e5e7eb',
-                  color: points === v ? RED : '#6b7280',
-                  fontWeight: points === v ? 700 : 400,
-                  background: points === v ? '#fff5f5' : '#fff',
-                }}
-              >{v}</button>
-            ))}
-          </div>
-          {/* 预计获得 */}
-          <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between mb-4">
-            <span className="text-xs text-gray-400">预计获得</span>
-            <div className="text-right">
-              <span className="text-2xl font-bold" style={{ color: RED }}>{payout}</span>
-              <span className="text-xs text-gray-400 ml-1">积分</span>
-              <div className="text-xs text-gray-400">净赚 {profit} 分</div>
+
+          {/* 积分滑动条 */}
+          <div className="mx-4 mb-5">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs" style={{ color: '#888' }}>投入积分</span>
+              <span className="text-base font-bold text-white">{points} 分</span>
+            </div>
+            <input
+              type="range"
+              min={MIN_POINTS}
+              max={MAX_POINTS}
+              step={10}
+              value={points}
+              onChange={e => { setPoints(Number(e.target.value)); setConfirmed(false); }}
+              className="w-full h-2 rounded-full appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(to right, ${accentColor} 0%, ${accentColor} ${((points - MIN_POINTS) / (MAX_POINTS - MIN_POINTS)) * 100}%, #2a2a2a ${((points - MIN_POINTS) / (MAX_POINTS - MIN_POINTS)) * 100}%, #2a2a2a 100%)`,
+                accentColor,
+              }}
+            />
+            <div className="flex justify-between text-xs mt-1" style={{ color: '#444' }}>
+              <span>{MIN_POINTS}</span>
+              <span>{MAX_POINTS}</span>
             </div>
           </div>
+
+          {/* 预期收益展示 */}
+          <div className="mx-4 mb-5 rounded-2xl px-5 py-4 flex items-center justify-between" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+            <div>
+              <div className="text-xs mb-1" style={{ color: '#888' }}>投入</div>
+              <div className="text-xl font-bold text-white">{points} <span className="text-xs font-normal" style={{ color: '#888' }}>分</span></div>
+            </div>
+            <div style={{ color: '#444', fontSize: 20 }}>→</div>
+            <div className="text-right">
+              <div className="text-xs mb-1" style={{ color: '#888' }}>预期获得</div>
+              <div className="text-2xl font-bold" style={{ color: accentColor }}>{payout > 0 ? payout : '-'} <span className="text-xs font-normal" style={{ color: '#888' }}>分</span></div>
+              {profit > 0 && <div className="text-xs" style={{ color: accentColor }}>+{profit} 净赚</div>}
+            </div>
+          </div>
+
           {/* 确认按钮 */}
-          <button
-            onClick={handleConfirm}
-            className="w-full py-3 rounded-xl text-white text-sm font-bold active:opacity-80 transition-opacity"
-            style={{ background: selectedDir === 'up' ? RED : GREEN_A }}
-          >
-            {confirmed ? '✓ 预测已提交（功能开发中）' : `确认预测：${selectedDir === 'up' ? '↑ 涨' : '↓ 跌'} ≥0% <1% · 投入 ${points} 分`}
-          </button>
-          {confirmed && (
-            <div className="mt-2 text-center text-xs text-gray-400">预测功能正在开发中，暂不扣除积分</div>
-          )}
-        </div>
+          <div className="mx-4">
+            <button
+              onClick={handleConfirm}
+              disabled={currentOdds === 0}
+              className="w-full py-4 rounded-2xl text-white text-base font-bold transition-all active:scale-95 disabled:opacity-40"
+              style={{ background: confirmed ? '#333' : accentBg, boxShadow: confirmed ? 'none' : `0 4px 20px ${dir === 'down' ? 'rgba(45,106,45,0.4)' : 'rgba(198,40,40,0.4)'}` }}
+            >
+              {confirmed
+                ? '✓ 已提交（功能开发中）'
+                : `确认预测 ${dir === 'up' ? '↑ 涨' : '↓ 跌'} ${currentRange?.rangeLabel ?? ''}`
+              }
+            </button>
+            {confirmed && (
+              <div className="mt-2 text-center text-xs" style={{ color: '#555' }}>预测功能正在开发中，暂不扣除积分</div>
+            )}
+          </div>
+
+          {/* 底部规则 */}
+          <div className="mx-4 mt-5 text-xs leading-relaxed" style={{ color: '#444' }}>
+            <div>· 赔率含本金 · 庄家优势 25% · 历史概率基于全量日线</div>
+          </div>
+        </>
       )}
 
-      {/* 底部说明 */}
-      <div className="mx-3 mt-3 px-4 py-3 bg-white rounded-xl border border-gray-200">
-        <div className="text-xs text-gray-400 leading-relaxed">
-          <div className="font-semibold text-gray-500 mb-1">规则说明</div>
-          <div>· 预测标的为 {symbolLabel} 明日收盘相对今日收盘的涨跌幅</div>
-          <div>· 涨幅区间：≥0% 且 &lt;1%；跌幅区间：≥0% 且 &lt;1%（绝对值）</div>
-          <div>· 赔率含本金，庄家优势 25%</div>
-          <div>· 历史概率基于全量日线数据统计</div>
+      {/* 未选方向时的提示 */}
+      {!dir && (
+        <div className="mx-4 text-center py-8" style={{ color: '#444' }}>
+          <div className="text-4xl mb-3">📊</div>
+          <div className="text-sm">选择涨或跌，开始预测</div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
