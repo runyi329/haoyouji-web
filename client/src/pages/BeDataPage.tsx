@@ -4,7 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, LabelList
+  ResponsiveContainer, Cell, LabelList, ReferenceLine
 } from "recharts";
 
 const SYMBOLS = [
@@ -171,6 +171,114 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
           }
         </div>
       )}
+    </div>
+  );
+}
+
+// 涨跌幅频率分布图组件（正态分布直方图）
+function ChangePctDistChart({ allData }: { allData: { date: string; changePct: number | null }[] }) {
+  const distData = useMemo(() => {
+    // 统计每1%区间的出现次数
+    const bucketMap: Record<number, number> = {};
+    for (const item of allData) {
+      const pct = item.changePct;
+      if (pct == null) continue;
+      // 向下取整到最近的1%区间（如 +2.3% → +2，-1.7% → -2）
+      const bucket = pct >= 0 ? Math.floor(pct) : Math.ceil(pct) - 1;
+      // 极端值合并到±20%
+      const clampedBucket = Math.max(-20, Math.min(20, bucket));
+      bucketMap[clampedBucket] = (bucketMap[clampedBucket] || 0) + 1;
+    }
+    // 找出最小和最大 bucket（确保包含0）
+    const keys = Object.keys(bucketMap).map(Number);
+    if (keys.length === 0) return [];
+    const minB = Math.min(-1, ...keys);
+    const maxB = Math.max(0, ...keys);
+    const result = [];
+    for (let b = minB; b <= maxB; b++) {
+      const cnt = bucketMap[b] || 0;
+      const label = b === 0 ? '0%' : b > 0 ? `+${b}%` : `${b}%`;
+      result.push({ bucket: b, label, count: cnt, isUp: b >= 0, isDown: b < 0 });
+    }
+    return result;
+  }, [allData]);
+
+  const maxCount = useMemo(() => Math.max(1, ...distData.map(d => d.count)), [distData]);
+
+  const totalDays = allData.filter(d => d.changePct != null).length;
+  const upDays = allData.filter(d => d.changePct != null && d.changePct > 0).length;
+  const downDays = allData.filter(d => d.changePct != null && d.changePct < 0).length;
+
+  // 找出众数（出现最多的区间）
+  const modeEntry = distData.reduce((a, b) => b.count > a.count ? b : a, { bucket: 0, label: '0%', count: 0, isUp: false, isDown: false });
+
+  return (
+    <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <div>
+          <span className="text-sm font-semibold text-gray-700">涨跌幅频率分布</span>
+          <span className="text-xs text-gray-400 ml-2">每1%一个区间 · 共{totalDays}天</span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-red-500 font-medium">{upDays}涨</span>
+          <span className="text-gray-300">|</span>
+          <span className="text-green-600 font-medium">{downDays}跌</span>
+        </div>
+      </div>
+      {/* 图表主体 */}
+      <div className="px-2 pt-3 pb-1">
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart
+            data={distData}
+            margin={{ top: 16, right: 4, left: -20, bottom: 24 }}
+            barCategoryGap={1}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 9, fill: "#9ca3af" }}
+              axisLine={{ stroke: "#e5e7eb" }}
+              tickLine={false}
+              interval={1}
+              angle={-45}
+              textAnchor="end"
+              height={36}
+            />
+            <YAxis
+              tick={{ fontSize: 9, fill: "#9ca3af" }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              formatter={(val: any, _name: any, props: any) => {
+                const pct = totalDays > 0 ? ((val / totalDays) * 100).toFixed(1) : '0';
+                const b = props?.payload?.bucket;
+                const rangeLabel = b != null ? (b >= 0 ? `+${b}% ~ +${b + 1}%` : `${b}% ~ ${b + 1}%`) : '';
+                return [`${val} 天 (${pct}%)`, rangeLabel];
+              }}
+              contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb' }}
+              labelFormatter={() => ''}
+            />
+            {/* 0% 参考线 */}
+            <ReferenceLine x="0%" stroke="#888" strokeDasharray="4 2" strokeWidth={1.5} />
+            <Bar dataKey="count" maxBarSize={28} radius={[2, 2, 0, 0]}>
+              {distData.map((entry, i) => (
+                <Cell
+                  key={i}
+                  fill={entry.bucket === 0 ? '#9ca3af' : entry.isUp ? '#ef4444' : '#22c55e'}
+                  fillOpacity={entry.count === maxCount ? 1 : 0.65 + (entry.count / maxCount) * 0.35}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {/* 图例说明 */}
+      <div className="px-4 pb-3 flex items-center gap-4 text-xs text-gray-400">
+        <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400"></span>上涨区间</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500"></span>下跌区间</span>
+        <span className="ml-auto">众数：{modeEntry.label}（{modeEntry.count}天）</span>
+      </div>
     </div>
   );
 }
@@ -488,6 +596,11 @@ export default function BeDataPage() {
                   </ResponsiveContainer>
                 </div>
               </div>
+
+              {/* 涨跌幅频率分布图（正态分布直方图） */}
+              {allChangePcts && allChangePcts.length > 0 && (
+                <ChangePctDistChart allData={allChangePcts} />
+              )}
 
             </div>
           )}
