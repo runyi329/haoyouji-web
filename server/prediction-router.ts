@@ -627,4 +627,130 @@ export const predictionRouter = router({
     .mutation(async ({ input }) => {
       return { synced: 0, coin: input.coin, message: "请使用前端刷新功能（5G网络）" };
     }),
+
+  // ============================================================
+  // 竞猜下单：扣除账本余额 + 写入 crypto_bets
+  // ============================================================
+  placeBet: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      coin: z.string(),
+      direction: z.enum(["up", "down"]),
+      rangeIndex: z.number().min(0).max(11),
+      rangeLabel: z.string(),
+      betAmount: z.number().positive(),
+      odds: z.number().positive(),
+      expectedReturn: z.number().positive(),
+      houseEdge: z.number(),
+      probability: z.number(),
+      targetDate: z.string(), // YYYY-MM-DD
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+
+      // 确保 crypto_bets 表存在
+      await conn.execute(`
+        CREATE TABLE IF NOT EXISTS crypto_bets (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          user_id INT NOT NULL,
+          coin VARCHAR(10) NOT NULL,
+          direction VARCHAR(10) NOT NULL,
+          range_index INT NOT NULL,
+          range_label VARCHAR(20) NOT NULL,
+          bet_amount DECIMAL(20,8) NOT NULL,
+          odds DECIMAL(10,4) NOT NULL,
+          expected_return DECIMAL(20,8) NOT NULL,
+          house_edge DECIMAL(5,4) NOT NULL,
+          probability DECIMAL(10,6) NOT NULL,
+          status VARCHAR(20) NOT NULL DEFAULT 'pending',
+          settled_at TIMESTAMP NULL,
+          actual_change_pct DECIMAL(10,4) NULL,
+          settle_note TEXT NULL,
+          target_date VARCHAR(10) NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX crypto_bets_ledger_idx (ledger_id),
+          INDEX crypto_bets_user_idx (user_id),
+          INDEX crypto_bets_status_idx (status),
+          INDEX crypto_bets_target_date_idx (target_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      const userId = ctx.user.id;
+      const { ledgerId, coin, direction, rangeIndex, rangeLabel, betAmount, odds, expectedReturn, houseEdge, probability, targetDate } = input;
+
+      // 1. 查询账本余额
+      const { getUserBalance, addUserBalance } = await import("./db-recharge");
+      const balance = await getUserBalance(userId, ledgerId);
+
+      // 2. 查询今日已下注总额（同一账本同一目标日期）
+      const [todayBets] = await conn.execute(
+        `SELECT COALESCE(SUM(bet_amount), 0) as total FROM crypto_bets WHERE user_id = ? AND ledger_id = ? AND target_date = ? AND status != 'cancelled'`,
+        [userId, ledgerId, targetDate]
+      ) as any;
+      const todayTotal = parseFloat((todayBets as any[])[0]?.total || '0');
+
+      // 3. 余额检查
+      if (balance < betAmount) {
+        throw new Error(`余额不足，当前余额 ${balance.toFixed(2)} U，需要 ${betAmount.toFixed(2)} U`);
+      }
+
+      // 4. 扣除余额（写入 balance_history，type='consume'）
+      await addUserBalance(userId, -betAmount, 'consume', undefined, `竞猜下单：${coin} 明日${direction === 'up' ? '涨' : '跌'} ${rangeLabel}，下注 ${betAmount} U`);
+
+      // 5. 写入竞猜订单
+      const [result] = await conn.execute(
+        `INSERT INTO crypto_bets (ledger_id, user_id, coin, direction, range_index, range_label, bet_amount, odds, expected_return, house_edge, probability, target_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [ledgerId, userId, coin, direction, rangeIndex, rangeLabel, betAmount, odds, expectedReturn, houseEdge, probability, targetDate]
+      ) as any;
+
+      const newBalance = await getUserBalance(userId, ledgerId);
+
+      return {
+        success: true,
+        betId: (result as any).insertId,
+        newBalance,
+        message: `下单成功！已扣除 ${betAmount} U，剩余 ${newBalance.toFixed(2)} U`,
+      };
+    }),
+
+  // 查询用户竞猜记录
+  getMyBets: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      coin: z.string().optional(),
+      limit: z.number().default(20),
+    }))
+    .query(async ({ input, ctx }) => {
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) return { bets: [] };
+
+      // 确保表存在
+      try {
+        await conn.execute(`CREATE TABLE IF NOT EXISTS crypto_bets (id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, user_id INT NOT NULL, coin VARCHAR(10) NOT NULL, direction VARCHAR(10) NOT NULL, range_index INT NOT NULL, range_label VARCHAR(20) NOT NULL, bet_amount DECIMAL(20,8) NOT NULL, odds DECIMAL(10,4) NOT NULL, expected_return DECIMAL(20,8) NOT NULL, house_edge DECIMAL(5,4) NOT NULL, probability DECIMAL(10,6) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending', settled_at TIMESTAMP NULL, actual_change_pct DECIMAL(10,4) NULL, settle_note TEXT NULL, target_date VARCHAR(10) NOT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+      } catch (_) {}
+
+      const userId = ctx.user.id;
+      const coinFilter = input.coin ? ` AND coin = '${input.coin}'` : '';
+      const [rows] = await conn.execute(
+        `SELECT * FROM crypto_bets WHERE user_id = ? AND ledger_id = ?${coinFilter} ORDER BY created_at DESC LIMIT ?`,
+        [userId, input.ledgerId, input.limit]
+      ) as any;
+
+      return { bets: rows as any[] };
+    }),
+
+  // 查询用户账本余额（用于竞猜页面显示）
+  getBetBalance: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const { getUserBalance } = await import("./db-recharge");
+      const balance = await getUserBalance(ctx.user.id, input.ledgerId);
+      return { balance };
+    }),
 });
