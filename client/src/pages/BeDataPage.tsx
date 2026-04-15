@@ -121,7 +121,6 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
       {Array.from({ length: maxStreak }, (_, i) => i + 1).map(n => {
         const upCnt = upStreakMap[n] || 0;
         const downCnt = downStreakMap[n] || 0;
-        if (upCnt === 0 && downCnt === 0) return null;
         const maxCnt = Math.max(
           ...Array.from({ length: maxStreak }, (_, i) => Math.max(upStreakMap[i + 1] || 0, downStreakMap[i + 1] || 0)),
           1
