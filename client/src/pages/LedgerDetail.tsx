@@ -518,6 +518,79 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
   );
 }
 
+// 资金方订单内联备注编辑组件
+function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved }: {
+  orderId: number;
+  ledgerId: number;
+  initialNote: string;
+  onSaved: (note: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(initialNote);
+  const [saving, setSaving] = useState(false);
+  const updateNote = trpc.ledger.funderUpdatePublicNote.useMutation();
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: value });
+      onSaved(value);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between px-4 py-2 text-xs" style={{ borderTop: '1px solid #E8EFFF' }} onClick={e => e.stopPropagation()}>
+      <span className="shrink-0 mr-3" style={{ color: '#9CA3AF' }}>备注</span>
+      <div className="flex-1 flex items-center gap-1 justify-end min-w-0">
+        {editing ? (
+          <>
+            <input
+              autoFocus
+              className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
+              style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
+              placeholder="输入备注..."
+            />
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="shrink-0 text-xs px-2 py-0.5 rounded"
+              style={{ background: '#3B82F6', color: '#fff' }}
+            >{saving ? '...' : '保存'}</button>
+            <button
+              onClick={() => { setEditing(false); setValue(initialNote); }}
+              className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+              style={{ background: '#F3F4F6', color: '#6B7280' }}
+            >取消</button>
+          </>
+        ) : (
+          <>
+            <span className="text-right truncate" style={{ color: value ? '#4B5563' : '#C0C8D8', wordBreak: 'break-all' }}>
+              {value || '点击添加备注'}
+            </span>
+            <button
+              onClick={() => setEditing(true)}
+              className="shrink-0 ml-1"
+              style={{ opacity: 0.5, lineHeight: 1 }}
+              title="编辑备注"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // 单张资金方订单卡片（左右两栏布局）
 function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean }) {
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
@@ -655,6 +728,13 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
         </div>
 
       </div>
+      {/* 备注行：所有成员均可编辑 */}
+      <FunderNoteRow
+        orderId={order.id}
+        ledgerId={ledgerId}
+        initialNote={order.public_note || ''}
+        onSaved={(note) => { order.public_note = note; }}
+      />
     </div>
   );
 }

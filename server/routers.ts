@@ -12932,6 +12932,36 @@ export const appRouter = router({
         await conn.end();
         return { success: true };
       }),
+    // 资金方订单公开备注更新（任何成员均可修改）
+    funderUpdatePublicNote: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        ledgerId: z.number(),
+        publicNote: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证用户是账本成员
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const mysql = await import('mysql2/promise');
+        const dbUrl = process.env.DATABASE_URL || '';
+        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
+        const conn = await mysql.createConnection({
+          host: parsedUrl.hostname,
+          port: parseInt(parsedUrl.port) || 3306,
+          user: decodeURIComponent(parsedUrl.username),
+          password: decodeURIComponent(parsedUrl.password),
+          database: parsedUrl.pathname.replace(/^\//, ''),
+        });
+        await conn.execute('UPDATE funder_asset_orders SET public_note = ? WHERE id = ? AND ledger_id = ?', [input.publicNote || null, input.id, input.ledgerId]);
+        await conn.end();
+        return { success: true };
+      }),
+
     // 管理员删除融资付息订单
     financeDeleteOrder: protectedProcedure
       .input(z.object({ id: z.number(), ledgerId: z.number() }))
