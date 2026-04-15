@@ -144,6 +144,7 @@ export default function FunderManagement() {
     interestPaymentType: '',
     interestBase: '',
     interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
+    interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
     interestStartDate: '',
     showProfitShare: true,
     originalAmount: '', // 编辑时保存原订单金额，买入价格或数量为空时回退使用
@@ -264,6 +265,7 @@ export default function FunderManagement() {
       interestPaymentType: '',
       interestBase: '',
       interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
+      interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
       interestStartDate: '',
       showProfitShare: true,
     });
@@ -289,6 +291,7 @@ export default function FunderManagement() {
       interestPaymentType: order.interest_payment_type || '',
       interestBase: order.interest_base || '',
       interestBaseCurrency: (order.interest_base_currency || 'USDT') as 'USDT' | 'CNY',
+      interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       originalAmount: order.amount || '',
@@ -330,6 +333,7 @@ export default function FunderManagement() {
       interestPaymentType: formData.interestPaymentType || undefined,
       interestBase: formData.interestBase || undefined,
       interestBaseCurrency: formData.interestBaseCurrency,
+      interestRateCurrency: formData.interestRateCurrency,
       interestStartDate: formData.interestStartDate || undefined,
       showProfitShare: formData.showProfitShare,
       collateralAssets: collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
@@ -831,11 +835,29 @@ export default function FunderManagement() {
                     inputMode="decimal"
                     value={formData.interestRateAnnual}
                     onChange={e => setFormData(d => ({ ...d, interestRateAnnual: e.target.value }))}
-                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
                     placeholder="如：8.5"
                     style={{ display: 'block', boxSizing: 'border-box' }}
                   />
                   <span className="text-base font-medium text-gray-500 shrink-0">% / 年</span>
+                </div>
+                {/* 利息计价货币选择 */}
+                <div className="flex gap-2 mt-2">
+                  {(['USDT', 'CNY'] as const).map(cur => (
+                    <button
+                      key={cur}
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, interestRateCurrency: cur }))}
+                      className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
+                      style={
+                        formData.interestRateCurrency === cur
+                          ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                      }
+                    >
+                      {cur === 'USDT' ? 'U（USDT）' : '人民币（元）'}
+                    </button>
+                  ))}
                 </div>
               </div>
 
