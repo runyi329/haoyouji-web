@@ -167,6 +167,14 @@ export default function LedgerDetailAA({
     }
   }, [categories]);
 
+  // admin 进入账本时默认选中 YH 标签（仅首次加载，未手动选过时生效）
+  useEffect(() => {
+    if (userRole === 'admin' && categories.length > 0 && selectedTagId === null) {
+      const yhTag = categories.find((c: any) => c.name === 'YH');
+      if (yhTag) setSelectedTagId(yhTag.id);
+    }
+  }, [userRole, categories]);
+
   // 当前选中的标签名
   const selectedTag = useMemo(() => {
     if (!selectedTagId || !categories) return null;
@@ -696,7 +704,8 @@ export default function LedgerDetailAA({
             {/* 右侧：操作按鈕 + 返回按鈕 + 标签下拉 */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {/* 搜索和数据按钮已隐藏 */}
-              {canEdit && !viewAsUserId && (
+              {/* 设置按钮仅账本创建者（owner）可见，管理员不显示 */}
+              {canSwitchView && !viewAsUserId && (
                 <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
                   className="w-7 h-7 rounded-full flex items-center justify-center"
