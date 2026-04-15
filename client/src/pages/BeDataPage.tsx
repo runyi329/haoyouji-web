@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -18,6 +18,13 @@ const TABS = [
   { key: "analysis", label: "数据分析" },
 ];
 
+// 颜色常量（与 StockDetail 保持一致）
+const RED = "#D32F2F";
+const GREEN_A = "#388E3C";
+const MUTED = "#888";
+const CARD = "#fff";
+const BG = "#f5f5f5";
+
 function formatPrice(val: number): string {
   return val.toFixed(2);
 }
@@ -25,6 +32,148 @@ function formatPrice(val: number): string {
 function formatPct(val: number | null): string {
   if (val == null) return "-";
   return (val >= 0 ? "+" : "") + val.toFixed(2) + "%";
+}
+
+// 连涨连跌统计计算函数（与 StockDetail 一致）
+function calcStreakFromItems(data: { changePct: number | null }[]): {
+  upStreakMap: Record<number, number>;
+  downStreakMap: Record<number, number>;
+  maxUpStreak: number;
+  maxDownStreak: number;
+} {
+  const upMap: Record<number, number> = {};
+  const downMap: Record<number, number> = {};
+  let streak = 0;
+  let dir: 'up' | 'down' | 'flat' | null = null;
+  for (const item of data) {
+    const pct = item.changePct;
+    if (pct == null) continue;
+    const d = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat';
+    if (d === dir) {
+      streak++;
+    } else {
+      if (dir !== null && streak > 0) {
+        if (dir === 'up') upMap[streak] = (upMap[streak] || 0) + 1;
+        else if (dir === 'down') downMap[streak] = (downMap[streak] || 0) + 1;
+      }
+      streak = 1;
+      dir = d;
+    }
+  }
+  if (dir !== null && streak > 0) {
+    if (dir === 'up') upMap[streak] = (upMap[streak] || 0) + 1;
+    else if (dir === 'down') downMap[streak] = (downMap[streak] || 0) + 1;
+  }
+  const maxUp = Math.max(0, ...Object.keys(upMap).map(Number));
+  const maxDown = Math.max(0, ...Object.keys(downMap).map(Number));
+  return { upStreakMap: upMap, downStreakMap: downMap, maxUpStreak: maxUp, maxDownStreak: maxDown };
+}
+
+// 连涨连跌统计组件（三列对称布局，参照 StockDetail）
+function StreakStatsPanel({ allData }: { allData: { date: string; changePct: number | null }[] }) {
+  const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | 'all'>(60);
+
+  // 各时间段统计（前端计算）
+  const allSorted = allData; // 已按日期升序
+  const recentData30 = useMemo(() => calcStreakFromItems(allSorted.slice(-30)), [allSorted]);
+  const recentData60 = useMemo(() => calcStreakFromItems(allSorted.slice(-60)), [allSorted]);
+  const recentData90 = useMemo(() => calcStreakFromItems(allSorted.slice(-90)), [allSorted]);
+  const recentData180 = useMemo(() => calcStreakFromItems(allSorted.slice(-180)), [allSorted]);
+  const allStreakData = useMemo(() => calcStreakFromItems(allSorted), [allSorted]);
+
+  const curData = streakTab === 'all' ? allStreakData
+    : streakTab === 30 ? recentData30
+    : streakTab === 60 ? recentData60
+    : streakTab === 90 ? recentData90
+    : recentData180;
+
+  const { upStreakMap, downStreakMap, maxUpStreak, maxDownStreak } = curData;
+  const maxStreak = Math.max(maxUpStreak, maxDownStreak);
+
+  return (
+    <div style={{ background: CARD, borderTop: `8px solid ${BG}` }}>
+      {/* 标题 + 时间段切换 */}
+      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+        <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计</span>
+        <div className="flex items-center gap-1">
+          {([30, 60, 90, 180, 'all'] as const).map(n => (
+            <button
+              key={n}
+              onClick={() => setStreakTab(n)}
+              className="text-xs px-2 py-0.5"
+              style={{
+                background: streakTab === n ? RED : '#F0F0F0',
+                color: streakTab === n ? '#fff' : MUTED,
+                fontWeight: streakTab === n ? 700 : 400,
+                borderRadius: 2,
+              }}
+            >{n === 'all' ? '全量' : `${n}天`}</button>
+          ))}
+        </div>
+      </div>
+      {/* 表头 */}
+      <div className="px-4 pb-1" style={{ display: 'grid', gridTemplateColumns: '1fr 36px 1fr', gap: 0 }}>
+        <span className="text-xs font-medium text-right pr-2" style={{ color: RED }}>连涨次数</span>
+        <span className="text-xs font-medium text-center" style={{ color: MUTED }}>天数</span>
+        <span className="text-xs font-medium text-left pl-2" style={{ color: GREEN_A }}>连跌次数</span>
+      </div>
+      {/* 表行 */}
+      {Array.from({ length: maxStreak }, (_, i) => i + 1).map(n => {
+        const upCnt = upStreakMap[n] || 0;
+        const downCnt = downStreakMap[n] || 0;
+        if (upCnt === 0 && downCnt === 0) return null;
+        const maxCnt = Math.max(
+          ...Array.from({ length: maxStreak }, (_, i) => Math.max(upStreakMap[i + 1] || 0, downStreakMap[i + 1] || 0)),
+          1
+        );
+        const BAR_MAX = 80;
+        const upW = upCnt > 0 ? Math.max(Math.round((upCnt / maxCnt) * BAR_MAX), 4) : 0;
+        const downW = downCnt > 0 ? Math.max(Math.round((downCnt / maxCnt) * BAR_MAX), 4) : 0;
+        return (
+          <div
+            key={n}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 36px 1fr',
+              gap: 0,
+              borderTop: `1px solid ${BG}`,
+              padding: '5px 16px',
+              alignItems: 'center',
+            }}
+          >
+            {/* 涨：数字在左，进度条靠右对齐到中间 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+              <span className="text-xs font-bold" style={{ color: upCnt > 0 ? RED : MUTED, minWidth: 28, textAlign: 'right' }}>
+                {upCnt > 0 ? `${upCnt}次` : '-'}
+              </span>
+              <div style={{ width: upW, height: 8, background: RED, borderRadius: '2px 0 0 2px', opacity: 0.85, flexShrink: 0 }} />
+            </div>
+            {/* 天数居中 */}
+            <span className="text-xs font-semibold text-center" style={{ color: MUTED }}>{n}天</span>
+            {/* 跌：进度条靠左对齐到中间，数字在右 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 4 }}>
+              <div style={{ width: downW, height: 8, background: GREEN_A, borderRadius: '0 2px 2px 0', opacity: 0.85, flexShrink: 0 }} />
+              <span className="text-xs font-bold" style={{ color: downCnt > 0 ? GREEN_A : MUTED, minWidth: 28 }}>
+                {downCnt > 0 ? `${downCnt}次` : '-'}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+      {maxStreak === 0 && (
+        <div className="px-4 py-3 text-xs" style={{ color: MUTED }}>暂无连涨/连跌数据</div>
+      )}
+      {maxStreak > 0 && (
+        <div className="px-4 py-2 text-xs" style={{ color: MUTED }}>
+          最长连涨{maxUpStreak}天 · 最长连跌{maxDownStreak}天
+          {streakTab === 'all'
+            ? <span style={{ marginLeft: 6 }}>（全历史 {allSorted.length} 天）</span>
+            : <span style={{ marginLeft: 6 }}>（近{streakTab}天）</span>
+          }
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function BeDataPage() {
@@ -46,6 +195,12 @@ export default function BeDataPage() {
     { enabled: activeTab === "analysis" }
   );
 
+  // 全量涨跌幅数组（用于前端分段计算连涨连跌统计）
+  const { data: allChangePcts, isLoading: changePctsLoading } = trpc.cryptoData.getAllChangePcts.useQuery(
+    { symbol: activeSymbol },
+    { enabled: activeTab === "analysis", staleTime: 5 * 60 * 1000 }
+  );
+
   const rows = data?.rows ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -64,7 +219,7 @@ export default function BeDataPage() {
     setPage(1);
   };
 
-  // 构建连涨/连跌图表数据（最多显示到10天）
+  // 构建连涨/连跌图表数据（最多显示到10天，用于柱状图）
   const MAX_CONSEC = 10;
   const buildConsecData = (map: Record<number, number>, maxKey: number) => {
     const result = [];
@@ -82,6 +237,8 @@ export default function BeDataPage() {
 
   const upData = stats ? buildConsecData(stats.consecutiveUp, stats.maxConsecUp) : [];
   const downData = stats ? buildConsecData(stats.consecutiveDown, stats.maxConsecDown) : [];
+
+  const analysisLoading = statsLoading || changePctsLoading;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -218,15 +375,15 @@ export default function BeDataPage() {
       {/* ===== 数据分析 Tab ===== */}
       {activeTab === "analysis" && (
         <div className="flex-1 overflow-auto pb-6">
-          {statsLoading ? (
+          {analysisLoading ? (
             <div className="flex items-center justify-center py-20 text-gray-400 text-sm">计算中...</div>
           ) : !stats ? (
             <div className="flex items-center justify-center py-20 text-gray-400 text-sm">暂无数据</div>
           ) : (
-            <div className="px-3 pt-3 space-y-4">
+            <div className="pt-3 space-y-0">
 
               {/* 涨跌天数概览 */}
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
                 <div className="px-4 py-3 border-b border-gray-100">
                   <span className="text-sm font-semibold text-gray-700">涨跌天数统计</span>
                   <span className="text-xs text-gray-400 ml-2">共 {stats.total} 天</span>
@@ -251,17 +408,15 @@ export default function BeDataPage() {
                   </div>
                 </div>
                 {/* 涨跌比例条 */}
-                <div className="px-4 pb-4">
-                  <div className="flex h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-red-400" style={{ width: `${stats.upPct}%` }} />
-                    <div className="bg-gray-200" style={{ width: `${(stats.flatDays / stats.total * 100).toFixed(1)}%` }} />
-                    <div className="bg-green-500 flex-1" />
-                  </div>
+                <div className="mx-4 mb-3 h-2 rounded-full overflow-hidden flex">
+                  <div className="bg-red-400" style={{ width: `${stats.upPct}%` }} />
+                  <div className="bg-gray-200" style={{ width: `${(stats.flatDays / stats.total * 100).toFixed(1)}%` }} />
+                  <div className="bg-green-500 flex-1" />
                 </div>
               </div>
 
               {/* 最长连涨/连跌 */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mx-3 mb-3">
                 <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col items-center">
                   <span className="text-xs text-gray-400 mb-1">最长连涨</span>
                   <span className="text-3xl font-bold text-red-500">{stats.maxConsecUp}</span>
@@ -274,11 +429,18 @@ export default function BeDataPage() {
                 </div>
               </div>
 
-              {/* 连涨次数分布图 */}
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* 连涨/连跌统计（三列对称布局，参照 StockDetail） */}
+              {allChangePcts && allChangePcts.length > 0 && (
+                <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
+                  <StreakStatsPanel allData={allChangePcts} />
+                </div>
+              )}
+
+              {/* 连涨次数分布图（柱状图，全量数据） */}
+              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
                 <div className="px-4 py-3 border-b border-gray-100">
                   <span className="text-sm font-semibold text-gray-700">连涨次数分布</span>
-                  <span className="text-xs text-gray-400 ml-2">连续上涨N天出现的次数</span>
+                  <span className="text-xs text-gray-400 ml-2">连续上涨N天出现的次数（全量）</span>
                 </div>
                 <div className="px-2 pt-3 pb-2">
                   <ResponsiveContainer width="100%" height={180}>
@@ -301,11 +463,11 @@ export default function BeDataPage() {
                 </div>
               </div>
 
-              {/* 连跌次数分布图 */}
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* 连跌次数分布图（柱状图，全量数据） */}
+              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
                 <div className="px-4 py-3 border-b border-gray-100">
                   <span className="text-sm font-semibold text-gray-700">连跌次数分布</span>
-                  <span className="text-xs text-gray-400 ml-2">连续下跌N天出现的次数</span>
+                  <span className="text-xs text-gray-400 ml-2">连续下跌N天出现的次数（全量）</span>
                 </div>
                 <div className="px-2 pt-3 pb-2">
                   <ResponsiveContainer width="100%" height={180}>
