@@ -16,6 +16,7 @@ const PAGE_SIZE = 60;
 const TABS = [
   { key: "data", label: "日线数据" },
   { key: "analysis", label: "数据分析" },
+  { key: "predict", label: "预测未来" },
 ];
 
 // 颜色常量（与 StockDetail 保持一致）
@@ -464,6 +465,182 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
   );
 }
 
+// ===== 预测未来 Tab 组件 =====
+function PredictTab({ allData, symbol }: { allData: { date: string; changePct: number | null }[]; symbol: string }) {
+  const symbolLabel = symbol === 'BTCUSDT' ? 'BTC 比特币' : 'ETH 以太坊';
+  const [points, setPoints] = useState(100);
+  const [selectedDir, setSelectedDir] = useState<'up' | 'down' | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
+
+  // 计算条件概率和赔率（25%庄家优势）
+  const HOUSE_EDGE = 0.25;
+  const distMap = useMemo(() => {
+    const m: Record<number, number> = {};
+    for (const item of allData) {
+      const pct = item.changePct;
+      if (pct == null) continue;
+      const bucket = pct >= 0 ? Math.floor(pct) : Math.ceil(pct) - 1;
+      const clamped = Math.max(-20, Math.min(20, bucket));
+      m[clamped] = (m[clamped] || 0) + 1;
+    }
+    return m;
+  }, [allData]);
+
+  const totalUpDays = Object.entries(distMap).filter(([k]) => Number(k) >= 0).reduce((s, [, v]) => s + v, 0);
+  const totalDownDays = Object.entries(distMap).filter(([k]) => Number(k) < 0).reduce((s, [, v]) => s + v, 0);
+
+  // 只取第一个区间（≥0% <1%）作为原型按钮
+  const upCnt = distMap[0] ?? 0;
+  const downCnt = distMap[-1] ?? 0;
+  const upProb = totalUpDays > 0 ? upCnt / totalUpDays : 0;
+  const downProb = totalDownDays > 0 ? downCnt / totalDownDays : 0;
+  const upOdds = upProb > 0 ? parseFloat((1 / upProb * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
+  const downOdds = downProb > 0 ? parseFloat((1 / downProb * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
+
+  const activeOdds = selectedDir === 'up' ? upOdds : selectedDir === 'down' ? downOdds : 0;
+  const payout = activeOdds > 0 ? Math.floor(points * activeOdds) : 0;
+  const profit = payout - points;
+
+  const handleConfirm = () => {
+    if (!selectedDir || points <= 0) return;
+    setConfirmed(true);
+    setTimeout(() => setConfirmed(false), 3000);
+  };
+
+  return (
+    <div className="flex-1 overflow-auto bg-gray-50 pb-8">
+      {/* 说明卡片 */}
+      <div className="mx-3 mt-3 bg-white rounded-xl border border-gray-200 px-4 py-3">
+        <div className="text-sm font-semibold text-gray-800 mb-1">{symbolLabel} · 明日涨跌预测</div>
+        <div className="text-xs text-gray-400">根据历史数据赔率，预测明日涨跌幅区间。庄家优势 25%。</div>
+      </div>
+
+      {/* 预测按钮区 */}
+      <div className="mx-3 mt-3 bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 pt-3 pb-1">
+          <span className="text-xs font-semibold text-gray-500">选择预测方向</span>
+        </div>
+
+        {/* 涨按钮 */}
+        <button
+          onClick={() => { setSelectedDir('up'); setConfirmed(false); }}
+          className="w-full px-4 py-3 flex items-center justify-between border-t border-gray-100 active:bg-red-50 transition-colors"
+          style={{ background: selectedDir === 'up' ? '#fff5f5' : '#fff' }}
+        >
+          <div className="flex flex-col items-start gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-bold" style={{ color: RED }}>↑ 涨</span>
+              <span className="text-xs font-mono font-semibold text-gray-600">≥0% &lt;1%</span>
+            </div>
+            <div className="text-xs text-gray-400">
+              历史概率 {(upProb * 100).toFixed(2)}% · 共 {upCnt} 天
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="text-xl font-bold" style={{ color: RED }}>{upOdds}x</div>
+            <div className="text-xs text-gray-400">赔率（含本金）</div>
+          </div>
+          {selectedDir === 'up' && (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full" style={{ background: RED }} />
+          )}
+        </button>
+
+        {/* 跌按钮 */}
+        <button
+          onClick={() => { setSelectedDir('down'); setConfirmed(false); }}
+          className="w-full px-4 py-3 flex items-center justify-between border-t border-gray-100 active:bg-green-50 transition-colors"
+          style={{ background: selectedDir === 'down' ? '#f0fdf4' : '#fff' }}
+        >
+          <div className="flex flex-col items-start gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="text-base font-bold" style={{ color: GREEN_A }}>↓ 跌</span>
+              <span className="text-xs font-mono font-semibold text-gray-600">≥0% &lt;1%</span>
+            </div>
+            <div className="text-xs text-gray-400">
+              历史概率 {(downProb * 100).toFixed(2)}% · 共 {downCnt} 天
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="text-xl font-bold" style={{ color: GREEN_A }}>{downOdds}x</div>
+            <div className="text-xs text-gray-400">赔率（含本金）</div>
+          </div>
+        </button>
+      </div>
+
+      {/* 积分输入区（选择方向后显示） */}
+      {selectedDir && (
+        <div className="mx-3 mt-3 bg-white rounded-xl border border-gray-200 px-4 py-4">
+          <div className="text-xs font-semibold text-gray-500 mb-3">投入积分</div>
+          <div className="flex items-center gap-3 mb-4">
+            <button
+              onClick={() => setPoints(p => Math.max(10, p - 50))}
+              className="w-9 h-9 rounded-full border border-gray-200 text-lg font-bold text-gray-500 flex items-center justify-center active:bg-gray-100"
+            >−</button>
+            <input
+              type="number"
+              min={10}
+              value={points}
+              onChange={e => setPoints(Math.max(10, parseInt(e.target.value) || 10))}
+              className="flex-1 text-center text-xl font-bold text-gray-800 border border-gray-200 rounded-lg py-2 outline-none focus:border-red-300"
+            />
+            <button
+              onClick={() => setPoints(p => p + 50)}
+              className="w-9 h-9 rounded-full border border-gray-200 text-lg font-bold text-gray-500 flex items-center justify-center active:bg-gray-100"
+            >+</button>
+          </div>
+          {/* 快捷金额 */}
+          <div className="flex gap-2 mb-4">
+            {[50, 100, 200, 500].map(v => (
+              <button
+                key={v}
+                onClick={() => setPoints(v)}
+                className="flex-1 py-1.5 text-xs rounded-lg border transition-colors"
+                style={{
+                  borderColor: points === v ? RED : '#e5e7eb',
+                  color: points === v ? RED : '#6b7280',
+                  fontWeight: points === v ? 700 : 400,
+                  background: points === v ? '#fff5f5' : '#fff',
+                }}
+              >{v}</button>
+            ))}
+          </div>
+          {/* 预计获得 */}
+          <div className="bg-gray-50 rounded-xl px-4 py-3 flex items-center justify-between mb-4">
+            <span className="text-xs text-gray-400">预计获得</span>
+            <div className="text-right">
+              <span className="text-2xl font-bold" style={{ color: RED }}>{payout}</span>
+              <span className="text-xs text-gray-400 ml-1">积分</span>
+              <div className="text-xs text-gray-400">净赚 {profit} 分</div>
+            </div>
+          </div>
+          {/* 确认按钮 */}
+          <button
+            onClick={handleConfirm}
+            className="w-full py-3 rounded-xl text-white text-sm font-bold active:opacity-80 transition-opacity"
+            style={{ background: selectedDir === 'up' ? RED : GREEN_A }}
+          >
+            {confirmed ? '✓ 预测已提交（功能开发中）' : `确认预测：${selectedDir === 'up' ? '↑ 涨' : '↓ 跌'} ≥0% <1% · 投入 ${points} 分`}
+          </button>
+          {confirmed && (
+            <div className="mt-2 text-center text-xs text-gray-400">预测功能正在开发中，暂不扣除积分</div>
+          )}
+        </div>
+      )}
+
+      {/* 底部说明 */}
+      <div className="mx-3 mt-3 px-4 py-3 bg-white rounded-xl border border-gray-200">
+        <div className="text-xs text-gray-400 leading-relaxed">
+          <div className="font-semibold text-gray-500 mb-1">规则说明</div>
+          <div>· 预测标的为 {symbolLabel} 明日收盘相对今日收盘的涨跌幅</div>
+          <div>· 涨幅区间：≥0% 且 &lt;1%；跌幅区间：≥0% 且 &lt;1%（绝对值）</div>
+          <div>· 赔率含本金，庄家优势 25%</div>
+          <div>· 历史概率基于全量日线数据统计</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BeDataPage() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -486,7 +663,7 @@ export default function BeDataPage() {
   // 全量涨跌幅数组（用于前端分段计算连涨连跌统计）
   const { data: allChangePcts, isLoading: changePctsLoading } = trpc.cryptoData.getAllChangePcts.useQuery(
     { symbol: activeSymbol },
-    { enabled: activeTab === "analysis", staleTime: 5 * 60 * 1000 }
+    { enabled: activeTab === "analysis" || activeTab === "predict", staleTime: 5 * 60 * 1000 }
   );
 
   const rows = data?.rows ?? [];
@@ -732,6 +909,11 @@ export default function BeDataPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ===== 预测未来 Tab ===== */}
+      {activeTab === "predict" && (
+        <PredictTab allData={allChangePcts ?? []} symbol={activeSymbol} />
       )}
 
       {/* 分页（仅日线数据 Tab 显示） */}
