@@ -408,6 +408,19 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
   const rawLowest = stats?.allTimeLow ? Number(stats.allTimeLow) : null;
   const lastScanPrice = stats?.lastScanPrice ? Number(stats.lastScanPrice) : null;
   const buyPrice = order.buy_price ? Number(order.buy_price) : null;
+  // 利息计价货币：计息基数货币 vs 约定利息货币
+  const baseCur = order.interest_base_currency || 'USDT'; // 计息基数货币
+  const rateCur = order.interest_rate_currency || 'USDT'; // 约定利息货币
+  const interestUnit = rateCur === 'CNY' ? '元' : 'U';
+  // 折算：计息基数和利息货币不一致时按 1U=7元 折算
+  const convertAccrued = (val: number): number => {
+    if (baseCur === rateCur) return val;
+    if (baseCur === 'USDT' && rateCur === 'CNY') return val * 7; // U计息基数，元显示
+    if (baseCur === 'CNY' && rateCur === 'USDT') return val / 7; // 元计息基数，U显示
+    return val;
+  };
+  const displayAccrued = convertAccrued(accrued);
+  const displayPaid = convertAccrued(paidInterest);
   // 最低价：如果扫描到的最低价比买入价更低，就显示最低价；否则显示买入价
   const displayLowest = rawLowest && buyPrice && rawLowest < buyPrice ? rawLowest : buyPrice;
   const lowestAt = stats?.allTimeLowAt;
@@ -435,15 +448,15 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             className="text-2xl font-bold tabular-nums leading-tight"
             style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
           >
-            {accrued.toFixed(2)}
+            {displayAccrued.toFixed(2)}
           </span>
-          <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>元</span>
+          <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
         </div>
         {/* 明细行：统一 space-y-0.5，和左栏一致 */}
         <div className="space-y-0.5">
         <div className="flex items-center justify-between text-xs">
           <span className="text-gray-400">已结利息</span>
-          <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)}元</span>
+          <span className="font-medium" style={{ color: '#4B5563' }}>{displayPaid.toFixed(2)}{interestUnit}</span>
         </div>
         {order.interest_start_date && (
           <div className="flex items-center justify-between text-xs">
