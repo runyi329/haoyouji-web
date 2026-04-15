@@ -515,7 +515,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               {hasValue && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-400">担保价值</span>
-                  <span className="font-medium" style={{ color: '#1A56DB' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}U</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}U</span>
                 </div>
               )}
               {hasValue && (
