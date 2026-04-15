@@ -146,6 +146,7 @@ export default function FunderManagement() {
     interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
     interestStartDate: '',
     showProfitShare: true,
+    originalAmount: '', // 编辑时保存原订单金额，买入价格或数量为空时回退使用
   });
 
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
@@ -287,6 +288,7 @@ export default function FunderManagement() {
       interestBaseCurrency: (order.interest_base_currency || 'USDT') as 'USDT' | 'CNY',
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
+      originalAmount: order.amount || '',
     });
     // 加载担保货币
     try {
@@ -305,14 +307,16 @@ export default function FunderManagement() {
   };
 
   const handleSubmit = () => {
-    if (!computedAmount || parseFloat(computedAmount) <= 0) {
+    // 编辑模式下，如果买入价/数量为空，使用原订单金额；新建模式必须填
+    const finalAmount = computedAmount || (editingOrder ? formData.originalAmount : '');
+    if (!finalAmount || parseFloat(finalAmount) <= 0) {
       toast.error('请填写买入价格和买入数量以自动计算总金额');
       return;
     }
     const payload = {
       ledgerId,
       coin: formData.coin,
-      amount: computedAmount,
+      amount: finalAmount,
       buyPrice: formData.buyPrice || undefined,
       buyDate: formData.buyDate || undefined,
       buyQuantity: formData.buyQuantity || undefined,
