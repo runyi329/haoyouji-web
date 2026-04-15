@@ -487,9 +487,9 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
                     ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : rawNote || '充值')
                     : (rawNote ? rawNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
                   return (
-                    <div key={item.id || idx} className="flex items-center justify-between py-3 border-b border-gray-100">
+                    <div key={item.id || idx} className="flex items-start justify-between py-3 border-b border-gray-100">
                       <div className="flex-1 min-w-0 mr-3">
-                        <div className="text-gray-900 text-xs leading-snug break-words">{typeLabel}</div>
+                        <div className="text-gray-900 text-xs leading-snug" style={{wordBreak:'break-all',whiteSpace:'normal',overflowWrap:'anywhere'}}>{typeLabel}</div>
                         <div className="text-gray-400 text-xs mt-0.5">{dateStr}</div>
                       </div>
                       <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
