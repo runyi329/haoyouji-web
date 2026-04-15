@@ -10866,19 +10866,38 @@ export const appRouter = router({
           status: r.status,
           createdAt: r.created_at,
         }));
-        // 2. 手动调账记录（af_manual_balances）
+        // 2. 手动调账记录（af_manual_balances），JOIN af_orders 获取订单创建日期用于生成完整编号
         let manualList: any[] = [];
         try {
           const manualRows = await db.execute(
-            sql`SELECT id, amount, note, created_at FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} ORDER BY created_at DESC`
+            sql`SELECT m.id, m.amount, m.note, m.created_at,
+                       o.id AS order_id, o.created_at AS order_created_at
+                FROM af_manual_balances m
+                LEFT JOIN af_orders o ON (
+                  m.note REGEXP CONCAT('#', o.id, '$') AND o.ledger_id = m.ledger_id
+                )
+                WHERE m.ledger_id = ${input.ledgerId} AND m.user_id = ${targetUserId}
+                ORDER BY m.created_at DESC`
           ) as any;
-          manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => ({
-            id: `m_${r.id}`,
-            amount: parseFloat(r.amount),
-            sourceType: 'manual' as const,
-            note: r.note || '管理员调账',
-            createdAt: r.created_at,
-          }));
+          manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => {
+            let note = r.note || '管理员调账';
+            // 如果关联到了订单，把 #id 替换为完整编号 AFyymmdd000000
+            if (r.order_id && r.order_created_at) {
+              const d = new Date(r.order_created_at);
+              const yy = String(d.getFullYear()).slice(2);
+              const mm = String(d.getMonth() + 1).padStart(2, '0');
+              const dd = String(d.getDate()).padStart(2, '0');
+              const fullNo = `AF${yy}${mm}${dd}${String(r.order_id).padStart(6, '0')}`;
+              note = note.replace(new RegExp(`#${r.order_id}$`), fullNo);
+            }
+            return {
+              id: `m_${r.id}`,
+              amount: parseFloat(r.amount),
+              sourceType: 'manual' as const,
+              note,
+              createdAt: r.created_at,
+            };
+          });
         } catch (_) {
           // 表不存在时忽略
         }
