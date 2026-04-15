@@ -10849,7 +10849,7 @@ export const appRouter = router({
         }
         // 1. 充値订单（recharge_orders，全状态显示，按 ledger_id 隔离）
         const rechargeRows = await db.execute(
-          sql`SELECT id, amount, status, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} ORDER BY created_at DESC LIMIT 100`
+          sql`SELECT id, amount, status, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} AND status NOT IN ('expired', 'cancelled') ORDER BY created_at DESC LIMIT 100`
         ) as any;
         const statusLabelMap: Record<string, string> = {
           completed: '充值到账',
