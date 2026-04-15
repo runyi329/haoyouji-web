@@ -17859,7 +17859,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         // 不关闭共享连接池
       }
     }),
-});;
+});
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
   // 获取所有容器定义
