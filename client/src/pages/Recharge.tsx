@@ -489,7 +489,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
                   return (
                     <div key={item.id || idx} className="flex items-center justify-between py-3 border-b border-gray-100">
                       <div className="flex-1 min-w-0 mr-3">
-                        <div className="text-gray-900 text-sm truncate">{typeLabel}</div>
+                        <div className="text-gray-900 text-xs leading-snug break-words">{typeLabel}</div>
                         <div className="text-gray-400 text-xs mt-0.5">{dateStr}</div>
                       </div>
                       <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
