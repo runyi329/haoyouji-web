@@ -508,7 +508,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               )}
               <div className="flex items-center justify-between text-xs mt-0.5">
                 <span className="text-gray-400">担保货币</span>
-                <span className="font-medium text-[10px]" style={{ color: '#4B5563' }}>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
                   {collateral.map(a => `${a.qty}${a.coin}`).join('+')}
                 </span>
               </div>
