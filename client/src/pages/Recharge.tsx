@@ -498,16 +498,21 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
                     const isPositive = amt >= 0;
                     const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
                     const rawNote = item.note || '';
+                    // 提取备注中的订单号（AF开头的完整编号）
+                    const orderNoMatch = rawNote.match(/AF\d{14}/);
+                    const orderNo = orderNoMatch ? orderNoMatch[0] : null;
+                    // 去掉备注中的订单号，只保留描述文字
+                    const cleanNote = rawNote.replace(/\s*AF\d{14}/, '').trim();
                     const typeLabel = item.sourceType === 'recharge'
-                      ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : rawNote || '充值')
-                      : (rawNote ? rawNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
+                      ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : cleanNote || '充值')
+                      : (cleanNote ? cleanNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
                     const balanceAfter = balances[idx];
                     const showBalance = item.sourceType === 'manual' || (item.sourceType === 'recharge' && item.status === 'completed');
                     return (
                       <div key={item.id || idx} className="flex items-start justify-between py-3 border-b border-gray-100">
                         <div className="flex-1 min-w-0 mr-3">
                           <div className="text-gray-900 text-xs leading-snug" style={{wordBreak:'break-all',whiteSpace:'normal',overflowWrap:'anywhere'}}>{typeLabel}</div>
-                          <div className="text-gray-400 text-xs mt-0.5">{dateStr}</div>
+                          <div className="text-gray-400 text-xs mt-0.5">{dateStr}{orderNo && <span className="ml-1">{orderNo}</span>}</div>
                         </div>
                         <div className="flex flex-col items-end">
                           <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
