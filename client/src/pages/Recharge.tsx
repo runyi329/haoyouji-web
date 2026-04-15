@@ -498,11 +498,11 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
                     const isPositive = amt >= 0;
                     const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
                     const rawNote = item.note || '';
-                    // 提取备注中的订单号（AF开头的完整编号）
-                    const orderNoMatch = rawNote.match(/AF\d{14}/);
+                    // 提取备注中的订单号（AF开头的完整编号，AF后接12位数字）
+                    const orderNoMatch = rawNote.match(/AF\d{12}/);
                     const orderNo = orderNoMatch ? orderNoMatch[0] : null;
                     // 去掉备注中的订单号，只保留描述文字
-                    const cleanNote = rawNote.replace(/\s*AF\d{14}/, '').trim();
+                    const cleanNote = rawNote.replace(/\s*AF\d{12}/, '').trim();
                     const typeLabel = item.sourceType === 'recharge'
                       ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : cleanNote || '充值')
                       : (cleanNote ? cleanNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
