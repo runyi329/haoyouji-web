@@ -563,8 +563,8 @@ export default function FunderManagement() {
 
       {/* 创建/编辑弹窗 */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', touchAction: 'none' }} onTouchMove={e => e.preventDefault()}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
             <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
                 {editingOrder ? '编辑订单' : '添加订单'}
@@ -712,7 +712,7 @@ export default function FunderManagement() {
                   计息基数
                   <span className="ml-1.5 text-xs text-gray-400 font-normal">利息计算的本金基数</span>
                 </label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full min-w-0">
                   <div className="flex rounded-xl border border-gray-200 overflow-hidden shrink-0">
                     <button
                       type="button"
@@ -738,9 +738,9 @@ export default function FunderManagement() {
                     inputMode="decimal"
                     value={formData.interestBase}
                     onChange={e => setFormData(d => ({ ...d, interestBase: e.target.value }))}
-                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
                     placeholder={formData.interestBaseCurrency === 'CNY' ? '如：800000' : '如：120000'}
-                    style={{ display: 'block', boxSizing: 'border-box' }}
+                    style={{ display: 'block', boxSizing: 'border-box', width: '0' }}
                   />
                 </div>
               </div>
