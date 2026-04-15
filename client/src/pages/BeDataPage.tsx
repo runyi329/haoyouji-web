@@ -520,23 +520,23 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
     return m;
   }, [allData]);
 
-  const totalUpDays = useMemo(() => Object.entries(distMap).filter(([k]) => Number(k) >= 0).reduce((s, [, v]) => s + v, 0), [distMap]);
-  const totalDownDays = useMemo(() => Object.entries(distMap).filter(([k]) => Number(k) < 0).reduce((s, [, v]) => s + v, 0), [distMap]);
+  // 绝对概率：÷总天数（涨跌所有天），与赔率参考表保持一致
+  const totalAllDays = useMemo(() => Object.values(distMap).reduce((s, v) => s + v, 0), [distMap]);
 
   // 最多12档：≥0%<1%, ≥1%<2%, ..., ≥11%<12%
   const upRanges = useMemo(() => Array.from({ length: MAX_RANGE + 1 }, (_, i) => ({
     rangeLabel: `≥${i}% <${i + 1}%`,
     bucket: i,
     count: distMap[i] ?? 0,
-    prob: totalUpDays > 0 ? (distMap[i] ?? 0) / totalUpDays : 0,
-  })), [distMap, totalUpDays]);
+    prob: totalAllDays > 0 ? (distMap[i] ?? 0) / totalAllDays : 0,
+  })), [distMap, totalAllDays]);
 
   const downRanges = useMemo(() => Array.from({ length: MAX_RANGE + 1 }, (_, i) => ({
     rangeLabel: `≥${i}% <${i + 1}%`,
     bucket: -(i + 1),
     count: distMap[-(i + 1)] ?? 0,
-    prob: totalDownDays > 0 ? (distMap[-(i + 1)] ?? 0) / totalDownDays : 0,
-  })), [distMap, totalDownDays]);
+    prob: totalAllDays > 0 ? (distMap[-(i + 1)] ?? 0) / totalAllDays : 0,
+  })), [distMap, totalAllDays]);
 
   const ranges = dir === 'down' ? downRanges : upRanges;
   const safeRangeIdx = Math.min(rangeIdx, MAX_RANGE);
