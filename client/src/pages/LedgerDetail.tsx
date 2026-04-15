@@ -424,13 +424,13 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
     <div className="flex flex-col h-full">
       {/* 上半：代结利息 */}
       <div className="flex-1 flex flex-col justify-start">
-        <div className="flex items-center justify-between mb-0.5">
-          <div className="flex items-center gap-1">
-            <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
-            <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
-          </div>
+        {/* 区块标题 */}
+        <div className="flex items-center gap-1 mb-1">
+          <span className="text-xs" style={{ color: '#3B82F6' }}>待结利息</span>
+          <span className="text-xs text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
         </div>
-        <div className="flex items-baseline gap-0.5">
+        {/* 大数字 */}
+        <div className="flex items-baseline gap-0.5 mb-1">
           <span
             className="text-2xl font-bold tabular-nums leading-tight"
             style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
@@ -439,7 +439,9 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           </span>
           <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>元</span>
         </div>
-        <div className="flex items-center justify-between mt-0.5 text-xs">
+        {/* 明细行：统一 space-y-0.5，和左栏一致 */}
+        <div className="space-y-0.5">
+        <div className="flex items-center justify-between text-xs">
           <span className="text-gray-400">已结利息</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)}元</span>
         </div>
@@ -534,6 +536,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             </>
           );
         })()}
+        </div>{/* end space-y-0.5 */}
       </div>
       {/* 中间分隔线 - 只在收益分成开启时显示 */}
       {order.show_profit_share !== 0 && order.show_profit_share !== false && (
@@ -542,30 +545,33 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
       {/* 下半：收益分成 - 受 show_profit_share 控制 */}
       {order.show_profit_share !== 0 && order.show_profit_share !== false && (
       <div className="flex-1 flex flex-col justify-start pt-2">
-        <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>收益分成</div>
+        {/* 收益分成标题 */}
+        <div className="flex items-center gap-1 mb-1">
+          <span className="text-xs" style={{ color: '#3B82F6' }}>收益分成</span>
+        </div>
+        {/* 大数字 */}
         {(() => {
-          // 优先用实时价格计算收益分成，无实时价格时回退到上次扫描价
           const currentPrice = (livePrices && livePrices[order.coin]) ? livePrices[order.coin] : lastScanPrice;
           const isProfit = currentPrice && buyPrice && currentPrice > buyPrice && profitPct > 0;
           const profitU = isProfit ? (currentPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
           if (isProfit) {
             return (
-              <div className="flex items-baseline justify-between w-full">
+              <div className="flex items-baseline justify-between w-full mb-1">
                 <div className="flex items-baseline gap-0.5">
                   <span
-                    className="text-xl font-bold tabular-nums leading-tight"
+                    className="text-2xl font-bold tabular-nums leading-tight"
                     style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                   >
                     +{profitU.toFixed(2)}
                   </span>
-                  <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                  <span className="text-sm font-semibold" style={{ color: '#D32F2F' }}>U</span>
                 </div>
-                <span className="font-medium" style={{ color: '#4B5563', fontSize: '12px' }}>{profitPct.toFixed(2)}%</span>
+                <span className="font-medium text-xs" style={{ color: '#4B5563' }}>{profitPct.toFixed(2)}%</span>
               </div>
             );
           }
           return (
-            <div className="flex items-baseline gap-0.5">
+            <div className="flex items-baseline gap-0.5 mb-1">
               <span
                 className="text-2xl font-bold tabular-nums leading-tight"
                 style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
@@ -576,28 +582,30 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             </div>
           );
         })()}
-        
-        <div className="flex items-center justify-between mt-0.5 text-xs">
-          <span className="text-gray-400">最低价格</span>
-          <span className="font-medium" style={{ color: '#4B5563' }}>
-            {displayLowest !== null ? displayLowest.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-400">最低跌幅</span>
-          <span className="font-medium" style={{ color: '#4B5563' }}>
-            {(() => {
-              if (!buyPrice || buyPrice <= 0) return '0.00%';
-              const drop = rawLowest && rawLowest < buyPrice
-                ? ((buyPrice - rawLowest) / buyPrice * 100)
-                : 0;
-              return drop.toFixed(2) + '%';
-            })()}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-400">发生时间</span>
-          <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel || '---'}</span>
+        {/* 明细行：统一 space-y-0.5 */}
+        <div className="space-y-0.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-400">最低价格</span>
+            <span className="font-medium" style={{ color: '#4B5563' }}>
+              {displayLowest !== null ? displayLowest.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-400">最低跌幅</span>
+            <span className="font-medium" style={{ color: '#4B5563' }}>
+              {(() => {
+                if (!buyPrice || buyPrice <= 0) return '0.00%';
+                const drop = rawLowest && rawLowest < buyPrice
+                  ? ((buyPrice - rawLowest) / buyPrice * 100)
+                  : 0;
+                return drop.toFixed(2) + '%';
+              })()}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-400">发生时间</span>
+            <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel || '---'}</span>
+          </div>
         </div>
       </div>
       )}
