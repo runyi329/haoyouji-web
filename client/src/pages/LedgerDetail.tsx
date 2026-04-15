@@ -396,9 +396,12 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           </div>
         )}
       </div>
-      {/* 中间分隔线 */}
+      {/* 中间分隔线 - 只在收益分成开启时显示 */}
+      {order.show_profit_share !== 0 && order.show_profit_share !== false && (
       <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
-      {/* 下半：收益分成 */}
+      )}
+      {/* 下半：收益分成 - 受 show_profit_share 控制 */}
+      {order.show_profit_share !== 0 && order.show_profit_share !== false && (
       <div className="flex-1 flex flex-col justify-start pt-2">
         <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>收益分成</div>
         {(() => {
@@ -458,6 +461,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel || '---'}</span>
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -145,6 +145,7 @@ export default function FunderManagement() {
     interestBase: '',
     interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
     interestStartDate: '',
+    showProfitShare: true,
   });
 
   // 自动折算总金额
@@ -227,6 +228,7 @@ export default function FunderManagement() {
       interestBase: '',
       interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
       interestStartDate: '',
+      showProfitShare: true,
     });
     setEditingOrder(null);
     setShowDatePicker(false);
@@ -250,6 +252,7 @@ export default function FunderManagement() {
       interestBase: order.interest_base || '',
       interestBaseCurrency: (order.interest_base_currency || 'USDT') as 'USDT' | 'CNY',
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
+      showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
     });
     setEditingOrder(order);
     setShowDatePicker(false);
@@ -277,6 +280,7 @@ export default function FunderManagement() {
       interestBase: formData.interestBase || undefined,
       interestBaseCurrency: formData.interestBaseCurrency,
       interestStartDate: formData.interestStartDate || undefined,
+      showProfitShare: formData.showProfitShare,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
@@ -679,6 +683,27 @@ export default function FunderManagement() {
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">利息约定</span>
                 <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* 收益分成开关 */}
+              <div className="flex items-center justify-between px-1">
+                <div>
+                  <div className="text-sm font-medium text-gray-700">收益分成</div>
+                  <div className="text-xs text-gray-400 mt-0.5">开启后资金方可看到收益分成区块</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFormData(d => ({ ...d, showProfitShare: !d.showProfitShare }))}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                    formData.showProfitShare ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      formData.showProfitShare ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
               </div>
 
               {/* 计息基数 */}
