@@ -609,6 +609,14 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/member-manage`)}
  />
  )}
+ {/* 快捷按钮管理入口：37/52/59号账本且是owner/admin显示 */}
+ {(ledgerId === 37 || ledgerId === 52 || ledgerId === 59) && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="快捷按钮管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/shortcut-buttons`)}
+ />
+ )}
 
  {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem

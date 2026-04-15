@@ -104,6 +104,7 @@ const PendingOverview = lazy(() => import("./pages/PendingOverview"));
 const CreateLedgerType = lazy(() => import("./pages/CreateLedgerType"));
 const CreateLedger = lazy(() => import("./pages/CreateLedger"));
 const LedgerSettings = lazy(() => import("./pages/LedgerSettings"));
+const ShortcutButtonsManage = lazy(() => import("./pages/ShortcutButtonsManage"));
 const PptGuide = lazy(() => import("./pages/PptGuide"));
 const PptPromptLibrary = lazy(() => import("./pages/PptPromptLibrary"));
 const AgDataSources = lazy(() => import("./pages/AgDataSources"));
@@ -418,6 +419,7 @@ function Router() {
         <Route path="/ledger/:id/equity-manage" component={LedgerEquityManage} />
         <Route path="/ledger/:id/equity-weight-manage" component={EquityWeightManage} />
         <Route path="/ledger/:id/member-manage">{(params) => <LedgerMemberManage ledgerId={Number(params.id)} />}</Route>
+        <Route path="/ledger/:id/shortcut-buttons" component={ShortcutButtonsManage} />
         <Route path="/ledger/:id/af-invite-tree" component={AfInviteTreePage} />
         <Route path="/ledger/:id/af-withdraw" component={AfWithdrawPage} />
         <Route path="/ledger/:id/af-withdraw-manage" component={AfWithdrawManage} />

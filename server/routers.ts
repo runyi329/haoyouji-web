@@ -18353,6 +18353,81 @@ export const adminFeatureRouter = router({
       return { success: true };
     }),
 
+    // ===== 快捷按鈕管理 =====
+    // 获取账本所有成员的快捷按鈕配置（owner/admin可用）
+    getShortcutButtons: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const db = await getLedgerDb();
+        const rows = await db.execute(
+          sql`SELECT lm.userId, lm.shortcut_buttons, u.name, u.nickname, u.avatar
+              FROM ledger_members lm
+              LEFT JOIN users u ON u.id = lm.userId
+              WHERE lm.ledgerId = ${input.ledgerId}
+              ORDER BY lm.createdAt ASC`
+        );
+        const members = (rows as any)[0] as any[];
+        return members.map((m: any) => ({
+          userId: m.userId,
+          name: m.nickname || m.name || `用户${m.userId}`,
+          avatar: m.avatar || '',
+          shortcuts: (() => {
+            try {
+              const raw = typeof m.shortcut_buttons === 'string'
+                ? JSON.parse(m.shortcut_buttons)
+                : (m.shortcut_buttons ?? {});
+              return raw;
+            } catch { return {}; }
+          })(),
+        }));
+      }),
+
+    // 更新某成员的快捷按鈕配置（owner/admin可用）
+    updateShortcutButtons: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        targetUserId: z.number(),
+        shortcuts: z.record(z.boolean()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        const shortcutsJson = JSON.stringify(input.shortcuts);
+        await db.execute(
+          sql`UPDATE ledger_members
+              SET shortcut_buttons = ${shortcutsJson}
+              WHERE ledgerId = ${input.ledgerId} AND userId = ${input.targetUserId}`
+        );
+        return { success: true };
+      }),
+
+    // 获取当前用户自己的快捷按鈕配置（所有登录用户可用）
+    getMyShortcutButtons: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const rows = await db.execute(
+          sql`SELECT shortcut_buttons FROM ledger_members
+              WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id}
+              LIMIT 1`
+        );
+        const list = (rows as any)[0] as any[];
+        if (!list.length) return {};
+        try {
+          const raw = list[0].shortcut_buttons;
+          return typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {});
+        } catch { return {}; }
+      }),
+
 });
 export type AppRouter = typeof appRouter;
 
