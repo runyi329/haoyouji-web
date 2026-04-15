@@ -1,8 +1,7 @@
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft } from "lucide-react";
+import { toast } from "sonner";
 
 // 快捷按钮定义（与 LedgerDetail 右上角保持一致）
 const SHORTCUT_BUTTONS = [
@@ -36,8 +35,6 @@ export default function ShortcutButtonsManage() {
   const { id } = useParams<{ id: string }>();
   const ledgerId = parseInt(id || "0");
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
-
   const { data: members, isLoading, refetch } = trpc.getShortcutButtons.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
@@ -46,10 +43,10 @@ export default function ShortcutButtonsManage() {
   const updateMutation = trpc.updateShortcutButtons.useMutation({
     onSuccess: () => {
       refetch();
-      toast({ description: "已保存" });
+      toast("已保存");
     },
     onError: (e) => {
-      toast({ description: e.message, variant: "destructive" });
+      toast.error(e.message);
     },
   });
 
