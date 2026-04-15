@@ -424,6 +424,21 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
               </div>
             );
           });
+          // 涨幅概率求和行
+          const upProbSum = Array.from({ length: 21 }, (_, i) => i).reduce((s, n) => {
+            const entry = distData.find(d => d.bucket === n);
+            const cnt = entry?.count ?? 0;
+            return s + (totalUpDays > 0 ? cnt / totalUpDays : 0);
+          }, 0);
+          const upSumRow = (
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr', gap: 2, padding: '4px 4px', background: '#fef3c7', borderTop: '1px solid #d97706' }}>
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontWeight: 700 }}>合计</span>
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontWeight: 700, fontFamily: 'monospace' }}>{(upProbSum * 100).toFixed(2)}%</span>
+              {[0.10, 0.15, 0.20, 0.25].map(edge => (
+                <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontFamily: 'monospace' }}>—</span>
+              ))}
+            </div>
+          );
           const downRows = Array.from({ length: 21 }, (_, i) => i).map(n => {
             const entry = distData.find(d => d.bucket === -(n + 1));
             const cnt = entry?.count ?? 0;
@@ -442,6 +457,21 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
               </div>
             );
           });
+          // 跌幅概率求和行
+          const downProbSum = Array.from({ length: 21 }, (_, i) => i).reduce((s, n) => {
+            const entry = distData.find(d => d.bucket === -(n + 1));
+            const cnt = entry?.count ?? 0;
+            return s + (totalDownDays > 0 ? cnt / totalDownDays : 0);
+          }, 0);
+          const downSumRow = (
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr', gap: 2, padding: '4px 4px', background: '#f0fdf4', borderTop: '1px solid #16a34a' }}>
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#15803d', fontWeight: 700 }}>合计</span>
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#15803d', fontWeight: 700, fontFamily: 'monospace' }}>{(downProbSum * 100).toFixed(2)}%</span>
+              {[0.10, 0.15, 0.20, 0.25].map(edge => (
+                <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#15803d', fontFamily: 'monospace' }}>—</span>
+              ))}
+            </div>
+          );
           return (
             <>
               {/* 涨幅区 */}
@@ -449,12 +479,14 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
                 <Header />
                 {upRows}
+                {upSumRow}
               </div>
               {/* 跌幅区 */}
               <div style={{ fontSize: 9, color: GREEN_A, fontWeight: 600, margin: '8px 0 2px 2px' }}>↓ 跌幅赔率</div>
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
                 <Header />
                 {downRows}
+                {downSumRow}
               </div>
             </>
           );
