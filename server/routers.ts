@@ -11391,9 +11391,9 @@ export const appRouter = router({
           const grossReturn = isGift ? Math.max(0, profit) : (principal + Math.max(0, profit));
           balanceAdjust = Math.max(0, grossReturn - managementFee);
           if (isGift) {
-            balanceNote = `卖出成交 ${coin} 收益${Math.max(0, profit).toFixed(4)}-管理费${managementFee.toFixed(4)} USDT`;
+            balanceNote = `卖出成交 ${coin} 净收益${balanceAdjust.toFixed(2)} U`;
           } else {
-            balanceNote = `卖出成交 ${coin} 本金${principal.toFixed(2)}+收益${Math.max(0, profit).toFixed(4)}-管理费${managementFee.toFixed(4)} USDT`;
+            balanceNote = `卖出成交 ${coin} 净收益${balanceAdjust.toFixed(2)} U`;
           }
           
           if (Math.abs(balanceAdjust) > 0.001) {
