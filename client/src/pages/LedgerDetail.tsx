@@ -343,7 +343,63 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
 }
 
 // 单张资金方订单卡片右栏（包含扫描数据查询）
+function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyValue, currentValue, accrued, shortfall }: {
+  onClose: () => void;
+  collateral: { coin: string; qty: string }[];
+  collateralValue: number;
+  buyValue: number;
+  currentValue: number;
+  accrued: number;
+  shortfall: number | null;
+}) {
+  const floatLoss = Math.max(buyValue - currentValue, 0);
+  const riskTocover = floatLoss + accrued;
+  const isSufficient = shortfall !== null ? collateralValue >= riskTocover : false;
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose}>
+      <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
+          <button onClick={onClose} className="text-gray-400 text-lg leading-none">×</button>
+        </div>
+        <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动亏损</div>
+            <div>= 买入价值 - 当前市值（币涨时取 0）</div>
+            <div className="mt-1 font-mono" style={{ color: '#3B82F6' }}>
+              = max({buyValue.toFixed(2)} - {currentValue.toFixed(2)}, 0) = <strong>{floatLoss.toFixed(2)} U</strong>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 需覆盖风险</div>
+            <div>= 浮动亏损 + 代结利息</div>
+            <div className="mt-1 font-mono" style={{ color: '#3B82F6' }}>
+              = {floatLoss.toFixed(2)} + {accrued.toFixed(2)} = <strong>{riskTocover.toFixed(2)} U</strong>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 担保价值</div>
+            <div>= {collateral.map(a => `${a.qty}${a.coin}`).join(' + ')} 折算 USDT</div>
+            <div className="mt-1 font-mono" style={{ color: '#3B82F6' }}>
+              = <strong>{collateralValue.toFixed(2)} U</strong>
+            </div>
+          </div>
+          <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#F0FDF4' : '#FFF1F1' }}>
+            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>④ 担保结论</div>
+            {isSufficient ? (
+              <div style={{ color: '#16A34A' }}>担保价值 {collateralValue.toFixed(2)} ≥ 需覆盖风险 {riskTocover.toFixed(2)}，<strong>担保充足（100%）</strong></div>
+            ) : (
+              <div style={{ color: '#DC2626' }}>担保价值 {collateralValue.toFixed(2)} &lt; 需覆盖风险 {riskTocover.toFixed(2)}，<strong>缺口 {(riskTocover - collateralValue).toFixed(2)} U</strong></div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number> }) {
+  const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const { data: stats } = trpc.ledger.funderGetOrderScanStats.useQuery(
     { orderId: order.id, ledgerId },
     { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
@@ -413,7 +469,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             if (!item.coin) continue;
             const qty = parseFloat(item.qty);
             if (item.qty === '' || isNaN(qty)) continue;
-            hasValue = true; // qty=0 也算有效
+            hasValue = true;
             if (item.coin === 'USDT') {
               collateralValue += qty;
             } else {
@@ -421,10 +477,33 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               if (p) collateralValue += qty * p;
             }
           }
-          const orderAmt = parseFloat(order.amount || '0');
-          const gap = hasValue && orderAmt > 0 ? orderAmt - collateralValue : null;
+          // 买入价值 = 买入价 × 数量
+          const buyPriceNum = order.buy_price ? Number(order.buy_price) : 0;
+          const buyQty = order.buy_quantity ? Number(order.buy_quantity) : 0;
+          const buyValue = buyPriceNum * buyQty;
+          // 当前市值 = 实时价 × 数量（无实时价则用买入价）
+          const liveP = livePrices?.[order.coin] ?? buyPriceNum;
+          const currentValue = liveP * buyQty;
+          // 浮动亏损 = max(买入价值 - 当前市值, 0)
+          const floatLoss = Math.max(buyValue - currentValue, 0);
+          // 需覆盖风险 = 浮动亏损 + 代结利息
+          const riskToCover = floatLoss + accrued;
+          // 担保充足：担保价值 >= 需覆盖风险
+          const isSufficient = hasValue && collateralValue >= riskToCover;
+          const shortfallAmt = hasValue ? riskToCover - collateralValue : null;
           return (
             <>
+              {showCollateralInfo && (
+                <FunderCollateralInfoModal
+                  onClose={() => setShowCollateralInfo(false)}
+                  collateral={collateral}
+                  collateralValue={collateralValue}
+                  buyValue={buyValue}
+                  currentValue={currentValue}
+                  accrued={accrued}
+                  shortfall={shortfallAmt}
+                />
+              )}
               <div className="flex items-center justify-between text-xs mt-0.5">
                 <span className="text-gray-400">担保货币</span>
                 <span className="font-medium text-[10px]" style={{ color: '#4B5563' }}>
@@ -437,11 +516,18 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   <span className="font-medium" style={{ color: '#1A56DB' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}U</span>
                 </div>
               )}
-              {gap !== null && (
+              {hasValue && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400">担保缺口</span>
-                  <span className="font-medium" style={{ color: gap > 0 ? '#DC2626' : '#16A34A' }}>
-                    {gap > 0 ? '+' : ''}{gap.toLocaleString(undefined, { maximumFractionDigits: 2 })}U
+                  <div className="flex items-center gap-0.5">
+                    <span className="text-gray-400">担保缺口</span>
+                    <button
+                      onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                      className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px]"
+                      style={{ background: 'rgba(59,130,246,0.15)', color: '#3B82F6', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                    >?</button>
+                  </div>
+                  <span className="font-medium" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>
+                    {isSufficient ? '100%（充足）' : `缺 ${(shortfallAmt! > 0 ? shortfallAmt! : 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
                   </span>
                 </div>
               )}
