@@ -184,7 +184,7 @@ export default function FunderManagement() {
     let hasAny = false;
     for (const item of collateralAssets) {
       const qty = parseFloat(item.qty);
-      if (!item.coin || isNaN(qty) || qty <= 0) continue;
+      if (!item.coin || item.qty === '' || isNaN(qty)) continue;
       hasAny = true;
       if (item.coin === 'USDT') {
         total += qty;
@@ -329,8 +329,8 @@ export default function FunderManagement() {
       interestBaseCurrency: formData.interestBaseCurrency,
       interestStartDate: formData.interestStartDate || undefined,
       showProfitShare: formData.showProfitShare,
-      collateralAssets: collateralAssets.filter(a => a.coin && parseFloat(a.qty) > 0).length > 0
-        ? collateralAssets.filter(a => a.coin && parseFloat(a.qty) > 0)
+      collateralAssets: collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
+        ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
         : undefined,
     };
     if (editingOrder) {
