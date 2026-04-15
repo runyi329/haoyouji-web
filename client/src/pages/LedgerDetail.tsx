@@ -1388,6 +1388,7 @@ export default function LedgerDetail() {
   const [viewAsUserId, setViewAsUserIdState] = useState<number | null>(viewAsUserIdFromUrl);
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
   const [viewAsSearch, setViewAsSearch] = useState('');
+  const [viewAsRoleFilter, setViewAsRoleFilter] = useState<'all' | 'member' | 'funder'>('all');
   const trpcUtils = trpc.useUtils();
   // 视角切换时同步写入 URL，确保刷新后保持视角
   const handleSwitchView = (userId: number | null) => {
@@ -4848,6 +4849,22 @@ export default function LedgerDetail() {
                   className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                 />
               </div>
+              {/* 角色筛选按钮 */}
+              <div className="flex gap-2 mt-2">
+                {(['all', 'member', 'funder'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setViewAsRoleFilter(f)}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      viewAsRoleFilter === f
+                        ? 'bg-[#A80000] text-white'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                    }`}
+                  >
+                    {f === 'all' ? '全部' : f === 'member' ? '普通成员' : '资金方'}
+                  </button>
+                ))}
+              </div>
             </div>
             {/* 成员列表 */}
             <div className="flex-1 overflow-y-auto px-4 py-2">
@@ -4868,6 +4885,9 @@ export default function LedgerDetail() {
               {/* 成员列表 */}
               {((membersData as any[]) || []).filter((m: any) => {
                 if (m.userId === user?.id) return false; // 排除自己
+                // 角色筛选
+                if (viewAsRoleFilter === 'member' && m.role !== 'member') return false;
+                if (viewAsRoleFilter === 'funder' && m.role !== 'funder') return false;
                 if (!viewAsSearch) return true;
                 const keyword = viewAsSearch.toLowerCase();
                 return (m.nickname || '').toLowerCase().includes(keyword) || (m.username || '').toLowerCase().includes(keyword);
