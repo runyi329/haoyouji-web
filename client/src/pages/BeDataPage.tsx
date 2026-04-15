@@ -580,60 +580,6 @@ export default function BeDataPage() {
                 </div>
               )}
 
-              {/* 连涨次数分布图（柱状图，全量数据） */}
-              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">连涨次数分布</span>
-                  <span className="text-xs text-gray-400 ml-2">连续上涨N天出现的次数（全量）</span>
-                </div>
-                <div className="px-2 pt-3 pb-2">
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={upData} margin={{ top: 16, right: 8, left: -16, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                      <XAxis dataKey="days" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        formatter={(val: any) => [`${val} 次`, "出现次数"]}
-                        contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
-                      />
-                      <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                        {upData.map((_, i) => (
-                          <Cell key={i} fill="#ef4444" fillOpacity={0.75 + (i / upData.length) * 0.25} />
-                        ))}
-                        <LabelList dataKey="count" position="top" style={{ fontSize: 10, fill: "#ef4444", fontWeight: 600 }} />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* 连跌次数分布图（柱状图，全量数据） */}
-              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">连跌次数分布</span>
-                  <span className="text-xs text-gray-400 ml-2">连续下跌N天出现的次数（全量）</span>
-                </div>
-                <div className="px-2 pt-3 pb-2">
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={downData} margin={{ top: 16, right: 8, left: -16, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                      <XAxis dataKey="days" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={{ stroke: "#e5e7eb" }} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        formatter={(val: any) => [`${val} 次`, "出现次数"]}
-                        contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e5e7eb" }}
-                      />
-                      <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                        {downData.map((_, i) => (
-                          <Cell key={i} fill="#22c55e" fillOpacity={0.75 + (i / downData.length) * 0.25} />
-                        ))}
-                        <LabelList dataKey="count" position="top" style={{ fontSize: 10, fill: "#16a34a", fontWeight: 600 }} />
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
               {/* 涨跌幅频率分布图（正态分布直方图） */}
               {allChangePcts && allChangePcts.length > 0 && (
                 <ChangePctDistChart allData={allChangePcts} />
