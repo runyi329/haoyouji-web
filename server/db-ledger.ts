@@ -1048,7 +1048,76 @@ export async function getLedgerCategories(
     .orderBy(asc(ledgerCategories.sortOrder), asc(ledgerCategories.id));
   
   // 合并预设分类和自定义分类，预设分类在前
-  return [...defaultCategories, ...customCategories];
+  const allCategories = [...defaultCategories, ...customCategories];
+
+  // ===== 标签可见性过滤 =====
+  // 仅对非-owner用户生效：读取该用户在该账本的 initial_balances，
+  // 将 tagName__visible=0 的顶级标签及其所有子孙分类过滤掉。
+  if (userId && ledgerId > 0) {
+    try {
+      // 查询该用户在该账本的角色
+      const memberRows = await db
+        .select({ role: ledgerMembers.role, initialBalances: ledgerMembers.initialBalances })
+        .from(ledgerMembers)
+        .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+        .limit(1);
+
+      if (memberRows.length > 0) {
+        const memberRole = memberRows[0].role;
+        // owner 看到全部标签，不过滤
+        if (memberRole !== 'owner') {
+          const raw = memberRows[0].initialBalances;
+          if (raw) {
+            const balances = JSON.parse(raw) as Record<string, any>;
+            // 收集隐藏的顶级标签名称（visible=0）
+            const hiddenTopNames = new Set<string>();
+            for (const [key, val] of Object.entries(balances)) {
+              if (key.endsWith('__visible') && Number(val) === 0) {
+                hiddenTopNames.add(key.replace('__visible', ''));
+              }
+            }
+
+            if (hiddenTopNames.size > 0) {
+              // 找出隐藏的顶级分类 ID
+              const topLevelCats = allCategories.filter(c => c.parentId === null);
+              const hiddenTopIds = new Set<number>(
+                topLevelCats.filter(c => hiddenTopNames.has(c.name)).map(c => c.id)
+              );
+
+              if (hiddenTopIds.size > 0) {
+                // 递归收集所有需要隐藏的 ID（包括子孙分类）
+                // 先拿到该账本所有分类（不分层级）用于递归
+                const allLedgerCats = await db
+                  .select({ id: ledgerCategories.id, parentId: ledgerCategories.parentId })
+                  .from(ledgerCategories)
+                  .where(eq(ledgerCategories.ledgerId, ledgerId));
+
+                const hiddenIds = new Set<number>(hiddenTopIds);
+                // BFS 收集子孙分类
+                let changed = true;
+                while (changed) {
+                  changed = false;
+                  for (const cat of allLedgerCats) {
+                    if (!hiddenIds.has(cat.id) && cat.parentId !== null && hiddenIds.has(cat.parentId)) {
+                      hiddenIds.add(cat.id);
+                      changed = true;
+                    }
+                  }
+                }
+
+                return allCategories.filter(c => !hiddenIds.has(c.id));
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // 过滤失败时降级处理，返回全量
+      console.error('[getLedgerCategories] 标签可见性过滤失败:', e);
+    }
+  }
+
+  return allCategories;
 }
 
 /**
