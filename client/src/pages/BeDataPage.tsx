@@ -187,9 +187,14 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
             ))}
           </div>
         );
-        const makeRows = (streakMap: Record<number, number>, maxN: number, keyPrefix: string) =>
-          Array.from({ length: maxN }, (_, i) => i + 1).map(n => {
+        const makeRows = (streakMap: Record<number, number>, maxN: number, keyPrefix: string) => {
+          // 计算总段数（所有连涨/连跌段的总次数，即 ≥1天 的总次数）
+          const totalSegments = Object.values(streakMap).reduce((s, v) => s + v, 0);
+          return Array.from({ length: maxN }, (_, i) => i + 1).map(n => {
             const cnt = streakMap[n] ?? 0;
+            // 条件概率：恰好连涨/连跌N天的次数 ÷ 总段数
+            const prob = totalSegments > 0 ? cnt / totalSegments : 0;
+            const fairOdds = prob > 0 ? 1 / prob : 0;
             if (cnt === 0) return (
               <div key={`${keyPrefix}-${n}`} style={rStyle(n)}>
                 <span style={{ fontSize: 9, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>{n}天</span>
@@ -199,8 +204,6 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
                 ))}
               </div>
             );
-            const prob = totalDays > 0 ? cnt / totalDays : 0;
-            const fairOdds = prob > 0 ? 1 / prob : 0;
             return (
               <div key={`${keyPrefix}-${n}`} style={rStyle(n)}>
                 <span style={{ fontSize: 9, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>{n}天</span>
@@ -213,6 +216,7 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
               </div>
             );
           });
+        };
         return (
           <div className="px-4 pb-3">
             <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', margin: '4px 0 4px 0' }}>赔率参考表
@@ -228,7 +232,7 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
               <Header />
               {makeRows(downStreakMap, maxDownStreak, 'down')}
             </div>
-            <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。概率 = 该连涨/连跌天数出现次数 ÷ 统计总天数。</div>
+            <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。条件概率 = 该连涨/连跌N天出现次数 ÷ 所有连涨/连跌段总次数，各天数概率之和 = 100%。</div>
           </div>
         );
       })()}
@@ -359,8 +363,10 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
           const upCnt = upEntry?.count ?? 0;
           const downCnt = downEntry?.count ?? 0;
           if (upCnt === 0 && downCnt === 0) return null;
-          const upPct = totalDays > 0 ? (upCnt / totalDays * 100).toFixed(2) : '0.0';
-          const downPct = totalDays > 0 ? (downCnt / totalDays * 100).toFixed(2) : '0.0';
+          const totalUpDays = distData.filter(d => d.bucket >= 0).reduce((s, d) => s + d.count, 0);
+          const totalDownDays = distData.filter(d => d.bucket < 0).reduce((s, d) => s + d.count, 0);
+          const upPct = totalUpDays > 0 ? (upCnt / totalUpDays * 100).toFixed(2) : '0.00';
+          const downPct = totalDownDays > 0 ? (downCnt / totalDownDays * 100).toFixed(2) : '0.00';
           const rangeLabel = `≥${n}% <${n+1}%`;
           return (
             <div
@@ -396,11 +402,14 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
               ))}
             </div>
           );
+          // 条件概率：涨幅区间概率 = 该区间天数 ÷ 总涨天数，跌幅区间概率 = 该区间天数 ÷ 总跌天数
+          const totalUpDays = distData.filter(d => d.bucket >= 0).reduce((s, d) => s + d.count, 0);
+          const totalDownDays = distData.filter(d => d.bucket < 0).reduce((s, d) => s + d.count, 0);
           const upRows = Array.from({ length: 21 }, (_, i) => i).map(n => {
             const entry = distData.find(d => d.bucket === n);
             const cnt = entry?.count ?? 0;
             if (cnt === 0) return null;
-            const prob = totalDays > 0 ? cnt / totalDays : 0;
+            const prob = totalUpDays > 0 ? cnt / totalUpDays : 0;
             const fairOdds = prob > 0 ? 1 / prob : 0;
             return (
               <div key={`up-${n}`} style={rowStyle(n)}>
@@ -418,7 +427,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             const entry = distData.find(d => d.bucket === -(n + 1));
             const cnt = entry?.count ?? 0;
             if (cnt === 0) return null;
-            const prob = totalDays > 0 ? cnt / totalDays : 0;
+            const prob = totalDownDays > 0 ? cnt / totalDownDays : 0;
             const fairOdds = prob > 0 ? 1 / prob : 0;
             return (
               <div key={`down-${n}`} style={rowStyle(n)}>
@@ -449,7 +458,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             </>
           );
         })()}
-        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金，如“1赔3”即投注1元返回3元（凈0元）。概率基于历史数据估算。</div>
+        <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。条件概率：涨幅区间 = 该区间天数 ÷ 总涨天数，跌幅区间 = 该区间天数 ÷ 总跌天数，各区间概率之和 = 100%。</div>
       </div>
     </div>
   );
