@@ -625,26 +625,8 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
             />
           </div>
 
-          {/* 积分滑动条 */}
-          <div className="mx-4 mb-5">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>投入积分</span>
-              <span className="text-lg font-black" style={{ color: neon.main, textShadow: `0 0 8px ${neon.glow}` }}>{points} 分</span>
-            </div>
-            <input
-              type="range" min={MIN_POINTS} max={MAX_POINTS} step={10} value={points}
-              onChange={e => { setPoints(Number(e.target.value)); setConfirmed(false); }}
-              className="w-full h-3 rounded-full appearance-none cursor-pointer"
-              style={{ background: sliderBg(points, MIN_POINTS, MAX_POINTS, neon.main), accentColor: neon.main }}
-            />
-            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
-              <span>{MIN_POINTS}</span>
-              <span>{MAX_POINTS}</span>
-            </div>
-          </div>
-
-          {/* 预期获得 */}
-          <div className="mx-4 mb-5 rounded-2xl px-5 py-4 flex items-center justify-between" style={{
+          {/* 预期获得数字展示 */}
+          <div className="mx-4 mb-3 rounded-2xl px-5 py-4 flex items-center justify-between" style={{
             background: 'rgba(255,255,255,0.04)',
             border: '1px solid rgba(255,255,255,0.08)',
           }}>
@@ -658,6 +640,20 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
               <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
                 {payout > 0 ? payout : '-'}<span className="text-sm font-normal ml-1" style={{ color: 'rgba(255,255,255,0.4)' }}>分</span>
               </div>
+            </div>
+          </div>
+
+          {/* 积分滑动条（在数字展示下方） */}
+          <div className="mx-4 mb-5">
+            <input
+              type="range" min={MIN_POINTS} max={MAX_POINTS} step={10} value={points}
+              onChange={e => { setPoints(Number(e.target.value)); setConfirmed(false); }}
+              className="w-full h-3 rounded-full appearance-none cursor-pointer"
+              style={{ background: sliderBg(points, MIN_POINTS, MAX_POINTS, neon.main), accentColor: neon.main }}
+            />
+            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+              <span>{MIN_POINTS}分</span>
+              <span>{MAX_POINTS}分</span>
             </div>
           </div>
 
