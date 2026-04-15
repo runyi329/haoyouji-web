@@ -84,6 +84,8 @@ export default function LedgerDetailAA({
   // 日历视图模  // 权限判断：owner 或 admin 才能操作
   const userRole = (ledgerData as any)?.userRole;
   const canEdit = userRole === 'owner' || userRole === 'admin';
+  // 视角切换仅账本创建者（owner）可用，管理员不可切换他人视角
+  const canSwitchView = userRole === 'owner';
   // 隐藏悬浮+按钮：账本 ID=37（"2026 AA"私人定制账本）对所有人隐藏，仅保留点击日历格子添加记录
   const hideFloatingAddButton = ledgerId === 37;
 
@@ -659,8 +661,8 @@ export default function LedgerDetailAA({
           {/* 头像（管理员可点击切换视角） */}
           <div
             className="flex-shrink-0 relative"
-            onClick={() => { if (canEdit) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
-            style={{ cursor: canEdit ? 'pointer' : 'default' }}
+            onClick={() => { if (canSwitchView) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
+            style={{ cursor: canSwitchView ? 'pointer' : 'default' }}
           >
             {(() => {
               const viewTarget = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
@@ -672,7 +674,7 @@ export default function LedgerDetailAA({
                 <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold" style={{ backgroundColor: "rgba(255,255,255,0.3)" }}>?</div>
               );
             })()}
-            {canEdit && !viewAsUserId && (
+            {canSwitchView && !viewAsUserId && (
               <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/90 flex items-center justify-center">
                 <Users className="w-2.5 h-2.5" style={{ color: '#D32F2F' }} />
               </div>
@@ -1789,7 +1791,7 @@ export default function LedgerDetailAA({
       )}
 
       {/* ── 视角切换弹窗（管理员/创建者点击头像弹出） ── */}
-      {showViewAsPicker && canEdit && (
+      {showViewAsPicker && canSwitchView && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setShowViewAsPicker(false)}>
           <div
             className="w-full rounded-t-2xl overflow-hidden"
@@ -1856,7 +1858,7 @@ export default function LedgerDetailAA({
       )}
 
       {/* ── 视角切换黄色横幅提示条（切换后底部显示） ── */}
-      {viewAsUserId && canEdit && (
+      {viewAsUserId && canSwitchView && (
         <div
           className="fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-between px-4 py-3"
           style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}
