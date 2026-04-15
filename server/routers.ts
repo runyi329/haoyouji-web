@@ -10941,12 +10941,20 @@ export const appRouter = router({
           sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
               VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
         );
-        // 委托买入：扣除余额
+        // 委托买入：扣除余额，并回填订单号
         const amountNum = parseFloat(input.amount);
         if (!isNaN(amountNum) && amountNum > 0) {
+          // 查询刚创建的订单 ID
+          const newOrderRows = await db.execute(
+            sql`SELECT id FROM af_orders WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND side = 'buy' ORDER BY created_at DESC LIMIT 1`
+          ) as any;
+          const newOrderId = (newOrderRows[0]?.[0] ?? newOrderRows[0])?.id;
+          const buyNote = newOrderId
+            ? `委托买入 ${input.coin} ${input.amount} USDT #${newOrderId}`
+            : `委托买入 ${input.coin} ${input.amount} USDT`;
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-                VALUES (${input.ledgerId}, ${ctx.user.id}, ${-amountNum}, ${`委托买入 ${input.coin} ${input.amount} USDT`}, NOW(), NOW())`
+                VALUES (${input.ledgerId}, ${ctx.user.id}, ${-amountNum}, ${buyNote}, NOW(), NOW())`
           );
         }
         return { success: true };
