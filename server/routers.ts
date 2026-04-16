@@ -26,7 +26,7 @@ import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import * as dbCrypto from "./db-crypto";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
-import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations, ahCompanyMembers } from "../drizzle/schema";
+import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, ledgerMembers, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations, ahCompanyMembers } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, inArray, like, or, gt } from "drizzle-orm";
 import { inviteRouter } from "./invite-api";
@@ -18358,36 +18358,70 @@ export const adminFeatureRouter = router({
   getShortcutButtons: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const dbLedger = await import('./db-ledger');
-      const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-      if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+      // 第一步：用 drizzle ORM 查成员基本信息（和 getLedgerMembers / getMemberPermissions 同样的方式）
+      const db = await getLedgerDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+      // 权限检查
+      const currentMember = await db
+        .select({ role: ledgerMembers.role })
+        .from(ledgerMembers)
+        .where(and(
+          eq(ledgerMembers.ledgerId, input.ledgerId),
+          eq(ledgerMembers.userId, ctx.user.id)
+        ))
+        .limit(1);
+      if (!currentMember.length || (currentMember[0].role !== 'owner' && currentMember[0].role !== 'admin')) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
       }
-      const conn = await getDbConnection();
-      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      const [rows] = await conn.execute(
-        `SELECT lm.userId, lm.shortcut_buttons, lm.nickname, u.name, u.username, u.avatar
-         FROM ledger_members lm
-         LEFT JOIN users u ON u.id = lm.userId
-         WHERE lm.ledgerId = ?
-         ORDER BY lm.createdAt ASC`,
-        [input.ledgerId]
-      ) as any[];
-      const members = (rows as any[]) || [];
+
+      // 第二步：用 drizzle ORM 查所有成员基本信息
+      const members = await db
+        .select({
+          userId: ledgerMembers.userId,
+          nickname: ledgerMembers.nickname,
+          memberType: ledgerMembers.memberType,
+          name: users.name,
+          username: users.username,
+          avatar: users.avatar,
+        })
+        .from(ledgerMembers)
+        .leftJoin(users, eq(ledgerMembers.userId, users.id))
+        .where(eq(ledgerMembers.ledgerId, input.ledgerId))
+        .orderBy(ledgerMembers.createdAt);
+
       console.log('[getShortcutButtons] ledgerId:', input.ledgerId, 'members count:', members.length);
-      return members.map((m: any) => ({
-        userId: m.userId,
-        name: m.nickname || m.name || `用户${m.userId}`,
-        avatar: m.avatar || '',
-        shortcuts: (() => {
-          try {
-            const raw = typeof m.shortcut_buttons === 'string'
-              ? JSON.parse(m.shortcut_buttons)
-              : (m.shortcut_buttons ?? {});
-            return raw;
-          } catch { return {}; }
-        })(),
-      }));
+
+      // 第三步：用原始 SQL 查 shortcut_buttons（该字段不在 drizzle schema 中）
+      const conn = await getDbConnection();
+      let shortcutMap: Record<number, any> = {};
+      if (conn) {
+        try {
+          const [sbRows] = await conn.execute(
+            `SELECT userId, shortcut_buttons FROM ledger_members WHERE ledgerId = ?`,
+            [input.ledgerId]
+          ) as any[];
+          for (const row of (sbRows as any[]) || []) {
+            try {
+              const raw = typeof row.shortcut_buttons === 'string'
+                ? JSON.parse(row.shortcut_buttons)
+                : (row.shortcut_buttons ?? {});
+              shortcutMap[row.userId] = raw;
+            } catch { shortcutMap[row.userId] = {}; }
+          }
+        } catch (e) {
+          console.error('[getShortcutButtons] shortcut_buttons查询失败:', e);
+        }
+      }
+
+      return members
+        .filter((m: any) => m.memberType !== 'ai')
+        .map((m: any) => ({
+          userId: m.userId,
+          name: m.nickname || m.name || m.username || `用户${m.userId}`,
+          avatar: m.avatar || '',
+          shortcuts: shortcutMap[m.userId] || {},
+        }));
     }),
 
   // 更新某成员的快捷按鈕配置（owner/admin可用）
