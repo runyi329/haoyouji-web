@@ -331,23 +331,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
               zIndex: 1,
             }}
           />
-          {/* 滑块上的文字标签（跟随滑块位置） */}
-          {dir && (
-            <div
-              className="absolute top-0 bottom-0 flex items-center justify-center pointer-events-none"
-              style={{
-                left: `calc(${(dirSlider + 11) / 22 * 100}% - 12px)`,
-                width: '24px',
-                zIndex: 2,
-                fontSize: '11px',
-                fontWeight: 900,
-                color: dir === 'down' ? '#00e676' : '#ff4d4d',
-                textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,1)' : '0 0 8px rgba(255,77,77,1)',
-              }}
-            >
-              {dir === 'up' ? '涨' : '跌'}
-            </div>
-          )}
+
         </div>
         {/* 幅度刻度 */}
         <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(60,30,0,0.5)' }}>
