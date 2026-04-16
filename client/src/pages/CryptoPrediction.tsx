@@ -188,6 +188,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
   const dir: 'up' | 'down' | null = dirSlider > 0 ? 'up' : dirSlider < 0 ? 'down' : null;
   const rangeIdx = dirSlider !== 0 ? Math.abs(dirSlider) - 1 : 0;
   const [betAmount, setBetAmount] = useState(10);
+  const [inputValue, setInputValue] = useState('10'); // 控制输入框显示内容
   const [showConfirm, setShowConfirm] = useState(false);
 
   // 获取账本余额
@@ -355,14 +356,22 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
                 <div className="flex items-baseline gap-1">
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     max={Math.max(Math.floor(balance), 1)}
-                    value={betAmount}
+                    value={inputValue}
                     onChange={e => {
-                      const v = Number(e.target.value);
-                      if (!isNaN(v) && v >= 1) {
-                        setBetAmount(Math.min(v, Math.max(Math.floor(balance), 1)));
+                      const raw = e.target.value;
+                      setInputValue(raw);
+                      const v = Number(raw);
+                      if (!isNaN(v) && raw !== '') {
+                        setBetAmount(Math.min(Math.max(v, 0), Math.max(Math.floor(balance), 1)));
                       }
+                    }}
+                    onBlur={e => {
+                      const v = Number(e.target.value);
+                      const clamped = isNaN(v) || e.target.value === '' ? 1 : Math.min(Math.max(v, 1), Math.max(Math.floor(balance), 1));
+                      setBetAmount(clamped);
+                      setInputValue(String(clamped));
                     }}
                     className="text-xl font-bold bg-transparent border-b outline-none w-20 text-right"
                     style={{
@@ -388,7 +397,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
           <div className="mx-4 mb-4">
             <input
               type="range" min={1} max={Math.max(Math.floor(balance), 1)} step={1} value={betAmount}
-              onChange={e => setBetAmount(Number(e.target.value))}
+              onChange={e => { const v = Number(e.target.value); setBetAmount(v); setInputValue(String(v)); }}
               className="w-full h-3 rounded-full appearance-none cursor-pointer"
               style={{ background: sliderBg(betAmount, 1, Math.max(Math.floor(balance), 1), '#d4af37'), accentColor: '#d4af37' }}
             />
