@@ -2322,71 +2322,12 @@ export default function CryptoPrediction() {
         )}
 
         {/* 行情评估（竞猜） */}
-        {tab === "market" && (() => {
-           // 根据管理员勾选过滤事件（如果管理员尚未设置任何勾选，默认显示全部）
-           const filteredEvents = visibleQuestions.length > 0 ? events.filter(e => visibleQuestions.includes(e.question)) : events;
-          return (
+        {tab === "market" && (
           <div>
             {/* ===== 明日涨跌竞猜组件 ===== */}
             <MarketBetPanel ledgerId={ledgerId} coinKey={coinKey} />
-            {/* 分割线 */}
-            <div className="my-4 flex items-center gap-2">
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>行情评估</span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-            </div>
-            {predLoading ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-3">
-                <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-                <p className="text-xs text-gray-500">正在加载预测数据...</p>
-              </div>
-            ) : predError ? (
-              <div className="bg-[#1C2127] rounded-2xl px-5 py-8 flex flex-col items-center gap-3 text-center">
-                <WifiOff className="w-10 h-10 text-gray-600" />
-                <p className="text-sm font-medium text-gray-300">数据加载失败</p>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  {predError.message || "无法连接到 Polymarket，请检查网络后重试"}
-                </p>
-                <button onClick={() => refetchPred()} disabled={predFetching}
-                  className="mt-1 flex items-center gap-2 bg-[#D32F2F] text-white px-5 py-2.5 rounded-xl text-sm font-medium disabled:opacity-60">
-                  <RefreshCw className={`w-4 h-4 ${predFetching ? "animate-spin" : ""}`} />
-                  重新加载
-                </button>
-              </div>
-            ) : filteredEvents.length === 0 ? (
-              <div className="bg-[#1C2127] rounded-2xl px-5 py-8 flex flex-col items-center gap-3 text-center">
-                <Bitcoin className="w-12 h-12 text-gray-600" />
-                <p className="text-sm font-medium text-gray-300">暂无 {coin.name} 行情评估数据</p>
-                <p className="text-xs text-gray-500">暂无相关评估数据</p>
-              </div>
-            ) : (
-              filteredEvents.map((event) => (
-                <EventCard key={event.id} event={event} ledgerId={ledgerId} onPredicted={() => refetchPred()} />
-              ))
-            )}
-            {/* QQ 容器入口 - 仅 jiang(870413) 和 yjh(4957151) 可见 */}
-            {canSeeQQ && (
-              <div
-                className="mt-4 bg-[#1C2127] rounded-2xl p-4 flex items-center justify-between cursor-pointer active:opacity-70"
-                onClick={() => setLocation(`/ledger/${ledgerId}/qq`)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#12B7F5] flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">QQ</span>
-                  </div>
-                  <div>
-                    <div className="text-white font-medium text-sm">QQ</div>
-                    <div className="text-gray-400 text-xs mt-0.5">点击进入</div>
-                  </div>
-                </div>
-                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </div>
-            )}
           </div>
-          );
-        })()}
+        )}
       </div>
 
     </div>
