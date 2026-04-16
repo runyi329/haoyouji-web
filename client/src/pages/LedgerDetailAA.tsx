@@ -709,8 +709,23 @@ export default function LedgerDetailAA({
 
             {/* 右侧：操作按鈕 + 返回按鈕 + 标签下拉 */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
+              {/* 数字B快捷按钮（跳转52号账本）——最左边 */}
+              {myShortcuts?.digitalB && (
+                <div
+                  className="w-7 h-7 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
+                  style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
+                  onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }}
+                  title="数字B"
+                >
+                  <img
+                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_6d044b9b.png"
+                    alt="数字B"
+                    style={{ width: '110%', height: '110%', objectFit: 'cover', marginLeft: '-5%', marginTop: '-5%' }}
+                  />
+                </div>
+              )}
               {/* 搜索和数据按钮已隐藏 */}
-              {/* 设置按钮仅账本创建者（owner）可见，管理员不显示 */}
+              {/* 设置按钮仅账本创建者（owner）可见，管理员不显示 */
               {canSwitchView && !viewAsUserId && (
                 <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
@@ -733,22 +748,8 @@ export default function LedgerDetailAA({
               >
                 刷新
               </button>
-              {/* 数字B快捷按钮（跳转52号账本） */}
-              {myShortcuts?.digitalB && (
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
-                  style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
-                  onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }}
-                  title="数字B"
-                >
-                  <img
-                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_6d044b9b.png"
-                    alt="数字B"
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                </div>
-              )}
-              {/* 返回按鈕：渿圆形，点击返回账本首页 */}
+              {/* 数字B快捷按钮（跳转52号账本）——放在所有按钮最左边 */}
+              {/* 返回按鈕：渿圆形，点击返回账本首页 */
               <button
                 onClick={() => setLocation("/ledger")}
                 className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
