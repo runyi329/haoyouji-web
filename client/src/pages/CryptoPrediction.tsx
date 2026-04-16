@@ -277,23 +277,20 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
 
       {/* 方向+幅度合一滑条 */}
       <div className="px-4 mb-4">
-        {/* 标签行 */}
+        {/* 标签行：只显示左跌右涨 */}
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm font-black" style={{ color: dir === 'down' ? '#00e676' : 'rgba(60,30,0,0.4)', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.6)' : 'none', transition: 'all 0.2s' }}>↓ 跌</span>
-          <span className="text-xs" style={{ color: 'rgba(60,30,0,0.5)' }}>
-            {dirSlider === 0 ? '← 拖动选择方向 →' : (dir === 'up' ? `↑ 涨 ${safeIdx}%~${safeIdx+1}%` : `↓ 跌 ${safeIdx}%~${safeIdx+1}%`)}
-          </span>
           <span className="text-sm font-black" style={{ color: dir === 'up' ? '#ff4d4d' : 'rgba(60,30,0,0.4)', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.6)' : 'none', transition: 'all 0.2s' }}>涨 ↑</span>
         </div>
         {/* 双向滑条 */}
-        <div className="relative">
+        <div className="relative" style={{ height: '28px' }}>
           <input
             type="range" min={-11} max={11} step={1} value={dirSlider}
             onChange={e => setDirSlider(Number(e.target.value))}
-            className="w-full appearance-none cursor-pointer"
+            className="w-full appearance-none cursor-pointer absolute inset-0"
             style={{
-              height: '20px',
-              borderRadius: '10px',
+              height: '28px',
+              borderRadius: '14px',
               background: (() => {
                 const pct = (dirSlider + 11) / 22 * 100;
                 const mid = 50;
@@ -305,10 +302,26 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
               outline: 'none',
               border: '1px solid rgba(255,255,255,0.3)',
               boxShadow: dir === 'down' ? '0 0 10px rgba(0,230,118,0.4)' : dir === 'up' ? '0 0 10px rgba(255,77,77,0.4)' : 'none',
+              zIndex: 1,
             }}
           />
-          {/* 中心刻度线 */}
-          <div className="absolute top-0 bottom-0 w-0.5 pointer-events-none" style={{ left: 'calc(50% - 1px)', background: 'rgba(255,255,255,0.5)' }} />
+          {/* 滑块上的文字标签（跟随滑块位置） */}
+          {dir && (
+            <div
+              className="absolute top-0 bottom-0 flex items-center justify-center pointer-events-none"
+              style={{
+                left: `calc(${(dirSlider + 11) / 22 * 100}% - 14px)`,
+                width: '28px',
+                zIndex: 2,
+                fontSize: '11px',
+                fontWeight: 900,
+                color: dir === 'down' ? '#00e676' : '#ff4d4d',
+                textShadow: dir === 'down' ? '0 0 6px rgba(0,230,118,0.9)' : '0 0 6px rgba(255,77,77,0.9)',
+              }}
+            >
+              {dir === 'up' ? '涨' : '跌'}
+            </div>
+          )}
         </div>
         {/* 幅度刻度 */}
         <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(60,30,0,0.5)' }}>
@@ -457,10 +470,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
         </div>
       )}
 
-      {/* 底部说明 */}
-      <div className="px-4 pb-4 text-xs" style={{ color: 'rgba(60,30,0,0.5)' }}>
-        · 赔率含本金 · 1U = 1优
-      </div>
+
     </div>
   );
 }
