@@ -226,6 +226,38 @@ export default function FunderManagement() {
     return orderAmt - computedCollateralValue;
   }, [computedCollateralValue, computedAmount]);
 
+  // 预览卡片实时待结利息（每秒更新）
+  const [previewAccrued, setPreviewAccrued] = useState<number>(0);
+  useEffect(() => {
+    const compute = () => {
+      const base = parseFloat(formData.interestBase || '0');
+      const rate = parseFloat(formData.interestRateAnnual || '0');
+      if (!base || !rate || !formData.interestStartDate) { setPreviewAccrued(0); return; }
+      const startTs = new Date(formData.interestStartDate + 'T00:00:00').getTime();
+      if (isNaN(startTs)) { setPreviewAccrued(0); return; }
+      const elapsedSeconds = Math.max(0, (Date.now() - startTs) / 1000);
+      const perSecond = (base * rate / 100) / (365 * 24 * 3600);
+      setPreviewAccrued(perSecond * elapsedSeconds);
+    };
+    compute();
+    const timer = setInterval(compute, 1000);
+    return () => clearInterval(timer);
+  }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
+
+  // 预览卡片实时风险敎口
+  const previewExposure = useMemo(() => {
+    if (computedCollateralValue === null) return null;
+    const liveP = formLivePrices[formData.coin];
+    const buyQty = parseFloat(formData.buyQuantity || '0');
+    const buyPriceNum = parseFloat(formData.buyPrice || '0');
+    const buyValue = buyPriceNum * buyQty;
+    const currentValue = liveP ? liveP * buyQty : null;
+    const floatPnl = currentValue !== null ? currentValue - buyValue : null;
+    return floatPnl !== null
+      ? computedCollateralValue + floatPnl - previewAccrued
+      : computedCollateralValue - previewAccrued;
+  }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued]);
+
   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: () => {
       toast.success('创建成功');
@@ -1229,7 +1261,9 @@ export default function FunderManagement() {
                           </div>
                           {/* 待结利息大数字 */}
                           <div className="h-7 flex items-baseline gap-0.5">
-                            <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>---</span>
+                            <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
+                              {previewAccrued > 0 ? previewAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                            </span>
                             <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
                               {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}
                             </span>
@@ -1253,13 +1287,25 @@ export default function FunderManagement() {
                             {displayConfig.collateralValue && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">担保价值</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>--- U</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {computedCollateralValue !== null
+                                    ? computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U'
+                                    : '--- U'}
+                                </span>
                               </div>
                             )}
                             {displayConfig.collateral && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">担保缺口</span>
-                                <span className="text-xs font-medium" style={{ color: '#DC2626' }}>100%</span>
+                                <span className="text-xs font-medium" style={{
+                                  color: previewExposure !== null && previewExposure >= 0 ? '#DC2626' : '#16A34A'
+                                }}>
+                                  {previewExposure === null
+                                    ? '---'
+                                    : previewExposure >= 0
+                                      ? '100%'
+                                      : `-${Math.abs(previewExposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                                </span>
                               </div>
                             )}
                           </div>
