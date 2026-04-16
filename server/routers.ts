@@ -18363,15 +18363,18 @@ export const adminFeatureRouter = router({
       if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
       }
-      const db = await getLedgerDb();
-      const rows = await db.execute(
-        sql`SELECT lm.userId, lm.shortcut_buttons, lm.nickname, u.name, u.username, u.avatar
-            FROM ledger_members lm
-            LEFT JOIN users u ON u.id = lm.userId
-            WHERE lm.ledgerId = ${input.ledgerId}
-            ORDER BY lm.createdAt ASC`
-      ) as any;
-      const members = ((rows[0] || rows) as any[]) || [];
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const [rows] = await conn.execute(
+        `SELECT lm.userId, lm.shortcut_buttons, lm.nickname, u.name, u.username, u.avatar
+         FROM ledger_members lm
+         LEFT JOIN users u ON u.id = lm.userId
+         WHERE lm.ledgerId = ?
+         ORDER BY lm.createdAt ASC`,
+        [input.ledgerId]
+      ) as any[];
+      const members = (rows as any[]) || [];
+      console.log('[getShortcutButtons] ledgerId:', input.ledgerId, 'members count:', members.length);
       return members.map((m: any) => ({
         userId: m.userId,
         name: m.nickname || m.name || `用户${m.userId}`,
@@ -18400,12 +18403,12 @@ export const adminFeatureRouter = router({
       if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
       }
-      const db = await getLedgerDb();
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       const shortcutsJson = JSON.stringify(input.shortcuts);
-      await db.execute(
-        sql`UPDATE ledger_members
-            SET shortcut_buttons = ${shortcutsJson}
-            WHERE ledgerId = ${input.ledgerId} AND userId = ${input.targetUserId}`
+      await conn.execute(
+        `UPDATE ledger_members SET shortcut_buttons = ? WHERE ledgerId = ? AND userId = ?`,
+        [shortcutsJson, input.ledgerId, input.targetUserId]
       );
       return { success: true };
     }),
@@ -18414,13 +18417,13 @@ export const adminFeatureRouter = router({
   getMyShortcutButtons: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
-      const db = await getLedgerDb();
-      const rows = await db.execute(
-        sql`SELECT shortcut_buttons FROM ledger_members
-            WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id}
-            LIMIT 1`
-      ) as any;
-      const list = ((rows[0] || rows) as any[]) || [];
+      const conn = await getDbConnection();
+      if (!conn) return {};
+      const [rows] = await conn.execute(
+        `SELECT shortcut_buttons FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+        [input.ledgerId, ctx.user.id]
+      ) as any[];
+      const list = (rows as any[]) || [];
       if (!list.length) return {};
       try {
         const raw = list[0].shortcut_buttons;
