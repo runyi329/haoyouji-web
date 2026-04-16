@@ -119,7 +119,7 @@ export default function ShortcutButtonsManage() {
         <>
           {/* 表头 */}
           <div
-            className="border-b border-gray-300 text-sm text-gray-700 font-medium bg-white sticky top-0 z-10 shadow-sm"
+            className="border-b border-gray-300 text-sm text-gray-700 font-medium bg-white sticky top-[44px] z-10 shadow-sm"
             style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(4, 1fr)" }}
           >
             <div className="py-3 px-2 text-center">成员</div>
