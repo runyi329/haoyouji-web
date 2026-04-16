@@ -13668,23 +13668,41 @@ export const appRouter = router({
         }),
       }))
       .mutation(async ({ input, ctx }) => {
-        const conn = await getDbConnection();
-        // 检查当前用户是否是owner
-        const [ledgerRows] = await (conn as any).execute(
-          `SELECT createdBy FROM ledgers WHERE id = ?`,
-          [input.ledgerId]
-        );
-        const ledgerRow = (ledgerRows as any[])[0];
-        if (!ledgerRow || Number(ledgerRow.createdBy) !== Number(ctx.user.id)) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建者可操作' });
+        try {
+          console.log('[updateShortcutButtons] start, ledgerId=', input.ledgerId, 'targetUserId=', input.targetUserId, 'userId=', ctx.user.id);
+          const conn = await getDbConnection();
+          if (!conn) throw new Error('数据库连接失败');
+          // 检查当前用户是否是owner
+          const [ledgerRows] = await (conn as any).execute(
+            `SELECT createdBy FROM ledgers WHERE id = ?`,
+            [input.ledgerId]
+          );
+          console.log('[updateShortcutButtons] ledgerRows count=', (ledgerRows as any[]).length, 'createdBy=', (ledgerRows as any[])[0]?.createdBy, 'userId=', ctx.user.id);
+          const ledgerRow = (ledgerRows as any[])[0];
+          if (!ledgerRow || Number(ledgerRow.createdBy) !== Number(ctx.user.id)) {
+            console.log('[updateShortcutButtons] FORBIDDEN: createdBy=', ledgerRow?.createdBy, 'userId=', ctx.user.id);
+            throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建者可操作' });
+          }
+          // 确保 shortcut_buttons 字段存在
+          try {
+            await (conn as any).execute(
+              `ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL`
+            );
+          } catch (alterErr: any) {
+            // 字段已存在时忽略错误
+          }
+          const [updateResult] = await (conn as any).execute(
+            `UPDATE ledger_members SET shortcut_buttons = ? WHERE ledgerId = ? AND userId = ?`,
+            [JSON.stringify(input.shortcuts), input.ledgerId, input.targetUserId]
+          );
+          console.log('[updateShortcutButtons] UPDATE affectedRows=', (updateResult as any)?.affectedRows);
+          return { success: true };
+        } catch (err: any) {
+          if (err instanceof TRPCError) throw err;
+          console.error('[updateShortcutButtons] ERROR:', err.message, err.stack?.substring(0, 500));
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: err.message || '更新失败' });
         }
-        await (conn as any).execute(
-          `UPDATE ledger_members SET shortcut_buttons = ? WHERE ledgerId = ? AND userId = ?`,
-          [JSON.stringify(input.shortcuts), input.ledgerId, input.targetUserId]
-        );
-        return { success: true };
       }),
-
     // 获取当前用户自己的快捷按钮配置
     getMyShortcutButtons: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
