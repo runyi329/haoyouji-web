@@ -810,11 +810,19 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           {/* 标题：持有资产（固定高度与右栏对齐） */}
           <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>持有资产</div>
           {/* 币种名称 + 数量（固定高度与右栏对齐） */}
-          <div className="h-9 flex items-baseline gap-1">
+          <div className="h-9 flex items-baseline gap-1 flex-wrap">
             <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
               {qty > 0 ? smartQty(qty) : '—'}
             </span>
             <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
+            {(() => {
+              const liveP = isEnded
+                ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
+                : (livePrices[order.coin] ?? null);
+              if (!liveP || !qty) return null;
+              const val = (qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 });
+              return <span className="text-xs" style={{ color: '#6B7280' }}>({val} U)</span>;
+            })()}
           </div>
           {/* 订单信息列表：标题靠左，数值靠右 */}
           <div className="space-y-0.5">
@@ -870,16 +878,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                 </span>
               </div>
             )}
-            {dc.currentValue && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400 shrink-0">{isEnded ? '结束价值' : '当前价值'}</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {isEnded
-                    ? (order.end_price && qty ? (qty * parseFloat(order.end_price)).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
-                    : (livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
-                </span>
-              </div>
-            )}
+            {/* 当前价值已移至持有资产大数字旁括号显示，此行已移除 */}
             {dc.holdDuration && order.buy_date && order.status === 'active' && (() => {
               const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
               if (elapsed < 0) return null;
