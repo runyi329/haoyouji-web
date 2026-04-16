@@ -276,8 +276,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
       </div>
 
       {/* 赔率卡（幅度区间）——在滑条前显示 */}
-      {dir && (
-        <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
+      <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
           background: 'rgba(0,0,0,0.18)',
           border: '1px solid rgba(255,255,255,0.35)',
           boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
@@ -301,7 +300,6 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
             </div>
           </div>
         </div>
-      )}
 
       {/* 方向+幅度合一滑条（始终显示） */}
       <div className="px-4 mb-3">
@@ -359,9 +357,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
         </div>
       </div>
 
-      {dir && (
-        <>
-          {/* 投入 → 预期获得 */}
+      {/* 投入 → 预期获得 */}
           <div className="mx-4 mb-3 rounded-2xl px-4 py-3 flex items-center justify-between" style={{
             background: 'rgba(0,0,0,0.18)',
             border: '1px solid rgba(255,255,255,0.35)',
@@ -435,10 +431,6 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
               </div>
             )}
           </div>
-        </>
-      )}
-
-
 
       {/* 我的最近竞猜记录 */}
       {myBets.length > 0 && (
