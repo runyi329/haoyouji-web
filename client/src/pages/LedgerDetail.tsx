@@ -375,7 +375,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
               {floatPnl !== null
                 ? <>
                     <span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {buyValue.toFixed(2)} = </span>
-                    <strong style={{ color: floatPnl >= 0 ? '#16A34A' : '#DC2626' }}>
+                    <strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
                       {floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U
                       {floatPnl >= 0 ? '（浮盈）' : '（亏损）'}
                     </strong>
@@ -391,16 +391,16 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
               = <strong>{collateralValue.toFixed(2)} U</strong>
             </div>
           </div>
-          <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#F0FDF4' : '#FFF1F1' }}>
-            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>③ 风险敎口</div>
+          <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
+            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
             <div>担保物 + 浮动盈亏 − 代结利息（正数充足，负数缺口）</div>
             <div className="mt-1 font-mono">
               {floatPnl !== null
-                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
               }
             </div>
-            <div className="mt-1.5" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>
+            <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
               {isSufficient
                 ? `担保物充足，还有 ${exposure.toFixed(2)} U 的余量空间`
                 : `担保物不足，还需补充 ${Math.abs(exposure).toFixed(2)} U 才能覆盖风险`
@@ -569,7 +569,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                     >?</button>
                   </div>
                   <span className="font-medium" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>
-                    {isSufficient ? '100%（充足）' : `-${(shortfallAmt! > 0 ? shortfallAmt! : 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                    {isSufficient ? '100%' : `-${(shortfallAmt! > 0 ? shortfallAmt! : 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
                   </span>
                 </div>
               )}
