@@ -469,7 +469,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
         {/* 大数字（固定高度与左栏对齐） */}
         <div className="h-7 flex items-baseline gap-0.5 whitespace-nowrap overflow-hidden">
           <span
-            className="text-lg font-bold tabular-nums leading-tight"
+            className="text-xl font-bold tabular-nums leading-tight"
             style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
           >
             {displayAccrued.toFixed(2)}
@@ -606,7 +606,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               <div className="h-7 flex items-baseline justify-between w-full whitespace-nowrap overflow-hidden">
                 <div className="flex items-baseline gap-0.5">
                   <span
-                    className="text-lg font-bold tabular-nums leading-tight"
+                    className="text-xl font-bold tabular-nums leading-tight"
                     style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                   >
                     +{profitU.toFixed(2)}
@@ -620,7 +620,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           return (
             <div className="h-7 flex items-baseline gap-0.5 whitespace-nowrap overflow-hidden">
               <span
-                className="text-lg font-bold tabular-nums leading-tight"
+                className="text-xl font-bold tabular-nums leading-tight"
                 style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
               >
                 {profitPct.toFixed(2)}
@@ -801,7 +801,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>持有资产</div>
           {/* 币种名称 + 数量（固定高度与右栏对齐） */}
           <div className="h-7 flex items-baseline gap-1">
-            <span className="text-lg font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
+            <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
               {qty > 0 ? qty.toFixed(4) : '—'}
             </span>
             <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
