@@ -3269,8 +3269,8 @@ export default function LedgerDetail() {
                     ledgerId={ledgerId}
                     livePrices={funderLivePrices}
                     paidInterest={(interestSummary as any)?.[order.id] ?? 0}
-                    onClick={() => { if (isOwner || isAdmin) setSelectedFunderOrder(order); }}
-                    canClick={isOwner || isAdmin}
+                    onClick={() => {}}
+                    canClick={false}
                   />
                 ))}
               </div>
