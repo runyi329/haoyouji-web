@@ -521,6 +521,7 @@ export const ledgerMembers = mysqlTable("ledger_members", {
 	canInvite: tinyint().default(0).notNull(),
 	invitedBy: int(),
 	initialBalances: text("initial_balances"),
+	shortcutButtons: json("shortcut_buttons"),
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
