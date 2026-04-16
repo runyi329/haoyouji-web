@@ -720,7 +720,7 @@ export default function LedgerDetailAA({
                   <img
                     src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_6d044b9b.png"
                     alt="数字B"
-                    style={{ width: '108%', height: '108%', objectFit: 'cover', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                    style={{ width: '113%', height: '113%', objectFit: 'cover', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
                   />
                 </div>
               )}
