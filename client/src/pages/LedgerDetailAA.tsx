@@ -725,7 +725,7 @@ export default function LedgerDetailAA({
                 </div>
               )}
               {/* 搜索和数据按钮已隐藏 */}
-              {/* 设置按钮仅账本创建者（owner）可见，管理员不显示 */
+              {/* 设置按钮仅账本创建者（owner）可见，管理员不显示 */}
               {canSwitchView && !viewAsUserId && (
                 <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
@@ -748,8 +748,7 @@ export default function LedgerDetailAA({
               >
                 刷新
               </button>
-              {/* 数字B快捷按钮（跳转52号账本）——放在所有按钮最左边 */}
-              {/* 返回按鈕：渿圆形，点击返回账本首页 */
+              {/* 返回按鈕：渿圆形，点击返回账本首页 */}
               <button
                 onClick={() => setLocation("/ledger")}
                 className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
