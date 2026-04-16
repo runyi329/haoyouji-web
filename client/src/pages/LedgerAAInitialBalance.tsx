@@ -19,57 +19,24 @@
  *   tagName__startDate     → 开始日期 (YYYY-MM-DD)
  *   tagName__visible       → 显示开关 (1 = 显示, 0 = 隐藏)
  */
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { ChevronLeft, ChevronDown, Save, Tag, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 
-// 支持的数字币配置（使用OKX API格式）
+// 支持的数字币配置
 const CRYPTO_COINS = [
-  { symbol: "BTC-USDT", name: "BTC", label: "比特币" },
-  { symbol: "ETH-USDT", name: "ETH", label: "以太坊" },
-  { symbol: "SOL-USDT", name: "SOL", label: "索拉纳" },
-  { symbol: "LDO-USDT", name: "LDO", label: "LDO" },
-  { symbol: "USDT", name: "USDT", label: "USDT" },
+  { name: "BTC", label: "比特币" },
+  { name: "ETH", label: "以太坊" },
+  { name: "SOL", label: "索拉纳" },
+  { name: "LDO", label: "LDO" },
+  { name: "USDT", label: "USDT" },
 ];
 
-// 价格缓存（模块级，跨组件实例共享）
-let cryptoPriceCache: Record<string, number> = {};
-let cnyRateCache = 0;
-let lastFetchTime = 0;
-const CACHE_TTL = 10 * 1000; // 10秒刷新一次（Binance API，不占用服务器资源）
-
-async function fetchCryptoPrices(): Promise<{ prices: Record<string, number>; cnyRate: number }> {
-  const now = Date.now();
-  if (now - lastFetchTime < CACHE_TTL && cnyRateCache > 0 && Object.keys(cryptoPriceCache).length > 0) {
-    return { prices: cryptoPriceCache, cnyRate: cnyRateCache };
-  }
-  try {
-    // 使用OKX API（国内可访问），USDT/CNY汇率固定7.0
-    const CNY_RATE = 7.0;
-    const results = await Promise.all(
-      CRYPTO_COINS.map((c) =>
-        fetch(`https://www.okx.com/api/v5/market/ticker?instId=${c.symbol}`)
-          .then((r) => r.json())
-          .catch(() => null)
-      )
-    );
-    const prices: Record<string, number> = {};
-    CRYPTO_COINS.forEach((coin, i) => {
-      const r = results[i];
-      const last = r?.data?.[0]?.last;
-      if (last) prices[coin.name] = parseFloat(last) * CNY_RATE;
-    });
-    cryptoPriceCache = prices;
-    cnyRateCache = CNY_RATE;
-    lastFetchTime = now;
-    return { prices, cnyRate: CNY_RATE };
-  } catch {
-    return { prices: cryptoPriceCache, cnyRate: cnyRateCache || 7.25 };
-  }
-}
+// USDT/CNY 汇率（固定）
+const CNY_RATE = 7.0;
 
 interface TagEntry {
   amount: string;
@@ -120,26 +87,17 @@ export default function LedgerAAInitialBalance() {
   const [dirtyUsers, setDirtyUsers] = useState<Set<number>>(new Set());
   const [savingUsers, setSavingUsers] = useState<Set<number>>(new Set());
 
-  // 数字币价格（CNY）
-  const [cryptoPrices, setCryptoPrices] = useState<Record<string, number>>(cryptoPriceCache);
-  const fetchingRef = useRef(false);
-
-  const loadPrices = useCallback(async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
-    try {
-      const { prices } = await fetchCryptoPrices();
-      setCryptoPrices({ ...prices });
-    } finally {
-      fetchingRef.current = false;
+  // 数字币价格（USDT），统一走后端代理（规范：crypto-price-unified）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 30000 });
+  // 价格单位为 USDT，需乘以 CNY_RATE 转换为人民币
+  const cryptoPrices: Record<string, number> = {};
+  if (cryptoPricesRaw) {
+    for (const [coin, usdtPrice] of Object.entries(cryptoPricesRaw as Record<string, number>)) {
+      cryptoPrices[coin] = usdtPrice * CNY_RATE;
     }
-  }, []);
-
-  useEffect(() => {
-    loadPrices();
-    const timer = window.setInterval(loadPrices, CACHE_TTL);
-    return () => window.clearInterval(timer);
-  }, [loadPrices]);
+    // USDT 稳定币价格固定为 1 USDT = CNY_RATE 元
+    cryptoPrices['USDT'] = CNY_RATE;
+  }
 
   useEffect(() => {
     if (!allBalancesData) return;
@@ -257,7 +215,7 @@ export default function LedgerAAInitialBalance() {
     if (isNaN(num) || num === 0) return null;
     if (!coin) return null; // 法币模式不需要折算
     // USDT 稳定币，用固定汇率 7.0 折算
-    const price = coin === 'USDT' ? (cnyRateCache || 7.0) : cryptoPrices[coin];
+    const price = coin === 'USDT' ? CNY_RATE : cryptoPrices[coin];
     if (!price) return null;
     const cny = num * price;
     return `≈ ¥${cny.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;

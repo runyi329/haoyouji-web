@@ -617,7 +617,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   const coinSymbol = order.coin === 'BTC' ? 'BTCUSDT' : order.coin === 'ETH' ? 'ETHUSDT' : order.coin === 'SOL' ? 'SOLUSDT' : order.coin + 'USDT';
   const { data: liveTickerData } = trpc.ledger.getBinanceTicker.useQuery(
     { symbol: coinSymbol },
-    { enabled: order.side === 'buy', staleTime: 30000, refetchInterval: 60000 }
+    { enabled: order.side === 'buy', staleTime: 30000, refetchInterval: 30000 }
   );
   const livePrice = liveTickerData ? parseFloat((liveTickerData as any).lastPrice || '0') : 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
@@ -909,7 +909,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 {/* 累计扫描行 */}
                 <span className="text-[#9CA3AF]">累计扫描</span>
                 <span className="font-semibold text-[#1A56DB]">{tierData?.scanCount ?? 0} 次</span>
-                <span className="text-[#94A3B8] text-right">每4小时一次</span>
+                <span className="text-[#94A3B8] text-right">每30秒一次</span>
 
                 {/* 上次扫描行 */}
                 {(tierData?.latestLowPrice || tierData?.scanStatus?.lastScanAt) && (
@@ -950,7 +950,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 <span>
                   <span className="text-[#CBD5E1]">0 次</span>
                   <span className="text-[#CBD5E1] mx-1.5">·</span>
-                  <span className="text-[#94A3B8]">每4小时一次</span>
+                  <span className="text-[#94A3B8]">每30秒一次</span>
                 </span>
               </div>
             </div>
