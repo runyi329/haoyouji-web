@@ -1080,15 +1080,39 @@ export default function FunderManagement() {
                   </div>
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />
-                {/* 右栏字段 */}
-                <div className="px-4 pb-3">
-                  <div className="text-xs font-medium text-blue-500 mb-2">右栏：利息与收益</div>
+                {/* 右栏上半：待结利息区 */}
+                <div className="px-4 pb-2">
+                  <div className="text-xs font-medium text-blue-500 mb-2">右栏上半：待结利息区</div>
                   <div className="space-y-2">
                     {[
-                      { key: 'accruedInterest', label: '待结利息' },
+                      { key: 'accruedInterest', label: '待结利息（标题+大数字）' },
                       { key: 'paidInterest', label: '已结利息' },
-                      { key: 'profitShare', label: '收益分成' },
                       { key: 'collateral', label: '担保缺口' },
+                    ].map(({ key, label }) => (
+                      <div key={key} className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">{label}</span>
+                        <button
+                          type="button"
+                          onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
+                          className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                            displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                            displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="mx-4 h-px bg-gray-100 my-2" />
+                {/* 右栏下半：收益分成区 */}
+                <div className="px-4 pb-3">
+                  <div className="text-xs font-medium text-blue-500 mb-2">右栏下半：收益分成区</div>
+                  <div className="space-y-2">
+                    {[
+                      { key: 'profitShare', label: '收益分成（开启后显示下半区）' },
                     ].map(({ key, label }) => (
                       <div key={key} className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{label}</span>
@@ -1189,13 +1213,14 @@ export default function FunderManagement() {
                     <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
                     {/* 右栏 */}
                     <div className="w-44 p-4 pl-3 flex flex-col">
-                      {(displayConfig.accruedInterest || displayConfig.paidInterest) && formData.interestBase && formData.interestRateAnnual && formData.interestStartDate ? (
-                        <div>
+                      {/* 上半：待结利息区 */}
+                      {displayConfig.accruedInterest && formData.interestBase && formData.interestRateAnnual && formData.interestStartDate ? (
+                        <div className="flex-1">
                           {/* 待结利息标题 */}
                           <div className="h-5 flex items-center gap-1">
                             <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
                             <span className="text-[10px] text-gray-400">
-                              {parseFloat(formData.interestRateAnnual).toFixed(2)}%/年
+                              (年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%)
                             </span>
                           </div>
                           {/* 待结利息大数字 */}
@@ -1213,6 +1238,12 @@ export default function FunderManagement() {
                                 <span className="font-medium" style={{ color: '#4B5563' }}>---</span>
                               </div>
                             )}
+                            {displayConfig.collateral && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">担保缺口</span>
+                                <span className="text-xs font-medium" style={{ color: '#DC2626' }}>100%</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : (
@@ -1220,12 +1251,23 @@ export default function FunderManagement() {
                           <span className="text-xs text-gray-300">未配置利息</span>
                         </div>
                       )}
-                      {/* 担保缺口 */}
-                      {displayConfig.collateral && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
-                        <div className="mt-2 pt-2" style={{ borderTop: '1px solid #E8EFFF' }}>
+                      {/* 中间分隔线：只在收益分成开启时显示 */}
+                      {displayConfig.profitShare && displayConfig.accruedInterest && (
+                        <div className="h-px my-2" style={{ backgroundColor: '#E8EFFF' }} />
+                      )}
+                      {/* 下半：收益分成区 */}
+                      {displayConfig.profitShare && (
+                        <div className="flex-1">
+                          <div className="h-5 flex items-center">
+                            <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>收益分成</span>
+                          </div>
+                          <div className="h-7 flex items-baseline gap-0.5">
+                            <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>---</span>
+                            <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>U</span>
+                          </div>
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-gray-400">担保缺口</span>
-                            <span className="text-xs font-medium" style={{ color: '#22C55E' }}>100%</span>
+                            <span className="text-gray-400">分成比例</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>---</span>
                           </div>
                         </div>
                       )}
