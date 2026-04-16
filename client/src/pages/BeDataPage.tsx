@@ -491,6 +491,128 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
         })()}
         <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。绝对概率：各区间天数 ÷ 总天数，所有涨跌区间概率之和 = 100%。</div>
       </div>
+
+      {/* ── 时间切片对比表 ── */}
+      <SliceCompareTable allData={allData} />
+    </div>
+  );
+}
+
+// 时间切片对比表：行=区间，列=近1/2/3/5年+全量
+function SliceCompareTable({ allData }: { allData: { date: string; changePct: number | null }[] }) {
+  const slices = useMemo(() => {
+    const now = new Date();
+    const cutoff = (years: number) => {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - years);
+      // date格式为 'yy/mm/dd'，转成可比较字符串
+      const yy = String(d.getFullYear()).slice(-2).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yy}/${mm}/${dd}`;
+    };
+    const periods = [
+      { label: '近1年', cutDate: cutoff(1) },
+      { label: '近2年', cutDate: cutoff(2) },
+      { label: '近3年', cutDate: cutoff(3) },
+      { label: '近5年', cutDate: cutoff(5) },
+      { label: '全量', cutDate: '00/01/01' },
+    ];
+    // 区间定义：0~10 涨，0~10 跌（合并>10%）
+    const RANGES = [
+      { label: '≥0% <1%',  upBucket: 0,  downBucket: -1 },
+      { label: '≥1% <2%',  upBucket: 1,  downBucket: -2 },
+      { label: '≥2% <3%',  upBucket: 2,  downBucket: -3 },
+      { label: '≥3% <5%',  upBucket: null, downBucket: null, upRange: [3,4], downRange: [-4,-5] },
+      { label: '≥5% <10%', upBucket: null, downBucket: null, upRange: [5,6,7,8,9], downRange: [-6,-7,-8,-9,-10] },
+      { label: '≥10%',     upBucket: null, downBucket: null, upRange: Array.from({length:11},(_,i)=>i+10), downRange: Array.from({length:11},(_,i)=>-(i+11)) },
+    ];
+    return periods.map(({ label, cutDate }) => {
+      const subset = allData.filter(d => d.changePct != null && d.date >= cutDate);
+      const total = subset.length;
+      const counts = RANGES.map(r => {
+        let upCnt = 0, downCnt = 0;
+        for (const d of subset) {
+          const pct = d.changePct!;
+          const b = pct >= 0 ? Math.floor(pct) : Math.ceil(pct) - 1;
+          if (r.upBucket != null) {
+            if (b === r.upBucket) upCnt++;
+          } else if (r.upRange) {
+            if (r.upRange.includes(b)) upCnt++;
+          }
+          if (r.downBucket != null) {
+            if (b === r.downBucket) downCnt++;
+          } else if (r.downRange) {
+            if (r.downRange.includes(b)) downCnt++;
+          }
+        }
+        return { upCnt, downCnt, total };
+      });
+      return { label, total, counts };
+    });
+  }, [allData]);
+
+  const RANGES_LABELS = ['≥0% <1%', '≥1% <2%', '≥2% <3%', '≥3% <5%', '≥5% <10%', '≥10%'];
+
+  // 热力图色：概率越高越深
+  const heatColor = (pct: number, isUp: boolean) => {
+    const alpha = Math.min(1, pct / 25); // 25%封顶
+    return isUp
+      ? `rgba(239,68,68,${0.08 + alpha * 0.55})`
+      : `rgba(34,197,94,${0.08 + alpha * 0.55})`;
+  };
+
+  return (
+    <div className="border-t border-gray-100 px-4 pt-3 pb-4">
+      <div className="text-xs font-semibold text-gray-600 mb-1">时间切片区间概率对比</div>
+      <div className="text-xs text-gray-400 mb-2">各时段内，涨/跌落入该区间的天数占总天数百分比（颜色越深概率越高）</div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+          <thead>
+            <tr style={{ background: '#fafafa' }}>
+              <th style={{ padding: '4px 6px', textAlign: 'left', color: '#9ca3af', fontWeight: 600, borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>区间</th>
+              {slices.map(s => (
+                <th key={s.label} colSpan={2} style={{ padding: '4px 4px', textAlign: 'center', color: '#6b7280', fontWeight: 600, borderBottom: '1px solid #e5e7eb', borderLeft: '1px solid #f0f0f0', whiteSpace: 'nowrap' }}>
+                  {s.label}
+                  <div style={{ fontSize: 8, color: '#9ca3af', fontWeight: 400 }}>{s.total}天</div>
+                </th>
+              ))}
+            </tr>
+            <tr style={{ background: '#f9fafb' }}>
+              <th style={{ padding: '2px 6px', color: '#9ca3af', fontSize: 9 }}></th>
+              {slices.map(s => (
+                <>
+                  <th key={`${s.label}-up`} style={{ padding: '2px 3px', textAlign: 'center', color: '#ef4444', fontSize: 9, fontWeight: 600, borderLeft: '1px solid #f0f0f0' }}>↑涨</th>
+                  <th key={`${s.label}-dn`} style={{ padding: '2px 3px', textAlign: 'center', color: '#16a34a', fontSize: 9, fontWeight: 600 }}>↓跌</th>
+                </>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {RANGES_LABELS.map((rl, ri) => (
+              <tr key={rl} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                <td style={{ padding: '4px 6px', fontFamily: 'monospace', color: '#6b7280', whiteSpace: 'nowrap', fontSize: 9 }}>{rl}</td>
+                {slices.map(s => {
+                  const { upCnt, downCnt, total } = s.counts[ri];
+                  const upPct = total > 0 ? upCnt / total * 100 : 0;
+                  const downPct = total > 0 ? downCnt / total * 100 : 0;
+                  return (
+                    <>
+                      <td key={`${s.label}-up`} style={{ padding: '3px 3px', textAlign: 'center', background: heatColor(upPct, true), borderLeft: '1px solid #f0f0f0' }}>
+                        <span style={{ color: '#b91c1c', fontFamily: 'monospace', fontWeight: 600 }}>{upPct.toFixed(1)}%</span>
+                      </td>
+                      <td key={`${s.label}-dn`} style={{ padding: '3px 3px', textAlign: 'center', background: heatColor(downPct, false) }}>
+                        <span style={{ color: '#15803d', fontFamily: 'monospace', fontWeight: 600 }}>{downPct.toFixed(1)}%</span>
+                      </td>
+                    </>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：同一区间涨/跌概率均以总天数为分母，两者之和不等于100%（因为还有其他区间）。</div>
     </div>
   );
 }
