@@ -392,7 +392,8 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
             </div>
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#F0FDF4' : '#FFF1F1' }}>
-            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>③             <div>担保物 + 浮动盈亏 − 代结利息（正数充足，负数缺口）</div>
+            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>③ 风险敎口</div>
+            <div>担保物 + 浮动盈亏 − 代结利息（正数充足，负数缺口）</div>
             <div className="mt-1 font-mono">
               {floatPnl !== null
                 ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
