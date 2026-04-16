@@ -744,7 +744,7 @@ function smartQty(val: number | string): string {
 }
 
 // 单张资金方订单卡片（左右两栏布局）
-function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean }) {
+function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick, priceDirection }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'> }) {
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
@@ -838,8 +838,30 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
             )}
             {dc.todayPrice && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400 shrink-0">{isEnded ? '结束币价' : '今日币价'}</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>
+                <span className="text-gray-400 shrink-0">{isEnded ? '结束币价' : '当前币价'}</span>
+                <span className="font-medium flex items-center gap-0.5" style={{ color: '#4B5563' }}>
+                  {(() => {
+                    const dir = !isEnded ? (priceDirection?.[order.coin] ?? 'same') : 'same';
+                    if (dir === 'up') return (
+                      <span
+                        className="text-[10px] leading-none"
+                        style={{
+                          color: '#DC2626',
+                          animation: 'price-blink 1s ease-in-out infinite',
+                        }}
+                      >▲</span>
+                    );
+                    if (dir === 'down') return (
+                      <span
+                        className="text-[10px] leading-none"
+                        style={{
+                          color: '#16A34A',
+                          animation: 'price-blink 1s ease-in-out infinite',
+                        }}
+                      >▼</span>
+                    );
+                    return null;
+                  })()}
                   {isEnded
                     ? (order.end_price ? parseFloat(order.end_price).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
                     : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
@@ -1565,6 +1587,23 @@ export default function LedgerDetail() {
   let cachedPrices: Record<string, number> = {};
   try { cachedPrices = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || '{}'); } catch {}
   const funderLivePrices: Record<string, number> = hasFreshPrices ? freshPrices : cachedPrices;
+  // 记录上一次价格，用于计算涨跌方向
+  const prevPricesRef = useRef<Record<string, number>>({});
+  const priceDirectionRef = useRef<Record<string, 'up' | 'down' | 'same'>>({});
+  if (hasFreshPrices) {
+    const newDir: Record<string, 'up' | 'down' | 'same'> = {};
+    for (const coin of Object.keys(freshPrices)) {
+      const prev = prevPricesRef.current[coin];
+      const curr = freshPrices[coin];
+      if (prev === undefined) { newDir[coin] = 'same'; }
+      else if (curr > prev) { newDir[coin] = 'up'; }
+      else if (curr < prev) { newDir[coin] = 'down'; }
+      else { newDir[coin] = 'same'; }
+    }
+    priceDirectionRef.current = newDir;
+    prevPricesRef.current = freshPrices;
+  }
+  const funderPriceDirection = priceDirectionRef.current;
   const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => o.id), [funderAssetOrders]);
   const { data: interestSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId: Number(ledgerId), orderIds: funderOrderIds },
@@ -3303,6 +3342,7 @@ export default function LedgerDetail() {
                     paidInterest={(interestSummary as any)?.[order.id] ?? 0}
                     onClick={() => {}}
                     canClick={false}
+                    priceDirection={funderPriceDirection}
                   />
                 ))}
               </div>
