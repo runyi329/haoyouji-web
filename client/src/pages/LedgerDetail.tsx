@@ -844,19 +844,21 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                     const dir = !isEnded ? (priceDirection?.[order.coin] ?? 'same') : 'same';
                     if (dir === 'up') return (
                       <span
-                        className="text-[10px] leading-none"
+                        className="text-[10px] inline-flex items-center self-center"
                         style={{
                           color: '#DC2626',
-                          animation: 'price-blink 1s ease-in-out infinite',
+                          animation: 'price-blink 1.5s ease-in-out infinite',
+                          lineHeight: 1,
                         }}
                       >▲</span>
                     );
                     if (dir === 'down') return (
                       <span
-                        className="text-[10px] leading-none"
+                        className="text-[10px] inline-flex items-center self-center"
                         style={{
                           color: '#16A34A',
-                          animation: 'price-blink 1s ease-in-out infinite',
+                          animation: 'price-blink 1.5s ease-in-out infinite',
+                          lineHeight: 1,
                         }}
                       >▼</span>
                     );
