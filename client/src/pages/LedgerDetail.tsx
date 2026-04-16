@@ -1587,23 +1587,27 @@ export default function LedgerDetail() {
   let cachedPrices: Record<string, number> = {};
   try { cachedPrices = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || '{}'); } catch {}
   const funderLivePrices: Record<string, number> = hasFreshPrices ? freshPrices : cachedPrices;
-  // 记录上一次价格，用于计算涨跌方向
-  const prevPricesRef = useRef<Record<string, number>>({});
-  const priceDirectionRef = useRef<Record<string, 'up' | 'down' | 'same'>>({});
-  if (hasFreshPrices) {
+  // 涨跌方向计算：用 localStorage 存储上一次价格，刷新页面后第一次加载就能显示筜头
+  const PREV_PRICE_CACHE_KEY = `funder_prev_prices_${ledgerId}`;
+  const [funderPriceDirection, setFunderPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
+  useEffect(() => {
+    if (!hasFreshPrices) return;
+    let prevPrices: Record<string, number> = {};
+    try { prevPrices = JSON.parse(localStorage.getItem(PREV_PRICE_CACHE_KEY) || '{}'); } catch {}
     const newDir: Record<string, 'up' | 'down' | 'same'> = {};
     for (const coin of Object.keys(freshPrices)) {
-      const prev = prevPricesRef.current[coin];
+      const prev = prevPrices[coin];
       const curr = freshPrices[coin];
-      if (prev === undefined) { newDir[coin] = 'same'; }
+      if (!prev || prev === 0) { newDir[coin] = 'same'; }
       else if (curr > prev) { newDir[coin] = 'up'; }
       else if (curr < prev) { newDir[coin] = 'down'; }
       else { newDir[coin] = 'same'; }
     }
-    priceDirectionRef.current = newDir;
-    prevPricesRef.current = freshPrices;
-  }
-  const funderPriceDirection = priceDirectionRef.current;
+    setFunderPriceDirection(newDir);
+    // 将最新价格存入 localStorage，下次刷新时用于对比
+    try { localStorage.setItem(PREV_PRICE_CACHE_KEY, JSON.stringify(freshPrices)); } catch {};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(freshPrices)]);
   const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => o.id), [funderAssetOrders]);
   const { data: interestSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId: Number(ledgerId), orderIds: funderOrderIds },
