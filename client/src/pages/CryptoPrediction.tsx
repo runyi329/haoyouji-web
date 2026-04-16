@@ -132,7 +132,41 @@ const RANGE_LABELS = [
 ];
 
 // ─── 明日涨跌竞猜面板 ─────────────────────────────────────────
-function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: string }) {
+function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
+  const [activeCoin, setActiveCoin] = useState<'BTC' | 'ETH'>('BTC');
+  return (
+    <div className="rounded-2xl overflow-hidden mb-3" style={{
+      background: 'linear-gradient(160deg, #7a5c00 0%, #b8860b 25%, #d4af37 50%, #b8860b 75%, #7a5c00 100%)',
+      border: '2px solid #ffd700',
+      boxShadow: '0 6px 32px rgba(212,175,55,0.5), 0 2px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.3)',
+    }}>
+      {/* 币种切换 Tab */}
+      <div className="flex px-4 pt-3 pb-0 gap-2">
+        {(['BTC', 'ETH'] as const).map(c => (
+          <button
+            key={c}
+            onClick={() => setActiveCoin(c)}
+            className="px-4 py-1.5 rounded-full text-sm font-black transition-all"
+            style={{
+              background: activeCoin === c
+                ? 'rgba(0,0,0,0.25)'
+                : 'rgba(0,0,0,0.08)',
+              color: activeCoin === c ? '#3d2000' : 'rgba(60,30,0,0.5)',
+              border: activeCoin === c ? '2px solid rgba(255,255,255,0.5)' : '2px solid transparent',
+              boxShadow: activeCoin === c ? 'inset 0 1px 3px rgba(0,0,0,0.2)' : 'none',
+            }}
+          >
+            {c === 'BTC' ? '₿ BTC' : 'Ξ ETH'}
+          </button>
+        ))}
+      </div>
+      {/* 内容区域：复用 MarketBetPanel 但去掉外层容器 */}
+      <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} />
+    </div>
+  );
+}
+
+function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey: string }) {
   const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
   const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
@@ -215,11 +249,7 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
   };
 
   return (
-    <div className="rounded-2xl overflow-hidden mb-3" style={{
-      background: 'linear-gradient(160deg, #7a5c00 0%, #b8860b 25%, #d4af37 50%, #b8860b 75%, #7a5c00 100%)',
-      border: '2px solid #ffd700',
-      boxShadow: '0 6px 32px rgba(212,175,55,0.5), 0 2px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.3)',
-    }}>
+    <div>
       {/* 头部：标题 + 余额 */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div>
@@ -2323,12 +2353,7 @@ export default function CryptoPrediction() {
 
         {/* 行情评估（竞猜） */}
         {tab === "market" && (
-          <div>
-            {/* ===== BTC 明日涨跌竞猜 ===== */}
-            <MarketBetPanel ledgerId={ledgerId} coinKey="BTC" />
-            {/* ===== ETH 明日涨跌竞猜 ===== */}
-            <MarketBetPanel ledgerId={ledgerId} coinKey="ETH" />
-          </div>
+          <MarketBetPanelWithTabs ledgerId={ledgerId} />
         )}
       </div>
 
