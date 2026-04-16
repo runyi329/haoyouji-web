@@ -5580,3 +5580,21 @@ export async function getUserMembership(ledgerId: number, userId: number) {
 
   return rows[0] ?? null;
 }
+
+// ========== funder_asset_orders.display_config 字段迁移 ==========
+let _displayConfigMigrated = false;
+async function ensureDisplayConfigColumn() {
+  if (_displayConfigMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    await db.execute(sql`ALTER TABLE funder_asset_orders ADD COLUMN display_config JSON NULL COMMENT '字段展示配置，控制前端卡片各字段的显示/隐藏'`);
+    console.log('[ensureDisplayConfigColumn] display_config 字段添加成功');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureDisplayConfigColumn] error:', e.message);
+    }
+  }
+  _displayConfigMigrated = true;
+}
+ensureDisplayConfigColumn().catch(console.error);

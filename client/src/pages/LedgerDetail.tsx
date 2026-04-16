@@ -413,7 +413,8 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
   );
 }
 
-function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number> }) {
+function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices, dc }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number>; dc?: Record<string, boolean> }) {
+  const show = (key: string) => dc ? (dc[key] !== false) : true;
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const { data: stats } = trpc.ledger.funderGetOrderScanStats.useQuery(
     { orderId: order.id, ledgerId },
@@ -478,10 +479,12 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
         </div>
         {/* 明细行：统一 space-y-0.5，和左栏一致 */}
         <div className="space-y-0.5">
+        {show('paidInterest') && (
         <div className="flex items-center justify-between text-xs">
           <span className="text-gray-400">已结利息</span>
           <span className="font-medium" style={{ color: '#4B5563' }}>{displayPaid.toFixed(2)}{interestUnit}<span className="text-[10px] text-gray-400 font-normal"> ({altPaid.toFixed(2)}{altUnit})</span></span>
         </div>
+        )}
         {order.interest_start_date && (
           <div className="flex items-center justify-between text-xs">
             <span className="text-gray-400">计息日期</span>
@@ -501,6 +504,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             }
           } catch {}
           if (collateral.length === 0) return null;
+          if (!show('collateral')) return null;
           // 计算担保价值
           let collateralValue = 0;
           let hasValue = false;
@@ -579,11 +583,11 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
         </div>{/* end space-y-0.5 */}
       </div>
       {/* 中间分隔线 - 只在收益分成开启时显示 */}
-      {order.show_profit_share !== 0 && order.show_profit_share !== false && (
+      {order.show_profit_share !== 0 && order.show_profit_share !== false && show('profitShare') && (
       <div className="h-px mx-0" style={{ backgroundColor: '#E8EFFF' }} />
       )}
-      {/* 下半：收益分成 - 受 show_profit_share 控制 */}
-      {order.show_profit_share !== 0 && order.show_profit_share !== false && (
+      {/* 下半：收益分成 - 受 show_profit_share 和 dc.profitShare 双重控制 */}
+      {order.show_profit_share !== 0 && order.show_profit_share !== false && show('profitShare') && (
       <div className="flex-1 flex flex-col justify-start pt-2">
         {/* 收益分成标题（固定高度与左栏对齐） */}
         <div className="h-5 flex items-center gap-1">
@@ -743,6 +747,16 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
   const price = parseFloat(order.buy_price || '0');
   const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
   const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date && order.status === 'active';
+  // 解析字段展示配置（默认全部显示）
+  const dc: Record<string, boolean> = (() => {
+    const defaults = { buyPrice: true, buyValue: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, collateral: true };
+    try {
+      const raw = order.display_config;
+      if (!raw) return defaults;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      return { ...defaults, ...parsed };
+    } catch { return defaults; }
+  })();
   const coinName = coinNameMap[order.coin] || order.coin;
   return (
     <div
@@ -791,41 +805,45 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           </div>
           {/* 订单信息列表：标题靠左，数值靠右 */}
           <div className="space-y-0.5">
-            {price > 0 && (
+            {dc.buyPrice && price > 0 && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">买入币价</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
               </div>
             )}
-            {totalU > 0 && (
+            {dc.buyValue && totalU > 0 && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">买入价值</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
-            {order.buy_date && (
+            {dc.buyDate && order.buy_date && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">买入时间</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
               </div>
             )}
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400 shrink-0">{isEnded ? '结束币价' : '今日币价'}</span>
-              <span className="font-medium" style={{ color: '#4B5563' }}>
-                {isEnded
-                  ? (order.end_price ? parseFloat(order.end_price).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
-                  : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-gray-400 shrink-0">{isEnded ? '结束价值' : '当前价值'}</span>
-              <span className="font-medium" style={{ color: '#4B5563' }}>
-                {isEnded
-                  ? (order.end_price && qty ? (qty * parseFloat(order.end_price)).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
-                  : (livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
-              </span>
-            </div>
-            {order.buy_date && order.status === 'active' && (() => {
+            {dc.todayPrice && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">{isEnded ? '结束币价' : '今日币价'}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
+                  {isEnded
+                    ? (order.end_price ? parseFloat(order.end_price).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
+                    : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
+                </span>
+              </div>
+            )}
+            {dc.currentValue && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">{isEnded ? '结束价值' : '当前价值'}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
+                  {isEnded
+                    ? (order.end_price && qty ? (qty * parseFloat(order.end_price)).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
+                    : (livePrices[order.coin] && qty ? (qty * livePrices[order.coin]).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
+                </span>
+              </div>
+            )}
+            {dc.holdDuration && order.buy_date && order.status === 'active' && (() => {
               const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
               if (elapsed < 0) return null;
               const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
@@ -839,7 +857,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                 </div>
               );
             })()}
-            {order.order_no && (
+            {dc.orderNo && order.order_no && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">订单编号</span>
                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
@@ -854,7 +872,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
         {/* 右栏：利息 + 收益分成 */}
         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
           {hasInterest ? (
-            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} livePrices={livePrices} />
+            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} livePrices={livePrices} dc={dc} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <ChevronRight className="w-5 h-5 text-gray-200" />
