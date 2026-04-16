@@ -1269,14 +1269,18 @@ export default function FunderManagement() {
                                 </span>
                               </div>
                             )}
-                            {displayConfig.collateralCoin && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400">担保货币</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {collateralAssets.filter(a => a.coin && a.qty !== '').map(a => `${a.qty}${a.coin}`).join('+')}
-                                </span>
-                              </div>
-                            )}
+                            {displayConfig.collateralCoin && (() => {
+                              const validAssets = collateralAssets.filter(a => a.coin && a.qty !== '');
+                              if (validAssets.length === 0) return null;
+                              return validAssets.map((a, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-400">{validAssets.length > 1 ? `担保货币${['一','二','三','四','五'][idx] ?? idx+1}` : '担保货币'}</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>
+                                    {a.qty} {a.coin}
+                                  </span>
+                                </div>
+                              ));
+                            })()}
                             {displayConfig.collateralValue && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">担保价值</span>
@@ -1291,7 +1295,7 @@ export default function FunderManagement() {
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">担保缺口</span>
                                 <span className="text-xs font-medium" style={{
-                                  color: previewExposure !== null && previewExposure >= 0 ? '#DC2626' : '#16A34A'
+                                  color: previewExposure !== null && previewExposure >= 0 ? '#16A34A' : '#DC2626'
                                 }}>
                                   {previewExposure === null
                                     ? '---'
