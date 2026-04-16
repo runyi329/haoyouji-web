@@ -174,8 +174,10 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
   const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
   const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
-  const [dir, setDir] = useState<'up' | 'down' | null>(null);
-  const [rangeIdx, setRangeIdx] = useState(0);
+  // dirSlider: -11~+11, 0=未选择, 负=跌, 正=涨
+  const [dirSlider, setDirSlider] = useState(0);
+  const dir: 'up' | 'down' | null = dirSlider > 0 ? 'up' : dirSlider < 0 ? 'down' : null;
+  const rangeIdx = dirSlider !== 0 ? Math.abs(dirSlider) - 1 : 0;
   const [betAmount, setBetAmount] = useState(10);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -198,7 +200,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
     onSuccess: (data: any) => {
       toast.success('下单成功！', { description: data.message });
       setShowConfirm(false);
-      setDir(null);
+      setDirSlider(0);
       setBetAmount(10);
       refetchBalance();
       refetchBets();
@@ -273,32 +275,47 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
         }}>{coinKey === 'BTC' ? '比特币' : '以太坊'} {targetDateLabel}涨跌趋势</div>
       </div>
 
-      {/* 方向选择 */}
-      <div className="px-4 grid grid-cols-2 gap-3 mb-4">
-        <button
-          onClick={() => { setDir('up'); setRangeIdx(0); }}
-          className="py-4 rounded-2xl flex flex-col items-center gap-1 transition-all active:scale-95"
-          style={{
-            background: dir === 'up' ? 'linear-gradient(135deg,#8b0000,#cc0000)' : 'rgba(0,0,0,0.15)',
-            border: `2px solid ${dir === 'up' ? '#ff4d4d' : 'rgba(255,255,255,0.3)'}`,
-            boxShadow: dir === 'up' ? '0 0 20px rgba(255,77,77,0.6), inset 0 1px 0 rgba(255,255,255,0.2)' : 'inset 0 1px 3px rgba(0,0,0,0.2)',
-          }}
-        >
-          <span className="text-3xl" style={{ color: dir === 'up' ? '#ff4d4d' : '#3d2000', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.8)' : '0 1px 2px rgba(255,255,255,0.4)' }}>↑</span>
-          <span className="text-base font-black" style={{ color: dir === 'up' ? '#ff4d4d' : '#3d2000', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.8)' : '0 1px 2px rgba(255,255,255,0.4)' }}>涨</span>
-        </button>
-        <button
-          onClick={() => { setDir('down'); setRangeIdx(0); }}
-          className="py-4 rounded-2xl flex flex-col items-center gap-1 transition-all active:scale-95"
-          style={{
-            background: dir === 'down' ? 'linear-gradient(135deg,#003a1a,#006633)' : 'rgba(0,0,0,0.15)',
-            border: `2px solid ${dir === 'down' ? '#00e676' : 'rgba(255,255,255,0.3)'}`,
-            boxShadow: dir === 'down' ? '0 0 20px rgba(0,230,118,0.6), inset 0 1px 0 rgba(255,255,255,0.2)' : 'inset 0 1px 3px rgba(0,0,0,0.2)',
-          }}
-        >
-          <span className="text-3xl" style={{ color: dir === 'down' ? '#00e676' : '#3d2000', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.8)' : '0 1px 2px rgba(255,255,255,0.4)' }}>↓</span>
-          <span className="text-base font-black" style={{ color: dir === 'down' ? '#00e676' : '#3d2000', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.8)' : '0 1px 2px rgba(255,255,255,0.4)' }}>跌</span>
-        </button>
+      {/* 方向+幅度合一滑条 */}
+      <div className="px-4 mb-4">
+        {/* 标签行 */}
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-sm font-black" style={{ color: dir === 'down' ? '#00e676' : 'rgba(60,30,0,0.4)', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.6)' : 'none', transition: 'all 0.2s' }}>↓ 跌</span>
+          <span className="text-xs" style={{ color: 'rgba(60,30,0,0.5)' }}>
+            {dirSlider === 0 ? '← 拖动选择方向 →' : (dir === 'up' ? `↑ 涨 ${safeIdx}%~${safeIdx+1}%` : `↓ 跌 ${safeIdx}%~${safeIdx+1}%`)}
+          </span>
+          <span className="text-sm font-black" style={{ color: dir === 'up' ? '#ff4d4d' : 'rgba(60,30,0,0.4)', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.6)' : 'none', transition: 'all 0.2s' }}>涨 ↑</span>
+        </div>
+        {/* 双向滑条 */}
+        <div className="relative">
+          <input
+            type="range" min={-11} max={11} step={1} value={dirSlider}
+            onChange={e => setDirSlider(Number(e.target.value))}
+            className="w-full appearance-none cursor-pointer"
+            style={{
+              height: '20px',
+              borderRadius: '10px',
+              background: (() => {
+                const pct = (dirSlider + 11) / 22 * 100;
+                const mid = 50;
+                if (dirSlider === 0) return 'rgba(0,0,0,0.25)';
+                if (dirSlider < 0) return `linear-gradient(to right, rgba(0,230,118,0.7) 0%, rgba(0,230,118,0.7) ${pct}%, rgba(0,0,0,0.25) ${pct}%, rgba(0,0,0,0.25) ${mid}%, rgba(0,0,0,0.15) ${mid}%, rgba(0,0,0,0.15) 100%)`;
+                return `linear-gradient(to right, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.15) ${mid}%, rgba(0,0,0,0.25) ${mid}%, rgba(0,0,0,0.25) ${pct}%, rgba(255,77,77,0.7) ${pct}%, rgba(255,77,77,0.7) 100%)`;
+              })(),
+              accentColor: dir === 'down' ? '#00e676' : dir === 'up' ? '#ff4d4d' : '#d4af37',
+              outline: 'none',
+              border: '1px solid rgba(255,255,255,0.3)',
+              boxShadow: dir === 'down' ? '0 0 10px rgba(0,230,118,0.4)' : dir === 'up' ? '0 0 10px rgba(255,77,77,0.4)' : 'none',
+            }}
+          />
+          {/* 中心刻度线 */}
+          <div className="absolute top-0 bottom-0 w-0.5 pointer-events-none" style={{ left: 'calc(50% - 1px)', background: 'rgba(255,255,255,0.5)' }} />
+        </div>
+        {/* 幅度刻度 */}
+        <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(60,30,0,0.5)' }}>
+          <span>≥11%</span>
+          <span>0%</span>
+          <span>≥11%</span>
+        </div>
       </div>
 
       {dir && (
@@ -331,20 +348,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
 
           </div>
 
-          {/* 区间滑动条 */}
-          <div className="mx-4 mb-4">
-            <div className="flex justify-between text-xs mb-1.5" style={{ color: 'rgba(60,30,0,0.65)' }}>
-              <span>≥0%</span>
-              <span>拖动选择幅度</span>
-              <span>≥11%</span>
-            </div>
-            <input
-              type="range" min={0} max={11} step={1} value={safeIdx}
-              onChange={e => setRangeIdx(Number(e.target.value))}
-              className="w-full h-3 rounded-full appearance-none cursor-pointer"
-              style={{ background: sliderBg(safeIdx, 0, 11, '#d4af37'), accentColor: '#d4af37' }}
-            />
-          </div>
+
 
           {/* 投入 → 预期获得 */}
           <div className="mx-4 mb-3 rounded-2xl px-4 py-3 flex items-center justify-between" style={{
@@ -423,11 +427,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
         </>
       )}
 
-      {!dir && (
-        <div className="px-4 pb-5 text-center">
-          <div className="text-xs" style={{ color: 'rgba(60,30,0,0.65)' }}>选择涨或跌，开始预测</div>
-        </div>
-      )}
+
 
       {/* 我的最近竞猜记录 */}
       {myBets.length > 0 && (
