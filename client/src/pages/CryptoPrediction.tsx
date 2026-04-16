@@ -286,8 +286,8 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
           <div className="flex items-center justify-between">
             <div>
               <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>幅度区间</div>
-              <div className="text-xl font-black" style={{ color: '#ffffff' }}>
-                {(() => {
+              <div className="text-xl font-black" style={{ color: dirSlider === 0 ? 'rgba(255,255,255,0.4)' : '#ffffff' }}>
+                {dirSlider === 0 ? '涨跌幅 = 0' : (() => {
                   const m = rangeLabel.match(/≥(\d+)%<(\d+)%/);
                   if (m) return `${m[1]}% ≤ ${coinKey} < ${m[2]}%`;
                   return rangeLabel;
