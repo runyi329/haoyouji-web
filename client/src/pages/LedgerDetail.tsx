@@ -2419,7 +2419,7 @@ export default function LedgerDetail() {
                           <div className="space-y-1">
                             <div>
                               <div className="text-[10px] text-white/40">持有数量</div>
-                              <div className="text-xs font-semibold text-white">{qty > 0 ? qty.toFixed(decimals) : '0'}</div>
+                              <div className="text-xs font-semibold text-white">{qty > 0 ? parseFloat(qty.toFixed(decimals)).toString() : '0'}</div>
                             </div>
                             <div>
                               <div className="text-[10px] text-white/40">平均成本</div>
