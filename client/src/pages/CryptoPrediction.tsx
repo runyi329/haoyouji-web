@@ -134,6 +134,15 @@ const RANGE_LABELS = [
 // ─── 明日涨跌竞猜面板 ─────────────────────────────────────────
 function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   const [activeCoin, setActiveCoin] = useState<'BTC' | 'ETH'>('BTC');
+  // 北京时间明天日期标签
+  const tabDateLabel = useMemo(() => {
+    const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const tomorrow = new Date(nowBJ);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const m = tomorrow.getUTCMonth() + 1;
+    const d = tomorrow.getUTCDate();
+    return `${m}月${d}日`;
+  }, []);
   return (
     <div className="rounded-2xl overflow-hidden mb-3" style={{
       background: 'linear-gradient(160deg, #7a5c00 0%, #b8860b 25%, #d4af37 50%, #b8860b 75%, #7a5c00 100%)',
@@ -142,7 +151,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
       isolation: 'isolate',
       WebkitMaskImage: '-webkit-radial-gradient(white, black)',
     }}>
-      {/* 币种切换 Tab */}
+      {/* 币种切换 Tab（含日期+趋势） */}
       <div className="flex">
         {(['BTC', 'ETH'] as const).map((c, i) => (
           <button
@@ -160,7 +169,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
               borderTopRightRadius: i === 1 ? '1rem' : 0,
             }}
           >
-            {c === 'BTC' ? '₿ 比特币' : 'Ξ 以太坊'}
+            {tabDateLabel} {c} 趋势
           </button>
         ))}
       </div>
@@ -267,13 +276,6 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
 
   return (
     <div>
-      {/* 头部：标题 */}
-      <div className="px-4 pt-4 pb-3">
-        <div className="text-base font-black" style={{
-          color: '#3d2000',
-          textShadow: '0 1px 2px rgba(255,255,255,0.4), 0 -1px 1px rgba(0,0,0,0.3)',
-        }}>{coinKey === 'BTC' ? '比特币' : '以太坊'} {targetDateLabel}涨跌趋势</div>
-      </div>
 
       {/* 赔率卡（幅度区间）——在滑条前显示 */}
       <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
