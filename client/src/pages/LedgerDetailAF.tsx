@@ -6,7 +6,7 @@
  *   Binance K 线图（调用 Binance API）
  *   三 Tab 切换：无损合约 / 无损现货 / 行情评估
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Settings, ChevronRight, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -186,60 +186,36 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
   // 当前 K 线周期
   const [interval, setInterval] = useState("1h");
 
-  // K 线数据
-  const [klines, setKlines] = useState<KlineBar[]>([]);
-  const [ticker, setTicker] = useState<TickerData | null>(null);
-  const [klineLoading, setKlineLoading] = useState(false);
-  const [klineError, setKlineError] = useState(false);
-
   // 当前 Tab
   const [tab, setTab] = useState<"contract" | "spot" | "market">("contract");
 
-  const fetchKline = useCallback(async () => {
-    setKlineLoading(true);
-    setKlineError(false);
-    try {
-      const [klinesRes, tickerRes] = await Promise.all([
-        fetch(
-          `https://api.binance.com/api/v3/klines?symbol=${coin.symbol}&interval=${interval}&limit=60`
-        ),
-        fetch(
-          `https://api.binance.com/api/v3/ticker/24hr?symbol=${coin.symbol}`
-        ),
-      ]);
-      const klinesJson = await klinesRes.json();
-      const tickerJson = await tickerRes.json();
+  // K 线数据（后端代理，规范：crypto-price-unified，禁止前端直连外部API）
+  const { data: klinesRaw, isLoading: klineLoading, isError: klineError, refetch: refetchKlines } =
+    trpc.ledger.getBinanceKlines.useQuery(
+      { symbol: coin.symbol, interval, limit: 60 },
+      { staleTime: 30000 }
+    );
+  const { data: tickerRaw, refetch: refetchTicker } =
+    trpc.ledger.getBinanceTicker.useQuery(
+      { symbol: coin.symbol },
+      { staleTime: 30000, refetchInterval: 30000 }
+    );
 
-      setKlines(
-        klinesJson.map((k: any[]) => ({
-          openTime: k[0],
-          open: parseFloat(k[1]),
-          high: parseFloat(k[2]),
-          low: parseFloat(k[3]),
-          close: parseFloat(k[4]),
-          volume: parseFloat(k[5]),
-        }))
-      );
-      setTicker({
-        lastPrice: tickerJson.lastPrice,
-        priceChangePercent: tickerJson.priceChangePercent,
-        highPrice: tickerJson.highPrice,
-        lowPrice: tickerJson.lowPrice,
-        volume: tickerJson.volume,
-      });
-    } catch {
-      setKlineError(true);
-    } finally {
-      setKlineLoading(false);
-    }
-  }, [coin.symbol, interval]);
+  const klines: KlineBar[] = (klinesRaw as KlineBar[] | undefined) ?? [];
+  const ticker: TickerData | null = tickerRaw
+    ? {
+        lastPrice: String((tickerRaw as any).lastPrice ?? ''),
+        priceChangePercent: String((tickerRaw as any).priceChangePercent ?? ''),
+        highPrice: String((tickerRaw as any).highPrice ?? ''),
+        lowPrice: String((tickerRaw as any).lowPrice ?? ''),
+        volume: String((tickerRaw as any).volume ?? ''),
+      }
+    : null;
 
-  useEffect(() => {
-    fetchKline();
-    // 每 30 秒自动刷新
-    const timer = window.setInterval(fetchKline, 30000);
-    return () => window.clearInterval(timer);
-  }, [fetchKline]);
+  const fetchKline = useCallback(() => {
+    refetchKlines();
+    refetchTicker();
+  }, [refetchKlines, refetchTicker]);
 
   const priceChange = ticker ? parseFloat(ticker.priceChangePercent) : 0;
   const isUp = priceChange >= 0;
@@ -715,7 +691,7 @@ function MarketTab({
       {/* 免责声明 */}
       <div className="bg-[#1C2127] rounded-xl px-3 py-2">
         <p className="text-xs text-gray-500 leading-relaxed">
-          以上分析仅供参考，基于 Binance 实时数据计算，不构成投资建议。加密货币市场波动较大，请谨慎决策。
+          以上分析仅供参考，基于实时行情数据计算，不构成投资建议。加密货币市场波动较大，请谨慎决策。
         </p>
       </div>
 

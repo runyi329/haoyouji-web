@@ -1,6 +1,6 @@
 /**
  * 实时价格扫描器
- * 每60秒从 Gate.io / 火币 / OKX 获取 BTC/ETH/SOL 的最新价格
+ * 每30秒从 Gate.io / 火币 / OKX 获取 BTC/ETH/SOL 的最新价格
  * 内存缓存供盈亏计算使用
  * 数据源优先级与 af-tier-scanner 保持一致：Gate.io > 火币 > OKX
  * 持久化：每次更新后写入本地文件，服务重启时自动恢复上次价格
@@ -133,9 +133,9 @@ export function startPriceScanner() {
   scanPrices().then(() => {
     console.log('[价格扫描] 首次扫描完成:', Object.entries(latestPrices).map(([k, v]) => `${k}=${v.price}`).join(', '));
   });
-  // 每60秒扫描一次
+  // 每30秒扫描一次（规范：crypto-price-unified，前端 refetchInterval: 30000）
   setInterval(() => {
     scanPrices().catch(err => console.error('[价格扫描] 定时扫描失败:', err));
-  }, 60 * 1000);
-  console.log('[价格扫描] 已启动，每60秒刷新 BTC/ETH/SOL/AAVE/SUI/ONDO/ASTER/LDO/ENA/ARKM 价格（含文件持久化）');
+  }, 30 * 1000);
+  console.log('[价格扫描] 已启动，每30秒刷新 BTC/ETH/SOL/AAVE/SUI/ONDO/ASTER/LDO/ENA/ARKM 价格（含文件持久化）');
 }

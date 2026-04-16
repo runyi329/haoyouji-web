@@ -16999,18 +16999,15 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
 
   // 数字币实时价格（服务端缓存，前端直接读取）
   getCryptoPrices: publicProcedure.query(async () => {
-    try {
-      const dbConn = await getDbConnection();
-      if (!dbConn) return {};
-      const [rows] = await dbConn.execute(`SELECT coin, price_cny FROM crypto_price_cache`) as any;
-      const prices: Record<string, number> = {};
-      for (const row of (rows as any[])) {
-        prices[row.coin] = parseFloat(row.price_cny);
-      }
-      return prices;
-    } catch {
-      return {};
+    // 从 price-scanner 内存缓存读取（规范：crypto-price-unified）
+    // 不从数据库读取，确保价格实时且不为空（保留上次数据）
+    const { getAllLatestPrices } = await import('./price-scanner');
+    const allPrices = getAllLatestPrices();
+    const result: Record<string, number> = {};
+    for (const [coin, entry] of Object.entries(allPrices)) {
+      result[coin] = entry.price;
     }
+    return result;
   }),
 
   // 分红功能：获取某用户在某账本的分红汇总（按标签分组）
