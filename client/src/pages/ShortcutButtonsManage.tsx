@@ -2,15 +2,53 @@ import { useParams, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
+import { toast } from "sonner";
+
+const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock"] as const;
+const SHORTCUT_LABELS: Record<string, string> = {
+  gold: "黄金",
+  qq: "QQ",
+  oil: "石油",
+  stock: "股票",
+};
+
+const DEFAULT_SHORTCUTS = { gold: false, qq: false, oil: false, stock: false };
 
 export default function ShortcutButtonsManage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const ledgerId = Number(id);
 
-  // 直接复用成员权限页面的同一个接口，已验证能秒出成员
-  const { data } = trpc.ledger.getMemberPermissions.useQuery({ ledgerId });
-  const members = data?.members || [];
+  // 复用成员权限页面的同一个接口获取成员列表
+  const { data: permData } = trpc.ledger.getMemberPermissions.useQuery({ ledgerId });
+  const members = permData?.members || [];
+
+  // 获取所有成员的快捷按钮配置（shortcutMap: { userId: { gold, qq, oil, stock } }）
+  const { data: shortcutMap } = trpc.ledger.getShortcutButtons.useQuery({ ledgerId });
+
+  const utils = trpc.useUtils();
+  const updateMutation = trpc.ledger.updateShortcutButtons.useMutation({
+    onSuccess: () => {
+      utils.ledger.getShortcutButtons.invalidate({ ledgerId });
+    },
+    onError: (err) => {
+      toast.error(err.message || "保存失败");
+    },
+  });
+
+  const handleToggle = (userId: number, key: string) => {
+    const current = shortcutMap?.[userId] || DEFAULT_SHORTCUTS;
+    const newShortcuts = {
+      ...DEFAULT_SHORTCUTS,
+      ...current,
+      [key]: !current[key],
+    };
+    updateMutation.mutate({
+      ledgerId,
+      targetUserId: userId,
+      shortcuts: newShortcuts,
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -26,46 +64,66 @@ export default function ShortcutButtonsManage() {
 
       {/* 表头 */}
       <div
-        className="border-b border-gray-200 text-sm text-gray-700 font-medium bg-white sticky top-0 z-10 shadow-sm"
+        className="border-b border-gray-300 text-sm text-gray-700 font-medium bg-white sticky top-0 z-10 shadow-sm"
         style={{
           display: "grid",
           gridTemplateColumns: "minmax(72px, 1fr) repeat(4, 1fr)",
         }}
       >
         <div className="py-3 px-2 text-center">成员</div>
-        <div className="py-3 px-2 text-center border-l border-gray-200">黄金</div>
-        <div className="py-3 px-2 text-center border-l border-gray-200">QQ</div>
-        <div className="py-3 px-2 text-center border-l border-gray-200">石油</div>
-        <div className="py-3 px-2 text-center border-l border-gray-200">股票</div>
+        {SHORTCUT_KEYS.map((key) => (
+          <div key={key} className="py-3 px-2 text-center border-l border-gray-200">
+            {SHORTCUT_LABELS[key]}
+          </div>
+        ))}
       </div>
 
       {/* 成员列表 */}
       <div className="bg-white">
-        {members.map((member: any) => (
-          <div
-            key={member.id}
-            className="border-b border-gray-100"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(72px, 1fr) repeat(4, 1fr)",
-            }}
-          >
-            <div className="py-4 px-2 flex flex-col items-center justify-center gap-1">
-              <UserAvatar
-                username={member.userName}
-                avatar={member.userAvatar}
-                size="sm"
-              />
-              <span className="text-xs text-gray-600 truncate max-w-[60px] text-center">
-                {member.userName}
-              </span>
+        {members.map((member: any) => {
+          const shortcuts = shortcutMap?.[member.userId] || DEFAULT_SHORTCUTS;
+          return (
+            <div
+              key={member.id}
+              className="border-b border-gray-100"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(72px, 1fr) repeat(4, 1fr)",
+              }}
+            >
+              {/* 成员头像+名字 */}
+              <div className="py-3 px-2 flex flex-col items-center justify-center gap-1">
+                <UserAvatar
+                  username={member.userName}
+                  avatar={member.userAvatar}
+                  size="sm"
+                />
+                <span className="text-xs text-gray-600 truncate max-w-[60px] text-center">
+                  {member.userName}
+                </span>
+              </div>
+              {/* 4个开关 */}
+              {SHORTCUT_KEYS.map((key) => {
+                const isOn = !!(shortcuts as any)[key];
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center justify-center border-l border-gray-100 cursor-pointer"
+                    onClick={() => handleToggle(member.userId, key)}
+                  >
+                    <span
+                      className={`text-sm font-medium ${
+                        isOn ? "text-[#4CAF50]" : "text-[#D32F2F]"
+                      }`}
+                    >
+                      {isOn ? "开" : "关"}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100 text-sm text-gray-400">-</div>
-            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100 text-sm text-gray-400">-</div>
-            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100 text-sm text-gray-400">-</div>
-            <div className="py-4 px-2 flex items-center justify-center border-l border-gray-100 text-sm text-gray-400">-</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* 说明 */}

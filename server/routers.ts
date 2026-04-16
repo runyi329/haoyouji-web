@@ -13634,6 +13634,72 @@ export const appRouter = router({
         );
         return { success: true, newRatio: input.newRatio, othersTotal, remaining: 100 - input.newRatio - othersTotal };
       }),
+
+    // ===== 快捷按钮管理 =====
+    getShortcutButtons: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const conn = getDbConnection();
+        // 查当前用户在该账本的shortcut_buttons
+        const [rows] = await (conn as any).execute(
+          `SELECT userId, shortcut_buttons FROM ledger_members WHERE ledgerId = ?`,
+          [input.ledgerId]
+        );
+        const shortcutMap: Record<number, any> = {};
+        for (const row of (rows as any[])) {
+          try {
+            shortcutMap[row.userId] = row.shortcut_buttons ? JSON.parse(row.shortcut_buttons) : null;
+          } catch {
+            shortcutMap[row.userId] = null;
+          }
+        }
+        return shortcutMap;
+      }),
+
+    updateShortcutButtons: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        targetUserId: z.number(),
+        shortcuts: z.object({
+          gold: z.boolean(),
+          qq: z.boolean(),
+          oil: z.boolean(),
+          stock: z.boolean(),
+        }),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const conn = getDbConnection();
+        // 检查当前用户是否是owner
+        const [ledgerRows] = await (conn as any).execute(
+          `SELECT createdBy FROM ledgers WHERE id = ?`,
+          [input.ledgerId]
+        );
+        if (!(ledgerRows as any[])[0] || (ledgerRows as any[])[0].createdBy !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建者可操作' });
+        }
+        await (conn as any).execute(
+          `UPDATE ledger_members SET shortcut_buttons = ? WHERE ledgerId = ? AND userId = ?`,
+          [JSON.stringify(input.shortcuts), input.ledgerId, input.targetUserId]
+        );
+        return { success: true };
+      }),
+
+    // 获取当前用户自己的快捷按钮配置
+    getMyShortcutButtons: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = getDbConnection();
+        const [rows] = await (conn as any).execute(
+          `SELECT shortcut_buttons FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const list = (rows as any[]) || [];
+        if (!list.length) return {};
+        try {
+          const raw = list[0].shortcut_buttons;
+          return typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {});
+        } catch { return {}; }
+      }),
   }),
   
   // 銀行列表管理
@@ -18353,134 +18419,6 @@ export const adminFeatureRouter = router({
       return { success: true };
     }),
 
-  // ===== 快捷按鈕管理 =====
-  // 获取账本所有成员的快捷按鈕配置（owner可用）
-  // 完全模仿 getMemberPermissions 的方式
-  getShortcutButtons: protectedProcedure
-    .input(z.object({ ledgerId: z.number() }))
-    .query(async ({ ctx, input }) => {
-      // 直接调用 dbLedger.getMemberPermissions 获取成员列表（已验证可正常工作）
-      const permData = await dbLedger.getMemberPermissions(input.ledgerId, ctx.user.id);
-      
-      // 只有 owner 可以管理快捷按钮
-      if (!permData.isOwner) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅创建者可管理快捷按钮' });
-      }
-      
-      const memberUserIds = permData.members.map(m => m.userId);
-      console.log('[getShortcutButtons] ledgerId:', input.ledgerId, 'members count:', memberUserIds.length);
-      
-      // 获取用户头像和名字
-      const db = await getLedgerDb();
-      let userInfoMap: Record<number, { name: string; avatar: string; nickname: string }> = {};
-      if (db && memberUserIds.length > 0) {
-        const userInfos = await db
-          .select({
-            id: users.id,
-            name: users.name,
-            username: users.username,
-            avatar: users.avatar,
-          })
-          .from(users)
-          .where(inArray(users.id, memberUserIds));
-        for (const u of userInfos) {
-          userInfoMap[u.id] = {
-            name: u.name || u.username || `用户${u.id}`,
-            avatar: u.avatar || '',
-            nickname: '',
-          };
-        }
-      }
-      
-      // 获取成员昵称
-      if (db) {
-        const memberNicknames = await db
-          .select({
-            userId: ledgerMembers.userId,
-            nickname: ledgerMembers.nickname,
-          })
-          .from(ledgerMembers)
-          .where(eq(ledgerMembers.ledgerId, input.ledgerId));
-        for (const mn of memberNicknames) {
-          if (mn.nickname && userInfoMap[mn.userId]) {
-            userInfoMap[mn.userId].nickname = mn.nickname;
-          }
-        }
-      }
-      
-      // 用原始 SQL 查 shortcut_buttons（该字段不在 drizzle schema 中）
-      const conn = await getDbConnection();
-      let shortcutMap: Record<number, any> = {};
-      if (conn) {
-        try {
-          const [sbRows] = await conn.execute(
-            `SELECT userId, shortcut_buttons FROM ledger_members WHERE ledgerId = ?`,
-            [input.ledgerId]
-          ) as any[];
-          for (const row of (sbRows as any[]) || []) {
-            try {
-              const raw = typeof row.shortcut_buttons === 'string'
-                ? JSON.parse(row.shortcut_buttons)
-                : (row.shortcut_buttons ?? {});
-              shortcutMap[row.userId] = raw;
-            } catch { shortcutMap[row.userId] = {}; }
-          }
-        } catch (e) {
-          console.error('[getShortcutButtons] shortcut_buttons查询失败:', e);
-        }
-      }
-
-      return permData.members.map((m: any) => {
-        const uInfo = userInfoMap[m.userId];
-        return {
-          userId: m.userId,
-          name: uInfo?.nickname || uInfo?.name || `用户${m.userId}`,
-          avatar: uInfo?.avatar || '',
-          shortcuts: shortcutMap[m.userId] || {},
-        };
-      });
-    }),
-
-  // 更新某成员的快捷按鈕配置（owner/admin可用）
-  updateShortcutButtons: protectedProcedure
-    .input(z.object({
-      ledgerId: z.number(),
-      targetUserId: z.number(),
-      shortcuts: z.record(z.boolean()),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const dbLedger = await import('./db-ledger');
-      const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-      if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-      }
-      const conn = await getDbConnection();
-      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      const shortcutsJson = JSON.stringify(input.shortcuts);
-      await conn.execute(
-        `UPDATE ledger_members SET shortcut_buttons = ? WHERE ledgerId = ? AND userId = ?`,
-        [shortcutsJson, input.ledgerId, input.targetUserId]
-      );
-      return { success: true };
-    }),
-
-  // 获取当前用户自己的快捷按鈕配置（所有登录用户可用）
-  getMyShortcutButtons: protectedProcedure
-    .input(z.object({ ledgerId: z.number() }))
-    .query(async ({ ctx, input }) => {
-      const conn = await getDbConnection();
-      if (!conn) return {};
-      const [rows] = await conn.execute(
-        `SELECT shortcut_buttons FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
-        [input.ledgerId, ctx.user.id]
-      ) as any[];
-      const list = (rows as any[]) || [];
-      if (!list.length) return {};
-      try {
-        const raw = list[0].shortcut_buttons;
-        return typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {});
-      } catch { return {}; }
-    }),
 
 });
 export type AppRouter = typeof appRouter;
