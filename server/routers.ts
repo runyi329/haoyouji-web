@@ -18414,14 +18414,12 @@ export const adminFeatureRouter = router({
         }
       }
 
-      return members
-        .filter((m: any) => m.memberType !== 'ai')
-        .map((m: any) => ({
-          userId: m.userId,
-          name: m.nickname || m.name || m.username || `用户${m.userId}`,
-          avatar: m.avatar || '',
-          shortcuts: shortcutMap[m.userId] || {},
-        }));
+      return members.map((m: any) => ({
+        userId: m.userId,
+        name: m.nickname || m.name || m.username || `用户${m.userId}`,
+        avatar: m.avatar || '',
+        shortcuts: shortcutMap[m.userId] || {},
+      }));
     }),
 
   // 更新某成员的快捷按鈕配置（owner/admin可用）
