@@ -142,7 +142,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
     }}>
       {/* 币种切换 Tab */}
       <div className="flex">
-        {(['BTC', 'ETH'] as const).map(c => (
+        {(['BTC', 'ETH'] as const).map((c, i) => (
           <button
             key={c}
             onClick={() => setActiveCoin(c)}
@@ -154,6 +154,8 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
               color: activeCoin === c ? '#3d2000' : 'rgba(60,30,0,0.45)',
               borderBottom: activeCoin === c ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
               borderRadius: 0,
+              borderTopLeftRadius: i === 0 ? '1rem' : 0,
+              borderTopRightRadius: i === 1 ? '1rem' : 0,
             }}
           >
             {c === 'BTC' ? '₿ 比特币' : 'Ξ 以太坊'}
