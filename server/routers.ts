@@ -13673,6 +13673,7 @@ export const appRouter = router({
           qq: z.boolean(),
           oil: z.boolean(),
           stock: z.boolean(),
+          digitalB: z.boolean().optional().default(false),
         }),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -13716,14 +13717,14 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!row || !row.shortcutButtons) return { gold: false, qq: false, oil: false, stock: false };
+        if (!row || !row.shortcutButtons) return { gold: false, qq: false, oil: false, stock: false, digitalB: false };
         try {
           const raw = row.shortcutButtons;
-          if (typeof raw === 'object') return raw as { gold: boolean; qq: boolean; oil: boolean; stock: boolean };
+          if (typeof raw === 'object') return raw as { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean };
           if (typeof raw === 'string') return JSON.parse(raw);
-          return { gold: false, qq: false, oil: false, stock: false };
+          return { gold: false, qq: false, oil: false, stock: false, digitalB: false };
         } catch {
-          return { gold: false, qq: false, oil: false, stock: false };
+          return { gold: false, qq: false, oil: false, stock: false, digitalB: false };
         }
       }),
   }),
