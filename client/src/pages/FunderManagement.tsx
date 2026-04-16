@@ -1274,7 +1274,7 @@ export default function FunderManagement() {
                               if (validAssets.length === 0) return null;
                               return validAssets.map((a, idx) => (
                                 <div key={idx} className="flex items-center justify-between text-xs">
-                                  <span className="text-gray-400">{validAssets.length > 1 ? `担保货币${['一','二','三','四','五'][idx] ?? idx+1}` : '担保货币'}</span>
+                                  <span className="text-gray-400">{validAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
                                     {a.qty} {a.coin}
                                   </span>
@@ -1283,7 +1283,7 @@ export default function FunderManagement() {
                             })()}
                             {displayConfig.collateralValue && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
                               <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400">担保价值</span>
+                                <span className="text-gray-400">{collateralAssets.filter(a => a.coin && a.qty !== '').length > 1 ? '担保总值' : '担保价值'}</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
                                   {computedCollateralValue !== null
                                     ? computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U'
