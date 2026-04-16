@@ -13697,17 +13697,19 @@ export const appRouter = router({
         return { success: true };
       }),
     getMyShortcutButtons: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const db_instance = await getDb();
         if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        // 如果传了 viewAsUserId，查目标用户的权限（用于Owner视角切换）
+        const targetUserId = input.viewAsUserId ?? ctx.user.id;
         const [row] = await db_instance
           .select({ shortcutButtons: ledgerMembers.shortcutButtons })
           .from(ledgerMembers)
           .where(
             and(
               eq(ledgerMembers.ledgerId, input.ledgerId),
-              eq(ledgerMembers.userId, ctx.user.id)
+              eq(ledgerMembers.userId, targetUserId)
             )
           )
           .limit(1);

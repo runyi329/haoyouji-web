@@ -1471,7 +1471,7 @@ export default function LedgerDetail() {
   // 快捷按钮配置：从数据库读取当前用户的快捷按钮开关状态
   const isShortcutLedger = ledgerId === 52 || ledgerId === 37 || ledgerId === 59;
   const { data: myShortcuts } = (trpc as any).ledger.getMyShortcutButtons.useQuery(
-    { ledgerId: Number(ledgerId) },
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isShortcutLedger }
   );
   const { data: dietStats } = trpc.diet.getStats.useQuery(
