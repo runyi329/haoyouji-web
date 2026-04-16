@@ -275,7 +275,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
         }}>{coinKey === 'BTC' ? '比特币' : '以太坊'} {targetDateLabel}涨跌趋势</div>
       </div>
 
-      {/* 方向+幅度合一滑条（展示在幅度区间下方） */}
+      {/* 方向+幅度合一滑条（始终显示） */}
       <div className="px-4 mb-3">
         {/* 标签行：只显示左跌右涨 */}
         <div className="flex justify-between items-center mb-2">
@@ -357,10 +357,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
                 </div>
               </div>
             </div>
-
           </div>
-
-
 
           {/* 投入 → 预期获得 */}
           <div className="mx-4 mb-3 rounded-2xl px-4 py-3 flex items-center justify-between" style={{
