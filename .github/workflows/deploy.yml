@@ -182,6 +182,10 @@ jobs:
               " 2>&1 && echo "✅ 全局默认手续费规则已就绪" || echo "⚠️ 插入全局规则失败"
               echo "验证 snt_withdrawals 数据..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, user_id, ledger_id, snt_amount, status, created_at FROM snt_withdrawals ORDER BY id DESC LIMIT 10;" 2>&1
+              echo "确保 ledger_members 表有 shortcut_buttons 字段..."
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL;
+              " 2>&1 && echo "✅ shortcut_buttons 字段已添加" || echo "⚠️ shortcut_buttons 字段可能已存在（正常）"
             else
               echo "DATABASE_URL not found, 跳过建表"
             fi
