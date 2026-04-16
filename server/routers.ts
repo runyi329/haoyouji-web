@@ -13674,7 +13674,8 @@ export const appRouter = router({
           `SELECT createdBy FROM ledgers WHERE id = ?`,
           [input.ledgerId]
         );
-        if (!(ledgerRows as any[])[0] || (ledgerRows as any[])[0].createdBy !== ctx.user.id) {
+        const ledgerRow = (ledgerRows as any[])[0];
+        if (!ledgerRow || Number(ledgerRow.createdBy) !== Number(ctx.user.id)) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建者可操作' });
         }
         await (conn as any).execute(
