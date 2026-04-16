@@ -196,6 +196,16 @@ export default function FunderManagement() {
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
 
+  // 编辑订单时实时查询已结利息
+  const editingOrderId = editingOrder?.id ?? null;
+  const { data: editingPaidSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
+    { ledgerId, orderIds: editingOrderId ? [editingOrderId] : [] },
+    { enabled: !!editingOrderId && ledgerId > 0 }
+  );
+  const previewPaidInterest = editingOrderId && editingPaidSummary
+    ? ((editingPaidSummary as any)[editingOrderId] ?? 0)
+    : 0;
+
   // 担保价值（所有担保货币折算为 USDT 的总值）
   const computedCollateralValue = useMemo(() => {
     if (collateralAssets.length === 0) return null;
@@ -805,27 +815,6 @@ export default function FunderManagement() {
                 <div className="flex-1 h-px bg-gray-100" />
               </div>
 
-              {/* 收益分成开关 */}
-              <div className="flex items-center justify-between px-1">
-                <div>
-                  <div className="text-sm font-medium text-gray-700">收益分成</div>
-                  <div className="text-xs text-gray-400 mt-0.5">开启后资金方可看到收益分成区块</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFormData(d => ({ ...d, showProfitShare: !d.showProfitShare }))}
-                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                    formData.showProfitShare ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      formData.showProfitShare ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
               {/* 计息基数 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
@@ -1273,7 +1262,11 @@ export default function FunderManagement() {
                             {displayConfig.paidInterest && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">已结利息</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>---</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {previewPaidInterest > 0
+                                    ? previewPaidInterest.toLocaleString(undefined, { maximumFractionDigits: 2 }) + (formData.interestBaseCurrency === 'CNY' ? '元' : ' U')
+                                    : '0' + (formData.interestBaseCurrency === 'CNY' ? '元' : ' U')}
+                                </span>
                               </div>
                             )}
                             {displayConfig.collateralCoin && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
