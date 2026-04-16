@@ -18365,13 +18365,13 @@ export const adminFeatureRouter = router({
       }
       const db = await getLedgerDb();
       const rows = await db.execute(
-        sql`SELECT lm.userId, lm.shortcut_buttons, u.name, u.nickname, u.avatar
+        sql`SELECT lm.userId, lm.shortcut_buttons, lm.nickname, u.name, u.username, u.avatar
             FROM ledger_members lm
             LEFT JOIN users u ON u.id = lm.userId
             WHERE lm.ledgerId = ${input.ledgerId}
             ORDER BY lm.createdAt ASC`
-      );
-      const members = (rows as any)[0] as any[];
+      ) as any;
+      const members = ((rows[0] || rows) as any[]) || [];
       return members.map((m: any) => ({
         userId: m.userId,
         name: m.nickname || m.name || `用户${m.userId}`,
@@ -18419,8 +18419,8 @@ export const adminFeatureRouter = router({
         sql`SELECT shortcut_buttons FROM ledger_members
             WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id}
             LIMIT 1`
-      );
-      const list = (rows as any)[0] as any[];
+      ) as any;
+      const list = ((rows[0] || rows) as any[]) || [];
       if (!list.length) return {};
       try {
         const raw = list[0].shortcut_buttons;
