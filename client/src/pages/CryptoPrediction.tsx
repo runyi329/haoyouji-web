@@ -139,6 +139,8 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
       background: 'linear-gradient(160deg, #7a5c00 0%, #b8860b 25%, #d4af37 50%, #b8860b 75%, #7a5c00 100%)',
       border: '2px solid #ffd700',
       boxShadow: '0 6px 32px rgba(212,175,55,0.5), 0 2px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.3)',
+      isolation: 'isolate',
+      WebkitMaskImage: '-webkit-radial-gradient(white, black)',
     }}>
       {/* 币种切换 Tab */}
       <div className="flex">
