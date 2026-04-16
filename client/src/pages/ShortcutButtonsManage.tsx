@@ -3,7 +3,7 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock"] as const;
 const SHORTCUT_LABELS: Record<string, string> = {
@@ -13,50 +13,54 @@ const SHORTCUT_LABELS: Record<string, string> = {
   stock: "股票",
 };
 const DEFAULT_SHORTCUTS = { gold: false, qq: false, oil: false, stock: false };
-
-type ShortcutMap = Record<string, { gold: boolean; qq: boolean; oil: boolean; stock: boolean }>;
+type ShortcutValues = { gold: boolean; qq: boolean; oil: boolean; stock: boolean };
+type ShortcutMap = Record<string, ShortcutValues>;
 
 export default function ShortcutButtonsManage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const ledgerId = Number(id);
 
-  // 乐观更新：本地状态覆盖服务器数据
+  // 本地状态（乐观更新用）
   const [localMap, setLocalMap] = useState<ShortcutMap>({});
   // 正在保存的按钮 key: `${userId}-${key}`
   const [savingSet, setSavingSet] = useState<Set<string>>(new Set());
+  // 是否已初始化本地状态
+  const initializedRef = useRef(false);
 
   // 获取成员列表
-  const { data: permData, isLoading: membersLoading } = trpc.ledger.getMemberPermissions.useQuery({ ledgerId });
+  const { data: permData, isLoading: membersLoading } = (trpc as any).ledger.getMemberPermissions.useQuery({ ledgerId });
   const members = permData?.members || [];
 
   // 获取所有成员的快捷按钮配置
-  const { data: serverMap, isLoading: shortcutLoading } = trpc.ledger.getShortcutButtons.useQuery(
-    { ledgerId },
-    {
-      onSuccess: (data: any) => {
-        // 服务器数据加载后，同步到本地状态
-        const normalized: ShortcutMap = {};
-        for (const [uid, val] of Object.entries(data || {})) {
-          normalized[String(uid)] = {
-            gold: !!(val as any)?.gold,
-            qq: !!(val as any)?.qq,
-            oil: !!(val as any)?.oil,
-            stock: !!(val as any)?.stock,
-          };
-        }
-        setLocalMap(normalized);
-      },
-    }
-  );
+  const { data: serverMap, isLoading: shortcutLoading } = (trpc as any).ledger.getShortcutButtons.useQuery({ ledgerId });
 
-  const utils = trpc.useUtils();
-  const updateMutation = trpc.ledger.updateShortcutButtons.useMutation({
+  // 服务器数据加载后同步到本地状态（仅首次）
+  useEffect(() => {
+    if (serverMap && !initializedRef.current) {
+      const normalized: ShortcutMap = {};
+      for (const [uid, val] of Object.entries(serverMap || {})) {
+        normalized[String(uid)] = {
+          gold: !!(val as any)?.gold,
+          qq: !!(val as any)?.qq,
+          oil: !!(val as any)?.oil,
+          stock: !!(val as any)?.stock,
+        };
+      }
+      setLocalMap(normalized);
+      initializedRef.current = true;
+    }
+  }, [serverMap]);
+
+  const utils = (trpc as any).useUtils();
+
+  const updateMutation = (trpc as any).ledger.updateShortcutButtons.useMutation({
     onSuccess: () => {
+      // 成功后刷新服务器数据
       utils.ledger.getShortcutButtons.invalidate({ ledgerId });
     },
-    onError: (err, variables) => {
-      // 回滚乐观更新
+    onError: (err: any, variables: any) => {
+      // 回滚乐观更新：恢复到服务器数据
       const uid = String(variables.targetUserId);
       const serverVal = (serverMap as any)?.[variables.targetUserId] || (serverMap as any)?.[uid];
       setLocalMap(prev => ({
@@ -67,7 +71,7 @@ export default function ShortcutButtonsManage() {
       }));
       toast.error(err.message || "保存失败，请重试");
     },
-    onSettled: (_data, _err, variables) => {
+    onSettled: (_data: any, _err: any, variables: any) => {
       const uid = String(variables.targetUserId);
       setSavingSet(prev => {
         const next = new Set(prev);

@@ -13634,34 +13634,29 @@ export const appRouter = router({
         );
         return { success: true, newRatio: input.newRatio, othersTotal, remaining: 100 - input.newRatio - othersTotal };
       }),
-
-    // ===== 快捷按钮管理 =====
+    // ===== 快捷按钮管理（重构版，使用 drizzle ORM） =====
     getShortcutButtons: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ input }) => {
-        const conn = await getDbConnection();
-        if (!conn) return {};
-        // 确保 shortcut_buttons 字段存在
-        try {
-          await (conn as any).execute(
-            `ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL`
-          );
-        } catch (_e: any) {
-          // 字段已存在时忽略
-        }
-        const [rows] = await (conn as any).execute(
-          `SELECT userId, shortcut_buttons FROM ledger_members WHERE ledgerId = ?`,
-          [input.ledgerId]
-        );
-        const shortcutMap: Record<number, any> = {};
-        for (const row of (rows as any[])) {
+        const db_instance = await getDb();
+        if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        const rows = await db_instance
+          .select({ userId: ledgerMembers.userId, shortcutButtons: ledgerMembers.shortcutButtons })
+          .from(ledgerMembers)
+          .where(eq(ledgerMembers.ledgerId, input.ledgerId));
+        const shortcutMap: Record<number, { gold: boolean; qq: boolean; oil: boolean; stock: boolean }> = {};
+        for (const row of rows) {
           try {
-            const raw = row.shortcut_buttons;
-            shortcutMap[Number(row.userId)] = raw
-              ? (typeof raw === 'string' ? JSON.parse(raw) : raw)
-              : { gold: false, qq: false, oil: false, stock: false };
+            const raw = row.shortcutButtons;
+            if (raw && typeof raw === 'object') {
+              shortcutMap[row.userId] = raw as any;
+            } else if (raw && typeof raw === 'string') {
+              shortcutMap[row.userId] = JSON.parse(raw);
+            } else {
+              shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false };
+            }
           } catch {
-            shortcutMap[Number(row.userId)] = { gold: false, qq: false, oil: false, stock: false };
+            shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false };
           }
         }
         return shortcutMap;
@@ -13678,56 +13673,53 @@ export const appRouter = router({
         }),
       }))
       .mutation(async ({ input, ctx }) => {
-        try {
-          console.log('[updateShortcutButtons] start, ledgerId=', input.ledgerId, 'targetUserId=', input.targetUserId, 'userId=', ctx.user.id);
-          const conn = await getDbConnection();
-          if (!conn) throw new Error('数据库连接失败');
-          // 检查当前用户是否是owner
-          const [ledgerRows] = await (conn as any).execute(
-            `SELECT createdBy FROM ledgers WHERE id = ?`,
-            [input.ledgerId]
-          );
-          console.log('[updateShortcutButtons] ledgerRows count=', (ledgerRows as any[]).length, 'createdBy=', (ledgerRows as any[])[0]?.createdBy, 'userId=', ctx.user.id);
-          const ledgerRow = (ledgerRows as any[])[0];
-          if (!ledgerRow || Number(ledgerRow.createdBy) !== Number(ctx.user.id)) {
-            console.log('[updateShortcutButtons] FORBIDDEN: createdBy=', ledgerRow?.createdBy, 'userId=', ctx.user.id);
-            throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建者可操作' });
-          }
-          // 确保 shortcut_buttons 字段存在
-          try {
-            await (conn as any).execute(
-              `ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL`
-            );
-          } catch (alterErr: any) {
-            // 字段已存在时忽略错误
-          }
-          const [updateResult] = await (conn as any).execute(
-            `UPDATE ledger_members SET shortcut_buttons = ? WHERE ledgerId = ? AND userId = ?`,
-            [JSON.stringify(input.shortcuts), input.ledgerId, input.targetUserId]
-          );
-          console.log('[updateShortcutButtons] UPDATE affectedRows=', (updateResult as any)?.affectedRows);
-          return { success: true };
-        } catch (err: any) {
-          if (err instanceof TRPCError) throw err;
-          console.error('[updateShortcutButtons] ERROR:', err.message, err.stack?.substring(0, 500));
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: err.message || '更新失败' });
+        const db_instance = await getDb();
+        if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        // 检查当前用户是否是 owner
+        const [ledgerRow] = await db_instance
+          .select({ createdBy: ledgers.createdBy })
+          .from(ledgers)
+          .where(eq(ledgers.id, input.ledgerId))
+          .limit(1);
+        if (!ledgerRow || Number(ledgerRow.createdBy) !== Number(ctx.user.id)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建者可操作' });
         }
+        // 更新目标用户的快捷按钮配置
+        await db_instance
+          .update(ledgerMembers)
+          .set({ shortcutButtons: input.shortcuts })
+          .where(
+            and(
+              eq(ledgerMembers.ledgerId, input.ledgerId),
+              eq(ledgerMembers.userId, input.targetUserId)
+            )
+          );
+        return { success: true };
       }),
-    // 获取当前用户自己的快捷按钮配置
     getMyShortcutButtons: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const conn = await getDbConnection();
-        const [rows] = await (conn as any).execute(
-          `SELECT shortcut_buttons FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
-          [input.ledgerId, ctx.user.id]
-        );
-        const list = (rows as any[]) || [];
-        if (!list.length) return {};
+        const db_instance = await getDb();
+        if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Database not available' });
+        const [row] = await db_instance
+          .select({ shortcutButtons: ledgerMembers.shortcutButtons })
+          .from(ledgerMembers)
+          .where(
+            and(
+              eq(ledgerMembers.ledgerId, input.ledgerId),
+              eq(ledgerMembers.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
+        if (!row || !row.shortcutButtons) return { gold: false, qq: false, oil: false, stock: false };
         try {
-          const raw = list[0].shortcut_buttons;
-          return typeof raw === 'string' ? JSON.parse(raw) : (raw ?? {});
-        } catch { return {}; }
+          const raw = row.shortcutButtons;
+          if (typeof raw === 'object') return raw as { gold: boolean; qq: boolean; oil: boolean; stock: boolean };
+          if (typeof raw === 'string') return JSON.parse(raw);
+          return { gold: false, qq: false, oil: false, stock: false };
+        } catch {
+          return { gold: false, qq: false, oil: false, stock: false };
+        }
       }),
   }),
   
