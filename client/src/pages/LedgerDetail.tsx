@@ -353,11 +353,11 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
   shortfall: number | null;
   floatPnl: number | null;
 }) {
-  // 风险敎口 = 担保物价値 - 浮动盈亏 - 代结利息
-  // 注：浮动盈亏正数=亏损，负数=浮盈
-  // 敎口正数表示担保充足（担保物 > 亏损+利息），负数表示缺口
+  // 风险敎口 = 担保物价値 + 浮动盈亏 - 代结利息
+  // 注：浮动盈亏正数=浮盈（币涨），负数=亏损（币跌）
+  // 敎口正数表示担保充足，负数表示缺口
   const exposure = floatPnl !== null
-    ? collateralValue - floatPnl - accrued
+    ? collateralValue + floatPnl - accrued
     : collateralValue - accrued;
   const isSufficient = exposure >= 0;
   return (
@@ -370,14 +370,14 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
         <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
-            <div>= 买入价値 - 当前市値（正数为亏损，负数为浮盈）</div>
+            <div>= 当前市値 - 买入价値（正数为浮盈，负数为亏损）</div>
             <div className="mt-1 font-mono">
               {floatPnl !== null
                 ? <>
-                    <span style={{ color: '#3B82F6' }}>= {buyValue.toFixed(2)} - {currentValue!.toFixed(2)} = </span>
-                    <strong style={{ color: floatPnl > 0 ? '#DC2626' : '#16A34A' }}>
-                      {floatPnl > 0 ? '+' : ''}{floatPnl.toFixed(2)} U
-                      {floatPnl < 0 ? '（浮盈）' : '（亏损）'}
+                    <span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {buyValue.toFixed(2)} = </span>
+                    <strong style={{ color: floatPnl >= 0 ? '#16A34A' : '#DC2626' }}>
+                      {floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U
+                      {floatPnl >= 0 ? '（浮盈）' : '（亏损）'}
                     </strong>
                   </>
                 : <span className="text-gray-400">当前市値暂无实时价格，暂无法计算浮动盈亏</span>
@@ -392,12 +392,11 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
             </div>
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#F0FDF4' : '#FFF1F1' }}>
-            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>③ 风险敎口</div>
-            <div>担保物 − 浮动盈亏 − 代结利息</div>
+            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>③             <div>担保物 + 浮动盈亏 − 代结利息（正数充足，负数缺口）</div>
             <div className="mt-1 font-mono">
               {floatPnl !== null
-                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} − ({floatPnl.toFixed(2)}) − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} − ---（暂无实时价） − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
               }
             </div>
             <div className="mt-1.5" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>
@@ -523,10 +522,11 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           // 当前市値 = 实时价 × 数量（无实时价则为 null，不用买入价代替）
           const liveP = livePrices?.[order.coin] ?? null;
           const currentValue = liveP !== null ? liveP * buyQty : null;
-          // 浮动盈亏 = 买入价値 - 当前市値（正数为亏损，负数为浮盈）
-          const floatPnl = currentValue !== null ? buyValue - currentValue : null;
-          // 需覆盖风险 = max(浮动盈亏, 0) + 代结利息（币涨时浮动部分取 0）
-          const floatLossForRisk = floatPnl !== null ? Math.max(floatPnl, 0) : 0;
+          // 浮动盈亏 = 当前市値 - 买入价値（正数为浮盈，负数为亏损）
+          const floatPnl = currentValue !== null ? currentValue - buyValue : null;
+          // 风险敎口计算用：浮盈时浮动部分不增加风险（币跌亏损时才需覆盖）
+          // 亏损 = max(-floatPnl, 0)
+          const floatLossForRisk = floatPnl !== null ? Math.max(-floatPnl, 0) : 0;
           const riskToCover = floatLossForRisk + accrued;
           // 担保充足：担保价値 >= 需覆盖风险（无实时价时仅用利息部分判断）
           const isSufficient = hasValue && collateralValue >= riskToCover;
