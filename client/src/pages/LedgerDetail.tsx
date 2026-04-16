@@ -1470,7 +1470,7 @@ export default function LedgerDetail() {
   const { data: user } = trpc.auth.me.useQuery();
   // 快捷按钮配置：从数据库读取当前用户的快捷按钮开关状态
   const isShortcutLedger = ledgerId === 52 || ledgerId === 37 || ledgerId === 59;
-  const { data: myShortcuts } = (trpc as any).getMyShortcutButtons.useQuery(
+  const { data: myShortcuts } = (trpc as any).ledger.getMyShortcutButtons.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: isShortcutLedger }
   );
@@ -2043,23 +2043,7 @@ export default function LedgerDetail() {
                     )}
                   </>
                 )}
-                {/* 兜底：数据库未配置时，对 jiang/yjh 保持原有硬编码显示（向下兼容） */}
-                {isShortcutLedger && !myShortcuts && (user?.id === 870413 || user?.id === 4957151) && isCustomAF && (
-                  <>
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => setLocation(`/ledger/${ledgerId}/gold`)} title="黄金行情">
-                      <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/OPICjhxYcoKhRcPL.png" alt="MT5" className="w-full h-full object-cover rounded-full" />
-                    </div>
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => setLocation(`/ledger/${ledgerId}/qq`)}>
-                      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/qq-icon-circle.png" alt="QQ" className="w-full h-full object-cover rounded-full" />
-                    </div>
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setLocation(`/ledger/${ledgerId}/oil`)} title="石油业务">
-                      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oil-pump-icon-circle.png" alt="石油" className="w-full h-full object-cover rounded-full" />
-                    </div>
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', '52'); setLocation('/ledger/37'); }} title="股票行情">
-                      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ths-stock-icon-circle.png" alt="股票" className="w-full h-full object-cover rounded-full" />
-                    </div>
-                  </>
-                )}
+
                 {/* AI账本：按鈕移到第二行，此处不再渲染 */}
                 {effectiveIsManager && (
                   <div
