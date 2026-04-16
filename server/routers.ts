@@ -18354,45 +18354,61 @@ export const adminFeatureRouter = router({
     }),
 
   // ===== 快捷按鈕管理 =====
-  // 获取账本所有成员的快捷按鈕配置（owner/admin可用）
+  // 获取账本所有成员的快捷按鈕配置（owner可用）
+  // 完全模仿 getMemberPermissions 的方式
   getShortcutButtons: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ ctx, input }) => {
-      // 第一步：用 drizzle ORM 查成员基本信息（和 getLedgerMembers / getMemberPermissions 同样的方式）
-      const db = await getLedgerDb();
-      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-
-      // 权限检查
-      const currentMember = await db
-        .select({ role: ledgerMembers.role })
-        .from(ledgerMembers)
-        .where(and(
-          eq(ledgerMembers.ledgerId, input.ledgerId),
-          eq(ledgerMembers.userId, ctx.user.id)
-        ))
-        .limit(1);
-      if (!currentMember.length || (currentMember[0].role !== 'owner' && currentMember[0].role !== 'admin')) {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+      // 直接调用 dbLedger.getMemberPermissions 获取成员列表（已验证可正常工作）
+      const permData = await dbLedger.getMemberPermissions(input.ledgerId, ctx.user.id);
+      
+      // 只有 owner 可以管理快捷按钮
+      if (!permData.isOwner) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅创建者可管理快捷按钮' });
       }
-
-      // 第二步：用 drizzle ORM 查所有成员基本信息
-      const members = await db
-        .select({
-          userId: ledgerMembers.userId,
-          nickname: ledgerMembers.nickname,
-          memberType: ledgerMembers.memberType,
-          name: users.name,
-          username: users.username,
-          avatar: users.avatar,
-        })
-        .from(ledgerMembers)
-        .leftJoin(users, eq(ledgerMembers.userId, users.id))
-        .where(eq(ledgerMembers.ledgerId, input.ledgerId))
-        .orderBy(ledgerMembers.createdAt);
-
-      console.log('[getShortcutButtons] ledgerId:', input.ledgerId, 'members count:', members.length);
-
-      // 第三步：用原始 SQL 查 shortcut_buttons（该字段不在 drizzle schema 中）
+      
+      const memberUserIds = permData.members.map(m => m.userId);
+      console.log('[getShortcutButtons] ledgerId:', input.ledgerId, 'members count:', memberUserIds.length);
+      
+      // 获取用户头像和名字
+      const db = await getLedgerDb();
+      let userInfoMap: Record<number, { name: string; avatar: string; nickname: string }> = {};
+      if (db && memberUserIds.length > 0) {
+        const userInfos = await db
+          .select({
+            id: users.id,
+            name: users.name,
+            username: users.username,
+            avatar: users.avatar,
+          })
+          .from(users)
+          .where(inArray(users.id, memberUserIds));
+        for (const u of userInfos) {
+          userInfoMap[u.id] = {
+            name: u.name || u.username || `用户${u.id}`,
+            avatar: u.avatar || '',
+            nickname: '',
+          };
+        }
+      }
+      
+      // 获取成员昵称
+      if (db) {
+        const memberNicknames = await db
+          .select({
+            userId: ledgerMembers.userId,
+            nickname: ledgerMembers.nickname,
+          })
+          .from(ledgerMembers)
+          .where(eq(ledgerMembers.ledgerId, input.ledgerId));
+        for (const mn of memberNicknames) {
+          if (mn.nickname && userInfoMap[mn.userId]) {
+            userInfoMap[mn.userId].nickname = mn.nickname;
+          }
+        }
+      }
+      
+      // 用原始 SQL 查 shortcut_buttons（该字段不在 drizzle schema 中）
       const conn = await getDbConnection();
       let shortcutMap: Record<number, any> = {};
       if (conn) {
@@ -18414,12 +18430,15 @@ export const adminFeatureRouter = router({
         }
       }
 
-      return members.map((m: any) => ({
-        userId: m.userId,
-        name: m.nickname || m.name || m.username || `用户${m.userId}`,
-        avatar: m.avatar || '',
-        shortcuts: shortcutMap[m.userId] || {},
-      }));
+      return permData.members.map((m: any) => {
+        const uInfo = userInfoMap[m.userId];
+        return {
+          userId: m.userId,
+          name: uInfo?.nickname || uInfo?.name || `用户${m.userId}`,
+          avatar: uInfo?.avatar || '',
+          shortcuts: shortcutMap[m.userId] || {},
+        };
+      });
     }),
 
   // 更新某成员的快捷按鈕配置（owner/admin可用）
