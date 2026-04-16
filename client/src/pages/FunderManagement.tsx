@@ -1312,7 +1312,7 @@ export default function FunderManagement() {
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">担保缺口</span>
                                 <span className="text-xs font-medium" style={{
-                                  color: previewExposure !== null && previewExposure >= 0 ? '#16A34A' : '#DC2626'
+                                  color: previewExposure !== null && previewExposure >= 0 ? '#4B5563' : '#16A34A'
                                 }}>
                                   {previewExposure === null
                                     ? '---'

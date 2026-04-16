@@ -575,7 +575,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                       style={{ background: 'rgba(59,130,246,0.15)', color: '#3B82F6', border: 'none', cursor: 'pointer', lineHeight: 1 }}
                     >?</button>
                   </div>
-                  <span className="font-medium" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>
+                  <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#16A34A' }}>
                     {isSufficient ? '100%' : `-${(shortfallAmt! > 0 ? shortfallAmt! : 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
                   </span>
                 </div>
