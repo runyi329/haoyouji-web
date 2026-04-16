@@ -265,19 +265,12 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
 
   return (
     <div>
-      {/* 头部：标题 + 余额 */}
-      <div className="px-4 pt-4 pb-3 flex items-center justify-between">
-        <div>
-          <div className="text-base font-black" style={{
-            color: '#3d2000',
-            textShadow: '0 1px 2px rgba(255,255,255,0.4), 0 -1px 1px rgba(0,0,0,0.3)',
-          }}>{coinKey === 'BTC' ? '比特币' : '以太坊'} {targetDateLabel}涨跌趋势</div>
-        </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
-          <Wallet className="w-3.5 h-3.5" style={{ color: '#3d2000' }} />
-          <span className="text-sm font-bold" style={{ color: '#3d2000' }}>{balance.toFixed(2)}</span>
-          <span className="text-xs" style={{ color: 'rgba(60,30,0,0.7)' }}>U</span>
-        </div>
+      {/* 头部：标题 */}
+      <div className="px-4 pt-4 pb-3">
+        <div className="text-base font-black" style={{
+          color: '#3d2000',
+          textShadow: '0 1px 2px rgba(255,255,255,0.4), 0 -1px 1px rgba(0,0,0,0.3)',
+        }}>{coinKey === 'BTC' ? '比特币' : '以太坊'} {targetDateLabel}涨跌趋势</div>
       </div>
 
       {/* 方向选择 */}
