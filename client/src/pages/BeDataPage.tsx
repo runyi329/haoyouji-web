@@ -599,33 +599,40 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
   const monthSlices = sliceData.filter(s => s.group === 'month');
   const yearSlices = sliceData.filter(s => s.group === 'year');
 
+  // 行=时间切片，列=区间（横向热力图）
   const renderTable = (slices: typeof sliceData, isUp: boolean) => (
     <div style={{ overflowX: 'auto', marginBottom: 12 }}>
       <table style={{ borderCollapse: 'collapse', fontSize: 9, minWidth: 'max-content' }}>
         <thead>
           <tr style={{ background: '#f9fafb' }}>
-            <th style={{ padding: '4px 8px', textAlign: 'left', color: '#9ca3af', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', position: 'sticky', left: 0, background: '#f9fafb', zIndex: 1 }}>区间</th>
-            {slices.map(s => (
-              <th key={s.label} style={{ padding: '4px 6px', textAlign: 'center', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', borderLeft: '1px solid #e5e7eb', whiteSpace: 'nowrap', minWidth: 48 }}>
-                {s.label}
-                <div style={{ fontSize: 8, color: '#9ca3af', fontWeight: 400 }}>{s.total}天</div>
+            <th style={{ padding: '4px 8px', textAlign: 'left', color: '#9ca3af', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', position: 'sticky', left: 0, background: '#f9fafb', zIndex: 1 }}>时段</th>
+            {RANGES_LABELS.map(rl => (
+              <th key={rl} style={{ padding: '4px 5px', textAlign: 'center', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', borderLeft: '1px solid #e5e7eb', whiteSpace: 'nowrap', minWidth: 44, fontSize: 8 }}>
+                {rl}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {RANGES_LABELS.map((rl, ri) => (
-            <tr key={rl}>
-              <td style={{ padding: '3px 8px', fontFamily: 'monospace', color: '#6b7280', whiteSpace: 'nowrap', borderBottom: '1px solid #f0f0f0', position: 'sticky', left: 0, background: '#fff', zIndex: 1 }}>{rl}</td>
-              {slices.map(s => {
+          {slices.map(s => (
+            <tr key={s.label}>
+              <td style={{ padding: '3px 8px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f0f0f0', position: 'sticky', left: 0, background: '#fff', zIndex: 1, fontWeight: 600, fontSize: 9 }}>
+                {s.label}
+                <span style={{ color: '#9ca3af', fontWeight: 400, marginLeft: 3 }}>({s.total}天)</span>
+              </td>
+              {RANGES_LABELS.map((_, ri) => {
                 const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
                 const pct = s.total > 0 ? cnt / s.total * 100 : 0;
                 const maxPct = isUp ? maxUpPct : maxDownPct;
                 const t = Math.min(1, pct / maxPct);
-                const bg = isUp ? heatUp(pct) : heatDown(pct);
-                const tc = textColor(t);
+                // 统一红色热力图：白→浅红→深红
+                const r = 255;
+                const g = Math.round(255 - t * 210);
+                const b2 = Math.round(255 - t * 210);
+                const bg = `rgb(${r},${g},${b2})`;
+                const tc = t > 0.55 ? '#fff' : '#374151';
                 return (
-                  <td key={s.label} style={{ padding: '3px 4px', textAlign: 'center', background: bg, borderLeft: '1px solid #e5e7eb', borderBottom: '1px solid #f0f0f0' }}>
+                  <td key={ri} style={{ padding: '3px 4px', textAlign: 'center', background: bg, borderLeft: '1px solid #e5e7eb', borderBottom: '1px solid #f0f0f0' }}>
                     <span style={{ color: tc, fontFamily: 'monospace', fontWeight: 600, fontSize: 9 }}>{pct.toFixed(1)}%</span>
                   </td>
                 );
