@@ -2324,8 +2324,10 @@ export default function CryptoPrediction() {
         {/* 行情评估（竞猜） */}
         {tab === "market" && (
           <div>
-            {/* ===== 明日涨跌竞猜组件 ===== */}
-            <MarketBetPanel ledgerId={ledgerId} coinKey={coinKey} />
+            {/* ===== BTC 明日涨跌竞猜 ===== */}
+            <MarketBetPanel ledgerId={ledgerId} coinKey="BTC" />
+            {/* ===== ETH 明日涨跌竞猜 ===== */}
+            <MarketBetPanel ledgerId={ledgerId} coinKey="ETH" />
           </div>
         )}
       </div>
