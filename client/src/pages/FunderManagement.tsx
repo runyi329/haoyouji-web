@@ -1089,7 +1089,7 @@ export default function FunderManagement() {
                       { key: 'buyValue', label: '买入价值' },
                       { key: 'buyDate', label: '买入时间' },
                       { key: 'todayPrice', label: '今日币价' },
-                      { key: 'currentValue', label: '当前价值' },
+                      // 当前价值已移至持有资产括号显示，不再单独作为开关
                       { key: 'holdDuration', label: '持有时长' },
                       { key: 'orderNo', label: '订单编号' },
                     ].map(({ key, label }) => (
@@ -1177,11 +1177,14 @@ export default function FunderManagement() {
                     {/* 左栏 */}
                     <div className="flex-1 p-4 pr-3">
                       <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>持有资产</div>
-                      <div className="h-7 flex items-baseline gap-1">
+                      <div className="h-7 flex items-baseline gap-1 flex-wrap">
                         <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
                           {formData.buyQuantity ? parseFloat(parseFloat(formData.buyQuantity).toFixed(8)).toString() : '—'}
                         </span>
                         <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{formData.coin}</span>
+                        {formLivePrices[formData.coin] && formData.buyQuantity ? (
+                          <span className="text-xs" style={{ color: '#6B7280' }}>({(formLivePrices[formData.coin] * parseFloat(formData.buyQuantity)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U)</span>
+                        ) : null}
                       </div>
                       <div className="space-y-0.5">
                         {displayConfig.buyPrice && formData.buyPrice && (
@@ -1210,16 +1213,7 @@ export default function FunderManagement() {
                             </span>
                           </div>
                         )}
-                        {displayConfig.currentValue && (
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-gray-400">当前价值</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>
-                              {formLivePrices[formData.coin] && formData.buyQuantity
-                                ? (formLivePrices[formData.coin] * parseFloat(formData.buyQuantity)).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U'
-                                : '---'}
-                            </span>
-                          </div>
-                        )}
+                        {/* 当前价值已移至持有资产大数字旁括号显示，此行已移除 */}
                         {displayConfig.holdDuration && formData.buyDate && (
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-gray-400">持有时长</span>
