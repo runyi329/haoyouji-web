@@ -343,7 +343,7 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
 }
 
 // 单张资金方订单卡片右栏（包含扫描数据查询）
-function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyValue, currentValue, accrued, shortfall }: {
+function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyValue, currentValue, accrued, shortfall, floatPnl }: {
   onClose: () => void;
   collateral: { coin: string; qty: string }[];
   collateralValue: number;
@@ -351,9 +351,11 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
   currentValue: number | null;
   accrued: number;
   shortfall: number | null;
+  floatPnl: number | null;
 }) {
-  const floatLoss = currentValue !== null ? Math.max(buyValue - currentValue, 0) : null;
-  const riskTocover = floatLoss !== null ? floatLoss + accrued : accrued;
+  // 需覆盖风险 = max(浮动盈亏, 0) + 代结利息（币涨时浮动部分取 0）
+  const floatLossForRisk = floatPnl !== null ? Math.max(floatPnl, 0) : 0;
+  const riskTocover = floatLossForRisk + accrued;
   const isSufficient = shortfall !== null ? collateralValue >= riskTocover : false;
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose}>
@@ -364,22 +366,28 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
         </div>
         <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动亏损</div>
-            <div>= 买入价值 - 当前市值（币涨时取 0）</div>
-            <div className="mt-1 font-mono" style={{ color: '#3B82F6' }}>
-              {currentValue !== null
-                ? <>= max({buyValue.toFixed(2)} - {currentValue.toFixed(2)}, 0) = <strong>{floatLoss!.toFixed(2)} U</strong></>
-                : <span className="text-gray-400">当前市値暂无实时价格，暂无法计算浮动亏损</span>
+            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
+            <div>= 买入价値 - 当前市値（正数为亏损，负数为浮盈）</div>
+            <div className="mt-1 font-mono">
+              {floatPnl !== null
+                ? <>
+                    <span style={{ color: '#3B82F6' }}>= {buyValue.toFixed(2)} - {currentValue!.toFixed(2)} = </span>
+                    <strong style={{ color: floatPnl > 0 ? '#DC2626' : '#16A34A' }}>
+                      {floatPnl > 0 ? '+' : ''}{floatPnl.toFixed(2)} U
+                      {floatPnl < 0 ? '（浮盈）' : '（亏损）'}
+                    </strong>
+                  </>
+                : <span className="text-gray-400">当前市値暂无实时价格，暂无法计算浮动盈亏</span>
               }
             </div>
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 需覆盖风险</div>
-            <div>= 浮动亏损 + 代结利息</div>
+            <div>= max(浮动盈亏, 0) + 代结利息（币涨时浮动部分取 0）</div>
             <div className="mt-1 font-mono" style={{ color: '#3B82F6' }}>
-              {floatLoss !== null
-                ? <>= {floatLoss.toFixed(2)} + {accrued.toFixed(2)} = <strong>{riskTocover.toFixed(2)} U</strong></>
-                : <>= ---（暂无实时价） + {accrued.toFixed(2)} = <strong>至少 {riskTocover.toFixed(2)} U</strong></>
+              {floatPnl !== null
+                ? <>= max({floatPnl.toFixed(2)}, 0) + {accrued.toFixed(2)} = {floatLossForRisk.toFixed(2)} + {accrued.toFixed(2)} = <strong>{riskTocover.toFixed(2)} U</strong></>
+                : <>= 0（暂无实时价） + {accrued.toFixed(2)} = <strong>至少 {riskTocover.toFixed(2)} U</strong></>
               }
             </div>
           </div>
@@ -514,10 +522,11 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           // 当前市値 = 实时价 × 数量（无实时价则为 null，不用买入价代替）
           const liveP = livePrices?.[order.coin] ?? null;
           const currentValue = liveP !== null ? liveP * buyQty : null;
-          // 浮动亏损 = max(买入价値 - 当前市値, 0)；无实时价时为 null
-          const floatLoss = currentValue !== null ? Math.max(buyValue - currentValue, 0) : null;
-          // 需覆盖风险 = 浮动亏损 + 代结利息
-          const riskToCover = floatLoss !== null ? floatLoss + accrued : accrued;
+          // 浮动盈亏 = 买入价値 - 当前市値（正数为亏损，负数为浮盈）
+          const floatPnl = currentValue !== null ? buyValue - currentValue : null;
+          // 需覆盖风险 = max(浮动盈亏, 0) + 代结利息（币涨时浮动部分取 0）
+          const floatLossForRisk = floatPnl !== null ? Math.max(floatPnl, 0) : 0;
+          const riskToCover = floatLossForRisk + accrued;
           // 担保充足：担保价値 >= 需覆盖风险（无实时价时仅用利息部分判断）
           const isSufficient = hasValue && collateralValue >= riskToCover;
           const shortfallAmt = hasValue ? riskToCover - collateralValue : null;
@@ -532,6 +541,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   currentValue={currentValue}
                   accrued={accrued}
                   shortfall={shortfallAmt}
+                  floatPnl={floatPnl}
                 />
               )}
               <div className="flex items-center justify-between text-xs mt-0.5">
