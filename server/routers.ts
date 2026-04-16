@@ -13638,9 +13638,17 @@ export const appRouter = router({
     // ===== 快捷按钮管理 =====
     getShortcutButtons: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
-      .query(async ({ input, ctx }) => {
+      .query(async ({ input }) => {
         const conn = await getDbConnection();
-        // 查当前用户在该账本的shortcut_buttons
+        if (!conn) return {};
+        // 确保 shortcut_buttons 字段存在
+        try {
+          await (conn as any).execute(
+            `ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL`
+          );
+        } catch (_e: any) {
+          // 字段已存在时忽略
+        }
         const [rows] = await (conn as any).execute(
           `SELECT userId, shortcut_buttons FROM ledger_members WHERE ledgerId = ?`,
           [input.ledgerId]
@@ -13648,14 +13656,16 @@ export const appRouter = router({
         const shortcutMap: Record<number, any> = {};
         for (const row of (rows as any[])) {
           try {
-            shortcutMap[row.userId] = row.shortcut_buttons ? JSON.parse(row.shortcut_buttons) : null;
+            const raw = row.shortcut_buttons;
+            shortcutMap[Number(row.userId)] = raw
+              ? (typeof raw === 'string' ? JSON.parse(raw) : raw)
+              : { gold: false, qq: false, oil: false, stock: false };
           } catch {
-            shortcutMap[row.userId] = null;
+            shortcutMap[Number(row.userId)] = { gold: false, qq: false, oil: false, stock: false };
           }
         }
         return shortcutMap;
       }),
-
     updateShortcutButtons: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
