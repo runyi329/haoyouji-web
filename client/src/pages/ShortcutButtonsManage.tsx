@@ -129,7 +129,7 @@ export default function ShortcutButtonsManage() {
               <div key={key} className="py-3 px-2 text-center border-l border-gray-200">
                 {key === 'digitalB' ? (
                   <div className="flex flex-col items-center gap-0.5">
-                    <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_6d044b9b.png" alt="数字B" className="w-5 h-5 rounded-full object-cover" />
+                    <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png" alt="数字B" className="w-5 h-5 rounded-full object-cover" />
                     <span className="text-[10px] leading-none">数字B</span>
                   </div>
                 ) : SHORTCUT_LABELS[key]}

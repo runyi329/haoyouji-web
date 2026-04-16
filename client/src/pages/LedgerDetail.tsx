@@ -2151,7 +2151,7 @@ export default function LedgerDetail() {
                         title="数字B"
                       >
                         <img
-                          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_6d044b9b.png"
+                          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png"
                           alt="数字B"
                           className="w-full h-full object-cover rounded-full"
                         />
