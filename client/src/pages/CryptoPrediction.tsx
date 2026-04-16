@@ -141,22 +141,22 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
       boxShadow: '0 6px 32px rgba(212,175,55,0.5), 0 2px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.3)',
     }}>
       {/* 币种切换 Tab */}
-      <div className="flex px-4 pt-3 pb-0 gap-2">
+      <div className="flex">
         {(['BTC', 'ETH'] as const).map(c => (
           <button
             key={c}
             onClick={() => setActiveCoin(c)}
-            className="px-4 py-1.5 rounded-full text-sm font-black transition-all"
+            className="flex-1 py-2.5 text-sm font-black transition-all"
             style={{
               background: activeCoin === c
-                ? 'rgba(0,0,0,0.25)'
-                : 'rgba(0,0,0,0.08)',
-              color: activeCoin === c ? '#3d2000' : 'rgba(60,30,0,0.5)',
-              border: activeCoin === c ? '2px solid rgba(255,255,255,0.5)' : '2px solid transparent',
-              boxShadow: activeCoin === c ? 'inset 0 1px 3px rgba(0,0,0,0.2)' : 'none',
+                ? 'rgba(0,0,0,0.22)'
+                : 'rgba(0,0,0,0.06)',
+              color: activeCoin === c ? '#3d2000' : 'rgba(60,30,0,0.45)',
+              borderBottom: activeCoin === c ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
+              borderRadius: 0,
             }}
           >
-            {c === 'BTC' ? '₿ BTC' : 'Ξ ETH'}
+            {c === 'BTC' ? '₿ 比特币' : 'Ξ 以太坊'}
           </button>
         ))}
       </div>
@@ -253,11 +253,11 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
       {/* 头部：标题 + 余额 */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div>
-          <div className="text-xs font-medium" style={{ color: 'rgba(80,40,0,0.8)', letterSpacing: 2 }}>{coin.name} · 明日涨跌</div>
+          <div className="text-xs font-medium" style={{ color: 'rgba(80,40,0,0.8)', letterSpacing: 2 }}>{coinKey === 'BTC' ? '比特币涨跌' : '以太坊涨跌'}</div>
           <div className="text-lg font-black mt-0.5" style={{
             color: '#3d2000',
             textShadow: '0 1px 2px rgba(255,255,255,0.4), 0 -1px 1px rgba(0,0,0,0.3)',
-          }}>竞猜预测</div>
+          }}>趋势</div>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
           <Wallet className="w-3.5 h-3.5" style={{ color: '#3d2000' }} />
