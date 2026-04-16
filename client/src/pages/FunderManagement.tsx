@@ -571,7 +571,7 @@ export default function FunderManagement() {
                       {order.buy_quantity && (
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">买入数量</span>
-                          <span className="font-medium text-gray-700">{order.buy_quantity} {order.coin}</span>
+                          <span className="font-medium text-gray-700">{order.buy_quantity ? parseFloat(parseFloat(order.buy_quantity).toFixed(8)).toString() : order.buy_quantity} {order.coin}</span>
                         </div>
                       )}
                       {order.buy_date && (
@@ -1179,7 +1179,7 @@ export default function FunderManagement() {
                       <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>持有资产</div>
                       <div className="h-7 flex items-baseline gap-1">
                         <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
-                          {formData.buyQuantity ? parseFloat(formData.buyQuantity).toFixed(4) : '—'}
+                          {formData.buyQuantity ? parseFloat(parseFloat(formData.buyQuantity).toFixed(8)).toString() : '—'}
                         </span>
                         <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{formData.coin}</span>
                       </div>
