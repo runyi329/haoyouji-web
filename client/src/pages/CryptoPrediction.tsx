@@ -278,15 +278,15 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
     <div>
 
       {/* 赔率卡（幅度区间）——在滑条前显示 */}
-      <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
-          background: 'rgba(0,0,0,0.18)',
-          border: '1px solid rgba(255,255,255,0.35)',
-          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
+      <div className="mx-4 mt-3 mb-3 rounded-2xl px-4 py-3" style={{
+          background: 'rgba(0,0,0,0.65)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
         }}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>幅度区间</div>
-              <div className="text-xl font-black" style={{ color: '#3d2000' }}>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>幅度区间</div>
+              <div className="text-xl font-black" style={{ color: '#ffffff' }}>
                 {(() => {
                   const m = rangeLabel.match(/≥(\d+)%<(\d+)%/);
                   if (m) return `${m[1]}% ≤ ${coinKey} < ${m[2]}%`;
@@ -295,7 +295,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
               </div>
             </div>
             <div className="text-right">
-              <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>赔率（含本金）</div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>赔率（含本金）</div>
               <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
                 {odds > 0 ? `${odds}x` : '-'}
               </div>
@@ -307,8 +307,8 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
       <div className="px-4 mb-3">
         {/* 标签行：只显示左跌右涨 */}
         <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-black" style={{ color: dir === 'down' ? '#00e676' : 'rgba(60,30,0,0.4)', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.6)' : 'none', transition: 'all 0.2s' }}>↓ 跌</span>
-          <span className="text-sm font-black" style={{ color: dir === 'up' ? '#ff4d4d' : 'rgba(60,30,0,0.4)', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.6)' : 'none', transition: 'all 0.2s' }}>涨 ↑</span>
+          <span className="text-sm font-black" style={{ color: dir === 'down' ? '#00e676' : 'rgba(255,255,255,0.35)', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.6)' : 'none', transition: 'all 0.2s' }}>↓ 跌</span>
+          <span className="text-sm font-black" style={{ color: dir === 'up' ? '#ff4d4d' : 'rgba(255,255,255,0.35)', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.6)' : 'none', transition: 'all 0.2s' }}>涨 ↑</span>
         </div>
         {/* 双向滑条 */}
         <div className="relative" style={{ height: '12px' }}>
@@ -336,7 +336,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
 
         </div>
         {/* 幅度刻度 */}
-        <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(60,30,0,0.5)' }}>
+        <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
           <span>≥11%</span>
           <span>0%</span>
           <span>≥11%</span>
@@ -345,17 +345,17 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
 
       {/* 投入 → 预期获得 */}
           <div className="mx-4 mb-3 rounded-2xl px-4 py-3 flex items-center justify-between" style={{
-            background: 'rgba(0,0,0,0.18)',
-            border: '1px solid rgba(255,255,255,0.35)',
-            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
+            background: 'rgba(0,0,0,0.65)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
           }}>
             <div>
-              <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>投入</div>
-              <div className="text-xl font-bold" style={{ color: '#3d2000' }}>{betAmount}<span className="text-xs font-normal ml-1" style={{ color: 'rgba(60,30,0,0.5)' }}>U</span></div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>投入</div>
+              <div className="text-xl font-bold" style={{ color: '#ffffff' }}>{betAmount}<span className="text-xs font-normal ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>U</span></div>
             </div>
-            <div className="text-xl" style={{ color: 'rgba(60,30,0,0.5)' }}>→</div>
+            <div className="text-xl" style={{ color: 'rgba(255,255,255,0.4)' }}>→</div>
             <div className="text-right">
-              <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>预期获得</div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>预期获得</div>
               <div className="text-2xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
                 {payout > 0 ? payout : '-'}<span className="text-sm font-normal ml-1" style={{ color: 'rgba(255,255,255,0.4)' }}>U</span>
               </div>
@@ -370,7 +370,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
               className="w-full h-3 rounded-full appearance-none cursor-pointer"
               style={{ background: sliderBg(betAmount, 1, Math.max(Math.floor(balance), 1), '#d4af37'), accentColor: '#d4af37' }}
             />
-            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(60,30,0,0.6)' }}>
+            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
               <span>1 U</span>
               <span>余额 {balance.toFixed(2)} U</span>
             </div>
