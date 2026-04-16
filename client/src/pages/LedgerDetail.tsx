@@ -553,7 +553,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               )}
               {show('collateralCoin') && collateral.map((a, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs mt-0.5">
-                  <span className="text-gray-400">{collateral.length > 1 ? `担保货币${['一','二','三','四','五'][idx] ?? idx+1}` : '担保货币'}</span>
+                  <span className="text-gray-400">{collateral.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>
                     {a.qty} {a.coin}
                   </span>
@@ -561,7 +561,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               ))}
               {hasValue && show('collateralValue') && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400">担保价值</span>
+                  <span className="text-gray-400">{collateral.length > 1 ? '担保总值' : '担保价值'}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
                 </div>
               )}
