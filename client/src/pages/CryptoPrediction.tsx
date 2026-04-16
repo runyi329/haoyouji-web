@@ -350,10 +350,10 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
             boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
           }}>
             <div>
-              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>投入</div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>预算</div>
               <div className="text-xl font-bold" style={{ color: '#ffffff' }}>{betAmount}<span className="text-xs font-normal ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>U</span></div>
             </div>
-            <div className="text-xl" style={{ color: 'rgba(255,255,255,0.4)' }}>→</div>
+
             <div className="text-right">
               <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>预期获得</div>
               <div className="text-2xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
