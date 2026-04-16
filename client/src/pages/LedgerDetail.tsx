@@ -466,7 +466,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
           <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
         </div>
-        {/* 大数字（自适应高度，括号换算值换行） */}
+        {/* 大数字（自适应高度，折算值第二行） */}
         <div className="min-h-9 flex flex-col justify-center">
           <div className="flex items-baseline gap-0.5">
             <span
@@ -477,7 +477,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             </span>
             <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
           </div>
-          <div className="text-[10px] text-gray-400 leading-tight">({altAccrued.toFixed(2)}{altUnit})</div>
+          <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toFixed(2)} {altUnit}</div>
         </div>
         {/* 明细行：统一 space-y-0.5，和左栏一致 */}
         <div className="space-y-0.5">
@@ -813,20 +813,20 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>持有资产</div>
           {/* 币种名称 + 数量（固定高度与右栏对齐） */}
           <div className="min-h-9 flex flex-col justify-center">
-            <div className="flex items-baseline gap-1 flex-wrap">
+            <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
                 {qty > 0 ? smartQty(qty) : '—'}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
-              {(() => {
-                const liveP = isEnded
-                  ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
-                  : (livePrices[order.coin] ?? null);
-                if (!liveP || !qty) return null;
-                const val = (qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 });
-                return <span className="text-[10px]" style={{ color: '#6B7280' }}>({val} U)</span>;
-              })()}
             </div>
+            {(() => {
+              const liveP = isEnded
+                ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
+                : (livePrices[order.coin] ?? null);
+              if (!liveP || !qty) return null;
+              const val = (qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 });
+              return <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val} U</div>;
+            })()}
           </div>
           {/* 订单信息列表：标题靠左，数值靠右 */}
           <div className="space-y-0.5">
