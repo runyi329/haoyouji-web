@@ -319,7 +319,14 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>幅度区间</div>
-                <div className="text-xl font-black" style={{ color: '#3d2000' }}>{rangeLabel}</div>
+                <div className="text-xl font-black" style={{ color: '#3d2000' }}>
+                  {(() => {
+                    // 把 ≥0%<1% 转换为 0% ≤ BTC < 1%
+                    const m = rangeLabel.match(/≥(\d+)%<(\d+)%/);
+                    if (m) return `${m[1]}% ≤ ${coinKey} < ${m[2]}%`;
+                    return rangeLabel;
+                  })()}
+                </div>
               </div>
               <div className="text-right">
                 <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>赔率（含本金）</div>
