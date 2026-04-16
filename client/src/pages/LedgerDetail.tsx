@@ -598,24 +598,28 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
         <div className="h-5 flex items-center gap-1">
           <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>收益分成</span>
         </div>
-        {/* 大数字（固定高度与左栏对齐） */}
+        {/* 大数字（自适应高度，有收益时加≈折算行） */}
         {(() => {
           const currentPrice = (livePrices && livePrices[order.coin]) ? livePrices[order.coin] : lastScanPrice;
           const isProfit = currentPrice && buyPrice && currentPrice > buyPrice && profitPct > 0;
           const profitU = isProfit ? (currentPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
           if (isProfit) {
+            const profitCNY = profitU * 7;
             return (
-              <div className="h-9 flex items-baseline justify-between w-full whitespace-nowrap overflow-hidden">
-                <div className="flex items-baseline gap-0.5">
-                  <span
-                    className="text-2xl font-bold tabular-nums leading-tight"
-                    style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-                  >
-                    +{profitU.toFixed(2)}
-                  </span>
-                  <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+              <div className="min-h-9 flex flex-col justify-center">
+                <div className="flex items-baseline justify-between w-full whitespace-nowrap overflow-hidden">
+                  <div className="flex items-baseline gap-0.5">
+                    <span
+                      className="text-2xl font-bold tabular-nums leading-tight"
+                      style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                    >
+                      +{profitU.toFixed(2)}
+                    </span>
+                    <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                  </div>
+                  <span className="text-xs text-gray-400">{profitPct % 1 === 0 ? profitPct.toFixed(0) : profitPct.toFixed(2)}%</span>
                 </div>
-                <span className="text-xs text-gray-400">{profitPct % 1 === 0 ? profitPct.toFixed(0) : profitPct.toFixed(2)}%</span>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{profitCNY.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元</div>
               </div>
             );
           }
