@@ -12432,7 +12432,7 @@ export const appRouter = router({
         interestStartDate: z.string().optional(),
         showProfitShare: z.boolean().optional(),
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
-        displayConfig: z.record(z.boolean()).optional(),
+        displayConfig: z.record(z.string(), z.boolean()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -12495,7 +12495,7 @@ export const appRouter = router({
         interestStartDate: z.string().optional(),
         showProfitShare: z.boolean().optional(),
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
-        displayConfig: z.record(z.boolean()).optional(),
+        displayConfig: z.record(z.string(), z.boolean()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
