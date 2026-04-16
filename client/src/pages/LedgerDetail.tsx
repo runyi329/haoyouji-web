@@ -2142,6 +2142,21 @@ export default function LedgerDetail() {
                         />
                       </div>
                     )}
+                    {/* 数字B（跳转52号账本） */}
+                    {myShortcuts.digitalB && (
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                        style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
+                        onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }}
+                        title="数字B"
+                      >
+                        <img
+                          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_6d044b9b.png"
+                          alt="数字B"
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      </div>
+                    )}
                   </>
                 )}
 
