@@ -1249,12 +1249,17 @@ export default function FunderManagement() {
                             </span>
                           </div>
                           {/* 待结利息大数字 */}
-                          <div className="h-7 flex items-baseline gap-0.5">
+                          <div className="h-7 flex items-baseline gap-0.5 whitespace-nowrap overflow-hidden">
                             <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
                               {previewAccrued > 0 ? previewAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                             </span>
                             <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
                               {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              ({formData.interestBaseCurrency === 'CNY'
+                                ? (previewAccrued / 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'U'
+                                : (previewAccrued * 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '元'})
                             </span>
                           </div>
                           {/* 明细行 */}
@@ -1263,9 +1268,13 @@ export default function FunderManagement() {
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">已结利息</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {previewPaidInterest > 0
-                                    ? previewPaidInterest.toLocaleString(undefined, { maximumFractionDigits: 2 }) + (formData.interestBaseCurrency === 'CNY' ? '元' : ' U')
-                                    : '0' + (formData.interestBaseCurrency === 'CNY' ? '元' : ' U')}
+                                  {(() => {
+                                    const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
+                                    const mainUnit = formData.interestBaseCurrency === 'CNY' ? '元' : ' U';
+                                    const altVal = formData.interestBaseCurrency === 'CNY' ? val / 7 : val * 7;
+                                    const altUnit = formData.interestBaseCurrency === 'CNY' ? 'U' : '元';
+                                    return <>{val.toLocaleString(undefined, { maximumFractionDigits: 2 })}{mainUnit}<span className="text-[10px] text-gray-400 font-normal"> ({altVal.toLocaleString(undefined, { maximumFractionDigits: 2 })}{altUnit})</span></>;
+                                  })()}
                                 </span>
                               </div>
                             )}
