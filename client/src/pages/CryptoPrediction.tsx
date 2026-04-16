@@ -216,11 +216,22 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
   const payout = odds > 0 ? parseFloat((betAmount * odds).toFixed(2)) : 0;
   const rangeLabel = RANGE_LABELS[safeIdx];
 
-  // 目标日期（明天）
+  // 目标日期（北京时间明天）
   const targetDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    // 北京时间 UTC+8
+    const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const tomorrow = new Date(nowBJ);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    return tomorrow.toISOString().slice(0, 10); // YYYY-MM-DD
+  }, []);
+  // 显示用的日期标签：X月X日
+  const targetDateLabel = useMemo(() => {
+    const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const tomorrow = new Date(nowBJ);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    const m = tomorrow.getUTCMonth() + 1;
+    const d = tomorrow.getUTCDate();
+    return `${m}月${d}日`;
   }, []);
 
   const sliderBg = (val: number, min: number, max: number, color: string) =>
@@ -257,11 +268,10 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
       {/* 头部：标题 + 余额 */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div>
-          <div className="text-xs font-medium" style={{ color: 'rgba(80,40,0,0.8)', letterSpacing: 2 }}>{coinKey === 'BTC' ? '比特币涨跌' : '以太坊涨跌'}</div>
-          <div className="text-lg font-black mt-0.5" style={{
+          <div className="text-base font-black" style={{
             color: '#3d2000',
             textShadow: '0 1px 2px rgba(255,255,255,0.4), 0 -1px 1px rgba(0,0,0,0.3)',
-          }}>趋势</div>
+          }}>{coinKey === 'BTC' ? '比特币' : '以太坊'} {targetDateLabel}涨跌趋势</div>
         </div>
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
           <Wallet className="w-3.5 h-3.5" style={{ color: '#3d2000' }} />
@@ -318,9 +328,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
                 </div>
               </div>
             </div>
-            <div className="text-xs mt-1.5" style={{ color: 'rgba(60,30,0,0.65)' }}>
-              历史概率 {(prob * 100).toFixed(2)}%　庄家优势 25%
-            </div>
+
           </div>
 
           {/* 区间滑动条 */}
@@ -451,7 +459,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
 
       {/* 底部说明 */}
       <div className="px-4 pb-4 text-xs" style={{ color: 'rgba(60,30,0,0.5)' }}>
-        · 赔率含本金 · 庄家优势 25% · 1U = 1优 · 历史概率基于全量日线
+        · 赔率含本金 · 1U = 1优
       </div>
     </div>
   );
