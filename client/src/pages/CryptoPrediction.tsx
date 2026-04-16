@@ -275,6 +275,34 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
         }}>{coinKey === 'BTC' ? '比特币' : '以太坊'} {targetDateLabel}涨跌趋势</div>
       </div>
 
+      {/* 赔率卡（幅度区间）——在滑条前显示 */}
+      {dir && (
+        <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
+          background: 'rgba(0,0,0,0.18)',
+          border: '1px solid rgba(255,255,255,0.35)',
+          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
+        }}>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>幅度区间</div>
+              <div className="text-xl font-black" style={{ color: '#3d2000' }}>
+                {(() => {
+                  const m = rangeLabel.match(/≥(\d+)%<(\d+)%/);
+                  if (m) return `${m[1]}% ≤ ${coinKey} < ${m[2]}%`;
+                  return rangeLabel;
+                })()}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>赔率（含本金）</div>
+              <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
+                {odds > 0 ? `${odds}x` : '-'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 方向+幅度合一滑条（始终显示） */}
       <div className="px-4 mb-3">
         {/* 标签行：只显示左跌右涨 */}
@@ -333,32 +361,6 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
 
       {dir && (
         <>
-          {/* 赔率卡（幅度区间） */}
-          <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
-            background: 'rgba(0,0,0,0.18)',
-            border: '1px solid rgba(255,255,255,0.35)',
-            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
-          }}>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>幅度区间</div>
-                <div className="text-xl font-black" style={{ color: '#3d2000' }}>
-                  {(() => {
-                    const m = rangeLabel.match(/≥(\d+)%<(\d+)%/);
-                    if (m) return `${m[1]}% ≤ ${coinKey} < ${m[2]}%`;
-                    return rangeLabel;
-                  })()}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>赔率（含本金）</div>
-                <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
-                  {odds > 0 ? `${odds}x` : '-'}
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* 投入 → 预期获得 */}
           <div className="mx-4 mb-3 rounded-2xl px-4 py-3 flex items-center justify-between" style={{
             background: 'rgba(0,0,0,0.18)',
