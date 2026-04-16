@@ -216,24 +216,23 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
 
   return (
     <div className="rounded-2xl overflow-hidden mb-3" style={{
-      background: 'linear-gradient(160deg, #0a0800 0%, #110e00 50%, #0a0800 100%)',
-      border: '1px solid rgba(212,175,55,0.2)',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+      background: 'linear-gradient(160deg, #7a5c00 0%, #b8860b 25%, #d4af37 50%, #b8860b 75%, #7a5c00 100%)',
+      border: '2px solid #ffd700',
+      boxShadow: '0 6px 32px rgba(212,175,55,0.5), 0 2px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.3)',
     }}>
       {/* 头部：标题 + 余额 */}
       <div className="px-4 pt-4 pb-3 flex items-center justify-between">
         <div>
-          <div className="text-xs font-medium" style={{ color: 'rgba(212,175,55,0.6)', letterSpacing: 2 }}>{coin.name} · 明日涨跌</div>
+          <div className="text-xs font-medium" style={{ color: 'rgba(80,40,0,0.8)', letterSpacing: 2 }}>{coin.name} · 明日涨跌</div>
           <div className="text-lg font-black mt-0.5" style={{
-            background: 'linear-gradient(90deg, #d4af37, #ffd700, #b8860b)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            color: '#3d2000',
+            textShadow: '0 1px 2px rgba(255,255,255,0.4), 0 -1px 1px rgba(0,0,0,0.3)',
           }}>竞猜预测</div>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.2)' }}>
-          <Wallet className="w-3.5 h-3.5" style={{ color: '#d4af37' }} />
-          <span className="text-sm font-bold" style={{ color: '#d4af37' }}>{balance.toFixed(2)}</span>
-          <span className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>U</span>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
+          <Wallet className="w-3.5 h-3.5" style={{ color: '#3d2000' }} />
+          <span className="text-sm font-bold" style={{ color: '#3d2000' }}>{balance.toFixed(2)}</span>
+          <span className="text-xs" style={{ color: 'rgba(60,30,0,0.7)' }}>U</span>
         </div>
       </div>
 
@@ -243,25 +242,25 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
           onClick={() => { setDir('up'); setRangeIdx(0); }}
           className="py-4 rounded-2xl flex flex-col items-center gap-1 transition-all active:scale-95"
           style={{
-            background: dir === 'up' ? neonUp.bg : 'rgba(255,255,255,0.04)',
-            border: `2px solid ${dir === 'up' ? neonUp.border : 'rgba(255,255,255,0.08)'}`,
-            boxShadow: dir === 'up' ? `0 0 20px ${neonUp.glow}` : 'none',
+            background: dir === 'up' ? 'linear-gradient(135deg,#8b0000,#cc0000)' : 'rgba(0,0,0,0.15)',
+            border: `2px solid ${dir === 'up' ? '#ff4d4d' : 'rgba(255,255,255,0.3)'}`,
+            boxShadow: dir === 'up' ? '0 0 20px rgba(255,77,77,0.6), inset 0 1px 0 rgba(255,255,255,0.2)' : 'inset 0 1px 3px rgba(0,0,0,0.2)',
           }}
         >
-          <span className="text-3xl" style={{ filter: dir === 'up' ? `drop-shadow(0 0 8px ${neonUp.main})` : 'none' }}>↑</span>
-          <span className="text-base font-black" style={{ color: dir === 'up' ? neonUp.main : 'rgba(255,255,255,0.5)' }}>涨</span>
+          <span className="text-3xl" style={{ color: dir === 'up' ? '#ff4d4d' : '#3d2000', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.8)' : '0 1px 2px rgba(255,255,255,0.4)' }}>↑</span>
+          <span className="text-base font-black" style={{ color: dir === 'up' ? '#ff4d4d' : '#3d2000', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.8)' : '0 1px 2px rgba(255,255,255,0.4)' }}>涨</span>
         </button>
         <button
           onClick={() => { setDir('down'); setRangeIdx(0); }}
           className="py-4 rounded-2xl flex flex-col items-center gap-1 transition-all active:scale-95"
           style={{
-            background: dir === 'down' ? neonDown.bg : 'rgba(255,255,255,0.04)',
-            border: `2px solid ${dir === 'down' ? neonDown.border : 'rgba(255,255,255,0.08)'}`,
-            boxShadow: dir === 'down' ? `0 0 20px ${neonDown.glow}` : 'none',
+            background: dir === 'down' ? 'linear-gradient(135deg,#003a1a,#006633)' : 'rgba(0,0,0,0.15)',
+            border: `2px solid ${dir === 'down' ? '#00e676' : 'rgba(255,255,255,0.3)'}`,
+            boxShadow: dir === 'down' ? '0 0 20px rgba(0,230,118,0.6), inset 0 1px 0 rgba(255,255,255,0.2)' : 'inset 0 1px 3px rgba(0,0,0,0.2)',
           }}
         >
-          <span className="text-3xl" style={{ filter: dir === 'down' ? `drop-shadow(0 0 8px ${neonDown.main})` : 'none' }}>↓</span>
-          <span className="text-base font-black" style={{ color: dir === 'down' ? neonDown.main : 'rgba(255,255,255,0.5)' }}>跌</span>
+          <span className="text-3xl" style={{ color: dir === 'down' ? '#00e676' : '#3d2000', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.8)' : '0 1px 2px rgba(255,255,255,0.4)' }}>↓</span>
+          <span className="text-base font-black" style={{ color: dir === 'down' ? '#00e676' : '#3d2000', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.8)' : '0 1px 2px rgba(255,255,255,0.4)' }}>跌</span>
         </button>
       </div>
 
@@ -269,29 +268,30 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
         <>
           {/* 赔率卡 */}
           <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
-            background: 'rgba(212,175,55,0.06)',
-            border: '1px solid rgba(212,175,55,0.25)',
+            background: 'rgba(0,0,0,0.18)',
+            border: '1px solid rgba(255,255,255,0.35)',
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
           }}>
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>幅度区间</div>
-                <div className="text-xl font-black text-white">{rangeLabel}</div>
+                <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>幅度区间</div>
+                <div className="text-xl font-black" style={{ color: '#3d2000' }}>{rangeLabel}</div>
               </div>
               <div className="text-right">
-                <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>赔率（含本金）</div>
+                <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>赔率（含本金）</div>
                 <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
                   {odds > 0 ? `${odds}x` : '-'}
                 </div>
               </div>
             </div>
-            <div className="text-xs mt-1.5" style={{ color: 'rgba(212,175,55,0.5)' }}>
+            <div className="text-xs mt-1.5" style={{ color: 'rgba(60,30,0,0.65)' }}>
               历史概率 {(prob * 100).toFixed(2)}%　庄家优势 25%
             </div>
           </div>
 
           {/* 区间滑动条 */}
           <div className="mx-4 mb-4">
-            <div className="flex justify-between text-xs mb-1.5" style={{ color: 'rgba(212,175,55,0.5)' }}>
+            <div className="flex justify-between text-xs mb-1.5" style={{ color: 'rgba(60,30,0,0.65)' }}>
               <span>≥0%</span>
               <span>拖动选择幅度</span>
               <span>≥11%</span>
@@ -306,16 +306,17 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
 
           {/* 投入 → 预期获得 */}
           <div className="mx-4 mb-3 rounded-2xl px-4 py-3 flex items-center justify-between" style={{
-            background: 'rgba(212,175,55,0.06)',
-            border: '1px solid rgba(212,175,55,0.2)',
+            background: 'rgba(0,0,0,0.18)',
+            border: '1px solid rgba(255,255,255,0.35)',
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
           }}>
             <div>
-              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>投入</div>
-              <div className="text-xl font-bold text-white">{betAmount}<span className="text-xs font-normal ml-1" style={{ color: 'rgba(255,255,255,0.4)' }}>U</span></div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>投入</div>
+              <div className="text-xl font-bold" style={{ color: '#3d2000' }}>{betAmount}<span className="text-xs font-normal ml-1" style={{ color: 'rgba(60,30,0,0.5)' }}>U</span></div>
             </div>
-            <div className="text-xl" style={{ color: 'rgba(212,175,55,0.4)' }}>→</div>
+            <div className="text-xl" style={{ color: 'rgba(60,30,0,0.5)' }}>→</div>
             <div className="text-right">
-              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>预期获得</div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(60,30,0,0.6)' }}>预期获得</div>
               <div className="text-2xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
                 {payout > 0 ? payout : '-'}<span className="text-sm font-normal ml-1" style={{ color: 'rgba(255,255,255,0.4)' }}>U</span>
               </div>
@@ -330,7 +331,7 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
               className="w-full h-3 rounded-full appearance-none cursor-pointer"
               style={{ background: sliderBg(betAmount, 1, Math.max(Math.floor(balance), 1), '#d4af37'), accentColor: '#d4af37' }}
             />
-            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(212,175,55,0.4)' }}>
+            <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(60,30,0,0.6)' }}>
               <span>1 U</span>
               <span>余额 {balance.toFixed(2)} U</span>
             </div>
@@ -346,22 +347,22 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
                 style={{
                   background: neon.bg,
                   border: `2px solid ${neon.border}`,
-                  boxShadow: `0 0 20px ${neon.glow}`,
+                  boxShadow: `0 0 20px ${neon.glow}, inset 0 1px 0 rgba(255,255,255,0.15)`,
                   letterSpacing: 1,
                 }}
               >
                 确认预测 {dir === 'up' ? '↑ 涨' : '↓ 跌'} {rangeLabel}
               </button>
             ) : (
-              <div className="rounded-2xl p-4" style={{ background: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.3)' }}>
-                <div className="text-sm text-white mb-3 text-center">
+              <div className="rounded-2xl p-4" style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}>
+                <div className="text-sm mb-3 text-center" style={{ color: '#3d2000' }}>
                   确认下注 <span style={{ color: '#d4af37' }}>{betAmount} U</span>，预测 {coin.name} 明日{dir === 'up' ? '涨' : '跌'} <span style={{ color: neon.main }}>{rangeLabel}</span>？
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setShowConfirm(false)}
                     className="py-2.5 rounded-xl text-sm font-medium"
-                    style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    style={{ background: 'rgba(0,0,0,0.15)', color: '#3d2000', border: '1px solid rgba(255,255,255,0.3)' }}
                   >
                     取消
                   </button>
@@ -382,26 +383,25 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
 
       {!dir && (
         <div className="px-4 pb-5 text-center">
-          <div className="text-4xl mb-2" style={{ filter: 'drop-shadow(0 0 12px rgba(212,175,55,0.8))' }}>🎰</div>
-          <div className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>选择涨或跌，开始预测</div>
+          <div className="text-xs" style={{ color: 'rgba(60,30,0,0.65)' }}>选择涨或跌，开始预测</div>
         </div>
       )}
 
       {/* 我的最近竞猜记录 */}
       {myBets.length > 0 && (
         <div className="mx-4 mb-4">
-          <div className="text-xs mb-2" style={{ color: 'rgba(212,175,55,0.4)' }}>最近下注记录</div>
+          <div className="text-xs mb-2" style={{ color: 'rgba(60,30,0,0.6)' }}>最近下注记录</div>
           <div className="space-y-1.5">
             {myBets.slice(0, 3).map((bet: any) => (
-              <div key={bet.id} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div key={bet.id} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: 'rgba(0,0,0,0.12)', border: '1px solid rgba(255,255,255,0.25)' }}>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold" style={{ color: bet.direction === 'up' ? '#ff4d4d' : '#00e676' }}>
                     {bet.direction === 'up' ? '↑涨' : '↓跌'} {bet.range_label}
                   </span>
-                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{bet.target_date}</span>
+                  <span className="text-xs" style={{ color: 'rgba(60,30,0,0.5)' }}>{bet.target_date}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-white">{parseFloat(bet.bet_amount).toFixed(0)} U</span>
+                  <span className="text-xs font-bold" style={{ color: '#3d2000' }}>{parseFloat(bet.bet_amount).toFixed(0)} U</span>
                   <span className="text-xs px-1.5 py-0.5 rounded-full" style={{
                     background: bet.status === 'won' ? 'rgba(255,77,77,0.2)' : bet.status === 'lost' ? 'rgba(0,230,118,0.1)' : 'rgba(212,175,55,0.1)',
                     color: bet.status === 'won' ? '#ff4d4d' : bet.status === 'lost' ? '#00e676' : '#d4af37',
@@ -416,7 +416,7 @@ function MarketBetPanel({ ledgerId, coinKey }: { ledgerId: number; coinKey: stri
       )}
 
       {/* 底部说明 */}
-      <div className="px-4 pb-4 text-xs" style={{ color: 'rgba(212,175,55,0.3)' }}>
+      <div className="px-4 pb-4 text-xs" style={{ color: 'rgba(60,30,0,0.5)' }}>
         · 赔率含本金 · 庄家优势 25% · 1U = 1优 · 历史概率基于全量日线
       </div>
     </div>
