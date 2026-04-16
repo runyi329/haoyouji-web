@@ -372,7 +372,12 @@ export default function FunderManagement() {
       const dc = order.display_config;
       if (dc) {
         const parsed = typeof dc === 'string' ? JSON.parse(dc) : dc;
-        setDisplayConfig({ ...DEFAULT_DISPLAY_CONFIG, ...parsed });
+        // 过滤掉非 boolean 值，防止旧数据污染导致后端校验失败
+        const safeConfig: Record<string, boolean> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'boolean') safeConfig[k] = v;
+        }
+        setDisplayConfig({ ...DEFAULT_DISPLAY_CONFIG, ...safeConfig });
       } else {
         setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
       }
@@ -410,7 +415,10 @@ export default function FunderManagement() {
       collateralAssets: collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
         ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
         : undefined,
-      displayConfig,
+      // 提交前确保 displayConfig 所有值都是 boolean
+      displayConfig: Object.fromEntries(
+        Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
+      ) as Record<string, boolean>,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
