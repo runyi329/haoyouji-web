@@ -349,9 +349,31 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
             border: '1px solid rgba(255,255,255,0.15)',
             boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
           }}>
-            <div>
-              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>预算</div>
-              <div className="text-xl font-bold" style={{ color: '#ffffff' }}>{betAmount}<span className="text-xs font-normal ml-1" style={{ color: 'rgba(255,255,255,0.5)' }}>U</span></div>
+            <div className="flex items-baseline gap-1">
+              <div>
+                <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>预算</div>
+                <div className="flex items-baseline gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    max={Math.max(Math.floor(balance), 1)}
+                    value={betAmount}
+                    onChange={e => {
+                      const v = Number(e.target.value);
+                      if (!isNaN(v) && v >= 1) {
+                        setBetAmount(Math.min(v, Math.max(Math.floor(balance), 1)));
+                      }
+                    }}
+                    className="text-xl font-bold bg-transparent border-b outline-none w-20 text-right"
+                    style={{
+                      color: '#ffffff',
+                      borderColor: 'rgba(255,255,255,0.3)',
+                      MozAppearance: 'textfield',
+                    }}
+                  />
+                  <span className="text-xs font-normal" style={{ color: 'rgba(255,255,255,0.5)' }}>U</span>
+                </div>
+              </div>
             </div>
 
             <div className="text-right">
