@@ -733,6 +733,16 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved }: {
   );
 }
 
+// 智能去尾零：保留有效小数位，去掉末尾无意义的零
+// 例：1.0000 → "1"，1.0001 → "1.0001"，0.00350 → "0.0035"
+function smartQty(val: number | string): string {
+  if (val === '' || val === null || val === undefined) return '—';
+  const n = typeof val === 'string' ? parseFloat(val) : val;
+  if (isNaN(n) || n === 0) return '0';
+  // 最多保留8位小数，然后去掉末尾零
+  return parseFloat(n.toFixed(8)).toString();
+}
+
 // 单张资金方订单卡片（左右两栏布局）
 function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean }) {
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
@@ -802,7 +812,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           {/* 币种名称 + 数量（固定高度与右栏对齐） */}
           <div className="h-7 flex items-baseline gap-1">
             <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-              {qty > 0 ? qty.toFixed(4) : '—'}
+              {qty > 0 ? smartQty(qty) : '—'}
             </span>
             <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
           </div>
