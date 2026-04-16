@@ -13639,7 +13639,7 @@ export const appRouter = router({
     getShortcutButtons: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ input, ctx }) => {
-        const conn = getDbConnection();
+        const conn = await getDbConnection();
         // 查当前用户在该账本的shortcut_buttons
         const [rows] = await (conn as any).execute(
           `SELECT userId, shortcut_buttons FROM ledger_members WHERE ledgerId = ?`,
@@ -13668,7 +13668,7 @@ export const appRouter = router({
         }),
       }))
       .mutation(async ({ input, ctx }) => {
-        const conn = getDbConnection();
+        const conn = await getDbConnection();
         // 检查当前用户是否是owner
         const [ledgerRows] = await (conn as any).execute(
           `SELECT createdBy FROM ledgers WHERE id = ?`,
@@ -13688,7 +13688,7 @@ export const appRouter = router({
     getMyShortcutButtons: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const conn = getDbConnection();
+        const conn = await getDbConnection();
         const [rows] = await (conn as any).execute(
           `SELECT shortcut_buttons FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
           [input.ledgerId, ctx.user.id]
