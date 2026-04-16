@@ -309,14 +309,14 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
           <span className="text-sm font-black" style={{ color: dir === 'up' ? '#ff4d4d' : 'rgba(60,30,0,0.4)', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.6)' : 'none', transition: 'all 0.2s' }}>涨 ↑</span>
         </div>
         {/* 双向滑条 */}
-        <div className="relative" style={{ height: '40px' }}>
+        <div className="relative" style={{ height: '12px' }}>
           <input
             type="range" min={-11} max={11} step={1} value={dirSlider}
             onChange={e => setDirSlider(Number(e.target.value))}
             className="w-full appearance-none cursor-pointer absolute inset-0"
             style={{
-              height: '40px',
-              borderRadius: '20px',
+              height: '12px',
+              borderRadius: '6px',
               background: (() => {
                 const pct = (dirSlider + 11) / 22 * 100;
                 const mid = 50;
@@ -336,10 +336,10 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
             <div
               className="absolute top-0 bottom-0 flex items-center justify-center pointer-events-none"
               style={{
-                left: `calc(${(dirSlider + 11) / 22 * 100}% - 20px)`,
-                width: '40px',
+                left: `calc(${(dirSlider + 11) / 22 * 100}% - 12px)`,
+                width: '24px',
                 zIndex: 2,
-                fontSize: '14px',
+                fontSize: '11px',
                 fontWeight: 900,
                 color: dir === 'down' ? '#00e676' : '#ff4d4d',
                 textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,1)' : '0 0 8px rgba(255,77,77,1)',
