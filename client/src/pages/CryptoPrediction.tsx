@@ -412,7 +412,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
                   letterSpacing: 1,
                 }}
               >
-                确认预测 {dir === 'up' ? '↑ 涨' : '↓ 跌'} {rangeLabel}
+                确认提交
               </button>
             ) : (
               <div className="rounded-2xl p-4" style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}>
