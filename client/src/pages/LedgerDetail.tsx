@@ -525,13 +525,13 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           const currentValue = liveP !== null ? liveP * buyQty : null;
           // 浮动盈亏 = 当前市値 - 买入价値（正数为浮盈，负数为亏损）
           const floatPnl = currentValue !== null ? currentValue - buyValue : null;
-          // 风险敎口计算用：浮盈时浮动部分不增加风险（币跌亏损时才需覆盖）
-          // 亏损 = max(-floatPnl, 0)
-          const floatLossForRisk = floatPnl !== null ? Math.max(-floatPnl, 0) : 0;
-          const riskToCover = floatLossForRisk + accrued;
-          // 担保充足：担保价値 >= 需覆盖风险（无实时价时仅用利息部分判断）
-          const isSufficient = hasValue && collateralValue >= riskToCover;
-          const shortfallAmt = hasValue ? riskToCover - collateralValue : null;
+          // 风险敞口 = 担保物 + 浮动盈亏 - 代结利息（与弹窗逻辑一致）
+          // 正数表示充足，负数表示缺口
+          const exposure = floatPnl !== null
+            ? collateralValue + floatPnl - accrued
+            : collateralValue - accrued;
+          const isSufficient = hasValue && exposure >= 0;
+          const shortfallAmt = hasValue ? -exposure : null; // 负数表示缺口量（取负得正数）
           return (
             <>
               {showCollateralInfo && (
