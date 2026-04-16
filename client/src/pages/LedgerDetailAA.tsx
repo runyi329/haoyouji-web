@@ -68,6 +68,12 @@ export default function LedgerDetailAA({
 }: Props) {
   const [, setLocation] = useLocation();
 
+  // 快捷按钮配置：从数据库读取当前用户的快捷按钮开关状态
+  const { data: myShortcuts } = (trpc as any).ledger.getMyShortcutButtons.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: true }
+  );
+
   // 数字币价格（从服务端数据库缓存读取，每5分钟自动刷新）
   const { data: cryptoPricesData } = trpc.getCryptoPrices.useQuery(undefined, {
     refetchInterval: 5 * 60 * 1000, // 每5分钟刷新一次
@@ -727,6 +733,21 @@ export default function LedgerDetailAA({
               >
                 刷新
               </button>
+              {/* 数字B快捷按钮（跳转52号账本） */}
+              {myShortcuts?.digitalB && (
+                <div
+                  className="w-7 h-7 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                  style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
+                  onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }}
+                  title="数字B"
+                >
+                  <img
+                    src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_6d044b9b.png"
+                    alt="数字B"
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                </div>
+              )}
               {/* 返回按鈕：渿圆形，点击返回账本首页 */}
               <button
                 onClick={() => setLocation("/ledger")}
