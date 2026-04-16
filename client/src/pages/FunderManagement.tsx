@@ -164,8 +164,10 @@ export default function FunderManagement() {
     orderNo: true,
     accruedInterest: true,
     paidInterest: true,
-    profitShare: true,
+    collateralCoin: true,
+    collateralValue: true,
     collateral: true,
+    profitShare: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT'];
@@ -1087,6 +1089,8 @@ export default function FunderManagement() {
                     {[
                       { key: 'accruedInterest', label: '待结利息（标题+大数字）' },
                       { key: 'paidInterest', label: '已结利息' },
+                      { key: 'collateralCoin', label: '担保货币' },
+                      { key: 'collateralValue', label: '担保价值' },
                       { key: 'collateral', label: '担保缺口' },
                     ].map(({ key, label }) => (
                       <div key={key} className="flex items-center justify-between">
@@ -1236,6 +1240,20 @@ export default function FunderManagement() {
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">已结利息</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>---</span>
+                              </div>
+                            )}
+                            {displayConfig.collateralCoin && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">担保货币</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {collateralAssets.filter(a => a.coin && a.qty !== '').map(a => `${a.qty}${a.coin}`).join('+')}
+                                </span>
+                              </div>
+                            )}
+                            {displayConfig.collateralValue && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">担保价值</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>--- U</span>
                               </div>
                             )}
                             {displayConfig.collateral && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (

@@ -504,7 +504,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             }
           } catch {}
           if (collateral.length === 0) return null;
-          if (!show('collateral')) return null;
+          // 只要有担保物数据就渲染（各子字段由 show() 单独控制）
+          if (!show('collateralCoin') && !show('collateralValue') && !show('collateral')) return null;
           // 计算担保价值
           let collateralValue = 0;
           let hasValue = false;
@@ -550,19 +551,21 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   floatPnl={floatPnl}
                 />
               )}
-              <div className="flex items-center justify-between text-xs mt-0.5">
-                <span className="text-gray-400">担保货币</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {collateral.map(a => `${a.qty}${a.coin}`).join('+')}
-                </span>
-              </div>
-              {hasValue && (
+              {show('collateralCoin') && (
+                <div className="flex items-center justify-between text-xs mt-0.5">
+                  <span className="text-gray-400">担保货币</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>
+                    {collateral.map(a => `${a.qty}${a.coin}`).join('+')}
+                  </span>
+                </div>
+              )}
+              {hasValue && show('collateralValue') && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-400">担保价值</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}U</span>
                 </div>
               )}
-              {hasValue && (
+              {hasValue && show('collateral') && (
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-0.5">
                     <span className="text-gray-400">担保缺口</span>
