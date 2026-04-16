@@ -353,10 +353,13 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
   shortfall: number | null;
   floatPnl: number | null;
 }) {
-  // 需覆盖风险 = max(浮动盈亏, 0) + 代结利息（币涨时浮动部分取 0）
-  const floatLossForRisk = floatPnl !== null ? Math.max(floatPnl, 0) : 0;
-  const riskTocover = floatLossForRisk + accrued;
-  const isSufficient = shortfall !== null ? collateralValue >= riskTocover : false;
+  // 风险敎口 = 担保物价値 - 浮动盈亏 - 代结利息
+  // 注：浮动盈亏正数=亏损，负数=浮盈
+  // 敎口正数表示担保充足（担保物 > 亏损+利息），负数表示缺口
+  const exposure = floatPnl !== null
+    ? collateralValue - floatPnl - accrued
+    : collateralValue - accrued;
+  const isSufficient = exposure >= 0;
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose}>
       <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
@@ -382,29 +385,27 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
             </div>
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 需覆盖风险</div>
-            <div>= max(浮动盈亏, 0) + 代结利息（币涨时浮动部分取 0）</div>
-            <div className="mt-1 font-mono" style={{ color: '#3B82F6' }}>
-              {floatPnl !== null
-                ? <>= max({floatPnl.toFixed(2)}, 0) + {accrued.toFixed(2)} = {floatLossForRisk.toFixed(2)} + {accrued.toFixed(2)} = <strong>{riskTocover.toFixed(2)} U</strong></>
-                : <>= 0（暂无实时价） + {accrued.toFixed(2)} = <strong>至少 {riskTocover.toFixed(2)} U</strong></>
-              }
-            </div>
-          </div>
-          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 担保价值</div>
+            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价値</div>
             <div>= {collateral.map(a => `${a.qty}${a.coin}`).join(' + ')} 折算 USDT</div>
             <div className="mt-1 font-mono" style={{ color: '#3B82F6' }}>
               = <strong>{collateralValue.toFixed(2)} U</strong>
             </div>
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#F0FDF4' : '#FFF1F1' }}>
-            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>④ 担保结论</div>
-            {isSufficient ? (
-              <div style={{ color: '#16A34A' }}>担保价值 {collateralValue.toFixed(2)} ≥ 需覆盖风险 {riskTocover.toFixed(2)}，<strong>担保充足（100%）</strong></div>
-            ) : (
-              <div style={{ color: '#DC2626' }}>担保价值 {collateralValue.toFixed(2)} &lt; 需覆盖风险 {riskTocover.toFixed(2)}，<strong>缺口 {(riskTocover - collateralValue).toFixed(2)} U</strong></div>
-            )}
+            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>③ 风险敎口</div>
+            <div>担保物 − 浮动盈亏 − 代结利息</div>
+            <div className="mt-1 font-mono">
+              {floatPnl !== null
+                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} − ({floatPnl.toFixed(2)}) − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} − ---（暂无实时价） − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+              }
+            </div>
+            <div className="mt-1.5" style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>
+              {isSufficient
+                ? `担保物充足，还有 ${exposure.toFixed(2)} U 的余量空间`
+                : `担保物不足，还需补充 ${Math.abs(exposure).toFixed(2)} U 才能覆盖风险`
+              }
+            </div>
           </div>
         </div>
       </div>
