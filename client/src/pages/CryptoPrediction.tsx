@@ -526,7 +526,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced }: { ledgerId: num
             />
             <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
               <span>1 U</span>
-              <span>余额 {balance.toFixed(2)} U</span>
+              <span>可用 {Math.min(Math.max(Math.floor(balance), 1), maxBetByPayout > 0 && isFinite(maxBetByPayout) ? maxBetByPayout : Math.max(Math.floor(balance), 1)).toLocaleString()} U</span>
             </div>
           </div>
 
