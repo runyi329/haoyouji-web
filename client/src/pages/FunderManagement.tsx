@@ -1431,8 +1431,18 @@ export default function FunderManagement() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <span className="text-xs text-gray-300">未配置利息</span>
+                        <div className="flex flex-col justify-center h-full gap-0.5">
+                          <div className="flex items-center justify-center">
+                            <span className="text-xs text-gray-300">未配置利息</span>
+                          </div>
+                          {formData.interestStartDate && (
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-400">计息日期</span>
+                              <span className="font-medium" style={{ color: '#4B5563' }}>
+                                {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )}
                       {/* 中间分隔线：只在收益分成开启时显示 */}
