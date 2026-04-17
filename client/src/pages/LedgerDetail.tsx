@@ -494,41 +494,39 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               : `${elapsedHours}小时 ${elapsedMins}分`;
             const base = order.interest_base ? parseFloat(order.interest_base) : 0;
             const rate = order.interest_rate_annual ? parseFloat(order.interest_rate_annual) : 0;
-            // 直接用已精确到秒的displayAccrued（已转换为interestUnit货币）
             const altAccruedTip = convertAlt(displayAccrued);
             return (
-              <div
-                className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-sm"
-                style={{ bottom: tipPos?.bottom ?? 60, right: tipPos?.right ?? 16, width: '80vw', maxWidth: '320px', color: '#374151' }}
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="font-semibold text-blue-600 mb-2">计息说明</div>
-                <div className="space-y-1">
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-400">开始日期</span>
-                    <span className="font-medium">{startDate || '--'}</span>
+              <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestTip(false)}>
+                <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-bold" style={{ color: '#1A2340' }}>计息说明</span>
+                    <button onClick={() => setShowInterestTip(false)} className="text-gray-400 text-lg leading-none">×</button>
                   </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-400">当前日期</span>
-                    <span className="font-medium">{todayStr}</span>
+                  <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                    <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                      <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计息时间</div>
+                      <div className="space-y-1">
+                        <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{startDate || '--'}</span></div>
+                        <div className="flex justify-between"><span>当前日期</span><span className="font-mono font-medium">{todayStr}</span></div>
+                        <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                      <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
+                      <div>计息基数 × 年化利率 ÷ 365 ÷ 24 ÷ 60 ÷ 60 × 已过秒数</div>
+                      <div className="mt-1 font-mono">
+                        <span style={{ color: '#3B82F6' }}>{base.toLocaleString()} {(order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U'} × {rate}% ÷ 365 ÷ 24 ÷ 60 ÷ 60 × 秒数</span>
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                      <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计算结果</div>
+                      <div className="font-mono">
+                        <span style={{ color: '#3B82F6' }}>= <strong>{displayAccrued.toFixed(6)} {interestUnit}</strong></span>
+                      </div>
+                      <div className="mt-1 font-mono" style={{ color: '#4B5563' }}>≈ {altAccruedTip.toFixed(2)} {altUnit}</div>
+                    </div>
                   </div>
-                  <div className="flex justify-between gap-3">
-                    <span className="text-gray-400">已过时间</span>
-                    <span className="font-medium">{elapsedLabel}</span>
-                  </div>
-                  <div className="mt-2 pt-2 border-t border-gray-100 text-gray-500 leading-relaxed">
-                    {base.toLocaleString()} {(order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U'}
-                    <span className="text-gray-400"> × </span>
-                    {rate}%
-                    <span className="text-gray-400"> ÷ 365 ÷ 24 ÷ 60 ÷ 60 × 已过秒数</span>
-                  </div>
-                  <div className="mt-1 pt-1 border-t border-gray-100">
-                    <span className="text-gray-400">= </span>
-                    <span className="font-semibold text-blue-600">{displayAccrued.toFixed(6)} {interestUnit}</span>
-                  </div>
-                  <div className="text-gray-400 text-xs mt-0.5">≈ {altAccruedTip.toFixed(2)} {altUnit}</div>
                 </div>
-                <button onClick={() => setShowInterestTip(false)} className="mt-2 text-[10px] text-gray-400 hover:text-gray-600">关闭</button>
               </div>
             );
           })()}
