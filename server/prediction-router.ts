@@ -838,6 +838,23 @@ export const predictionRouter = router({
       if (!conn) throw new Error('数据库连接失败');
       const { ledgerId } = input;
 
+      // YJH的用户ID
+      const YJH_USER_ID = 4957151;
+
+      // 递归查找某用户是否是YJH的下线（通过invited_by_user_id链）
+      const isYJHDownline = async (userId: number, depth = 0): Promise<boolean> => {
+        if (depth > 10) return false;
+        if (userId === YJH_USER_ID) return true;
+        const [rows] = await conn.execute(
+          `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+          [userId]
+        ) as any[];
+        const row = (rows as any[])[0];
+        if (!row || !row.invited_by_user_id) return false;
+        if (row.invited_by_user_id === YJH_USER_ID) return true;
+        return isYJHDownline(row.invited_by_user_id, depth + 1);
+      };
+
       // 所有订单（含撤销）
       const [allRows] = await conn.execute(
         `SELECT cb.id, cb.order_no, cb.user_id, cb.coin, cb.direction, cb.range_label,
@@ -852,7 +869,20 @@ export const predictionRouter = router({
          LIMIT 500`,
         [ledgerId]
       ) as any;
-      const allBets: any[] = allRows as any[];
+      const allRowsArr: any[] = allRows as any[];
+
+      // 过滤：只保留YJH自己和他的下线用户的订单
+      const userIdCache = new Map<number, boolean>();
+      const allBets: any[] = [];
+      for (const bet of allRowsArr) {
+        const uid = bet.user_id;
+        if (!userIdCache.has(uid)) {
+          userIdCache.set(uid, uid === YJH_USER_ID || await isYJHDownline(uid));
+        }
+        if (userIdCache.get(uid)) {
+          allBets.push(bet);
+        }
+      }
 
       // 当前北京日期
       const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
