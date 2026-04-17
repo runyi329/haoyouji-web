@@ -483,11 +483,18 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           >?</button>
           {showInterestTip && (() => {
             const startDate = order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : null;
-            const todayStr = new Date().toISOString().slice(0, 10);
-            const days = startDate ? Math.max(0, Math.floor((Date.now() - new Date(startDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24))) : 0;
+            const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            const elapsedMs = startDate ? Math.max(0, Date.now() - new Date(startDate + 'T00:00:00').getTime()) : 0;
+            const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+            const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+            const elapsedLabel = elapsedDays > 0
+              ? `${elapsedDays}天 ${elapsedHours}小时 ${elapsedMins}分`
+              : `${elapsedHours}小时 ${elapsedMins}分`;
             const base = order.interest_base ? parseFloat(order.interest_base) : 0;
             const rate = order.interest_rate_annual ? parseFloat(order.interest_rate_annual) : 0;
-            const baseUnit = (order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U';
+            // 直接用已精确到秒的displayAccrued（已转换为interestUnit货币）
+            const altAccruedTip = convertAlt(displayAccrued);
             return (
               <div
                 className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-sm"
@@ -505,25 +512,20 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                     <span className="font-medium">{todayStr}</span>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <span className="text-gray-400">已过天数</span>
-                    <span className="font-medium">{days} 天</span>
+                    <span className="text-gray-400">已过时间</span>
+                    <span className="font-medium">{elapsedLabel}</span>
                   </div>
                   <div className="mt-2 pt-2 border-t border-gray-100 text-gray-500 leading-relaxed">
-                    {base.toLocaleString()} {baseUnit}
+                    {base.toLocaleString()} {(order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U'}
                     <span className="text-gray-400"> × </span>
                     {rate}%
-                    <span className="text-gray-400"> ÷ 365 × </span>
-                    {days}天
-                    <span className="text-gray-400"> = </span>
-                    <span className="font-semibold text-blue-600">{(base * rate / 100 / 365 * days).toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseUnit}</span>
+                    <span className="text-gray-400"> ÷ 365 ÷ 24 ÷ 60 ÷ 60 × 已过秒数</span>
                   </div>
-                  {(() => {
-                    const result = base * rate / 100 / 365 * days;
-                    const altResult = rateCur === 'CNY' ? result / 7 : result * 7;
-                    return (
-                      <div className="text-gray-400 text-xs mt-1">≈ {altResult.toLocaleString(undefined, { maximumFractionDigits: 2 })} {altUnit}</div>
-                    );
-                  })()}
+                  <div className="mt-1 pt-1 border-t border-gray-100">
+                    <span className="text-gray-400">= </span>
+                    <span className="font-semibold text-blue-600">{displayAccrued.toFixed(6)} {interestUnit}</span>
+                  </div>
+                  <div className="text-gray-400 text-xs mt-0.5">≈ {altAccruedTip.toFixed(2)} {altUnit}</div>
                 </div>
                 <button onClick={() => setShowInterestTip(false)} className="mt-2 text-[10px] text-gray-400 hover:text-gray-600">关闭</button>
               </div>
