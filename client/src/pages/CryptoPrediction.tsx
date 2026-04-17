@@ -268,6 +268,21 @@ const GLOBAL_PROB: Record<string, { up: number[]; down: number[] }> = {
     down: [0.100221, 0.072716, 0.053114, 0.032564, 0.022447, 0.017072, 0.016124, 0.010117, 0.003794, 0.004742, 0.003162, 0.003162],
   },
 };
+// ─── 4档竞猜概率数据（全量切片，6位精度，分界点X=涨幅中位数，Y=跌幅中位数）─────
+// X: 涨幅分界点（小涨<X%，大涨≥X%）；Y: 跌幅分界点（小跌<Y%，大跌≥Y%）
+const HIST_PROB_4TIER: Record<string, { X: number; Y: number; bigUp: number; smallUp: number; smallDown: number; bigDown: number }> = {
+  BTC:   { X: 1.5447, Y: 1.4422, bigUp: 0.256086, smallUp: 0.256086, smallDown: 0.243756, bigDown: 0.244072 },
+  ETH:   { X: 2.1494, Y: 2.0387, bigUp: 0.255138, smallUp: 0.255138, smallDown: 0.244388, bigDown: 0.244704 },
+  AAPL:  { X: 0.9657, Y: 0.9527, bigUp: 0.257903, smallUp: 0.257903, smallDown: 0.24066,  bigDown: 0.240962 },
+  MSFT:  { X: 0.7835, Y: 0.7501, bigUp: 0.250945, smallUp: 0.250794, smallDown: 0.243382, bigDown: 0.243382 },
+  GOOGL: { X: 0.8211, Y: 0.7776, bigUp: 0.253074, smallUp: 0.253074, smallDown: 0.245733, bigDown: 0.246284 },
+  AMZN:  { X: 1.1614, Y: 1.0868, bigUp: 0.252155, smallUp: 0.252004, smallDown: 0.245954, bigDown: 0.246105 },
+  NVDA:  { X: 1.502,  Y: 1.5214, bigUp: 0.251097, smallUp: 0.250945, smallDown: 0.245651, bigDown: 0.245802 },
+  TSLA:  { X: 1.647,  Y: 1.5569, bigUp: 0.248364, smallUp: 0.248113, smallDown: 0.250881, bigDown: 0.250881 },
+  META:  { X: 1.0294, Y: 0.9801, bigUp: 0.253646, smallUp: 0.253646, smallDown: 0.245353, bigDown: 0.245353 },
+  SOL:   { X: 2.1494, Y: 2.0387, bigUp: 0.255138, smallUp: 0.255138, smallDown: 0.244388, bigDown: 0.244704 },
+};
+
 const HOUSE_EDGE = 0.25;
 const RANGE_LABELS = [
   '≥0%<1%','≥1%<2%','≥2%<3%','≥3%<4%','≥4%<5%','≥5%<6%',
@@ -581,40 +596,18 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
 }
 
 function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, targetDateStr: targetDateStrProp, timeRangeLabel }: { ledgerId: number; coinKey: string; onBetPlaced?: () => void; tomorrowLabel?: string; targetDateStr?: string; timeRangeLabel?: string }) {
-  const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
-  const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
-  // 动态计算涨跌方向各自最大有效格数（遇到第一个0就截断）
-  const maxUpSlots = useMemo(() => {
-    const p = (HIST_PROB[coinKey] || HIST_PROB['BTC']).up;
-    let count = 0;
-    for (let i = 0; i < 12; i++) {
-      if (p[i] === 0) break;
-      count = i + 1;
-    }
-    return Math.max(count, 1);
-  }, [coinKey]);
-  const maxDownSlots = useMemo(() => {
-    const p = (HIST_PROB[coinKey] || HIST_PROB['BTC']).down;
-    let count = 0;
-    for (let i = 0; i < 12; i++) {
-      if (p[i] === 0) break;
-      count = i + 1;
-    }
-    return Math.max(count, 1);
-  }, [coinKey]);
+  // 4档竞猜：大跌/小跌/小涨/大涨
+  type TierChoice = 'bigDown' | 'smallDown' | 'smallUp' | 'bigUp' | null;
+  const [tierChoice, setTierChoice] = useState<TierChoice>(null);
+  const dir: 'up' | 'down' | null = tierChoice === 'bigUp' || tierChoice === 'smallUp' ? 'up' : tierChoice === 'bigDown' || tierChoice === 'smallDown' ? 'down' : null;
 
-  // dirSlider: -maxDownSlots~+maxUpSlots, 0=未选择, 负=跌, 正=涨
-  const [dirSlider, setDirSlider] = useState(0);
-  const dir: 'up' | 'down' | null = dirSlider > 0 ? 'up' : dirSlider < 0 ? 'down' : null;
-  const rangeIdx = dirSlider !== 0 ? Math.abs(dirSlider) - 1 : 0;
-
-  // 切换标的时自动重置滑条
+  // 切换标的时自动重置选择
   const prevCoinKeyRef = useRef(coinKey);
   useEffect(() => {
     if (prevCoinKeyRef.current !== coinKey) {
       prevCoinKeyRef.current = coinKey;
-      setDirSlider(0);
+      setTierChoice(null);
     }
   }, [coinKey]);
   const [betAmount, setBetAmount] = useState(10);
@@ -636,7 +629,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
     onSuccess: (data: any) => {
       toast.success('下单成功！', { description: data.message });
       setShowConfirm(false);
-      setDirSlider(0);
+      setTierChoice(null);
       setBetAmount(10);
       refetchBalance();
       onBetPlaced?.();
@@ -647,16 +640,20 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
     },
   });
 
-  const probs = dir === 'down' ? histProb.down : histProb.up;
-  const safeIdx = Math.min(rangeIdx, 11);
-  const prob = probs[safeIdx] ?? 0;
-  const odds = (dirSlider !== 0 && prob > 0) ? parseFloat((1 / prob * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
+  // 4档数据
+  const tier4 = HIST_PROB_4TIER[coinKey] || HIST_PROB_4TIER['BTC'];
+  const prob = tierChoice ? tier4[tierChoice] : 0;
+  const odds = (tierChoice !== null && prob > 0) ? parseFloat((1 / prob * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
   const payout = odds > 0 ? parseFloat((betAmount * odds).toFixed(2)) : 0;
-  // 赔付上限：预期获赔最高10万U，对应最大投注额 = 100000 / odds
   const MAX_PAYOUT = 100000;
   const maxBetByPayout = odds > 0 ? Math.floor(MAX_PAYOUT / odds) : Infinity;
-  const isAtPayoutLimit = payout >= MAX_PAYOUT - 0.5; // 允许0.5U误差
-  const rangeLabel = RANGE_LABELS[safeIdx];
+  const isAtPayoutLimit = payout >= MAX_PAYOUT - 0.5;
+  // rangeLabel用于显示和下单
+  const rangeLabel = tierChoice === 'bigUp' ? `大涨 ≥${tier4.X.toFixed(2)}%`
+    : tierChoice === 'smallUp' ? `小涨 0~${tier4.X.toFixed(2)}%`
+    : tierChoice === 'smallDown' ? `小跌 0~${tier4.Y.toFixed(2)}%`
+    : tierChoice === 'bigDown' ? `大跌 ≥${tier4.Y.toFixed(2)}%`
+    : '未选择';
 
   // 目标日期：优先使用父组件传入的targetDateStrProp（美股已考虑交易日和截止时间）
   const targetDate = useMemo(() => {
@@ -684,7 +681,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
   const neon = dir === 'down' ? neonDown : dir === 'up' ? neonUp : neonGold;
 
   const handleSubmit = () => {
-    if (!dir || odds === 0 || betAmount <= 0) return;
+    if (!tierChoice || !dir || odds === 0 || betAmount <= 0) return;
     if (betAmount > balance) {
       toast.error('余额不足', { description: `当前余额 ${balance.toFixed(2)} U` });
       return;
@@ -709,8 +706,8 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
       ledgerId,
       coin: coinKey,
       direction: dir,
-      rangeIndex: safeIdx,
-      rangeLabel,
+      rangeIndex: 0, // 4档模式下不使用rangeIndex
+      rangeLabel, // 例："大涨 ≥1.54%"
       betAmount,
       odds,
       expectedReturn: payout,
@@ -723,37 +720,65 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
   return (
     <div>
 
-      {/* 赔率卡（幅度区间）——在滑条前显示 */}
-      <div className="mx-4 mt-3 mb-3 rounded-2xl px-4 py-3" style={{
+      {/* 幅度区间标题行 */}
+      <div className="mx-4 mt-3 mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>幅度区间</span>
+          {tomorrowLabel && (
+            <span className="text-xs px-1.5 py-0.5 rounded-full" style={{
+              background: 'rgba(245,200,66,0.18)',
+              color: '#f5c842',
+              fontWeight: 600,
+              fontSize: '0.65rem',
+              border: '1px solid rgba(245,200,66,0.35)',
+            }}>{tomorrowLabel}</span>
+          )}
+        </div>
+        {timeRangeLabel && (
+          <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem' }}>{timeRangeLabel}</div>
+        )}
+      </div>
+
+      {/* 4档选择按鈕：大跌 | 小跌 | 小涨 | 大涨 */}
+      <div className="mx-4 mb-3 grid grid-cols-4 gap-2">
+        {([
+          { key: 'bigDown' as const,  label: '大跌', sub: `≥${tier4.Y.toFixed(2)}%`, color: '#00e676', glow: 'rgba(0,230,118,0.5)', bg: 'linear-gradient(135deg,#003a1a,#006633)', border: '#00e676' },
+          { key: 'smallDown' as const, label: '小跌', sub: `0~${tier4.Y.toFixed(2)}%`, color: '#4caf50', glow: 'rgba(76,175,80,0.4)', bg: 'linear-gradient(135deg,#001a0a,#003318)', border: '#4caf50' },
+          { key: 'smallUp' as const,  label: '小涨', sub: `0~${tier4.X.toFixed(2)}%`, color: '#ff7070', glow: 'rgba(255,112,112,0.4)', bg: 'linear-gradient(135deg,#1a0000,#4a1010)', border: '#ff7070' },
+          { key: 'bigUp' as const,    label: '大涨', sub: `≥${tier4.X.toFixed(2)}%`, color: '#ff4d4d', glow: 'rgba(255,77,77,0.5)', bg: 'linear-gradient(135deg,#3a0000,#8b0000)', border: '#ff4d4d' },
+        ] as const).map(btn => {
+          const isSelected = tierChoice === btn.key;
+          const tierOdds = parseFloat((1 / tier4[btn.key] * (1 - HOUSE_EDGE)).toFixed(2));
+          return (
+            <button
+              key={btn.key}
+              onClick={() => setTierChoice(isSelected ? null : btn.key)}
+              className="rounded-xl py-2.5 px-1 flex flex-col items-center gap-0.5 transition-all active:scale-95"
+              style={{
+                background: isSelected ? btn.bg : 'rgba(0,0,0,0.4)',
+                border: `1.5px solid ${isSelected ? btn.border : 'rgba(255,255,255,0.15)'}`,
+                boxShadow: isSelected ? `0 0 14px ${btn.glow}` : 'none',
+              }}
+            >
+              <span className="text-sm font-black" style={{ color: isSelected ? btn.color : 'rgba(255,255,255,0.6)' }}>{btn.label}</span>
+              <span className="font-bold" style={{ color: isSelected ? btn.color : 'rgba(255,255,255,0.4)', fontSize: '0.6rem' }}>{btn.sub}</span>
+              <span className="font-bold" style={{ color: isSelected ? '#ffffff' : 'rgba(255,255,255,0.35)', fontSize: '0.7rem' }}>{tierOdds}x</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 已选择时显示当前赔率卡 */}
+      {tierChoice && (
+        <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{
           background: 'rgba(0,0,0,0.65)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
+          border: `1px solid ${neon.border}`,
+          boxShadow: `inset 0 1px 3px rgba(0,0,0,0.5), 0 0 10px ${neon.glow}`,
         }}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>幅度区间</span>
-                {tomorrowLabel && (
-                  <span className="text-xs px-1.5 py-0.5 rounded-full" style={{
-                    background: 'rgba(245,200,66,0.18)',
-                    color: '#f5c842',
-                    fontWeight: 600,
-                    fontSize: '0.65rem',
-                    border: '1px solid rgba(245,200,66,0.35)',
-                  }}>{tomorrowLabel}</span>
-                )}
-              </div>
-              {timeRangeLabel && (
-                <div className="text-xs" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', marginBottom: 2 }}>{timeRangeLabel}</div>
-              )}
-              <div className="text-xl font-black" style={{ color: dirSlider === 0 ? 'rgba(255,255,255,0.4)' : '#ffffff' }}>
-                {dirSlider === 0 ? '涨跌幅 = 0' : (() => {
-                  const m = rangeLabel.match(/≥(\d+)%<(\d+)%/);
-                  if (m) return `${m[1]}% ≤ ${coinKey} < ${m[2]}%`;
-                  return rangeLabel;
-                })()
-                }
-              </div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>已选区间</div>
+              <div className="text-lg font-black" style={{ color: neon.main }}>{rangeLabel}</div>
             </div>
             <div className="text-right">
               <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>X</div>
@@ -763,47 +788,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
             </div>
           </div>
         </div>
-
-      {/* 方向+幅度合一滑条（始终显示） */}
-      <div className="px-4 mb-3">
-        {/* 标签行：只显示左跌右涨 */}
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-black" style={{ color: dir === 'down' ? '#00e676' : 'rgba(255,255,255,0.35)', textShadow: dir === 'down' ? '0 0 8px rgba(0,230,118,0.6)' : 'none', transition: 'all 0.2s' }}>↓ 跌</span>
-          <span className="text-sm font-black" style={{ color: dir === 'up' ? '#ff4d4d' : 'rgba(255,255,255,0.35)', textShadow: dir === 'up' ? '0 0 8px rgba(255,77,77,0.6)' : 'none', transition: 'all 0.2s' }}>涨 ↑</span>
-        </div>
-        {/* 双向滑条 */}
-        <div className="relative" style={{ height: '12px' }}>
-          <input
-            type="range" min={-maxDownSlots} max={maxUpSlots} step={1} value={dirSlider}
-            onChange={e => setDirSlider(Number(e.target.value))}
-            className="w-full appearance-none cursor-pointer absolute inset-0"
-            style={{
-              height: '12px',
-              borderRadius: '6px',
-              background: (() => {
-                const total = maxDownSlots + maxUpSlots;
-                const pct = (dirSlider + maxDownSlots) / total * 100;
-                const mid = maxDownSlots / total * 100;
-                if (dirSlider === 0) return 'rgba(0,0,0,0.25)';
-                if (dirSlider < 0) return `linear-gradient(to right, rgba(0,230,118,0.7) 0%, rgba(0,230,118,0.7) ${pct}%, rgba(0,0,0,0.25) ${pct}%, rgba(0,0,0,0.25) ${mid}%, rgba(0,0,0,0.15) ${mid}%, rgba(0,0,0,0.15) 100%)`;
-                return `linear-gradient(to right, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.15) ${mid}%, rgba(0,0,0,0.25) ${mid}%, rgba(0,0,0,0.25) ${pct}%, rgba(255,77,77,0.7) ${pct}%, rgba(255,77,77,0.7) 100%)`;
-              })(),
-              accentColor: dir === 'down' ? '#00e676' : dir === 'up' ? '#ff4d4d' : '#d4af37',
-              outline: 'none',
-              border: '1px solid rgba(255,255,255,0.3)',
-              boxShadow: dir === 'down' ? '0 0 12px rgba(0,230,118,0.5)' : dir === 'up' ? '0 0 12px rgba(255,77,77,0.5)' : 'none',
-              zIndex: 1,
-            }}
-          />
-
-        </div>
-        {/* 幅度刻度 */}
-        <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          <span>≥{maxDownSlots}%</span>
-          <span>0%</span>
-          <span>≥{maxUpSlots}%</span>
-        </div>
-      </div>
+      )}
 
       {/* 投入 → 预期获得 */}
           <div className="mx-4 mb-3 rounded-2xl px-4 py-3 flex items-center justify-between" style={{
@@ -878,7 +863,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
             {!showConfirm ? (
               <button
                 onClick={() => setShowConfirm(true)}
-                disabled={odds === 0 || betAmount <= 0 || betAmount > balance}
+                disabled={tierChoice === null || odds === 0 || betAmount <= 0 || betAmount > balance}
                 className="w-full py-3.5 rounded-2xl text-white text-base font-black transition-all active:scale-95 disabled:opacity-30"
                 style={{
                   background: neon.bg,
@@ -892,7 +877,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
             ) : (
               <div className="rounded-2xl p-4" style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}>
                 <div className="text-sm mb-3 text-center" style={{ color: '#3d2000' }}>
-                  确认买入 <span style={{ color: '#d4af37' }}>{betAmount} U</span>，{coinKey} 明日{dir === 'up' ? '涨' : '跌'} <span style={{ color: neon.main }}>{rangeLabel}</span>？
+                  确认买入 <span style={{ color: '#d4af37' }}>{betAmount} U</span>，{coinKey} 明日 <span style={{ color: neon.main }}>{rangeLabel}</span>？
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
