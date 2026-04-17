@@ -830,9 +830,9 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved }: {
 
   return (
     <div className="px-4 py-2 text-xs" style={{ borderTop: '1px solid #E8EFFF' }} onClick={e => e.stopPropagation()}>
-      {/* 标题行：备注 + 展开箭头（仅此而已，默认收起不显示内容） */}
+      {/* 标题行：备注（左）+ 展开箭头（右） */}
       <div
-        className="flex items-center gap-1 cursor-pointer select-none"
+        className="flex items-center justify-between cursor-pointer select-none"
         onClick={() => setExpanded(v => !v)}
       >
         <span className="shrink-0" style={{ color: '#9CA3AF' }}>备注</span>
