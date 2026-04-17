@@ -548,11 +548,11 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               className="text-2xl font-bold tabular-nums leading-tight"
               style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
             >
-              {displayAccrued.toFixed(2)}
+              {displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </span>
             <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
           </div>
-          <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toFixed(2)} {altUnit}</div>
+          <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
         </div>
         {/* 明细行：统一 space-y-0.5，和左栏一致 */}
         <div className="space-y-0.5">
@@ -560,9 +560,9 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
         <div className="text-xs">
           <div className="flex items-center justify-between">
             <span className="text-gray-400 whitespace-nowrap">已结利息</span>
-            <span className="font-medium" style={{ color: '#4B5563' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
+            <span className="font-medium" style={{ color: '#4B5563' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
           </div>
-          {displayPaid > 0 && <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altPaid.toFixed(2)} {altUnit}</div>}
+          {displayPaid > 0 && <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>}
         </div>
         )}
         {order.interest_start_date && (
@@ -1059,7 +1059,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                       <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
                         {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                         {dir === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                        {currentPrice != null ? currentPrice.toFixed(2) + ' U' : '---'}
+                        {currentPrice != null ? currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '---'}
                       </span>
                     );
                   })()}
