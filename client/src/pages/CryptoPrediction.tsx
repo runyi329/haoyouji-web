@@ -429,7 +429,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
             ) : (
               <div className="rounded-2xl p-4" style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}>
                 <div className="text-sm mb-3 text-center" style={{ color: '#3d2000' }}>
-                  确认下注 <span style={{ color: '#d4af37' }}>{betAmount} U</span>，预测 {coin.name} 明日{dir === 'up' ? '涨' : '跌'} <span style={{ color: neon.main }}>{rangeLabel}</span>？
+                  确认买入 <span style={{ color: '#d4af37' }}>{betAmount} U</span>，{coin.name} 明日{dir === 'up' ? '涨' : '跌'} <span style={{ color: neon.main }}>{rangeLabel}</span>？
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -445,7 +445,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
                     className="py-2.5 rounded-xl text-sm font-black transition-all active:scale-95 disabled:opacity-60"
                     style={{ background: neon.bg, border: `1px solid ${neon.border}`, color: 'white', boxShadow: `0 0 12px ${neon.glow}` }}
                   >
-                    {placeBetMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '确认扣款'}
+                    {placeBetMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '确认'}
                   </button>
                 </div>
               </div>
