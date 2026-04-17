@@ -830,98 +830,82 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved }: {
 
   return (
     <div className="px-4 py-2 text-xs" style={{ borderTop: '1px solid #E8EFFF' }} onClick={e => e.stopPropagation()}>
-      {/* 标题行：备注 + 展开箭头 + 加号 */}
-      <div className="flex items-center gap-1 mb-1">
+      {/* 标题行：备注 + 展开箭头（仅此而已，默认收起不显示内容） */}
+      <div
+        className="flex items-center gap-1 cursor-pointer select-none"
+        onClick={() => setExpanded(v => !v)}
+      >
         <span className="shrink-0" style={{ color: '#9CA3AF' }}>备注</span>
-        <button
-          type="button"
-          onClick={() => setExpanded(v => !v)}
-          className="flex items-center justify-center"
-          style={{ color: '#9CA3AF', lineHeight: 1 }}
-          title={expanded ? '收起' : '展开'}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          onClick={handleAddNote}
-          className="flex items-center justify-center"
-          style={{ color: '#9CA3AF', lineHeight: 1 }}
-          title="新增备注"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
       </div>
 
-      {/* 收起状态：只显示最新一条 */}
-      {!expanded && (
-        <div className="flex items-center gap-1">
-          {latestNote ? (
-            <>
-              <span className="flex-1 truncate" style={{ color: '#4B5563' }}>{latestNote.text || <span style={{ color: '#C0C8D8' }}>点击加号添加备注</span>}</span>
-              {latestNote.time && <span className="shrink-0 text-[10px]" style={{ color: '#C0C8D8' }}>{formatNoteTime(latestNote.time)}</span>}
-              <button onClick={() => { setEditingIdx(notes.length - 1); setEditValue(latestNote.text); setExpanded(true); }} className="shrink-0" title="编辑">
-                <EditIcon />
-              </button>
-            </>
-          ) : (
-            <span style={{ color: '#C0C8D8' }}>点击加号添加备注</span>
-          )}
-        </div>
-      )}
-
-      {/* 展开状态：显示所有条目 */}
+      {/* 展开状态：显示所有条目，条目间用横线分隔，最后一条下方有添加按钮 */}
       {expanded && (
-        <div className="space-y-1.5">
+        <div className="mt-1.5">
+          {notes.length === 0 && (
+            <div style={{ color: '#C0C8D8' }} className="py-1">暂无备注</div>
+          )}
           {notes.map((note, idx) => (
-            <div key={idx} className="flex items-center gap-1">
-              {editingIdx === idx ? (
-                <>
-                  <input
-                    autoFocus
-                    className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
-                    style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
-                    value={editValue}
-                    onChange={e => setEditValue(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') { note.text ? handleSaveEdit(idx) : handleSaveNew(idx); }
-                      if (e.key === 'Escape') { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }
-                    }}
-                    placeholder="输入备注..."
-                    maxLength={200}
-                  />
-                  <button
-                    onClick={() => note.text ? handleSaveEdit(idx) : handleSaveNew(idx)}
-                    disabled={saving}
-                    className="shrink-0 text-xs px-2 py-0.5 rounded"
-                    style={{ background: '#3B82F6', color: '#fff' }}
-                  >{saving ? '...' : '保存'}</button>
-                  <button
-                    onClick={() => { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }}
-                    className="shrink-0 text-xs px-1.5 py-0.5 rounded"
-                    style={{ background: '#F3F4F6', color: '#6B7280' }}
-                  >取消</button>
-                </>
-              ) : (
-                <>
-                  <span className="flex-1 truncate" style={{ color: '#4B5563' }}>{note.text}</span>
-                  {note.time && <span className="shrink-0 text-[10px]" style={{ color: '#C0C8D8' }}>{formatNoteTime(note.time)}</span>}
-                  <button onClick={() => { setEditingIdx(idx); setEditValue(note.text); }} className="shrink-0" title="编辑">
-                    <EditIcon />
-                  </button>
-                </>
-              )}
+            <div key={idx}>
+              {idx > 0 && <div style={{ borderTop: '1px solid #E8EFFF' }} className="my-1" />}
+              <div className="flex items-center gap-1 py-0.5">
+                {editingIdx === idx ? (
+                  <>
+                    <input
+                      autoFocus
+                      className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
+                      style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
+                      value={editValue}
+                      onChange={e => setEditValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { note.text ? handleSaveEdit(idx) : handleSaveNew(idx); }
+                        if (e.key === 'Escape') { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }
+                      }}
+                      placeholder="输入备注..."
+                      maxLength={200}
+                    />
+                    <button
+                      onClick={() => note.text ? handleSaveEdit(idx) : handleSaveNew(idx)}
+                      disabled={saving}
+                      className="shrink-0 text-xs px-2 py-0.5 rounded"
+                      style={{ background: '#3B82F6', color: '#fff' }}
+                    >{saving ? '...' : '保存'}</button>
+                    <button
+                      onClick={() => { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }}
+                      className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+                      style={{ background: '#F3F4F6', color: '#6B7280' }}
+                    >取消</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 truncate" style={{ color: '#4B5563' }}>{note.text}</span>
+                    {note.time && <span className="shrink-0 text-[10px]" style={{ color: '#C0C8D8' }}>{formatNoteTime(note.time)}</span>}
+                    <button onClick={() => { setEditingIdx(idx); setEditValue(note.text); }} className="shrink-0" title="编辑">
+                      <EditIcon />
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
-          {notes.length === 0 && (
-            <span style={{ color: '#C0C8D8' }}>点击加号添加备注</span>
-          )}
+          {/* 添加按钮在最后一条下方 */}
+          <div style={{ borderTop: notes.length > 0 ? '1px solid #E8EFFF' : 'none' }} className="mt-1 pt-1">
+            <button
+              type="button"
+              onClick={handleAddNote}
+              className="flex items-center gap-1"
+              style={{ color: '#9CA3AF' }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span style={{ fontSize: '11px' }}>添加备注</span>
+            </button>
+          </div>
         </div>
       )}
     </div>
