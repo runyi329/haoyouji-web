@@ -879,17 +879,18 @@ export async function settleDailyBets(targetDateInput?: string): Promise<{
   const coins = [...new Set(pendingBets.map((b: any) => b.coin))] as string[];
 
   // 3. 从 crypto_klines 取实际涨跌幅
-  // coin 字段是 'BTC'/'ETH'，symbol 是 'BTCUSDT'/'ETHUSDT'
+  // BTC/ETH: symbol = coin + 'USDT'；美股七姐妹: symbol = coin（直接存储）
+  const US_STOCKS = new Set(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META']);
   const changePctMap: Record<string, number | null> = {};
   for (const coin of coins) {
-    const symbol = coin + 'USDT';
+    const symbol = US_STOCKS.has(coin) ? coin : coin + 'USDT';
     const [rows] = await conn.execute(
       `SELECT change_pct FROM crypto_klines WHERE symbol = ? AND date = ? LIMIT 1`,
       [symbol, targetDate]
     ) as any;
     const row = (rows as any[])[0];
     changePctMap[coin] = row ? parseFloat(row.change_pct) : null;
-    console.log(`[竞猜结算] ${coin} ${targetDate} 实际涨跌幅: ${changePctMap[coin]}%`);
+    console.log(`[竞猜结算] ${coin} (${symbol}) ${targetDate} 实际涨跌幅: ${changePctMap[coin]}%`);
   }
 
   // 4. 区间边界定义（与前端 RANGE_LABELS 一致）
