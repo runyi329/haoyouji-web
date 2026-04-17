@@ -892,7 +892,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
             ) : (
               <div className="rounded-2xl p-4" style={{ background: 'rgba(0,0,0,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}>
                 <div className="text-sm mb-3 text-center" style={{ color: '#3d2000' }}>
-                  确认买入 <span style={{ color: '#d4af37' }}>{betAmount} U</span>，{coin.name} 明日{dir === 'up' ? '涨' : '跌'} <span style={{ color: neon.main }}>{rangeLabel}</span>？
+                  确认买入 <span style={{ color: '#d4af37' }}>{betAmount} U</span>，{coinKey} 明日{dir === 'up' ? '涨' : '跌'} <span style={{ color: neon.main }}>{rangeLabel}</span>？
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
