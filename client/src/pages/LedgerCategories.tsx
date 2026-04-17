@@ -56,6 +56,11 @@ const LedgerCategories = () => {
   const [categoryToReplace, setCategoryToReplace] = useState<Category | null>(null);
   const [targetCategoryId, setTargetCategoryId] = useState<number | null>(null);
   const [affectedCount, setAffectedCount] = useState<number>(0);
+
+  // 重命名状态
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [categoryToRename, setCategoryToRename] = useState<Category | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   
   const toggleCategory = (categoryId: number) => {
     setExpandedCategories(prev => {
@@ -114,6 +119,20 @@ const LedgerCategories = () => {
     },
     onError: (error) => {
       toast.error(`删除失败: ${error.message}`);
+    },
+  });
+
+  // 重命名分类的mutation
+  const updateCategoryMutation = trpc.ledger.updateCategory.useMutation({
+    onSuccess: () => {
+      toast.success("分类重命名成功");
+      refetchCategories();
+      setShowRenameDialog(false);
+      setCategoryToRename(null);
+      setRenameValue("");
+    },
+    onError: (error) => {
+      toast.error(`重命名失败: ${error.message}`);
     },
   });
 
@@ -277,6 +296,16 @@ const LedgerCategories = () => {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => {
+                        setCategoryToRename(category);
+                        setRenameValue(category.name);
+                        setShowRenameDialog(true);
+                      }}
+                      className="px-2 py-1 text-xs border border-[#4CAF50] text-[#4CAF50] rounded hover:bg-[#E8F5E9]"
+                    >
+                      改名
+                    </button>
+                    <button
+                      onClick={() => {
                         setCategoryToReplace(category);
                         setShowReplaceDialog(true);
                       }}
@@ -343,6 +372,16 @@ const LedgerCategories = () => {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => {
+                              setCategoryToRename(child);
+                              setRenameValue(child.name);
+                              setShowRenameDialog(true);
+                            }}
+                            className="px-2 py-1 text-xs border border-[#4CAF50] text-[#4CAF50] rounded hover:bg-[#E8F5E9]"
+                          >
+                            改名
+                          </button>
+                          <button
+                            onClick={() => {
                               setCategoryToReplace(child);
                               setShowReplaceDialog(true);
                             }}
@@ -388,6 +427,16 @@ const LedgerCategories = () => {
                                   </span>
                                 )}
                                 {grandchild.name}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCategoryToRename(grandchild);
+                                  setRenameValue(grandchild.name);
+                                  setShowRenameDialog(true);
+                                }}
+                                className="px-2 py-1 text-xs border border-[#4CAF50] text-[#4CAF50] rounded hover:bg-[#E8F5E9]"
+                              >
+                                改名
                               </button>
                               <button
                                 onClick={() => {
@@ -733,6 +782,65 @@ const LedgerCategories = () => {
                 disabled={!targetCategoryId || replaceCategoryMutation.isPending}
               >
                 {replaceCategoryMutation.isPending ? "替换中..." : "确认替换"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 重命名弹窗 */}
+      <Dialog open={showRenameDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowRenameDialog(false);
+          setCategoryToRename(null);
+          setRenameValue("");
+        }
+      }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>修改分类名称</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>当前名称</Label>
+              <p className="text-sm text-gray-500 mt-1">{categoryToRename?.name}</p>
+            </div>
+            <div>
+              <Label>新名称</Label>
+              <Input
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                placeholder="请输入新的分类名称"
+                className="mt-1"
+                maxLength={50}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && renameValue.trim() && !updateCategoryMutation.isPending) {
+                    updateCategoryMutation.mutate({ categoryId: categoryToRename!.id, name: renameValue.trim() });
+                  }
+                }}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setShowRenameDialog(false);
+                  setCategoryToRename(null);
+                  setRenameValue("");
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                取消
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!categoryToRename || !renameValue.trim()) return;
+                  updateCategoryMutation.mutate({ categoryId: categoryToRename.id, name: renameValue.trim() });
+                }}
+                className="flex-1 bg-[#4CAF50] hover:bg-[#388E3C]"
+                disabled={!renameValue.trim() || renameValue.trim() === categoryToRename?.name || updateCategoryMutation.isPending}
+              >
+                {updateCategoryMutation.isPending ? "修改中..." : "确认改名"}
               </Button>
             </div>
           </div>
