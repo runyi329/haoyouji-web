@@ -792,21 +792,13 @@ export const predictionRouter = router({
       const bet = (betRows as any[])[0];
       if (!bet) throw new Error('订单不存在');
       if (bet.status !== 'pending') throw new Error('该订单已结算或已撤销，无法撤销');
-
-      // 检查是否在当天北京时间12:00前
+      // 撤销条件：当前北京日期 < target_date（目标日还未到则可撤销）
+      // 例：今天 4-17 下单预测 4-18，4-17 内可撤销；到了4-18当天则不可撤销
       const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
-      const bjHour = nowBJ.getUTCHours();
-      const bjMinute = nowBJ.getUTCMinutes();
-      // target_date 是 YYYY-MM-DD，今天北京日期
       const todayBJ = nowBJ.toISOString().slice(0, 10);
-      if (bet.target_date !== todayBJ) {
-        throw new Error('只能撤销今日的订单');
-      }
-      if (bjHour >= 12) {
-        throw new Error('北京时间12:00后不可撤销');
-      }
-
-      // 撤销：更新状态为 cancelled
+      if (todayBJ >= String(bet.target_date)) {
+        throw new Error('已到达目标日，无法撤销');
+      }     // 撤销：更新状态为 cancelled
       await conn.execute(
         `UPDATE crypto_bets SET status = 'cancelled', updated_at = NOW() WHERE id = ?`,
         [betId]
