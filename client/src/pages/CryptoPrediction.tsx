@@ -431,10 +431,33 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: 
   const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
   const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
-  // dirSlider: -11~+11, 0=未选择, 负=跌, 正=涨
+  // 动态计算涨跌方向各自最大有效格数（最后一个概率>0的区间 index+1）
+  const maxUpSlots = useMemo(() => {
+    const p = (HIST_PROB[coinKey] || HIST_PROB['BTC']).up;
+    let last = 1;
+    for (let i = 0; i < 12; i++) { if (p[i] > 0) last = i + 1; }
+    return last;
+  }, [coinKey]);
+  const maxDownSlots = useMemo(() => {
+    const p = (HIST_PROB[coinKey] || HIST_PROB['BTC']).down;
+    let last = 1;
+    for (let i = 0; i < 12; i++) { if (p[i] > 0) last = i + 1; }
+    return last;
+  }, [coinKey]);
+
+  // dirSlider: -maxDownSlots~+maxUpSlots, 0=未选择, 负=跌, 正=涨
   const [dirSlider, setDirSlider] = useState(0);
   const dir: 'up' | 'down' | null = dirSlider > 0 ? 'up' : dirSlider < 0 ? 'down' : null;
   const rangeIdx = dirSlider !== 0 ? Math.abs(dirSlider) - 1 : 0;
+
+  // 切换标的时自动重置滑条
+  const prevCoinKeyRef = useRef(coinKey);
+  useEffect(() => {
+    if (prevCoinKeyRef.current !== coinKey) {
+      prevCoinKeyRef.current = coinKey;
+      setDirSlider(0);
+    }
+  }, [coinKey]);
   const [betAmount, setBetAmount] = useState(10);
   const [inputValue, setInputValue] = useState('10'); // 控制输入框显示内容
   const [showConfirm, setShowConfirm] = useState(false);
@@ -574,15 +597,16 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: 
         {/* 双向滑条 */}
         <div className="relative" style={{ height: '12px' }}>
           <input
-            type="range" min={-11} max={11} step={1} value={dirSlider}
+            type="range" min={-maxDownSlots} max={maxUpSlots} step={1} value={dirSlider}
             onChange={e => setDirSlider(Number(e.target.value))}
             className="w-full appearance-none cursor-pointer absolute inset-0"
             style={{
               height: '12px',
               borderRadius: '6px',
               background: (() => {
-                const pct = (dirSlider + 11) / 22 * 100;
-                const mid = 50;
+                const total = maxDownSlots + maxUpSlots;
+                const pct = (dirSlider + maxDownSlots) / total * 100;
+                const mid = maxDownSlots / total * 100;
                 if (dirSlider === 0) return 'rgba(0,0,0,0.25)';
                 if (dirSlider < 0) return `linear-gradient(to right, rgba(0,230,118,0.7) 0%, rgba(0,230,118,0.7) ${pct}%, rgba(0,0,0,0.25) ${pct}%, rgba(0,0,0,0.25) ${mid}%, rgba(0,0,0,0.15) ${mid}%, rgba(0,0,0,0.15) 100%)`;
                 return `linear-gradient(to right, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.15) ${mid}%, rgba(0,0,0,0.25) ${mid}%, rgba(0,0,0,0.25) ${pct}%, rgba(255,77,77,0.7) ${pct}%, rgba(255,77,77,0.7) 100%)`;
@@ -598,9 +622,9 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: 
         </div>
         {/* 幅度刻度 */}
         <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          <span>≥11%</span>
+          <span>≥{maxDownSlots}%</span>
           <span>0%</span>
-          <span>≥11%</span>
+          <span>≥{maxUpSlots}%</span>
         </div>
       </div>
 
