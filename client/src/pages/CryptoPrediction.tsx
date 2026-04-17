@@ -431,18 +431,24 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: 
   const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
   const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
-  // 动态计算涨跌方向各自最大有效格数（最后一个概率>0的区间 index+1）
+  // 动态计算涨跌方向各自最大有效格数（遇到第一个0就截断）
   const maxUpSlots = useMemo(() => {
     const p = (HIST_PROB[coinKey] || HIST_PROB['BTC']).up;
-    let last = 1;
-    for (let i = 0; i < 12; i++) { if (p[i] > 0) last = i + 1; }
-    return last;
+    let count = 0;
+    for (let i = 0; i < 12; i++) {
+      if (p[i] === 0) break;
+      count = i + 1;
+    }
+    return Math.max(count, 1);
   }, [coinKey]);
   const maxDownSlots = useMemo(() => {
     const p = (HIST_PROB[coinKey] || HIST_PROB['BTC']).down;
-    let last = 1;
-    for (let i = 0; i < 12; i++) { if (p[i] > 0) last = i + 1; }
-    return last;
+    let count = 0;
+    for (let i = 0; i < 12; i++) {
+      if (p[i] === 0) break;
+      count = i + 1;
+    }
+    return Math.max(count, 1);
   }, [coinKey]);
 
   // dirSlider: -maxDownSlots~+maxUpSlots, 0=未选择, 负=跌, 正=涨
