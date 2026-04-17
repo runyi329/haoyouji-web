@@ -9,15 +9,15 @@ import {
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
 const SYMBOLS = [
-  { key: "BTCUSDT", label: "比特币 BTC", shortLabel: "BTC",  icon: `${CDN}/btc_6de80cf5.svg` },
-  { key: "ETHUSDT", label: "以太坊 ETH", shortLabel: "ETH",  icon: `${CDN}/eth_a0bdfa2a.svg` },
-  { key: "AAPL",   label: "苹果 AAPL",   shortLabel: "AAPL", icon: `${CDN}/aapl_d2f6d4da.svg` },
-  { key: "MSFT",   label: "微软 MSFT",   shortLabel: "MSFT", icon: `${CDN}/msft_7833cd05.svg` },
-  { key: "GOOGL",  label: "谷歌 GOOGL",  shortLabel: "GOOGL",icon: `${CDN}/googl_d1441e1a.svg` },
-  { key: "AMZN",   label: "亚马逊 AMZN",  shortLabel: "AMZN", icon: `${CDN}/amzn_51fd690f.svg` },
-  { key: "NVDA",   label: "英伟达 NVDA",  shortLabel: "NVDA", icon: `${CDN}/nvda_e5e34b83.svg` },
-  { key: "TSLA",   label: "特斯拉 TSLA",  shortLabel: "TSLA", icon: `${CDN}/tsla_7e66d3b4.svg` },
-  { key: "META",   label: "Meta META",   shortLabel: "META", icon: `${CDN}/meta_b0ca1fc6.svg` },
+  { key: "BTCUSDT", label: "比特币 BTC", shortLabel: "BTC",  icon: `${CDN}/btc_732a725a.png` },
+  { key: "ETHUSDT", label: "以太坊 ETH", shortLabel: "ETH",  icon: `${CDN}/eth_6ebbf353.png` },
+  { key: "AAPL",   label: "苹果 AAPL",   shortLabel: "AAPL", icon: `${CDN}/aapl_3d0ebe4b.png` },
+  { key: "MSFT",   label: "微软 MSFT",   shortLabel: "MSFT", icon: `${CDN}/msft_6f03ba12.png` },
+  { key: "GOOGL",  label: "谷歌 GOOGL",  shortLabel: "GOOGL",icon: `${CDN}/googl_f5e51fc9.png` },
+  { key: "AMZN",   label: "亚马逊 AMZN",  shortLabel: "AMZN", icon: `${CDN}/amzn_62fb91c5.png` },
+  { key: "NVDA",   label: "英伟达 NVDA",  shortLabel: "NVDA", icon: `${CDN}/nvda_027844b0.png` },
+  { key: "TSLA",   label: "特斯拉 TSLA",  shortLabel: "TSLA", icon: `${CDN}/tsla_ce7ce165.png` },
+  { key: "META",   label: "Meta META",   shortLabel: "META", icon: `${CDN}/meta_c6a365b1.png` },
 ];
 
 const PAGE_SIZE = 60;
