@@ -343,22 +343,23 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
 }
 
 // 单张资金方订单卡片右栏（包含扫描数据查询）
-function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyValue, currentValue, accrued, shortfall, floatPnl }: {
+function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyValue, currentValue, accrued, paidInterest, shortfall, floatPnl }: {
   onClose: () => void;
   collateral: { coin: string; qty: string }[];
   collateralValue: number;
   buyValue: number;
   currentValue: number | null;
   accrued: number;
+  paidInterest: number;
   shortfall: number | null;
   floatPnl: number | null;
 }) {
-  // 风险敎口 = 担保物价値 + 浮动盈亏 - 代结利息
+  // 风险敞口 = 担保物价値 + 浮动盈亏 - 待结利息 + 已结利息
   // 注：浮动盈亏正数=浮盈（币涨），负数=亏损（币跌）
-  // 敎口正数表示担保充足，负数表示缺口
+  // 敞口正数表示担保充足，负数表示缺口
   const exposure = floatPnl !== null
-    ? collateralValue + floatPnl - accrued
-    : collateralValue - accrued;
+    ? collateralValue + floatPnl - accrued + paidInterest
+    : collateralValue - accrued + paidInterest;
   const isSufficient = exposure >= 0;
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={onClose}>
@@ -392,12 +393,12 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
             </div>
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
-            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
-            <div>担保物 + 浮动盈亏 − 代结利息（正数充足，负数缺口）</div>
+            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>④ 风险敞口</div>
+            <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）</div>
             <div className="mt-1 font-mono">
               {floatPnl !== null
-                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {paidInterest.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {paidInterest.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
               }
             </div>
             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
@@ -603,11 +604,11 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           const currentValue = liveP !== null ? liveP * buyQty : null;
           // 浮动盈亏 = 当前市値 - 计息基数（正数为浮盈，负数为亏损）
           const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
-          // 风险敞口 = 担保物 + 浮动盈亏 - 代结利息（与弹窗逻辑一致）
+          // 风险敞口 = 担保物 + 浮动盈亏 - 待结利息 + 已结利息（与弹窗逻辑一致）
           // 正数表示充足，负数表示缺口
           const exposure = floatPnl !== null
-            ? collateralValue + floatPnl - accrued
-            : collateralValue - accrued;
+            ? collateralValue + floatPnl - accrued + paidInterest
+            : collateralValue - accrued + paidInterest;
           const isSufficient = hasValue && exposure >= 0;
           const shortfallAmt = hasValue ? -exposure : null; // 负数表示缺口量（取负得正数）
           return (
@@ -620,6 +621,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   buyValue={interestBaseNum}
                   currentValue={currentValue}
                   accrued={accrued}
+                  paidInterest={paidInterest}
                   shortfall={shortfallAmt}
                   floatPnl={floatPnl}
                 />
