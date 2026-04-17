@@ -227,7 +227,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
   const probs = dir === 'down' ? histProb.down : histProb.up;
   const safeIdx = Math.min(rangeIdx, 11);
   const prob = probs[safeIdx] ?? 0;
-  const odds = prob > 0 ? parseFloat((1 / prob * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
+  const odds = (dirSlider !== 0 && prob > 0) ? parseFloat((1 / prob * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
   const payout = odds > 0 ? parseFloat((betAmount * odds).toFixed(2)) : 0;
   const rangeLabel = RANGE_LABELS[safeIdx];
 
