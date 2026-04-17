@@ -1027,12 +1027,6 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                 </span>
               </div>
             )}
-            {dc.buyDate && order.buy_date && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-400 shrink-0">买入时间</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
-              </div>
-            )}
             {dc.todayPrice && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">{isEnded ? '结束币价' : '当前币价'}</span>
@@ -1065,6 +1059,12 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                     ? (order.end_price ? parseFloat(order.end_price).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
                     : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
                 </span>
+              </div>
+            )}
+            {dc.buyDate && order.buy_date && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">买入时间</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
               </div>
             )}
             {/* 当前价值已移至持有资产大数字旁括号显示，此行已移除 */}
