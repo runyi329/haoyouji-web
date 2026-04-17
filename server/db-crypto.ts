@@ -345,3 +345,274 @@ export async function getAllChangePcts(symbol: string): Promise<{ date: string; 
     changePct: r.changePct != null ? parseFloat(r.changePct) : null,
   }));
 }
+
+// ─── 美股相关工具函数 ────────────────────────────────────────────────────────────
+
+/**
+ * 判断当前是否为美国夏令时（EDT，UTC-4）
+ * 夏令时：3月第2个周日 00:02 ~ 11月第1个周日 02:00（美东时间）
+ */
+export function isUSDST(date: Date = new Date()): boolean {
+  const year = date.getUTCFullYear();
+
+  // 3月第2个周日（UTC时间）
+  const marchSecondSunday = (() => {
+    const d = new Date(Date.UTC(year, 2, 1)); // 3月1日 UTC
+    const dow = d.getUTCDay(); // 0=周日
+    const firstSunday = dow === 0 ? 1 : 8 - dow;
+    return new Date(Date.UTC(year, 2, firstSunday + 7, 7, 0, 0)); // 02:00 EST = 07:00 UTC
+  })();
+
+  // 11月第1个周日（UTC时间）
+  const novFirstSunday = (() => {
+    const d = new Date(Date.UTC(year, 10, 1)); // 11月1日 UTC
+    const dow = d.getUTCDay();
+    const firstSunday = dow === 0 ? 1 : 8 - dow;
+    return new Date(Date.UTC(year, 10, firstSunday, 6, 0, 0)); // 02:00 EDT = 06:00 UTC
+  })();
+
+  return date >= marchSecondSunday && date < novFirstSunday;
+}
+
+/**
+ * 获取美股当日开盘/收盘时间（北京时间，UTC+8）
+ * 夏令时：开盘 21:30，收盘次日 04:00
+ * 冬令时：开盘 22:30，收盘次日 05:00
+ */
+export function getUSMarketHoursBJT(date: Date = new Date()): {
+  openHour: number; openMin: number;
+  closeHour: number; closeMin: number; closeNextDay: boolean;
+} {
+  const dst = isUSDST(date);
+  return dst
+    ? { openHour: 21, openMin: 30, closeHour: 4, closeMin: 0, closeNextDay: true }
+    : { openHour: 22, openMin: 30, closeHour: 5, closeMin: 0, closeNextDay: true };
+}
+
+/**
+ * 美股法定节假日列表（NYSE，按年维护）
+ * 格式：YYYY-MM-DD
+ */
+export function getUSHolidays(year: number): Set<string> {
+  const holidays: string[] = [];
+
+  // 元旦（1月1日，若周六则提前至周五，若周日则顺延至周一）
+  holidays.push(adjustHoliday(year, 1, 1));
+  // 马丁路德金日（1月第3个周一）
+  holidays.push(nthWeekday(year, 1, 1, 3));
+  // 总统日（2月第3个周一）
+  holidays.push(nthWeekday(year, 2, 1, 3));
+  // 耶稣受难日（复活节前的周五，需计算）
+  holidays.push(getGoodFriday(year));
+  // 阵亡将士纪念日（5月最后一个周一）
+  holidays.push(lastWeekday(year, 5, 1));
+  // 六月节（6月19日，若周六则提前至周五，若周日则顺延至周一）
+  holidays.push(adjustHoliday(year, 6, 19));
+  // 独立日（7月4日）
+  holidays.push(adjustHoliday(year, 7, 4));
+  // 劳工节（9月第1个周一）
+  holidays.push(nthWeekday(year, 9, 1, 1));
+  // 感恩节（11月第4个周四）
+  holidays.push(nthWeekday(year, 11, 4, 4));
+  // 圣诞节（12月25日）
+  holidays.push(adjustHoliday(year, 12, 25));
+
+  return new Set(holidays);
+}
+
+function adjustHoliday(year: number, month: number, day: number): string {
+  const d = new Date(Date.UTC(year, month - 1, day));
+  const dow = d.getUTCDay();
+  if (dow === 6) d.setUTCDate(d.getUTCDate() - 1); // 周六→周五
+  if (dow === 0) d.setUTCDate(d.getUTCDate() + 1); // 周日→周一
+  return d.toISOString().slice(0, 10);
+}
+
+function nthWeekday(year: number, month: number, weekday: number, nth: number): string {
+  // weekday: 0=周日, 1=周一, ..., 4=周四
+  const d = new Date(Date.UTC(year, month - 1, 1));
+  let count = 0;
+  while (true) {
+    if (d.getUTCDay() === weekday) {
+      count++;
+      if (count === nth) return d.toISOString().slice(0, 10);
+    }
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+}
+
+function lastWeekday(year: number, month: number, weekday: number): string {
+  const d = new Date(Date.UTC(year, month, 0)); // 月末最后一天
+  while (d.getUTCDay() !== weekday) d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function getGoodFriday(year: number): string {
+  // 使用高斯算法计算复活节日期
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  const easter = new Date(Date.UTC(year, month - 1, day));
+  easter.setUTCDate(easter.getUTCDate() - 2); // 复活节前2天=耶稣受难日
+  return easter.toISOString().slice(0, 10);
+}
+
+/**
+ * 判断某日期是否为美股交易日
+ * @param dateStr YYYY-MM-DD
+ */
+export function isUSTradingDay(dateStr: string): boolean {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const dow = d.getUTCDay();
+  if (dow === 0 || dow === 6) return false; // 周末
+  const year = d.getUTCFullYear();
+  const holidays = getUSHolidays(year);
+  return !holidays.has(dateStr);
+}
+
+/**
+ * 获取下一个美股交易日
+ * @param fromDateStr YYYY-MM-DD（不含当天）
+ */
+export function getNextUSTradingDay(fromDateStr: string): string {
+  const d = new Date(fromDateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  while (!isUSTradingDay(d.toISOString().slice(0, 10))) {
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+/** 美股七姐妹 symbol 映射（Yahoo Finance ticker） */
+export const US_STOCK_SYMBOLS: Record<string, string> = {
+  AAPL: 'AAPL',
+  MSFT: 'MSFT',
+  GOOGL: 'GOOGL',
+  AMZN: 'AMZN',
+  NVDA: 'NVDA',
+  TSLA: 'TSLA',
+  META: 'META',
+};
+
+/**
+ * 从 Yahoo Finance 拉取美股日线数据并写入 crypto_klines
+ * symbol 格式：'AAPL'（不带后缀）
+ */
+export async function syncStockFromYahoo(symbol: string): Promise<{ added: number; latestDate: string | null }> {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('DB connection failed');
+
+  // 1. 查最新日期
+  const latestDate = await getLatestCryptoDate(symbol);
+
+  let startDate: string;
+  if (latestDate) {
+    const d = new Date(latestDate + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 1);
+    startDate = d.toISOString().slice(0, 10);
+  } else {
+    startDate = '2010-01-01';
+  }
+
+  const now = new Date();
+  if (new Date(startDate) > now) {
+    return { added: 0, latestDate };
+  }
+
+  // 2. 从 Yahoo Finance 拉取
+  const period1 = Math.floor(new Date(startDate).getTime() / 1000);
+  const period2 = Math.floor(now.getTime() / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${period1}&period2=${period2}&events=history`;
+
+  let chartData: any;
+  try {
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) throw new Error(`Yahoo Finance API error: ${resp.status}`);
+    const json = await resp.json();
+    chartData = json?.chart?.result?.[0];
+    if (!chartData) throw new Error('Yahoo Finance 返回数据为空');
+  } catch (e: any) {
+    // 备用：query2
+    try {
+      const url2 = `https://query2.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${period1}&period2=${period2}&events=history`;
+      const resp2 = await fetch(url2, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!resp2.ok) throw new Error(`Yahoo Finance backup error: ${resp2.status}`);
+      const json2 = await resp2.json();
+      chartData = json2?.chart?.result?.[0];
+      if (!chartData) throw new Error('Yahoo Finance 备用返回数据为空');
+    } catch (e2: any) {
+      throw new Error(`无法连接 Yahoo Finance: ${e2.message}`);
+    }
+  }
+
+  // 3. 解析数据
+  const timestamps: number[] = chartData.timestamp || [];
+  const ohlcv = chartData.indicators?.quote?.[0] || {};
+  const opens: number[] = ohlcv.open || [];
+  const highs: number[] = ohlcv.high || [];
+  const lows: number[] = ohlcv.low || [];
+  const closes: number[] = ohlcv.close || [];
+  const volumes: number[] = ohlcv.volume || [];
+
+  // 今天（UTC）不纳入，当天数据未收盘
+  const todayUTC = new Date();
+  todayUTC.setUTCHours(0, 0, 0, 0);
+
+  const records: CryptoKline[] = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const ts = timestamps[i];
+    const open = opens[i];
+    const high = highs[i];
+    const low = lows[i];
+    const close = closes[i];
+    const volume = volumes[i] || 0;
+
+    if (!open || !close || isNaN(open) || isNaN(close)) continue;
+
+    const dateObj = new Date(ts * 1000);
+    dateObj.setUTCHours(0, 0, 0, 0);
+    if (dateObj >= todayUTC) continue; // 排除今天
+
+    const dateStr = dateObj.toISOString().slice(0, 10);
+    const changePct = open > 0 ? parseFloat(((close - open) / open * 100).toFixed(6)) : null;
+    const amplitudePct = open > 0 && high && low ? parseFloat(((high - low) / open * 100).toFixed(6)) : null;
+
+    records.push({
+      symbol,
+      date: dateStr,
+      open,
+      high: high || open,
+      low: low || open,
+      close,
+      volume,
+      quoteVolume: 0,
+      changePct,
+      amplitudePct,
+    });
+  }
+
+  if (records.length === 0) {
+    return { added: 0, latestDate };
+  }
+
+  await batchUpsertCryptoKlines(records);
+  const newLatest = records[records.length - 1].date;
+  return { added: records.length, latestDate: newLatest };
+}

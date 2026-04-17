@@ -560,6 +560,74 @@ async function startServer() {
     scheduleSettle();
     console.log('[竞猜结算] 已注册，每天北京时间 00:01 精确触发一次');
     // ──────────────────────────────────────────────────────
+
+    // ─── 美股七姐妹：每日数据拉取 + 结算定时任务 ─────────────────────────────────
+    // 夏令时（3月第2周日~11月第1周日）：美股收盘 BJT 04:00，任务触发 BJT 04:05
+    // 冬令时（其余时间）：美股收盘 BJT 05:00，任务触发 BJT 05:05
+    const US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'];
+
+    const scheduleUSStockSettle = () => {
+      const now = new Date();
+      const { isUSDST, syncStockFromYahoo, isUSTradingDay } = require('../db-crypto');
+
+      // 判断当前是否夏令时，决定触发时间
+      const dst = isUSDST(now);
+      // 触发时间：BJT 04:05（夏令时）或 BJT 05:05（冬令时）
+      const triggerHourBJT = dst ? 4 : 5;
+      const triggerMinBJT = 5;
+
+      // 计算下次触发时间（UTC）
+      const bjtNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+      const target = new Date(Date.UTC(
+        bjtNow.getUTCFullYear(), bjtNow.getUTCMonth(), bjtNow.getUTCDate(),
+        triggerHourBJT - 8, triggerMinBJT, 0, 0
+      ));
+      if (target.getTime() <= now.getTime()) target.setUTCDate(target.getUTCDate() + 1);
+      const ms = target.getTime() - now.getTime();
+      const nextStr = target.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      console.log(`[美股结算] 下次触发时间: ${nextStr} (BJT ${triggerHourBJT.toString().padStart(2,'0')}:${triggerMinBJT.toString().padStart(2,'0')}, ${dst ? '夏令时' : '冬令时'})`);
+
+      setTimeout(async () => {
+        try {
+          // 结算日期：北京时间当天（美股开盘日，即昨天美东日期）
+          // 触发时是 BJT 04:05/05:05，此时美东还是前一天，所以结算"BJT昨天"
+          const bjtNowInner = new Date(Date.now() + 8 * 60 * 60 * 1000);
+          const yesterday = new Date(bjtNowInner);
+          yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+          const targetDate = yesterday.toISOString().slice(0, 10);
+
+          console.log(`[美股结算] 触发，结算日期: ${targetDate}`);
+
+          // 判断是否为交易日
+          if (!isUSTradingDay(targetDate)) {
+            console.log(`[美股结算] ${targetDate} 为非交易日，跳过`);
+            return;
+          }
+
+          // 1. 拉取七姐妹最新数据
+          for (const sym of US_STOCKS) {
+            try {
+              const r = await syncStockFromYahoo(sym);
+              console.log(`[美股数据] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+            } catch (e: any) {
+              console.error(`[美股数据] ${sym} 拉取失败:`, e.message);
+            }
+          }
+
+          // 2. 结算当天订单
+          const { settleDailyBets } = await import('../prediction-router');
+          const result = await settleDailyBets(targetDate);
+          console.log(`[美股结算] ${targetDate} 完成: 结算${result.settled}单，中奖${result.won}单，派奖${result.totalPayout.toFixed(2)}U`);
+        } catch (err) {
+          console.error('[美股结算] 执行失败:', err);
+        } finally {
+          scheduleUSStockSettle();
+        }
+      }, ms);
+    };
+    scheduleUSStockSettle();
+    console.log('[美股结算] 已注册，每天美股收盘后自动拉取数据并结算');
+    // ──────────────────────────────────────────────────────
   });
 }
 

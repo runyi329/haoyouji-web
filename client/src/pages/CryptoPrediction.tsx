@@ -110,6 +110,63 @@ function KlineChart({ bars, coinColor }: { bars: KlineBar[]; coinColor: string }
 // 整数型币种（单价较低，通常以整数计量）
 const INTEGER_COINS_FIN = new Set(['SUI', 'ONDO', 'LOD', 'ENA', 'ARKM', 'AAVE']);
 
+// ─── 美股辅助函数 ─────────────────────────────────────────────
+// 美股七姐妹标识
+const US_STOCK_KEYS = new Set(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META']);
+
+// 美国法定节假日（2024~2026年，格式 YYYY-MM-DD，均为美东时间）
+const US_HOLIDAYS = new Set([
+  // 2024
+  '2024-01-01','2024-01-15','2024-02-19','2024-03-29','2024-05-27',
+  '2024-06-19','2024-07-04','2024-09-02','2024-11-28','2024-12-25',
+  // 2025
+  '2025-01-01','2025-01-20','2025-02-17','2025-04-18','2025-05-26',
+  '2025-06-19','2025-07-04','2025-09-01','2025-11-27','2025-12-25',
+  // 2026
+  '2026-01-01','2026-01-19','2026-02-16','2026-04-03','2026-05-25',
+  '2026-06-19','2026-07-03','2026-09-07','2026-11-26','2026-12-25',
+]);
+
+/** 判断给定日期（YYYY-MM-DD）是否为美股交易日（周一~周五且非节假日） */
+function isUSTradingDay(dateStr: string): boolean {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  const dow = d.getUTCDay(); // 0=周日, 6=周六
+  if (dow === 0 || dow === 6) return false;
+  if (US_HOLIDAYS.has(dateStr)) return false;
+  return true;
+}
+
+/** 判断给定时间是否处于美国夏令时（3月第2个周日 ~ 11月第1个周日） */
+function isUSDST(date: Date): boolean {
+  const y = date.getUTCFullYear();
+  // 3月第2个周日（美东 02:00 切换，UTC 07:00）
+  const mar = new Date(Date.UTC(y, 2, 1));
+  const marDow = mar.getUTCDay();
+  const dstStart = new Date(Date.UTC(y, 2, (7 - marDow + 7) % 7 + 8, 7, 0, 0));
+  // 11月第1个周日（美东 02:00 切换，UTC 06:00）
+  const nov = new Date(Date.UTC(y, 10, 1));
+  const novDow = nov.getUTCDay();
+  const dstEnd = new Date(Date.UTC(y, 10, (7 - novDow) % 7 + 1, 6, 0, 0));
+  return date >= dstStart && date < dstEnd;
+}
+
+/** 获取下一个美股交易日（YYYY-MM-DD），从 fromDate 的次日起算 */
+function getNextUSTradingDay(fromDate: Date): string {
+  const d = new Date(fromDate);
+  d.setUTCDate(d.getUTCDate() + 1);
+  for (let i = 0; i < 10; i++) {
+    const s = d.toISOString().slice(0, 10);
+    if (isUSTradingDay(s)) return s;
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return d.toISOString().slice(0, 10);
+}
+
+/** 获取美股下单截止时间（北京时间）：夏令时 21:29，冬令时 22:29 */
+function getUSMarketCutoff(now: Date): { hour: number; minute: number } {
+  return isUSDST(now) ? { hour: 21, minute: 29 } : { hour: 22, minute: 29 };
+}
+
 // ─── 历史概率数据（基于 Binance 全量日线，2017~2026，3164天）────
 // 历史概率数据：各区间在所有时段切片（近1月~近12月+近1~5年+全量）中的最高命中概率
 // 历史概率数据：基于数据库crypto_klines日线数据
@@ -234,22 +291,67 @@ const MARKET_SYMBOLS = [
 // ─── 明日涨跌竞猜面板 ─────────────────────────────────────────
 function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   const [activeCoin, setActiveCoin] = useState('BTC');
+  // 美股休市提示弹窗
+  const [closedNotice, setClosedNotice] = useState<{ show: boolean; nextDay: string }>({ show: false, nextDay: '' });
 
-  // 北京时间明天日期标签（用于金色容器内显示）
+  // 计算目标日期：BTC/ETH始终是明天；美股需要判断交易日和截止时间
+  const targetDateStr = useMemo(() => {
+    const now = new Date(Date.now() + 8 * 60 * 60 * 1000); // BJT now
+    if (!US_STOCK_KEYS.has(activeCoin)) {
+      // BTC/ETH: 始终是明天
+      const tomorrow = new Date(now);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      return tomorrow.toISOString().slice(0, 10);
+    }
+    // 美股：判断当前是否已过截止时间
+    const cutoff = getUSMarketCutoff(now);
+    const bjtHour = now.getUTCHours();
+    const bjtMin = now.getUTCMinutes();
+    const pastCutoff = bjtHour > cutoff.hour || (bjtHour === cutoff.hour && bjtMin >= cutoff.minute);
+    // 如果已过截止时间，展示下一个交易日（从明天起算）
+    if (pastCutoff) {
+      return getNextUSTradingDay(now);
+    }
+    // 未过截止时间：展示今天（如果是交易日）或下一个交易日
+    const todayStr = now.toISOString().slice(0, 10);
+    if (isUSTradingDay(todayStr)) return todayStr;
+    // 今天是非交易日，展示下一个交易日
+    return getNextUSTradingDay(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+  }, [activeCoin]);
+
+  // 展示用日期标签（X月X日）
   const tomorrowLabel = useMemo(() => {
-    const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
-    const tomorrow = new Date(nowBJ);
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    const m = tomorrow.getUTCMonth() + 1;
-    const d = tomorrow.getUTCDate();
-    return `${m}月${d}日`;
-  }, []);
+    const d = new Date(targetDateStr + 'T12:00:00Z');
+    const m = d.getUTCMonth() + 1;
+    const day = d.getUTCDate();
+    return `${m}月${day}日`;
+  }, [targetDateStr]);
 
   // 当前北京日期（YYYY-MM-DD）
   const todayBJ = useMemo(() => {
     const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
     return nowBJ.toISOString().slice(0, 10);
   }, []);
+
+  // 处理Tab点击：美股需检测休市日
+  const handleTabClick = (sym: string) => {
+    if (US_STOCK_KEYS.has(sym)) {
+      const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      const todayStr = now.toISOString().slice(0, 10);
+      const cutoff = getUSMarketCutoff(now);
+      const bjtHour = now.getUTCHours();
+      const bjtMin = now.getUTCMinutes();
+      const pastCutoff = bjtHour > cutoff.hour || (bjtHour === cutoff.hour && bjtMin >= cutoff.minute);
+      // 如果今天是非交易日（且未开盘），显示休市提示
+      if (!isUSTradingDay(todayStr) && !pastCutoff) {
+        const nextDay = getNextUSTradingDay(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+        const d = new Date(nextDay + 'T12:00:00Z');
+        const nextLabel = `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
+        setClosedNotice({ show: true, nextDay: nextLabel });
+      }
+    }
+    setActiveCoin(sym);
+  };
 
   // 订单列表（在父组件管理，不随币种切换重置）
   const { data: myBetsData, refetch: refetchBets } = trpc.prediction.getMyBets.useQuery(
@@ -293,7 +395,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
             return (
               <button
                 key={sym.key}
-                onClick={() => setActiveCoin(sym.key)}
+                onClick={() => handleTabClick(sym.key)}
                 className="flex-shrink-0 flex flex-col items-center justify-center transition-all"
                 style={{
                   minWidth: '52px',
@@ -333,7 +435,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
           })}
         </div>
         {/* 下单操作区（传入tomorrowLabel用于幅度区间旁显示日期） */}
-        <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} onBetPlaced={refetchBets} tomorrowLabel={tomorrowLabel} />
+        <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} onBetPlaced={refetchBets} tomorrowLabel={tomorrowLabel} targetDateStr={targetDateStr} />
       </div>
 
       {/* 订单列表：独立容器 */}
@@ -423,11 +525,45 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
           </div>
         )}
       </div>
+
+      {/* 美股休市提示弹窗 */}
+      {closedNotice.show && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setClosedNotice({ show: false, nextDay: '' })}
+        >
+          <div
+            className="rounded-2xl px-6 py-5 mx-4 text-center"
+            style={{
+              background: 'linear-gradient(160deg, #1a1200 0%, #3d2e00 50%, #1a1200 100%)',
+              border: '2px solid #d4af37',
+              boxShadow: '0 8px 32px rgba(212,175,55,0.4)',
+              maxWidth: 300,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-3xl mb-2" style={{ lineHeight: 1.2 }}>&#128197;</div>
+            <div className="text-base font-bold mb-1" style={{ color: '#f5c842' }}>今日休市</div>
+            <div className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.75)' }}>
+              美股非交易日，下一交易日为<br />
+              <span style={{ color: '#f5c842', fontWeight: 700 }}>{closedNotice.nextDay}</span>
+            </div>
+            <button
+              className="w-full py-2 rounded-xl text-sm font-bold"
+              style={{ background: '#d4af37', color: '#1a1200' }}
+              onClick={() => setClosedNotice({ show: false, nextDay: '' })}
+            >
+              我知道了
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: { ledgerId: number; coinKey: string; onBetPlaced?: () => void; tomorrowLabel?: string }) {
+function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, targetDateStr: targetDateStrProp }: { ledgerId: number; coinKey: string; onBetPlaced?: () => void; tomorrowLabel?: string; targetDateStr?: string }) {
   const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
   const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
@@ -505,23 +641,22 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: 
   const isAtPayoutLimit = payout >= MAX_PAYOUT - 0.5; // 允许0.5U误差
   const rangeLabel = RANGE_LABELS[safeIdx];
 
-  // 目标日期（北京时间明天）
+  // 目标日期：优先使用父组件传入的targetDateStrProp（美股已考虑交易日和截止时间）
   const targetDate = useMemo(() => {
-    // 北京时间 UTC+8
+    if (targetDateStrProp) return targetDateStrProp;
+    // 备用：如果没有传入，默认展示明天
     const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
     const tomorrow = new Date(nowBJ);
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    return tomorrow.toISOString().slice(0, 10); // YYYY-MM-DD
-  }, []);
+    return tomorrow.toISOString().slice(0, 10);
+  }, [targetDateStrProp]);
   // 显示用的日期标签：X月X日
   const targetDateLabel = useMemo(() => {
-    const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
-    const tomorrow = new Date(nowBJ);
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-    const m = tomorrow.getUTCMonth() + 1;
-    const d = tomorrow.getUTCDate();
-    return `${m}月${d}日`;
-  }, []);
+    const d = new Date(targetDate + 'T12:00:00Z');
+    const m = d.getUTCMonth() + 1;
+    const day = d.getUTCDate();
+    return `${m}月${day}日`;
+  }, [targetDate]);
 
   const sliderBg = (val: number, min: number, max: number, color: string) =>
     `linear-gradient(to right, ${color} 0%, ${color} ${((val - min) / (max - min)) * 100}%, rgba(255,255,255,0.08) ${((val - min) / (max - min)) * 100}%, rgba(255,255,255,0.08) 100%)`;
@@ -536,6 +671,22 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: 
     if (betAmount > balance) {
       toast.error('余额不足', { description: `当前余额 ${balance.toFixed(2)} U` });
       return;
+    }
+    // 美股七姐妹：校验截止时间
+    if (US_STOCK_KEYS.has(coinKey)) {
+      const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      const cutoff = getUSMarketCutoff(now);
+      const bjtHour = now.getUTCHours();
+      const bjtMin = now.getUTCMinutes();
+      const pastCutoff = bjtHour > cutoff.hour || (bjtHour === cutoff.hour && bjtMin >= cutoff.minute);
+      if (pastCutoff) {
+        // 已过截止时间，提示已切换到下一交易日
+        const nextDay = getNextUSTradingDay(now);
+        const d = new Date(nextDay + 'T12:00:00Z');
+        const nextLabel = `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
+        toast.info(`今日下单已截止，已切换至下一交易日 ${nextLabel}`, { duration: 3000 });
+        return;
+      }
     }
     placeBetMutation.mutate({
       ledgerId,
