@@ -349,15 +349,14 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
           <div className="flex items-center gap-2">
             <button
               onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history')}
-              className="flex items-center text-xs px-2.5 py-1.5 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+              className="text-xs px-3 py-1.5 rounded-full border border-[#D32F2F] text-[#D32F2F] bg-white hover:bg-red-50 transition-colors font-medium"
             >
-              <History className="w-3.5 h-3.5 mr-1" />
               充值记录
             </button>
             {fromLedgerId && (
               <button
                 onClick={() => setShowLedgerHistory(true)}
-                className="flex items-center text-xs px-2.5 py-1.5 rounded-full bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+                className="text-xs px-3 py-1.5 rounded-full border border-[#D32F2F] text-[#D32F2F] bg-white hover:bg-red-50 transition-colors font-medium"
               >
                 账户明细
               </button>
