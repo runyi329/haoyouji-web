@@ -827,6 +827,76 @@ export const predictionRouter = router({
       const result = await settleDailyBets(input.targetDate);
       return result;
     }),
+
+  // 行情竞猜订单汇总（供邀请页面展示）
+  getAllBetsStats: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+      const { ledgerId } = input;
+
+      // 所有订单（含撤销）
+      const [allRows] = await conn.execute(
+        `SELECT cb.id, cb.order_no, cb.user_id, cb.coin, cb.direction, cb.range_label,
+                cb.bet_amount, cb.odds, cb.expected_return, cb.status,
+                cb.actual_change_pct, cb.settle_note, cb.target_date, cb.created_at,
+                COALESCE(u.name, u.username, CONCAT('uid', cb.user_id)) AS user_name,
+                u.username
+         FROM crypto_bets cb
+         LEFT JOIN users u ON u.id = cb.user_id
+         WHERE cb.ledger_id = ?
+         ORDER BY cb.created_at DESC
+         LIMIT 500`,
+        [ledgerId]
+      ) as any;
+      const allBets: any[] = allRows as any[];
+
+      // 汇总统计：撤销不计入流水
+      const nonCancelledBets = allBets.filter((b: any) => b.status !== 'cancelled');
+      const totalOrders = nonCancelledBets.length;
+      const totalTurnover = nonCancelledBets.reduce((s: number, b: any) => s + parseFloat(b.bet_amount), 0);
+      const wonBets = nonCancelledBets.filter((b: any) => b.status === 'won');
+      const lostBets = nonCancelledBets.filter((b: any) => b.status === 'lost');
+      const pendingBets = nonCancelledBets.filter((b: any) => b.status === 'pending');
+      const totalWonAmount = wonBets.reduce((s: number, b: any) => s + parseFloat(b.expected_return), 0);
+      const totalLostAmount = lostBets.reduce((s: number, b: any) => s + parseFloat(b.bet_amount), 0);
+      const commission = totalTurnover * 0.1;
+
+      return {
+        summary: {
+          totalOrders,
+          totalTurnover: parseFloat(totalTurnover.toFixed(2)),
+          wonCount: wonBets.length,
+          lostCount: lostBets.length,
+          pendingCount: pendingBets.length,
+          cancelledCount: allBets.filter((b: any) => b.status === 'cancelled').length,
+          totalWonAmount: parseFloat(totalWonAmount.toFixed(2)),
+          totalLostAmount: parseFloat(totalLostAmount.toFixed(2)),
+          commission: parseFloat(commission.toFixed(2)),
+        },
+        orders: allBets.map((b: any) => ({
+          id: b.id,
+          orderNo: b.order_no || '',
+          userId: b.user_id,
+          userName: b.user_name || '',
+          username: b.username || '',
+          coin: b.coin,
+          direction: b.direction,
+          rangeLabel: b.range_label,
+          betAmount: parseFloat(b.bet_amount),
+          odds: parseFloat(b.odds),
+          expectedReturn: parseFloat(b.expected_return),
+          status: b.status,
+          actualChangePct: b.actual_change_pct != null ? parseFloat(b.actual_change_pct) : null,
+          settleNote: b.settle_note || '',
+          targetDate: b.target_date,
+          createdAt: b.created_at,
+        })),
+      };
+    }),
 });
 
 // ─── 每日结算函数 ───────────────────────────────────────────────────────────────
