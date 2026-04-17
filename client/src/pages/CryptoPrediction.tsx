@@ -148,11 +148,8 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
     return `${m}月${d}日`;
   }, []);
 
-  // 北京时间是否在 12:00 前（可撤销窗口）
-  const canCancelNow = useMemo(() => {
-    const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
-    return nowBJ.getUTCHours() < 12;
-  }, []);
+  // 可撤销窗口：当天内随时可撤销（不限时间）
+  const canCancelNow = true;
 
   // 订单列表（在父组件管理，不随币种切换重置）
   const { data: myBetsData, refetch: refetchBets } = trpc.prediction.getMyBets.useQuery(
@@ -229,7 +226,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
               const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
               const todayBJ = nowBJ.toISOString().slice(0, 10);
               const isToday = bet.target_date === todayBJ;
-              const canCancel = isPending && isToday && canCancelNow;
+              const canCancel = isPending;
               // 日期简写：4-18
               const shortDate = String(bet.target_date).replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1-$2');
 
