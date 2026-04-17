@@ -370,7 +370,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
         <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
-            <div>= 当前市値 - 买入价値（正数为浮盈，负数为亏损）</div>
+            <div>= 当前市値 - 计息基数（正数为浮盈，负数为亏损）</div>
             <div className="mt-1 font-mono">
               {floatPnl !== null
                 ? <>
@@ -592,15 +592,17 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               if (p) collateralValue += qty * p;
             }
           }
-          // 买入价值 = 买入价 × 数量
+          // 买入价值 = 买入价 × 数量（仅用于展示，不参与担保缺口计算）
           const buyPriceNum = order.buy_price ? Number(order.buy_price) : 0;
           const buyQty = order.buy_quantity ? Number(order.buy_quantity) : 0;
           const buyValue = buyPriceNum * buyQty;
+          // 计息基数（固定基准，用于担保缺口计算）
+          const interestBaseNum = order.interest_base ? Number(order.interest_base) : buyValue;
           // 当前市値 = 实时价 × 数量（无实时价则为 null，不用买入价代替）
           const liveP = livePrices?.[order.coin] ?? null;
           const currentValue = liveP !== null ? liveP * buyQty : null;
-          // 浮动盈亏 = 当前市値 - 买入价値（正数为浮盈，负数为亏损）
-          const floatPnl = currentValue !== null ? currentValue - buyValue : null;
+          // 浮动盈亏 = 当前市値 - 计息基数（正数为浮盈，负数为亏损）
+          const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
           // 风险敞口 = 担保物 + 浮动盈亏 - 代结利息（与弹窗逻辑一致）
           // 正数表示充足，负数表示缺口
           const exposure = floatPnl !== null
@@ -615,7 +617,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   onClose={() => setShowCollateralInfo(false)}
                   collateral={collateral}
                   collateralValue={collateralValue}
-                  buyValue={buyValue}
+                  buyValue={interestBaseNum}
                   currentValue={currentValue}
                   accrued={accrued}
                   shortfall={shortfallAmt}
