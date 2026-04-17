@@ -390,7 +390,38 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
         </div>
         {/* 公用表头组件 */}
         {(() => {
-          const COL = '72px 1fr 1fr 1fr 1fr 1fr';
+          // 计算所有时段切片（近1月~近12月 + 近1年~近5年 + 全量）
+          const now = new Date();
+          const fmtDate = (d: Date) => {
+            const yy = String(d.getFullYear()).slice(-2).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${yy}/${mm}/${dd}`;
+          };
+          const allPeriodCuts: string[] = [
+            ...Array.from({ length: 12 }, (_, i) => { const d = new Date(now); d.setMonth(d.getMonth() - (i + 1)); return fmtDate(d); }),
+            ...Array.from({ length: 5 }, (_, i) => { const d = new Date(now); d.setFullYear(d.getFullYear() - (i + 1)); return fmtDate(d); }),
+            '00/01/01', // 全量
+          ];
+          // 对每个区间（n=0~11），在所有时段里找涨幅/跌幅最高概率
+          const SLICE_RANGE = 12; // 只统计0~12%内的区间
+          const bestUpProb: number[] = Array(SLICE_RANGE).fill(0);
+          const bestDownProb: number[] = Array(SLICE_RANGE).fill(0);
+          for (const cutDate of allPeriodCuts) {
+            const subset = allData.filter(d => d.changePct != null && d.date >= cutDate);
+            const total = subset.length;
+            if (total === 0) continue;
+            for (let ri = 0; ri < SLICE_RANGE; ri++) {
+              const upCnt = subset.filter(d => { const p = d.changePct!; return p >= 0 && Math.floor(p) === ri; }).length;
+              const downCnt = subset.filter(d => { const p = d.changePct!; return p < 0 && Math.floor(Math.abs(p)) === ri; }).length;
+              const upP = upCnt / total * 100;
+              const downP = downCnt / total * 100;
+              if (upP > bestUpProb[ri]) bestUpProb[ri] = upP;
+              if (downP > bestDownProb[ri]) bestDownProb[ri] = downP;
+            }
+          }
+
+          const COL = '72px 1fr 1fr 1fr 1fr 1fr 1fr';
           const headerStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: COL, gap: 0, background: '#fafafa', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '3px 0' };
           const rowStyle = (i: number): React.CSSProperties => ({ display: 'grid', gridTemplateColumns: COL, gap: 0, borderBottom: '1px solid #f0f0f0', padding: '2px 0', alignItems: 'center', background: i % 2 === 0 ? '#fff' : '#fafafa' });
           const Header = () => (
@@ -400,6 +431,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
               {['10%优', '15%优', '20%优', '25%优'].map(t => (
                 <span key={t} style={{ fontSize: 9, textAlign: 'center', color: '#b45309', fontWeight: 600 }}>{t}</span>
               ))}
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#7c3aed', fontWeight: 700 }}>最优25%</span>
             </div>
           );
           // 绝对概率：每个区间天数 ÷ 总天数（涨跌所有天），所有区间概率之和 = 100%
@@ -410,6 +442,10 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             if (cnt === 0) return null;
             const prob = totalAllDays > 0 ? cnt / totalAllDays : 0;
             const fairOdds = prob > 0 ? 1 / prob : 0;
+            // 最优时段最高概率（只对应0~11区间）
+            const bestP = n < SLICE_RANGE ? bestUpProb[n] : 0;
+            const bestFair = bestP > 0 ? 100 / bestP : 0;
+            const bestOdds25 = bestFair > 0 ? (bestFair * 0.75).toFixed(2) : '-';
             return (
               <div key={`up-${n}`} style={rowStyle(n)}>
                 <span style={{ fontSize: 8, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>≥{n}% &lt;{n+1}%</span>
@@ -419,6 +455,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
                     {(fairOdds * (1 - edge)).toFixed(2)}
                   </span>
                 ))}
+                <span style={{ fontSize: 9, textAlign: 'center', color: '#7c3aed', fontFamily: 'monospace', fontWeight: 700 }}>{bestOdds25}</span>
               </div>
             );
           });
@@ -429,12 +466,13 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             return s + (totalAllDays > 0 ? cnt / totalAllDays : 0);
           }, 0);
           const upSumRow = (
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr', gap: 2, padding: '4px 4px', background: '#fef3c7', borderTop: '1px solid #d97706' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr 1fr 1fr 1fr', gap: 0, padding: '4px 0', background: '#fef3c7', borderTop: '1px solid #d97706' }}>
               <span style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontWeight: 700 }}>合计</span>
               <span style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontWeight: 700, fontFamily: 'monospace' }}>{(upProbSum * 100).toFixed(2)}%</span>
               {[0.10, 0.15, 0.20, 0.25].map(edge => (
                 <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontFamily: 'monospace' }}>—</span>
               ))}
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#7c3aed', fontFamily: 'monospace' }}>—</span>
             </div>
           );
           const downRows = Array.from({ length: 21 }, (_, i) => i).map(n => {
@@ -443,6 +481,9 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             if (cnt === 0) return null;
             const prob = totalAllDays > 0 ? cnt / totalAllDays : 0;
             const fairOdds = prob > 0 ? 1 / prob : 0;
+            const bestP = n < SLICE_RANGE ? bestDownProb[n] : 0;
+            const bestFair = bestP > 0 ? 100 / bestP : 0;
+            const bestOdds25 = bestFair > 0 ? (bestFair * 0.75).toFixed(2) : '-';
             return (
               <div key={`down-${n}`} style={rowStyle(n)}>
                 <span style={{ fontSize: 8, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>≥{n}% &lt;{n+1}%</span>
@@ -452,6 +493,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
                     {(fairOdds * (1 - edge)).toFixed(2)}
                   </span>
                 ))}
+                <span style={{ fontSize: 9, textAlign: 'center', color: '#7c3aed', fontFamily: 'monospace', fontWeight: 700 }}>{bestOdds25}</span>
               </div>
             );
           });
@@ -462,12 +504,13 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
             return s + (totalAllDays > 0 ? cnt / totalAllDays : 0);
           }, 0);
           const downSumRow = (
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1.5fr 1.5fr', gap: 2, padding: '4px 4px', background: '#f0fdf4', borderTop: '1px solid #16a34a' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 1fr 1fr 1fr 1fr 1fr', gap: 0, padding: '4px 0', background: '#f0fdf4', borderTop: '1px solid #16a34a' }}>
               <span style={{ fontSize: 9, textAlign: 'center', color: '#15803d', fontWeight: 700 }}>合计</span>
               <span style={{ fontSize: 9, textAlign: 'center', color: '#15803d', fontWeight: 700, fontFamily: 'monospace' }}>{(downProbSum * 100).toFixed(2)}%</span>
               {[0.10, 0.15, 0.20, 0.25].map(edge => (
                 <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#15803d', fontFamily: 'monospace' }}>—</span>
               ))}
+              <span style={{ fontSize: 9, textAlign: 'center', color: '#7c3aed', fontFamily: 'monospace' }}>—</span>
             </div>
           );
           return (
