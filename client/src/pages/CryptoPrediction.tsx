@@ -213,11 +213,8 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
       }}>
         {/* 标题行 */}
-        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #f0f0f0' }}>
+        <div className="flex items-center px-4 py-3" style={{ borderBottom: '1px solid #f0f0f0' }}>
           <span className="text-sm font-bold" style={{ color: '#1a1a1a' }}>最近下单记录</span>
-          {canCancelNow && (
-            <span className="text-xs" style={{ color: '#999' }}>12:00前可撤销</span>
-          )}
         </div>
 
         {myBets.length === 0 ? (
