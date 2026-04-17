@@ -416,6 +416,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
 function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices, dc }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number>; dc?: Record<string, boolean> }) {
   const show = (key: string) => dc ? (dc[key] !== false) : true;
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
+  const [showInterestTip, setShowInterestTip] = useState(false);
   const { data: stats } = trpc.ledger.funderGetOrderScanStats.useQuery(
     { orderId: order.id, ledgerId },
     { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
@@ -462,9 +463,56 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
       {/* 上半：代结利息 */}
       <div className="flex-1 flex flex-col justify-start">
         {/* 区块标题（固定高度与左栏对齐） */}
-        <div className="h-5 flex items-center gap-1">
+        <div className="h-5 flex items-center gap-1 relative">
           <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
           <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
+          <button
+            type="button"
+            onClick={() => setShowInterestTip(v => !v)}
+            className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+            style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+          >?</button>
+          {showInterestTip && (() => {
+            const startDate = order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : null;
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const days = startDate ? Math.max(0, Math.floor((Date.now() - new Date(startDate + 'T00:00:00').getTime()) / (1000 * 60 * 60 * 24))) : 0;
+            const base = order.interest_base ? parseFloat(order.interest_base) : 0;
+            const rate = order.interest_rate_annual ? parseFloat(order.interest_rate_annual) : 0;
+            const baseUnit = (order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U';
+            return (
+              <div
+                className="absolute left-0 top-6 z-50 bg-white rounded-xl shadow-lg border border-gray-100 p-3 text-xs"
+                style={{ minWidth: '200px', color: '#374151' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="font-semibold text-blue-600 mb-2">计息说明</div>
+                <div className="space-y-1">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-400">开始日期</span>
+                    <span className="font-medium">{startDate || '--'}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-400">当前日期</span>
+                    <span className="font-medium">{todayStr}</span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-400">已过天数</span>
+                    <span className="font-medium">{days} 天</span>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-gray-100 text-gray-500 leading-relaxed">
+                    {base.toLocaleString()} {baseUnit}
+                    <span className="text-gray-400"> × </span>
+                    {rate}%
+                    <span className="text-gray-400"> ÷ 365 × </span>
+                    {days}天
+                    <span className="text-gray-400"> = </span>
+                    <span className="font-semibold text-blue-600">{(base * rate / 100 / 365 * days).toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseUnit}</span>
+                  </div>
+                </div>
+                <button onClick={() => setShowInterestTip(false)} className="mt-2 text-[10px] text-gray-400 hover:text-gray-600">关闭</button>
+              </div>
+            );
+          })()}
         </div>
         {/* 大数字（自适应高度，折算值第二行） */}
         <div className="min-h-9 flex flex-col justify-center">
