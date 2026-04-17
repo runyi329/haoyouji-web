@@ -599,16 +599,22 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
   // 行=区间，列=时段（所有切片合并为一张表）
   // 同一行横向扫：看同一区间在不同时段的概率变化
   const renderTable = (isUp: boolean) => {
-    // 每个区间的最大概率（行内归一化，让同一区间内深浅更有区分度）
-    const rowMaxPcts = RANGES_LABELS.map((_, ri) => {
-      let m = 0;
+    // 每行独立计算最大、最小概率，用 (pct - rowMin) / (rowMax - rowMin) 归一化
+    // 最小值映射到白色，最大值映射到最深红，行与行完全独立
+    const rowRanges = RANGES_LABELS.map((_, ri) => {
+      let maxP = 0, minP = Infinity;
       for (const s of sliceData) {
         const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
         const p = s.total > 0 ? cnt / s.total * 100 : 0;
-        if (p > m) m = p;
+        if (p > maxP) maxP = p;
+        if (p < minP) minP = p;
       }
-      return m || 1;
+      if (minP === Infinity) minP = 0;
+      const span = maxP - minP;
+      return { maxP, minP, span: span > 0 ? span : 1 };
     });
+    // 保留向下兼容（rowMaxPcts 不再使用，但不删除避免引用错误）
+    const rowMaxPcts = rowRanges.map(r => r.maxP || 1);
     return (
       <div style={{ overflowX: 'auto', marginBottom: 12 }}>
         <table style={{ borderCollapse: 'collapse', fontSize: 9, minWidth: 'max-content' }}>
@@ -644,8 +650,10 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
                   {sliceData.map((s, si) => {
                     const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
                     const pct = s.total > 0 ? cnt / s.total * 100 : 0;
-                    // 行内归一化
-                    const t = Math.min(1, pct / rowMaxPcts[ri]);
+                    // 行内归一化：(pct - rowMin) / (rowMax - rowMin)
+                    // 最小值 = 白色，最大值 = 最深红，行与行完全独立
+                    const { minP, span } = rowRanges[ri];
+                    const t = Math.min(1, Math.max(0, (pct - minP) / span));
                     const g2 = Math.round(255 - t * 210);
                     const bg = `rgb(255,${g2},${g2})`;
                     const isMax = si === rowMaxIdx && rowMaxVal > 0;
