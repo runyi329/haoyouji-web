@@ -739,13 +739,13 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
         )}
       </div>
 
-      {/* 4档选择按鈕：大跌 | 小跌 | 小涨 | 大涨 */}
+      {/* 4档选择按鈕：大涨 | 小涨 | 大跌 | 小跌 */}
       <div className="mx-4 mb-3 grid grid-cols-4 gap-2">
         {([
+          { key: 'bigUp' as const,    label: '大涨', sub: `≥${tier4.X.toFixed(2)}%`, color: '#ff4d4d', glow: 'rgba(255,77,77,0.5)', bg: 'linear-gradient(135deg,#3a0000,#8b0000)', border: '#ff4d4d' },
+          { key: 'smallUp' as const,  label: '小涨', sub: `0~${tier4.X.toFixed(2)}%`, color: '#ff7070', glow: 'rgba(255,112,112,0.4)', bg: 'linear-gradient(135deg,#1a0000,#4a1010)', border: '#ff7070' },
           { key: 'bigDown' as const,  label: '大跌', sub: `≥${tier4.Y.toFixed(2)}%`, color: '#00e676', glow: 'rgba(0,230,118,0.5)', bg: 'linear-gradient(135deg,#003a1a,#006633)', border: '#00e676' },
           { key: 'smallDown' as const, label: '小跌', sub: `0~${tier4.Y.toFixed(2)}%`, color: '#4caf50', glow: 'rgba(76,175,80,0.4)', bg: 'linear-gradient(135deg,#001a0a,#003318)', border: '#4caf50' },
-          { key: 'smallUp' as const,  label: '小涨', sub: `0~${tier4.X.toFixed(2)}%`, color: '#ff7070', glow: 'rgba(255,112,112,0.4)', bg: 'linear-gradient(135deg,#1a0000,#4a1010)', border: '#ff7070' },
-          { key: 'bigUp' as const,    label: '大涨', sub: `≥${tier4.X.toFixed(2)}%`, color: '#ff4d4d', glow: 'rgba(255,77,77,0.5)', bg: 'linear-gradient(135deg,#3a0000,#8b0000)', border: '#ff4d4d' },
         ] as const).map(btn => {
           const isSelected = tierChoice === btn.key;
           const tierOdds = parseFloat((1 / tier4[btn.key] * (1 - HOUSE_EDGE)).toFixed(2));
