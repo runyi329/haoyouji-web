@@ -1362,17 +1362,24 @@ export default function FunderManagement() {
                           {/* 明细行 */}
                           <div className="space-y-0.5">
                             {displayConfig.paidInterest && (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400">已结利息</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {(() => {
-                                    const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
-                                    const mainUnit = formData.interestBaseCurrency === 'CNY' ? '元' : ' U';
-                                    const altVal = formData.interestBaseCurrency === 'CNY' ? val / 7 : val * 7;
-                                    const altUnit = formData.interestBaseCurrency === 'CNY' ? 'U' : '元';
-                                    return <>{val.toLocaleString(undefined, { maximumFractionDigits: 2 })}{mainUnit}<span className="text-[10px] text-gray-400 font-normal"> ({altVal.toLocaleString(undefined, { maximumFractionDigits: 2 })}{altUnit})</span></>;
-                                  })()}
-                                </span>
+                              <div className="text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-400">已结利息</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>
+                                    {(() => {
+                                      const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
+                                      const mainUnit = formData.interestBaseCurrency === 'CNY' ? ' 元' : ' U';
+                                      return <>{val.toLocaleString(undefined, { maximumFractionDigits: 2 })}{mainUnit}</>;
+                                    })()}
+                                  </span>
+                                </div>
+                                {(() => {
+                                  const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
+                                  if (val <= 0) return null;
+                                  const altVal = formData.interestBaseCurrency === 'CNY' ? val / 7 : val * 7;
+                                  const altUnit = formData.interestBaseCurrency === 'CNY' ? 'U' : '元';
+                                  return <div className="text-[10px] text-gray-400 mt-0.5">≈ {altVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} {altUnit}</div>;
+                                })()}
                               </div>
                             )}
                             {displayConfig.collateralCoin && (() => {
