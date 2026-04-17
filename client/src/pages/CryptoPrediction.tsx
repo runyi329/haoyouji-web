@@ -585,7 +585,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: 
               </div>
             </div>
             <div className="text-right">
-              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>赔率（含本金）</div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>X 含本金</div>
               <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
                 {odds > 0 ? `${odds}x` : '-'}
               </div>
