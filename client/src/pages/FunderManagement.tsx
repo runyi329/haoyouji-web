@@ -148,6 +148,7 @@ export default function FunderManagement() {
     interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
     interestStartDate: '',
     showProfitShare: true,
+    commissionShare: '',
     originalAmount: '', // 编辑时保存原订单金额，买入价格或数量为空时回退使用
   });
 
@@ -171,6 +172,7 @@ export default function FunderManagement() {
     collateralValue: true,
     collateral: true,
     profitShare: true,
+    commissionShare: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT'];
@@ -349,6 +351,7 @@ export default function FunderManagement() {
       interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
       interestStartDate: '',
       showProfitShare: true,
+      commissionShare: '',
     });
     setCollateralAssets([]);
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
@@ -376,6 +379,7 @@ export default function FunderManagement() {
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
+      commissionShare: order.commission_share || '',
       originalAmount: order.amount || '',
     });
     // 加载担保货币
@@ -433,6 +437,7 @@ export default function FunderManagement() {
       interestRateCurrency: formData.interestRateCurrency,
       interestStartDate: formData.interestStartDate || undefined,
       showProfitShare: formData.showProfitShare,
+      commissionShare: formData.commissionShare || undefined,
       collateralAssets: collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
         ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
         : undefined,
@@ -1106,6 +1111,26 @@ export default function FunderManagement() {
                 )}
               </div>
 
+              {/* 分隔线：佣金分成 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-xs text-gray-400 shrink-0">佣金分成</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
+
+              {/* 佣金分成输入 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-1">佣金分成说明</label>
+                <input
+                  type="text"
+                  value={formData.commissionShare}
+                  onChange={e => setFormData(d => ({ ...d, commissionShare: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="例如：年化收益的 20%"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+
               {/* 分隔线：备注 */}
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
@@ -1245,6 +1270,7 @@ export default function FunderManagement() {
                   <div className="space-y-2">
                     {[
                       { key: 'profitShare', label: '收益分成（开启后显示下半区）' },
+                      { key: 'commissionShare', label: '佣金分成' },
                     ].map(({ key, label }) => (
                       <div key={key} className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{label}</span>
@@ -1465,6 +1491,12 @@ export default function FunderManagement() {
                             <span className="text-gray-400">分成比例</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>---</span>
                           </div>
+                          {displayConfig.commissionShare && formData.commissionShare && (
+                            <div className="flex items-center justify-between text-xs mt-0.5">
+                              <span className="text-gray-400">佣金分成</span>
+                              <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

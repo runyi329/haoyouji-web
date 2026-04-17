@@ -5628,3 +5628,21 @@ async function ensureDisplayConfigColumn() {
   _displayConfigMigrated = true;
 }
 ensureDisplayConfigColumn().catch(console.error);
+
+// ========== funder_asset_orders.commission_share 字段迁移 ==========
+let _commissionShareMigrated = false;
+async function ensureCommissionShareColumn() {
+  if (_commissionShareMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    await db.execute(sql`ALTER TABLE funder_asset_orders ADD COLUMN commission_share VARCHAR(200) NULL DEFAULT NULL COMMENT '佣金分成说明'`);
+    console.log('[ensureCommissionShareColumn] commission_share 字段添加成功');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureCommissionShareColumn] error:', e.message);
+    }
+  }
+  _commissionShareMigrated = true;
+}
+ensureCommissionShareColumn().catch(console.error);
