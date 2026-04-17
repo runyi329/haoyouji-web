@@ -387,6 +387,12 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
     setActiveCoin(sym);
   };
 
+  // 余额查询（父组件持有，撤单后实时刷新）
+  const { refetch: refetchBalanceParent } = trpc.prediction.getBetBalance.useQuery(
+    { ledgerId },
+    { staleTime: 10000 }
+  );
+
   // 订单列表（在父组件管理，不随币种切换重置）
   const { data: myBetsData, refetch: refetchBets } = trpc.prediction.getMyBets.useQuery(
     { ledgerId, limit: 20 },
@@ -406,6 +412,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
     onSuccess: (data: any) => {
       toast.success('撤销成功', { description: data.message });
       refetchBets();
+      refetchBalanceParent();
     },
     onError: (e: any) => {
       toast.error('撤销失败', { description: e.message });
