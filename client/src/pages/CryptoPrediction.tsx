@@ -241,22 +241,27 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                     opacity: isCancelled ? 0.5 : 1,
                   }}
                 >
-                  {/* 主信息： ≥5%  ETH 4-18 跌幅  <6% */}
+                  {/* 主信息： 5%≤  ETH 4-18 跌幅  <6% */}
                   {(() => {
-                    const rangeMatch = String(bet.range_label).match(/^(≥[\d.]+%?)(<[\d.]+%?)$/);
-                    const leftPart = rangeMatch ? rangeMatch[1] : bet.range_label;
+                    // range_label 格式：≥5%<6%，抆分为左部分和右部分
+                    // 左部分读作：5%≤（数字+≤符号），右部分保持 <6%
+                    const rangeMatch = String(bet.range_label).match(/^≥([\d.]+%?)(<[\d.]+%?)$/);
+                    const leftPart = rangeMatch ? `${rangeMatch[1]}≤` : bet.range_label;
                     const rightPart = rangeMatch ? rangeMatch[2] : '';
                     const dirColor = bet.direction === 'up' ? '#e53935' : '#43a047';
                     return (
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          {/* 左侧：大于等于部分 */}
+                        <div className="flex items-center gap-1.5">
+                          {/* 左：5%≤ */}
                           <span className="text-xs font-bold" style={{ color: dirColor }}>{leftPart}</span>
-                          {/* 中间：币种+日期+涨跌幅 */}
+                          {/* 中：币种+日期+涨跌幅 */}
                           <span className="text-xs font-medium" style={{ color: '#333' }}>
-                            {bet.coin} {shortDate} <span style={{ color: dirColor }}>{bet.direction === 'up' ? '涨幅' : '跌幅'}</span>
+                            {bet.coin} {shortDate}
                           </span>
-                          {/* 右侧：小于部分 */}
+                          <span className="text-xs font-medium" style={{ color: dirColor }}>
+                            {bet.direction === 'up' ? '涨幅' : '跌幅'}
+                          </span>
+                          {/* 右：<6% */}
                           <span className="text-xs font-bold" style={{ color: dirColor }}>{rightPart}</span>
                         </div>
                         {bet.order_no && (
