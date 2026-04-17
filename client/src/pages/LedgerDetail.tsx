@@ -481,8 +481,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             const baseUnit = (order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U';
             return (
               <div
-                className="fixed z-50 bg-white rounded-xl shadow-lg border border-gray-100 p-3 text-xs"
-                style={{ minWidth: '220px', maxWidth: '280px', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: '#374151' }}
+                className="fixed z-50 bg-white rounded-t-2xl shadow-2xl border-t border-gray-100 p-4 text-sm"
+                style={{ bottom: 0, left: 0, right: 0, color: '#374151' }}
                 onClick={e => e.stopPropagation()}
               >
                 <div className="font-semibold text-blue-600 mb-2">计息说明</div>
