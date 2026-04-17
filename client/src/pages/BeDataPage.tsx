@@ -545,6 +545,8 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
 
       {/* ── 时间切片对比表 ── */}
       <SliceCompareTable allData={allData} />
+      {/* ── 4档竞猜分界点热力图 ── */}
+      <FourTierTable allData={allData} />
     </div>
   );
 }
@@ -757,6 +759,193 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
       {renderTable(activeTab === 'up')}
 
       <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 4 }}>注：热力图深浅为行内归一化，即同一区间内最高概率为最深色，方便看同一区间在不同时段的变化。第13列起为年度切片（加粗分隔线）。</div>
+    </div>
+  );
+}
+
+// 4档竞猜分界点热力图：行=4档（大涨/小涨/小跌/大跌），列=18个时间切片
+function FourTierTable({ allData }: { allData: { date: string; changePct: number | null }[] }) {
+  const HOUSE_EDGE = 0.25;
+
+  // 时间切片：近1~12月 + 近1~5年 + 全量（与 SliceCompareTable 完全一致）
+  const periods = useMemo(() => {
+    const now = new Date();
+    const fmtDate = (d: Date) => {
+      const yy = String(d.getFullYear()).slice(-2).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yy}/${mm}/${dd}`;
+    };
+    const byMonth = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - (i + 1));
+      return { label: `近${i+1}月`, cutDate: fmtDate(d), group: 'month' };
+    });
+    const byYear = Array.from({ length: 5 }, (_, i) => {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - (i + 1));
+      return { label: `近${i+1}年`, cutDate: fmtDate(d), group: 'year' };
+    });
+    const all = { label: '全量', cutDate: '00/01/01', group: 'year' };
+    return [...byMonth, ...byYear, all];
+  }, []);
+
+  // 每个切片计算 4 档分界点 X/Y 及各档概率
+  const sliceData = useMemo(() => {
+    return periods.map(({ label, cutDate, group }) => {
+      const subset = allData
+        .filter(d => d.changePct != null && d.date >= cutDate)
+        .map(d => d.changePct as number);
+      const total = subset.length;
+      if (total === 0) {
+        return { label, total, group, X: 0, Y: 0, bigUp: 0, smallUp: 0, smallDown: 0, bigDown: 0 };
+      }
+
+      // 涨幅中位数 X：所有 pct > 0 的排序，取第50百分位
+      const upVals = subset.filter(p => p > 0).sort((a, b) => a - b);
+      const downVals = subset.filter(p => p < 0).map(p => Math.abs(p)).sort((a, b) => a - b);
+
+      let X = 0, Y = 0;
+      if (upVals.length > 0) {
+        const mid = (upVals.length - 1) / 2;
+        const lo = Math.floor(mid), hi = Math.ceil(mid);
+        X = parseFloat(((upVals[lo] + upVals[hi]) / 2).toFixed(6));
+      }
+      if (downVals.length > 0) {
+        const mid = (downVals.length - 1) / 2;
+        const lo = Math.floor(mid), hi = Math.ceil(mid);
+        Y = parseFloat(((downVals[lo] + downVals[hi]) / 2).toFixed(6));
+      }
+
+      const bigUpCnt   = subset.filter(p => p >= X).length;
+      const smallUpCnt = subset.filter(p => p >= 0 && p < X).length;
+      const smallDownCnt = subset.filter(p => p < 0 && p > -Y).length;
+      const bigDownCnt = subset.filter(p => p <= -Y).length;
+
+      return {
+        label, total, group,
+        X, Y,
+        bigUp:    parseFloat((bigUpCnt   / total).toFixed(6)),
+        smallUp:  parseFloat((smallUpCnt / total).toFixed(6)),
+        smallDown:parseFloat((smallDownCnt / total).toFixed(6)),
+        bigDown:  parseFloat((bigDownCnt  / total).toFixed(6)),
+      };
+    });
+  }, [allData, periods]);
+
+  // 4 档标签
+  const TIERS = [
+    { key: 'bigUp',    label: '大涨', isUp: true },
+    { key: 'smallUp',  label: '小涨', isUp: true },
+    { key: 'smallDown',label: '小跌', isUp: false },
+    { key: 'bigDown',  label: '大跌', isUp: false },
+  ] as const;
+
+  // 行内归一化：每行独立计算 min/max
+  const rowRanges = useMemo(() => {
+    return TIERS.map(tier => {
+      let maxP = 0, minP = Infinity;
+      for (const s of sliceData) {
+        const p = s[tier.key] * 100;
+        if (p > maxP) maxP = p;
+        if (p < minP) minP = p;
+      }
+      if (minP === Infinity) minP = 0;
+      const span = maxP - minP;
+      return { maxP, minP, span: span > 0 ? span : 1 };
+    });
+  }, [sliceData]);
+
+  const heatColor = (t: number, isUp: boolean) => {
+    // 涨档：白→深红；跌档：白→深绿
+    if (isUp) {
+      const g = Math.round(255 - t * 210);
+      return `rgb(255,${g},${g})`;
+    } else {
+      const r = Math.round(255 - t * 210);
+      return `rgb(${r},255,${r})`;
+    }
+  };
+
+  return (
+    <div className="border-t border-gray-100 px-4 pt-3 pb-4">
+      <div className="text-xs font-semibold text-gray-600 mb-1">4档竞猜分界点×时段热力图</div>
+      <div className="text-xs text-gray-400 mb-3">
+        行 = 4档（大涨/小涨/小跌/大跌）· 列 = 时段（近1月→近12月 │ 近1年→全量）· 分界点 X/Y 取各切片涨跌中位数
+      </div>
+      <div style={{ overflowX: 'auto', marginBottom: 12 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 9, minWidth: 'max-content' }}>
+          <thead>
+            <tr style={{ background: '#f9fafb' }}>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: '#9ca3af', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', position: 'sticky', left: 0, background: '#f9fafb', zIndex: 1 }}>档位</th>
+              {sliceData.map((s, si) => (
+                <th key={s.label} style={{
+                  padding: '3px 4px', textAlign: 'center', color: '#6b7280', fontWeight: 600,
+                  borderBottom: '2px solid #e5e7eb', borderLeft: si === 12 ? '2px solid #d1d5db' : '1px solid #e5e7eb',
+                  whiteSpace: 'nowrap', minWidth: 44, fontSize: 8,
+                  background: si === 12 ? '#f0f4ff' : '#f9fafb'
+                }}>
+                  {s.label}
+                  <div style={{ fontSize: 7, color: '#9ca3af', fontWeight: 400 }}>{s.total}天</div>
+                  {s.total > 0 && (
+                    <div style={{ fontSize: 7, color: '#b45309', fontWeight: 400 }}>X={s.X.toFixed(2)}%</div>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {TIERS.map((tier, ri) => {
+              // 找出该行最大值的列索引
+              let rowMaxVal = 0;
+              let rowMaxIdx = -1;
+              sliceData.forEach((s, si) => {
+                const p = s[tier.key] * 100;
+                if (p > rowMaxVal) { rowMaxVal = p; rowMaxIdx = si; }
+              });
+              const { minP, span } = rowRanges[ri];
+              return (
+                <tr key={tier.key}>
+                  <td style={{
+                    padding: '3px 8px', fontFamily: 'monospace', whiteSpace: 'nowrap',
+                    borderBottom: '1px solid #f0f0f0', position: 'sticky', left: 0, background: '#fff', zIndex: 1,
+                    fontWeight: 700, fontSize: 9,
+                    color: tier.isUp ? '#dc2626' : '#16a34a'
+                  }}>{tier.label}</td>
+                  {sliceData.map((s, si) => {
+                    const prob = s[tier.key];
+                    const pct = prob * 100;
+                    const t = Math.min(1, Math.max(0, (pct - minP) / span));
+                    const bg = heatColor(t, tier.isUp);
+                    const isMax = si === rowMaxIdx && rowMaxVal > 0;
+                    const tc = isMax ? '#fbbf24' : (t > 0.55 ? '#fff' : '#374151');
+                    const odds = prob > 0 ? (1 / prob * (1 - HOUSE_EDGE)) : 0;
+                    return (
+                      <td key={si} style={{
+                        padding: '3px 3px', textAlign: 'center', background: bg,
+                        borderLeft: si === 12 ? '2px solid #d1d5db' : '1px solid #e5e7eb',
+                        borderBottom: '1px solid #f0f0f0',
+                        outline: isMax ? '1.5px solid #fbbf24' : 'none',
+                        outlineOffset: '-1px'
+                      }}>
+                        <span style={{ color: tc, fontFamily: 'monospace', fontWeight: isMax ? 800 : 600, fontSize: 8 }}>
+                          {pct.toFixed(1)}%{isMax ? ' ★' : ''}
+                        </span>
+                        <div style={{ color: tc, fontFamily: 'monospace', fontWeight: 600, fontSize: 7, opacity: 0.85 }}>
+                          {odds > 0 ? `${odds.toFixed(2)}x` : '-'}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 4 }}>
+        注：X=涨幅中位数（大涨≥X），Y=跌幅中位数（大跌≥Y），分界点按各切片独立计算。赔率含25%优势扣。热力图深浅为行内归一化。
+      </div>
     </div>
   );
 }
