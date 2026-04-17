@@ -2918,6 +2918,20 @@ export async function addTransaction(data: {
     }
   }
   
+  // UPSERT逻辑：同一标签（categoryId）同一日期只保留一条记录，后录入的自动覆盖前一条
+  const existingRecord = await db
+    .select({ id: ledgerRecords.id })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, data.ledgerId),
+        eq(ledgerRecords.categoryId, data.categoryId),
+        eq(ledgerRecords.recordDate, data.transactionDate),
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .limit(1);
+
   // 插入记账记录（加密敏感字段）
   const recordData = {
     ledgerId: data.ledgerId,
@@ -2934,7 +2948,23 @@ export async function addTransaction(data: {
     pendingIncludeStats: data.pendingType ? (data.pendingIncludeStats ?? 1) : null,
   };
   const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
-  const result = await db.insert(ledgerRecords).values(encryptedRecordData as any);
+
+  let result: any;
+  if (existingRecord.length > 0) {
+    // 已存在同标签同日期的记录，直接更新（覆盖）
+    const existingId = existingRecord[0].id;
+    await db
+      .update(ledgerRecords)
+      .set({
+        ...encryptedRecordData as any,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(ledgerRecords.id, existingId));
+    result = { insertId: existingId };
+  } else {
+    // 不存在，正常插入
+    result = await db.insert(ledgerRecords).values(encryptedRecordData as any);
+  }
   
   // 如果需要审批，创建审批记录
   if (approvalStatus === 'pending' && approverIds.length > 0) {
