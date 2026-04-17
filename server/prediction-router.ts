@@ -682,6 +682,10 @@ export const predictionRouter = router({
       const userId = ctx.user.id;
       const { ledgerId, coin, direction, rangeIndex, rangeLabel, betAmount, odds, expectedReturn, houseEdge, probability, targetDate } = input;
 
+      // 生成6位订单编号（数字+大写字母）
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      const orderNo = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+
       // 1. 查询账本余额
       const { getUserBalance, addUserBalance } = await import("./db-recharge");
       const balance = await getUserBalance(userId, ledgerId);
@@ -698,18 +702,23 @@ export const predictionRouter = router({
         throw new Error(`余额不足，当前余额 ${balance.toFixed(2)} U，需要 ${betAmount.toFixed(2)} U`);
       }
 
+      // 备注格式：委托买入 BTC 2026-04-18 涨幅 #XXXXXX
+      const dirLabel = direction === 'up' ? '涨幅' : '跌幅';
+      const coinFullName = coin === 'BTC' ? '比特币' : coin === 'ETH' ? '以太坊' : coin;
+      const betNote = `委托买入 ${coinFullName} ${targetDate} ${dirLabel} #${orderNo}`;
+
       // 4. 扣除余额：写入 af_manual_balances（负数），使账户明细可见，且余额计算自动扣除
       await conn.execute(
         `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
          VALUES (?, ?, ?, ?, NOW(), NOW())`,
-        [ledgerId, userId, -betAmount, `竞猜下单：${coin} 明日${direction === 'up' ? '涨' : '跌'} ${rangeLabel}，下注 ${betAmount} U`]
+        [ledgerId, userId, -betAmount, betNote]
       );
 
-      // 5. 写入竞猜订单
+      // 5. 写入竞猜订单（含 order_no）
       const [result] = await conn.execute(
-        `INSERT INTO crypto_bets (ledger_id, user_id, coin, direction, range_index, range_label, bet_amount, odds, expected_return, house_edge, probability, target_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [ledgerId, userId, coin, direction, rangeIndex, rangeLabel, betAmount, odds, expectedReturn, houseEdge, probability, targetDate]
+        `INSERT INTO crypto_bets (order_no, ledger_id, user_id, coin, direction, range_index, range_label, bet_amount, odds, expected_return, house_edge, probability, target_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [orderNo, ledgerId, userId, coin, direction, rangeIndex, rangeLabel, betAmount, odds, expectedReturn, houseEdge, probability, targetDate]
       ) as any;
 
       const newBalance = await getUserBalance(userId, ledgerId);
@@ -803,7 +812,7 @@ export async function settleDailyBets(targetDateInput?: string): Promise<{
 
   // 1. 查询该日期所有 pending 订单
   const [pendingRows] = await conn.execute(
-    `SELECT id, ledger_id, user_id, coin, direction, range_index, range_label, bet_amount, odds, expected_return
+    `SELECT id, order_no, ledger_id, user_id, coin, direction, range_index, range_label, bet_amount, odds, expected_return
      FROM crypto_bets
      WHERE target_date = ? AND status = 'pending'`,
     [targetDate]
@@ -881,7 +890,7 @@ export async function settleDailyBets(targetDateInput?: string): Promise<{
         `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
          VALUES (?, ?, ?, ?, NOW(), NOW())`,
         [bet.ledger_id, bet.user_id, expectedReturn,
-          `竞猜中奖：${bet.coin} ${bet.direction === 'up' ? '涨' : '跌'} ${bet.range_label}（${targetDate}），获得 ${expectedReturn.toFixed(2)} U`]
+          `委托买入 ${bet.coin === 'BTC' ? '比特币' : bet.coin === 'ETH' ? '以太坊' : bet.coin} ${targetDate} ${bet.direction === 'up' ? '涨幅' : '跌幅'} 中奖派发${bet.order_no ? ` #${bet.order_no}` : ''}`]
       );
       wonCount++;
       totalPayout += expectedReturn;
