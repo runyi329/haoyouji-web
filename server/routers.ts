@@ -12651,6 +12651,20 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
+        // 自动建表（幂等）
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS funder_interest_payments (
+          id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+          order_id int NOT NULL,
+          ledger_id int NOT NULL,
+          amount decimal(20, 4) NOT NULL,
+          pay_date date NOT NULL,
+          note text,
+          created_by int NOT NULL,
+          created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          INDEX fip_order_id_idx (order_id),
+          INDEX fip_ledger_id_idx (ledger_id),
+          INDEX fip_pay_date_idx (pay_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
@@ -12668,6 +12682,20 @@ export const appRouter = router({
       .input(z.object({ ledgerId: z.number(), orderId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
+        // 自动建表（幂等）
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS funder_interest_payments (
+          id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+          order_id int NOT NULL,
+          ledger_id int NOT NULL,
+          amount decimal(20, 4) NOT NULL,
+          pay_date date NOT NULL,
+          note text,
+          created_by int NOT NULL,
+          created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          INDEX fip_order_id_idx (order_id),
+          INDEX fip_ledger_id_idx (ledger_id),
+          INDEX fip_pay_date_idx (pay_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
