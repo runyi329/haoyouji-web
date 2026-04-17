@@ -487,7 +487,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             <span className="text-gray-400 whitespace-nowrap">已结利息</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
           </div>
-          {displayPaid > 0 && <div className="text-[10px] text-gray-400">≈ {altPaid.toFixed(2)} {altUnit}</div>}
+          {displayPaid > 0 && <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altPaid.toFixed(2)} {altUnit}</div>}
         </div>
         )}
         {order.interest_start_date && (
