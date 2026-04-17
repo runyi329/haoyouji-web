@@ -752,9 +752,10 @@ export const predictionRouter = router({
 
       const userId = ctx.user.id;
       const coinFilter = input.coin ? ` AND coin = '${input.coin}'` : '';
+      const limitNum = parseInt(String(input.limit), 10) || 10;
       const [rows] = await conn.execute(
-        `SELECT * FROM crypto_bets WHERE user_id = ? AND ledger_id = ?${coinFilter} ORDER BY created_at DESC LIMIT ?`,
-        [userId, input.ledgerId, input.limit]
+        `SELECT * FROM crypto_bets WHERE user_id = ? AND ledger_id = ?${coinFilter} ORDER BY created_at DESC LIMIT ${limitNum}`,
+        [userId, input.ledgerId]
       ) as any;
 
       return { bets: rows as any[] };
