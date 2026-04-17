@@ -391,16 +391,14 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
             {collateral.map((a, idx) => {
               const itemVal = collateralItemValues[idx];
               return (
-                <div key={idx} className="flex items-center justify-between font-mono mt-1" style={{ color: '#3B82F6' }}>
-                  <span>{a.qty} {a.coin}</span>
-                  <span>{itemVal !== null ? '≈ ' + itemVal.toFixed(2) + ' U' : '暂无实时价'}</span>
+                <div key={idx} className="font-mono mt-1" style={{ color: '#3B82F6' }}>
+                  {a.qty} {a.coin}{itemVal !== null ? ' ≈ ' + itemVal.toFixed(2) + ' U' : ' （暂无实时价）'}
                 </div>
               );
             })}
             {collateral.length > 1 && (
-              <div className="flex items-center justify-between font-mono mt-1 pt-1" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
-                <span className="font-semibold">合计</span>
-                <span className="font-semibold">{collateralValue.toFixed(2)} U</span>
+              <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                合计 {collateralValue.toFixed(2)} U
               </div>
             )}
           </div>
