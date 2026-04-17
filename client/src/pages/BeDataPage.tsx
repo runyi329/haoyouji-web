@@ -629,29 +629,45 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
             </tr>
           </thead>
           <tbody>
-            {RANGES_LABELS.map((rl, ri) => (
-              <tr key={rl}>
-                <td style={{ padding: '3px 8px', fontFamily: 'monospace', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f0f0f0', position: 'sticky', left: 0, background: '#fff', zIndex: 1, fontWeight: 600, fontSize: 9 }}>{rl}</td>
-                {sliceData.map((s, si) => {
-                  const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
-                  const pct = s.total > 0 ? cnt / s.total * 100 : 0;
-                  // 行内归一化：同一区间不同时段对比
-                  const t = Math.min(1, pct / rowMaxPcts[ri]);
-                  const g2 = Math.round(255 - t * 210);
-                  const bg = `rgb(255,${g2},${g2})`;
-                  const tc = t > 0.55 ? '#fff' : '#374151';
-                  return (
-                    <td key={si} style={{
-                      padding: '3px 3px', textAlign: 'center', background: bg,
-                      borderLeft: si === 12 ? '2px solid #d1d5db' : '1px solid #e5e7eb',
-                      borderBottom: '1px solid #f0f0f0'
-                    }}>
-                      <span style={{ color: tc, fontFamily: 'monospace', fontWeight: 600, fontSize: 8 }}>{pct.toFixed(1)}%</span>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {RANGES_LABELS.map((rl, ri) => {
+              // 找出该行最大值的列索引
+              let rowMaxVal = 0;
+              let rowMaxIdx = -1;
+              sliceData.forEach((s, si) => {
+                const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
+                const p = s.total > 0 ? cnt / s.total * 100 : 0;
+                if (p > rowMaxVal) { rowMaxVal = p; rowMaxIdx = si; }
+              });
+              return (
+                <tr key={rl}>
+                  <td style={{ padding: '3px 8px', fontFamily: 'monospace', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f0f0f0', position: 'sticky', left: 0, background: '#fff', zIndex: 1, fontWeight: 600, fontSize: 9 }}>{rl}</td>
+                  {sliceData.map((s, si) => {
+                    const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
+                    const pct = s.total > 0 ? cnt / s.total * 100 : 0;
+                    // 行内归一化
+                    const t = Math.min(1, pct / rowMaxPcts[ri]);
+                    const g2 = Math.round(255 - t * 210);
+                    const bg = `rgb(255,${g2},${g2})`;
+                    const isMax = si === rowMaxIdx && rowMaxVal > 0;
+                    // 最大值：黄色字体加粗标注；其他：根据背景深浅决定白/深灰
+                    const tc = isMax ? '#fbbf24' : (t > 0.55 ? '#fff' : '#374151');
+                    return (
+                      <td key={si} style={{
+                        padding: '3px 3px', textAlign: 'center', background: bg,
+                        borderLeft: si === 12 ? '2px solid #d1d5db' : '1px solid #e5e7eb',
+                        borderBottom: '1px solid #f0f0f0',
+                        outline: isMax ? '1.5px solid #fbbf24' : 'none',
+                        outlineOffset: '-1px'
+                      }}>
+                        <span style={{ color: tc, fontFamily: 'monospace', fontWeight: isMax ? 800 : 600, fontSize: 8 }}>
+                          {pct.toFixed(1)}%{isMax ? ' ★' : ''}
+                        </span>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
