@@ -8049,6 +8049,16 @@ export const appRouter = router({
         );
       }),
 
+    // 重命名分类
+    updateCategory: protectedProcedure
+      .input(z.object({
+        categoryId: z.number(),
+        name: z.string().min(1).max(50),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await dbLedger.updateLedgerCategory(input.categoryId, { name: input.name.trim() });
+      }),
+
     // 批量替换分类
     replaceCategory: protectedProcedure
       .input(z.object({
