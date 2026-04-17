@@ -327,6 +327,23 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
     return `${m}月${day}日`;
   }, [targetDateStr]);
 
+  // 交易时间段标签
+  const timeRangeLabel = useMemo(() => {
+    if (!US_STOCK_KEYS.has(activeCoin)) {
+      // BTC/ETH：全天候
+      return '00:00 ~ 23:59';
+    }
+    // 美股：判断目标日是否处于夏令时
+    const targetDay = new Date(targetDateStr + 'T12:00:00Z');
+    if (isUSDST(targetDay)) {
+      // 夏令时：美东开盘 BJT 21:30，收盘 BJT次日 04:00
+      return 'BJT 21:30 ~ 次日 04:00';
+    } else {
+      // 冬令时：美东开盘 BJT 22:30，收盘 BJT次日 05:00
+      return 'BJT 22:30 ~ 次日 05:00';
+    }
+  }, [activeCoin, targetDateStr]);
+
   // 当前北京日期（YYYY-MM-DD）
   const todayBJ = useMemo(() => {
     const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
@@ -435,7 +452,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
           })}
         </div>
         {/* 下单操作区（传入tomorrowLabel用于幅度区间旁显示日期） */}
-        <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} onBetPlaced={refetchBets} tomorrowLabel={tomorrowLabel} targetDateStr={targetDateStr} />
+        <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} onBetPlaced={refetchBets} tomorrowLabel={tomorrowLabel} targetDateStr={targetDateStr} timeRangeLabel={timeRangeLabel} />
       </div>
 
       {/* 订单列表：独立容器 */}
@@ -563,7 +580,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   );
 }
 
-function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, targetDateStr: targetDateStrProp }: { ledgerId: number; coinKey: string; onBetPlaced?: () => void; tomorrowLabel?: string; targetDateStr?: string }) {
+function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, targetDateStr: targetDateStrProp, timeRangeLabel }: { ledgerId: number; coinKey: string; onBetPlaced?: () => void; tomorrowLabel?: string; targetDateStr?: string; timeRangeLabel?: string }) {
   const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
   const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
@@ -723,9 +740,12 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
                     fontWeight: 600,
                     fontSize: '0.65rem',
                     border: '1px solid rgba(245,200,66,0.35)',
-                  }}>（{tomorrowLabel}）</span>
+                  }}>{tomorrowLabel}</span>
                 )}
               </div>
+              {timeRangeLabel && (
+                <div className="text-xs" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.6rem', marginBottom: 2 }}>{timeRangeLabel}</div>
+              )}
               <div className="text-xl font-black" style={{ color: dirSlider === 0 ? 'rgba(255,255,255,0.4)' : '#ffffff' }}>
                 {dirSlider === 0 ? '涨跌幅 = 0' : (() => {
                   const m = rangeLabel.match(/≥(\d+)%<(\d+)%/);
@@ -736,7 +756,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
               </div>
             </div>
             <div className="text-right">
-              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>X（含本金）</div>
+              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>X</div>
               <div className="text-3xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
                 {odds > 0 ? `${odds}x` : '0'}
               </div>
