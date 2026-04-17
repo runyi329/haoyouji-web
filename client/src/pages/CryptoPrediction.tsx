@@ -615,20 +615,16 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
               <div className="mt-2 pt-2" style={{ borderTop: '1px solid #e8e5ff' }}>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span style={{ color: '#888' }}>ETH竞猜总盈利</span>
-                    <div className="font-bold" style={{ color: '#e53935' }}>{ethPos.summary.totalWon.toFixed(2)} U</div>
+                    <span style={{ color: '#888' }}>预测错误金额</span>
+                    <div className="font-bold" style={{ color: '#43a047' }}>{ethPos.summary.netLoss.toFixed(2)} U</div>
                   </div>
                   <div>
-                    <span style={{ color: '#888' }}>ETH竞猜总亏损</span>
-                    <div className="font-bold" style={{ color: '#43a047' }}>{ethPos.summary.totalLost.toFixed(2)} U</div>
-                  </div>
-                  <div>
-                    <span style={{ color: '#888' }}>净亏损</span>
-                    <div className="font-bold" style={{ color: ethPos.summary.netLoss > 0 ? '#43a047' : '#888' }}>{ethPos.summary.netLoss.toFixed(2)} U</div>
-                  </div>
-                  <div>
-                    <span style={{ color: '#888' }}>持仓占比</span>
-                    <div className="font-bold" style={{ color: '#4F46E5' }}>{(ethPos.summary.positionRatio * 100).toFixed(1)}%</div>
+                    <span style={{ color: '#888' }}>占比</span>
+                    <div className="font-bold" style={{ color: '#4F46E5' }}>
+                      {ethPos.summary.totalBuyAmount > 0
+                        ? (ethPos.summary.netLoss / ethPos.summary.totalBuyAmount * 100).toFixed(1) + '%'
+                        : '0.0%'}
+                    </div>
                   </div>
                 </div>
               </div>
