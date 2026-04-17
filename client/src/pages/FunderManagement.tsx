@@ -798,8 +798,8 @@ export default function FunderManagement() {
       {/* 创建/编辑弹窗 */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', touchAction: 'none' }} onTouchMove={e => e.preventDefault()}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] overflow-y-auto" style={{ overscrollBehavior: 'contain' }}>
-            <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col" style={{ overscrollBehavior: 'contain' }}>
+            <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
                 {editingOrder ? '编辑订单' : '添加订单'}
               </h3>
@@ -811,7 +811,7 @@ export default function FunderManagement() {
               </button>
             </div>
 
-            <div className="px-5 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
               {/* 币种 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种</label>
@@ -1384,6 +1384,14 @@ export default function FunderManagement() {
                                 })()}
                               </div>
                             )}
+                            {formData.interestStartDate && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">计息日期</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                                </span>
+                              </div>
+                            )}
                             {displayConfig.collateralCoin && (() => {
                               const validAssets = collateralAssets.filter(a => a.coin && a.qty !== '');
                               if (validAssets.length === 0) return null;
@@ -1459,7 +1467,7 @@ export default function FunderManagement() {
             </div>
 
             {/* 提交按钮 */}
-            <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-gray-100">
+            <div className="flex-shrink-0 bg-white px-5 py-4 border-t border-gray-100">
               <button
                 onClick={handleSubmit}
                 disabled={createMutation.isPending || updateMutation.isPending}
