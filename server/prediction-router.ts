@@ -854,8 +854,12 @@ export const predictionRouter = router({
       ) as any;
       const allBets: any[] = allRows as any[];
 
-      // 汇总统计：撤销不计入流水
-      const nonCancelledBets = allBets.filter((b: any) => b.status !== 'cancelled');
+      // 当前北京日期
+      const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      const todayBJ = nowBJ.toISOString().slice(0, 10);
+
+      // 汇总统计：撤销不计入流水，且只统计已进入不可撤销状态的订单（todayBJ >= target_date）
+      const nonCancelledBets = allBets.filter((b: any) => b.status !== 'cancelled' && String(b.target_date) <= todayBJ);
       const totalOrders = nonCancelledBets.length;
       const totalTurnover = nonCancelledBets.reduce((s: number, b: any) => s + parseFloat(b.bet_amount), 0);
       const wonBets = nonCancelledBets.filter((b: any) => b.status === 'won');
