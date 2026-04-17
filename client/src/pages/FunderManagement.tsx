@@ -1266,7 +1266,7 @@ export default function FunderManagement() {
               {/* 实时预览卡片 */}
               <div>
                 <div className="text-xs font-medium text-gray-400 mb-2">实时预览（订单卡片展示效果）</div>
-                <div className="rounded-2xl shadow-sm overflow-hidden" style={{ border: '1px solid #E0E8FF', backgroundColor: '#FFFFFF' }}>
+                <div className="rounded-2xl shadow-sm" style={{ border: '1px solid #E0E8FF', backgroundColor: '#FFFFFF', overflow: 'visible' }}>
                   {/* 顶部色条 */}
                   <div className="h-1" style={{ background: `linear-gradient(90deg, ${COIN_COLORS[formData.coin] || '#6B7280'}, ${COIN_COLORS[formData.coin] || '#6B7280'}55)` }} />
                   {/* 主体：左右两栏 */}
