@@ -137,6 +137,7 @@ const RANGE_LABELS = [
 // ─── 明日涨跌竞猜面板 ─────────────────────────────────────────
 function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   const [activeCoin, setActiveCoin] = useState<'BTC' | 'ETH'>('BTC');
+
   // 北京时间明天日期标签
   const tabDateLabel = useMemo(() => {
     const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
@@ -146,43 +147,155 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
     const d = tomorrow.getUTCDate();
     return `${m}月${d}日`;
   }, []);
+
+  // 北京时间是否在 12:00 前（可撤销窗口）
+  const canCancelNow = useMemo(() => {
+    const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    return nowBJ.getUTCHours() < 12;
+  }, []);
+
+  // 订单列表（在父组件管理，不随币种切换重置）
+  const { data: myBetsData, refetch: refetchBets } = trpc.prediction.getMyBets.useQuery(
+    { ledgerId, limit: 20 },
+    { staleTime: 0 }
+  );
+  const myBets: any[] = (myBetsData as any)?.bets ?? [];
+
+  // 撤销 mutation
+  const cancelBetMutation = trpc.prediction.cancelBet.useMutation({
+    onSuccess: (data: any) => {
+      toast.success('撤销成功', { description: data.message });
+      refetchBets();
+    },
+    onError: (e: any) => {
+      toast.error('撤销失败', { description: e.message });
+    },
+  });
+
   return (
-    <div className="rounded-2xl overflow-hidden mb-3" style={{
-      background: 'linear-gradient(160deg, #7a5c00 0%, #b8860b 25%, #d4af37 50%, #b8860b 75%, #7a5c00 100%)',
-      border: '2px solid #ffd700',
-      boxShadow: '0 6px 32px rgba(212,175,55,0.5), 0 2px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.3)',
-      isolation: 'isolate',
-      WebkitMaskImage: '-webkit-radial-gradient(white, black)',
-    }}>
-      {/* 币种切换 Tab（含日期+趋势） */}
-      <div className="flex">
-        {(['BTC', 'ETH'] as const).map((c, i) => (
-          <button
-            key={c}
-            onClick={() => setActiveCoin(c)}
-            className="flex-1 py-2.5 text-sm font-black transition-all"
-            style={{
-              background: activeCoin === c
-                ? 'rgba(0,0,0,0.22)'
-                : 'rgba(0,0,0,0.06)',
-              color: activeCoin === c ? '#3d2000' : 'rgba(60,30,0,0.45)',
-              borderBottom: activeCoin === c ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
-              borderRadius: 0,
-              borderTopLeftRadius: i === 0 ? '1rem' : 0,
-              borderTopRightRadius: i === 1 ? '1rem' : 0,
-            }}
-          >
-            {tabDateLabel} {c} 趋势
-          </button>
-        ))}
+    <div>
+      {/* 金色容器：下单操作区 */}
+      <div className="rounded-2xl overflow-hidden mb-4" style={{
+        background: 'linear-gradient(160deg, #7a5c00 0%, #b8860b 25%, #d4af37 50%, #b8860b 75%, #7a5c00 100%)',
+        border: '2px solid #ffd700',
+        boxShadow: '0 6px 32px rgba(212,175,55,0.5), 0 2px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.3)',
+        isolation: 'isolate',
+        WebkitMaskImage: '-webkit-radial-gradient(white, black)',
+      }}>
+        {/* 币种切换 Tab（含日期+趋势） */}
+        <div className="flex">
+          {(['BTC', 'ETH'] as const).map((c, i) => (
+            <button
+              key={c}
+              onClick={() => setActiveCoin(c)}
+              className="flex-1 py-2.5 text-sm font-black transition-all"
+              style={{
+                background: activeCoin === c ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.06)',
+                color: activeCoin === c ? '#3d2000' : 'rgba(60,30,0,0.45)',
+                borderBottom: activeCoin === c ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
+                borderRadius: 0,
+                borderTopLeftRadius: i === 0 ? '1rem' : 0,
+                borderTopRightRadius: i === 1 ? '1rem' : 0,
+              }}
+            >
+              {tabDateLabel} {c} 趋势
+            </button>
+          ))}
+        </div>
+        {/* 下单操作区 */}
+        <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} onBetPlaced={refetchBets} />
       </div>
-      {/* 内容区域：复用 MarketBetPanel 但去掉外层容器 */}
-      <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} />
+
+      {/* 订单列表：独立容器 */}
+      <div className="rounded-2xl overflow-hidden mb-3" style={{
+        background: '#ffffff',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+      }}>
+        {/* 标题行 */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #f0f0f0' }}>
+          <span className="text-sm font-bold" style={{ color: '#1a1a1a' }}>最近下单记录</span>
+          {canCancelNow && (
+            <span className="text-xs" style={{ color: '#999' }}>12:00前可撤销</span>
+          )}
+        </div>
+
+        {myBets.length === 0 ? (
+          <div className="text-sm text-center py-6" style={{ color: '#bbb' }}>暂无记录</div>
+        ) : (
+          <div>
+            {myBets.map((bet: any, idx: number) => {
+              const isEven = idx % 2 === 0;
+              const isCancelled = bet.status === 'cancelled';
+              const isPending = bet.status === 'pending';
+              // 判断是否是今天的订单
+              const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
+              const todayBJ = nowBJ.toISOString().slice(0, 10);
+              const isToday = bet.target_date === todayBJ;
+              const canCancel = isPending && isToday && canCancelNow;
+              // 日期简写：4-18
+              const shortDate = String(bet.target_date).replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1-$2');
+
+              return (
+                <div
+                  key={bet.id}
+                  className="flex items-center px-4 py-3"
+                  style={{
+                    background: isEven ? '#ffffff' : '#f9f9f9',
+                    borderBottom: idx < myBets.length - 1 ? '1px solid #f0f0f0' : 'none',
+                    opacity: isCancelled ? 0.5 : 1,
+                  }}
+                >
+                  {/* 左侧：方向+币种 */}
+                  <div className="flex items-center gap-1.5 w-16 flex-shrink-0">
+                    <span className="text-xs font-black" style={{ color: bet.direction === 'up' ? '#e53935' : '#43a047' }}>
+                      {bet.direction === 'up' ? '↑涨' : '↓跌'}
+                    </span>
+                    <span className="text-xs font-bold" style={{ color: '#555' }}>{bet.coin}</span>
+                  </div>
+                  {/* 中间：幅度区间+日期+编号 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium" style={{ color: '#333' }}>{bet.range_label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: '#999' }}>
+                      {shortDate}
+                      {bet.order_no && <span className="ml-1.5 font-mono">编号{bet.order_no}</span>}
+                    </div>
+                  </div>
+                  {/* 金额 */}
+                  <div className="text-sm font-bold flex-shrink-0 mr-2" style={{ color: '#1a1a1a' }}>
+                    {parseFloat(bet.bet_amount).toFixed(0)} U
+                  </div>
+                  {/* 状态/撤销按钮 */}
+                  <div className="flex-shrink-0">
+                    {canCancel ? (
+                      <button
+                        onClick={() => cancelBetMutation.mutate({ ledgerId, betId: bet.id })}
+                        disabled={cancelBetMutation.isPending}
+                        className="text-xs px-2 py-1 rounded-lg font-medium transition-all active:scale-95"
+                        style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}
+                      >
+                        {cancelBetMutation.isPending ? '撤销中...' : '撤销'}
+                      </button>
+                    ) : (
+                      <span className="text-xs px-2 py-1 rounded-lg" style={{
+                        background: isCancelled ? '#f5f5f5' : bet.status === 'won' ? '#ffebee' : bet.status === 'lost' ? '#e8f5e9' : '#fffde7',
+                        color: isCancelled ? '#bbb' : bet.status === 'won' ? '#e53935' : bet.status === 'lost' ? '#43a047' : '#f9a825',
+                      }}>
+                        {isCancelled ? '已撤销' : bet.status === 'won' ? '中奖' : bet.status === 'lost' ? '未中' : '待结算'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey: string }) {
+function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced }: { ledgerId: number; coinKey: string; onBetPlaced?: () => void }) {
   const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
   const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
@@ -201,12 +314,8 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
   );
   const balance = (balanceData as any)?.balance ?? 0;
 
-  // 获取我的竞猜记录
-  const { data: myBetsData, refetch: refetchBets } = trpc.prediction.getMyBets.useQuery(
-    { ledgerId, limit: 10 },
-    { staleTime: 0 }
-  );
-  const myBets: any[] = (myBetsData as any)?.bets ?? [];
+  // 获取我的竞猜记录（由父组件传入，避免随币种切换重置）
+  // myBets 和 refetchBets 通过 props 传入
 
   // 下单 mutation
   const placeBetMutation = trpc.prediction.placeBet.useMutation({
@@ -216,7 +325,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
       setDirSlider(0);
       setBetAmount(10);
       refetchBalance();
-      refetchBets();
+      onBetPlaced?.();
     },
     onError: (e: any) => {
       toast.error('下单失败', { description: e.message });
@@ -452,37 +561,7 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
             )}
           </div>
 
-      {/* 我的最近竞猜记录 */}
-      <div className="mx-4 mb-4">
-        <div className="text-xs mb-2" style={{ color: 'rgba(60,30,0,0.6)' }}>最近下单记录</div>
-        {myBets.length === 0 ? (
-          <div className="text-xs text-center py-3 rounded-xl" style={{ color: 'rgba(60,30,0,0.4)', background: 'rgba(0,0,0,0.08)' }}>暂无记录</div>
-        ) : (
-          <div className="space-y-1.5">
-            {myBets.slice(0, 5).map((bet: any) => (
-              <div key={bet.id} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: 'rgba(0,0,0,0.12)', border: '1px solid rgba(255,255,255,0.25)' }}>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold" style={{ color: bet.direction === 'up' ? '#ff4d4d' : '#00e676' }}>
-                    {bet.direction === 'up' ? '↑涨' : '↓跌'} {bet.range_label}
-                  </span>
-                  <span className="text-xs" style={{ color: 'rgba(60,30,0,0.5)' }}>{bet.target_date}</span>
-                  {bet.order_no && <span className="text-xs font-mono" style={{ color: 'rgba(60,30,0,0.35)' }}>编号{bet.order_no}</span>}
-                  <span className="text-xs font-bold" style={{ color: 'rgba(60,30,0,0.6)' }}>{bet.coin}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold" style={{ color: '#3d2000' }}>{parseFloat(bet.bet_amount).toFixed(0)} U</span>
-                  <span className="text-xs px-1.5 py-0.5 rounded-full" style={{
-                    background: bet.status === 'won' ? 'rgba(255,77,77,0.2)' : bet.status === 'lost' ? 'rgba(0,230,118,0.1)' : 'rgba(212,175,55,0.1)',
-                    color: bet.status === 'won' ? '#ff4d4d' : bet.status === 'lost' ? '#00e676' : '#d4af37',
-                  }}>
-                    {bet.status === 'won' ? '中奖' : bet.status === 'lost' ? '未中' : '待结算'}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+
 
 
     </div>

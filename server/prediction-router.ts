@@ -770,6 +770,62 @@ export const predictionRouter = router({
       return { balance };
     }),
 
+  // 撤销竞猜订单（当天北京时间12:00前可撤销）
+  cancelBet: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      betId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await ensureOnce();
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+
+      const userId = ctx.user.id;
+      const { ledgerId, betId } = input;
+
+      // 查询订单
+      const [betRows] = await conn.execute(
+        `SELECT * FROM crypto_bets WHERE id = ? AND user_id = ? AND ledger_id = ? LIMIT 1`,
+        [betId, userId, ledgerId]
+      ) as any;
+      const bet = (betRows as any[])[0];
+      if (!bet) throw new Error('订单不存在');
+      if (bet.status !== 'pending') throw new Error('该订单已结算或已撤销，无法撤销');
+
+      // 检查是否在当天北京时间12:00前
+      const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
+      const bjHour = nowBJ.getUTCHours();
+      const bjMinute = nowBJ.getUTCMinutes();
+      // target_date 是 YYYY-MM-DD，今天北京日期
+      const todayBJ = nowBJ.toISOString().slice(0, 10);
+      if (bet.target_date !== todayBJ) {
+        throw new Error('只能撤销今日的订单');
+      }
+      if (bjHour >= 12) {
+        throw new Error('北京时间12:00后不可撤销');
+      }
+
+      // 撤销：更新状态为 cancelled
+      await conn.execute(
+        `UPDATE crypto_bets SET status = 'cancelled', updated_at = NOW() WHERE id = ?`,
+        [betId]
+      );
+
+      // 退款：写入正数 af_manual_balances
+      const coinFullName = bet.coin === 'BTC' ? '比特币' : bet.coin === 'ETH' ? '以太坊' : bet.coin;
+      const shortDate = String(bet.target_date).replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1-$2');
+      const refundNote = `撤销委托 ${coinFullName} ${shortDate} 退款 编号${bet.order_no}`;
+      await conn.execute(
+        `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        [ledgerId, userId, parseFloat(bet.bet_amount), refundNote]
+      );
+
+      const { getUserBalance } = await import('./db-recharge');
+      const newBalance = await getUserBalance(userId, ledgerId);
+      return { success: true, newBalance, message: `撤销成功，已退款 ${parseFloat(bet.bet_amount).toFixed(2)} U` };
+    }),
+
   // 手动触发结算（管理员用）
   manualSettle: protectedProcedure
     .input(z.object({
