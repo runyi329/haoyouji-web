@@ -1030,35 +1030,25 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
             {dc.todayPrice && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">{isEnded ? '结束币价' : '当前币价'}</span>
-                <span className="font-medium flex items-center gap-0.5" style={{ color: '#4B5563' }}>
-                  {(() => {
+                {(() => {
+                    const currentPrice = isEnded
+                      ? (order.end_price ? parseFloat(order.end_price) : livePrices[order.coin])
+                      : livePrices[order.coin];
+                    const buyPrice = order.buy_price ? parseFloat(order.buy_price) : null;
+                    let priceColor = '#4B5563';
+                    if (currentPrice != null && buyPrice != null) {
+                      if (currentPrice > buyPrice) priceColor = '#DC2626';
+                      else if (currentPrice < buyPrice) priceColor = '#16A34A';
+                    }
                     const dir = !isEnded ? (priceDirection?.[order.coin] ?? 'same') : 'same';
-                    if (dir === 'up') return (
-                      <span
-                        className="text-[10px] inline-flex items-center self-center"
-                        style={{
-                          color: '#DC2626',
-                          animation: 'price-blink 1.5s ease-in-out infinite',
-                          lineHeight: 1,
-                        }}
-                      >▲</span>
+                    return (
+                      <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
+                        {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
+                        {dir === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
+                        {currentPrice != null ? currentPrice.toFixed(2) + ' U' : '---'}
+                      </span>
                     );
-                    if (dir === 'down') return (
-                      <span
-                        className="text-[10px] inline-flex items-center self-center"
-                        style={{
-                          color: '#16A34A',
-                          animation: 'price-blink 1.5s ease-in-out infinite',
-                          lineHeight: 1,
-                        }}
-                      >▼</span>
-                    );
-                    return null;
                   })()}
-                  {isEnded
-                    ? (order.end_price ? parseFloat(order.end_price).toFixed(2) + ' U' : (livePrices[order.coin] ? livePrices[order.coin].toFixed(2) + ' U' : '---'))
-                    : (livePrices[order.coin] ? livePrices[order.coin].toFixed(2) + ' U' : '---')}
-                </span>
               </div>
             )}
             {dc.buyDate && order.buy_date && (
