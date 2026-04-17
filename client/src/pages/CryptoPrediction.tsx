@@ -750,8 +750,8 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
       setTierChoice(null);
     }
   }, [coinKey]);
-  const [betAmount, setBetAmount] = useState(10);
-  const [inputValue, setInputValue] = useState('10'); // 控制输入框显示内容
+  const [betAmount, setBetAmount] = useState(100);
+  const [inputValue, setInputValue] = useState('100'); // 控制输入框显示内容
   const [showConfirm, setShowConfirm] = useState(false);
 
   // 获取账本余额
@@ -942,8 +942,8 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
                 <div className="flex items-baseline gap-1">
                   <input
                     type="number"
-                    min={0}
-                    max={Math.max(Math.floor(balance), 1)}
+                    min={100}
+                    max={Math.max(Math.floor(balance), 100)}
                     value={inputValue}
                     onChange={e => {
                       const raw = e.target.value;
@@ -951,13 +951,13 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
                       const v = Number(raw);
                       if (!isNaN(v) && raw !== '') {
                         const maxByPayout = odds > 0 ? Math.floor(MAX_PAYOUT / odds) : Math.max(Math.floor(balance), 1);
-                        setBetAmount(Math.min(Math.max(v, 0), Math.min(Math.max(Math.floor(balance), 1), maxByPayout)));
+                        setBetAmount(Math.min(Math.max(v, 100), Math.min(Math.max(Math.floor(balance), 100), maxByPayout)));
                       }
                     }}
                     onBlur={e => {
                       const v = Number(e.target.value);
                       const maxByPayout2 = odds > 0 ? Math.floor(MAX_PAYOUT / odds) : Math.max(Math.floor(balance), 1);
-                    const clamped = isNaN(v) || e.target.value === '' ? 1 : Math.min(Math.max(v, 1), Math.min(Math.max(Math.floor(balance), 1), maxByPayout2));
+                    const clamped = isNaN(v) || e.target.value === '' ? 100 : Math.min(Math.max(v, 100), Math.min(Math.max(Math.floor(balance), 100), maxByPayout2));
                       setBetAmount(clamped);
                       setInputValue(String(clamped));
                     }}
@@ -987,14 +987,14 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
           {/* 投注金额滑动条 */}
           <div className="mx-4 mb-4">
             <input
-              type="range" min={1} max={Math.min(Math.max(Math.floor(balance), 1), maxBetByPayout > 0 ? maxBetByPayout : Math.max(Math.floor(balance), 1))} step={1} value={betAmount}
+              type="range" min={100} max={Math.min(Math.max(Math.floor(balance), 100), maxBetByPayout > 0 ? maxBetByPayout : Math.max(Math.floor(balance), 100))} step={1} value={betAmount}
               onChange={e => { const v = Number(e.target.value); setBetAmount(v); setInputValue(String(v)); }}
-              className="w-full h-3 rounded-full appearance-none cursor-pointer"
-              style={{ background: sliderBg(betAmount, 1, Math.min(Math.max(Math.floor(balance), 1), maxBetByPayout > 0 ? maxBetByPayout : Math.max(Math.floor(balance), 1)), '#d4af37'), accentColor: '#d4af37' }}
+              className="slider w-full h-3 rounded-full appearance-none cursor-pointer"
+              style={{ background: sliderBg(betAmount, 100, Math.min(Math.max(Math.floor(balance), 100), maxBetByPayout > 0 ? maxBetByPayout : Math.max(Math.floor(balance), 100)), '#d4af37'), accentColor: '#d4af37' }}
             />
             <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              <span>1 U</span>
-              <span>余额 {Math.floor(balance).toLocaleString()} U &nbsp;/&nbsp; 可用 {Math.min(Math.max(Math.floor(balance), 1), maxBetByPayout > 0 && isFinite(maxBetByPayout) ? maxBetByPayout : Math.max(Math.floor(balance), 1)).toLocaleString()} U</span>
+              <span>100 U</span>
+              <span>余额 {Math.floor(balance).toLocaleString()} U &nbsp;/&nbsp; 可用 {Math.min(Math.max(Math.floor(balance), 100), maxBetByPayout > 0 && isFinite(maxBetByPayout) ? maxBetByPayout : Math.max(Math.floor(balance), 100)).toLocaleString()} U</span>
             </div>
           </div>
 
