@@ -306,6 +306,8 @@ const MARKET_SYMBOLS = [
 // ─── 明日涨跌竞猜面板 ─────────────────────────────────────────
 function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   const [activeCoin, setActiveCoin] = useState('BTC');
+  // 订单列表Tab：最近购买记录 / 持仓订单
+  const [orderTab, setOrderTab] = useState<'recent' | 'position'>('recent');
   // 美股休市提示弹窗
   const [closedNotice, setClosedNotice] = useState<{ show: boolean; nextDay: string }>({ show: false, nextDay: '' });
 
@@ -392,6 +394,13 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   );
   const myBets: any[] = ((myBetsData as any)?.bets ?? []).filter((b: any) => b.status !== 'cancelled');
 
+  // ETH持仓数据
+  const { data: ethPositionData } = trpc.prediction.getMyEthPosition.useQuery(
+    { ledgerId },
+    { staleTime: 30000 }
+  );
+  const ethPos = ethPositionData as any;
+
   // 撤销 mutation
   const cancelBetMutation = trpc.prediction.cancelBet.useMutation({
     onSuccess: (data: any) => {
@@ -476,12 +485,35 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
         border: '1px solid #e5e7eb',
         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
       }}>
-        {/* 标题行 */}
-        <div className="flex items-center px-4 py-3" style={{ borderBottom: '1px solid #f0f0f0' }}>
-          <span className="text-sm font-bold" style={{ color: '#1a1a1a' }}>最近购买记录{myBets.length > 0 ? `（${myBets.length}）` : ''}</span>
+        {/* Tab切换标题行 */}
+        <div className="flex items-center px-4 py-0" style={{ borderBottom: '1px solid #f0f0f0' }}>
+          <button
+            className="text-sm font-bold py-3 mr-4 relative"
+            style={{
+              color: orderTab === 'recent' ? '#1a1a1a' : '#999',
+              borderBottom: orderTab === 'recent' ? '2px solid #e53935' : '2px solid transparent',
+              marginBottom: '-1px',
+            }}
+            onClick={() => setOrderTab('recent')}
+          >
+            最近购买记录{myBets.length > 0 ? `（${myBets.length}）` : ''}
+          </button>
+          <button
+            className="text-sm font-bold py-3 relative"
+            style={{
+              color: orderTab === 'position' ? '#1a1a1a' : '#999',
+              borderBottom: orderTab === 'position' ? '2px solid #4F46E5' : '2px solid transparent',
+              marginBottom: '-1px',
+            }}
+            onClick={() => setOrderTab('position')}
+          >
+            持仓订单{ethPos?.records?.length > 0 ? `（${ethPos.records.length}）` : ''}
+          </button>
         </div>
 
-        {myBets.length === 0 ? (
+        {orderTab === 'recent' ? (
+        /* 最近购买记录 */
+        myBets.length === 0 ? (
           <div className="text-sm text-center py-6" style={{ color: '#bbb' }}>暂无记录</div>
         ) : (
           <div>
@@ -555,6 +587,111 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
               );
             })}
           </div>
+        )
+        ) : (
+        /* 持仓订单 Tab */
+        <div className="px-4 py-3">
+          {/* 汇总统计卡片 */}
+          {ethPos?.summary ? (
+            <div className="rounded-xl p-3 mb-3" style={{ background: '#f8f7ff', border: '1px solid #e8e5ff' }}>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span style={{ color: '#888' }}>累计买入金额</span>
+                  <div className="font-bold" style={{ color: '#1a1a1a' }}>{ethPos.summary.totalBuyAmount.toFixed(2)} U</div>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>累计买入ETH</span>
+                  <div className="font-bold" style={{ color: '#1a1a1a' }}>{ethPos.summary.totalEthQty.toFixed(6)} ETH</div>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>平均买入价</span>
+                  <div className="font-bold" style={{ color: '#1a1a1a' }}>{ethPos.summary.avgBuyPrice.toFixed(2)} U</div>
+                </div>
+                <div>
+                  <span style={{ color: '#888' }}>当前ETH价格</span>
+                  <div className="font-bold" style={{ color: '#1a1a1a' }}>{ethPos.summary.currentEthPrice.toFixed(2)} U</div>
+                </div>
+              </div>
+              <div className="mt-2 pt-2" style={{ borderTop: '1px solid #e8e5ff' }}>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span style={{ color: '#888' }}>ETH竞猜总盈利</span>
+                    <div className="font-bold" style={{ color: '#e53935' }}>{ethPos.summary.totalWon.toFixed(2)} U</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#888' }}>ETH竞猜总亏损</span>
+                    <div className="font-bold" style={{ color: '#43a047' }}>{ethPos.summary.totalLost.toFixed(2)} U</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#888' }}>净亏损</span>
+                    <div className="font-bold" style={{ color: ethPos.summary.netLoss > 0 ? '#43a047' : '#888' }}>{ethPos.summary.netLoss.toFixed(2)} U</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#888' }}>持仓占比</span>
+                    <div className="font-bold" style={{ color: '#4F46E5' }}>{(ethPos.summary.positionRatio * 100).toFixed(1)}%</div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 pt-2" style={{ borderTop: '1px solid #e8e5ff' }}>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span style={{ color: '#888' }}>实际持有</span>
+                    <div className="font-bold" style={{ color: '#4F46E5' }}>{ethPos.summary.actualEthQty.toFixed(6)}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#888' }}>持仓市值</span>
+                    <div className="font-bold" style={{ color: '#1a1a1a' }}>{ethPos.summary.positionValue.toFixed(2)} U</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#888' }}>浮盈浮亏</span>
+                    <div className="font-bold" style={{ color: ethPos.summary.positionPnl >= 0 ? '#e53935' : '#43a047' }}>
+                      {ethPos.summary.positionPnl >= 0 ? '+' : ''}{ethPos.summary.positionPnl.toFixed(2)} U
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-center py-2" style={{ color: '#bbb' }}>加载中...</div>
+          )}
+
+          {/* 持仓明细列表 */}
+          {ethPos?.records?.length > 0 ? (
+            <div>
+              <div className="text-xs font-semibold mb-2" style={{ color: '#666' }}>买入明细</div>
+              {ethPos.records.map((rec: any, idx: number) => {
+                const shortDate = String(rec.targetDate).replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1-$2');
+                return (
+                  <div
+                    key={rec.id}
+                    className="flex items-center justify-between py-2"
+                    style={{
+                      borderBottom: idx < ethPos.records.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      background: idx % 2 === 0 ? '#fff' : '#f9f9f9',
+                      padding: '8px 4px',
+                    }}
+                  >
+                    <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-1" style={{ fontSize: '0.75rem', color: '#333' }}>
+                        <span style={{ color: '#4F46E5', fontWeight: 600 }}>买入ETH</span>
+                        <span>{shortDate}</span>
+                        {rec.orderNo && <span style={{ color: '#999' }}>编号{rec.orderNo}</span>}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: '#999' }}>
+                        价格 {rec.ethPrice.toFixed(2)} U · 数量 {rec.ethQty.toFixed(6)} ETH
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-right ml-2">
+                      <div className="text-sm font-bold" style={{ color: '#43a047' }}>-{rec.lossAmount.toFixed(0)} U</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-sm text-center py-4" style={{ color: '#bbb' }}>暂无持仓记录</div>
+          )}
+        </div>
         )}
       </div>
 

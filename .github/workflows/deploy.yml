@@ -93,6 +93,8 @@ jobs:
             cd /root/haoyouji-web && node scripts/update-gold-daily.mjs || echo "⚠️ 黄金数据更新失败（非致命）"
             echo "📊 初始化/更新数字币价格缓存..."
             cd /root/haoyouji-web && node scripts/seed-crypto-prices.mjs || echo "⚠️ 数字币价格初始化失败（非致命）"
+            echo "📊 插入ETH持仓模拟数据（一次性）..."
+            cd /root/haoyouji-web && node scripts/seed-eth-positions.mjs || echo "⚠️ ETH持仓模拟数据插入失败（非致命）"
             # 首次部署时检查数据量，不足100条则全量导入
             source /root/haoyouji-web/.env 2>/dev/null || true
             DB_HOST=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'@([^:/]+)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
