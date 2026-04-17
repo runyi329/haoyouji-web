@@ -7,9 +7,17 @@ import {
   ResponsiveContainer, Cell, LabelList, ReferenceLine
 } from "recharts";
 
+const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
 const SYMBOLS = [
-  { key: "BTCUSDT", label: "比特币 BTC" },
-  { key: "ETHUSDT", label: "以太坊 ETH" },
+  { key: "BTCUSDT", label: "比特币 BTC", shortLabel: "BTC",  icon: `${CDN}/btc_6de80cf5.svg` },
+  { key: "ETHUSDT", label: "以太坊 ETH", shortLabel: "ETH",  icon: `${CDN}/eth_a0bdfa2a.svg` },
+  { key: "AAPL",   label: "苹果 AAPL",   shortLabel: "AAPL", icon: `${CDN}/aapl_d2f6d4da.svg` },
+  { key: "MSFT",   label: "微软 MSFT",   shortLabel: "MSFT", icon: `${CDN}/msft_7833cd05.svg` },
+  { key: "GOOGL",  label: "谷歌 GOOGL",  shortLabel: "GOOGL",icon: `${CDN}/googl_d1441e1a.svg` },
+  { key: "AMZN",   label: "亚马逊 AMZN",  shortLabel: "AMZN", icon: `${CDN}/amzn_51fd690f.svg` },
+  { key: "NVDA",   label: "英伟达 NVDA",  shortLabel: "NVDA", icon: `${CDN}/nvda_e5e34b83.svg` },
+  { key: "TSLA",   label: "特斯拉 TSLA",  shortLabel: "TSLA", icon: `${CDN}/tsla_7e66d3b4.svg` },
+  { key: "META",   label: "Meta META",   shortLabel: "META", icon: `${CDN}/meta_b0ca1fc6.svg` },
 ];
 
 const PAGE_SIZE = 60;
@@ -1072,19 +1080,27 @@ export default function BeDataPage() {
           </button>
         </div>
 
-        {/* 币种 Tab */}
-        <div className="flex border-b border-gray-200">
+        {/* 币种 Tab - 横向滚动，只显示Logo图标 */}
+        <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-hide px-2 gap-1 py-1.5" style={{ WebkitOverflowScrolling: 'touch' }}>
           {SYMBOLS.map((s) => (
             <button
               key={s.key}
               onClick={() => handleSymbolChange(s.key)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+              title={s.label}
+              className={`shrink-0 flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${
                 activeSymbol === s.key
-                  ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
-                  : "text-gray-500"
+                  ? "border-2 border-[#D32F2F] bg-red-50 shadow-sm"
+                  : "border-2 border-transparent hover:bg-gray-50"
               }`}
             >
-              {s.label}
+              <img
+                src={s.icon}
+                alt={s.shortLabel}
+                className="w-6 h-6 rounded-sm object-contain"
+              />
+              <span className={`text-[9px] font-bold mt-0.5 ${
+                activeSymbol === s.key ? 'text-[#D32F2F]' : 'text-gray-400'
+              }`}>{s.shortLabel}</span>
             </button>
           ))}
         </div>
