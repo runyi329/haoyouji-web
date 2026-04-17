@@ -159,7 +159,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
     { ledgerId, limit: 20 },
     { staleTime: 0 }
   );
-  const myBets: any[] = (myBetsData as any)?.bets ?? [];
+  const myBets: any[] = ((myBetsData as any)?.bets ?? []).filter((b: any) => b.status !== 'cancelled');
 
   // 撤销 mutation
   const cancelBetMutation = trpc.prediction.cancelBet.useMutation({
