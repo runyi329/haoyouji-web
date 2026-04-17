@@ -417,6 +417,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
   const show = (key: string) => dc ? (dc[key] !== false) : true;
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showInterestTip, setShowInterestTip] = useState(false);
+  const [tipPos, setTipPos] = useState<{ bottom: number; right: number } | null>(null);
+  const tipBtnRef = useRef<HTMLButtonElement>(null);
   const { data: stats } = trpc.ledger.funderGetOrderScanStats.useQuery(
     { orderId: order.id, ledgerId },
     { refetchOnWindowFocus: false, staleTime: 5 * 60 * 1000 }
@@ -467,8 +469,15 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
           <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
           <button
+            ref={tipBtnRef}
             type="button"
-            onClick={() => setShowInterestTip(v => !v)}
+            onClick={() => {
+              if (!showInterestTip && tipBtnRef.current) {
+                const rect = tipBtnRef.current.getBoundingClientRect();
+                setTipPos({ bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right });
+              }
+              setShowInterestTip(v => !v);
+            }}
             className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
             style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
           >?</button>
@@ -481,8 +490,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             const baseUnit = (order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U';
             return (
               <div
-                className="absolute z-50 bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-sm"
-                style={{ bottom: '100%', right: 0, marginBottom: '6px', width: '80vw', maxWidth: '320px', color: '#374151' }}
+                className="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 text-sm"
+                style={{ bottom: tipPos?.bottom ?? 60, right: tipPos?.right ?? 16, width: '80vw', maxWidth: '320px', color: '#374151' }}
                 onClick={e => e.stopPropagation()}
               >
                 <div className="font-semibold text-blue-600 mb-2">计息说明</div>
