@@ -348,16 +348,33 @@ export default function LedgerDetailAA({
       // 盈亏：需要计算每个标签的 initialBalance - latestBalance
       const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
-      // 找该标签最新的余额记录
-      const tagTransactions = (activeMemberTransactions || []).flatMap((day: any) =>
-        (day.records || []).filter((r: any) => r.category && r.category.includes(tagName))
-          .map((r: any) => ({ date: day.date, amount: r.amount, type: r.type }))
-      ).sort((a: any, b: any) => a.date.localeCompare(b.date));
-      if (tagTransactions.length > 0) {
-        const last = tagTransactions[tagTransactions.length - 1];
-        const latestBalance = last.amount;
+      // 找该标签最新的余额记录（与走势图逻辑一致：每日合计，跳过balance=0的天）
+      const tagStartDate = initialBalancesData.balances[`${tagName}__startDate`];
+      let effectiveStartStr: string | null = null;
+      if (tagStartDate) {
+        const sd = new Date(String(tagStartDate));
+        sd.setDate(sd.getDate() - 1);
+        effectiveStartStr = sd.toISOString().slice(0, 10);
+      }
+      const tagDayMap: Record<string, { income: number; expense: number }> = {};
+      (activeMemberTransactions || []).forEach((day: any) => {
+        const filtered = (day.records || []).filter((r: any) => r.category && r.category.includes(tagName));
+        if (filtered.length === 0) return;
+        if (!tagDayMap[day.date]) tagDayMap[day.date] = { income: 0, expense: 0 };
+        filtered.forEach((r: any) => {
+          if (r.type === 'income') tagDayMap[day.date].income += r.amount;
+          else tagDayMap[day.date].expense += r.amount;
+        });
+      });
+      const tagDays = Object.entries(tagDayMap)
+        .map(([date, v]) => ({ date, balance: v.income > 0 ? v.income : v.expense }))
+        .filter(d => d.balance > 0) // 跳过balance=0的天（防止误录入干扰）
+        .sort((a, b) => a.date.localeCompare(b.date));
+      const filteredTagDaysStats = effectiveStartStr ? tagDays.filter(d => d.date >= effectiveStartStr!) : tagDays;
+      if (filteredTagDaysStats.length > 0) {
+        const last = filteredTagDaysStats[filteredTagDaysStats.length - 1];
         if (initialBalance > 0) {
-          totalPnl += (initialBalance - latestBalance) * ratio;
+          totalPnl += (initialBalance - last.balance) * ratio;
         }
       }
     });
