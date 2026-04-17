@@ -508,6 +508,13 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                     <span className="text-gray-400"> = </span>
                     <span className="font-semibold text-blue-600">{(base * rate / 100 / 365 * days).toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseUnit}</span>
                   </div>
+                  {(() => {
+                    const result = base * rate / 100 / 365 * days;
+                    const altResult = rateCur === 'CNY' ? result / 7 : result * 7;
+                    return (
+                      <div className="text-gray-400 text-xs mt-1">≈ {altResult.toLocaleString(undefined, { maximumFractionDigits: 2 })} {altUnit}</div>
+                    );
+                  })()}
                 </div>
                 <button onClick={() => setShowInterestTip(false)} className="mt-2 text-[10px] text-gray-400 hover:text-gray-600">关闭</button>
               </div>
