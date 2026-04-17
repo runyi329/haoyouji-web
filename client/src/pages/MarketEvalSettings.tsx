@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ChevronLeft, ChevronDown, ChevronRight, Loader2, RefreshCw, Database, WifiOff } from "lucide-react";
+import { ChevronLeft, ChevronDown, ChevronRight, Loader2, RefreshCw, Database, WifiOff, CheckCircle2, XCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -195,6 +195,57 @@ function EventGroupCard({
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// 结算按鈕组件
+// ============================================================
+function SettleButton({ ledgerId }: { ledgerId: number }) {
+  const [result, setResult] = useState<any>(null);
+  const [dateInput, setDateInput] = useState("");
+  const settleMutation = trpc.prediction.manualSettle.useMutation({
+    onSuccess: (data) => {
+      setResult(data);
+      if (data.settled === 0) {
+        toast.info("无待结算订单", { description: data.details[0] });
+      } else {
+        toast.success(`结算完成！中奖 ${data.won} 单，派奖 ${data.totalPayout.toFixed(2)} U`, {
+          description: `共 ${data.settled} 单，未中 ${data.lost} 单`,
+        });
+      }
+    },
+    onError: (e) => toast.error("结算失败", { description: e.message }),
+  });
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <div className="flex items-center gap-2">
+        <input
+          type="date"
+          value={dateInput}
+          onChange={(e) => setDateInput(e.target.value)}
+          className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600 w-32"
+          placeholder="不填=昨天"
+        />
+        <button
+          onClick={() => settleMutation.mutate({ targetDate: dateInput || undefined })}
+          disabled={settleMutation.isPending}
+          className="flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-60 active:scale-95 transition-transform"
+        >
+          {settleMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+          {settleMutation.isPending ? "结算中..." : "手动结算"}
+        </button>
+      </div>
+      {result && (
+        <div className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1 max-w-xs text-right">
+          {result.settled > 0 ? (
+            <span className="text-emerald-600">✓ 中奖{result.won}单 未中{result.lost}单 派奖{result.totalPayout.toFixed(2)}U</span>
+          ) : (
+            <span className="text-gray-400">{result.details[0]}</span>
+          )}
         </div>
       )}
     </div>
@@ -462,6 +513,19 @@ export default function MarketEvalSettings() {
         )}
       </div>
 
+      {/* 竞猜结算区域 */}
+      <div className="mx-4 mb-3 bg-white rounded-xl p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-gray-400" />
+            <div>
+              <p className="text-sm font-medium text-gray-700">竞猜订单结算</p>
+              <p className="text-xs text-gray-400 mt-0.5">每天北京时间 00:01 自动结算前一天订单</p>
+            </div>
+          </div>
+          <SettleButton ledgerId={ledgerId} />
+        </div>
+      </div>
       {/* 三版本 Tab + 说明 */}
       <div className="px-4 pb-2">
         <div className="flex items-center justify-between mb-2">

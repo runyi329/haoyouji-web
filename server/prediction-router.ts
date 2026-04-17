@@ -749,7 +749,7 @@ export const predictionRouter = router({
       return { bets: rows as any[] };
     }),
 
-  // 查询用户账本余额（用于竞猜页面显示）
+  // 查询用户账本余额（用于竞猜页面显示）  // 查询账本余额
   getBetBalance: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
     .query(async ({ input, ctx }) => {
@@ -757,4 +757,147 @@ export const predictionRouter = router({
       const balance = await getUserBalance(ctx.user.id, input.ledgerId);
       return { balance };
     }),
+
+  // 手动触发结算（管理员用）
+  manualSettle: protectedProcedure
+    .input(z.object({
+      targetDate: z.string().optional(), // YYYY-MM-DD，不传则结算昨天
+    }))
+    .mutation(async ({ input }) => {
+      const result = await settleDailyBets(input.targetDate);
+      return result;
+    }),
 });
+
+// ─── 每日结算函数 ───────────────────────────────────────────────────────────────
+/**
+ * 结算指定日期（默认昨天）的所有 pending 竞猜订单
+ * 逻辑：
+ * 1. 从 crypto_klines 取该日期的实际涨跌幅
+ * 2. 判断每笔订单的 direction + range_index 是否命中
+ * 3. 命中：status='won'，往 af_manual_balances 写 +expected_return
+ * 4. 未命中：status='lost'
+ */
+export async function settleDailyBets(targetDateInput?: string): Promise<{
+  settled: number;
+  won: number;
+  lost: number;
+  totalPayout: number;
+  details: string[];
+}> {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+
+  // 确定结算日期（北京时间昨天）
+  const bjtNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  let targetDate: string;
+  if (targetDateInput) {
+    targetDate = targetDateInput;
+  } else {
+    const yesterday = new Date(bjtNow);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    targetDate = yesterday.toISOString().slice(0, 10);
+  }
+
+  console.log(`[竞猜结算] 开始结算日期: ${targetDate}`);
+
+  // 1. 查询该日期所有 pending 订单
+  const [pendingRows] = await conn.execute(
+    `SELECT id, ledger_id, user_id, coin, direction, range_index, range_label, bet_amount, odds, expected_return
+     FROM crypto_bets
+     WHERE target_date = ? AND status = 'pending'`,
+    [targetDate]
+  ) as any;
+  const pendingBets: any[] = pendingRows as any[];
+
+  if (pendingBets.length === 0) {
+    console.log(`[竞猜结算] ${targetDate} 无 pending 订单`);
+    return { settled: 0, won: 0, lost: 0, totalPayout: 0, details: [`${targetDate} 无待结算订单`] };
+  }
+
+  // 2. 取需要的币种列表
+  const coins = [...new Set(pendingBets.map((b: any) => b.coin))] as string[];
+
+  // 3. 从 crypto_klines 取实际涨跌幅
+  // coin 字段是 'BTC'/'ETH'，symbol 是 'BTCUSDT'/'ETHUSDT'
+  const changePctMap: Record<string, number | null> = {};
+  for (const coin of coins) {
+    const symbol = coin + 'USDT';
+    const [rows] = await conn.execute(
+      `SELECT change_pct FROM crypto_klines WHERE symbol = ? AND date = ? LIMIT 1`,
+      [symbol, targetDate]
+    ) as any;
+    const row = (rows as any[])[0];
+    changePctMap[coin] = row ? parseFloat(row.change_pct) : null;
+    console.log(`[竞猜结算] ${coin} ${targetDate} 实际涨跌幅: ${changePctMap[coin]}%`);
+  }
+
+  // 4. 区间边界定义（与前端 RANGE_LABELS 一致）
+  // range_index 0~11 对应 0~1%, 1~2%, ..., 11~12%
+  // direction='up': 涨幅 >= rangeMin && < rangeMax
+  // direction='down': 跌幅 >= rangeMin && < rangeMax（即 changePct <= -rangeMin && > -rangeMax）
+  const getRangeBounds = (rangeIndex: number) => {
+    const min = rangeIndex;       // %
+    const max = rangeIndex + 1;   // %
+    return { min, max };
+  };
+
+  let wonCount = 0, lostCount = 0, totalPayout = 0;
+  const details: string[] = [];
+
+  for (const bet of pendingBets) {
+    const actualPct = changePctMap[bet.coin];
+    if (actualPct === null || actualPct === undefined) {
+      // 无数据，跳过（保持 pending）
+      details.push(`订单#${bet.id} ${bet.coin} 无K线数据，跳过`);
+      continue;
+    }
+
+    const { min, max } = getRangeBounds(parseInt(bet.range_index));
+    let isWon = false;
+    if (bet.direction === 'up') {
+      isWon = actualPct >= min && actualPct < max;
+    } else {
+      // direction='down': 跌幅在区间内，即 changePct <= -min && > -max
+      isWon = actualPct <= -min && actualPct > -max;
+    }
+
+    const expectedReturn = parseFloat(bet.expected_return);
+    const betAmount = parseFloat(bet.bet_amount);
+    const status = isWon ? 'won' : 'lost';
+    const settleNote = isWon
+      ? `命中！实际${bet.direction === 'up' ? '涨' : '跌'}幅 ${Math.abs(actualPct).toFixed(2)}%，区间 ${bet.range_label}，派奖 ${expectedReturn.toFixed(2)} U`
+      : `未命中。实际${bet.direction === 'up' ? '涨' : '跌'}幅 ${Math.abs(actualPct).toFixed(2)}%，区间 ${bet.range_label}`;
+
+    // 5. 更新订单状态
+    await conn.execute(
+      `UPDATE crypto_bets SET status = ?, settled_at = NOW(), actual_change_pct = ?, settle_note = ? WHERE id = ?`,
+      [status, actualPct, settleNote, bet.id]
+    );
+
+    // 6. 命中则派奖
+    if (isWon) {
+      await conn.execute(
+        `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        [bet.ledger_id, bet.user_id, expectedReturn,
+          `竞猜中奖：${bet.coin} ${bet.direction === 'up' ? '涨' : '跌'} ${bet.range_label}（${targetDate}），获得 ${expectedReturn.toFixed(2)} U`]
+      );
+      wonCount++;
+      totalPayout += expectedReturn;
+    } else {
+      lostCount++;
+    }
+
+    details.push(`订单#${bet.id} ${isWon ? '✓中奖' : '✗未中'} | ${bet.coin} ${bet.direction === 'up' ? '涨' : '跌'} ${bet.range_label} | 实际${Math.abs(actualPct).toFixed(2)}% | ${isWon ? `派奖${expectedReturn.toFixed(2)}U` : `亏${betAmount.toFixed(2)}U`}`);
+  }
+
+  console.log(`[竞猜结算] ${targetDate} 完成：共${pendingBets.length}单，中奖${wonCount}单，未中${lostCount}单，派奖${totalPayout.toFixed(2)}U`);
+  return {
+    settled: wonCount + lostCount,
+    won: wonCount,
+    lost: lostCount,
+    totalPayout,
+    details,
+  };
+}

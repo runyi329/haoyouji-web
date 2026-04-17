@@ -529,6 +529,37 @@ async function startServer() {
     scheduleBackup();
     console.log('[定时备份] 已注册，每天北京时间凌晨 02:00 精确触发一次');
     // ──────────────────────────────────────────────────────
+
+    // ─── 竞猜每日结算定时任务（每天北京时间 00:01 精确触发）───
+    const scheduleSettle = () => {
+      const now = new Date();
+      const bjtNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+      // 目标：BJT 00:01 = UTC 16:01 前一天
+      const target = new Date(Date.UTC(
+        bjtNow.getUTCFullYear(), bjtNow.getUTCMonth(), bjtNow.getUTCDate(),
+        0 - 8, 1, 0, 0  // BJT 00:01 = UTC 16:01 前一天
+      ));
+      if (target.getTime() <= now.getTime()) target.setUTCDate(target.getUTCDate() + 1);
+      const ms = target.getTime() - now.getTime();
+      const nextStr = target.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      console.log(`[竞猜结算] 下次触发时间: ${nextStr} (BJT 00:01)`);
+      setTimeout(async () => {
+        try {
+          const dateKey = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          console.log(`[竞猜结算] 触发每日结算任务 (BJT 00:01) - 结算日期: ${dateKey}`);
+          const { settleDailyBets } = await import('../prediction-router');
+          const result = await settleDailyBets();
+          console.log(`[竞猜结算] 完成: 结算${result.settled}单，中奖${result.won}单，派奖${result.totalPayout.toFixed(2)}U`);
+        } catch (err) {
+          console.error('[竞猜结算] 执行失败:', err);
+        } finally {
+          scheduleSettle(); // 无论成败都设置下一次
+        }
+      }, ms);
+    };
+    scheduleSettle();
+    console.log('[竞猜结算] 已注册，每天北京时间 00:01 精确触发一次');
+    // ──────────────────────────────────────────────────────
   });
 }
 
