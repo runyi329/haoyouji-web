@@ -251,18 +251,15 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                     const dirColor = bet.direction === 'up' ? '#e53935' : '#43a047';
                     return (
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1" style={{ color: '#333', fontSize: '0.75rem', fontWeight: 500 }}>
                           {/* 左：5%≤ */}
-                          <span className="text-xs font-bold" style={{ color: dirColor }}>{leftPart}</span>
-                          {/* 中：币种+日期+涨跌幅 */}
-                          <span className="text-xs font-medium" style={{ color: '#333' }}>
-                            {bet.coin} {shortDate}
-                          </span>
-                          <span className="text-xs font-medium" style={{ color: dirColor }}>
-                            {bet.direction === 'up' ? '涨幅' : '跌幅'}
-                          </span>
+                          <span>{leftPart}</span>
+                          {/* 中：币种+日期 */}
+                          <span>{bet.coin} {shortDate}</span>
+                          {/* 涨跌幅：红/绿色 */}
+                          <span style={{ color: dirColor }}>{bet.direction === 'up' ? '涨幅' : '跌幅'}</span>
                           {/* 右：<6% */}
-                          <span className="text-xs font-bold" style={{ color: dirColor }}>{rightPart}</span>
+                          <span>{rightPart}</span>
                         </div>
                         {bet.order_no && (
                           <div className="text-xs mt-0.5 font-mono" style={{ color: '#bbb' }}>编号{bet.order_no}</div>
