@@ -596,58 +596,72 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
   };
   const textColor = (t: number) => t > 0.5 ? '#fff' : '#374151';
 
-  const monthSlices = sliceData.filter(s => s.group === 'month');
-  const yearSlices = sliceData.filter(s => s.group === 'year');
-
-  // 行=时间切片，列=区间（横向热力图）
-  const renderTable = (slices: typeof sliceData, isUp: boolean) => (
-    <div style={{ overflowX: 'auto', marginBottom: 12 }}>
-      <table style={{ borderCollapse: 'collapse', fontSize: 9, minWidth: 'max-content' }}>
-        <thead>
-          <tr style={{ background: '#f9fafb' }}>
-            <th style={{ padding: '4px 8px', textAlign: 'left', color: '#9ca3af', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', position: 'sticky', left: 0, background: '#f9fafb', zIndex: 1 }}>时段</th>
-            {RANGES_LABELS.map(rl => (
-              <th key={rl} style={{ padding: '4px 5px', textAlign: 'center', color: '#6b7280', fontWeight: 600, borderBottom: '2px solid #e5e7eb', borderLeft: '1px solid #e5e7eb', whiteSpace: 'nowrap', minWidth: 44, fontSize: 8 }}>
-                {rl}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {slices.map(s => (
-            <tr key={s.label}>
-              <td style={{ padding: '3px 8px', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f0f0f0', position: 'sticky', left: 0, background: '#fff', zIndex: 1, fontWeight: 600, fontSize: 9 }}>
-                {s.label}
-                <span style={{ color: '#9ca3af', fontWeight: 400, marginLeft: 3 }}>({s.total}天)</span>
-              </td>
-              {RANGES_LABELS.map((_, ri) => {
-                const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
-                const pct = s.total > 0 ? cnt / s.total * 100 : 0;
-                const maxPct = isUp ? maxUpPct : maxDownPct;
-                const t = Math.min(1, pct / maxPct);
-                // 统一红色热力图：白→浅红→深红
-                const r = 255;
-                const g = Math.round(255 - t * 210);
-                const b2 = Math.round(255 - t * 210);
-                const bg = `rgb(${r},${g},${b2})`;
-                const tc = t > 0.55 ? '#fff' : '#374151';
-                return (
-                  <td key={ri} style={{ padding: '3px 4px', textAlign: 'center', background: bg, borderLeft: '1px solid #e5e7eb', borderBottom: '1px solid #f0f0f0' }}>
-                    <span style={{ color: tc, fontFamily: 'monospace', fontWeight: 600, fontSize: 9 }}>{pct.toFixed(1)}%</span>
-                  </td>
-                );
-              })}
+  // 行=区间，列=时段（所有切片合并为一张表）
+  // 同一行横向扫：看同一区间在不同时段的概率变化
+  const renderTable = (isUp: boolean) => {
+    // 每个区间的最大概率（行内归一化，让同一区间内深浅更有区分度）
+    const rowMaxPcts = RANGES_LABELS.map((_, ri) => {
+      let m = 0;
+      for (const s of sliceData) {
+        const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
+        const p = s.total > 0 ? cnt / s.total * 100 : 0;
+        if (p > m) m = p;
+      }
+      return m || 1;
+    });
+    return (
+      <div style={{ overflowX: 'auto', marginBottom: 12 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 9, minWidth: 'max-content' }}>
+          <thead>
+            <tr style={{ background: '#f9fafb' }}>
+              <th style={{ padding: '4px 8px', textAlign: 'left', color: '#9ca3af', fontWeight: 600, borderBottom: '2px solid #e5e7eb', whiteSpace: 'nowrap', position: 'sticky', left: 0, background: '#f9fafb', zIndex: 1 }}>区间</th>
+              {sliceData.map((s, si) => (
+                <th key={s.label} style={{
+                  padding: '3px 4px', textAlign: 'center', color: '#6b7280', fontWeight: 600,
+                  borderBottom: '2px solid #e5e7eb', borderLeft: si === 12 ? '2px solid #d1d5db' : '1px solid #e5e7eb',
+                  whiteSpace: 'nowrap', minWidth: 36, fontSize: 8,
+                  background: si === 12 ? '#f0f4ff' : '#f9fafb'
+                }}>
+                  {s.label}
+                  <div style={{ fontSize: 7, color: '#9ca3af', fontWeight: 400 }}>{s.total}天</div>
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+          </thead>
+          <tbody>
+            {RANGES_LABELS.map((rl, ri) => (
+              <tr key={rl}>
+                <td style={{ padding: '3px 8px', fontFamily: 'monospace', color: '#374151', whiteSpace: 'nowrap', borderBottom: '1px solid #f0f0f0', position: 'sticky', left: 0, background: '#fff', zIndex: 1, fontWeight: 600, fontSize: 9 }}>{rl}</td>
+                {sliceData.map((s, si) => {
+                  const cnt = isUp ? s.upCnts[ri] : s.downCnts[ri];
+                  const pct = s.total > 0 ? cnt / s.total * 100 : 0;
+                  // 行内归一化：同一区间不同时段对比
+                  const t = Math.min(1, pct / rowMaxPcts[ri]);
+                  const g2 = Math.round(255 - t * 210);
+                  const bg = `rgb(255,${g2},${g2})`;
+                  const tc = t > 0.55 ? '#fff' : '#374151';
+                  return (
+                    <td key={si} style={{
+                      padding: '3px 3px', textAlign: 'center', background: bg,
+                      borderLeft: si === 12 ? '2px solid #d1d5db' : '1px solid #e5e7eb',
+                      borderBottom: '1px solid #f0f0f0'
+                    }}>
+                      <span style={{ color: tc, fontFamily: 'monospace', fontWeight: 600, fontSize: 8 }}>{pct.toFixed(1)}%</span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <div className="border-t border-gray-100 px-4 pt-3 pb-4">
-      <div className="text-xs font-semibold text-gray-600 mb-1">时间切片区间概率热力图</div>
-      <div className="text-xs text-gray-400 mb-3">各时段内，涨/跌落入该区间的天数占总天数百分比 · 颜色越深概率越高</div>
+      <div className="text-xs font-semibold text-gray-600 mb-1">区间×时段概率热力图</div>
+      <div className="text-xs text-gray-400 mb-3">行 = 区间（横向看同一区间在不同时段的概率变化）· 列 = 时段（近1月→近12月 │ 近1年→全量）· 颜色深浅为行内归一化</div>
 
       {/* Tab 切换 */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
@@ -660,20 +674,14 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
         <button
           onClick={() => setActiveTab('down')}
           style={{ padding: '4px 16px', borderRadius: 6, fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
-            background: activeTab === 'down' ? '#16a34a' : '#f3f4f6',
+            background: activeTab === 'down' ? '#ef4444' : '#f3f4f6',
             color: activeTab === 'down' ? '#fff' : '#6b7280' }}
         >↓ 跌幅</button>
       </div>
 
-      {/* 月度切片 */}
-      <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', marginBottom: 4 }}>近1~12月（月度颗粒度）</div>
-      {renderTable(monthSlices, activeTab === 'up')}
+      {renderTable(activeTab === 'up')}
 
-      {/* 年度切片 */}
-      <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', marginBottom: 4, marginTop: 4 }}>近1~5年 + 全量</div>
-      {renderTable(yearSlices, activeTab === 'up')}
-
-      <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 4 }}>注：概率以各时段总天数为分母，同一时段所有区间概率之和 ≤ 100%（涨跌各自统计）。</div>
+      <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 4 }}>注：热力图深浅为行内归一化，即同一区间内最高概率为最深色，方便看同一区间在不同时段的变化。第13列起为年度切片（加粗分隔线）。</div>
     </div>
   );
 }
