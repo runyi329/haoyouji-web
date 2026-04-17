@@ -343,9 +343,10 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
 }
 
 // 单张资金方订单卡片右栏（包含扫描数据查询）
-function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyValue, currentValue, accrued, paidInterest, shortfall, floatPnl }: {
+function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, collateralValue, buyValue, currentValue, accrued, paidInterest, shortfall, floatPnl }: {
   onClose: () => void;
   collateral: { coin: string; qty: string }[];
+  collateralItemValues: (number | null)[];
   collateralValue: number;
   buyValue: number;
   currentValue: number | null;
@@ -386,11 +387,22 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralValue, buyVa
             </div>
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价値</div>
-            <div>= {collateral.map(a => `${a.qty}${a.coin}`).join(' + ')} 折算 USDT</div>
-            <div className="mt-1 font-mono" style={{ color: '#3B82F6' }}>
-              = <strong>{collateralValue.toFixed(2)} U</strong>
-            </div>
+            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 担保价値</div>
+            {collateral.map((a, idx) => {
+              const itemVal = collateralItemValues[idx];
+              return (
+                <div key={idx} className="flex items-center justify-between font-mono mt-1" style={{ color: '#3B82F6' }}>
+                  <span>{a.qty} {a.coin}</span>
+                  <span>{itemVal !== null ? '≈ ' + itemVal.toFixed(2) + ' U' : '暂无实时价'}</span>
+                </div>
+              );
+            })}
+            {collateral.length > 1 && (
+              <div className="flex items-center justify-between font-mono mt-1 pt-1" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                <span className="font-semibold">合计</span>
+                <span className="font-semibold">{collateralValue.toFixed(2)} U</span>
+              </div>
+            )}
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
             <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>④ 风险敞口</div>
@@ -576,19 +588,22 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           if (collateral.length === 0) return null;
           // 只要有担保物数据就渲染（各子字段由 show() 单独控制）
           if (!show('collateralCoin') && !show('collateralValue') && !show('collateral')) return null;
-          // 计算担保价值
+          // 计算担保价值（同时记录每条担保物的单独折算值）
           let collateralValue = 0;
           let hasValue = false;
+          const collateralItemValues: (number | null)[] = [];
           for (const item of collateral) {
-            if (!item.coin) continue;
+            if (!item.coin) { collateralItemValues.push(null); continue; }
             const qty = parseFloat(item.qty);
-            if (item.qty === '' || isNaN(qty)) continue;
+            if (item.qty === '' || isNaN(qty)) { collateralItemValues.push(null); continue; }
             hasValue = true;
             if (item.coin === 'USDT') {
               collateralValue += qty;
+              collateralItemValues.push(qty);
             } else {
               const p = livePrices?.[item.coin];
-              if (p) collateralValue += qty * p;
+              if (p) { collateralValue += qty * p; collateralItemValues.push(qty * p); }
+              else collateralItemValues.push(null);
             }
           }
           // 买入价值 = 买入价 × 数量（仅用于展示，不参与担保缺口计算）
@@ -615,6 +630,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                 <FunderCollateralInfoModal
                   onClose={() => setShowCollateralInfo(false)}
                   collateral={collateral}
+                  collateralItemValues={collateralItemValues}
                   collateralValue={collateralValue}
                   buyValue={interestBaseNum}
                   currentValue={currentValue}
