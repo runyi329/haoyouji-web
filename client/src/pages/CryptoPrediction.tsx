@@ -261,9 +261,11 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                           {/* 右：<6% */}
                           <span>{rightPart}</span>
                         </div>
-                        {bet.order_no && (
-                          <div className="text-xs mt-0.5 font-mono" style={{ color: '#bbb' }}>编号{bet.order_no}</div>
-                        )}
+                        <div className="flex items-center gap-2 mt-0.5" style={{ fontSize: '0.7rem', color: '#999' }}>
+                          {bet.order_no && <span className="font-mono">编号{bet.order_no}</span>}
+                          <span>赔率 {parseFloat(bet.odds).toFixed(2)}倍</span>
+                          <span>预期获赔 <span style={{ color: '#e65100', fontWeight: 600 }}>{parseFloat(bet.expected_return).toFixed(0)} U</span></span>
+                        </div>
                       </div>
                     );
                   })()}
