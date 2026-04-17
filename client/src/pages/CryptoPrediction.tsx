@@ -214,7 +214,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
       }}>
         {/* 标题行 */}
         <div className="flex items-center px-4 py-3" style={{ borderBottom: '1px solid #f0f0f0' }}>
-          <span className="text-sm font-bold" style={{ color: '#1a1a1a' }}>最近下单记录</span>
+          <span className="text-sm font-bold" style={{ color: '#1a1a1a' }}>最近下单记录{myBets.length > 0 ? `（${myBets.length}）` : ''}</span>
         </div>
 
         {myBets.length === 0 ? (
