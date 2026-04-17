@@ -190,12 +190,17 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
               onClick={() => setActiveCoin(c)}
               className="flex-1 py-2.5 text-sm font-black transition-all"
               style={{
-                background: activeCoin === c ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.06)',
-                color: activeCoin === c ? '#3d2000' : 'rgba(60,30,0,0.45)',
-                borderBottom: activeCoin === c ? '2px solid rgba(255,255,255,0.6)' : '2px solid transparent',
+                background: activeCoin === c ? 'rgba(0,0,0,0.38)' : 'rgba(0,0,0,0.04)',
+                color: activeCoin === c ? '#fff8e1' : 'rgba(255,220,100,0.28)',
+                borderBottom: activeCoin === c ? '3px solid #f5c842' : '3px solid transparent',
+                fontWeight: activeCoin === c ? 900 : 400,
+                fontSize: activeCoin === c ? '0.92rem' : '0.82rem',
+                letterSpacing: activeCoin === c ? '0.04em' : 0,
+                textShadow: activeCoin === c ? '0 0 10px rgba(255,220,80,0.7)' : 'none',
                 borderRadius: 0,
                 borderTopLeftRadius: i === 0 ? '1rem' : 0,
                 borderTopRightRadius: i === 1 ? '1rem' : 0,
+                transition: 'all 0.2s',
               }}
             >
               {tabDateLabel} {c} 趋势
