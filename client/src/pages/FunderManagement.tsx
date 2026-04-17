@@ -158,6 +158,7 @@ export default function FunderManagement() {
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean> = {
     buyPrice: true,
     buyValue: true,
+    interestBase: true,
     buyDate: true,
     todayPrice: true,
     currentValue: true,
@@ -1182,6 +1183,7 @@ export default function FunderManagement() {
                     {[
                       { key: 'buyPrice', label: '买入币价' },
                       { key: 'buyValue', label: '买入价值' },
+                      { key: 'interestBase', label: '计息基数' },
                       { key: 'buyDate', label: '买入时间' },
                       { key: 'todayPrice', label: '今日币价' },
                       // 当前价值已移至持有资产括号显示，不再单独作为开关
