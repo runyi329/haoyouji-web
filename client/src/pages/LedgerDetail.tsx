@@ -1056,8 +1056,8 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                     return null;
                   })()}
                   {isEnded
-                    ? (order.end_price ? parseFloat(order.end_price).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'))
-                    : (livePrices[order.coin] ? livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---')}
+                    ? (order.end_price ? parseFloat(order.end_price).toFixed(2) + ' U' : (livePrices[order.coin] ? livePrices[order.coin].toFixed(2) + ' U' : '---'))
+                    : (livePrices[order.coin] ? livePrices[order.coin].toFixed(2) + ' U' : '---')}
                 </span>
               </div>
             )}
