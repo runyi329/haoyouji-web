@@ -619,30 +619,37 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                     <div className="font-bold" style={{ color: '#43a047' }}>{ethPos.summary.netLoss.toFixed(2)} U</div>
                   </div>
                   <div>
-                    <span style={{ color: '#888' }}>占比</span>
+                    <span style={{ color: '#888' }}>实时持有</span>
                     <div className="font-bold" style={{ color: '#4F46E5' }}>
-                      {ethPos.summary.totalBuyAmount > 0
-                        ? (ethPos.summary.netLoss / ethPos.summary.totalBuyAmount * 100).toFixed(1) + '%'
-                        : '0.0%'}
+                      {ethPos.summary.avgBuyPrice > 0
+                        ? (ethPos.summary.netLoss / ethPos.summary.avgBuyPrice).toFixed(6) + ' ETH'
+                        : '0.000000 ETH'}
                     </div>
                   </div>
                 </div>
               </div>
               <div className="mt-2 pt-2" style={{ borderTop: '1px solid #e8e5ff' }}>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <span style={{ color: '#888' }}>实际持有</span>
-                    <div className="font-bold" style={{ color: '#4F46E5' }}>{ethPos.summary.actualEthQty.toFixed(6)}</div>
-                  </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <span style={{ color: '#888' }}>持仓市值</span>
-                    <div className="font-bold" style={{ color: '#1a1a1a' }}>{ethPos.summary.positionValue.toFixed(2)} U</div>
+                    <div className="font-bold" style={{ color: '#1a1a1a' }}>
+                      {ethPos.summary.avgBuyPrice > 0
+                        ? ((ethPos.summary.netLoss / ethPos.summary.avgBuyPrice) * ethPos.summary.currentEthPrice).toFixed(2) + ' U'
+                        : '0.00 U'}
+                    </div>
                   </div>
                   <div>
                     <span style={{ color: '#888' }}>浮盈浮亏</span>
-                    <div className="font-bold" style={{ color: ethPos.summary.positionPnl >= 0 ? '#e53935' : '#43a047' }}>
-                      {ethPos.summary.positionPnl >= 0 ? '+' : ''}{ethPos.summary.positionPnl.toFixed(2)} U
-                    </div>
+                    {(() => {
+                      const holdQty = ethPos.summary.avgBuyPrice > 0 ? ethPos.summary.netLoss / ethPos.summary.avgBuyPrice : 0;
+                      const marketVal = holdQty * ethPos.summary.currentEthPrice;
+                      const pnl = marketVal - ethPos.summary.netLoss;
+                      return (
+                        <div className="font-bold" style={{ color: pnl >= 0 ? '#e53935' : '#43a047' }}>
+                          {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} U
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
