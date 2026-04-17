@@ -897,6 +897,105 @@ export const predictionRouter = router({
         })),
       };
     }),
+
+  // 用户ETH持仓汇总（行情评估页面用）
+  getMyEthPosition: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+      const userId = ctx.user.id;
+      const { ledgerId } = input;
+
+      // 确保表存在
+      await conn.execute(`
+        CREATE TABLE IF NOT EXISTS eth_position_records (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          user_id INT NOT NULL,
+          bet_id INT NOT NULL,
+          bet_order_no VARCHAR(20) DEFAULT '',
+          loss_amount DECIMAL(20,8) NOT NULL,
+          eth_price DECIMAL(20,4) NOT NULL,
+          eth_qty DECIMAL(20,8) NOT NULL,
+          target_date VARCHAR(10) NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_epr_user (user_id),
+          INDEX idx_epr_ledger (ledger_id),
+          INDEX idx_epr_bet (bet_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+
+      // 1. 查询该用户所有ETH持仓买入记录
+      const [posRows] = await conn.execute(
+        `SELECT id, bet_id, bet_order_no, loss_amount, eth_price, eth_qty, target_date, created_at
+         FROM eth_position_records
+         WHERE user_id = ? AND ledger_id = ?
+         ORDER BY created_at DESC`,
+        [userId, ledgerId]
+      ) as any;
+      const positions: any[] = posRows as any[];
+
+      // 2. 查询该用户ETH竞猜的总盈亏（已结算的won+lost）
+      const [ethBetRows] = await conn.execute(
+        `SELECT status, bet_amount, expected_return FROM crypto_bets
+         WHERE user_id = ? AND ledger_id = ? AND coin = 'ETH' AND status IN ('won','lost')`,
+        [userId, ledgerId]
+      ) as any;
+      const ethBets: any[] = ethBetRows as any[];
+      const totalWon = ethBets.filter((b: any) => b.status === 'won').reduce((s: number, b: any) => s + parseFloat(b.expected_return) - parseFloat(b.bet_amount), 0);
+      const totalLost = ethBets.filter((b: any) => b.status === 'lost').reduce((s: number, b: any) => s + parseFloat(b.bet_amount), 0);
+
+      // 累计买入ETH总金额和总数量
+      const totalBuyAmount = positions.reduce((s: number, p: any) => s + parseFloat(p.loss_amount), 0);
+      const totalEthQty = positions.reduce((s: number, p: any) => s + parseFloat(p.eth_qty), 0);
+      const avgBuyPrice = totalEthQty > 0 ? totalBuyAmount / totalEthQty : 0;
+
+      // 净亏损 = 总亏损 - 总盈利（最小0，最大=累计买入金额）
+      const netLoss = Math.max(0, Math.min(totalLost - totalWon, totalBuyAmount));
+      // 持仓占比 = 净亏损 / 累计买入金额
+      const positionRatio = totalBuyAmount > 0 ? netLoss / totalBuyAmount : 0;
+      // 实际持有ETH数量 = 累计买入数量 × 持仓占比
+      const actualEthQty = totalEthQty * positionRatio;
+
+      // 3. 取最新ETH价格
+      const [latestPriceRows] = await conn.execute(
+        `SELECT close FROM crypto_klines WHERE symbol = 'ETHUSDT' ORDER BY date DESC LIMIT 1`
+      ) as any;
+      const currentEthPrice = (latestPriceRows as any[])[0] ? parseFloat((latestPriceRows as any[])[0].close) : 0;
+
+      // 持仓市值 & 浮盈浮亏
+      const positionValue = actualEthQty * currentEthPrice;
+      const positionPnl = positionValue - netLoss;
+
+      return {
+        summary: {
+          totalBuyAmount: parseFloat(totalBuyAmount.toFixed(2)),
+          totalEthQty: parseFloat(totalEthQty.toFixed(8)),
+          avgBuyPrice: parseFloat(avgBuyPrice.toFixed(2)),
+          totalWon: parseFloat(totalWon.toFixed(2)),
+          totalLost: parseFloat(totalLost.toFixed(2)),
+          netLoss: parseFloat(netLoss.toFixed(2)),
+          positionRatio: parseFloat(positionRatio.toFixed(4)),
+          actualEthQty: parseFloat(actualEthQty.toFixed(8)),
+          currentEthPrice: parseFloat(currentEthPrice.toFixed(2)),
+          positionValue: parseFloat(positionValue.toFixed(2)),
+          positionPnl: parseFloat(positionPnl.toFixed(2)),
+        },
+        records: positions.map((p: any) => ({
+          id: p.id,
+          betId: p.bet_id,
+          orderNo: p.bet_order_no || '',
+          lossAmount: parseFloat(p.loss_amount),
+          ethPrice: parseFloat(p.eth_price),
+          ethQty: parseFloat(p.eth_qty),
+          targetDate: p.target_date,
+          createdAt: p.created_at,
+        })),
+      };
+    }),
 });
 
 // ─── 每日结算函数 ───────────────────────────────────────────────────────────────
@@ -947,6 +1046,39 @@ export async function settleDailyBets(targetDateInput?: string): Promise<{
 
   // 2. 取需要的币种列表
   const coins = [...new Set(pendingBets.map((b: any) => b.coin))] as string[];
+
+  // ★ 确保eth_position_records表存在
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS eth_position_records (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      ledger_id INT NOT NULL,
+      user_id INT NOT NULL,
+      bet_id INT NOT NULL COMMENT '关联crypto_bets.id',
+      bet_order_no VARCHAR(20) DEFAULT '' COMMENT '订单编号',
+      loss_amount DECIMAL(20,8) NOT NULL COMMENT '亏损金额(U)',
+      eth_price DECIMAL(20,4) NOT NULL COMMENT '买入时ETH价格(U)',
+      eth_qty DECIMAL(20,8) NOT NULL COMMENT '买入ETH数量',
+      target_date VARCHAR(10) NOT NULL COMMENT '结算日期',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_epr_user (user_id),
+      INDEX idx_epr_ledger (ledger_id),
+      INDEX idx_epr_bet (bet_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ETH竞猜亏损自动买入ETH持仓记录'
+  `);
+
+  // ★ 取当日ETH价格（用于亏损单自动买入）
+  let ethPriceForBuy: number | null = null;
+  const [ethPriceRows] = await conn.execute(
+    `SELECT close FROM crypto_klines WHERE symbol = 'ETHUSDT' AND date = ? LIMIT 1`,
+    [targetDate]
+  ) as any;
+  const ethPriceRow = (ethPriceRows as any[])[0];
+  if (ethPriceRow) {
+    ethPriceForBuy = parseFloat(ethPriceRow.close);
+    console.log(`[竞猜结算] 当日ETH价格: ${ethPriceForBuy} U`);
+  } else {
+    console.log(`[竞猜结算] 未找到当日ETH价格，亏损单将不写入持仓记录`);
+  }
 
   // 3. 从 crypto_klines 取实际涨跌幅
   // BTC/ETH: symbol = coin + 'USDT'；美股七姐妹: symbol = coin（直接存储）
@@ -1018,6 +1150,16 @@ export async function settleDailyBets(targetDateInput?: string): Promise<{
       totalPayout += expectedReturn;
     } else {
       lostCount++;
+      // ★ ETH竞猜亏损：自动买入ETH写入持仓记录
+      if (bet.coin === 'ETH' && ethPriceForBuy && ethPriceForBuy > 0) {
+        const ethQty = betAmount / ethPriceForBuy;
+        await conn.execute(
+          `INSERT INTO eth_position_records (ledger_id, user_id, bet_id, bet_order_no, loss_amount, eth_price, eth_qty, target_date)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [bet.ledger_id, bet.user_id, bet.id, bet.order_no || '', betAmount, ethPriceForBuy, ethQty, targetDate]
+        );
+        console.log(`[竞猜结算] ETH亏损单#${bet.id} 自动买入 ${ethQty.toFixed(8)} ETH @${ethPriceForBuy}`);
+      }
     }
 
     details.push(`订单#${bet.id} ${isWon ? '✓中奖' : '✗未中'} | ${bet.coin} ${bet.direction === 'up' ? '涨' : '跌'} ${bet.range_label} | 实际${Math.abs(actualPct).toFixed(2)}% | ${isWon ? `派奖${expectedReturn.toFixed(2)}U` : `亏${betAmount.toFixed(2)}U`}`);
