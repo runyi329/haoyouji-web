@@ -240,20 +240,30 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                     opacity: isCancelled ? 0.5 : 1,
                   }}
                 >
-                  {/* 主信息： ETH 4-18 涨幅 ≥0%<1% */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-black" style={{ color: '#333' }}>{bet.coin}</span>
-                      <span className="text-xs" style={{ color: '#999' }}>{shortDate}</span>
-                      <span className="text-xs font-medium" style={{ color: bet.direction === 'up' ? '#e53935' : '#43a047' }}>
-                        {bet.direction === 'up' ? '涨幅' : '跌幅'}
-                      </span>
-                      <span className="text-xs font-medium" style={{ color: '#555' }}>{bet.range_label}</span>
-                    </div>
-                    {bet.order_no && (
-                      <div className="text-xs mt-0.5 font-mono" style={{ color: '#bbb' }}>编号{bet.order_no}</div>
-                    )}
-                  </div>
+                  {/* 主信息： ≥5%  ETH 4-18 跌幅  <6% */}
+                  {(() => {
+                    const rangeMatch = String(bet.range_label).match(/^(≥[\d.]+%?)(<[\d.]+%?)$/);
+                    const leftPart = rangeMatch ? rangeMatch[1] : bet.range_label;
+                    const rightPart = rangeMatch ? rangeMatch[2] : '';
+                    const dirColor = bet.direction === 'up' ? '#e53935' : '#43a047';
+                    return (
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          {/* 左侧：大于等于部分 */}
+                          <span className="text-xs font-bold" style={{ color: dirColor }}>{leftPart}</span>
+                          {/* 中间：币种+日期+涨跌幅 */}
+                          <span className="text-xs font-medium" style={{ color: '#333' }}>
+                            {bet.coin} {shortDate} <span style={{ color: dirColor }}>{bet.direction === 'up' ? '涨幅' : '跌幅'}</span>
+                          </span>
+                          {/* 右侧：小于部分 */}
+                          <span className="text-xs font-bold" style={{ color: dirColor }}>{rightPart}</span>
+                        </div>
+                        {bet.order_no && (
+                          <div className="text-xs mt-0.5 font-mono" style={{ color: '#bbb' }}>编号{bet.order_no}</div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {/* 金额 */}
                   <div className="text-sm font-bold flex-shrink-0 mr-2" style={{ color: '#1a1a1a' }}>
                     {parseFloat(bet.bet_amount).toFixed(0)} U
