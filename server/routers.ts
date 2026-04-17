@@ -12646,6 +12646,8 @@ export const appRouter = router({
         ledgerId: z.number(),
         orderId: z.number(),
         amount: z.number().positive(),
+        currency: z.enum(['CNY', 'U']).default('U'),
+        exchangeRate: z.number().positive().default(7.0),
         payDate: z.string(), // YYYY-MM-DD
         note: z.string().optional(),
       }))
@@ -12657,6 +12659,8 @@ export const appRouter = router({
           order_id int NOT NULL,
           ledger_id int NOT NULL,
           amount decimal(20, 4) NOT NULL,
+          currency varchar(10) NOT NULL DEFAULT 'U',
+          exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0,
           pay_date date NOT NULL,
           note text,
           created_by int NOT NULL,
@@ -12665,14 +12669,19 @@ export const appRouter = router({
           INDEX fip_ledger_id_idx (ledger_id),
           INDEX fip_pay_date_idx (pay_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+        // 自动补充新字段（幂等）
+        try {
+          await db.execute(sql`ALTER TABLE funder_interest_payments ADD COLUMN IF NOT EXISTS currency varchar(10) NOT NULL DEFAULT 'U'`);
+          await db.execute(sql`ALTER TABLE funder_interest_payments ADD COLUMN IF NOT EXISTS exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
+        } catch (e) { /* 字段已存在则忽略 */ }
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         await db.execute(
-          sql`INSERT INTO funder_interest_payments (order_id, ledger_id, amount, pay_date, note, created_by)
-              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.payDate}, ${input.note || ''}, ${ctx.user.id})`
+          sql`INSERT INTO funder_interest_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, created_by)
+              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 7.0}, ${input.payDate}, ${input.note || ''}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -12733,6 +12742,51 @@ export const appRouter = router({
           result[row.order_id] = parseFloat(row.total_paid || '0');
         }
         return result;
+      }),
+
+    // 修改一笔结息记录
+    funderUpdateInterestPayment: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        paymentId: z.number(),
+        amount: z.number().positive(),
+        currency: z.enum(['CNY', 'U']),
+        exchangeRate: z.number().positive(),
+        payDate: z.string(),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 自动补充字段（幂等）
+        try {
+          await db.execute(sql`ALTER TABLE funder_interest_payments ADD COLUMN IF NOT EXISTS currency varchar(10) NOT NULL DEFAULT 'U'`);
+          await db.execute(sql`ALTER TABLE funder_interest_payments ADD COLUMN IF NOT EXISTS exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
+        } catch (e) { /* 字段已存在则忽略 */ }
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await db.execute(
+          sql`UPDATE funder_interest_payments SET amount=${input.amount}, currency=${input.currency}, exchange_rate=${input.exchangeRate}, pay_date=${input.payDate}, note=${input.note || ''} WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId}`
+        );
+        return { success: true };
+      }),
+
+    // 删除一笔结息记录
+    funderDeleteInterestPayment: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), paymentId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await db.execute(
+          sql`DELETE FROM funder_interest_payments WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId}`
+        );
+        return { success: true };
       }),
 
     // ========== 融资付息订单 API ==========
