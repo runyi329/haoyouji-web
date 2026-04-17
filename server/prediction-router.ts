@@ -702,10 +702,12 @@ export const predictionRouter = router({
         throw new Error(`余额不足，当前余额 ${balance.toFixed(2)} U，需要 ${betAmount.toFixed(2)} U`);
       }
 
-      // 备注格式：委托买入 BTC 2026-04-18 涨幅 #XXXXXX
+      // 备注格式：委托买入 比特币 4-18 涨幅 编号XXXXXX
       const dirLabel = direction === 'up' ? '涨幅' : '跌幅';
       const coinFullName = coin === 'BTC' ? '比特币' : coin === 'ETH' ? '以太坊' : coin;
-      const betNote = `委托买入 ${coinFullName} ${targetDate} ${dirLabel} #${orderNo}`;
+      // 日期简写：去掉年份，去掉前导零，如 2026-04-18 → 4-18
+      const shortDate = targetDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1-$2');
+      const betNote = `委托买入 ${coinFullName} ${shortDate} ${dirLabel} 编号${orderNo}`;
 
       // 4. 扣除余额：写入 af_manual_balances（负数），使账户明细可见，且余额计算自动扣除
       await conn.execute(
@@ -890,7 +892,7 @@ export async function settleDailyBets(targetDateInput?: string): Promise<{
         `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
          VALUES (?, ?, ?, ?, NOW(), NOW())`,
         [bet.ledger_id, bet.user_id, expectedReturn,
-          `委托买入 ${bet.coin === 'BTC' ? '比特币' : bet.coin === 'ETH' ? '以太坊' : bet.coin} ${targetDate} ${bet.direction === 'up' ? '涨幅' : '跌幅'} 中奖派发${bet.order_no ? ` #${bet.order_no}` : ''}`]
+          `委托买入 ${bet.coin === 'BTC' ? '比特币' : bet.coin === 'ETH' ? '以太坊' : bet.coin} ${targetDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1-$2')} ${bet.direction === 'up' ? '涨幅' : '跌幅'} 中奖派发${bet.order_no ? ` 编号${bet.order_no}` : ''}`]
       );
       wonCount++;
       totalPayout += expectedReturn;

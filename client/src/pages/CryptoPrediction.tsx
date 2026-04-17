@@ -466,8 +466,8 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
                     {bet.direction === 'up' ? '↑涨' : '↓跌'} {bet.range_label}
                   </span>
                   <span className="text-xs" style={{ color: 'rgba(60,30,0,0.5)' }}>{bet.target_date}</span>
+                  {bet.order_no && <span className="text-xs font-mono" style={{ color: 'rgba(60,30,0,0.35)' }}>编号{bet.order_no}</span>}
                   <span className="text-xs font-bold" style={{ color: 'rgba(60,30,0,0.6)' }}>{bet.coin}</span>
-                  {bet.order_no && <span className="text-xs font-mono" style={{ color: 'rgba(60,30,0,0.35)' }}>#{bet.order_no}</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold" style={{ color: '#3d2000' }}>{parseFloat(bet.bet_amount).toFixed(0)} U</span>
