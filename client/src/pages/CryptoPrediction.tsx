@@ -263,6 +263,13 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                         </div>
                         <div className="flex items-center gap-2 mt-0.5" style={{ fontSize: '0.7rem', color: '#999' }}>
                           {bet.order_no && <span className="font-mono">编号{bet.order_no}</span>}
+                          {bet.created_at && (() => {
+                            const bjTime = new Date(new Date(bet.created_at).getTime() + 8 * 60 * 60 * 1000);
+                            const hh = String(bjTime.getUTCHours()).padStart(2, '0');
+                            const mm = String(bjTime.getUTCMinutes()).padStart(2, '0');
+                            const ss = String(bjTime.getUTCSeconds()).padStart(2, '0');
+                            return <span className="font-mono">{hh}:{mm}:{ss}</span>;
+                          })()}
                           <span>{parseFloat(bet.odds).toFixed(2)}x</span>
                           <span>目标<span style={{ color: '#e65100', fontWeight: 600 }}>{parseFloat(bet.expected_return).toFixed(0)}U</span></span>
                         </div>
