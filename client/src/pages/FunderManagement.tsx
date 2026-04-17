@@ -166,6 +166,7 @@ export default function FunderManagement() {
     orderNo: true,
     accruedInterest: true,
     paidInterest: true,
+    interestStartDate: true,
     collateralCoin: true,
     collateralValue: true,
     collateral: true,
@@ -1215,6 +1216,7 @@ export default function FunderManagement() {
                     {[
                       { key: 'accruedInterest', label: '待结利息（标题+大数字）' },
                       { key: 'paidInterest', label: '已结利息' },
+                      { key: 'interestStartDate', label: '计息日期' },
                       { key: 'collateralCoin', label: '担保货币' },
                       { key: 'collateralValue', label: '担保价值' },
                       { key: 'collateral', label: '担保缺口' },
@@ -1384,7 +1386,7 @@ export default function FunderManagement() {
                                 })()}
                               </div>
                             )}
-                            {formData.interestStartDate && (
+                            {displayConfig.interestStartDate && formData.interestStartDate && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">计息日期</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -1435,7 +1437,7 @@ export default function FunderManagement() {
                           <div className="flex items-center justify-center">
                             <span className="text-xs text-gray-300">未配置利息</span>
                           </div>
-                          {formData.interestStartDate && (
+                          {displayConfig.interestStartDate && formData.interestStartDate && (
                             <div className="flex items-center justify-between text-xs">
                               <span className="text-gray-400">计息日期</span>
                               <span className="font-medium" style={{ color: '#4B5563' }}>
