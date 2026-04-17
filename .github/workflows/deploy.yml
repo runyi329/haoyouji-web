@@ -184,6 +184,22 @@ jobs:
               " 2>&1 && echo "✅ 全局默认手续费规则已就绪" || echo "⚠️ 插入全局规则失败"
               echo "验证 snt_withdrawals 数据..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, user_id, ledger_id, snt_amount, status, created_at FROM snt_withdrawals ORDER BY id DESC LIMIT 10;" 2>&1
+              echo "建表 funder_interest_payments（资方结息记录表）..."
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                CREATE TABLE IF NOT EXISTS funder_interest_payments (
+                  id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+                  order_id int NOT NULL,
+                  ledger_id int NOT NULL,
+                  amount decimal(20, 4) NOT NULL,
+                  pay_date date NOT NULL,
+                  note text,
+                  created_by int NOT NULL,
+                  created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                  INDEX fip_order_id_idx (order_id),
+                  INDEX fip_ledger_id_idx (ledger_id),
+                  INDEX fip_pay_date_idx (pay_date)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+              " 2>&1 && echo "✅ funder_interest_payments 表已就绪" || echo "⚠️ funder_interest_payments 建表失败"
               echo "确保 ledger_members 表有 shortcut_buttons 字段..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
                 ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL;
