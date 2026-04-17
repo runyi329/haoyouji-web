@@ -12757,11 +12757,17 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 自动补充字段（幂等）
-        try {
-          await db.execute(sql`ALTER TABLE funder_interest_payments ADD COLUMN IF NOT EXISTS currency varchar(10) NOT NULL DEFAULT 'U'`);
-          await db.execute(sql`ALTER TABLE funder_interest_payments ADD COLUMN IF NOT EXISTS exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
-        } catch (e) { /* 字段已存在则忽略 */ }
+        // 检查并补充新字段（先查字段存在再决定是否ALTER）
+        const colCheck = await db.execute(
+          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='funder_interest_payments' AND COLUMN_NAME IN ('currency','exchange_rate') AND TABLE_SCHEMA=DATABASE()`
+        ) as any;
+        const existingCols = ((colCheck[0] || colCheck) as any[]).map((r: any) => r.COLUMN_NAME || r.column_name);
+        if (!existingCols.includes('currency')) {
+          await db.execute(sql`ALTER TABLE funder_interest_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
+        }
+        if (!existingCols.includes('exchange_rate')) {
+          await db.execute(sql`ALTER TABLE funder_interest_payments ADD COLUMN exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
+        }
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
