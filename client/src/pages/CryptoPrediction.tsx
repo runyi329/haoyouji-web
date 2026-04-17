@@ -134,12 +134,26 @@ const RANGE_LABELS = [
   '≥6%<7%','≥7%<8%','≥8%<9%','≥9%<10%','≥10%<11%','≥11%<12%',
 ];
 
+// ─── 行情评估9个标的配置（与BE数据页面保持一致）─────────────────
+const CDN = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/';
+const MARKET_SYMBOLS = [
+  { key: 'BTC',   label: 'BTC',   icon: CDN + 'btc_732a725a.png'   },
+  { key: 'ETH',   label: 'ETH',   icon: CDN + 'eth_6ebbf353.png'   },
+  { key: 'AAPL',  label: 'AAPL',  icon: CDN + 'aapl_3d0ebe4b.png'  },
+  { key: 'MSFT',  label: 'MSFT',  icon: CDN + 'msft_6f03ba12.png'  },
+  { key: 'GOOGL', label: 'GOOGL', icon: CDN + 'googl_f5e51fc9.png' },
+  { key: 'AMZN',  label: 'AMZN',  icon: CDN + 'amzn_62fb91c5.png'  },
+  { key: 'NVDA',  label: 'NVDA',  icon: CDN + 'nvda_027844b0.png'  },
+  { key: 'TSLA',  label: 'TSLA',  icon: CDN + 'tsla_ce7ce165.png'  },
+  { key: 'META',  label: 'META',  icon: CDN + 'meta_c6a365b1.png'  },
+];
+
 // ─── 明日涨跌竞猜面板 ─────────────────────────────────────────
 function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
-  const [activeCoin, setActiveCoin] = useState<'BTC' | 'ETH'>('BTC');
+  const [activeCoin, setActiveCoin] = useState('BTC');
 
-  // 北京时间明天日期标签
-  const tabDateLabel = useMemo(() => {
+  // 北京时间明天日期标签（用于金色容器内显示）
+  const tomorrowLabel = useMemo(() => {
     const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
     const tomorrow = new Date(nowBJ);
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
@@ -182,33 +196,61 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
         isolation: 'isolate',
         WebkitMaskImage: '-webkit-radial-gradient(white, black)',
       }}>
-        {/* 币种切换 Tab（含日期+趋势） */}
-        <div className="flex">
-          {(['BTC', 'ETH'] as const).map((c, i) => (
-            <button
-              key={c}
-              onClick={() => setActiveCoin(c)}
-              className="flex-1 py-2.5 text-sm font-black transition-all"
-              style={{
-                background: activeCoin === c ? 'rgba(0,0,0,0.38)' : 'rgba(0,0,0,0.04)',
-                color: activeCoin === c ? '#fff8e1' : 'rgba(255,220,100,0.28)',
-                borderBottom: activeCoin === c ? '3px solid #f5c842' : '3px solid transparent',
-                fontWeight: activeCoin === c ? 900 : 400,
-                fontSize: activeCoin === c ? '0.92rem' : '0.82rem',
-                letterSpacing: activeCoin === c ? '0.04em' : 0,
-                textShadow: activeCoin === c ? '0 0 10px rgba(255,220,80,0.7)' : 'none',
-                borderRadius: 0,
-                borderTopLeftRadius: i === 0 ? '1rem' : 0,
-                borderTopRightRadius: i === 1 ? '1rem' : 0,
-                transition: 'all 0.2s',
-              }}
-            >
-              {tabDateLabel} {c} 趋势
-            </button>
-          ))}
+        {/* 9个标的图标 Tab */}
+        <div className="flex overflow-x-auto" style={{
+          background: 'rgba(0,0,0,0.18)',
+          borderBottom: '1px solid rgba(255,215,0,0.25)',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        }}>
+          {MARKET_SYMBOLS.map((sym, i) => {
+            const isActive = activeCoin === sym.key;
+            const isFirst = i === 0;
+            const isLast = i === MARKET_SYMBOLS.length - 1;
+            return (
+              <button
+                key={sym.key}
+                onClick={() => setActiveCoin(sym.key)}
+                className="flex-shrink-0 flex flex-col items-center justify-center transition-all"
+                style={{
+                  minWidth: '52px',
+                  padding: '8px 4px 6px',
+                  background: isActive ? 'rgba(0,0,0,0.42)' : 'transparent',
+                  borderBottom: isActive ? '3px solid #f5c842' : '3px solid transparent',
+                  borderTopLeftRadius: isFirst ? '1rem' : 0,
+                  borderTopRightRadius: isLast ? '1rem' : 0,
+                  transition: 'all 0.2s',
+                  outline: 'none',
+                }}
+              >
+                <img
+                  src={sym.icon}
+                  alt={sym.label}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    border: isActive ? '2px solid #f5c842' : '2px solid rgba(255,215,0,0.25)',
+                    boxShadow: isActive ? '0 0 8px rgba(245,200,66,0.7)' : 'none',
+                    background: '#fff',
+                    objectFit: 'cover',
+                    transition: 'all 0.2s',
+                  }}
+                />
+                <span style={{
+                  fontSize: '0.6rem',
+                  marginTop: 3,
+                  color: isActive ? '#fff8e1' : 'rgba(255,220,100,0.45)',
+                  fontWeight: isActive ? 700 : 400,
+                  letterSpacing: '0.02em',
+                  transition: 'all 0.2s',
+                }}>{sym.label}</span>
+              </button>
+            );
+          })}
         </div>
-        {/* 下单操作区 */}
-        <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} onBetPlaced={refetchBets} />
+        {/* 下单操作区（传入tomorrowLabel用于幅度区间旁显示日期） */}
+        <MarketBetPanelInner ledgerId={ledgerId} coinKey={activeCoin} onBetPlaced={refetchBets} tomorrowLabel={tomorrowLabel} />
       </div>
 
       {/* 订单列表：独立容器 */}
@@ -302,7 +344,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   );
 }
 
-function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced }: { ledgerId: number; coinKey: string; onBetPlaced?: () => void }) {
+function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel }: { ledgerId: number; coinKey: string; onBetPlaced?: () => void; tomorrowLabel?: string }) {
   const coin = COIN_CONFIG[coinKey] || COIN_CONFIG['BTC'];
   const histProb = HIST_PROB[coinKey] || HIST_PROB['BTC'];
 
@@ -409,13 +451,25 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced }: { ledgerId: num
         }}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>幅度区间</div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>幅度区间</span>
+                {tomorrowLabel && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full" style={{
+                    background: 'rgba(245,200,66,0.18)',
+                    color: '#f5c842',
+                    fontWeight: 600,
+                    fontSize: '0.65rem',
+                    border: '1px solid rgba(245,200,66,0.35)',
+                  }}>（{tomorrowLabel}）</span>
+                )}
+              </div>
               <div className="text-xl font-black" style={{ color: dirSlider === 0 ? 'rgba(255,255,255,0.4)' : '#ffffff' }}>
                 {dirSlider === 0 ? '涨跌幅 = 0' : (() => {
                   const m = rangeLabel.match(/≥(\d+)%<(\d+)%/);
                   if (m) return `${m[1]}% ≤ ${coinKey} < ${m[2]}%`;
                   return rangeLabel;
-                })()}
+                })()
+                }
               </div>
             </div>
             <div className="text-right">
@@ -1437,7 +1491,7 @@ export default function CryptoPrediction() {
   const predFetching = false;
 
   // 把后端返回的事件格式转为前端 PredictionEvent 格式
-  const events: PredictionEvent[] = (eventsData?.events || []).map((e: any) => ({
+  const events: PredictionEvent[] = ((eventsData as any)?.events || []).map((e: any) => ({
     id: e.id,
     question: e.question,
     outcomes: e.outcomes || [],
