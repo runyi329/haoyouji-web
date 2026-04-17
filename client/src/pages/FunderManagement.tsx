@@ -127,7 +127,8 @@ export default function FunderManagement() {
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
   // 结息记录相关 state
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null); // 当前展开结息面板的订单id
-  const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null); // 正在编辑的结息记录id
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -304,7 +305,25 @@ export default function FunderManagement() {
   const addPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
     onSuccess: () => {
       toast.success('结息记录已添加');
-      setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
+      setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
+      refetchPayments();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updatePaymentMutation = trpc.ledger.funderUpdateInterestPayment.useMutation({
+    onSuccess: () => {
+      toast.success('结息记录已更新');
+      setEditingPaymentId(null);
+      setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
+      refetchPayments();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deletePaymentMutation = trpc.ledger.funderDeleteInterestPayment.useMutation({
+    onSuccess: () => {
+      toast.success('结息记录已删除');
       refetchPayments();
     },
     onError: (err) => toast.error(err.message),
@@ -621,11 +640,34 @@ export default function FunderManagement() {
                       <div className="mt-3 pt-3 border-t border-blue-100">
                         <div className="text-xs font-semibold text-blue-600 mb-2">结息记录</div>
 
-                        {/* 新增表单 */}
+                        {/* 新增/编辑表单 */}
                         <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
+                          {/* 币种选择 + 汇率 */}
                           <div className="flex gap-2">
                             <div className="flex-1">
-                              <div className="text-xs text-gray-400 mb-1">结息金额（元）</div>
+                              <div className="text-xs text-gray-400 mb-1">币种</div>
+                              <div className="flex rounded-lg overflow-hidden border border-blue-200">
+                                {(['U', 'CNY'] as const).map(c => (
+                                  <button key={c}
+                                    onClick={() => setPaymentForm(f => ({ ...f, currency: c }))}
+                                    className={`flex-1 py-1.5 text-xs font-medium transition-colors ${paymentForm.currency === c ? 'bg-blue-600 text-white' : 'bg-white text-gray-500'}`}
+                                  >{c === 'U' ? 'U (USDT)' : '人民币'}</button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="w-24">
+                              <div className="text-xs text-gray-400 mb-1">汇率 (CNY/U)</div>
+                              <input
+                                type="number"
+                                value={paymentForm.exchangeRate}
+                                onChange={e => setPaymentForm(f => ({ ...f, exchangeRate: e.target.value }))}
+                                className="w-full px-2 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <div className="flex-1">
+                              <div className="text-xs text-gray-400 mb-1">结息金额（{paymentForm.currency === 'U' ? 'U' : '元'}）</div>
                               <input
                                 type="number"
                                 placeholder="请输入金额"
@@ -633,6 +675,14 @@ export default function FunderManagement() {
                                 onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
                                 className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
                               />
+                              {paymentForm.amount && !isNaN(parseFloat(paymentForm.amount)) && (
+                                <div className="text-xs text-gray-400 mt-0.5">
+                                  ≈ {paymentForm.currency === 'U'
+                                    ? `${(parseFloat(paymentForm.amount) * parseFloat(paymentForm.exchangeRate || '7')).toFixed(2)} 元`
+                                    : `${(parseFloat(paymentForm.amount) / parseFloat(paymentForm.exchangeRate || '7')).toFixed(4)} U`
+                                  }
+                                </div>
+                              )}
                             </div>
                             <div className="flex-1">
                               <div className="text-xs text-gray-400 mb-1">结息日期</div>
@@ -662,29 +712,74 @@ export default function FunderManagement() {
                               className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg bg-white"
                             />
                           </div>
-                          <button
-                            disabled={!paymentForm.amount || addPaymentMutation.isPending}
-                            onClick={() => addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), payDate: paymentForm.payDate, note: paymentForm.note })}
-                            className="w-full py-2 rounded-lg text-sm font-medium text-white"
-                            style={{ backgroundColor: '#1A56DB' }}
-                          >
-                            {addPaymentMutation.isPending ? '提交中...' : '确认添加'}
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              disabled={!paymentForm.amount || (editingPaymentId ? updatePaymentMutation.isPending : addPaymentMutation.isPending)}
+                              onClick={() => {
+                                const amt = parseFloat(paymentForm.amount);
+                                const rate = parseFloat(paymentForm.exchangeRate || '7');
+                                if (editingPaymentId) {
+                                  updatePaymentMutation.mutate({ ledgerId, paymentId: editingPaymentId, amount: amt, currency: paymentForm.currency, exchangeRate: rate, payDate: paymentForm.payDate, note: paymentForm.note });
+                                } else {
+                                  addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: amt, currency: paymentForm.currency, exchangeRate: rate, payDate: paymentForm.payDate, note: paymentForm.note });
+                                }
+                              }}
+                              className="flex-1 py-2 rounded-lg text-sm font-medium text-white"
+                              style={{ backgroundColor: '#1A56DB' }}
+                            >
+                              {(editingPaymentId ? updatePaymentMutation.isPending : addPaymentMutation.isPending) ? '提交中...' : (editingPaymentId ? '确认修改' : '确认添加')}
+                            </button>
+                            {editingPaymentId && (
+                              <button
+                                onClick={() => { setEditingPaymentId(null); setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
+                                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 bg-gray-100"
+                              >取消</button>
+                            )}
+                          </div>
                         </div>
 
                         {/* 历史记录 */}
                         {interestPayments && (interestPayments as any[]).length > 0 ? (
                           <div className="space-y-1.5">
                             <div className="text-xs text-gray-400 mb-1">历史结息记录</div>
-                            {(interestPayments as any[]).map((p: any) => (
-                              <div key={p.id} className="flex items-center justify-between text-xs bg-white rounded-lg px-3 py-2 border border-gray-100">
-                                <div>
-                                  <span className="font-medium text-gray-700">{p.pay_date?.slice(0, 10)}</span>
-                                  {p.note && <span className="ml-2 text-gray-400">{p.note}</span>}
+                            {(interestPayments as any[]).map((p: any) => {
+                              const isCNY = (p.currency || 'U') === 'CNY';
+                              const rate = parseFloat(p.exchange_rate || '7');
+                              const amt = parseFloat(p.amount);
+                              const primaryAmt = amt.toFixed(2);
+                              const primaryUnit = isCNY ? '元' : 'U';
+                              const secondaryAmt = isCNY ? (amt / rate).toFixed(4) : (amt * rate).toFixed(2);
+                              const secondaryUnit = isCNY ? 'U' : '元';
+                              return (
+                                <div key={p.id} className="bg-white rounded-lg px-3 py-2 border border-gray-100">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <span className="text-xs font-medium text-gray-700">{p.pay_date?.slice(0, 10)}</span>
+                                      {p.note && <span className="ml-2 text-xs text-gray-400">{p.note}</span>}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-right">
+                                        <div className="text-xs font-semibold" style={{ color: '#1A56DB' }}>+{primaryAmt} {primaryUnit}</div>
+                                        <div className="text-xs text-gray-400">≈ {secondaryAmt} {secondaryUnit}</div>
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          setEditingPaymentId(p.id);
+                                          setPaymentForm({ amount: String(amt), currency: (p.currency || 'U') as 'CNY' | 'U', exchangeRate: String(rate), payDate: p.pay_date?.slice(0, 10) || new Date().toISOString().slice(0, 10), note: p.note || '' });
+                                        }}
+                                        className="text-blue-500 hover:text-blue-700 p-1"
+                                        title="编辑"
+                                      >✏️</button>
+                                      <button
+                                        onClick={() => { if (window.confirm('确认删除这笔结息记录？')) deletePaymentMutation.mutate({ ledgerId, paymentId: p.id }); }}
+                                        className="text-red-400 hover:text-red-600 p-1"
+                                        title="删除"
+                                      >🗑️</button>
+                                    </div>
+                                  </div>
                                 </div>
-                                <span className="font-semibold" style={{ color: '#1A56DB' }}>+{parseFloat(p.amount).toFixed(2)}元</span>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="text-xs text-gray-400 text-center py-2">暂无结息记录</div>
