@@ -340,6 +340,10 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced }: { ledgerId: num
   const prob = probs[safeIdx] ?? 0;
   const odds = (dirSlider !== 0 && prob > 0) ? parseFloat((1 / prob * (1 - HOUSE_EDGE)).toFixed(2)) : 0;
   const payout = odds > 0 ? parseFloat((betAmount * odds).toFixed(2)) : 0;
+  // 赔付上限：预期获赔最高10万U，对应最大投注额 = 100000 / odds
+  const MAX_PAYOUT = 100000;
+  const maxBetByPayout = odds > 0 ? Math.floor(MAX_PAYOUT / odds) : Infinity;
+  const isAtPayoutLimit = payout >= MAX_PAYOUT - 0.5; // 允许0.5U误差
   const rangeLabel = RANGE_LABELS[safeIdx];
 
   // 目标日期（北京时间明天）
@@ -478,12 +482,14 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced }: { ledgerId: num
                       setInputValue(raw);
                       const v = Number(raw);
                       if (!isNaN(v) && raw !== '') {
-                        setBetAmount(Math.min(Math.max(v, 0), Math.max(Math.floor(balance), 1)));
+                        const maxByPayout = odds > 0 ? Math.floor(MAX_PAYOUT / odds) : Math.max(Math.floor(balance), 1);
+                        setBetAmount(Math.min(Math.max(v, 0), Math.min(Math.max(Math.floor(balance), 1), maxByPayout)));
                       }
                     }}
                     onBlur={e => {
                       const v = Number(e.target.value);
-                      const clamped = isNaN(v) || e.target.value === '' ? 1 : Math.min(Math.max(v, 1), Math.max(Math.floor(balance), 1));
+                      const maxByPayout2 = odds > 0 ? Math.floor(MAX_PAYOUT / odds) : Math.max(Math.floor(balance), 1);
+                    const clamped = isNaN(v) || e.target.value === '' ? 1 : Math.min(Math.max(v, 1), Math.min(Math.max(Math.floor(balance), 1), maxByPayout2));
                       setBetAmount(clamped);
                       setInputValue(String(clamped));
                     }}
@@ -499,8 +505,11 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced }: { ledgerId: num
               </div>
             </div>
 
-            <div className="text-right">
-              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.5)' }}>预期获得</div>
+              <div className="text-right">
+              <div className="flex items-center justify-end gap-1 mb-1">
+                <div className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>预期获得</div>
+                {isAtPayoutLimit && <div className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,80,80,0.25)', color: '#ff6b6b', fontSize: '0.6rem', fontWeight: 700 }}>已达上限</div>}
+              </div>
               <div className="text-2xl font-black" style={{ color: neon.main, textShadow: `0 0 12px ${neon.glow}` }}>
                 {payout > 0 ? payout : '-'}<span className="text-sm font-normal ml-1" style={{ color: 'rgba(255,255,255,0.4)' }}>U</span>
               </div>
@@ -510,10 +519,10 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced }: { ledgerId: num
           {/* 投注金额滑动条 */}
           <div className="mx-4 mb-4">
             <input
-              type="range" min={1} max={Math.max(Math.floor(balance), 1)} step={1} value={betAmount}
+              type="range" min={1} max={Math.min(Math.max(Math.floor(balance), 1), maxBetByPayout > 0 ? maxBetByPayout : Math.max(Math.floor(balance), 1))} step={1} value={betAmount}
               onChange={e => { const v = Number(e.target.value); setBetAmount(v); setInputValue(String(v)); }}
               className="w-full h-3 rounded-full appearance-none cursor-pointer"
-              style={{ background: sliderBg(betAmount, 1, Math.max(Math.floor(balance), 1), '#d4af37'), accentColor: '#d4af37' }}
+              style={{ background: sliderBg(betAmount, 1, Math.min(Math.max(Math.floor(balance), 1), maxBetByPayout > 0 ? maxBetByPayout : Math.max(Math.floor(balance), 1)), '#d4af37'), accentColor: '#d4af37' }}
             />
             <div className="flex justify-between text-xs mt-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
               <span>1 U</span>
