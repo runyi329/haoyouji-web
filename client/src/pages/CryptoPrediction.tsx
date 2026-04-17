@@ -453,11 +453,13 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
           </div>
 
       {/* 我的最近竞猜记录 */}
-      {myBets.length > 0 && (
-        <div className="mx-4 mb-4">
-          <div className="text-xs mb-2" style={{ color: 'rgba(60,30,0,0.6)' }}>最近下注记录</div>
+      <div className="mx-4 mb-4">
+        <div className="text-xs mb-2" style={{ color: 'rgba(60,30,0,0.6)' }}>最近下单记录</div>
+        {myBets.length === 0 ? (
+          <div className="text-xs text-center py-3 rounded-xl" style={{ color: 'rgba(60,30,0,0.4)', background: 'rgba(0,0,0,0.08)' }}>暂无记录</div>
+        ) : (
           <div className="space-y-1.5">
-            {myBets.slice(0, 3).map((bet: any) => (
+            {myBets.slice(0, 5).map((bet: any) => (
               <div key={bet.id} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: 'rgba(0,0,0,0.12)', border: '1px solid rgba(255,255,255,0.25)' }}>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold" style={{ color: bet.direction === 'up' ? '#ff4d4d' : '#00e676' }}>
@@ -477,8 +479,8 @@ function MarketBetPanelInner({ ledgerId, coinKey }: { ledgerId: number; coinKey:
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
 
     </div>

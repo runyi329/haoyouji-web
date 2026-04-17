@@ -698,8 +698,12 @@ export const predictionRouter = router({
         throw new Error(`余额不足，当前余额 ${balance.toFixed(2)} U，需要 ${betAmount.toFixed(2)} U`);
       }
 
-      // 4. 扣除余额（写入 balance_history，type='consume'）
-      await addUserBalance(userId, -betAmount, 'consume', undefined, `竞猜下单：${coin} 明日${direction === 'up' ? '涨' : '跌'} ${rangeLabel}，下注 ${betAmount} U`);
+      // 4. 扣除余额：写入 af_manual_balances（负数），使账户明细可见，且余额计算自动扣除
+      await conn.execute(
+        `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        [ledgerId, userId, -betAmount, `竞猜下单：${coin} 明日${direction === 'up' ? '涨' : '跌'} ${rangeLabel}，下注 ${betAmount} U`]
+      );
 
       // 5. 写入竞猜订单
       const [result] = await conn.execute(
