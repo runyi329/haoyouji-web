@@ -837,7 +837,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
   const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date && order.status === 'active';
   // 解析字段展示配置（默认全部显示）
   const dc: Record<string, boolean> = (() => {
-    const defaults = { buyPrice: true, buyValue: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, collateral: true };
+    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, collateral: true };
     try {
       const raw = order.display_config;
       if (!raw) return defaults;
@@ -913,6 +913,14 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">买入价值</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+              </div>
+            )}
+            {dc.interestBase && order.interest_base && parseFloat(order.interest_base) > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400 shrink-0">计息基数</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
+                  {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {(order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U'}
+                </span>
               </div>
             )}
             {dc.buyDate && order.buy_date && (
