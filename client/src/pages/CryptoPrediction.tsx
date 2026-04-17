@@ -243,16 +243,17 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                     opacity: isCancelled ? 0.5 : 1,
                   }}
                 >
-                  {/* 左侧：方向+币种 */}
-                  <div className="flex items-center gap-1.5 w-16 flex-shrink-0">
-                    <span className="text-xs font-black" style={{ color: bet.direction === 'up' ? '#e53935' : '#43a047' }}>
-                      {bet.direction === 'up' ? '↑涨' : '↓跌'}
-                    </span>
-                    <span className="text-xs font-bold" style={{ color: '#555' }}>{bet.coin}</span>
-                  </div>
-                  {/* 中间：幅度区间+日期+编号 */}
+                  {/* 主信息：方向+币种名+区间 */}
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium" style={{ color: '#333' }}>{bet.range_label}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black" style={{ color: bet.direction === 'up' ? '#e53935' : '#43a047' }}>
+                        {bet.direction === 'up' ? '↑涨' : '↓跌'}
+                      </span>
+                      <span className="text-xs font-bold" style={{ color: '#333' }}>
+                        {bet.coin === 'BTC' ? '比特币' : bet.coin === 'ETH' ? '以太坊' : bet.coin === 'SOL' ? 'Solana' : bet.coin}
+                      </span>
+                      <span className="text-xs font-medium" style={{ color: '#555' }}>{bet.range_label}</span>
+                    </div>
                     <div className="text-xs mt-0.5" style={{ color: '#999' }}>
                       {shortDate}
                       {bet.order_no && <span className="ml-1.5 font-mono">编号{bet.order_no}</span>}
