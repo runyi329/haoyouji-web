@@ -148,8 +148,11 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
     return `${m}月${d}日`;
   }, []);
 
-  // 可撤销窗口：当天内随时可撤销（不限时间）
-  const canCancelNow = true;
+  // 当前北京日期（YYYY-MM-DD）
+  const todayBJ = useMemo(() => {
+    const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    return nowBJ.toISOString().slice(0, 10);
+  }, []);
 
   // 订单列表（在父组件管理，不随币种切换重置）
   const { data: myBetsData, refetch: refetchBets } = trpc.prediction.getMyBets.useQuery(
@@ -222,11 +225,9 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
               const isEven = idx % 2 === 0;
               const isCancelled = bet.status === 'cancelled';
               const isPending = bet.status === 'pending';
-              // 判断是否是今天的订单
-              const nowBJ = new Date(Date.now() + 8 * 60 * 60 * 1000);
-              const todayBJ = nowBJ.toISOString().slice(0, 10);
-              const isToday = bet.target_date === todayBJ;
-              const canCancel = isPending;
+              // 撤销条件：target_date 还未到（即北京时间今天 < target_date）
+              // 例：今天 4-17 下单预测 4-18，则 4-17 内可撤销；到了4-18当天则不可撤销
+              const canCancel = isPending && todayBJ < String(bet.target_date);
               // 日期简写：4-18
               const shortDate = String(bet.target_date).replace(/^\d{4}-0?(\d+)-0?(\d+)$/, '$1-$2');
 
