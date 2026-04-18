@@ -386,50 +386,33 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                 />
               </div>
 
-              {/* 预警级别 —— 2×2 网格 */}
-              <div className="text-xs font-medium pt-1" style={{ color: '#6B7280' }}>选择提醒时机</div>
-              <div className="grid grid-cols-2 gap-2">
+              {/* 预警级别 —— 一排 4 个紧凑按鈕 */}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs font-medium" style={{ color: '#6B7280' }}>缺口提醒</span>
+                {saving && <Loader2 className="w-3 h-3 animate-spin" style={{ color: '#9CA3AF' }} />}
+              </div>
+              <div className="flex gap-2">
                 {ALERT_OPTIONS.map(opt => {
                   const isSelected = selectedLevel === opt.level;
                   const isDisabled = saving || (!hasAnyChannel && opt.level !== 'none');
                   return (
                     <button
                       key={opt.level}
-                      className="rounded-2xl p-4 flex flex-col items-center justify-center gap-1 transition-all text-center"
+                      className="flex-1 rounded-xl py-2 text-center transition-all"
                       style={{
                         background: isSelected ? opt.bg : '#F9FAFB',
-                        border: isSelected ? `2px solid ${opt.accent}` : '2px solid #E5E7EB',
+                        border: isSelected ? `1.5px solid ${opt.accent}` : '1.5px solid #E5E7EB',
                         opacity: isDisabled ? 0.45 : 1,
-                        minHeight: 88,
                       }}
                       onClick={() => !isDisabled && handleSaveAlert(opt.level)}
                       disabled={isDisabled}
                     >
-                      {/* 大字百分比 */}
                       <span
-                        className="font-bold leading-none"
-                        style={{
-                          fontSize: opt.level === 'none' ? 22 : 28,
-                          color: isSelected ? opt.accent : '#9CA3AF',
-                          letterSpacing: '-0.5px',
-                        }}
+                        className="text-sm font-semibold leading-none block"
+                        style={{ color: isSelected ? opt.accent : '#6B7280' }}
                       >
                         {opt.pct}
                       </span>
-                      {/* 小字标题 */}
-                      <span
-                        className="text-xs font-medium"
-                        style={{ color: isSelected ? opt.accent : '#6B7280' }}
-                      >
-                        {opt.label}
-                      </span>
-                      {/* 选中勾 */}
-                      {isSelected && !saving && (
-                        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5" style={{ color: opt.accent }} />
-                      )}
-                      {isSelected && saving && (
-                        <Loader2 className="w-3.5 h-3.5 mt-0.5 animate-spin" style={{ color: opt.accent }} />
-                      )}
                     </button>
                   );
                 })}
