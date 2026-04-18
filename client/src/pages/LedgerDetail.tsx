@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
+import { FunderAIPanel } from "@/components/FunderAIPanel";
 
 // PDF导出功能
 function exportLedgerToPDF() {
@@ -964,6 +965,7 @@ function smartQty(val: number | string): string {
 // AItag Lottie动效数据直接内联，避免fetch/CORS问题
 
 function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick, priceDirection }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'> }) {
+  const [showAIPanel, setShowAIPanel] = useState(false);
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
@@ -1031,14 +1033,18 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
             <span className="text-xs font-medium">持有资产</span>
           </div>
           {dc.aiIcon && (
-            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', boxShadow: '0 2px 8px rgba(26,86,219,0.35)', position: 'absolute', top: '16px', right: '12px' }}>
+            <button
+              className="w-8 h-8 rounded-full flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', boxShadow: '0 2px 8px rgba(26,86,219,0.35)', position: 'absolute', top: '16px', right: '12px', border: 'none', cursor: 'pointer', padding: 0 }}
+              onClick={e => { e.stopPropagation(); setShowAIPanel(true); }}
+            >
               <Lottie
                 animationData={aiTagAnimData as any}
                 loop={true}
                 autoplay={true}
                 style={{ width: 28, height: 28 }}
               />
-            </div>
+            </button>
           )}
           {/* 币种名称 + 数量（固定高度与右栏对齐） */}
           <div className="min-h-9 flex flex-col justify-center">
@@ -1155,6 +1161,51 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
         initialNote={order.public_note || ''}
         onSaved={(note) => { order.public_note = note; }}
       />
+      {/* AI 智能服务面板 */}
+      {showAIPanel && (() => {
+        // 计算担保相关数据传给AI面板
+        const buyQty = parseFloat(order.buy_quantity || '0');
+        const buyPriceNum = parseFloat(order.buy_price || '0');
+        const buyValue = buyPriceNum * buyQty || parseFloat(order.amount || '0');
+        const interestBaseNum = order.interest_base ? Number(order.interest_base) : buyValue;
+        const liveP = livePrices[order.coin] ?? null;
+        const currentValue = liveP !== null ? liveP * buyQty : null;
+        const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
+        let collateralValue: number | null = null;
+        try {
+          const raw = order.collateral_assets;
+          if (raw) {
+            const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            if (Array.isArray(parsed)) {
+              let cv = 0;
+              for (const item of parsed) {
+                const q = parseFloat(item.qty);
+                if (!isNaN(q)) {
+                  if (item.coin === 'USDT') cv += q;
+                  else if (livePrices[item.coin]) cv += q * livePrices[item.coin];
+                }
+              }
+              collateralValue = cv;
+            }
+          }
+        } catch {}
+        return (
+          <FunderAIPanel
+            orderId={order.id}
+            ledgerId={ledgerId}
+            orderInfo={{
+              coin: order.coin,
+              qty: buyQty,
+              buyValue: buyValue || null,
+              accrued,
+              paidInterest: paidInterest ?? 0,
+              collateralValue,
+              floatPnl,
+            }}
+            onClose={() => setShowAIPanel(false)}
+          />
+        );
+      })()}
     </div>
   );
 }

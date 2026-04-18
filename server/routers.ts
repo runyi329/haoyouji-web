@@ -13093,6 +13093,72 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // ========== 资方订单 AI 邮件预警接口 ==========
+    // 获取订单预警配置和用户邮箱
+    funderGetAlertState: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const rows = await db.execute(
+          sql`SELECT alert_level, last_triggered_state, last_triggered_at FROM funder_order_alert_state WHERE order_id = ${input.orderId} LIMIT 1`
+        ) as any;
+        const row = (rows[0]?.[0] ?? rows[0]);
+        const userRows = await db.execute(
+          sql`SELECT email FROM users WHERE id = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const userEmail = (userRows[0]?.[0] ?? userRows[0])?.email || null;
+        return {
+          alertLevel: row?.alert_level || 'none',
+          lastTriggeredState: row?.last_triggered_state || 'none',
+          lastTriggeredAt: row?.last_triggered_at || null,
+          userEmail,
+        };
+      }),
+    // 设置订单预警级别
+    funderSetAlertLevel: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        ledgerId: z.number(),
+        alertLevel: z.enum(['none', 'negative', 'pct5', 'pct10']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const orderRows = await db.execute(
+          sql`SELECT user_id FROM funder_asset_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+        ) as any;
+        const orderUserId = (orderRows[0]?.[0] ?? orderRows[0])?.user_id;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!isManager && orderUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const mysql2 = await import('mysql2/promise');
+        const dbUrl = process.env.DATABASE_URL || '';
+        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
+        const conn = await mysql2.createConnection({
+          host: parsedUrl.hostname,
+          port: parseInt(parsedUrl.port) || 3306,
+          user: decodeURIComponent(parsedUrl.username),
+          password: decodeURIComponent(parsedUrl.password),
+          database: parsedUrl.pathname.replace(/^\//, ''),
+        });
+        await conn.execute(
+          `INSERT INTO funder_order_alert_state (order_id, ledger_id, user_id, alert_level)
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE alert_level = ?, updated_at = NOW()`,
+          [input.orderId, input.ledgerId, orderUserId || ctx.user.id, input.alertLevel, input.alertLevel]
+        );
+        await conn.end();
+        return { success: true };
+      }),
+
     // 管理员删除融资付息订单
     financeDeleteOrder: protectedProcedure
       .input(z.object({ id: z.number(), ledgerId: z.number() }))
