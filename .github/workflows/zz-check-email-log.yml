@@ -1,4 +1,4 @@
-# check email error log
+# check email error log v2
 name: zz-check-email-log
 on:
   push:
@@ -18,4 +18,4 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "tail -100 /home/ubuntu/.pm2/logs/haoyouji-web-error-0.log 2>/dev/null | grep -i 'email\|smtp\|nodemailer\|sendMail\|535\|auth\|Error' | tail -30 || echo 'no email errors found'"
+            "echo '=== OUT LOG ===' && tail -80 /home/ubuntu/.pm2/logs/haoyouji-web-out-0.log 2>/dev/null | grep -i 'sendAlert\|email\|smtp\|nodemailer\|funderSend\|Error\|error' | tail -20; echo '=== ERROR LOG ===' && tail -200 /home/ubuntu/.pm2/logs/haoyouji-web-error-0.log 2>/dev/null | grep -v 'Scanner\|ETIMEDOUT\|BSC\|ERC20\|Solana\|Missing session' | tail -30"
