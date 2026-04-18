@@ -23,7 +23,7 @@ const FIELD_VALUE_ENCRYPT_FIELDS = ['value'];
 // Promise 缓存，避免并发请求重复查询
 const visibleContactIdsPromiseCache = new Map<number, { promise: Promise<number[]>, timestamp: number }>();
 const contactStatsPromiseCache = new Map<number, { promise: Promise<any>, timestamp: number }>();
-const CACHE_TTL = 0; // 禁用缓存onst contactCountsCache = new Map<number, { data: { total: number, mine: number, shared: number }, timestamp: number }>();
+const CACHE_TTL = 30_000; // 30秒缓存TTL
 
 /**
  * 轻量级获取联系人数量统计（全部、我的、共享）
@@ -81,8 +81,12 @@ export async function getContactCounts(parentUserId: number): Promise<{ total: n
  * @returns 人脉ID数组
  */
 async function getAllVisibleContactIds(parentUserId: number): Promise<number[]> {
-  // 缓存已禁用
-  
+  // 检查缓存（30秒内复用，避免并发重复查询）
+  const cached = visibleContactIdsPromiseCache.get(parentUserId);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+    return cached.promise;
+  }
+
   console.log('[getAllVisibleContactIds] 开始获取可见联系人ID，用户ID:', parentUserId);
   
   // 创建查询 Promise 并立即缓存
@@ -1187,8 +1191,12 @@ export async function getTotalLedgerEntries(parentUserId: number): Promise<numbe
  * 获取人脉统计数据
  */
 export async function getContactStats(parentUserId: number) {
-  // 缓存已禁用
-  
+  // 检查缓存（30秒内复用）
+  const cachedStats = contactStatsPromiseCache.get(parentUserId);
+  if (cachedStats && (Date.now() - cachedStats.timestamp) < CACHE_TTL) {
+    return cachedStats.promise;
+  }
+
   console.log('[getContactStats] 开始获取统计数据，用户ID:', parentUserId);
   
   // 创建查询 Promise 并立即缓存
