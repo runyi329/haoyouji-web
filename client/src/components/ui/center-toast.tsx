@@ -40,21 +40,21 @@ export const centerToast = {
 let nextId = 0;
 
 const iconMap: Record<ToastType, React.ReactNode> = {
-  success: <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />,
+  success: <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />,
   error: <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />,
   warning: <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />,
   info: <Info className="w-5 h-5 text-blue-500 flex-shrink-0" />,
 };
 
 const bgMap: Record<ToastType, string> = {
-  success: "#F0FDF4",
+  success: "#EFF6FF",
   error: "#FEF2F2",
   warning: "#FFFBEB",
   info: "#EFF6FF",
 };
 
 const borderMap: Record<ToastType, string> = {
-  success: "#BBF7D0",
+  success: "#BFDBFE",
   error: "#FECACA",
   warning: "#FDE68A",
   info: "#BFDBFE",
