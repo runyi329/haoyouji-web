@@ -12537,7 +12537,7 @@ export const appRouter = router({
         if (input.interestStartDate !== undefined) { sets.push('interest_start_date = ?'); vals.push(input.interestStartDate || null); }
         if (input.showProfitShare !== undefined) { sets.push('show_profit_share = ?'); vals.push(input.showProfitShare ? 1 : 0); }
         if (input.commissionShare !== undefined) { sets.push('commission_share = ?'); vals.push(input.commissionShare || null); }
-        if (input.collateralAssets !== undefined) { sets.push('collateral_assets = ?'); vals.push(input.collateralAssets ? JSON.stringify(input.collateralAssets) : null); }
+        if (input.collateralAssets !== undefined) { sets.push('collateral_assets = ?'); vals.push(input.collateralAssets && input.collateralAssets.length > 0 ? JSON.stringify(input.collateralAssets) : null); }
         if (input.displayConfig !== undefined) { sets.push('display_config = ?'); vals.push(input.displayConfig ? JSON.stringify(input.displayConfig) : null); }
         if (sets.length === 0) return { success: true };
         const setClause = sets.join(', ');

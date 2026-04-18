@@ -442,9 +442,12 @@ export default function FunderManagement() {
       interestStartDate: formData.interestStartDate || undefined,
       showProfitShare: formData.showProfitShare,
       commissionShare: formData.commissionShare || undefined,
-      collateralAssets: collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
+      // 编辑模式：始终传 collateralAssets（空数组表示清空），新建模式：为空时传 undefined
+      collateralAssets: editingOrder
         ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
-        : undefined,
+        : collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
+          ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
+          : undefined,
       // 提交前确保 displayConfig 所有值都是 boolean
       displayConfig: Object.fromEntries(
         Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
