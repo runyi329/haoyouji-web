@@ -1875,8 +1875,8 @@ export default function LedgerDetail() {
   // 涨跌方向计算：用 localStorage 存储上一次价格，刷新页面后第一次加载就能显示筜头
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_${ledgerId}`;
   const [funderPriceDirection, setFunderPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
-  // 资产订单视图模式：large=大图（默认），small=小图
-  const [funderViewMode, setFunderViewMode] = useState<'large' | 'small'>('large');
+  // 资产订单视图模式：large=大图（单列放大），medium=中图（左右双栏），small=小图（紧凑列表）
+  const [funderViewMode, setFunderViewMode] = useState<'large' | 'medium' | 'small'>('medium');
   useEffect(() => {
     if (!hasFreshPrices) return;
     let prevPrices: Record<string, number> = {};
@@ -3631,30 +3631,23 @@ export default function LedgerDetail() {
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
               <div className="ml-auto flex items-center gap-1">
-                <button
-                  onClick={() => setFunderViewMode('large')}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors"
-                  style={{
-                    background: funderViewMode === 'large' ? '#EFF6FF' : 'transparent',
-                    color: funderViewMode === 'large' ? '#1A56DB' : '#9CA3AF',
-                    border: funderViewMode === 'large' ? '1px solid #BFDBFE' : '1px solid transparent',
-                  }}
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                  <span>大图</span>
-                </button>
-                <button
-                  onClick={() => setFunderViewMode('small')}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors"
-                  style={{
-                    background: funderViewMode === 'small' ? '#EFF6FF' : 'transparent',
-                    color: funderViewMode === 'small' ? '#1A56DB' : '#9CA3AF',
-                    border: funderViewMode === 'small' ? '1px solid #BFDBFE' : '1px solid transparent',
-                  }}
-                >
-                  <LayoutList className="w-3.5 h-3.5" />
-                  <span>小图</span>
-                </button>
+                {(['large', 'medium', 'small'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setFunderViewMode(mode)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors"
+                    style={{
+                      background: funderViewMode === mode ? '#EFF6FF' : 'transparent',
+                      color: funderViewMode === mode ? '#1A56DB' : '#9CA3AF',
+                      border: funderViewMode === mode ? '1px solid #BFDBFE' : '1px solid transparent',
+                    }}
+                  >
+                    {mode === 'large' && <LayoutGrid className="w-3.5 h-3.5" />}
+                    {mode === 'medium' && <LayoutList className="w-3.5 h-3.5" />}
+                    {mode === 'small' && <Minus className="w-3.5 h-3.5" />}
+                    <span>{mode === 'large' ? '大图' : mode === 'medium' ? '中图' : '小图'}</span>
+                  </button>
+                ))}
               </div>
             </div>
             {(!funderAssetOrders || (funderAssetOrders as any[]).length === 0) ? (
@@ -3663,7 +3656,8 @@ export default function LedgerDetail() {
                 <div className="text-gray-400 text-base mb-1">暂无资产订单</div>
                 <div className="text-gray-400 text-sm">管理员将为您配置资产订单</div>
               </div>
-            ) : funderViewMode === 'large' ? (
+            ) : funderViewMode === 'medium' ? (
+              /* 中图模式：原双栏卡片 */
               <div className="space-y-3">
                 {(funderAssetOrders as any[]).map((order: any) => (
                   <FunderOrderCard
@@ -3677,6 +3671,93 @@ export default function LedgerDetail() {
                     priceDirection={funderPriceDirection}
                   />
                 ))}
+              </div>
+            ) : funderViewMode === 'large' ? (
+              /* 大图模式：单列放大 */
+              <div className="space-y-4">
+                {(funderAssetOrders as any[]).map((order: any) => {
+                  const coinColorMapL: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
+                  const ccL = coinColorMapL[order.coin] || '#6B7280';
+                  const isEndedL = order.status === 'ended';
+                  const statusLabelL = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : isEndedL ? '已结束' : '已取消';
+                  const statusColorL = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
+                  const qtyL = parseFloat(order.buy_quantity || '0');
+                  const priceL = parseFloat(order.buy_price || '0');
+                  const totalUL = qtyL > 0 && priceL > 0 ? qtyL * priceL : parseFloat(order.amount || '0');
+                  const livePriceL = funderLivePrices[order.coin];
+                  const currentValueL = livePriceL && qtyL > 0 ? qtyL * livePriceL : null;
+                  const interestBase = order.interest_base ? parseFloat(order.interest_base) : null;
+                  const interestRate = order.interest_rate_annual ? parseFloat(order.interest_rate_annual) : null;
+                  const interestUnit = (order.interest_rate_currency || 'USDT') === 'CNY' ? '元' : 'U';
+                  const paidInterestL = (interestSummary as any)?.[order.id] ?? 0;
+                  const dc: Record<string, boolean> = (() => {
+                    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true };
+                    try {
+                      const raw = order.display_config;
+                      if (!raw) return defaults;
+                      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                      return { ...defaults, ...parsed };
+                    } catch { return defaults; }
+                  })();
+                  const rows: { label: string; value: string }[] = [];
+                  if (dc.buyPrice && priceL > 0) rows.push({ label: '买入币价', value: `${priceL.toLocaleString()} U` });
+                  if (dc.buyValue && totalUL > 0) rows.push({ label: '买入价值', value: `${totalUL.toLocaleString(undefined, { maximumFractionDigits: 2 })} U` });
+                  if (dc.interestBase && interestBase && interestBase > 0) rows.push({ label: '计息基数', value: `${interestBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${(order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U'}` });
+                  if (dc.todayPrice) rows.push({ label: '当前币价', value: livePriceL ? `${livePriceL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U` : '---' });
+                  if (dc.buyDate && order.buy_date) rows.push({ label: '买入时间', value: order.buy_date });
+                  if (dc.holdDuration && order.buy_date && order.status === 'active') {
+                    const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+                    if (elapsed >= 0) {
+                      const days = Math.floor(elapsed / (1000 * 60 * 60 * 24));
+                      const hours = Math.floor((elapsed % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                      rows.push({ label: '持有时长', value: days > 0 ? `${days}天 ${hours}小时` : `${hours}小时` });
+                    }
+                  }
+                  if (dc.orderNo && order.order_no) rows.push({ label: '订单编号', value: order.order_no });
+                  if (interestRate && interestBase) rows.push({ label: '年化利率', value: `${interestRate}%` });
+                  if (dc.paidInterest) rows.push({ label: '已结利息', value: `${paidInterestL.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${interestUnit}` });
+                  return (
+                    <div
+                      key={order.id}
+                      className="rounded-2xl shadow-sm relative overflow-hidden"
+                      style={{ backgroundColor: isEndedL ? '#F3F4F6' : '#FFFFFF', border: isEndedL ? '1px solid #D1D5DB' : '1px solid #E0E8FF', boxShadow: isEndedL ? 'none' : '0 2px 12px rgba(26,86,219,0.10)', opacity: isEndedL ? 0.7 : 1 }}
+                    >
+                      {/* 顶部色条 */}
+                      <div className="h-1.5" style={{ background: isEndedL ? '#D1D5DB' : `linear-gradient(90deg, ${ccL}, ${ccL}55)` }} />
+                      <div className="p-5">
+                        {/* 标题行 */}
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium" style={{ color: '#3B82F6' }}>持有资产</span>
+                          <span className="text-sm font-medium px-3 py-1 rounded-full" style={{ background: `${statusColorL}18`, color: statusColorL }}>{statusLabelL}</span>
+                        </div>
+                        {/* 大数字：数量 + 币种 */}
+                        <div className="flex items-baseline gap-2 mb-1">
+                          <span className="text-4xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
+                            {qtyL > 0 ? (qtyL < 0.001 ? qtyL.toFixed(6) : qtyL < 1 ? qtyL.toFixed(4) : qtyL.toLocaleString(undefined, { maximumFractionDigits: 4 })) : '—'}
+                          </span>
+                          <span className="text-xl font-bold" style={{ color: ccL }}>{order.coin}</span>
+                        </div>
+                        {/* 当前价值 */}
+                        {currentValueL != null && (
+                          <div className="text-base font-medium mb-4" style={{ color: '#4B5563' }}>
+                            ≈ {currentValueL.toLocaleString(undefined, { maximumFractionDigits: 2 })} U
+                          </div>
+                        )}
+                        {/* 分隔线 */}
+                        <div className="border-t mb-4" style={{ borderColor: '#E8EFFF' }} />
+                        {/* 详情列表：单列全宽 */}
+                        <div className="space-y-2.5">
+                          {rows.map((row, i) => (
+                            <div key={i} className="flex items-center justify-between">
+                              <span className="text-sm" style={{ color: '#9CA3AF' }}>{row.label}</span>
+                              <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{row.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               /* 小图模式：紧凑列表 */
