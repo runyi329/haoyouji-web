@@ -18757,6 +18757,57 @@ export const adminFeatureRouter = router({
       }
     }),
 
+  // 获取所有短信模板的备注
+  smsGetRemarks: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
+      }
+      const db = await getLedgerDb();
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS sms_template_remarks (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          template_id VARCHAR(32) NOT NULL UNIQUE,
+          remark TEXT NOT NULL DEFAULT '',
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      const rows = await db.execute(
+        sql`SELECT template_id, remark FROM sms_template_remarks`
+      ) as any;
+      const result: Record<string, string> = {};
+      for (const row of ((rows[0] || rows) as any[])) {
+        result[String(row.template_id)] = row.remark;
+      }
+      return result;
+    }),
+
+  // 保存某个短信模板的备注
+  smsSaveRemark: protectedProcedure
+    .input(z.object({
+      templateId: z.string(),
+      remark: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可操作" });
+      }
+      const db = await getLedgerDb();
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS sms_template_remarks (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          template_id VARCHAR(32) NOT NULL UNIQUE,
+          remark TEXT NOT NULL DEFAULT '',
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      await db.execute(
+        sql`INSERT INTO sms_template_remarks (template_id, remark) VALUES (${input.templateId}, ${input.remark})
+            ON DUPLICATE KEY UPDATE remark = ${input.remark}, updated_at = NOW()`
+      );
+      return { success: true };
+    }),
+
   testSms: protectedProcedure
     .input(z.object({ phone: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {

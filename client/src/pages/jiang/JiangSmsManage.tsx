@@ -10,7 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
   MessageSquare, ChevronLeft, CheckCircle, XCircle,
-  Clock, Send, RefreshCw, Settings, FileText, Zap
+  Clock, Send, RefreshCw, Settings, FileText, Zap, Pencil, Save
 } from "lucide-react";
 
 export default function JiangSmsManage() {
@@ -22,6 +22,10 @@ export default function JiangSmsManage() {
 
   const isOwner = user?.username === "jiang";
 
+  // 备注编辑状态：{ [templateId]: string }
+  const [editingRemarks, setEditingRemarks] = useState<Record<string, string>>({});
+  const [savingRemark, setSavingRemark] = useState<string | null>(null);
+
   // 获取服务状态
   const { data: statusData, isLoading: statusLoading, refetch: refetchStatus } =
     trpc.smsGetStatus.useQuery(undefined, { enabled: isOwner });
@@ -29,6 +33,23 @@ export default function JiangSmsManage() {
   // 获取模板列表
   const { data: templates, isLoading: templatesLoading, refetch: refetchTemplates } =
     trpc.smsGetTemplates.useQuery(undefined, { enabled: isOwner && activeTab === "templates" });
+
+  // 获取所有模板备注
+  const { data: remarks, refetch: refetchRemarks } =
+    trpc.smsGetRemarks.useQuery(undefined, { enabled: isOwner && activeTab === "templates" });
+
+  // 保存备注
+  const saveRemarkMutation = trpc.smsSaveRemark.useMutation({
+    onSuccess: () => {
+      toast.success("备注已保存");
+      setSavingRemark(null);
+      refetchRemarks();
+    },
+    onError: (err) => {
+      toast.error(`保存失败：${err.message}`);
+      setSavingRemark(null);
+    },
+  });
 
   // 发送测试短信
   const sendTestMutation = trpc.smsSendTest.useMutation({
@@ -263,6 +284,49 @@ export default function JiangSmsManage() {
                           <p className="text-yellow-400 text-xs">{tpl.reviewReply}</p>
                         </div>
                       )}
+                      {/* 功能备注 */}
+                      <div className="mt-1 pt-2 border-t border-[#1e1e35]">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="text-[#666680] text-xs">功能备注</p>
+                          <button
+                            onClick={() => {
+                              const tplId = String(tpl.id);
+                              if (editingRemarks[tplId] !== undefined) {
+                                // 已在编辑状态，点保存
+                                setSavingRemark(tplId);
+                                saveRemarkMutation.mutate({ templateId: tplId, remark: editingRemarks[tplId] });
+                              } else {
+                                // 进入编辑状态
+                                setEditingRemarks(prev => ({ ...prev, [tplId]: (remarks as any)?.[tplId] || "" }));
+                              }
+                            }}
+                            className="flex items-center gap-1 text-[#D32F2F] text-xs"
+                          >
+                            {editingRemarks[String(tpl.id)] !== undefined ? (
+                              savingRemark === String(tpl.id) ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <><Save className="w-3 h-3" />保存</>
+                              )
+                            ) : (
+                              <><Pencil className="w-3 h-3" />编辑</>
+                            )}
+                          </button>
+                        </div>
+                        {editingRemarks[String(tpl.id)] !== undefined ? (
+                          <textarea
+                            value={editingRemarks[String(tpl.id)]}
+                            onChange={(e) => setEditingRemarks(prev => ({ ...prev, [String(tpl.id)]: e.target.value }))}
+                            placeholder="如：担保缺口预警通知（AI智能通知功能）"
+                            rows={2}
+                            className="w-full bg-[#0A0A0F] border border-[#D32F2F]/30 rounded-lg px-3 py-2 text-white text-xs placeholder-[#333355] focus:outline-none focus:border-[#D32F2F]/60 resize-none"
+                          />
+                        ) : (
+                          <p className="text-[#888899] text-xs bg-[#0A0A0F] rounded-lg px-3 py-2 min-h-[32px]">
+                            {(remarks as any)?.[String(tpl.id)] || "点击编辑添加备注..."}
+                          </p>
+                        )}
+                      </div>
                       {tpl.status === 0 && (
                         <button
                           onClick={() => {
