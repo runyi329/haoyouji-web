@@ -13766,8 +13766,8 @@ export const appRouter = router({
           return (rows2 as any[]).map(mapRow);
         }
 
-        // 追溯完整上级链（从 sourceUserId 往上，不设终点，追到最顶端）
-        // WITH RECURSIVE 查询：本人(depth=0) → 直接推荐人(depth=1) → ... → 最顶层
+        // 追溯上级链（从 sourceUserId 往上，到 YJH 为止，YJH 是最顶层）
+        // WITH RECURSIVE 查询：本人(depth=0) → 直接推荐人(depth=1) → ... → YJH
         const [chainRows] = await (conn as any).execute(
           `WITH RECURSIVE chain AS (
             SELECT id, name, username, invited_by_user_id, 0 AS depth FROM users WHERE id = ?
@@ -13775,12 +13775,12 @@ export const appRouter = router({
             SELECT u.id, u.name, u.username, u.invited_by_user_id, c.depth + 1
             FROM users u
             INNER JOIN chain c ON u.id = c.invited_by_user_id
-            WHERE c.invited_by_user_id IS NOT NULL AND c.depth < 20
+            WHERE c.invited_by_user_id IS NOT NULL AND c.id != ? AND c.depth < 20
           )
           SELECT id, name, username, depth FROM chain ORDER BY depth ASC`,
-          [input.sourceUserId]
+          [input.sourceUserId, YJH_USER_ID]
         );
-        // chainUsers[0] = 本人, chainUsers[1] = 直接推荐人, ..., 最后 = 最顶层
+        // chainUsers[0] = 本人, chainUsers[1] = 直接推荐人, ..., 最后 = YJH
         const chainUsers: Array<{ id: number; name: string; username: string; depth: number }> = (chainRows as any[]);
 
         // 构建 id -> 层级深度 映射（本人=0，越往上越大）
