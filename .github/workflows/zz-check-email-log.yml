@@ -1,4 +1,4 @@
-# check email error log v3
+# test email send directly
 name: zz-check-email-log
 on:
   push:
@@ -14,8 +14,16 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-      - name: 检查接口是否存在
+      - name: 直接测试邮件发送
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "grep -c 'funderSendTestNotification' /home/ubuntu/haoyouji-web/dist/index.js 2>/dev/null || echo '0 - not found'; echo '--- last 50 lines of out log ---'; tail -50 /home/ubuntu/.pm2/logs/haoyouji-web-out-0.log 2>/dev/null | grep -v 'Scanner\|ETIMEDOUT\|BSC\|ERC20\|Solana\|能源价格' | tail -20"
+            "cd /home/ubuntu/haoyouji-web && node -e \"
+import('./dist/index.js').catch(e => {});
+setTimeout(async () => {
+  try {
+    const m = await import('./dist/index.js');
+    console.log('keys:', Object.keys(m).slice(0,5));
+  } catch(e) { console.log('import error:', e.message); }
+}, 2000);
+\" 2>&1 | head -5 || echo 'node test failed'; echo '--- checking email env ---'; env | grep -i 'QQ\|SMTP\|EMAIL\|MAIL' || echo 'no email env vars'"
