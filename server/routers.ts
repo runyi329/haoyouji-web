@@ -18366,6 +18366,106 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         // 不关闭共享连接池
       }
     }),
+
+  // ===== SMS 短信管理 API =====
+  smsGetStatus: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
+      }
+      const status = await smsService.checkServiceStatus();
+      return {
+        ...status,
+        config: {
+          appId: process.env.TENCENT_SMS_APP_ID || "",
+          signName: process.env.TENCENT_SMS_SIGN_NAME || "",
+          templateId: process.env.TENCENT_SMS_TEMPLATE_ID || "",
+          adminPhone: process.env.ADMIN_PHONE || "",
+          region: process.env.TENCENT_SMS_REGION || "ap-guangzhou",
+        },
+      };
+    }),
+
+  smsGetTemplates: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
+      }
+      try {
+        return await smsService.getTemplates();
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
+      }
+    }),
+
+  smsSendTest: protectedProcedure
+    .input(z.object({
+      phone: z.string(),
+      templateId: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可操作" });
+      }
+      try {
+        const result = await smsService.sendCustomMessage(input.phone, input.templateId, []);
+        return { success: result.Code === "Ok", code: result.Code, message: result.Message, serialNo: result.SerialNo };
+      } catch (err: any) {
+        return { success: false, code: "Error", message: err.message, serialNo: "" };
+      }
+    }),
+
+  // 获取所有短信模板的备注
+  smsGetRemarks: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
+      }
+      const db = await getLedgerDb();
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS sms_template_remarks (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          template_id VARCHAR(32) NOT NULL UNIQUE,
+          remark TEXT NOT NULL DEFAULT '',
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      const rows = await db.execute(
+        sql`SELECT template_id, remark FROM sms_template_remarks`
+      ) as any;
+      const result: Record<string, string> = {};
+      for (const row of ((rows[0] || rows) as any[])) {
+        result[String(row.template_id)] = row.remark;
+      }
+      return result;
+    }),
+
+  // 保存某个短信模板的备注
+  smsSaveRemark: protectedProcedure
+    .input(z.object({
+      templateId: z.string(),
+      remark: z.string(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可操作" });
+      }
+      const db = await getLedgerDb();
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS sms_template_remarks (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          template_id VARCHAR(32) NOT NULL UNIQUE,
+          remark TEXT NOT NULL DEFAULT '',
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+      await db.execute(
+        sql`INSERT INTO sms_template_remarks (template_id, remark) VALUES (${input.templateId}, ${input.remark})
+            ON DUPLICATE KEY UPDATE remark = ${input.remark}, updated_at = NOW()`
+      );
+      return { success: true };
+    }),
+
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
