@@ -388,19 +388,24 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 担保价値</div>
-            {collateral.map((a, idx) => {
-              const itemVal = collateralItemValues[idx];
-              return (
-                <div key={idx} className="font-mono mt-1" style={{ color: '#3B82F6' }}>
-                  {a.qty} {a.coin}{itemVal !== null ? ' ≈ ' + itemVal.toFixed(2) + ' U' : ' （暂无实时价）'}
-                </div>
-              );
-            })}
-            {collateral.length > 1 && (
-              <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
-                合计 {collateralValue.toFixed(2)} U
-              </div>
-            )}
+            {collateral.length === 0
+              ? <div className="font-mono mt-1" style={{ color: '#9CA3AF' }}>0.00 U（无担保物）</div>
+              : <>
+                  {collateral.map((a, idx) => {
+                    const itemVal = collateralItemValues[idx];
+                    return (
+                      <div key={idx} className="font-mono mt-1" style={{ color: '#3B82F6' }}>
+                        {a.qty} {a.coin}{itemVal !== null ? ' ≈ ' + itemVal.toFixed(2) + ' U' : ' （暂无实时价）'}
+                      </div>
+                    );
+                  })}
+                  {collateral.length > 1 && (
+                    <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                      合计 {collateralValue.toFixed(2)} U
+                    </div>
+                  )}
+                </>
+            }
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
             <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>④ 风险敞口</div>
@@ -640,14 +645,23 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   floatPnl={floatPnl}
                 />
               )}
-              {show('collateralCoin') && collateral.map((a, idx) => (
-                <div key={idx} className="flex items-center justify-between text-xs mt-0.5">
-                  <span className="text-gray-400">{collateral.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
-                  <span className="font-medium" style={{ color: '#4B5563' }}>
-                    {a.qty} {a.coin}
-                  </span>
-                </div>
-              ))}
+              {show('collateralCoin') && (
+                collateral.length === 0
+                  ? (
+                    <div className="flex items-center justify-between text-xs mt-0.5">
+                      <span className="text-gray-400">担保货币</span>
+                      <span className="font-medium" style={{ color: '#9CA3AF' }}>0</span>
+                    </div>
+                  )
+                  : collateral.map((a, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs mt-0.5">
+                      <span className="text-gray-400">{collateral.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                      <span className="font-medium" style={{ color: '#4B5563' }}>
+                        {a.qty} {a.coin}
+                      </span>
+                    </div>
+                  ))
+              )}
               {show('collateralValue') && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-400">{collateral.length > 1 ? '担保总値' : '担保价値'}</span>
