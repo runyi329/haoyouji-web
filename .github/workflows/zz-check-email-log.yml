@@ -1,4 +1,4 @@
-# test email send directly
+# test smtp connection
 name: zz-check-email-log
 on:
   push:
@@ -14,16 +14,23 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-      - name: 直接测试邮件发送
+      - name: 测试SMTP连接
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "cd /home/ubuntu/haoyouji-web && node -e \"
-import('./dist/index.js').catch(e => {});
-setTimeout(async () => {
-  try {
-    const m = await import('./dist/index.js');
-    console.log('keys:', Object.keys(m).slice(0,5));
-  } catch(e) { console.log('import error:', e.message); }
-}, 2000);
-\" 2>&1 | head -5 || echo 'node test failed'; echo '--- checking email env ---'; env | grep -i 'QQ\|SMTP\|EMAIL\|MAIL' || echo 'no email env vars'"
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'SSHEOF'
+          cd /home/ubuntu/haoyouji-web
+          cat > /tmp/test-email.mjs << 'JSEOF'
+import nodemailer from '/home/ubuntu/haoyouji-web/node_modules/nodemailer/lib/nodemailer.js';
+const t = nodemailer.createTransport({
+  host: 'smtp.qq.com', port: 465, secure: true,
+  auth: { user: 'tina_u@qq.com', pass: 'wqettalptfmebgdf' }
+});
+try {
+  await t.verify();
+  console.log('SMTP OK');
+  await t.sendMail({ from: '"测试" <tina_u@qq.com>', to: 'tina_u@qq.com', subject: '好友记测试', html: '<p>测试</p>' });
+  console.log('SEND OK');
+} catch(e) { console.log('ERROR:', e.message); }
+JSEOF
+          node /tmp/test-email.mjs 2>&1 || echo "node failed"
+          SSHEOF
