@@ -13109,9 +13109,13 @@ export const appRouter = router({
           sql`SELECT alert_level, last_triggered_state, last_triggered_at, email_enabled, phone_enabled FROM funder_order_alert_state WHERE order_id = ${input.orderId} LIMIT 1`
         ) as any;
         const row = (rows[0]?.[0] ?? rows[0]);
-        // 邮箱和手机直接从 ctx.user 获取（ctx.user 已从 crm_db.users 查出）
-        const userEmail: string | null = (ctx.user as any).email || null;
-        const userPhone: string | null = (ctx.user as any).phone || null;
+        // 查订单所属用户的邮箱和手机（观察者视角也能看到订单创建者的联系方式）
+        const orderUserRows = await db.execute(
+          sql`SELECT u.email, u.phone FROM funder_asset_orders o JOIN users u ON u.id = o.user_id WHERE o.id = ${input.orderId} AND o.ledger_id = ${input.ledgerId} LIMIT 1`
+        ) as any;
+        const orderUser = (orderUserRows[0]?.[0] ?? orderUserRows[0]);
+        const userEmail: string | null = orderUser?.email || null;
+        const userPhone: string | null = orderUser?.phone || null;
         return {
           alertLevel: row?.alert_level || 'none',
           lastTriggeredState: row?.last_triggered_state || 'none',
