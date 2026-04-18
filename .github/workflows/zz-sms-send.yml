@@ -1,0 +1,61 @@
+name: zz-sms-send
+on:
+  push:
+    paths:
+      - '.github/workflows/zz-sms-send.yml'
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 发送测试短信
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            set -e
+            cd /root/haoyouji-web
+            source .env 2>/dev/null || true
+            echo "=== 短信配置检查 ==="
+            echo "APP_ID前4位: ${TENCENT_SMS_APP_ID:0:4}***"
+            echo "SIGN: $TENCENT_SMS_SIGN_NAME"
+            echo "TEMPLATE: $TENCENT_SMS_TEMPLATE_ID"
+            echo "REGION: $TENCENT_SMS_REGION"
+            echo ""
+            echo "=== 发送测试短信到 13127919173 ==="
+            node -e "
+const tc = require('./node_modules/tencentcloud-sdk-nodejs/index.js');
+const SmsClient = tc.sms.v20210111.Client;
+const client = new SmsClient({
+  credential: {
+    secretId: process.env.COS_SECRET_ID,
+    secretKey: process.env.COS_SECRET_KEY
+  },
+  region: process.env.TENCENT_SMS_REGION || 'ap-guangzhou',
+  profile: {
+    httpProfile: { endpoint: 'sms.tencentcloudapi.com' }
+  }
+});
+const params = {
+  SmsSdkAppId: process.env.TENCENT_SMS_APP_ID,
+  SignName: process.env.TENCENT_SMS_SIGN_NAME,
+  TemplateId: process.env.TENCENT_SMS_TEMPLATE_ID,
+  PhoneNumberSet: ['+8613127919173'],
+  TemplateParamSet: []
+};
+console.log('发送参数:', JSON.stringify({...params, PhoneNumberSet: params.PhoneNumberSet}));
+client.SendSms(params).then(r => {
+  const s = r.SendStatusSet[0];
+  if (s.Code === 'Ok') {
+    console.log('SUCCESS! SerialNo:', s.SerialNo);
+  } else {
+    console.log('FAIL:', s.Code, s.Message);
+  }
+}).catch(e => {
+  console.error('ERROR:', e.code, e.message);
+});
+" 2>&1
+          ENDSSH
