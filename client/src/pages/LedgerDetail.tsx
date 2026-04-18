@@ -585,8 +585,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               if (Array.isArray(parsed)) collateral = parsed;
             }
           } catch {}
-          if (collateral.length === 0) return null;
-          // 只要有担保物数据就渲染（各子字段由 show() 单独控制）
+          // 担保物为空时：collateralCoin 不显示，但 collateralValue/collateral 开关开着时仍需显示（値为0）
+          // 如果三个开关都关闭，才不渲染
           if (!show('collateralCoin') && !show('collateralValue') && !show('collateral')) return null;
           // 计算担保价值（同时记录每条担保物的单独折算值）
           let collateralValue = 0;
@@ -622,8 +622,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           const exposure = floatPnl !== null
             ? collateralValue + floatPnl - accrued + paidInterest
             : collateralValue - accrued + paidInterest;
-          const isSufficient = hasValue && exposure >= 0;
-          const shortfallAmt = hasValue ? -exposure : null; // 负数表示缺口量（取负得正数）
+          const isSufficient = exposure >= 0;
+          const shortfallAmt = -exposure; // 负数表示缺口量（取负得正数）
           return (
             <>
               {showCollateralInfo && (
@@ -648,13 +648,13 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   </span>
                 </div>
               ))}
-              {hasValue && show('collateralValue') && (
+              {show('collateralValue') && (
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400">{collateral.length > 1 ? '担保总值' : '担保价值'}</span>
+                  <span className="text-gray-400">{collateral.length > 1 ? '担保总値' : '担保价値'}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
                 </div>
               )}
-              {hasValue && show('collateral') && (
+              {show('collateral') && (
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-0.5">
                     <span className="text-gray-400">担保缺口</span>
@@ -665,7 +665,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                     >?</button>
                   </div>
                   <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#16A34A' }}>
-                    {isSufficient ? '100%' : `-${(shortfallAmt! > 0 ? shortfallAmt! : 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                    {isSufficient ? '100%' : `-${(shortfallAmt > 0 ? shortfallAmt : 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
                   </span>
                 </div>
               )}
