@@ -1,0 +1,23 @@
+name: 查询好友记本地数据库用户
+on:
+  workflow_dispatch:
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查询数据库
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 好友记.env DATABASE_URL ==="
+            grep DATABASE_URL /root/haoyouji-web/.env | head -5
+            echo "=== crm_db users表中Yunting ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SELECT id, openId, name, email, phone FROM users WHERE name LIKE '%Yunting%' OR name LIKE '%yunting%';"
+            echo "=== crm_db users表字段 ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SHOW COLUMNS FROM users;" | awk '{print $1}'
+          ENDSSH
