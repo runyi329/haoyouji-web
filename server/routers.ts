@@ -47,6 +47,7 @@ import * as dbMemo from "./db-memo";
 // import { initDatabase } from "./db-init";
 
 import ExcelJS from "exceljs";
+import { sendAlertEmail, sendBackupTestEmail } from "./email-service";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -13181,7 +13182,6 @@ export const appRouter = router({
         console.log(`[测试通知] channel=${input.channel} userEmail=${userEmail} userPhone=${userPhone} userId=${ctx.user.id}`);
         if (input.channel === 'email') {
           if (!userEmail) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定邮箱' });
-          const { sendAlertEmail } = await import('./email-service.js');
           console.log(`[测试通知] 开始发送邮件至 ${userEmail}`);
           try {
           await sendAlertEmail({
@@ -13213,7 +13213,7 @@ export const appRouter = router({
           const result = await smsService.sendCustomMessage(
             userPhone,
             smsTemplateId,
-            [coin, String(gapPct)]
+            [] // 模板2623560不需要参数
           );
           const ok = (result as any)?.Code === 'Ok';
           if (!ok) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `短信发送失败: ${(result as any)?.Message || '未知错误'}` });
@@ -14089,7 +14089,7 @@ export const appRouter = router({
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
-        const { sendAlertEmail, sendBackupTestEmail } = await import('./email-service.js');
+        // sendAlertEmail and sendBackupTestEmail are now statically imported at top
         if (input.type === 'alert') {
           const vars = input.alertVars ? JSON.parse(input.alertVars) : {};
           await sendAlertEmail({
