@@ -1,0 +1,35 @@
+name: Check email templates table
+on:
+  push:
+    paths: ['.github/workflows/zz-check-email-tpl.yml']
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check DB
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            echo "=== Check email_templates table ==="
+            cd /opt/haoyouji-web
+            source .env 2>/dev/null || true
+            # Try to query the table using node
+            node -e "
+              const mysql = require('mysql2/promise');
+              (async () => {
+                const url = process.env.DATABASE_URL || '';
+                if (!url) { console.log('No DATABASE_URL'); return; }
+                const conn = await mysql.createConnection(url);
+                try {
+                  const [rows] = await conn.query('SELECT * FROM email_templates');
+                  console.log('Rows:', JSON.stringify(rows, null, 2));
+                } catch(e) {
+                  console.log('Error:', e.message);
+                }
+                await conn.end();
+              })();
+            " 2>&1 || echo "Node query failed"
+            echo "=== Done ==="
