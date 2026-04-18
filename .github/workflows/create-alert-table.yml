@@ -1,6 +1,9 @@
 name: 创建预警状态表
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/create-alert-table.yml'
 jobs:
   migrate:
     runs-on: ubuntu-latest
@@ -15,18 +18,19 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
             echo "=== 创建funder_order_alert_state表 ==="
-            mysql -u root -pMiao@20190603 crm_db << 'SQL'
-CREATE TABLE IF NOT EXISTS `funder_order_alert_state` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `order_id` INT NOT NULL,
-  `alert_level` VARCHAR(20) NOT NULL DEFAULT 'none' COMMENT 'none/negative/pct5/pct10',
-  `last_triggered_state` VARCHAR(20) NOT NULL DEFAULT 'none' COMMENT '上次触发时的状态',
-  `last_triggered_at` DATETIME NULL,
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY `uk_order_id` (`order_id`)
+            mysql -u root -pMiao@20190603 crm_db -e "
+CREATE TABLE IF NOT EXISTS \`funder_order_alert_state\` (
+  \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+  \`order_id\` INT NOT NULL,
+  \`alert_level\` VARCHAR(20) NOT NULL DEFAULT 'none',
+  \`last_triggered_state\` VARCHAR(20) NOT NULL DEFAULT 'none',
+  \`last_triggered_at\` DATETIME NULL,
+  \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY \`uk_order_id\` (\`order_id\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-SQL
+"
             echo "=== 验证表已创建 ==="
-            mysql -u root -pMiao@20190603 crm_db -e "SHOW TABLES LIKE 'funder_order_alert_state'; DESCRIBE funder_order_alert_state;"
+            mysql -u root -pMiao@20190603 crm_db -e "SHOW TABLES LIKE 'funder_order_alert_state';"
+            echo "=== 完成 ==="
           ENDSSH
