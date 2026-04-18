@@ -13216,7 +13216,24 @@ export const appRouter = router({
             [] // 模板2623560不需要参数
           );
           const ok = (result as any)?.Code === 'Ok';
-          if (!ok) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `短信发送失败: ${(result as any)?.Message || '未知错误'}` });
+          if (!ok) {
+            const rawMsg: string = (result as any)?.Message || '';
+            const smsErrMap: Record<string, string> = {
+              'exceeds the upper limit': '该手机号今日收到短信条数已达上限，请明天再试',
+              'number of sms messages': '该手机号今日收到短信条数已达上限，请明天再试',
+              'template content': '短信模板参数不匹配，请联系管理员',
+              'invalid phone': '手机号码格式不正确',
+              'invalid mobile': '手机号码格式不正确',
+              'AuthFailure': '短信服务认证失败，请联系管理员',
+              'LimitExceeded': '发送频率超限，请稍后再试',
+              'InternalError': '短信服务内部错误，请稍后再试',
+            };
+            let cnMsg = '';
+            for (const [key, val] of Object.entries(smsErrMap)) {
+              if (rawMsg.toLowerCase().includes(key.toLowerCase())) { cnMsg = val; break; }
+            }
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: cnMsg || `短信发送失败：${rawMsg || '未知错误'}` });
+          }
           return { success: true, channel: 'sms', to: userPhone };
         }
       }),
