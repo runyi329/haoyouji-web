@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 import Lottie from "lottie-react";
+import aiTagAnimData from "@/assets/aitag-blue.json";
 
 // PDF导出功能
 function exportLedgerToPDF() {
@@ -960,18 +961,9 @@ function smartQty(val: number | string): string {
 }
 
 // 单张资金方订单卡片（左右两栏布局）
-const AI_TAG_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/GTOtHAKRrWkAijxr.json";
-let _aiTagData: any = null;
-let _aiTagPromise: Promise<any> | null = null;
-function loadAiTagData() {
-  if (_aiTagData) return Promise.resolve(_aiTagData);
-  if (_aiTagPromise) return _aiTagPromise;
-  _aiTagPromise = fetch(AI_TAG_URL).then(r => r.json()).then(d => { _aiTagData = d; return d; });
-  return _aiTagPromise;
-}
+// AItag Lottie动效数据直接内联，避免fetch/CORS问题
 
 function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick, priceDirection }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'> }) {
-  const [aiTagData, setAiTagData] = useState<any>(null);
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
@@ -998,11 +990,6 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
     } catch { return defaults; }
   })();
   const coinName = coinNameMap[order.coin] || order.coin;
-  useEffect(() => {
-    if (dc.aiIcon && !aiTagData) {
-      loadAiTagData().then(d => setAiTagData(d)).catch(() => {});
-    }
-  }, [dc.aiIcon]);
   return (
     <div
       className="rounded-2xl shadow-sm relative"
@@ -1043,15 +1030,13 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           <div className="h-5 flex items-center justify-between" style={{ color: '#3B82F6' }}>
             <span className="text-xs font-medium">持有资产</span>
             {dc.aiIcon && (
-              <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', boxShadow: '0 2px 8px rgba(26,86,219,0.35)', flexShrink: 0 }}>
-                {aiTagData && (
-                  <Lottie
-                    animationData={aiTagData}
-                    loop={true}
-                    autoplay={true}
-                    style={{ width: 28, height: 28 }}
-                  />
-                )}
+              <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', boxShadow: '0 2px 8px rgba(26,86,219,0.35)', flexShrink: 0 }}>
+                <Lottie
+                  animationData={aiTagAnimData as any}
+                  loop={true}
+                  autoplay={true}
+                  style={{ width: 28, height: 28 }}
+                />
               </div>
             )}
           </div>
