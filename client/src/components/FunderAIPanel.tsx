@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
-import { X, Mail, Phone, Loader2, AlertTriangle, CheckCircle2, Info, ExternalLink } from "lucide-react";
+import { X, Mail, Phone, Loader2, AlertTriangle, CheckCircle2, Info, ExternalLink, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -105,12 +105,38 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [phoneEnabled, setPhoneEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testConfirm, setTestConfirm] = useState<'email' | 'sms' | null>(null);
+  const [testSending, setTestSending] = useState(false);
   const [, setLocation] = useLocation();
 
   const { data: alertState, isLoading: alertLoading, refetch } = trpc.ledger.funderGetAlertState.useQuery(
     { orderId, ledgerId },
     { refetchOnWindowFocus: false }
   );
+
+  const sendTestNotification = trpc.ledger.funderSendTestNotification.useMutation({
+    onSuccess: (data) => {
+      setTestSending(false);
+      setTestConfirm(null);
+      const channelLabel = data.channel === 'email' ? `邮件已发送至 ${data.to}` : `短信已发送至 ${data.to}`;
+      toast.success(`测试通知已发送！${channelLabel}`);
+    },
+    onError: (e) => {
+      setTestSending(false);
+      toast.error('发送失败：' + e.message);
+    },
+  });
+
+  const handleSendTest = (channel: 'email' | 'sms') => {
+    setTestSending(true);
+    sendTestNotification.mutate({
+      orderId,
+      ledgerId,
+      channel,
+      coin: orderInfo.coin,
+      buyValue: orderInfo.buyValue ?? 50000,
+    });
+  };
 
   const setAlertLevel = trpc.ledger.funderSetAlertLevel.useMutation({
     onSuccess: () => {
@@ -193,6 +219,51 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
   const riskLevel = getRiskLevel();
 
   return (
+    <>
+    {/* 测试通知确认弹窗 */}
+    {testConfirm && (
+      <div
+        className="fixed inset-0 z-[400] flex items-center justify-center px-6"
+        style={{ background: 'rgba(0,0,0,0.5)' }}
+        onClick={() => !testSending && setTestConfirm(null)}
+      >
+        <div
+          className="w-full max-w-xs rounded-2xl p-6"
+          style={{ background: '#fff' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ background: '#EFF6FF' }}>
+              <FlaskConical className="w-4 h-4" style={{ color: '#1A56DB' }} />
+            </div>
+            <div className="text-sm font-bold" style={{ color: '#1A2340' }}>发送测试通知</div>
+          </div>
+          <p className="text-xs leading-relaxed mb-4" style={{ color: '#4B5563' }}>
+            将向您的{testConfirm === 'email' ? `邮箱（${alertState?.userEmail}）` : `手机（${alertState?.userPhone}）`}发送一条<strong>模拟数据</strong>的测试{testConfirm === 'email' ? '邮件' : '短信'}，用于验证通知功能是否正常。是否继续？
+          </p>
+          <div className="flex gap-2">
+            <button
+              className="flex-1 py-2 rounded-xl text-sm font-medium transition-colors"
+              style={{ background: '#F3F4F6', color: '#6B7280' }}
+              onClick={() => setTestConfirm(null)}
+              disabled={testSending}
+            >
+              取消
+            </button>
+            <button
+              className="flex-1 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-1 transition-colors"
+              style={{ background: '#1A56DB', color: '#fff' }}
+              onClick={() => handleSendTest(testConfirm)}
+              disabled={testSending}
+            >
+              {testSending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {testSending ? '发送中...' : '确认发送'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div
       className="fixed inset-0 z-[300] flex items-end justify-center"
       style={{ background: 'rgba(0,0,0,0.5)' }}
@@ -353,9 +424,19 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                     </button>
                   )}
                 </div>
+                {alertState?.userEmail && (
+                  <button
+                    className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg mr-1 transition-colors"
+                    style={{ background: '#EFF6FF', color: '#1A56DB', border: '1px solid #DBEAFE' }}
+                    onClick={() => setTestConfirm('email')}
+                  >
+                    <FlaskConical className="w-3 h-3" />
+                    测试
+                  </button>
+                )}
                 <Toggle
                   enabled={emailEnabled && !!alertState?.userEmail}
-                  onChange={setEmailEnabled}
+                  onChange={handleToggleEmail}
                   disabled={!alertState?.userEmail}
                 />
               </div>
@@ -379,9 +460,19 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                     </button>
                   )}
                 </div>
+                {alertState?.userPhone && (
+                  <button
+                    className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg mr-1 transition-colors"
+                    style={{ background: '#EFF6FF', color: '#1A56DB', border: '1px solid #DBEAFE' }}
+                    onClick={() => setTestConfirm('sms')}
+                  >
+                    <FlaskConical className="w-3 h-3" />
+                    测试
+                  </button>
+                )}
                 <Toggle
                   enabled={phoneEnabled && !!alertState?.userPhone}
-                  onChange={setPhoneEnabled}
+                  onChange={handleTogglePhone}
                   disabled={!alertState?.userPhone}
                 />
               </div>
@@ -439,5 +530,6 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
         </div>
       </div>
     </div>
+    </>
   );
 }

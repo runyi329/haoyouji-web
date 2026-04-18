@@ -13153,6 +13153,66 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 发送测试通知（邮件或短信）
+    funderSendTestNotification: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        ledgerId: z.number(),
+        channel: z.enum(['email', 'sms']),
+        coin: z.string().optional(),
+        buyValue: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证权限
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const userEmail: string | null = (ctx.user as any).email || null;
+        const userPhone: string | null = (ctx.user as any).phone || null;
+        const coin = input.coin || 'ETH';
+        const buyValue = input.buyValue || 50000;
+        const gapPct = 20;
+        const gapAmount = buyValue * 0.2;
+        const collateralValue = buyValue * 0.75;
+        const accruedInterest = buyValue * 0.05;
+        if (input.channel === 'email') {
+          if (!userEmail) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定邮箱' });
+          const { sendAlertEmail } = await import('./email-service.js');
+          await sendAlertEmail({
+            to: userEmail,
+            userName: ctx.user.name || '用户',
+            coin,
+            buyValue,
+            collateralValue,
+            accruedInterest,
+            gapAmount,
+            gapPct,
+            templateVars: {
+              headerTitle: '🔔 测试通知（模拟数据）',
+              headerSubtitle: '这是一条测试邮件，数据为模拟值',
+              alertTitle: '【测试】担保缺口已超过 {gapPct}%',
+              tipText: '这是一条测试通知，以上数据均为模拟数据，并非真实订单状态。\n\n如您收到此邮件，说明邮件通知功能已正常配置。',
+              subjectTemplate: '【测试】《好友记》{coin} 订单担保缺口提醒（模拟数据）',
+            },
+          });
+          return { success: true, channel: 'email', to: userEmail };
+        } else {
+          if (!userPhone) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定手机号' });
+          const smsTemplateId = process.env.TENCENT_SMS_TEMPLATE_ID || '2623560';
+          const result = await smsService.sendCustomMessage(
+            userPhone,
+            smsTemplateId,
+            [coin, String(gapPct)]
+          );
+          const ok = (result as any)?.Code === 'Ok';
+          if (!ok) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `短信发送失败: ${(result as any)?.Message || '未知错误'}` });
+          return { success: true, channel: 'sms', to: userPhone };
+        }
+      }),
+
     // 管理员删除融资付息订单
     financeDeleteOrder: protectedProcedure
       .input(z.object({ id: z.number(), ledgerId: z.number() }))
