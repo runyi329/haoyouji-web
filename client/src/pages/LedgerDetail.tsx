@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
+import Lottie from "lottie-react";
 
 // PDF导出功能
 function exportLedgerToPDF() {
@@ -959,7 +960,18 @@ function smartQty(val: number | string): string {
 }
 
 // 单张资金方订单卡片（左右两栏布局）
+const AI_TAG_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/GTOtHAKRrWkAijxr.json";
+let _aiTagData: any = null;
+let _aiTagPromise: Promise<any> | null = null;
+function loadAiTagData() {
+  if (_aiTagData) return Promise.resolve(_aiTagData);
+  if (_aiTagPromise) return _aiTagPromise;
+  _aiTagPromise = fetch(AI_TAG_URL).then(r => r.json()).then(d => { _aiTagData = d; return d; });
+  return _aiTagPromise;
+}
+
 function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick, priceDirection }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'> }) {
+  const [aiTagData, setAiTagData] = useState<any>(null);
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
@@ -977,7 +989,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
   const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date && order.status === 'active';
   // 解析字段展示配置（默认全部显示）
   const dc: Record<string, boolean> = (() => {
-    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true };
+    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true, aiIcon: false };
     try {
       const raw = order.display_config;
       if (!raw) return defaults;
@@ -986,6 +998,11 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
     } catch { return defaults; }
   })();
   const coinName = coinNameMap[order.coin] || order.coin;
+  useEffect(() => {
+    if (dc.aiIcon && !aiTagData) {
+      loadAiTagData().then(d => setAiTagData(d)).catch(() => {});
+    }
+  }, [dc.aiIcon]);
   return (
     <div
       className="rounded-2xl shadow-sm relative"
@@ -1023,7 +1040,21 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
         {/* 左栏：订单信息 */}
         <div className="flex-1 p-4 pr-3">
           {/* 标题：持有资产（固定高度与右栏对齐） */}
-          <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>持有资产</div>
+          <div className="h-5 flex items-center justify-between" style={{ color: '#3B82F6' }}>
+            <span className="text-xs font-medium">持有资产</span>
+            {dc.aiIcon && (
+              <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', boxShadow: '0 2px 8px rgba(26,86,219,0.35)', flexShrink: 0 }}>
+                {aiTagData && (
+                  <Lottie
+                    animationData={aiTagData}
+                    loop={true}
+                    autoplay={true}
+                    style={{ width: 28, height: 28 }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
           {/* 币种名称 + 数量（固定高度与右栏对齐） */}
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1">
