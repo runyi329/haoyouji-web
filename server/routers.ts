@@ -13764,25 +13764,42 @@ export const appRouter = router({
           const [rows2] = await (conn as any).execute(querySQL, [input.ledgerId, input.sourceUserId, YJH_USER_ID]);
           return (rows2 as any[]).map(mapRow);
         }
-        // 检查本人是否在列表中，若没有则在返回结果中补充（ratio=0，不写数据库）
-        const hasSelf = list.some((r: any) => r.beneficiaryUserId === input.sourceUserId);
-        if (!hasSelf) {
-          // 查询本人姓名
-          const [selfRows] = await (conn as any).execute(
-            `SELECT id, name, username FROM users WHERE id=?`,
-            [input.sourceUserId]
-          );
-          const selfUser = (selfRows as any[])[0];
-          const selfEntry = {
-            id: null,
-            beneficiaryUserId: input.sourceUserId,
-            ratio: 0,
-            name: (selfUser?.name || selfUser?.username || '本人') + '（本人）',
-            username: selfUser?.username || '',
-          };
-          return [...list, selfEntry];
+
+        // 追溯完整上级链（从 sourceUserId 往上到 YJH），确保每一层都在列表中
+        // 查询 sourceUserId 的完整上级链（最多10层防死循环）
+        const [chainRows] = await (conn as any).execute(
+          `WITH RECURSIVE chain AS (
+            SELECT id, name, username, invited_by_user_id FROM users WHERE id = ?
+            UNION ALL
+            SELECT u.id, u.name, u.username, u.invited_by_user_id
+            FROM users u
+            INNER JOIN chain c ON u.id = c.invited_by_user_id
+            WHERE c.invited_by_user_id IS NOT NULL AND c.id != ?
+          )
+          SELECT id, name, username FROM chain`,
+          [input.sourceUserId, YJH_USER_ID]
+        );
+        const chainUsers: Array<{ id: number; name: string; username: string }> = (chainRows as any[]);
+
+        // 已在列表中的受益人 ID
+        const existingIds = new Set(list.map((r: any) => r.beneficiaryUserId));
+
+        // 补充缺失的人（本人 + 中间层推荐人）
+        const extraEntries: any[] = [];
+        for (const u of chainUsers) {
+          if (!existingIds.has(u.id)) {
+            const isSelf = u.id === input.sourceUserId;
+            extraEntries.push({
+              id: null,
+              beneficiaryUserId: u.id,
+              ratio: 0,
+              name: isSelf ? (u.name || u.username || '本人') + '（本人）' : (u.name || u.username || '未知'),
+              username: u.username || '',
+            });
+          }
         }
-        return list;
+
+        return [...list, ...extraEntries];
       }),
 
     // YJH专属：修改某个受益人的拨比（可修改任意受益人，总和不超过100%）
