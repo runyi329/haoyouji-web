@@ -1,0 +1,33 @@
+name: zz-check-sms-config
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: Check SMS config
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 检查 /root/haoyouji-web/.env 中的短信配置 ==="
+            if [ -f /root/haoyouji-web/.env ]; then
+              grep -E "TENCENT|SMS|COS_SECRET" /root/haoyouji-web/.env | sed 's/=.*/=***已配置***/'
+            else
+              echo ".env 文件不存在"
+            fi
+            echo ""
+            echo "=== 检查 /home/ubuntu/haoyouji-web/.env ==="
+            if [ -f /home/ubuntu/haoyouji-web/.env ]; then
+              grep -E "TENCENT|SMS|COS_SECRET" /home/ubuntu/haoyouji-web/.env | sed 's/=.*/=***已配置***/'
+            else
+              echo ".env 文件不存在"
+            fi
+            echo ""
+            echo "=== 检查 PM2 进程环境变量 ==="
+            pm2 env 0 2>/dev/null | grep -E "TENCENT|SMS" | sed 's/: .*/: ***已配置***/' || echo "PM2 env 查询失败"
+          ENDSSH
