@@ -122,6 +122,8 @@ export class SmsService {
     const response = await this.client.DescribeSmsTemplateList({
       International: 0,
       TemplateIdSet: [],
+      Limit: 100,
+      Offset: 0,
     });
     return (response.TemplateStatusSet || []).map((t: any) => ({
       id: t.TemplateId,
