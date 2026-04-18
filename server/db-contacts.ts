@@ -302,22 +302,31 @@ export async function getContactsByParent(parentUserId: number, searchQuery?: st
     }
   }
   
-  // 为每个人脉添加上次联络日期和距今天数
-  const contactsWithInteractionInfo = await Promise.all(
-    baseContacts.map(async (contact) => {
-      const lastInteraction = await getLastInteractionDate(contact.id);
-      const daysSinceLastInteraction = lastInteraction 
-        ? calculateDaysDifference(lastInteraction, Date.now())
-        : null;
-      
-      return {
-        ...contact,
-        username: linkedUsernames[contact.id] || null,
-        lastInteractionDate: lastInteraction,
-        daysSinceLastInteraction,
-      };
+  // 一条 SQL 批量获取所有人脉的最后联络日期（替代 N+1 循环）
+  const lastInteractionRows = contactIds.length > 0 ? await db
+    .select({
+      contactId: contactInteractions.contactId,
+      lastInteraction: sql<string>`MAX(${contactInteractions.interactionDate})`,
     })
-  );
+    .from(contactInteractions)
+    .where(inArray(contactInteractions.contactId, contactIds))
+    .groupBy(contactInteractions.contactId) : [];
+
+  const lastInteractionMap = new Map<number, string | null>();
+  for (const id of contactIds) lastInteractionMap.set(id, null);
+  for (const row of lastInteractionRows) lastInteractionMap.set(row.contactId, row.lastInteraction);
+
+  const contactsWithInteractionInfo = baseContacts.map((contact) => {
+    const lastInteraction = lastInteractionMap.get(contact.id) ?? null;
+    const lastTs = lastInteraction ? new Date(lastInteraction).getTime() : null;
+    const daysSinceLastInteraction = lastTs ? calculateDaysDifference(lastTs, Date.now()) : null;
+    return {
+      ...contact,
+      username: linkedUsernames[contact.id] || null,
+      lastInteractionDate: lastTs,
+      daysSinceLastInteraction,
+    };
+  });
   
   // 解密敏感字段
   const decryptedContacts = await decryptFieldsArray(db, 'contacts', contactsWithInteractionInfo, CONTACT_ENCRYPT_FIELDS);
@@ -3431,65 +3440,57 @@ export async function getContactsByParentPaginated(
     }
   }
   
-  // 4. 为每个人脉添加上次联络日期、距今天数和活跃时间段标记
-  // 获取时间范围（基于北京时间）
-  const startOfTodayTimestamp = getBeijingTodayStart();
-  const startOfWeekTimestamp = getBeijingThisWeekStart();
-  const startOfMonthTimestamp = getBeijingThisMonthStart();
-  const startOfYearTimestamp = getBeijingThisYearStart();
-  
-  const contactsWithInteractionInfo = await Promise.all(
-    baseContacts.map(async (contact) => {
-      const lastInteraction = await getLastInteractionDate(contact.id);
-      const daysSinceLastInteraction = lastInteraction 
-        ? calculateDaysDifference(lastInteraction, Date.now())
-        : null;
-      
-      // 检查各时间段是否有联络记录
-      let hasInteractionToday = false;
-      let hasInteractionThisWeek = false;
-      let hasInteractionThisMonth = false;
-      let hasInteractionThisYear = false;
-      
-      // 查询该人脉的所有联络记录
-      const interactions = await db
-        .select({ interactionDate: contactInteractions.interactionDate })
-        .from(contactInteractions)
-        .where(eq(contactInteractions.contactId, contact.id));
-      
-      // 检查每个联络记录是否在各时间段内
-      for (const interaction of interactions) {
-        const rawTs2 = typeof interaction.interactionDate === 'number' 
-          ? interaction.interactionDate 
-          : new Date(interaction.interactionDate).getTime();
-        const interactionTimestamp = isNaN(rawTs2) ? 0 : rawTs2;
-        
-        if (interactionTimestamp >= startOfTodayTimestamp) {
-          hasInteractionToday = true;
-        }
-        if (interactionTimestamp >= startOfWeekTimestamp) {
-          hasInteractionThisWeek = true;
-        }
-        if (interactionTimestamp >= startOfMonthTimestamp) {
-          hasInteractionThisMonth = true;
-        }
-        if (interactionTimestamp >= startOfYearTimestamp) {
-          hasInteractionThisYear = true;
-        }
-      }
-      
-      return {
-        ...contact,
-        username: linkedUsernames[contact.id] || null,
-        lastInteractionDate: lastInteraction,
-        daysSinceLastInteraction,
-        hasInteractionToday,
-        hasInteractionThisWeek,
-        hasInteractionThisMonth,
-        hasInteractionThisYear,
-      };
+  // 4. 一条 SQL 批量获取所有人脉的联络信息（替代原来的 N+1 循环）
+  const toMySQLDatetimePag = (ts: number) => {
+    const d = new Date(ts);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+  };
+  const todayStrPag  = toMySQLDatetimePag(getBeijingTodayStart());
+  const weekStrPag   = toMySQLDatetimePag(getBeijingThisWeekStart());
+  const monthStrPag  = toMySQLDatetimePag(getBeijingThisMonthStart());
+  const yearStrPag   = toMySQLDatetimePag(getBeijingThisYearStart());
+
+  const pagInteractionRows = contactIds.length > 0 ? await db
+    .select({
+      contactId: contactInteractions.contactId,
+      lastInteraction: sql<string>`MAX(${contactInteractions.interactionDate})`,
+      hasInteractionToday:     sql<number>`MAX(CASE WHEN ${contactInteractions.interactionDate} >= ${todayStrPag}  THEN 1 ELSE 0 END)`,
+      hasInteractionThisWeek:  sql<number>`MAX(CASE WHEN ${contactInteractions.interactionDate} >= ${weekStrPag}   THEN 1 ELSE 0 END)`,
+      hasInteractionThisMonth: sql<number>`MAX(CASE WHEN ${contactInteractions.interactionDate} >= ${monthStrPag}  THEN 1 ELSE 0 END)`,
+      hasInteractionThisYear:  sql<number>`MAX(CASE WHEN ${contactInteractions.interactionDate} >= ${yearStrPag}   THEN 1 ELSE 0 END)`,
     })
-  );
+    .from(contactInteractions)
+    .where(sql`${contactInteractions.contactId} IN (${sql.join(contactIds.map(id => sql`${id}`), sql`, `)})`)
+    .groupBy(contactInteractions.contactId) : [];
+
+  const pagInteractionMap = new Map<number, { lastInteraction: string | null, hasInteractionToday: boolean, hasInteractionThisWeek: boolean, hasInteractionThisMonth: boolean, hasInteractionThisYear: boolean }>();
+  for (const id of contactIds) pagInteractionMap.set(id, { lastInteraction: null, hasInteractionToday: false, hasInteractionThisWeek: false, hasInteractionThisMonth: false, hasInteractionThisYear: false });
+  for (const row of pagInteractionRows) {
+    pagInteractionMap.set(row.contactId, {
+      lastInteraction:         row.lastInteraction,
+      hasInteractionToday:     row.hasInteractionToday     === 1,
+      hasInteractionThisWeek:  row.hasInteractionThisWeek  === 1,
+      hasInteractionThisMonth: row.hasInteractionThisMonth === 1,
+      hasInteractionThisYear:  row.hasInteractionThisYear  === 1,
+    });
+  }
+
+  const contactsWithInteractionInfo = baseContacts.map((contact) => {
+    const info = pagInteractionMap.get(contact.id) ?? { lastInteraction: null, hasInteractionToday: false, hasInteractionThisWeek: false, hasInteractionThisMonth: false, hasInteractionThisYear: false };
+    const lastTs = info.lastInteraction ? new Date(info.lastInteraction).getTime() : null;
+    const daysSinceLastInteraction = lastTs ? calculateDaysDifference(lastTs, Date.now()) : null;
+    return {
+      ...contact,
+      username: linkedUsernames[contact.id] || null,
+      lastInteractionDate: lastTs,
+      daysSinceLastInteraction,
+      hasInteractionToday:     info.hasInteractionToday,
+      hasInteractionThisWeek:  info.hasInteractionThisWeek,
+      hasInteractionThisMonth: info.hasInteractionThisMonth,
+      hasInteractionThisYear:  info.hasInteractionThisYear,
+    };
+  });
   
   console.log('[getContactsByParentPaginated] 分页计算:', {
     offset,
