@@ -432,7 +432,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
   );
 }
 
-function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices, dc }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number>; dc?: Record<string, boolean> }) {
+function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices, dc, viewMode }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number>; dc?: Record<string, boolean>; viewMode?: 'medium' | 'large' }) {
   const show = (key: string) => dc ? (dc[key] !== false) : true;
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showInterestTip, setShowInterestTip] = useState(false);
@@ -485,8 +485,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
       <div className="flex-1 flex flex-col justify-start">
         {/* 区块标题（固定高度与左栏对齐） */}
         <div className="h-5 flex items-center gap-1 relative">
-          <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
-          <span className="text-xs text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
+          <span className={`${viewMode === 'large' ? 'text-sm' : 'text-xs'} font-medium`} style={{ color: '#3B82F6' }}>待结利息</span>
+          <span className={`${viewMode === 'large' ? 'text-sm' : 'text-xs'} text-gray-400`}>(年化 {order.interest_rate_annual || 0}%)</span>
           <button
             ref={tipBtnRef}
             type="button"
@@ -551,32 +551,43 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             );
           })()}
         </div>
-        {/* 大数字（自适应高度，折算值第二行） */}
+        {/* 大数字（自适应高度，大图模式折算值同行） */}
         <div className="min-h-9 flex flex-col justify-center">
-          <div className="flex items-baseline gap-0.5">
-            <span
-              className="text-2xl font-bold tabular-nums leading-tight"
-              style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-            >
-              {displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-            <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
-          </div>
-          <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
+          {viewMode === 'large' ? (
+            <div className="flex items-baseline gap-1 flex-wrap">
+              <span className="text-3xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                {displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+              <span className="text-sm font-medium" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  {displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+              </div>
+              <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
+            </>
+          )}
         </div>
         {/* 明细行：统一 space-y-0.5，和左栏一致 */}
-        <div className="space-y-0.5">
+        <div className={viewMode === 'large' ? 'space-y-1' : 'space-y-0.5'}>
         {show('paidInterest') && (
-        <div className="text-xs">
+        <div className={viewMode === 'large' ? 'text-sm' : 'text-xs'}>
           <div className="flex items-center justify-between">
             <span className="text-gray-400 whitespace-nowrap">已结利息</span>
-            <span className="font-medium" style={{ color: '#4B5563' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
+            <span className="font-medium" style={{ color: '#4B5563' }}>
+              {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+              {displayPaid > 0 && <span className="ml-1 text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>}
+            </span>
           </div>
-          {displayPaid > 0 && <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>}
         </div>
         )}
         {order.interest_start_date && (
-          <div className="flex items-center justify-between text-xs">
+          <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
             <span className="text-gray-400">计息日期</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>
               {order.interest_start_date.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
@@ -651,13 +662,13 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               {show('collateralCoin') && (
                 collateral.length === 0
                   ? (
-                    <div className="flex items-center justify-between text-xs mt-0.5">
+                    <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'} mt-0.5`}>
                       <span className="text-gray-400">担保货币</span>
                       <span className="font-medium" style={{ color: '#4B5563' }}>0</span>
                     </div>
                   )
                   : collateral.map((a, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs mt-0.5">
+                    <div key={idx} className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'} mt-0.5`}>
                       <span className="text-gray-400">{collateral.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
                       <span className="font-medium" style={{ color: '#4B5563' }}>
                         {a.qty} {a.coin}
@@ -666,13 +677,13 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   ))
               )}
               {show('collateralValue') && (
-                <div className="flex items-center justify-between text-xs">
+                <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                   <span className="text-gray-400">{collateral.length > 1 ? '担保总値' : '担保价値'}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
                 </div>
               )}
               {show('collateral') && (
-                <div className="flex items-center justify-between text-xs">
+                <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                   <div className="flex items-center gap-0.5">
                     <span className="text-gray-400">担保缺口</span>
                     <button
@@ -700,7 +711,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
       <div className="flex-1 flex flex-col justify-start pt-2">
         {/* 收益分成标题（固定高度与左栏对齐） */}
         <div className="h-5 flex items-center gap-1">
-          <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>收益分成</span>
+          <span className={`${viewMode === 'large' ? 'text-sm' : 'text-xs'} font-medium`} style={{ color: '#3B82F6' }}>收益分成</span>
         </div>
         {/* 大数字（自适应高度，有收益时加≈折算行） */}
         {(() => {
@@ -711,43 +722,46 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             const profitCNY = profitU * 7;
             return (
               <div className="min-h-9 flex flex-col justify-center">
-                <div className="flex items-baseline justify-between w-full whitespace-nowrap overflow-hidden">
-                  <div className="flex items-baseline gap-0.5">
-                    <span
-                      className="text-2xl font-bold tabular-nums leading-tight"
-                      style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-                    >
-                      +{profitU.toFixed(2)}
-                    </span>
-                    <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                {viewMode === 'large' ? (
+                  <div className="flex items-baseline gap-1 flex-wrap">
+                    <span className="text-3xl font-bold tabular-nums leading-tight" style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>+{profitU.toFixed(2)}</span>
+                    <span className="text-sm font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                    <span className="text-sm font-medium" style={{ color: '#4B5563' }}>≈{profitCNY.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元</span>
+                    <span className="text-sm text-gray-400">{profitPct % 1 === 0 ? profitPct.toFixed(0) : profitPct.toFixed(2)}%</span>
                   </div>
-                  <span className="text-xs text-gray-400">{profitPct % 1 === 0 ? profitPct.toFixed(0) : profitPct.toFixed(2)}%</span>
-                </div>
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{profitCNY.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元</div>
+                ) : (
+                  <>
+                    <div className="flex items-baseline justify-between w-full whitespace-nowrap overflow-hidden">
+                      <div className="flex items-baseline gap-0.5">
+                        <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#D32F2F', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>+{profitU.toFixed(2)}</span>
+                        <span className="text-xs font-semibold" style={{ color: '#D32F2F' }}>U</span>
+                      </div>
+                      <span className="text-xs text-gray-400">{profitPct % 1 === 0 ? profitPct.toFixed(0) : profitPct.toFixed(2)}%</span>
+                    </div>
+                    <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{profitCNY.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元</div>
+                  </>
+                )}
               </div>
             );
           }
           return (
             <div className="h-9 flex items-baseline gap-0.5 whitespace-nowrap overflow-hidden">
-              <span
-                className="text-2xl font-bold tabular-nums leading-tight"
-                style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-              >
+              <span className={`${viewMode === 'large' ? 'text-3xl' : 'text-2xl'} font-bold tabular-nums leading-tight`} style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
                 {profitPct % 1 === 0 ? profitPct.toFixed(0) : profitPct.toFixed(2)}
               </span>
-              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>%</span>
+              <span className={`${viewMode === 'large' ? 'text-sm' : 'text-xs'} font-semibold`} style={{ color: '#1A2340' }}>%</span>
             </div>
           );
         })()}
         {/* 明细行：统一 space-y-0.5 */}
-        <div className="space-y-0.5">
-          <div className="flex items-center justify-between text-xs">
+        <div className={viewMode === 'large' ? 'space-y-1' : 'space-y-0.5'}>
+          <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
             <span className="text-gray-400">最低价格</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>
               {displayLowest !== null ? displayLowest.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
             </span>
           </div>
-          <div className="flex items-center justify-between text-xs">
+          <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
             <span className="text-gray-400">最低跌幅</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>
               {(() => {
@@ -759,12 +773,12 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
               })()}
             </span>
           </div>
-          <div className="flex items-center justify-between text-xs">
+          <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
             <span className="text-gray-400">发生时间</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>{lowestAtLabel || '---'}</span>
           </div>
           {show('commissionShare') && order.commission_share && (
-            <div className="flex items-center justify-between text-xs">
+            <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
               <span className="text-gray-400">佣金分成</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>{order.commission_share}</span>
             </div>
@@ -1030,7 +1044,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
         <div className={viewMode === 'large' ? 'p-4 pb-2' : 'flex-1 p-4 pr-3'} style={{ position: 'relative' }}>
           {/* 标题：持有资产（固定高度与右栏对齐） */}
           <div className="h-5 flex items-center" style={{ color: '#3B82F6' }}>
-            <span className="text-xs font-medium">持有资产</span>
+            <span className={`${viewMode === 'large' ? 'text-sm' : 'text-xs'} font-medium`}>持有资产</span>
           </div>
           {dc.aiIcon && (
             <button
@@ -1048,11 +1062,11 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           )}
           {/* 币种名称 + 数量（固定高度与右栏对齐） */}
           <div className="min-h-9 flex flex-col justify-center">
-            <div className="flex items-baseline gap-1">
-              <span className={`${viewMode === 'large' ? 'text-3xl' : 'text-2xl'} font-bold tabular-nums leading-tight`} style={{ color: '#1A2340' }}>
+            <div className="flex items-baseline gap-1 flex-wrap">
+              <span className={`${viewMode === 'large' ? 'text-4xl' : 'text-2xl'} font-bold tabular-nums leading-tight`} style={{ color: '#1A2340' }}>
                 {qty > 0 ? smartQty(qty) : '—'}
               </span>
-              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
+              <span className={`${viewMode === 'large' ? 'text-xl' : 'text-xs'} font-semibold`} style={{ color: '#1A2340' }}>{order.coin}</span>
             </div>
             {(() => {
               const liveP = isEnded
@@ -1060,11 +1074,11 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                 : (livePrices[order.coin] ?? null);
               if (!liveP || !qty) return null;
               const val = (qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 });
-              return <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val} U</div>;
+              return <div className={`${viewMode === 'large' ? 'text-sm' : 'text-xs'} font-medium leading-tight`} style={{ color: '#4B5563' }}>≈{val} U</div>;
             })()}
           </div>
-          {/* 订单信息列表：标题靠左，数值靠右 */}
-          <div className={viewMode === 'large' ? 'space-y-1' : 'space-y-0.5'}>
+          {/* 订单信息列表：标题靠左，数値靠右 */}
+          <div className={viewMode === 'large' ? 'space-y-1 text-sm' : 'space-y-0.5 text-xs'}>
             {dc.buyPrice && price > 0 && (
               <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                 <span className="text-gray-400 shrink-0">买入币价</span>
@@ -1148,7 +1162,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
         {/* 右栏/下半：利息 + 收益分成 */}
         <div className={viewMode === 'large' ? 'p-4 pt-2' : 'w-44 p-4 pl-3 flex flex-col'} style={viewMode === 'large' ? {} : { alignSelf: 'stretch' }}>
           {hasInterest ? (
-            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} livePrices={livePrices} dc={dc} />
+            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} livePrices={livePrices} dc={dc} viewMode={viewMode} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <ChevronRight className="w-5 h-5 text-gray-200" />
