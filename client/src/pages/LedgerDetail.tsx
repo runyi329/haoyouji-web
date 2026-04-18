@@ -483,7 +483,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
         {/* 区块标题（固定高度与左栏对齐） */}
         <div className="h-5 flex items-center gap-1 relative">
           <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
-          <span className="text-[10px] text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
+          <span className="text-xs text-gray-400">(年化 {order.interest_rate_annual || 0}%)</span>
           <button
             ref={tipBtnRef}
             type="button"
@@ -650,7 +650,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                   ? (
                     <div className="flex items-center justify-between text-xs mt-0.5">
                       <span className="text-gray-400">担保货币</span>
-                      <span className="font-medium" style={{ color: '#9CA3AF' }}>0</span>
+                      <span className="font-medium" style={{ color: '#4B5563' }}>0</span>
                     </div>
                   )
                   : collateral.map((a, idx) => (
@@ -1111,7 +1111,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
             {dc.orderNo && order.order_no && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400 shrink-0">订单编号</span>
-                <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{order.order_no}</span>
               </div>
             )}
           </div>
