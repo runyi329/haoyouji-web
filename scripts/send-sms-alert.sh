@@ -26,17 +26,20 @@ if [ -f .env ]; then
   set +a
 fi
 
-# 如果传入了新密钥参数，优先使用
+# 如果传入了新密钥参数，优先使用（覆盖.env中的值）
 if [ -n "$SMS_SECRET_ID" ]; then
   export COS_SECRET_ID="$SMS_SECRET_ID"
 fi
 if [ -n "$SMS_SECRET_KEY" ]; then
   export COS_SECRET_KEY="$SMS_SECRET_KEY"
 fi
+if [ -n "$SMS_APP_ID_OVERRIDE" ]; then
+  export TENCENT_SMS_APP_ID="$SMS_APP_ID_OVERRIDE"
+fi
 
 echo "=== 短信配置检查 ==="
 echo "SecretId前8位: ${COS_SECRET_ID:0:8}***"
-echo "APP_ID前4位: ${TENCENT_SMS_APP_ID:0:4}***"
+echo "APP_ID: $TENCENT_SMS_APP_ID"
 echo "SIGN: $TENCENT_SMS_SIGN_NAME"
 echo "TEMPLATE: $TENCENT_SMS_TEMPLATE_ID"
 echo "REGION: $TENCENT_SMS_REGION"
@@ -60,11 +63,6 @@ const phone = '+86${PHONE}';
 
 if (!secretId || !secretKey || !appId || !signName || !templateId) {
   console.error('ERROR: 缺少必要的环境变量');
-  console.error('secretId:', secretId ? '已设置' : '缺失');
-  console.error('secretKey:', secretKey ? '已设置' : '缺失');
-  console.error('appId:', appId || '缺失');
-  console.error('signName:', signName || '缺失');
-  console.error('templateId:', templateId || '缺失');
   process.exit(1);
 }
 
