@@ -115,7 +115,6 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
   const setAlertLevel = trpc.ledger.funderSetAlertLevel.useMutation({
     onSuccess: () => {
       refetch();
-      toast.success('提醒设置已保存');
       setSaving(false);
     },
     onError: (e) => {
