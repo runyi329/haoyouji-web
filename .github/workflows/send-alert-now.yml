@@ -1,0 +1,28 @@
+name: send-alert-test
+on:
+  workflow_dispatch:
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup-ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: send-email
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -s' << 'ENDSSH'
+            cd /root/haoyouji-web
+            node -e "
+const nodemailer = require('./node_modules/nodemailer');
+const mysql = require('./node_modules/mysql2/promise');
+(async () => {
+  const conn = await mysql.createConnection({ host:'127.0.0.1', port:3306, user:'root', password:'Miao@20190603', database:'crm_db' });
+  const [users] = await conn.execute(\"SELECT id, name, email FROM users WHERE email IS NOT NULL AND email != '' ORDER BY id LIMIT 5\");
+  console.log('有邮箱用户:', JSON.stringify(users));
+  await conn.end();
+})().catch(console.error);
+"
+          ENDSSH
