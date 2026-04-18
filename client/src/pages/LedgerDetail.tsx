@@ -3730,55 +3730,41 @@ export default function LedgerDetail() {
                 ))}
               </div>
             ) : (
-              /* 小图模式：紧凑列表 */
+              /* 小图模式：只显示当前资产和当前利息 */
               <div className="space-y-2">
                 {(funderAssetOrders as any[]).map((order: any) => {
                   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
                   const cc = coinColorMap[order.coin] || '#6B7280';
                   const qty = parseFloat(order.buy_quantity || '0');
-                  const price = parseFloat(order.buy_price || '0');
-                  const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
-                  const isEnded = order.status === 'ended';
-                  const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : isEnded ? '已结束' : '已取消';
-                  const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
                   const livePrice = funderLivePrices[order.coin];
                   const currentValue = livePrice && qty > 0 ? qty * livePrice : null;
+                  const accrued = (interestSummary as any)?.[order.id] ?? 0;
+                  const isEnded = order.status === 'ended';
                   return (
                     <div
                       key={order.id}
-                      className="rounded-xl px-3 py-2.5 flex items-center gap-3"
+                      className="rounded-xl px-3 py-2"
                       style={{ background: '#fff', border: '1px solid #E0E8FF', boxShadow: '0 1px 4px rgba(26,86,219,0.06)', opacity: isEnded ? 0.6 : 1 }}
                     >
-                      {/* 左侧色块 */}
-                      <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: cc, minHeight: 36 }} />
-                      {/* 币种+数量 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-sm font-bold tabular-nums" style={{ color: '#1A2340' }}>
-                            {qty > 0 ? (qty < 0.001 ? qty.toFixed(6) : qty < 1 ? qty.toFixed(4) : qty.toLocaleString(undefined, { maximumFractionDigits: 4 })) : '—'}
+                      <div className="flex items-center gap-3">
+                        {/* 左侧币种色条 */}
+                        <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: cc, minHeight: 28 }} />
+                        {/* 币种标签 */}
+                        <span className="text-xs font-bold" style={{ color: cc }}>{order.coin}</span>
+                        {/* 当前资产 */}
+                        <div className="flex-1 flex items-center gap-1">
+                          <span className="text-xs text-gray-400">当前资产</span>
+                          <span className="text-xs font-medium tabular-nums" style={{ color: '#1A2340' }}>
+                            {currentValue != null ? `${currentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '—'}
                           </span>
-                          <span className="text-xs font-semibold" style={{ color: cc }}>{order.coin}</span>
                         </div>
-                        {totalU > 0 && (
-                          <div className="text-xs" style={{ color: '#9CA3AF' }}>
-                            买入 {totalU.toLocaleString(undefined, { maximumFractionDigits: 0 })} U
-                          </div>
-                        )}
-                      </div>
-                      {/* 当前价值 */}
-                      {currentValue != null && (
-                        <div className="text-right">
-                          <div className="text-xs font-medium tabular-nums" style={{ color: '#4B5563' }}>
-                            {currentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U
-                          </div>
-                          <div className="text-xs" style={{ color: '#9CA3AF' }}>当前价值</div>
+                        {/* 当前利息 */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-400">当前利息</span>
+                          <span className="text-xs font-medium tabular-nums" style={{ color: '#F59E0B' }}>
+                            {accrued > 0 ? `${accrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U` : '—'}
+                          </span>
                         </div>
-                      )}
-                      {/* 状态 */}
-                      <div className="flex-shrink-0">
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: `${statusColor}18`, color: statusColor }}>
-                          {statusLabel}
-                        </span>
                       </div>
                     </div>
                   );
