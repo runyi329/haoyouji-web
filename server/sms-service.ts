@@ -113,6 +113,28 @@ export class SmsService {
   }
 
   /**
+   * 获取所有短信模板列表
+   */
+  async getTemplates() {
+    if (!this.isInitialized || !this.client) {
+      throw new Error('短信服务未初始化，请检查腾讯云API密钥配置');
+    }
+    const response = await this.client.DescribeSmsTemplateList({
+      International: 0,
+      TemplateIdSet: [],
+    });
+    return (response.TemplateStatusSet || []).map((t: any) => ({
+      id: t.TemplateId,
+      name: t.TemplateName,
+      content: t.TemplateContent,
+      status: t.StatusCode,
+      statusText: this.getStatusText(t.StatusCode),
+      createTime: t.CreateTime,
+      reviewReply: t.ReviewReply || '',
+    }));
+  }
+
+  /**
    * 发送验证码短信
    */
   async sendVerificationCode(phoneNumber: string, code: string, expireMinutes = SMS_CONFIG.defaultExpireMinutes) {
