@@ -6423,21 +6423,22 @@ export const appRouter = router({
       .query(async ({ ctx }) => {
         const connections = await db.getSharingConnectionsBySharerId(ctx.user.id);
         
-        // 为每个连接获取接收者信息、权限配置和共享人数
+        // 用一条 COUNT SQL 获取当前用户的人脉总数（避免全量查询）
+        const dbInst = await getDb();
+        const myCountRows = dbInst ? await dbInst.select({ count: sql<number>`COUNT(*)` }).from(contacts).where(eq(contacts.parentUserId, ctx.user.id)) : [{ count: 0 }];
+        const myContactCount = Number(myCountRows[0]?.count || 0);
+
         const connectionsWithDetails = await Promise.all(
           connections.map(async (conn: any) => {
             const receiver = await db.getUserById(conn.receiverId);
             const permissions = await db.getSharingPermissionsByConnectionId(conn.id);
-            // 统计共享给该用户的人数（当前用户的所有联系人）
-            const contacts = await dbContacts.getContactsByParent(ctx.user.id);
-            const sharedContactCount = contacts.length;
             return {
               ...conn,
               receiverName: receiver?.name || receiver?.username || '未知用户',
               receiverUsername: receiver?.username || '',
               receiverAvatar: receiver?.avatar || null,
               permissions,
-              sharedContactCount, // 共享给对方的人数
+              sharedContactCount: myContactCount,
             };
           })
         );
@@ -6450,19 +6451,26 @@ export const appRouter = router({
       .query(async ({ ctx }) => {
         const connections = await db.getSharingConnectionsByReceiverId(ctx.user.id);
         
-        // 为每个连接获取分享者信息和共享人数
+        // 批量查询所有分享者的人脉数量（一条 SQL，避免 N+1）
+        const sharerIds = [...new Set(connections.map((c: any) => c.sharerId))] as number[];
+        const sharerCountMap = new Map<number, number>();
+        if (sharerIds.length > 0) {
+          const dbInst = await getDb();
+          if (dbInst) {
+            const countRows = await dbInst.select({ parentUserId: contacts.parentUserId, count: sql<number>`COUNT(*)` }).from(contacts).where(inArray(contacts.parentUserId, sharerIds)).groupBy(contacts.parentUserId);
+            for (const row of countRows) sharerCountMap.set(row.parentUserId, Number(row.count));
+          }
+        }
+
         const connectionsWithDetails = await Promise.all(
           connections.map(async (conn: any) => {
             const sharer = await db.getUserById(conn.sharerId);
-            // 统计分享者共享给我的人数（分享者的所有联系人）
-            const contacts = await dbContacts.getContactsByParent(conn.sharerId);
-            const sharedContactCount = contacts.length;
             return {
               ...conn,
               sharerName: sharer?.name || sharer?.username || '未知用户',
               sharerUsername: sharer?.username || '',
               sharerAvatar: sharer?.avatar || null,
-              sharedContactCount, // 对方共享给我的人数
+              sharedContactCount: sharerCountMap.get(conn.sharerId) || 0,
             };
           })
         );
