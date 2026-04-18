@@ -1248,6 +1248,8 @@ import {
   Truck,
   RefreshCw,
   Minus,
+  LayoutGrid,
+  LayoutList,
 } from "lucide-react";
 
 
@@ -1873,6 +1875,8 @@ export default function LedgerDetail() {
   // 涨跌方向计算：用 localStorage 存储上一次价格，刷新页面后第一次加载就能显示筜头
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_${ledgerId}`;
   const [funderPriceDirection, setFunderPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
+  // 资产订单视图模式：large=大图（默认），small=小图
+  const [funderViewMode, setFunderViewMode] = useState<'large' | 'small'>('large');
   useEffect(() => {
     if (!hasFreshPrices) return;
     let prevPrices: Record<string, number> = {};
@@ -3626,6 +3630,32 @@ export default function LedgerDetail() {
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  onClick={() => setFunderViewMode('large')}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors"
+                  style={{
+                    background: funderViewMode === 'large' ? '#EFF6FF' : 'transparent',
+                    color: funderViewMode === 'large' ? '#1A56DB' : '#9CA3AF',
+                    border: funderViewMode === 'large' ? '1px solid #BFDBFE' : '1px solid transparent',
+                  }}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>大图</span>
+                </button>
+                <button
+                  onClick={() => setFunderViewMode('small')}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors"
+                  style={{
+                    background: funderViewMode === 'small' ? '#EFF6FF' : 'transparent',
+                    color: funderViewMode === 'small' ? '#1A56DB' : '#9CA3AF',
+                    border: funderViewMode === 'small' ? '1px solid #BFDBFE' : '1px solid transparent',
+                  }}
+                >
+                  <LayoutList className="w-3.5 h-3.5" />
+                  <span>小图</span>
+                </button>
+              </div>
             </div>
             {(!funderAssetOrders || (funderAssetOrders as any[]).length === 0) ? (
               <div className="text-center py-12">
@@ -3633,7 +3663,7 @@ export default function LedgerDetail() {
                 <div className="text-gray-400 text-base mb-1">暂无资产订单</div>
                 <div className="text-gray-400 text-sm">管理员将为您配置资产订单</div>
               </div>
-            ) : (
+            ) : funderViewMode === 'large' ? (
               <div className="space-y-3">
                 {(funderAssetOrders as any[]).map((order: any) => (
                   <FunderOrderCard
@@ -3647,6 +3677,61 @@ export default function LedgerDetail() {
                     priceDirection={funderPriceDirection}
                   />
                 ))}
+              </div>
+            ) : (
+              /* 小图模式：紧凑列表 */
+              <div className="space-y-2">
+                {(funderAssetOrders as any[]).map((order: any) => {
+                  const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
+                  const cc = coinColorMap[order.coin] || '#6B7280';
+                  const qty = parseFloat(order.buy_quantity || '0');
+                  const price = parseFloat(order.buy_price || '0');
+                  const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
+                  const isEnded = order.status === 'ended';
+                  const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : isEnded ? '已结束' : '已取消';
+                  const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
+                  const livePrice = funderLivePrices[order.coin];
+                  const currentValue = livePrice && qty > 0 ? qty * livePrice : null;
+                  return (
+                    <div
+                      key={order.id}
+                      className="rounded-xl px-3 py-2.5 flex items-center gap-3"
+                      style={{ background: '#fff', border: '1px solid #E0E8FF', boxShadow: '0 1px 4px rgba(26,86,219,0.06)', opacity: isEnded ? 0.6 : 1 }}
+                    >
+                      {/* 左侧色块 */}
+                      <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: cc, minHeight: 36 }} />
+                      {/* 币种+数量 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-sm font-bold tabular-nums" style={{ color: '#1A2340' }}>
+                            {qty > 0 ? (qty < 0.001 ? qty.toFixed(6) : qty < 1 ? qty.toFixed(4) : qty.toLocaleString(undefined, { maximumFractionDigits: 4 })) : '—'}
+                          </span>
+                          <span className="text-xs font-semibold" style={{ color: cc }}>{order.coin}</span>
+                        </div>
+                        {totalU > 0 && (
+                          <div className="text-xs" style={{ color: '#9CA3AF' }}>
+                            买入 {totalU.toLocaleString(undefined, { maximumFractionDigits: 0 })} U
+                          </div>
+                        )}
+                      </div>
+                      {/* 当前价值 */}
+                      {currentValue != null && (
+                        <div className="text-right">
+                          <div className="text-xs font-medium tabular-nums" style={{ color: '#4B5563' }}>
+                            {currentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U
+                          </div>
+                          <div className="text-xs" style={{ color: '#9CA3AF' }}>当前价值</div>
+                        </div>
+                      )}
+                      {/* 状态 */}
+                      <div className="flex-shrink-0">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: `${statusColor}18`, color: statusColor }}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
