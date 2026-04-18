@@ -18,8 +18,8 @@ export default function ProfileEdit() {
     business: "",
   });
 
-  // 使用tRPC获取用户信息
-  const { data: user, isLoading, refetch } = trpc.auth.me.useQuery();
+  // 使用tRPC获取用户信息（禁用缓存，每次进入页面都从数据库读取最新数据）
+  const { data: user, isLoading, refetch } = trpc.auth.me.useQuery(undefined, { staleTime: 0, refetchOnMount: 'always' });
 
   // 使用tRPC更新用户信息
   const updateProfileMutation = trpc.auth.updateProfile.useMutation({
