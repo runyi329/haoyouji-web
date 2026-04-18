@@ -5,6 +5,7 @@ html,
 body {
   overflow-x: hidden;
   max-width: 100vw;
+  overscroll-behavior-x: none; /* 禁用浏览器横向滑动返回手势 */
 }
 
 /* 价格涨跌箭头呼吸灯动画（0.5秒一次） */
