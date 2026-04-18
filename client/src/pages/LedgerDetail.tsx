@@ -1067,14 +1067,22 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
                 {qty > 0 ? smartQty(qty) : '—'}
               </span>
               <span className={`${viewMode === 'large' ? 'text-xl' : 'text-xs'} font-semibold`} style={{ color: '#1A2340' }}>{order.coin}</span>
+              {viewMode === 'large' && (() => {
+                const liveP = isEnded
+                  ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
+                  : (livePrices[order.coin] ?? null);
+                if (!liveP || !qty) return null;
+                const val = (qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                return <span className="text-sm font-medium" style={{ color: '#4B5563' }}>≈{val} U</span>;
+              })()}
             </div>
-            {(() => {
+            {viewMode !== 'large' && (() => {
               const liveP = isEnded
                 ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
                 : (livePrices[order.coin] ?? null);
               if (!liveP || !qty) return null;
               const val = (qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 });
-              return <div className={`${viewMode === 'large' ? 'text-sm' : 'text-xs'} font-medium leading-tight`} style={{ color: '#4B5563' }}>≈{val} U</div>;
+              return <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val} U</div>;
             })()}
           </div>
           {/* 订单信息列表：标题靠左，数値靠右 */}
