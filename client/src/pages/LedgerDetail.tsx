@@ -964,7 +964,7 @@ function smartQty(val: number | string): string {
 // 单张资金方订单卡片（左右两栏布局）
 // AItag Lottie动效数据直接内联，避免fetch/CORS问题
 
-function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick, priceDirection }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'> }) {
+function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick, priceDirection, viewMode }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'>; viewMode?: 'medium' | 'large' }) {
   const [showAIPanel, setShowAIPanel] = useState(false);
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
@@ -1023,11 +1023,11 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
       {/* 顶部色条 */}
       <div className="h-1" style={{ background: isEnded ? '#D1D5DB' : `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
 
-      {/* 主体：左右两栏 */}
-      <div className="flex" style={{ minHeight: '100px' }}>
+      {/* 主体：大图=单列，中图=左右两栏 */}
+      <div className={viewMode === 'large' ? 'flex flex-col' : 'flex'} style={{ minHeight: '100px' }}>
 
-        {/* 左栏：订单信息 */}
-        <div className="flex-1 p-4 pr-3" style={{ position: 'relative' }}>
+        {/* 左栏/上半：订单信息 */}
+        <div className={viewMode === 'large' ? 'p-4 pb-2' : 'flex-1 p-4 pr-3'} style={{ position: 'relative' }}>
           {/* 标题：持有资产（固定高度与右栏对齐） */}
           <div className="h-5 flex items-center" style={{ color: '#3B82F6' }}>
             <span className="text-xs font-medium">持有资产</span>
@@ -1049,7 +1049,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           {/* 币种名称 + 数量（固定高度与右栏对齐） */}
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
+              <span className={`${viewMode === 'large' ? 'text-3xl' : 'text-2xl'} font-bold tabular-nums leading-tight`} style={{ color: '#1A2340' }}>
                 {qty > 0 ? smartQty(qty) : '—'}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
@@ -1064,21 +1064,21 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
             })()}
           </div>
           {/* 订单信息列表：标题靠左，数值靠右 */}
-          <div className="space-y-0.5">
+          <div className={viewMode === 'large' ? 'space-y-1' : 'space-y-0.5'}>
             {dc.buyPrice && price > 0 && (
-              <div className="flex items-center justify-between text-xs">
+              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                 <span className="text-gray-400 shrink-0">买入币价</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
               </div>
             )}
             {dc.buyValue && totalU > 0 && (
-              <div className="flex items-center justify-between text-xs">
+              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                 <span className="text-gray-400 shrink-0">买入价值</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
             {dc.interestBase && order.interest_base && parseFloat(order.interest_base) > 0 && (
-              <div className="flex items-center justify-between text-xs">
+              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                 <span className="text-gray-400 shrink-0">计息基数</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
                   {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {(order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U'}
@@ -1086,7 +1086,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
               </div>
             )}
             {dc.todayPrice && (
-              <div className="flex items-center justify-between text-xs">
+              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                 <span className="text-gray-400 shrink-0">{isEnded ? '结束币价' : '当前币价'}</span>
                 {(() => {
                     const currentPrice = isEnded
@@ -1110,7 +1110,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
               </div>
             )}
             {dc.buyDate && order.buy_date && (
-              <div className="flex items-center justify-between text-xs">
+              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                 <span className="text-gray-400 shrink-0">买入时间</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
               </div>
@@ -1124,14 +1124,14 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
               const hours = totalHours % 24;
               const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
               return (
-                <div className="flex items-center justify-between text-xs">
+                <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                   <span className="text-gray-400 shrink-0">持有时长</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>{label}</span>
                 </div>
               );
             })()}
             {dc.orderNo && order.order_no && (
-              <div className="flex items-center justify-between text-xs">
+              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-xs'}`}>
                 <span className="text-gray-400 shrink-0">订单编号</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.order_no}</span>
               </div>
@@ -1139,11 +1139,14 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           </div>
         </div>
 
-        {/* 中间分隔线 */}
-        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+        {/* 中间分隔线：大图模式为水平线，中图模式为垂直线 */}
+        {viewMode === 'large'
+          ? <div className="mx-4 h-px" style={{ backgroundColor: '#E8EFFF' }} />
+          : <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+        }
 
-        {/* 右栏：利息 + 收益分成 */}
-        <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
+        {/* 右栏/下半：利息 + 收益分成 */}
+        <div className={viewMode === 'large' ? 'p-4 pt-2' : 'w-44 p-4 pl-3 flex flex-col'} style={viewMode === 'large' ? {} : { alignSelf: 'stretch' }}>
           {hasInterest ? (
             <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} livePrices={livePrices} dc={dc} />
           ) : (
@@ -3673,91 +3676,21 @@ export default function LedgerDetail() {
                 ))}
               </div>
             ) : funderViewMode === 'large' ? (
-              /* 大图模式：单列放大 */
-              <div className="space-y-4">
-                {(funderAssetOrders as any[]).map((order: any) => {
-                  const coinColorMapL: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
-                  const ccL = coinColorMapL[order.coin] || '#6B7280';
-                  const isEndedL = order.status === 'ended';
-                  const statusLabelL = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : isEndedL ? '已结束' : '已取消';
-                  const statusColorL = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
-                  const qtyL = parseFloat(order.buy_quantity || '0');
-                  const priceL = parseFloat(order.buy_price || '0');
-                  const totalUL = qtyL > 0 && priceL > 0 ? qtyL * priceL : parseFloat(order.amount || '0');
-                  const livePriceL = funderLivePrices[order.coin];
-                  const currentValueL = livePriceL && qtyL > 0 ? qtyL * livePriceL : null;
-                  const interestBase = order.interest_base ? parseFloat(order.interest_base) : null;
-                  const interestRate = order.interest_rate_annual ? parseFloat(order.interest_rate_annual) : null;
-                  const interestUnit = (order.interest_rate_currency || 'USDT') === 'CNY' ? '元' : 'U';
-                  const paidInterestL = (interestSummary as any)?.[order.id] ?? 0;
-                  const dc: Record<string, boolean> = (() => {
-                    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true };
-                    try {
-                      const raw = order.display_config;
-                      if (!raw) return defaults;
-                      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                      return { ...defaults, ...parsed };
-                    } catch { return defaults; }
-                  })();
-                  const rows: { label: string; value: string }[] = [];
-                  if (dc.buyPrice && priceL > 0) rows.push({ label: '买入币价', value: `${priceL.toLocaleString()} U` });
-                  if (dc.buyValue && totalUL > 0) rows.push({ label: '买入价值', value: `${totalUL.toLocaleString(undefined, { maximumFractionDigits: 2 })} U` });
-                  if (dc.interestBase && interestBase && interestBase > 0) rows.push({ label: '计息基数', value: `${interestBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${(order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U'}` });
-                  if (dc.todayPrice) rows.push({ label: '当前币价', value: livePriceL ? `${livePriceL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U` : '---' });
-                  if (dc.buyDate && order.buy_date) rows.push({ label: '买入时间', value: order.buy_date });
-                  if (dc.holdDuration && order.buy_date && order.status === 'active') {
-                    const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
-                    if (elapsed >= 0) {
-                      const days = Math.floor(elapsed / (1000 * 60 * 60 * 24));
-                      const hours = Math.floor((elapsed % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                      rows.push({ label: '持有时长', value: days > 0 ? `${days}天 ${hours}小时` : `${hours}小时` });
-                    }
-                  }
-                  if (dc.orderNo && order.order_no) rows.push({ label: '订单编号', value: order.order_no });
-                  if (interestRate && interestBase) rows.push({ label: '年化利率', value: `${interestRate}%` });
-                  if (dc.paidInterest) rows.push({ label: '已结利息', value: `${paidInterestL.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${interestUnit}` });
-                  return (
-                    <div
-                      key={order.id}
-                      className="rounded-2xl shadow-sm relative overflow-hidden"
-                      style={{ backgroundColor: isEndedL ? '#F3F4F6' : '#FFFFFF', border: isEndedL ? '1px solid #D1D5DB' : '1px solid #E0E8FF', boxShadow: isEndedL ? 'none' : '0 2px 12px rgba(26,86,219,0.10)', opacity: isEndedL ? 0.7 : 1 }}
-                    >
-                      {/* 顶部色条 */}
-                      <div className="h-1.5" style={{ background: isEndedL ? '#D1D5DB' : `linear-gradient(90deg, ${ccL}, ${ccL}55)` }} />
-                      <div className="p-5">
-                        {/* 标题行 */}
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-medium" style={{ color: '#3B82F6' }}>持有资产</span>
-                          <span className="text-sm font-medium px-3 py-1 rounded-full" style={{ background: `${statusColorL}18`, color: statusColorL }}>{statusLabelL}</span>
-                        </div>
-                        {/* 大数字：数量 + 币种 */}
-                        <div className="flex items-baseline gap-2 mb-1">
-                          <span className="text-4xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                            {qtyL > 0 ? (qtyL < 0.001 ? qtyL.toFixed(6) : qtyL < 1 ? qtyL.toFixed(4) : qtyL.toLocaleString(undefined, { maximumFractionDigits: 4 })) : '—'}
-                          </span>
-                          <span className="text-xl font-bold" style={{ color: ccL }}>{order.coin}</span>
-                        </div>
-                        {/* 当前价值 */}
-                        {currentValueL != null && (
-                          <div className="text-base font-medium mb-4" style={{ color: '#4B5563' }}>
-                            ≈ {currentValueL.toLocaleString(undefined, { maximumFractionDigits: 2 })} U
-                          </div>
-                        )}
-                        {/* 分隔线 */}
-                        <div className="border-t mb-4" style={{ borderColor: '#E8EFFF' }} />
-                        {/* 详情列表：单列全宽 */}
-                        <div className="space-y-2.5">
-                          {rows.map((row, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                              <span className="text-sm" style={{ color: '#9CA3AF' }}>{row.label}</span>
-                              <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{row.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              /* 大图模式：单列放大，复用FunderOrderCard并传入viewMode='large' */
+              <div className="space-y-3">
+                {(funderAssetOrders as any[]).map((order: any) => (
+                  <FunderOrderCard
+                    key={order.id}
+                    order={order}
+                    ledgerId={ledgerId}
+                    livePrices={funderLivePrices}
+                    paidInterest={(interestSummary as any)?.[order.id] ?? 0}
+                    onClick={() => {}}
+                    canClick={false}
+                    priceDirection={funderPriceDirection}
+                    viewMode="large"
+                  />
+                ))}
               </div>
             ) : (
               /* 小图模式：紧凑列表 */
