@@ -13749,6 +13749,7 @@ export const appRouter = router({
           id: r.id,
           beneficiaryUserId: r.beneficiary_user_id,
           ratio: parseFloat(r.ratio),
+          // 本人标识在后面统一处理
           name: r.name || r.username || '未知',
           username: r.username || '',
         });
@@ -13765,8 +13766,8 @@ export const appRouter = router({
           return (rows2 as any[]).map(mapRow);
         }
 
-        // 追溯完整上级链（从 sourceUserId 往上到 YJH），用于确定正确排序
-        // WITH RECURSIVE 查询：本人 → 直接推荐人 → ... → YJH，结果按层级顺序返回
+        // 追溯完整上级链（从 sourceUserId 往上，不设终点，追到最顶端）
+        // WITH RECURSIVE 查询：本人(depth=0) → 直接推荐人(depth=1) → ... → 最顶层
         const [chainRows] = await (conn as any).execute(
           `WITH RECURSIVE chain AS (
             SELECT id, name, username, invited_by_user_id, 0 AS depth FROM users WHERE id = ?
@@ -13774,12 +13775,12 @@ export const appRouter = router({
             SELECT u.id, u.name, u.username, u.invited_by_user_id, c.depth + 1
             FROM users u
             INNER JOIN chain c ON u.id = c.invited_by_user_id
-            WHERE c.invited_by_user_id IS NOT NULL AND c.depth < 10
+            WHERE c.invited_by_user_id IS NOT NULL AND c.depth < 20
           )
           SELECT id, name, username, depth FROM chain ORDER BY depth ASC`,
           [input.sourceUserId]
         );
-        // chainUsers[0] = 本人, chainUsers[1] = 直接推荐人, ..., 最后 = YJH
+        // chainUsers[0] = 本人, chainUsers[1] = 直接推荐人, ..., 最后 = 最顶层
         const chainUsers: Array<{ id: number; name: string; username: string; depth: number }> = (chainRows as any[]);
 
         // 构建 id -> 层级深度 映射（本人=0，越往上越大）
@@ -13788,9 +13789,16 @@ export const appRouter = router({
 
         // 构建完整的受益人 map（已有记录 + 补充缺失的）
         const allMap = new Map<number, any>();
-        for (const r of list) allMap.set(r.beneficiaryUserId, r);
+        for (const r of list) {
+          // 对已有记录中的本人行，补加（本人）标识
+          if (r.beneficiaryUserId === input.sourceUserId && !r.name.includes('（本人）')) {
+            allMap.set(r.beneficiaryUserId, { ...r, name: r.name + '（本人）' });
+          } else {
+            allMap.set(r.beneficiaryUserId, r);
+          }
+        }
 
-        // 补充链上缺失的人（本人 + 中间层推荐人）
+        // 补充链上缺失的人（本人 + 中间层推荐人 + YJH上面的人）
         for (const u of chainUsers) {
           if (!allMap.has(u.id)) {
             const isSelf = u.id === input.sourceUserId;
@@ -13804,11 +13812,11 @@ export const appRouter = router({
           }
         }
 
-        // 按上级链排序：YJH（depth最大）在顶，本人（depth=0）在底
-        // 不在链上的人（理论上不存在）放在中间
+        // 按上级链排序：最顶层（depth最大）在顶，本人（depth=0）在底
+        // 不在链上的人（数据库有但链上没有）放在最前面
         const sorted = Array.from(allMap.values()).sort((a: any, b: any) => {
-          const da = depthMap.has(a.beneficiaryUserId) ? depthMap.get(a.beneficiaryUserId)! : 999;
-          const db = depthMap.has(b.beneficiaryUserId) ? depthMap.get(b.beneficiaryUserId)! : 999;
+          const da = depthMap.has(a.beneficiaryUserId) ? depthMap.get(a.beneficiaryUserId)! : 9999;
+          const db = depthMap.has(b.beneficiaryUserId) ? depthMap.get(b.beneficiaryUserId)! : 9999;
           return db - da; // 深度大（上级）排前面，深度小（本人）排后面
         });
 
