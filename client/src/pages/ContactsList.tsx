@@ -1962,11 +1962,7 @@ export default function ContactsList() {
                     />
                   </div>
                 )}
-                {/* 左侧颜色指示条 */}
-                <div 
-                  className="absolute left-0 top-0 bottom-0 w-1"
-                  style={{ backgroundColor: getInteractionStatusColor((contact as any).daysSinceLastInteraction) }}
-                />
+
                 <CardHeader className="p-3 sm:p-4 pb-2 pl-4 sm:pl-5">
                   <div className="flex items-start justify-between">
                     <div className="flex flex-col gap-1">
