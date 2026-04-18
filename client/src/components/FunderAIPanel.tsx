@@ -130,12 +130,16 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
   const handleSendTest = (channel: 'email' | 'sms') => {
     setTestConfirm(null); // 先关闭弹窗
     setTestSending(true);
+    // 将 selectedLevel 转换为具体的百分比数字
+    const levelPctMap: Record<string, number> = { pct10: 10, pct20: 20, pct30: 30 };
+    const gapPct = levelPctMap[selectedLevel] ?? 20;
     sendTestNotification.mutate({
       orderId,
       ledgerId,
       channel,
       coin: orderInfo.coin,
       buyValue: orderInfo.buyValue ?? 50000,
+      gapPct,
     });
   };
 

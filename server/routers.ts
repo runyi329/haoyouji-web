@@ -13162,6 +13162,7 @@ export const appRouter = router({
         channel: z.enum(['email', 'sms']),
         coin: z.string().optional(),
         buyValue: z.number().optional(),
+        gapPct: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -13175,8 +13176,8 @@ export const appRouter = router({
         const userPhone: string | null = (ctx.user as any).phone || null;
         const coin = input.coin || 'ETH';
         const buyValue = input.buyValue || 50000;
-        const gapPct = 20;
-        const gapAmount = buyValue * 0.2;
+        const gapPct = input.gapPct ?? 20;
+        const gapAmount = buyValue * (gapPct / 100);
         const collateralValue = buyValue * 0.75;
         const accruedInterest = buyValue * 0.05;
         console.log(`[测试通知] channel=${input.channel} userEmail=${userEmail} userPhone=${userPhone} userId=${ctx.user.id}`);
