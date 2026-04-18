@@ -13105,7 +13105,7 @@ export const appRouter = router({
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const rows = await db.execute(
-          sql`SELECT alert_level, last_triggered_state, last_triggered_at FROM funder_order_alert_state WHERE order_id = ${input.orderId} LIMIT 1`
+          sql`SELECT alert_level, last_triggered_state, last_triggered_at, email_enabled, phone_enabled FROM funder_order_alert_state WHERE order_id = ${input.orderId} LIMIT 1`
         ) as any;
         const row = (rows[0]?.[0] ?? rows[0]);
         // 邮箱和手机直接从 ctx.user 获取（ctx.user 已从 crm_db.users 查出）
@@ -13117,6 +13117,8 @@ export const appRouter = router({
           lastTriggeredAt: row?.last_triggered_at || null,
           userEmail,
           userPhone,
+          emailEnabled: row?.email_enabled !== undefined ? !!row.email_enabled : true,
+          phoneEnabled: row?.phone_enabled !== undefined ? !!row.phone_enabled : true,
         };
       }),
     // 设置订单预警级别
@@ -13124,7 +13126,9 @@ export const appRouter = router({
       .input(z.object({
         orderId: z.number(),
         ledgerId: z.number(),
-        alertLevel: z.enum(['none', 'negative', 'pct5', 'pct10']),
+        alertLevel: z.enum(['none', 'pct10', 'pct20', 'pct30']),
+        emailEnabled: z.boolean().optional(),
+        phoneEnabled: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -13139,10 +13143,12 @@ export const appRouter = router({
         const orderUserId = (orderRows[0]?.[0] ?? orderRows[0])?.user_id;
         const isManager = role === 'owner' || role === 'admin';
         if (!isManager && orderUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const emailEnabledVal = input.emailEnabled !== false ? 1 : 0;
+        const phoneEnabledVal = input.phoneEnabled !== false ? 1 : 0;
         await db.execute(
-          sql`INSERT INTO funder_order_alert_state (order_id, alert_level)
-           VALUES (${input.orderId}, ${input.alertLevel})
-           ON DUPLICATE KEY UPDATE alert_level = ${input.alertLevel}, updated_at = NOW()`
+          sql`INSERT INTO funder_order_alert_state (order_id, alert_level, email_enabled, phone_enabled)
+           VALUES (${input.orderId}, ${input.alertLevel}, ${emailEnabledVal}, ${phoneEnabledVal})
+           ON DUPLICATE KEY UPDATE alert_level = ${input.alertLevel}, email_enabled = ${emailEnabledVal}, phone_enabled = ${phoneEnabledVal}, updated_at = NOW()`
         );
         return { success: true };
       }),
