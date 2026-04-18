@@ -185,6 +185,33 @@ export default function ContactsList() {
   const [showHistory, setShowHistory] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 彻底禁用浏览器右滑返回手势（JS层拦截横向touchmove）
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let startX = 0;
+    let startY = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      // 横向滑动幅度大于纵向，且方向向右（从左边缘滑入），阻止默认行为
+      if (Math.abs(dx) > Math.abs(dy) && dx > 0) {
+        e.preventDefault();
+      }
+    };
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+    };
+  }, []);
   
   // 标签管理相关状态
   const [showTagManagement, setShowTagManagement] = useState(false);
@@ -1057,7 +1084,7 @@ export default function ContactsList() {
   const dropdownContacts = filteredContacts?.slice(0, 10) || [];
 
   return (
-      <div className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] min-h-screen" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
+      <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] min-h-screen" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
       {/* 顶部深红色头部 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-5 rounded-b-3xl mb-4">
         <div className="flex items-center justify-between mb-2">
