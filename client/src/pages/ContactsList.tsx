@@ -1963,7 +1963,7 @@ export default function ContactsList() {
                   </div>
                 )}
 
-                <CardHeader className="p-3 sm:p-4 pb-2 pl-4 sm:pl-5">
+                <CardHeader className="p-3 sm:p-4 pb-1 pl-4 sm:pl-5">
                   <div className="flex items-start justify-between">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
@@ -2205,7 +2205,7 @@ export default function ContactsList() {
                   )}
                   {/* 联络状态显示 */}
                   <div 
-                    className="text-xs mt-2 pt-2 border-t border-gray-100 dark:border-gray-700"
+                    className="text-xs mt-1 pt-1 border-t border-gray-100 dark:border-gray-700"
                     style={{ color: getInteractionStatusColor((contact as any).daysSinceLastInteraction) }}
                   >
                     {(contact as any).daysSinceLastInteraction !== null ? (
