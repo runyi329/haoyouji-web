@@ -1,3 +1,4 @@
+# triggered: 2026-04-18 retry after key update
 name: zz-diagnose-sms
 on:
   push:
