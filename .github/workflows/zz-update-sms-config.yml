@@ -1,0 +1,46 @@
+name: zz-update-sms-config
+on:
+  push:
+    paths:
+      - '.github/workflows/zz-update-sms-config.yml'
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 更新服务器SMS环境变量
+        env:
+          SMS_SECRET_ID: ${{ secrets.TENCENT_SMS_SECRET_ID }}
+          SMS_SECRET_KEY: ${{ secrets.TENCENT_SMS_SECRET_KEY }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "bash -s" << ENDSSH
+          set -e
+          APP_DIR=""
+          for d in /root/haoyouji-web /home/ubuntu/haoyouji-web /var/www/haoyouji-web; do
+            if [ -f "\$d/.env" ]; then
+              APP_DIR="\$d"
+              break
+            fi
+          done
+          echo "项目目录: \$APP_DIR"
+          cd "\$APP_DIR"
+          cp .env .env.bak.\$(date +%Y%m%d%H%M%S)
+          sed -i 's|^TENCENT_SMS_APP_ID=.*|TENCENT_SMS_APP_ID=1401098628|' .env
+          sed -i 's|^TENCENT_SMS_SIGN_NAME=.*|TENCENT_SMS_SIGN_NAME=北京润仪商业中心|' .env
+          sed -i 's|^TENCENT_SMS_TEMPLATE_ID=.*|TENCENT_SMS_TEMPLATE_ID=2623560|' .env
+          sed -i "s|^COS_SECRET_ID=.*|COS_SECRET_ID=$SMS_SECRET_ID|" .env
+          sed -i "s|^COS_SECRET_KEY=.*|COS_SECRET_KEY=$SMS_SECRET_KEY|" .env
+          echo "=== 更新后SMS配置 ==="
+          grep "TENCENT_SMS_APP_ID\|TENCENT_SMS_SIGN_NAME\|TENCENT_SMS_TEMPLATE_ID" .env
+          echo "COS_SECRET_ID前8位: \$(grep '^COS_SECRET_ID=' .env | cut -d= -f2 | cut -c1-8)***"
+          pm2 restart all --update-env 2>&1 | tail -5 || true
+          echo "PM2已重启，新配置生效"
+          ENDSSH
