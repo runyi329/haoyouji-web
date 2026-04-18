@@ -204,6 +204,8 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
 
   // 计算当前担保缺口状态
   const { collateralValue, floatPnl, accrued, paidInterest, buyValue } = orderInfo;
+  // 是否有担保物
+  const hasCollateral = collateralValue !== null;
   const exposure = collateralValue !== null && floatPnl !== null
     ? collateralValue + floatPnl - accrued + paidInterest
     : collateralValue !== null
@@ -214,7 +216,11 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
     : null;
 
   const getRiskLevel = () => {
-    if (exposure === null) return null;
+    if (exposure === null) {
+      // 无担保物时，根据待结利息和买入价值判断
+      if (accrued > 0) return 'no_collateral';
+      return 'no_collateral';
+    }
     if (exposure >= 0) return 'safe';
     if (exposurePct && exposurePct >= 30) return 'pct30';
     if (exposurePct && exposurePct >= 20) return 'pct20';
@@ -333,17 +339,19 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                   riskLevel === 'pct30' ? '#FFF1F1' :
                     riskLevel === 'pct20' ? '#FFF7ED' :
                       riskLevel === 'pct10' ? '#FFFBEB' :
-                        riskLevel === 'negative' ? '#FFF7ED' : '#F9FAFB',
-                border: `1px solid ${riskLevel === 'safe' ? '#BBF7D0' : riskLevel === 'pct30' ? '#FECACA' : riskLevel === 'pct20' ? '#FED7AA' : riskLevel === 'pct10' ? '#FDE68A' : riskLevel === 'negative' ? '#FED7AA' : '#E5E7EB'}`
+                        riskLevel === 'negative' ? '#FFF7ED' :
+                          riskLevel === 'no_collateral' ? '#EFF6FF' : '#F9FAFB',
+                border: `1px solid ${riskLevel === 'safe' ? '#BBF7D0' : riskLevel === 'pct30' ? '#FECACA' : riskLevel === 'pct20' ? '#FED7AA' : riskLevel === 'pct10' ? '#FDE68A' : riskLevel === 'negative' ? '#FED7AA' : riskLevel === 'no_collateral' ? '#BFDBFE' : '#E5E7EB'}`
               }}>
                 <div className="flex items-center gap-2 mb-2">
                   {riskLevel === 'safe' && <CheckCircle2 className="w-4 h-4" style={{ color: '#16A34A' }} />}
-                  {riskLevel !== 'safe' && riskLevel !== null && <AlertTriangle className="w-4 h-4" style={{ color: riskLevel === 'pct30' ? '#EF4444' : riskLevel === 'pct20' ? '#F97316' : '#F59E0B' }} />}
+                  {riskLevel !== 'safe' && riskLevel !== null && riskLevel !== 'no_collateral' && <AlertTriangle className="w-4 h-4" style={{ color: riskLevel === 'pct30' ? '#EF4444' : riskLevel === 'pct20' ? '#F97316' : '#F59E0B' }} />}
+                  {riskLevel === 'no_collateral' && <Info className="w-4 h-4" style={{ color: '#1A56DB' }} />}
                   {riskLevel === null && <Info className="w-4 h-4" style={{ color: '#9CA3AF' }} />}
                   <span className="text-sm font-semibold" style={{
-                    color: riskLevel === 'safe' ? '#15803D' : riskLevel === 'pct30' ? '#DC2626' : riskLevel === 'pct20' ? '#C2410C' : riskLevel === 'pct10' ? '#B45309' : riskLevel === 'negative' ? '#C2410C' : '#6B7280'
+                    color: riskLevel === 'safe' ? '#15803D' : riskLevel === 'pct30' ? '#DC2626' : riskLevel === 'pct20' ? '#C2410C' : riskLevel === 'pct10' ? '#B45309' : riskLevel === 'negative' ? '#C2410C' : riskLevel === 'no_collateral' ? '#1A56DB' : '#6B7280'
                   }}>
-                    {riskLevel === 'safe' ? '担保充足' : riskLevel === 'pct30' ? '缺口较大' : riskLevel === 'pct20' ? '缺口偏大' : riskLevel === 'pct10' ? '缺口提示' : riskLevel === 'negative' ? '轻微缺口' : '暂无数据'}
+                    {riskLevel === 'safe' ? '担保充足' : riskLevel === 'pct30' ? '缺口较大' : riskLevel === 'pct20' ? '缺口偏大' : riskLevel === 'pct10' ? '缺口提示' : riskLevel === 'negative' ? '轻微缺口' : riskLevel === 'no_collateral' ? '无担保物订单' : '暂无数据'}
                   </span>
                 </div>
                 {exposure !== null ? (
@@ -371,6 +379,29 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                       </div>
                     )}
                   </div>
+                ) : riskLevel === 'no_collateral' ? (
+                  <div className="text-xs space-y-1" style={{ color: '#4B5563' }}>
+                    {buyValue !== null && buyValue > 0 && (
+                      <div className="flex justify-between">
+                        <span>买入价值</span>
+                        <span className="font-semibold">{buyValue.toFixed(2)} U</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>待结利息</span>
+                      <span className="font-semibold" style={{ color: accrued > 0 ? '#D97706' : '#16A34A' }}>{accrued.toFixed(2)} U</span>
+                    </div>
+                    {paidInterest > 0 && (
+                      <div className="flex justify-between">
+                        <span>已结利息</span>
+                        <span>{paidInterest.toFixed(2)} U</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>担保物</span>
+                      <span style={{ color: '#9CA3AF' }}>未设置</span>
+                    </div>
+                  </div>
                 ) : (
                   <div className="text-xs" style={{ color: '#9CA3AF' }}>暂无实时价格，无法计算风险敞口</div>
                 )}
@@ -396,7 +427,9 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                           ? `担保缺口约 ${exposurePct?.toFixed(1)}%，目前处于轻微缺口区间，建议留意价格变化，与对方保持正常沟通即可。`
                           : riskLevel === 'negative'
                             ? `担保物略低于待结利息，建议与对方确认后续安排，保持良好的沟通节奏。`
-                            : `当前无实时价格数据，无法进行风险评估。建议手动确认 ${orderInfo.coin} 当前价格并评估担保充足性。`
+                            : riskLevel === 'no_collateral'
+                              ? `该订单未设置担保物，待结利息 ${accrued.toFixed(2)} U。建议与对方确认利息结算安排，如需可考虑补充担保物以降低风险。`
+                              : `当前无实时价格数据，无法进行风险评估。建议手动确认 ${orderInfo.coin} 当前价格并评估担保充足性。`
                   }
                 </p>
               </div>
