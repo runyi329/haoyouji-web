@@ -11,23 +11,45 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-      - name: Check SMS config
+      - name: Send test SMS to 13127919173
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
-            echo "=== 检查 /root/haoyouji-web/.env 中的短信配置 ==="
-            if [ -f /root/haoyouji-web/.env ]; then
-              grep -E "TENCENT|SMS|COS_SECRET" /root/haoyouji-web/.env | sed 's/=.*/=***已配置***/'
-            else
-              echo ".env 文件不存在"
-            fi
+            source /root/haoyouji-web/.env 2>/dev/null || true
+            echo "=== 短信配置 ==="
+            echo "APP_ID: ${TENCENT_SMS_APP_ID:0:4}***"
+            echo "SIGN_NAME: $TENCENT_SMS_SIGN_NAME"
+            echo "TEMPLATE_ID: $TENCENT_SMS_TEMPLATE_ID"
+            echo "REGION: $TENCENT_SMS_REGION"
             echo ""
-            echo "=== 检查 /home/ubuntu/haoyouji-web/.env ==="
-            if [ -f /home/ubuntu/haoyouji-web/.env ]; then
-              grep -E "TENCENT|SMS|COS_SECRET" /home/ubuntu/haoyouji-web/.env | sed 's/=.*/=***已配置***/'
-            else
-              echo ".env 文件不存在"
-            fi
-            echo ""
-            echo "=== 检查 PM2 进程环境变量 ==="
-            pm2 env 0 2>/dev/null | grep -E "TENCENT|SMS" | sed 's/: .*/: ***已配置***/' || echo "PM2 env 查询失败"
+            echo "=== 发送测试短信到 13127919173 ==="
+            node -e "
+const tencentcloud = require('/root/haoyouji-web/node_modules/tencentcloud-sdk-nodejs');
+const SmsClient = tencentcloud.sms.v20210111.Client;
+const client = new SmsClient({
+  credential: {
+    secretId: process.env.COS_SECRET_ID,
+    secretKey: process.env.COS_SECRET_KEY,
+  },
+  region: process.env.TENCENT_SMS_REGION || 'ap-guangzhou',
+  profile: { httpProfile: { endpoint: 'sms.tencentcloudapi.com' } },
+});
+const params = {
+  SmsSdkAppId: process.env.TENCENT_SMS_APP_ID,
+  SignName: process.env.TENCENT_SMS_SIGN_NAME,
+  TemplateId: process.env.TENCENT_SMS_TEMPLATE_ID,
+  PhoneNumberSet: ['+8613127919173'],
+  TemplateParamSet: ['888888', '5'],
+};
+console.log('发送中...');
+client.SendSms(params).then(res => {
+  const r = res.SendStatusSet[0];
+  if (r.Code === 'Ok') {
+    console.log('✅ 短信发送成功！SerialNo:', r.SerialNo);
+  } else {
+    console.log('❌ 发送失败:', r.Code, r.Message);
+  }
+}).catch(err => {
+  console.error('❌ 异常:', err.code, err.message);
+});
+" 2>&1
           ENDSSH
