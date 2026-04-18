@@ -13183,6 +13183,7 @@ export const appRouter = router({
           if (!userEmail) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定邮箱' });
           const { sendAlertEmail } = await import('./email-service.js');
           console.log(`[测试通知] 开始发送邮件至 ${userEmail}`);
+          try {
           await sendAlertEmail({
             to: userEmail,
             userName: ctx.user.name || '用户',
@@ -13201,6 +13202,10 @@ export const appRouter = router({
             },
           });
           console.log(`[测试通知] 邮件发送成功至 ${userEmail}`);
+          } catch(emailErr: any) {
+            console.error(`[测试通知] 邮件发送失败:`, emailErr?.message, emailErr?.code, emailErr?.response);
+            throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `邮件发送失败: ${emailErr?.message || '未知错误'}` });
+          }
           return { success: true, channel: 'email', to: userEmail };
         } else {
           if (!userPhone) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定手机号' });
