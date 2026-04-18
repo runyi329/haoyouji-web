@@ -13178,9 +13178,11 @@ export const appRouter = router({
         const gapAmount = buyValue * 0.2;
         const collateralValue = buyValue * 0.75;
         const accruedInterest = buyValue * 0.05;
+        console.log(`[测试通知] channel=${input.channel} userEmail=${userEmail} userPhone=${userPhone} userId=${ctx.user.id}`);
         if (input.channel === 'email') {
           if (!userEmail) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定邮箱' });
           const { sendAlertEmail } = await import('./email-service.js');
+          console.log(`[测试通知] 开始发送邮件至 ${userEmail}`);
           await sendAlertEmail({
             to: userEmail,
             userName: ctx.user.name || '用户',
@@ -13198,6 +13200,7 @@ export const appRouter = router({
               subjectTemplate: '【测试】《好友记》{coin} 订单担保缺口提醒（模拟数据）',
             },
           });
+          console.log(`[测试通知] 邮件发送成功至 ${userEmail}`);
           return { success: true, channel: 'email', to: userEmail };
         } else {
           if (!userPhone) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定手机号' });
