@@ -888,7 +888,12 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved }: {
         className="flex items-center justify-between cursor-pointer select-none"
         onClick={() => setExpanded(v => !v)}
       >
-        <span className="shrink-0" style={{ color: '#9CA3AF' }}>备注</span>
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0" style={{ color: '#9CA3AF' }}>备注</span>
+          {notes.length > 0 && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>{notes.length}</span>
+          )}
+        </div>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
           <polyline points="6 9 12 15 18 9" />
