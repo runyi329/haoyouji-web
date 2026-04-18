@@ -128,6 +128,7 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
   });
 
   const handleSendTest = (channel: 'email' | 'sms') => {
+    setTestConfirm(null); // 先关闭弹窗
     setTestSending(true);
     sendTestNotification.mutate({
       orderId,
