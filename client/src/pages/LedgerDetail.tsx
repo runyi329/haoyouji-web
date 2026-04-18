@@ -990,6 +990,49 @@ function smartQty(val: number | string): string {
   return parseFloat(n.toFixed(8)).toString();
 }
 
+// 小图模式单张订单卡片（独立组件，可使用 Hook）
+function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: Record<string, number> }) {
+  const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
+  const cc = coinColorMap[order.coin] || '#6B7280';
+  const qty = parseFloat(order.buy_quantity || '0');
+  const livePrice = livePrices[order.coin];
+  const currentValue = livePrice && qty > 0 ? qty * livePrice : null;
+  const isEnded = order.status === 'ended';
+  // 待结利息：基于计息基数、年利率、计息开始日实时计算
+  const accrued = useAccruedInterest(
+    order.interest_base || order.buy_value || null,
+    order.interest_rate_annual || order.interestRateAnnual || null,
+    order.interest_start_date || order.interestStartDate || null
+  );
+  return (
+    <div
+      className="rounded-xl px-3 py-2"
+      style={{ background: '#fff', border: '1px solid #E0E8FF', boxShadow: '0 1px 4px rgba(26,86,219,0.06)', opacity: isEnded ? 0.6 : 1 }}
+    >
+      <div className="flex items-center gap-3">
+        {/* 左侧币种色条 */}
+        <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: cc, minHeight: 28 }} />
+        {/* 币种标签 */}
+        <span className="text-xs font-bold" style={{ color: cc }}>{order.coin}</span>
+        {/* 当前资产 */}
+        <div className="flex-1 flex items-center gap-1">
+          <span className="text-xs text-gray-400">当前资产</span>
+          <span className="text-xs font-medium tabular-nums" style={{ color: '#1A2340' }}>
+            {currentValue != null ? `${currentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '—'}
+          </span>
+        </div>
+        {/* 待结利息 */}
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-gray-400">待结利息</span>
+          <span className="text-xs font-medium tabular-nums" style={{ color: '#F59E0B' }}>
+            {accrued > 0 ? `${accrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U` : '—'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // 单张资金方订单卡片（左右两栏布局）
 // AItag Lottie动效数据直接内联，避免fetch/CORS问题
 
@@ -3730,45 +3773,15 @@ export default function LedgerDetail() {
                 ))}
               </div>
             ) : (
-              /* 小图模式：只显示当前资产和当前利息 */
+              /* 小图模式：只显示当前资产和待结利息 */
               <div className="space-y-2">
-                {(funderAssetOrders as any[]).map((order: any) => {
-                  const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
-                  const cc = coinColorMap[order.coin] || '#6B7280';
-                  const qty = parseFloat(order.buy_quantity || '0');
-                  const livePrice = funderLivePrices[order.coin];
-                  const currentValue = livePrice && qty > 0 ? qty * livePrice : null;
-                  const accrued = (interestSummary as any)?.[order.id] ?? 0;
-                  const isEnded = order.status === 'ended';
-                  return (
-                    <div
-                      key={order.id}
-                      className="rounded-xl px-3 py-2"
-                      style={{ background: '#fff', border: '1px solid #E0E8FF', boxShadow: '0 1px 4px rgba(26,86,219,0.06)', opacity: isEnded ? 0.6 : 1 }}
-                    >
-                      <div className="flex items-center gap-3">
-                        {/* 左侧币种色条 */}
-                        <div className="w-1 self-stretch rounded-full flex-shrink-0" style={{ background: cc, minHeight: 28 }} />
-                        {/* 币种标签 */}
-                        <span className="text-xs font-bold" style={{ color: cc }}>{order.coin}</span>
-                        {/* 当前资产 */}
-                        <div className="flex-1 flex items-center gap-1">
-                          <span className="text-xs text-gray-400">当前资产</span>
-                          <span className="text-xs font-medium tabular-nums" style={{ color: '#1A2340' }}>
-                            {currentValue != null ? `${currentValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '—'}
-                          </span>
-                        </div>
-                        {/* 当前利息 */}
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs text-gray-400">当前利息</span>
-                          <span className="text-xs font-medium tabular-nums" style={{ color: '#F59E0B' }}>
-                            {accrued > 0 ? `${accrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U` : '—'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                {(funderAssetOrders as any[]).map((order: any) => (
+                  <FunderOrderSmallCard
+                    key={order.id}
+                    order={order}
+                    livePrices={funderLivePrices}
+                  />
+                ))}
               </div>
             )}
           </div>
