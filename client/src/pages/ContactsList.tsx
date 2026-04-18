@@ -380,8 +380,8 @@ export default function ContactsList() {
     filterType: filterType || undefined, // 传递筛选类型给后端
   }, {
     enabled: viewMode !== 'company', // 公司视图不使用这个 API
-    refetchOnMount: 'always', // 确保页面重新进入时刷新数据
-    staleTime: 0, // 设置数据立即过期，确保每次都重新获取
+    refetchOnMount: true, // 页面重新挂载时刷新
+    staleTime: 30_000, // 30秒内不重复请求，减少不必要的网络开销
   });
   
   // 当数据加载完成时，累加到已加载列表
