@@ -1204,3 +1204,24 @@ nav.safe-area-inset-bottom {
 .animate-icon-pulse {
   animation: icon-pulse 1.6s ease-in-out infinite;
 }
+
+/* Toast 通知 - 强制屏幕正中央显示 */
+[data-sonner-toaster] {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  bottom: auto !important;
+  right: auto !important;
+  transform: translate(-50%, -50%) !important;
+  width: auto !important;
+  max-width: 320px !important;
+  z-index: 99999 !important;
+}
+[data-sonner-toaster] [data-sonner-toast] {
+  border-radius: 14px !important;
+  font-size: 15px !important;
+  padding: 16px 22px !important;
+  text-align: center !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important;
+  min-width: 220px !important;
+}
