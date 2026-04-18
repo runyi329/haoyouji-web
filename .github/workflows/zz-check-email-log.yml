@@ -1,4 +1,4 @@
-# check email error log v2
+# check email error log v3
 name: zz-check-email-log
 on:
   push:
@@ -14,8 +14,8 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-      - name: 查看邮件相关日志
+      - name: 检查接口是否存在
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "echo '=== OUT LOG ===' && tail -80 /home/ubuntu/.pm2/logs/haoyouji-web-out-0.log 2>/dev/null | grep -i 'sendAlert\|email\|smtp\|nodemailer\|funderSend\|Error\|error' | tail -20; echo '=== ERROR LOG ===' && tail -200 /home/ubuntu/.pm2/logs/haoyouji-web-error-0.log 2>/dev/null | grep -v 'Scanner\|ETIMEDOUT\|BSC\|ERC20\|Solana\|Missing session' | tail -30"
+            "grep -c 'funderSendTestNotification' /home/ubuntu/haoyouji-web/dist/index.js 2>/dev/null || echo '0 - not found'; echo '--- last 50 lines of out log ---'; tail -50 /home/ubuntu/.pm2/logs/haoyouji-web-out-0.log 2>/dev/null | grep -v 'Scanner\|ETIMEDOUT\|BSC\|ERC20\|Solana\|能源价格' | tail -20"
