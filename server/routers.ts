@@ -13108,10 +13108,29 @@ export const appRouter = router({
           sql`SELECT alert_level, last_triggered_state, last_triggered_at FROM funder_order_alert_state WHERE order_id = ${input.orderId} LIMIT 1`
         ) as any;
         const row = (rows[0]?.[0] ?? rows[0]);
-        const userRows = await db.execute(
-          sql`SELECT email FROM users WHERE id = ${ctx.user.id} LIMIT 1`
-        ) as any;
-        const userEmail = (userRows[0]?.[0] ?? userRows[0])?.email || null;
+        // 邮箱存在腾讯云数据库（ORIGINAL_DATABASE_URL），通过 openId 查询
+        let userEmail: string | null = null;
+        try {
+          const mysql2 = await import('mysql2/promise');
+          const extDbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || '';
+          const parsedExtUrl = new URL(extDbUrl.replace(/^mysql:\/\//, 'http://'));
+          const extConn = await mysql2.createConnection({
+            host: parsedExtUrl.hostname,
+            port: parseInt(parsedExtUrl.port) || 3306,
+            user: decodeURIComponent(parsedExtUrl.username),
+            password: decodeURIComponent(parsedExtUrl.password),
+            database: parsedExtUrl.pathname.replace(/^\//, ''),
+            ssl: { rejectUnauthorized: false },
+          });
+          const [emailRows] = await extConn.execute(
+            'SELECT email FROM users WHERE openId = ? LIMIT 1',
+            [ctx.user.openId]
+          ) as any;
+          await extConn.end();
+          userEmail = emailRows?.[0]?.email || null;
+        } catch (e) {
+          console.warn('[funderGetAlertState] 查询邮箱失败:', e);
+        }
         return {
           alertLevel: row?.alert_level || 'none',
           lastTriggeredState: row?.last_triggered_state || 'none',

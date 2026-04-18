@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
-import { X, Mail, Bell, BellOff, ChevronRight, Loader2, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { X, Mail, Bell, BellOff, ChevronRight, Loader2, AlertTriangle, CheckCircle2, Info, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 interface FunderAIPanelProps {
   orderId: number;
@@ -33,6 +34,7 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
   const [activeTab, setActiveTab] = useState<'analysis' | 'notify'>('analysis');
   const [selectedLevel, setSelectedLevel] = useState<AlertLevel>('none');
   const [saving, setSaving] = useState(false);
+  const [, setLocation] = useLocation();
 
   const { data: alertState, isLoading: alertLoading, refetch } = trpc.ledger.funderGetAlertState.useQuery(
     { orderId, ledgerId },
@@ -232,11 +234,20 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                   ) : alertState?.userEmail ? (
                     <div className="text-xs truncate" style={{ color: '#1A56DB' }}>{alertState.userEmail}</div>
                   ) : (
-                    <div className="text-xs" style={{ color: '#EF4444' }}>未绑定邮箱，请先在个人中心绑定</div>
+                    <div className="text-xs" style={{ color: '#EF4444' }}>未绑定邮箱</div>
                   )}
                 </div>
-                {alertState?.userEmail && (
+                {alertLoading ? null : alertState?.userEmail ? (
                   <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#16A34A' }} />
+                ) : (
+                  <button
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
+                    style={{ background: '#EFF6FF', color: '#1A56DB', border: '1px solid #BFDBFE' }}
+                    onClick={() => { onClose(); setLocation('/profile/edit'); }}
+                  >
+                    去绑定
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
                 )}
               </div>
 
