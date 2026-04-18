@@ -1025,13 +1025,13 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
       <div className="flex" style={{ minHeight: '100px' }}>
 
         {/* 左栏：订单信息 */}
-        <div className="flex-1 p-4 pr-3 relative">
+        <div className="flex-1 p-4 pr-3" style={{ position: 'relative' }}>
           {/* 标题：持有资产（固定高度与右栏对齐） */}
-          <div style={{ color: '#3B82F6', height: '20px' }}>
-            <span className="text-xs font-medium leading-5">持有资产</span>
+          <div className="h-5 flex items-center" style={{ color: '#3B82F6' }}>
+            <span className="text-xs font-medium">持有资产</span>
           </div>
           {dc.aiIcon && (
-            <div className="w-8 h-8 rounded-full flex items-center justify-center absolute" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', boxShadow: '0 2px 8px rgba(26,86,219,0.35)', top: '16px', right: '12px' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', boxShadow: '0 2px 8px rgba(26,86,219,0.35)', position: 'absolute', top: '16px', right: '12px' }}>
               <Lottie
                 animationData={aiTagAnimData as any}
                 loop={true}
