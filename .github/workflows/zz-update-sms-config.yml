@@ -1,3 +1,4 @@
+# triggered: 2026-04-18 fix APP_ID 1401098628
 name: zz-update-sms-config
 on:
   push:
