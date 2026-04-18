@@ -581,9 +581,19 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             <span className="text-gray-400 whitespace-nowrap">已结利息</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>
               {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
-              {displayPaid > 0 && <span className="ml-1 text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>}
             </span>
           </div>
+          {displayPaid > 0 && (
+            viewMode === 'large' ? (
+              <div className="flex justify-end">
+                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
+              </div>
+            )
+          )}
         </div>
         )}
         {order.interest_start_date && (
