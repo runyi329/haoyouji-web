@@ -13181,8 +13181,21 @@ export const appRouter = router({
         const accruedInterest = buyValue * 0.05;
         console.log(`[测试通知] channel=${input.channel} userEmail=${userEmail} userPhone=${userPhone} userId=${ctx.user.id}`);
         if (input.channel === 'email') {
-          if (!userEmail) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定邮箱' });
+          if (!userEmail) throw new TRPCError({ code: 'BAD_REQUEST', message: '未绑定邮筱' });
           console.log(`[测试通知] 开始发送邮件至 ${userEmail}`);
+          // 从数据库读取自定义模板
+          let customTemplateVars: Record<string, string> = {};
+          try {
+            const tplRows = await db.execute(
+              sql`SELECT content FROM email_templates WHERE template_key = 'alert' LIMIT 1`
+            ) as any;
+            const tplContent = (tplRows[0]?.[0] ?? tplRows[0])?.content;
+            if (tplContent) {
+              customTemplateVars = JSON.parse(tplContent);
+            }
+          } catch (tplErr) {
+            console.warn('[测试通知] 读取自定义模板失败，使用默认模板', tplErr);
+          }
           try {
           await sendAlertEmail({
             to: userEmail,
@@ -13194,11 +13207,12 @@ export const appRouter = router({
             gapAmount,
             gapPct,
             templateVars: {
-              headerTitle: '🔔 测试通知（模拟数据）',
+              ...customTemplateVars,
+              // 测试标识覆盖主题和标题，其他内容使用自定义模板
               headerSubtitle: '这是一条测试邮件，数据为模拟值',
-              alertTitle: '【测试】担保缺口已超过 {gapPct}%',
-              tipText: '这是一条测试通知，以上数据均为模拟数据，并非真实订单状态。\n\n如您收到此邮件，说明邮件通知功能已正常配置。',
-              subjectTemplate: '【测试】《好友记》{coin} 订单担保缺口提醒（模拟数据）',
+              alertTitle: '【测试】' + (customTemplateVars.alertTitle || '担保缺口已超过 {gapPct}%'),
+              tipText: customTemplateVars.tipText || '这是一条测试通知，以上数据均为模拟数据。\n\n如您收到此邮件，说明邮件通知功能已正常配置。',
+              subjectTemplate: '【测试】' + (customTemplateVars.subjectTemplate || '《好友记》{coin} 订单担保缺口提醒'),
             },
           });
           console.log(`[测试通知] 邮件发送成功至 ${userEmail}`);
