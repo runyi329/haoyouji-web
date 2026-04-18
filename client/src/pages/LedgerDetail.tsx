@@ -499,12 +499,14 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
             const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+            const elapsedSecs = Math.floor(elapsedMs / 1000);
             const elapsedLabel = elapsedDays > 0
               ? `${elapsedDays}天 ${elapsedHours}小时 ${elapsedMins}分`
               : `${elapsedHours}小时 ${elapsedMins}分`;
             const base = order.interest_base ? parseFloat(order.interest_base) : 0;
             const rate = order.interest_rate_annual ? parseFloat(order.interest_rate_annual) : 0;
             const altAccruedTip = convertAlt(displayAccrued);
+            const baseCurLabel = (order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U';
             return (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestTip(false)}>
                 <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
@@ -523,17 +525,17 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                     </div>
                     <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                       <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
-                      <div>计息基数 × 年化利率 ÷ 365 ÷ 24 ÷ 60 ÷ 60 × 已过秒数</div>
+                      <div>计息基数 × 年化利率 ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × 已过秒数</div>
                       <div className="mt-1 font-mono">
-                        <span style={{ color: '#3B82F6' }}>{base.toLocaleString()} {(order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'U'} × {rate}% ÷ 365 ÷ 24 ÷ 60 ÷ 60 × 秒数</span>
+                        <span style={{ color: '#3B82F6' }}>{base.toLocaleString()}{baseCurLabel} × {rate}% ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × {elapsedSecs.toLocaleString()}秒</span>
                       </div>
                     </div>
                     <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                      <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计算结果</div>
-                      <div className="font-mono">
-                        <span style={{ color: '#3B82F6' }}>= <strong>{displayAccrued.toFixed(6)} {interestUnit}</strong></span>
+                      <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计息结果</div>
+                      <div className="font-mono flex items-baseline gap-1">
+                        <span style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>= {displayAccrued.toFixed(6)} {interestUnit}</span>
                       </div>
-                      <div className="mt-1 font-mono" style={{ color: '#4B5563' }}>≈ {altAccruedTip.toFixed(2)} {altUnit}</div>
+                      <div className="mt-1 font-mono" style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>≈ {altAccruedTip.toFixed(2)} {altUnit}</div>
                     </div>
                   </div>
                 </div>
