@@ -3,7 +3,7 @@ import { trpc } from "@/lib/trpc";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
 import { X, Mail, Phone, Loader2, AlertTriangle, CheckCircle2, Info, ExternalLink } from "lucide-react";
-import { toast } from "sonner";
+import { centerToast as toast } from "@/components/ui/center-toast";
 import { useLocation } from "wouter";
 
 interface FunderAIPanelProps {

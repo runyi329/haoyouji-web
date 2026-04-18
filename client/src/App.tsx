@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 // App v2.1 - 强制重新构建
 import { Toaster } from "@/components/ui/sonner";
+import { CenterToastProvider } from "@/components/ui/center-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -640,9 +641,11 @@ function App() {
       <ThemeProvider defaultTheme="light">
         <ColorThemeProvider>
           <TooltipProvider>
+            <CenterToastProvider>
             <Toaster />
             <Router />
             <SuperViewBanner />
+            </CenterToastProvider>
 
           </TooltipProvider>
         </ColorThemeProvider>
