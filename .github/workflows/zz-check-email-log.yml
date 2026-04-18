@@ -13,11 +13,6 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-      - name: 测试SMTP
+      - name: 测试SMTP连接
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "node --input-type=module << 'EOF'
-import nodemailer from '/home/ubuntu/haoyouji-web/node_modules/nodemailer/lib/nodemailer.js';
-const t = nodemailer.createTransport({ host:'smtp.qq.com',port:465,secure:true,auth:{user:'tina_u@qq.com',pass:'wqettalptfmebgdf'} });
-try { await t.verify(); console.log('SMTP_OK'); } catch(e) { console.log('SMTP_ERR:'+e.message); }
-EOF
-"
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "cd /home/ubuntu/haoyouji-web && echo 'import nodemailer from \"/home/ubuntu/haoyouji-web/node_modules/nodemailer/lib/nodemailer.js\"; const t=nodemailer.createTransport({host:\"smtp.qq.com\",port:465,secure:true,auth:{user:\"tina_u@qq.com\",pass:\"wqettalptfmebgdf\"}}); try{await t.verify();console.log(\"SMTP_OK\");}catch(e){console.log(\"SMTP_ERR:\"+e.message);}' > /tmp/te.mjs && node /tmp/te.mjs 2>&1"
