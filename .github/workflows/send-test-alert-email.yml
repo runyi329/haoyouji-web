@@ -1,0 +1,188 @@
+name: 手动发送模拟预警邮件（云亭用户）
+on:
+  workflow_dispatch:
+jobs:
+  send-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 查询云亭用户并发送模拟预警邮件
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 查询云亭用户信息 ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SELECT id, name, email, phone FROM users WHERE name LIKE '%Yunting%' OR name LIKE '%yunting%' OR name LIKE '%云亭%' OR name LIKE '%云庭%' LIMIT 5;"
+
+            echo "=== 查询所有有邮箱的用户 ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SELECT id, name, email, phone FROM users WHERE email IS NOT NULL AND email != '' LIMIT 20;"
+
+            echo "=== 查询funder_asset_orders ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SELECT o.id, o.user_id, o.coin, o.buy_value, u.name, u.email FROM funder_asset_orders o JOIN users u ON o.user_id = u.id WHERE u.email IS NOT NULL LIMIT 10;"
+
+            echo "=== 发送模拟预警邮件 ==="
+            cd /root/haoyouji-web
+
+            # 写一个临时 Node.js 脚本发邮件
+            cat > /tmp/send-alert-test.mjs << 'NODESCRIPT'
+import nodemailer from '/root/haoyouji-web/node_modules/.pnpm/nodemailer@6.10.1/node_modules/nodemailer/lib/nodemailer.js';
+import mysql from '/root/haoyouji-web/node_modules/.pnpm/mysql2@3.15.1/node_modules/mysql2/promise.js';
+
+const conn = await mysql.createConnection({
+  host: '127.0.0.1',
+  port: 3306,
+  user: 'root',
+  password: 'Miao@20190603',
+  database: 'crm_db',
+});
+
+// 查找云亭用户
+const [users] = await conn.execute(
+  "SELECT id, name, email, phone FROM users WHERE name LIKE '%Yunting%' OR name LIKE '%yunting%' OR name LIKE '%云亭%' OR name LIKE '%云庭%' LIMIT 3"
+);
+console.log('找到用户：', users);
+
+// 如果没找到，用有邮箱的第一个用户
+let targetUser = users[0];
+if (!targetUser) {
+  const [anyUsers] = await conn.execute(
+    "SELECT id, name, email FROM users WHERE email IS NOT NULL AND email != '' LIMIT 1"
+  );
+  targetUser = anyUsers[0];
+}
+
+if (!targetUser || !targetUser.email) {
+  console.log('未找到有邮箱的用户，退出');
+  process.exit(0);
+}
+
+console.log(`目标用户：${targetUser.name} <${targetUser.email}>`);
+
+// 查找该用户的一个订单
+const [orders] = await conn.execute(
+  "SELECT id, coin, buy_value, qty FROM funder_asset_orders WHERE user_id = ? LIMIT 1",
+  [targetUser.id]
+);
+const order = orders[0] || { id: 999, coin: 'BTC', buy_value: 100000, qty: 1 };
+
+await conn.end();
+
+// 模拟数据
+const coin = order.coin || 'BTC';
+const buyValue = parseFloat(order.buy_value) || 100000;
+const gapPct = 30;
+const gapAmount = (buyValue * gapPct / 100).toFixed(2);
+const collateralValue = (buyValue * 0.7).toFixed(2);
+const accruedInterest = (buyValue * 0.05).toFixed(2);
+const now = new Date();
+const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+const transporter = nodemailer.createTransport({
+  host: 'smtp.qq.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: 'tina_u@qq.com',
+    pass: 'wqettalptfmebgdf',
+  },
+});
+
+const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+    .container { max-width: 560px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%); padding: 28px 24px; text-align: center; }
+    .header h1 { color: #fff; font-size: 20px; margin: 0 0 6px; font-weight: 600; }
+    .header p { color: rgba(255,255,255,0.85); font-size: 13px; margin: 0; }
+    .body { padding: 24px; }
+    .greeting { font-size: 15px; color: #1A2340; margin-bottom: 16px; }
+    .alert-card { background: #FFF7ED; border: 1.5px solid #FED7AA; border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+    .alert-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: #C2410C; margin-bottom: 12px; }
+    .alert-dot { width: 8px; height: 8px; background: #F97316; border-radius: 50%; }
+    .data-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #FDE8D0; font-size: 13px; }
+    .data-row:last-child { border-bottom: none; }
+    .data-label { color: #6B7280; }
+    .data-value { font-weight: 600; color: #1A2340; }
+    .data-value.red { color: #EF4444; }
+    .data-value.orange { color: #F97316; }
+    .tip { background: #F0F4FF; border-radius: 10px; padding: 14px 16px; font-size: 13px; color: #374151; line-height: 1.7; margin-bottom: 20px; }
+    .tip strong { color: #1A56DB; }
+    .footer { text-align: center; padding: 16px 24px; background: #F9FAFB; font-size: 12px; color: #9CA3AF; border-top: 1px solid #F3F4F6; }
+    .time-badge { display: inline-block; background: #EFF6FF; color: #1A56DB; font-size: 11px; padding: 3px 10px; border-radius: 20px; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔔 担保缺口提醒</h1>
+      <p>来自好友记 · AI 智能通知</p>
+    </div>
+    <div class="body">
+      <p class="greeting">您好，${targetUser.name}！</p>
+      <div class="alert-card">
+        <div class="alert-title">
+          <div class="alert-dot"></div>
+          担保缺口已超过 30%
+        </div>
+        <div class="data-row">
+          <span class="data-label">标的币种</span>
+          <span class="data-value">${coin}</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">买入价值</span>
+          <span class="data-value">${buyValue.toFixed(2)} U</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">担保物当前价值</span>
+          <span class="data-value">${collateralValue} U</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">待结利息</span>
+          <span class="data-value">${accruedInterest} U</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">担保缺口</span>
+          <span class="data-value red">-${gapAmount} U</span>
+        </div>
+        <div class="data-row">
+          <span class="data-label">缺口占比</span>
+          <span class="data-value orange">${gapPct}%</span>
+        </div>
+      </div>
+      <div class="tip">
+        <strong>温馨提示：</strong>当前担保缺口已达买入价值的 ${gapPct}%，建议您尽快与对方沟通，协商补充担保物或安排付息，以保持良好的合作关系。<br><br>
+        此提醒仅发送一次，缺口在同一区间内波动不重复通知。缺口完全恢复或进一步扩大时，将再次发送提醒。
+      </div>
+      <div style="text-align:center;">
+        <div class="time-badge">提醒时间：${dateStr}</div>
+      </div>
+    </div>
+    <div class="footer">
+      此邮件由好友记 AI 智能通知系统自动发送，请勿直接回复。<br>
+      如需调整提醒设置，请在 App 内订单详情页操作。
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+await transporter.sendMail({
+  from: '"好友记 AI 通知" <tina_u@qq.com>',
+  to: targetUser.email,
+  subject: `【好友记】${coin} 订单担保缺口提醒（已超过 ${gapPct}%）`,
+  html,
+});
+
+console.log(`✅ 邮件已成功发送至 ${targetUser.name} <${targetUser.email}>`);
+NODESCRIPT
+
+            node /tmp/send-alert-test.mjs
+          ENDSSH
