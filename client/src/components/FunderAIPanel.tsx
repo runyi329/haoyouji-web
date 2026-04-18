@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
-import { X, Mail, Phone, Loader2, AlertTriangle, CheckCircle2, Info, ExternalLink, FlaskConical } from "lucide-react";
+import { X, Mail, Phone, Loader2, AlertTriangle, CheckCircle2, Info, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -235,7 +235,6 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ background: '#EFF6FF' }}>
-              <FlaskConical className="w-4 h-4" style={{ color: '#1A56DB' }} />
             </div>
             <div className="text-sm font-bold" style={{ color: '#1A2340' }}>发送测试通知</div>
           </div>
@@ -430,7 +429,6 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                     style={{ background: '#EFF6FF', color: '#1A56DB', border: '1px solid #DBEAFE' }}
                     onClick={() => setTestConfirm('email')}
                   >
-                    <FlaskConical className="w-3 h-3" />
                     测试
                   </button>
                 )}
@@ -466,7 +464,6 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                     style={{ background: '#EFF6FF', color: '#1A56DB', border: '1px solid #DBEAFE' }}
                     onClick={() => setTestConfirm('sms')}
                   >
-                    <FlaskConical className="w-3 h-3" />
                     测试
                   </button>
                 )}
