@@ -238,6 +238,8 @@ export default function EmailTemplateManage() {
     onSuccess: () => {
       toast.success("模板已保存");
       setIsSaving(false);
+      // 保存成功后自动返回上一页
+      setTimeout(() => window.history.back(), 800);
     },
     onError: (e: any) => {
       toast.error(e.message || "保存失败");
@@ -304,7 +306,7 @@ export default function EmailTemplateManage() {
       {/* 顶部导航 */}
       <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button
-          onClick={() => setLocation(-1 as any)}
+          onClick={() => window.history.back()}
           className="p-1 -ml-1 text-gray-500"
         >
           <ChevronLeft className="w-5 h-5" />
