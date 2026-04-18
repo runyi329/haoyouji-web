@@ -119,6 +119,7 @@ export default function FunderManagement() {
   const [, params] = useRoute("/ledger/:id/funder-management");
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
+  const trpcUtils = trpc.useUtils();
 
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -273,29 +274,32 @@ export default function FunderManagement() {
       : computedCollateralValue - previewAccrued;
   }, [computedCollateralValue, formLivePrices, formData.coin, formData.buyQuantity, formData.buyPrice, previewAccrued]);
 
-  const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
+   const createMutation = trpc.ledger.funderCreateAssetOrder.useMutation({
     onSuccess: () => {
       toast.success('创建成功');
       setShowForm(false);
       refetchOrders();
+      // 使 LedgerDetail 中的担保缺口数据同步更新
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
   });
-
   const updateMutation = trpc.ledger.funderUpdateAssetOrder.useMutation({
     onSuccess: () => {
       toast.success('更新成功');
       setShowForm(false);
       setEditingOrder(null);
       refetchOrders();
+      // 使 LedgerDetail 中的担保缺口数据同步更新
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
   });
-
   const deleteMutation = trpc.ledger.funderDeleteAssetOrder.useMutation({
     onSuccess: () => {
       toast.success('删除成功');
       refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
   });
