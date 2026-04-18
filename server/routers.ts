@@ -18720,21 +18720,7 @@ export const adminFeatureRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "仅管理员可访问" });
       }
       try {
-        // 使用smsService内部的client（已静态初始化，避免动态import问题）
-        const client = (smsService as any).client;
-        if (!client) {
-          throw new Error("短信服务未初始化，请检查腾讯云API密钥配置");
-        }
-        const r = await client.DescribeSmsTemplateList({ International: 0, TemplateIdSet: [] });
-        return (r.DescribeTemplateStatusSet || []).map((t: any) => ({
-          id: t.TemplateId,
-          name: t.TemplateName,
-          content: t.TemplateContent,
-          status: t.StatusCode,
-          statusText: t.StatusCode === 0 ? "审核通过" : t.StatusCode === 1 ? "审核中" : "审核拒绝",
-          createTime: t.CreateTime,
-          reviewReply: t.ReviewReply || "",
-        }));
+        return await smsService.getTemplates();
       } catch (err: any) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: err.message });
       }
