@@ -219,20 +219,23 @@ export default function EmailTemplateManage() {
   const [showTestInput, setShowTestInput] = useState(false);
 
   // 从后端加载保存的模板
-  const { data: savedTemplates, refetch } = trpc.ledger.getEmailTemplates.useQuery(undefined, {
-    onSuccess: (data: any) => {
-      if (data?.alert) {
+  const { data: savedTemplates, refetch } = trpc.ledger.getEmailTemplates.useQuery(undefined);
+
+  // 当数据加载完成后，用 useEffect 更新状态
+  useEffect(() => {
+    if (savedTemplates) {
+      if (savedTemplates.alert) {
         try {
-          setAlertVars({ ...DEFAULT_ALERT_VARS, ...JSON.parse(data.alert) });
+          setAlertVars({ ...DEFAULT_ALERT_VARS, ...JSON.parse(savedTemplates.alert) });
         } catch {}
       }
-      if (data?.backup) {
+      if (savedTemplates.backup) {
         try {
-          setBackupVars({ ...DEFAULT_BACKUP_VARS, ...JSON.parse(data.backup) });
+          setBackupVars({ ...DEFAULT_BACKUP_VARS, ...JSON.parse(savedTemplates.backup) });
         } catch {}
       }
-    },
-  } as any);
+    }
+  }, [savedTemplates]);
 
   const saveTemplatesMutation = trpc.ledger.saveEmailTemplates.useMutation({
     onSuccess: () => {
