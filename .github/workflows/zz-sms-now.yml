@@ -1,0 +1,27 @@
+name: zz-sms-now
+on:
+  push:
+    paths:
+      - '.github/workflows/zz-sms-now.yml'
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: Send SMS
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            source /root/haoyouji-web/.env 2>/dev/null || true
+            echo "APP_ID: ${TENCENT_SMS_APP_ID:0:4}*** SIGN: $TENCENT_SMS_SIGN_NAME TPL: $TENCENT_SMS_TEMPLATE_ID"
+            node -e "
+const tc = require('/root/haoyouji-web/node_modules/tencentcloud-sdk-nodejs');
+const C = tc.sms.v20210111.Client;
+const c = new C({credential:{secretId:process.env.COS_SECRET_ID,secretKey:process.env.COS_SECRET_KEY},region:process.env.TENCENT_SMS_REGION||'ap-guangzhou',profile:{httpProfile:{endpoint:'sms.tencentcloudapi.com'}}});
+c.SendSms({SmsSdkAppId:process.env.TENCENT_SMS_APP_ID,SignName:process.env.TENCENT_SMS_SIGN_NAME,TemplateId:process.env.TENCENT_SMS_TEMPLATE_ID,PhoneNumberSet:['+8613127919173'],TemplateParamSet:['888888','5']}).then(r=>{const s=r.SendStatusSet[0];console.log(s.Code===('Ok')?'SUCCESS':'FAIL',s.Code,s.Message,s.SerialNo||'');}).catch(e=>console.error('ERR',e.code,e.message));
+" 2>&1
+          ENDSSH
