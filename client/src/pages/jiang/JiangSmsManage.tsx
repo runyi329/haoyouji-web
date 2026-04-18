@@ -98,10 +98,10 @@ export default function JiangSmsManage() {
             <div className="text-[10px] text-[#444466]">腾讯云短信服务控制台</div>
           </div>
           <button
-            onClick={() => { refetchStatus(); refetchTemplates(); }}
-            className="text-[#444466] hover:text-[#D32F2F] transition-colors"
+            onClick={() => { refetchStatus(); refetchTemplates(); window.location.reload(); }}
+            className="text-xs text-[#444466] hover:text-[#D32F2F] transition-colors border border-[#2a2a45] hover:border-[#D32F2F] rounded px-2 py-1"
           >
-            <RefreshCw className="w-4 h-4" />
+            刷新
           </button>
         </div>
         {/* Tab 切换 */}
