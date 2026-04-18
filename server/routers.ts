@@ -13894,6 +13894,100 @@ export const appRouter = router({
           return { gold: false, qq: false, oil: false, stock: false, digitalB: false };
         }
       }),
+
+    // ========== 邮件模板管理 ==========
+    getEmailTemplates: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+        }
+        const db = await getLedgerDb();
+        // 确保表存在
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS email_templates (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            template_key VARCHAR(64) NOT NULL UNIQUE,
+            content TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          )
+        `);
+        const rows = await db.execute(
+          sql`SELECT template_key, content FROM email_templates WHERE template_key IN ('alert', 'backup')`
+        ) as any;
+        const result: Record<string, string> = {};
+        for (const row of ((rows[0] || rows) as any[])) {
+          result[row.template_key] = row.content;
+        }
+        return result;
+      }),
+
+    saveEmailTemplates: protectedProcedure
+      .input(z.object({
+        alert: z.string().optional(),
+        backup: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS email_templates (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            template_key VARCHAR(64) NOT NULL UNIQUE,
+            content TEXT NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          )
+        `);
+        if (input.alert) {
+          await db.execute(
+            sql`INSERT INTO email_templates (template_key, content) VALUES ('alert', ${input.alert})
+                ON DUPLICATE KEY UPDATE content = ${input.alert}, updated_at = NOW()`
+          );
+        }
+        if (input.backup) {
+          await db.execute(
+            sql`INSERT INTO email_templates (template_key, content) VALUES ('backup', ${input.backup})
+                ON DUPLICATE KEY UPDATE content = ${input.backup}, updated_at = NOW()`
+          );
+        }
+        return { success: true };
+      }),
+
+    sendTestEmail: protectedProcedure
+      .input(z.object({
+        type: z.enum(['alert', 'backup']),
+        toEmail: z.string().email(),
+        alertVars: z.string().optional(),
+        backupVars: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const { sendAlertEmail, sendBackupTestEmail } = await import('./email-service.js');
+        if (input.type === 'alert') {
+          const vars = input.alertVars ? JSON.parse(input.alertVars) : {};
+          await sendAlertEmail({
+            to: input.toEmail,
+            userName: '测试用户',
+            coin: 'ETH',
+            buyValue: 50000,
+            collateralValue: 35000,
+            accruedInterest: 2500,
+            gapAmount: 15000,
+            gapPct: 30,
+            templateVars: vars,
+          });
+        } else {
+          await sendBackupTestEmail({
+            to: input.toEmail,
+            templateVars: input.backupVars ? JSON.parse(input.backupVars) : {},
+          });
+        }
+        return { success: true };
+      }),
+
   }),
   
   // 銀行列表管理
