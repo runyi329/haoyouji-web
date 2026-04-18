@@ -13764,6 +13764,24 @@ export const appRouter = router({
           const [rows2] = await (conn as any).execute(querySQL, [input.ledgerId, input.sourceUserId, YJH_USER_ID]);
           return (rows2 as any[]).map(mapRow);
         }
+        // 检查本人是否在列表中，若没有则在返回结果中补充（ratio=0，不写数据库）
+        const hasSelf = list.some((r: any) => r.beneficiaryUserId === input.sourceUserId);
+        if (!hasSelf) {
+          // 查询本人姓名
+          const [selfRows] = await (conn as any).execute(
+            `SELECT id, name, username FROM users WHERE id=?`,
+            [input.sourceUserId]
+          );
+          const selfUser = (selfRows as any[])[0];
+          const selfEntry = {
+            id: null,
+            beneficiaryUserId: input.sourceUserId,
+            ratio: 0,
+            name: (selfUser?.name || selfUser?.username || '本人') + '（本人）',
+            username: selfUser?.username || '',
+          };
+          return [...list, selfEntry];
+        }
         return list;
       }),
 
