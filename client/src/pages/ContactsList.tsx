@@ -2197,10 +2197,12 @@ export default function ContactsList() {
                   </div>
                 </CardHeader>
                 <CardContent className="p-3 sm:p-4 pt-0 pl-4 sm:pl-5">
-                  <div className="space-y-1 text-xs sm:text-sm text-muted-foreground mb-2">
-                    {contact.phone && <p>电话：{contact.phone}</p>}
-                    {contact.occupation && <p>职业：{contact.occupation}</p>}
-                  </div>
+                  {(contact.phone || contact.occupation) && (
+                    <div className="space-y-1 text-xs sm:text-sm text-muted-foreground mb-2">
+                      {contact.phone && <p>电话：{contact.phone}</p>}
+                      {contact.occupation && <p>职业：{contact.occupation}</p>}
+                    </div>
+                  )}
                   {/* 联络状态显示 */}
                   <div 
                     className="text-xs mt-2 pt-2 border-t border-gray-100 dark:border-gray-700"
