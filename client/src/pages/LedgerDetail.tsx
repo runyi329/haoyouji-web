@@ -1773,7 +1773,7 @@ export default function LedgerDetail() {
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const { data: funderAssetData } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { userId: viewAsUserId } : {}) },
-    { enabled: isCustomAF && effectiveIsFunder }
+    { enabled: isCustomAF && effectiveIsFunder, refetchOnWindowFocus: true, staleTime: 0 }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
   // livePrices：优先用接口返回的最新价格，若还未加载则从 localStorage 读取上次缓存
