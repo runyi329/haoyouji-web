@@ -13765,31 +13765,36 @@ export const appRouter = router({
           return (rows2 as any[]).map(mapRow);
         }
 
-        // 追溯完整上级链（从 sourceUserId 往上到 YJH），确保每一层都在列表中
-        // 查询 sourceUserId 的完整上级链（最多10层防死循环）
+        // 追溯完整上级链（从 sourceUserId 往上到 YJH），用于确定正确排序
+        // WITH RECURSIVE 查询：本人 → 直接推荐人 → ... → YJH，结果按层级顺序返回
         const [chainRows] = await (conn as any).execute(
           `WITH RECURSIVE chain AS (
-            SELECT id, name, username, invited_by_user_id FROM users WHERE id = ?
+            SELECT id, name, username, invited_by_user_id, 0 AS depth FROM users WHERE id = ?
             UNION ALL
-            SELECT u.id, u.name, u.username, u.invited_by_user_id
+            SELECT u.id, u.name, u.username, u.invited_by_user_id, c.depth + 1
             FROM users u
             INNER JOIN chain c ON u.id = c.invited_by_user_id
-            WHERE c.invited_by_user_id IS NOT NULL AND c.id != ?
+            WHERE c.invited_by_user_id IS NOT NULL AND c.depth < 10
           )
-          SELECT id, name, username FROM chain`,
-          [input.sourceUserId, YJH_USER_ID]
+          SELECT id, name, username, depth FROM chain ORDER BY depth ASC`,
+          [input.sourceUserId]
         );
-        const chainUsers: Array<{ id: number; name: string; username: string }> = (chainRows as any[]);
+        // chainUsers[0] = 本人, chainUsers[1] = 直接推荐人, ..., 最后 = YJH
+        const chainUsers: Array<{ id: number; name: string; username: string; depth: number }> = (chainRows as any[]);
 
-        // 已在列表中的受益人 ID
-        const existingIds = new Set(list.map((r: any) => r.beneficiaryUserId));
+        // 构建 id -> 层级深度 映射（本人=0，越往上越大）
+        const depthMap = new Map<number, number>();
+        for (const u of chainUsers) depthMap.set(u.id, u.depth);
 
-        // 补充缺失的人（本人 + 中间层推荐人）
-        const extraEntries: any[] = [];
+        // 构建完整的受益人 map（已有记录 + 补充缺失的）
+        const allMap = new Map<number, any>();
+        for (const r of list) allMap.set(r.beneficiaryUserId, r);
+
+        // 补充链上缺失的人（本人 + 中间层推荐人）
         for (const u of chainUsers) {
-          if (!existingIds.has(u.id)) {
+          if (!allMap.has(u.id)) {
             const isSelf = u.id === input.sourceUserId;
-            extraEntries.push({
+            allMap.set(u.id, {
               id: null,
               beneficiaryUserId: u.id,
               ratio: 0,
@@ -13799,7 +13804,15 @@ export const appRouter = router({
           }
         }
 
-        return [...list, ...extraEntries];
+        // 按上级链排序：YJH（depth最大）在顶，本人（depth=0）在底
+        // 不在链上的人（理论上不存在）放在中间
+        const sorted = Array.from(allMap.values()).sort((a: any, b: any) => {
+          const da = depthMap.has(a.beneficiaryUserId) ? depthMap.get(a.beneficiaryUserId)! : 999;
+          const db = depthMap.has(b.beneficiaryUserId) ? depthMap.get(b.beneficiaryUserId)! : 999;
+          return db - da; // 深度大（上级）排前面，深度小（本人）排后面
+        });
+
+        return sorted;
       }),
 
     // YJH专属：修改某个受益人的拨比（可修改任意受益人，总和不超过100%）
