@@ -360,10 +360,14 @@ export default function ContactsList() {
   }, [filterType]);
   
   // 轻量级获取联系人数量（全部、我的、共享）
-  const { data: contactCounts } = trpc.contacts.counts.useQuery();
+  const { data: contactCounts } = trpc.contacts.counts.useQuery(undefined, {
+    staleTime: 30_000,
+  });
   
   // 获取统计数据（用于显示新增人数）
-  const { data: stats } = trpc.contacts.stats.useQuery();
+  const { data: stats } = trpc.contacts.stats.useQuery(undefined, {
+    staleTime: 30_000,
+  });
   
   // 根据筛选类型获取分类统计数量（全部、我的、共享）
   const { data: filteredCounts } = trpc.contacts.filteredCounts.useQuery(

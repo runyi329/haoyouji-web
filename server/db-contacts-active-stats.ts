@@ -1,196 +1,142 @@
 /**
- * 活跃人脉统计模块
- * 
+ * 活跃人脉统计模块（性能优化版）
+ *
  * 统计规则:
  * - 统计"全部"人脉(我的+共享的)中的活跃数量
  * - 活跃定义: 在指定时间范围内有联络记录
  * - 同一个人多次联络只算1次
- * 
- * 重要: interactionDate 在数据库中是 timestamp 类型，存储的是 ISO 格式字符串
- * 例如: "2026-02-04 08:30:00" 或 "2026-02-04T08:30:00.000Z"
- * 需要使用字符串比较或转换为 Date 对象进行比较
+ *
+ * 优化: 原实现调用 4 次 getActiveCount，每次都重新查 getAllVisibleContactIds（3 次 SQL），
+ * 共发出 4×3+4=16 次数据库查询。
+ * 新实现: 1 次查可见 ID + 1 条 SQL 同时聚合四个时间段 = 共 3 次查询。
  */
 
 import { getDb } from './db';
-import { contacts, contactInteractions } from '../drizzle/schema';
-import { eq, and, gte, sql, inArray } from 'drizzle-orm';
-import { getBeijingTodayStart, getBeijingThisWeekStart, getBeijingThisMonthStart, getBeijingThisYearStart } from '../shared/timezone';
+import { contacts, contactInteractions, contactSharingConnections } from '../drizzle/schema';
+import { eq, and, sql, inArray } from 'drizzle-orm';
+import {
+  getBeijingTodayStart,
+  getBeijingThisWeekStart,
+  getBeijingThisMonthStart,
+  getBeijingThisYearStart,
+} from '../shared/timezone';
 
-// 注意：现在使用 shared/timezone.ts 中的时间函数，保证与其他模块一致
+// ─── 工具：时间戳 → MySQL UTC datetime 字符串 ───────────────────────────────
+function toMySQLDatetime(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+}
 
-/**
- * 获取用户所有可见的联系人ID(我的+共享的)
- */
+// ─── 获取可见人脉 ID（我的 + 共享给我的） ────────────────────────────────────
 async function getAllVisibleContactIds(userId: number): Promise<number[]> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  console.log(`[getAllVisibleContactIds] 开始查询用户 ${userId} 的可见人脉`);
-  
-  // 1. 获取自己的联系人
+  if (!db) throw new Error('Database not available');
+
+  // 1. 我的人脉
   const myContacts = await db
     .select({ id: contacts.id })
     .from(contacts)
     .where(eq(contacts.parentUserId, userId));
-  
-  const myContactIds = myContacts.map(c => c.id);
-  console.log(`[getAllVisibleContactIds] 我的人脉数量: ${myContactIds.length}`);
-  
-  // 2. 获取共享给我的联系人（使用正确的查询逻辑）
-  const { contactSharingConnections } = await import('../drizzle/schema');
-  const sharingConnections = await db
+  const myIds = myContacts.map(c => c.id);
+
+  // 2. 共享给我的人脉（两步 IN 查询）
+  const sharingConns = await db
     .select({ sharerId: contactSharingConnections.sharerId })
     .from(contactSharingConnections)
     .where(
       and(
         eq(contactSharingConnections.receiverId, userId),
-        eq(contactSharingConnections.status, 'active')
-      )
+        eq(contactSharingConnections.status, 'active'),
+      ),
     );
-  
-  console.log(`[getAllVisibleContactIds] 找到的共享连接数: ${sharingConnections.length}`);
-  
-  // 获取所有分享者的人脉ID（使用单次 IN 查询代替多次串行查询）
-  let sharedContactIds: number[] = [];
-  const sharerIds = sharingConnections.map(conn => conn.sharerId);
-  
-  if (sharerIds.length > 0) {
-    const sharerContacts = await db
+
+  let sharedIds: number[] = [];
+  if (sharingConns.length > 0) {
+    const sharerIds = sharingConns.map(c => c.sharerId);
+    const sharedContacts = await db
       .select({ id: contacts.id })
       .from(contacts)
       .where(inArray(contacts.parentUserId, sharerIds));
-    sharedContactIds = sharerContacts.map(c => c.id);
-    console.log(`[getAllVisibleContactIds] 一次性查询 ${sharerIds.length} 个分享者的联系人，共 ${sharedContactIds.length} 个`);
+    sharedIds = sharedContacts.map(c => c.id);
   }
-  
-  console.log(`[getAllVisibleContactIds] 共享联系人总数: ${sharedContactIds.length}`);
-  
-  // 3. 合并并去重
-  const allIds = Array.from(new Set([...myContactIds, ...sharedContactIds]));
-  console.log(`[getAllVisibleContactIds] 最终可见联系人总数: ${allIds.length}`);
-  
-  return allIds;
+
+  return Array.from(new Set([...myIds, ...sharedIds]));
 }
 
-/**
- * 统计指定时间范围内的活跃人脉数量
- * @param userId 用户ID
- * @param startDate 开始时间（Date对象）
- */
-async function getActiveCount(userId: number, startDate: Date): Promise<number> {
+// ─── 核心：一条 SQL 同时聚合四个时间段的活跃数 ───────────────────────────────
+async function getAllActiveStatsBatch(
+  userId: number,
+): Promise<{ todayActive: number; weeklyActive: number; monthlyActive: number; yearlyActive: number }> {
   const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  // 1. 获取所有可见的联系人 ID
+  if (!db) throw new Error('Database not available');
+
   const visibleContactIds = await getAllVisibleContactIds(userId);
-  
   if (visibleContactIds.length === 0) {
-    return 0;
+    return { todayActive: 0, weeklyActive: 0, monthlyActive: 0, yearlyActive: 0 };
   }
-  
-  // 将 Date 转换为 ISO 字符串格式用于数据库比较
-  // MySQL timestamp 字段存储的是 UTC 时间
-  const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
-  
-  console.log(`[getActiveCount] userId=${userId}, startDate=${startDate.toISOString()}, startDateStr=${startDateStr}`);
-  console.log(`[getActiveCount] 可见人脉数量: ${visibleContactIds.length}`);
-  
-  // 2. 查询指定时间范围内的所有联络记录
-  // 使用原生 SQL 确保时间比较正确
-  const interactions = await db
-    .select({ contactId: contactInteractions.contactId, interactionDate: contactInteractions.interactionDate })
+
+  const todayStr  = toMySQLDatetime(getBeijingTodayStart());
+  const weekStr   = toMySQLDatetime(getBeijingThisWeekStart());
+  const monthStr  = toMySQLDatetime(getBeijingThisMonthStart());
+  const yearStr   = toMySQLDatetime(getBeijingThisYearStart());
+
+  // ★ 一条 SQL：按 contactId 分组，用 CASE WHEN 同时标记四个时间段 ★
+  const rows = await db
+    .select({
+      contactId: contactInteractions.contactId,
+      isToday:   sql<number>`MAX(CASE WHEN ${contactInteractions.interactionDate} >= ${todayStr}  THEN 1 ELSE 0 END)`,
+      isWeek:    sql<number>`MAX(CASE WHEN ${contactInteractions.interactionDate} >= ${weekStr}   THEN 1 ELSE 0 END)`,
+      isMonth:   sql<number>`MAX(CASE WHEN ${contactInteractions.interactionDate} >= ${monthStr}  THEN 1 ELSE 0 END)`,
+      isYear:    sql<number>`MAX(CASE WHEN ${contactInteractions.interactionDate} >= ${yearStr}   THEN 1 ELSE 0 END)`,
+    })
     .from(contactInteractions)
     .where(
-      and(
-        sql`${contactInteractions.interactionDate} >= ${startDateStr}`,
-        inArray(contactInteractions.contactId, visibleContactIds)
-      )
-    );
-  
-  console.log(`[getActiveCount] 查询到 ${interactions.length} 条联络记录`);
-  if (interactions.length > 0 && interactions.length <= 5) {
-    console.log(`[getActiveCount] 示例记录:`, interactions.map(i => ({ contactId: i.contactId, date: i.interactionDate })));
+      sql`${contactInteractions.contactId} IN (${sql.join(visibleContactIds.map(id => sql`${id}`), sql`, `)})`,
+    )
+    .groupBy(contactInteractions.contactId);
+
+  let todayActive = 0, weeklyActive = 0, monthlyActive = 0, yearlyActive = 0;
+  for (const row of rows) {
+    if (row.isToday  === 1) todayActive++;
+    if (row.isWeek   === 1) weeklyActive++;
+    if (row.isMonth  === 1) monthlyActive++;
+    if (row.isYear   === 1) yearlyActive++;
   }
-  
-  // 3. 去重统计
-  const activeContactIds = new Set(interactions.map(i => i.contactId));
-  
-  console.log(`[getActiveCount] 去重后活跃人脉数: ${activeContactIds.size}`);
-  
-  return activeContactIds.size;
+
+  return { todayActive, weeklyActive, monthlyActive, yearlyActive };
 }
 
-/**
- * 获取今日活跃人脉数量
- */
+// ─── 对外导出（保持原有接口不变） ────────────────────────────────────────────
+
 export async function getTodayActiveCount(userId: number): Promise<number> {
-  const startTimestamp = getBeijingTodayStart();
-  const startDate = new Date(startTimestamp);
-  console.log(`[getTodayActiveCount] 今日开始时间: ${startDate.toISOString()}`);
-  return getActiveCount(userId, startDate);
+  const { todayActive } = await getAllActiveStatsBatch(userId);
+  return todayActive;
 }
 
-/**
- * 获取本周活跃人脉数量
- */
 export async function getWeeklyActiveCount(userId: number): Promise<number> {
-  const startTimestamp = getBeijingThisWeekStart();
-  const startDate = new Date(startTimestamp);
-  console.log(`[getWeeklyActiveCount] 本周开始时间: ${startDate.toISOString()}`);
-  return getActiveCount(userId, startDate);
+  const { weeklyActive } = await getAllActiveStatsBatch(userId);
+  return weeklyActive;
 }
 
-/**
- * 获取本月活跃人脉数量
- */
 export async function getMonthlyActiveCount(userId: number): Promise<number> {
-  const startTimestamp = getBeijingThisMonthStart();
-  const startDate = new Date(startTimestamp);
-  console.log(`[getMonthlyActiveCount] 本月开始时间: ${startDate.toISOString()}`);
-  return getActiveCount(userId, startDate);
+  const { monthlyActive } = await getAllActiveStatsBatch(userId);
+  return monthlyActive;
 }
 
-/**
- * 获取今年活跃人脉数量
- */
 export async function getYearlyActiveCount(userId: number): Promise<number> {
-  const startTimestamp = getBeijingThisYearStart();
-  const startDate = new Date(startTimestamp);
-  console.log(`[getYearlyActiveCount] 本年开始时间: ${startDate.toISOString()}`);
-  return getActiveCount(userId, startDate);
+  const { yearlyActive } = await getAllActiveStatsBatch(userId);
+  return yearlyActive;
 }
 
 /**
- * 一次性获取所有活跃统计数据
+ * 一次性获取所有活跃统计数据（推荐使用此函数，避免重复查询）
  */
 export async function getAllActiveStats(userId: number) {
   try {
-    console.log('[getAllActiveStats] 开始查询用户ID:', userId);
-    console.log('[getAllActiveStats] 注意：统计的是全部人脉（我的+共享）');
-    
-    const [todayActive, weeklyActive, monthlyActive, yearlyActive] = await Promise.all([
-      getTodayActiveCount(userId),
-      getWeeklyActiveCount(userId),
-      getMonthlyActiveCount(userId),
-      getYearlyActiveCount(userId),
-    ]);
-    
-    console.log('[getAllActiveStats] 查询结果（全部人脉）:', { todayActive, weeklyActive, monthlyActive, yearlyActive });
-    
-    return {
-      todayActive,
-      weeklyActive,
-      monthlyActive,
-      yearlyActive,
-    };
+    return await getAllActiveStatsBatch(userId);
   } catch (error) {
     console.error('[getAllActiveStats] 查询失败:', error);
-    // 返回默认值而不是抛出异常
-    return {
-      todayActive: 0,
-      weeklyActive: 0,
-      monthlyActive: 0,
-      yearlyActive: 0,
-    };
+    return { todayActive: 0, weeklyActive: 0, monthlyActive: 0, yearlyActive: 0 };
   }
 }
