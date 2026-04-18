@@ -26,7 +26,16 @@ if [ -f .env ]; then
   set +a
 fi
 
+# 如果传入了新密钥参数，优先使用
+if [ -n "$SMS_SECRET_ID" ]; then
+  export COS_SECRET_ID="$SMS_SECRET_ID"
+fi
+if [ -n "$SMS_SECRET_KEY" ]; then
+  export COS_SECRET_KEY="$SMS_SECRET_KEY"
+fi
+
 echo "=== 短信配置检查 ==="
+echo "SecretId前8位: ${COS_SECRET_ID:0:8}***"
 echo "APP_ID前4位: ${TENCENT_SMS_APP_ID:0:4}***"
 echo "SIGN: $TENCENT_SMS_SIGN_NAME"
 echo "TEMPLATE: $TENCENT_SMS_TEMPLATE_ID"
@@ -74,7 +83,6 @@ const payload = JSON.stringify({
   TemplateParamSet: []
 });
 
-// TC3-HMAC-SHA256 签名
 function sha256(message, secret, encoding) {
   const hmac = crypto.createHmac('sha256', secret);
   return hmac.update(message).digest(encoding);
