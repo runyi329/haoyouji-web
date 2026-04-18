@@ -76,4 +76,9 @@ echo "📊 确保AI预警状态表存在..."
 $DB_CMD -e "CREATE TABLE IF NOT EXISTS funder_order_alert_state (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, alert_level VARCHAR(20) NOT NULL DEFAULT 'none', last_triggered_state VARCHAR(20) NOT NULL DEFAULT 'none', last_triggered_at DATETIME NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uk_order_id (order_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;" || true
 echo "✅ AI预警状态表确认完成"
 
+# 添加新字段：邮筱/手机独立开关（email_enabled, phone_enabled）
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='funder_order_alert_state' AND COLUMN_NAME='email_enabled'; SET @s = IF(@c=0, 'ALTER TABLE funder_order_alert_state ADD COLUMN email_enabled TINYINT NOT NULL DEFAULT 1', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='funder_order_alert_state' AND COLUMN_NAME='phone_enabled'; SET @s = IF(@c=0, 'ALTER TABLE funder_order_alert_state ADD COLUMN phone_enabled TINYINT NOT NULL DEFAULT 1', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ AI预警表新字段确认完成"
+
 echo "✅ 所有数据库迁移完成"
