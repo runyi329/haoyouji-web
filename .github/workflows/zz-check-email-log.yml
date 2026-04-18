@@ -1,0 +1,21 @@
+# check email error log
+name: zz-check-email-log
+on:
+  push:
+    paths:
+      - '.github/workflows/zz-check-email-log.yml'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查看邮件相关日志
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "tail -100 /home/ubuntu/.pm2/logs/haoyouji-web-error-0.log 2>/dev/null | grep -i 'email\|smtp\|nodemailer\|sendMail\|535\|auth\|Error' | tail -30 || echo 'no email errors found'"
