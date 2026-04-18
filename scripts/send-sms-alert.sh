@@ -1,5 +1,5 @@
 #!/bin/bash
-# 发送测试短信脚本 - 在生产服务器上运行
+# 发送测试短信脚本 - 直接调用腾讯云SMS HTTP API，不依赖SDK
 set -e
 
 # 查找项目目录
@@ -21,7 +21,9 @@ cd "$APP_DIR"
 
 # 加载环境变量
 if [ -f .env ]; then
-  export $(grep -v '^#' .env | grep -v '^\s*$' | xargs)
+  set -a
+  source .env
+  set +a
 fi
 
 echo "=== 短信配置检查 ==="
@@ -34,74 +36,118 @@ echo ""
 PHONE="${1:-13127919173}"
 echo "=== 发送测试短信到 $PHONE ==="
 
-# 查找tencentcloud-sdk-nodejs
-SDK_PATH=""
-for p in \
-  "$APP_DIR/node_modules/tencentcloud-sdk-nodejs/index.js" \
-  "$APP_DIR/node_modules/.pnpm/tencentcloud-sdk-nodejs@4.0.1036/node_modules/tencentcloud-sdk-nodejs/index.js"; do
-  if [ -f "$p" ]; then
-    SDK_PATH="$p"
-    break
-  fi
-done
+# 用Node.js调用腾讯云SMS API（纯HTTP，不依赖SDK）
+node << NODESCRIPT
+const https = require('https');
+const crypto = require('crypto');
 
-# 如果找不到，用find搜索
-if [ -z "$SDK_PATH" ]; then
-  SDK_PATH=$(find "$APP_DIR/node_modules" -name "index.js" -path "*/tencentcloud-sdk-nodejs/index.js" 2>/dev/null | head -1)
-fi
+const secretId = process.env.COS_SECRET_ID;
+const secretKey = process.env.COS_SECRET_KEY;
+const region = process.env.TENCENT_SMS_REGION || 'ap-guangzhou';
+const appId = process.env.TENCENT_SMS_APP_ID;
+const signName = process.env.TENCENT_SMS_SIGN_NAME;
+const templateId = process.env.TENCENT_SMS_TEMPLATE_ID;
+const phone = '+86${PHONE}';
 
-if [ -z "$SDK_PATH" ]; then
-  echo "ERROR: 找不到 tencentcloud-sdk-nodejs"
-  echo "尝试用npm安装..."
-  cd /tmp && npm install tencentcloud-sdk-nodejs 2>&1 | tail -3
-  SDK_PATH="/tmp/node_modules/tencentcloud-sdk-nodejs/index.js"
-fi
+if (!secretId || !secretKey || !appId || !signName || !templateId) {
+  console.error('ERROR: 缺少必要的环境变量');
+  console.error('secretId:', secretId ? '已设置' : '缺失');
+  console.error('secretKey:', secretKey ? '已设置' : '缺失');
+  console.error('appId:', appId || '缺失');
+  console.error('signName:', signName || '缺失');
+  console.error('templateId:', templateId || '缺失');
+  process.exit(1);
+}
 
-echo "SDK路径: $SDK_PATH"
+const service = 'sms';
+const host = 'sms.tencentcloudapi.com';
+const action = 'SendSms';
+const version = '2021-01-11';
+const timestamp = Math.floor(Date.now() / 1000);
+const date = new Date(timestamp * 1000).toISOString().split('T')[0];
 
-# 写入临时Node.js脚本
-cat > /tmp/send_sms_test.js << NODESCRIPT
-const tc = require('$SDK_PATH');
-const SmsClient = tc.sms.v20210111.Client;
-const client = new SmsClient({
-  credential: {
-    secretId: process.env.COS_SECRET_ID,
-    secretKey: process.env.COS_SECRET_KEY
-  },
-  region: process.env.TENCENT_SMS_REGION || 'ap-guangzhou',
-  profile: {
-    httpProfile: { endpoint: 'sms.tencentcloudapi.com' }
-  }
+const payload = JSON.stringify({
+  SmsSdkAppId: appId,
+  SignName: signName,
+  TemplateId: templateId,
+  PhoneNumberSet: [phone],
+  TemplateParamSet: []
 });
 
-const phone = process.argv[2] || '13127919173';
-const params = {
-  SmsSdkAppId: process.env.TENCENT_SMS_APP_ID,
-  SignName: process.env.TENCENT_SMS_SIGN_NAME,
-  TemplateId: process.env.TENCENT_SMS_TEMPLATE_ID,
-  PhoneNumberSet: ['+86' + phone],
-  TemplateParamSet: []
+// TC3-HMAC-SHA256 签名
+function sha256(message, secret, encoding) {
+  const hmac = crypto.createHmac('sha256', secret);
+  return hmac.update(message).digest(encoding);
+}
+function getHash(message) {
+  return crypto.createHash('sha256').update(message).digest('hex');
+}
+
+const hashedRequestPayload = getHash(payload);
+const canonicalRequest = [
+  'POST',
+  '/',
+  '',
+  'content-type:application/json; charset=utf-8\n' + 'host:' + host + '\n',
+  'content-type;host',
+  hashedRequestPayload
+].join('\n');
+
+const credentialScope = date + '/' + service + '/tc3_request';
+const stringToSign = 'TC3-HMAC-SHA256\n' + timestamp + '\n' + credentialScope + '\n' + getHash(canonicalRequest);
+
+const secretDate = sha256(date, 'TC3' + secretKey);
+const secretService = sha256(service, secretDate);
+const secretSigning = sha256('tc3_request', secretService);
+const signature = sha256(stringToSign, secretSigning, 'hex');
+
+const authorization = 'TC3-HMAC-SHA256 Credential=' + secretId + '/' + credentialScope +
+  ', SignedHeaders=content-type;host, Signature=' + signature;
+
+const options = {
+  hostname: host,
+  path: '/',
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Host': host,
+    'X-TC-Action': action,
+    'X-TC-Timestamp': String(timestamp),
+    'X-TC-Version': version,
+    'X-TC-Region': region,
+    'Authorization': authorization
+  }
 };
 
-console.log('发送参数:', JSON.stringify({
-  SmsSdkAppId: params.SmsSdkAppId ? params.SmsSdkAppId.substring(0,4)+'***' : 'MISSING',
-  SignName: params.SignName,
-  TemplateId: params.TemplateId,
-  PhoneNumberSet: params.PhoneNumberSet
-}));
-
-client.SendSms(params).then(r => {
-  const s = r.SendStatusSet[0];
-  if (s.Code === 'Ok') {
-    console.log('SUCCESS! SerialNo:', s.SerialNo, 'Fee:', s.Fee);
-  } else {
-    console.log('FAIL:', s.Code, s.Message);
-    process.exit(1);
-  }
-}).catch(e => {
-  console.error('ERROR:', e.code, e.message);
+console.log('发送到:', phone);
+const req = https.request(options, (res) => {
+  let data = '';
+  res.on('data', (chunk) => { data += chunk; });
+  res.on('end', () => {
+    try {
+      const result = JSON.parse(data);
+      const resp = result.Response;
+      if (resp.Error) {
+        console.error('API ERROR:', resp.Error.Code, resp.Error.Message);
+        process.exit(1);
+      }
+      const s = resp.SendStatusSet[0];
+      if (s.Code === 'Ok') {
+        console.log('SUCCESS! SerialNo:', s.SerialNo, 'Fee:', s.Fee);
+      } else {
+        console.error('SEND FAIL:', s.Code, s.Message);
+        process.exit(1);
+      }
+    } catch(e) {
+      console.error('Parse error:', e.message, 'Raw:', data.substring(0, 200));
+      process.exit(1);
+    }
+  });
+});
+req.on('error', (e) => {
+  console.error('Request error:', e.message);
   process.exit(1);
 });
+req.write(payload);
+req.end();
 NODESCRIPT
-
-node /tmp/send_sms_test.js "$PHONE"
