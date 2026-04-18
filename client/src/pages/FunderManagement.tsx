@@ -174,6 +174,7 @@ export default function FunderManagement() {
     collateral: true,
     profitShare: true,
     commissionShare: true,
+    aiIcon: false,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT'];
@@ -1222,6 +1223,7 @@ export default function FunderManagement() {
                       // 当前价值已移至持有资产括号显示，不再单独作为开关
                       { key: 'holdDuration', label: '持有时长' },
                       { key: 'orderNo', label: '订单编号' },
+                      { key: 'aiIcon', label: 'AI图标（持有资产右上角）' },
                     ].map(({ key, label }) => (
                       <div key={key} className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{label}</span>
