@@ -39,6 +39,9 @@ fi
 if [ -n "$SMS_TEMPLATE_OVERRIDE" ]; then
   export TENCENT_SMS_TEMPLATE_ID="$SMS_TEMPLATE_OVERRIDE"
 fi
+if [ -n "$SMS_SIGN_OVERRIDE" ]; then
+  export TENCENT_SMS_SIGN_NAME="$SMS_SIGN_OVERRIDE"
+fi
 
 echo "=== 短信配置检查 ==="
 echo "SecretId前8位: ${COS_SECRET_ID:0:8}***"
