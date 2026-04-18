@@ -251,6 +251,33 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                 )}
               </div>
 
+              {/* 手机号状态 */}
+              <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                <Bell className="w-5 h-5 flex-shrink-0" style={{ color: alertState?.userPhone ? '#1A56DB' : '#9CA3AF' }} />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium" style={{ color: '#374151' }}>接收手机</div>
+                  {alertLoading ? (
+                    <div className="text-xs" style={{ color: '#9CA3AF' }}>加载中...</div>
+                  ) : alertState?.userPhone ? (
+                    <div className="text-xs truncate" style={{ color: '#1A56DB' }}>{alertState.userPhone}</div>
+                  ) : (
+                    <div className="text-xs" style={{ color: '#9CA3AF' }}>未绑定手机</div>
+                  )}
+                </div>
+                {alertLoading ? null : alertState?.userPhone ? (
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: '#16A34A' }} />
+                ) : (
+                  <button
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0"
+                    style={{ background: '#EFF6FF', color: '#1A56DB', border: '1px solid #BFDBFE' }}
+                    onClick={() => { onClose(); setLocation('/profile/edit'); }}
+                  >
+                    去绑定
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
               {/* 预警级别选择 */}
               <div className="text-xs font-medium mb-2" style={{ color: '#6B7280' }}>选择预警级别</div>
               <div className="space-y-2">

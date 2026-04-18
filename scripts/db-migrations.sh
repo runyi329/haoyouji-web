@@ -72,4 +72,8 @@ echo "📊 确保分红记录表存在..."
 $DB_CMD -e "CREATE TABLE IF NOT EXISTS dividend_records (id INT AUTO_INCREMENT PRIMARY KEY, ledger_id INT NOT NULL, user_id INT NOT NULL, tag_name VARCHAR(100) NOT NULL, amount DECIMAL(18,2) NOT NULL, note VARCHAR(255) DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_dividend_ledger (ledger_id), INDEX idx_dividend_user_tag (ledger_id, user_id, tag_name))" || true
 echo "✅ 分红记录表确认完成"
 
+echo "📊 确保AI预警状态表存在..."
+$DB_CMD -e "CREATE TABLE IF NOT EXISTS funder_order_alert_state (id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL, alert_level VARCHAR(20) NOT NULL DEFAULT 'none', last_triggered_state VARCHAR(20) NOT NULL DEFAULT 'none', last_triggered_at DATETIME NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, UNIQUE KEY uk_order_id (order_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;" || true
+echo "✅ AI预警状态表确认完成"
+
 echo "✅ 所有数据库迁移完成"

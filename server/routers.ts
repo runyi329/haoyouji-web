@@ -13108,13 +13108,15 @@ export const appRouter = router({
           sql`SELECT alert_level, last_triggered_state, last_triggered_at FROM funder_order_alert_state WHERE order_id = ${input.orderId} LIMIT 1`
         ) as any;
         const row = (rows[0]?.[0] ?? rows[0]);
-        // 邮箱直接从 ctx.user 获取（ctx.user 已从 crm_db.users 查出，包含 email 字段）
+        // 邮箱和手机直接从 ctx.user 获取（ctx.user 已从 crm_db.users 查出）
         const userEmail: string | null = (ctx.user as any).email || null;
+        const userPhone: string | null = (ctx.user as any).phone || null;
         return {
           alertLevel: row?.alert_level || 'none',
           lastTriggeredState: row?.last_triggered_state || 'none',
           lastTriggeredAt: row?.last_triggered_at || null,
           userEmail,
+          userPhone,
         };
       }),
     // 设置订单预警级别
@@ -13137,23 +13139,11 @@ export const appRouter = router({
         const orderUserId = (orderRows[0]?.[0] ?? orderRows[0])?.user_id;
         const isManager = role === 'owner' || role === 'admin';
         if (!isManager && orderUserId !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        const mysql2 = await import('mysql2/promise');
-        const dbUrl = process.env.DATABASE_URL || '';
-        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
-        const conn = await mysql2.createConnection({
-          host: parsedUrl.hostname,
-          port: parseInt(parsedUrl.port) || 3306,
-          user: decodeURIComponent(parsedUrl.username),
-          password: decodeURIComponent(parsedUrl.password),
-          database: parsedUrl.pathname.replace(/^\//, ''),
-        });
-        await conn.execute(
-          `INSERT INTO funder_order_alert_state (order_id, ledger_id, user_id, alert_level)
-           VALUES (?, ?, ?, ?)
-           ON DUPLICATE KEY UPDATE alert_level = ?, updated_at = NOW()`,
-          [input.orderId, input.ledgerId, orderUserId || ctx.user.id, input.alertLevel, input.alertLevel]
+        await db.execute(
+          sql`INSERT INTO funder_order_alert_state (order_id, alert_level)
+           VALUES (${input.orderId}, ${input.alertLevel})
+           ON DUPLICATE KEY UPDATE alert_level = ${input.alertLevel}, updated_at = NOW()`
         );
-        await conn.end();
         return { success: true };
       }),
 
