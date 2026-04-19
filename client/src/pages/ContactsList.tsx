@@ -746,20 +746,46 @@ export default function ContactsList() {
       });
     }
     
+    // 对共享人脉进行前端排序（因为 sharedContacts API 不支持 sortBy 参数）
+    const sortContacts = (list: any[]) => {
+      if (!sortBy || sortBy === 'tagCount_desc') {
+        // 默认排序：标签数量从多到少
+        return [...list].sort((a, b) => {
+          const aTagCount = (a.tags?.length || 0) + (a.personalTags?.length || 0);
+          const bTagCount = (b.tags?.length || 0) + (b.personalTags?.length || 0);
+          return bTagCount - aTagCount;
+        });
+      } else if (sortBy === 'tagCount_asc') {
+        // 标签数量从少到多
+        return [...list].sort((a, b) => {
+          const aTagCount = (a.tags?.length || 0) + (a.personalTags?.length || 0);
+          const bTagCount = (b.tags?.length || 0) + (b.personalTags?.length || 0);
+          return aTagCount - bTagCount;
+        });
+      } else if (sortBy === 'interactionCount_desc') {
+        // 联络次数从多到少
+        return [...list].sort((a, b) => (b.interactionCount || 0) - (a.interactionCount || 0));
+      } else if (sortBy === 'interactionCount_asc') {
+        // 联络次数从少到多
+        return [...list].sort((a, b) => (a.interactionCount || 0) - (b.interactionCount || 0));
+      }
+      return list;
+    };
+
     // 根据 shareFilter 返回对应的人脉列表
     if (shareFilter === 'mine') {
-      // 只显示自己的人脉
+      // 只显示自己的人脉（后端已排序，无需前端排序）
       return allContacts || [];
     } else if (shareFilter === 'shared') {
-      // 只显示共享的人脉
-      return markedSharedContacts || [];
+      // 只显示共享的人脉，前端排序
+      return sortContacts(markedSharedContacts || []);
     } else {
-      // 显示全部人脉（自己的 + 共享的）
+      // 显示全部人脉（自己的 + 共享的），对共享部分前端排序后合并
       const myContacts = allContacts || [];
-      const sharedList = markedSharedContacts || [];
+      const sharedList = sortContacts(markedSharedContacts || []);
       return [...myContacts, ...sharedList];
     }
-  }, [allContacts, sharedContacts, shareFilter, sharerFilter, searchQuery]);
+  }, [allContacts, sharedContacts, shareFilter, sharerFilter, searchQuery, sortBy]);
   
   // 根据筛选条件过滤人脉（后端已处理，这里直接使用mergedContacts）
   const contacts = mergedContacts;
