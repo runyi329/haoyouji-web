@@ -1113,23 +1113,7 @@ export default function ContactsList() {
             {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
             {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
-          <span className="text-xs text-white/70 shrink-0">
-            {viewMode === 'company' && companyList ? (
-              `共 ${new Set(companyList.map(item => item.companyName)).size} 家`
-            ) : isLoading ? (
-              `加载中...`
-            ) : (filterType && filteredCounts) ? (
-              shareFilter === 'all' ? `共 ${filteredCounts.total} 位` :
-              shareFilter === 'mine' ? `共 ${filteredCounts.mine} 位` :
-              `共 ${filteredCounts.shared} 位`
-            ) : contactCounts ? (
-              shareFilter === 'all' ? `共 ${contactCounts.total} 位` :
-              shareFilter === 'mine' ? `共 ${contactCounts.mine} 位` :
-              `共 ${contactCounts.shared} 位`
-            ) : (
-              `共 0 位`
-            )}
-          </span>
+
         </div>
         {/* 第二行：全部 / 我的 / 共享 Tab */}
         <div className="flex items-center gap-2">
