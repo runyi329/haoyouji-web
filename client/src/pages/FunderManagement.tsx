@@ -1349,14 +1349,15 @@ export default function FunderManagement() {
                 </div>
               </div>
 
-              {/* 分隔线：担保货币 */}
-              <div className="flex items-center gap-3">
+              {/* 分隔线：担保货币 - 受邀订单隐藏 */}
+              {!editingOrder?.participantInfo && <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">担保货币</span>
                 <div className="flex-1 h-px bg-gray-100" />
-              </div>
+              </div>}
 
-              {/* 担保货币列表 */}
+              {/* 担保货币列表 - 受邀订单隐藏 */}
+              {!editingOrder?.participantInfo && (
               <div className="space-y-3">
                 {collateralAssets.map((item, idx) => (
                   <div key={idx} className="flex gap-2 items-center">
@@ -1416,16 +1417,17 @@ export default function FunderManagement() {
                   </div>
                 )}
               </div>
+              )}
 
-              {/* 分隔线：佣金分成 */}
-              <div className="flex items-center gap-3">
+              {/* 分隔线：佣金分成 - 受邀订单隐藏 */}
+              {!editingOrder?.participantInfo && <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">佣金分成</span>
                 <div className="flex-1 h-px bg-gray-100" />
-              </div>
+              </div>}
 
-              {/* 佣金分成输入 */}
-              <div>
+              {/* 佣金分成输入 - 受邀订单隐藏 */}
+              {!editingOrder?.participantInfo && <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">佣金分成说明</label>
                 <input
                   type="text"
@@ -1435,17 +1437,17 @@ export default function FunderManagement() {
                   placeholder="例如：年化收益的 20%"
                   style={{ display: 'block', boxSizing: 'border-box' }}
                 />
-              </div>
+              </div>}
 
-              {/* 分隔线：备注 */}
-              <div className="flex items-center gap-3">
+              {/* 分隔线：备注 - 受邀订单隐藏 */}
+              {!editingOrder?.participantInfo && <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">备注</span>
                 <div className="flex-1 h-px bg-gray-100" />
-              </div>
+              </div>}
 
-              {/* 公开备注（资金方可见） */}
-              <div>
+              {/* 公开备注（资金方可见） - 受邀订单隐藏 */}
+              {!editingOrder?.participantInfo && <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
                   公开备注
                   <span className="ml-1.5 text-xs text-green-500 font-normal">资金方可见</span>
@@ -1458,10 +1460,10 @@ export default function FunderManagement() {
                   placeholder="填写资金方可见的说明或备注"
                   style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
                 />
-              </div>
+              </div>}
 
-              {/* 内部备注（资金方不可见） */}
-              <div>
+              {/* 内部备注（资金方不可见） - 受邀订单隐藏 */}
+              {!editingOrder?.participantInfo && <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
                   内部备注
                   <span className="ml-1.5 text-xs text-gray-400 font-normal">仅管理员可见</span>
@@ -1474,10 +1476,10 @@ export default function FunderManagement() {
                   placeholder="内部管理备注（资金方不可见）"
                   style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
                 />
-              </div>
+              </div>}
 
-              {/* 状态（编辑时） */}
-              {editingOrder && (
+              {/* 状态（编辑时） - 受邀订单隐藏 */}
+              {editingOrder && !editingOrder.participantInfo && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">订单状态</label>
                   <div className="flex gap-2">
