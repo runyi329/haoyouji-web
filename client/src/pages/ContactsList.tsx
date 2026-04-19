@@ -349,6 +349,7 @@ export default function ContactsList() {
   const tagIdParam = urlParams.get('tag'); // 标签ID筛选（支持多个，用逗号分隔）
   const viewMode = urlParams.get('view'); // 视图模式：company显示公司信息
   const refreshTimestamp = urlParams.get('_refresh'); // 强制刷新时间戳
+  const tTimestamp = urlParams.get('_t'); // 首页人脉总数按钒传入的时间戳（每次点击都不同）
   
   // 调试日志
   console.log('[ContactsList] searchParams:', searchParams);
@@ -431,6 +432,17 @@ export default function ContactsList() {
       }, 50);
     }
   }, [refreshTimestamp]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 监听 _t 时间戳变化（首页人脉总数按钒点击时传入），强制刷新数据
+  React.useEffect(() => {
+    if (tTimestamp) {
+      setPage(1);
+      setAllLoadedContacts([]);
+      setTimeout(() => {
+        refetchContacts();
+      }, 50);
+    }
+  }, [tTimestamp]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 当数据加载完成时，累加到已加载列表
   React.useEffect(() => {
