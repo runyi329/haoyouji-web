@@ -324,12 +324,14 @@ export default function FunderManagement() {
     },
     onError: (err) => toast.error(err.message),
   });
-  const handleOpenParticipants = async (orderId: number) => {
+  const [currentOrderAmount, setCurrentOrderAmount] = useState('');
+  const handleOpenParticipants = async (orderId: number, orderAmount: string) => {
     if (showParticipantsPanel === orderId) {
       setShowParticipantsPanel(null);
       return;
     }
     setShowParticipantsPanel(orderId);
+    setCurrentOrderAmount(orderAmount || '');
     setParticipantsLoading(true);
     try {
       const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId, ledgerId });
@@ -368,7 +370,7 @@ export default function FunderManagement() {
         role,
         rate: '',
         rateLabel: roleOpt?.defaultRateLabel || '',
-        amount: '',
+        amount: currentOrderAmount,
         note: '',
         sortOrder: list.length,
       }];
@@ -658,7 +660,7 @@ export default function FunderManagement() {
                       </div>
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => handleOpenParticipants(order.id)}
+                          onClick={() => handleOpenParticipants(order.id, order.amount)}
                           className="px-2 py-1 text-xs rounded-lg font-medium"
                           style={{ backgroundColor: showParticipantsPanel === order.id ? '#059669' : '#ECFDF5', color: showParticipantsPanel === order.id ? '#fff' : '#059669' }}
                         >
