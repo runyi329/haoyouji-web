@@ -1716,21 +1716,34 @@ export default function FunderManagement() {
                             </span>
                           </div>
                           {/* 待结利息/待结佣金大数字 */}
-                          <div className="h-7 flex items-baseline gap-0.5 whitespace-nowrap overflow-hidden">
-                            <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
-                              {editingOrder?.participantInfo
-                                ? (previewCommission > 0 ? previewCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00')
-                                : (previewAccrued > 0 ? previewAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00')}
-                            </span>
-                            <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>U</span>
-                            <span className="text-[10px] text-gray-400">
-                              {editingOrder?.participantInfo
-                                ? ('(≈' + (previewCommission * 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '元)')
-                                : (formData.interestBaseCurrency === 'CNY'
-                                    ? '(' + (previewAccrued / 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'U)'
-                                    : '(' + (previewAccrued * 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '元)')}
-                            </span>
-                          </div>
+                          {(() => {
+                            // 受邀订单：货币单位跟随原始订单的 interestBaseCurrency
+                            const commCurrency = editingOrder?.participantInfo?.interestBaseCurrency || 'USDT';
+                            const isCNY = commCurrency === 'CNY';
+                            const mainVal = editingOrder?.participantInfo
+                              ? (previewCommission > 0 ? previewCommission : 0)
+                              : (previewAccrued > 0 ? previewAccrued : 0);
+                            const mainUnit = editingOrder?.participantInfo
+                              ? (isCNY ? '元' : 'U')
+                              : (formData.interestBaseCurrency === 'CNY' ? '元' : 'U');
+                            const altVal = editingOrder?.participantInfo
+                              ? (isCNY ? mainVal / 7 : mainVal * 7)
+                              : (formData.interestBaseCurrency === 'CNY' ? mainVal / 7 : mainVal * 7);
+                            const altUnit = editingOrder?.participantInfo
+                              ? (isCNY ? 'U' : '元')
+                              : (formData.interestBaseCurrency === 'CNY' ? 'U' : '元');
+                            return (
+                              <div className="h-7 flex items-baseline gap-0.5 whitespace-nowrap overflow-hidden">
+                                <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
+                                  {mainVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{mainUnit}</span>
+                                <span className="text-[10px] text-gray-400">
+                                  ({isCNY || formData.interestBaseCurrency !== 'CNY' ? '≈' : '≈'}{altVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{altUnit})
+                                </span>
+                              </div>
+                            );
+                          })()}
                           {/* 明细行 */}
                           <div className="space-y-0.5">
                             {displayConfig.paidInterest && (
@@ -1740,7 +1753,12 @@ export default function FunderManagement() {
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
                                     {(() => {
                                       const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
-                                      const mainUnit = editingOrder?.participantInfo ? ' U' : (formData.interestBaseCurrency === 'CNY' ? ' 元' : ' U');
+                                      // 受邀订单：跟随原始订单的 interestBaseCurrency
+                                      const commCurrency2 = editingOrder?.participantInfo?.interestBaseCurrency || 'USDT';
+                                      const isCNY2 = commCurrency2 === 'CNY';
+                                      const mainUnit = editingOrder?.participantInfo
+                                        ? (isCNY2 ? ' 元' : ' U')
+                                        : (formData.interestBaseCurrency === 'CNY' ? ' 元' : ' U');
                                       return <>{val.toLocaleString(undefined, { maximumFractionDigits: 2 })}{mainUnit}</>;
                                     })()}
                                   </span>
@@ -1748,8 +1766,12 @@ export default function FunderManagement() {
                                 {(() => {
                                   const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
                                   if (val <= 0) return null;
+                                  const commCurrency3 = editingOrder?.participantInfo?.interestBaseCurrency || 'USDT';
+                                  const isCNY3 = commCurrency3 === 'CNY';
                                   if (editingOrder?.participantInfo) {
-                                    return <div className="text-[10px] text-gray-400 mt-0.5">≈ {(val * 7).toLocaleString(undefined, { maximumFractionDigits: 2 })} 元</div>;
+                                    const altVal3 = isCNY3 ? val / 7 : val * 7;
+                                    const altUnit3 = isCNY3 ? 'U' : '元';
+                                    return <div className="text-[10px] text-gray-400 mt-0.5">≈ {altVal3.toLocaleString(undefined, { maximumFractionDigits: 2 })} {altUnit3}</div>;
                                   }
                                   const altVal = formData.interestBaseCurrency === 'CNY' ? val / 7 : val * 7;
                                   const altUnit = formData.interestBaseCurrency === 'CNY' ? 'U' : '元';
