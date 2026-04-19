@@ -1,3 +1,5 @@
+import React, { useState, useEffect, useRef } from "react";
+import { pinyin } from "pinyin-pro";
 import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,273 +64,6 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-
-// 内置拼音首字母获取函数（基于 Unicode 区间，覆盖常用汉字）
-function getChinesePinyinInitials(text: string): string {
-  const pinyinMap: [number, number, string][] = [
-    [0x554A, 0x554A, 'a'], [0x963F, 0x963F, 'a'], [0x57C3, 0x57C3, 'a'], [0x6328, 0x6328, 'a'],
-    [0x54CE, 0x54CE, 'a'], [0x5F4C, 0x5F4C, 'a'], [0x6182, 0x6182, 'a'], [0x5416, 0x5416, 'a'],
-    [0x7231, 0x7231, 'a'], [0x9F4B, 0x9F4B, 'a'], [0x5B89, 0x5B89, 'a'], [0x6309, 0x6309, 'a'],
-    [0x6697, 0x6697, 'a'], [0x5ED6, 0x5ED6, 'a'],
-    // B
-    [0x516B, 0x516B, 'b'], [0x634C, 0x634C, 'b'], [0x62D4, 0x62D4, 'b'], [0x9B3C, 0x9B3C, 'b'],
-    [0x62CD, 0x62CD, 'b'], [0x767D, 0x767D, 'b'], [0x6469, 0x6469, 'b'], [0x8D1D, 0x8D1D, 'b'],
-    [0x5317, 0x5317, 'b'], [0x672C, 0x672C, 'b'], [0x5F3A, 0x5F3A, 'b'], [0x5E01, 0x5E01, 'b'],
-    [0x8FB9, 0x8FB9, 'b'], [0x8868, 0x8868, 'b'], [0x522B, 0x522B, 'b'],
-    // C
-    [0x624D, 0x624D, 'c'], [0x8D38, 0x8D38, 'c'], [0x53C2, 0x53C2, 'c'], [0x518C, 0x518C, 'c'],
-    [0x5C42, 0x5C42, 'c'], [0x5DEE, 0x5DEE, 'c'], [0x8D85, 0x8D85, 'c'], [0x8F66, 0x8F66, 'c'],
-    [0x6210, 0x6210, 'c'], [0x7A0B, 0x7A0B, 'c'], [0x5E38, 0x5E38, 'c'], [0x573A, 0x573A, 'c'],
-    [0x5C1D, 0x5C1D, 'c'], [0x4F20, 0x4F20, 'c'], [0x5C98, 0x5C98, 'c'],
-    // D
-    [0x5927, 0x5927, 'd'], [0x5F53, 0x5F53, 'd'], [0x5BFC, 0x5BFC, 'd'], [0x5730, 0x5730, 'd'],
-    [0x7B2C, 0x7B2C, 'd'], [0x7684, 0x7684, 'd'], [0x5E97, 0x5E97, 'd'], [0x7B49, 0x7B49, 'd'],
-    [0x5F97, 0x5F97, 'd'], [0x5730, 0x5730, 'd'], [0x8FBE, 0x8FBE, 'd'], [0x4EE3, 0x4EE3, 'd'],
-    [0x5355, 0x5355, 'd'], [0x591A, 0x591A, 'd'], [0x5EA6, 0x5EA6, 'd'],
-    // E
-    [0x9E45, 0x9E45, 'e'], [0x5CE8, 0x5CE8, 'e'], [0x800C, 0x800C, 'e'], [0x8033, 0x8033, 'e'],
-    // F
-    [0x53D1, 0x53D1, 'f'], [0x65B9, 0x65B9, 'f'], [0x5206, 0x5206, 'f'], [0x98CE, 0x98CE, 'f'],
-    [0x5C01, 0x5C01, 'f'], [0x5BCC, 0x5BCC, 'f'], [0x590D, 0x590D, 'f'], [0x6CD5, 0x6CD5, 'f'],
-    [0x8D39, 0x8D39, 'f'], [0x98DE, 0x98DE, 'f'], [0x5426, 0x5426, 'f'], [0x5F20, 0x5F20, 'f'],
-    // G
-    [0x8BE5, 0x8BE5, 'g'], [0x5404, 0x5404, 'g'], [0x7ED9, 0x7ED9, 'g'], [0x6839, 0x6839, 'g'],
-    [0x5DE5, 0x5DE5, 'g'], [0x516C, 0x516C, 'g'], [0x8FC7, 0x8FC7, 'g'], [0x56FD, 0x56FD, 'g'],
-    [0x6C49, 0x6C49, 'g'], [0x9AD8, 0x9AD8, 'g'], [0x6210, 0x6210, 'g'], [0x8D35, 0x8D35, 'g'],
-    [0x5F52, 0x5F52, 'g'], [0x7BA1, 0x7BA1, 'g'],
-    // H
-    [0x548C, 0x548C, 'h'], [0x597D, 0x597D, 'h'], [0x53F7, 0x53F7, 'h'], [0x6D77, 0x6D77, 'h'],
-    [0x884C, 0x884C, 'h'], [0x5F53, 0x5F53, 'h'], [0x6D3B, 0x6D3B, 'h'], [0x5316, 0x5316, 'h'],
-    [0x8BDD, 0x8BDD, 'h'], [0x6C49, 0x6C49, 'h'], [0x8363, 0x8363, 'h'], [0x5F8C, 0x5F8C, 'h'],
-    [0x6237, 0x6237, 'h'], [0x80E1, 0x80E1, 'h'],
-    // J
-    [0x673A, 0x673A, 'j'], [0x52A0, 0x52A0, 'j'], [0x5BB6, 0x5BB6, 'j'], [0x89C1, 0x89C1, 'j'],
-    [0x8FDB, 0x8FDB, 'j'], [0x7ECF, 0x7ECF, 'j'], [0x5C31, 0x5C31, 'j'], [0x8BB0, 0x8BB0, 'j'],
-    [0x6280, 0x6280, 'j'], [0x8BA1, 0x8BA1, 'j'], [0x5EFA, 0x5EFA, 'j'], [0x89E3, 0x89E3, 'j'],
-    [0x4ECB, 0x4ECB, 'j'], [0x9636, 0x9636, 'j'], [0x96C6, 0x96C6, 'j'], [0x6A59, 0x6A59, 'j'],
-    // K
-    [0x5F00, 0x5F00, 'k'], [0x770B, 0x770B, 'k'], [0x53EF, 0x53EF, 'k'], [0x5BA2, 0x5BA2, 'k'],
-    [0x63A7, 0x63A7, 'k'], [0x5FEB, 0x5FEB, 'k'], [0x79D1, 0x79D1, 'k'], [0x8003, 0x8003, 'k'],
-    // L
-    [0x6765, 0x6765, 'l'], [0x5229, 0x5229, 'l'], [0x5C06, 0x5C06, 'l'], [0x8054, 0x8054, 'l'],
-    [0x5F0F, 0x5F0F, 'l'], [0x5217, 0x5217, 'l'], [0x6D41, 0x6D41, 'l'], [0x5F0F, 0x5F0F, 'l'],
-    [0x8DEF, 0x8DEF, 'l'], [0x5C06, 0x5C06, 'l'], [0x4E86, 0x4E86, 'l'], [0x529B, 0x529B, 'l'],
-    [0x5C71, 0x5C71, 'l'], [0x5C40, 0x5C40, 'l'], [0x7406, 0x7406, 'l'],
-    // M
-    [0x9EBB, 0x9EBB, 'm'], [0x5988, 0x5988, 'm'], [0x5356, 0x5356, 'm'], [0x5C31, 0x5C31, 'm'],
-    [0x8D38, 0x8D38, 'm'], [0x6CA1, 0x6CA1, 'm'], [0x6BCF, 0x6BCF, 'm'], [0x95E8, 0x95E8, 'm'],
-    [0x9762, 0x9762, 'm'], [0x6C11, 0x6C11, 'm'], [0x540D, 0x540D, 'm'], [0x660E, 0x660E, 'm'],
-    [0x6A21, 0x6A21, 'm'], [0x76EE, 0x76EE, 'm'],
-    // N
-    [0x90A3, 0x90A3, 'n'], [0x5185, 0x5185, 'n'], [0x80FD, 0x80FD, 'n'], [0x5E74, 0x5E74, 'n'],
-    [0x5C3C, 0x5C3C, 'n'], [0x60A8, 0x60A8, 'n'], [0x5973, 0x5973, 'n'], [0x5B81, 0x5B81, 'n'],
-    // P
-    [0x6392, 0x6392, 'p'], [0x5E73, 0x5E73, 'p'], [0x5426, 0x5426, 'p'], [0x6279, 0x6279, 'p'],
-    [0x54C1, 0x54C1, 'p'], [0x8BC4, 0x8BC4, 'p'], [0x5C31, 0x5C31, 'p'], [0x5E02, 0x5E02, 'p'],
-    [0x6295, 0x6295, 'p'], [0x666E, 0x666E, 'p'],
-    // Q
-    [0x671F, 0x671F, 'q'], [0x5176, 0x5176, 'q'], [0x8D77, 0x8D77, 'q'], [0x5C31, 0x5C31, 'q'],
-    [0x524D, 0x524D, 'q'], [0x5F3A, 0x5F3A, 'q'], [0x533A, 0x533A, 'q'], [0x6E20, 0x6E20, 'q'],
-    [0x7FA4, 0x7FA4, 'q'], [0x5168, 0x5168, 'q'], [0x8BF7, 0x8BF7, 'q'], [0x6E05, 0x6E05, 'q'],
-    // R
-    [0x4EBA, 0x4EBA, 'r'], [0x65E5, 0x65E5, 'r'], [0x5982, 0x5982, 'r'], [0x5165, 0x5165, 'r'],
-    [0x8BA4, 0x8BA4, 'r'], [0x4EFB, 0x4EFB, 'r'], [0x5BB9, 0x5BB9, 'r'], [0x5C31, 0x5C31, 'r'],
-    [0x8363, 0x8363, 'r'],
-    // S
-    [0x4E09, 0x4E09, 's'], [0x4E0A, 0x4E0A, 's'], [0x5C11, 0x5C11, 's'], [0x5C71, 0x5C71, 's'],
-    [0x8BBE, 0x8BBE, 's'], [0x793E, 0x793E, 's'], [0x751F, 0x751F, 's'], [0x5C31, 0x5C31, 's'],
-    [0x5546, 0x5546, 's'], [0x5C71, 0x5C71, 's'], [0x5B9E, 0x5B9E, 's'], [0x65F6, 0x65F6, 's'],
-    [0x5C71, 0x5C71, 's'], [0x5C71, 0x5C11, 's'],
-    // T
-    [0x4ED6, 0x4ED6, 't'], [0x5929, 0x5929, 't'], [0x5F97, 0x5F97, 't'], [0x5C71, 0x5C71, 't'],
-    [0x6295, 0x6295, 't'], [0x5C71, 0x5C71, 't'], [0x5C71, 0x5C71, 't'], [0x5C71, 0x5C71, 't'],
-    [0x8C2D, 0x8C2D, 't'], [0x5510, 0x5510, 't'], [0x5C71, 0x5C71, 't'],
-    // W
-    [0x4E07, 0x4E07, 'w'], [0x4E3A, 0x4E3A, 'w'], [0x6211, 0x6211, 'w'], [0x5C71, 0x5C71, 'w'],
-    [0x5C71, 0x5C71, 'w'], [0x5C71, 0x5C71, 'w'], [0x5C71, 0x5C71, 'w'],
-    [0x738B, 0x738B, 'w'], [0x5C71, 0x5C71, 'w'],
-    // X
-    [0x5C0F, 0x5C0F, 'x'], [0x5148, 0x5148, 'x'], [0x5C71, 0x5C71, 'x'], [0x5C71, 0x5C71, 'x'],
-    [0x5C71, 0x5C71, 'x'], [0x5C71, 0x5C71, 'x'], [0x5C71, 0x5C71, 'x'],
-    [0x5C71, 0x5C71, 'x'], [0x5C71, 0x5C71, 'x'],
-    // Y
-    [0x4E00, 0x4E00, 'y'], [0x5DF2, 0x5DF2, 'y'], [0x4E5F, 0x4E5F, 'y'], [0x5C71, 0x5C71, 'y'],
-    [0x5C71, 0x5C71, 'y'], [0x5C71, 0x5C71, 'y'], [0x5C71, 0x5C71, 'y'],
-    [0x5C71, 0x5C71, 'y'], [0x5C71, 0x5C71, 'y'],
-    // Z
-    [0x5728, 0x5728, 'z'], [0x5C31, 0x5C31, 'z'], [0x6700, 0x6700, 'z'], [0x5C71, 0x5C71, 'z'],
-    [0x5C71, 0x5C71, 'z'], [0x5C71, 0x5C71, 'z'], [0x5C71, 0x5C71, 'z'],
-    [0x5C71, 0x5C71, 'z'], [0x5C71, 0x5C71, 'z'],
-  ];
-  // 使用 Unicode 区间法：常用汉字按拼音首字母的 Unicode 排列
-  const pinyinRanges: [number, number, string][] = [
-    [0x554A, 0x554A, 'a'], [0x963F, 0x963F, 'a'], [0x57C3, 0x57C3, 'a'],
-    [0x6328, 0x6328, 'a'], [0x54CE, 0x54CE, 'a'], [0x5416, 0x5416, 'a'],
-    [0x5B89, 0x5B89, 'a'], [0x6309, 0x6309, 'a'],
-    [0x516B, 0x516B, 'b'], [0x634C, 0x634C, 'b'], [0x62D4, 0x62D4, 'b'],
-    [0x767D, 0x767D, 'b'], [0x5317, 0x5317, 'b'], [0x672C, 0x672C, 'b'],
-    [0x8FB9, 0x8FB9, 'b'], [0x522B, 0x522B, 'b'],
-    [0x624D, 0x624D, 'c'], [0x53C2, 0x53C2, 'c'], [0x5C42, 0x5C42, 'c'],
-    [0x8D85, 0x8D85, 'c'], [0x8F66, 0x8F66, 'c'], [0x6210, 0x6210, 'c'],
-    [0x5E38, 0x5E38, 'c'], [0x4F20, 0x4F20, 'c'],
-    [0x5927, 0x5927, 'd'], [0x5F53, 0x5F53, 'd'], [0x5730, 0x5730, 'd'],
-    [0x7B2C, 0x7B2C, 'd'], [0x7684, 0x7684, 'd'], [0x5E97, 0x5E97, 'd'],
-    [0x8FBE, 0x8FBE, 'd'], [0x591A, 0x591A, 'd'],
-    [0x800C, 0x800C, 'e'], [0x8033, 0x8033, 'e'],
-    [0x53D1, 0x53D1, 'f'], [0x65B9, 0x65B9, 'f'], [0x5206, 0x5206, 'f'],
-    [0x98CE, 0x98CE, 'f'], [0x5BCC, 0x5BCC, 'f'], [0x590D, 0x590D, 'f'],
-    [0x8BE5, 0x8BE5, 'g'], [0x5DE5, 0x5DE5, 'g'], [0x516C, 0x516C, 'g'],
-    [0x8FC7, 0x8FC7, 'g'], [0x56FD, 0x56FD, 'g'], [0x9AD8, 0x9AD8, 'g'],
-    [0x548C, 0x548C, 'h'], [0x597D, 0x597D, 'h'], [0x6D77, 0x6D77, 'h'],
-    [0x884C, 0x884C, 'h'], [0x6D3B, 0x6D3B, 'h'], [0x5316, 0x5316, 'h'],
-    [0x8BDD, 0x8BDD, 'h'], [0x80E1, 0x80E1, 'h'],
-    [0x673A, 0x673A, 'j'], [0x52A0, 0x52A0, 'j'], [0x5BB6, 0x5BB6, 'j'],
-    [0x89C1, 0x89C1, 'j'], [0x8FDB, 0x8FDB, 'j'], [0x5C31, 0x5C31, 'j'],
-    [0x8BB0, 0x8BB0, 'j'], [0x6280, 0x6280, 'j'], [0x8BA1, 0x8BA1, 'j'],
-    [0x5EFA, 0x5EFA, 'j'], [0x89E3, 0x89E3, 'j'], [0x96C6, 0x96C6, 'j'],
-    [0x5F00, 0x5F00, 'k'], [0x770B, 0x770B, 'k'], [0x53EF, 0x53EF, 'k'],
-    [0x5BA2, 0x5BA2, 'k'], [0x79D1, 0x79D1, 'k'], [0x8003, 0x8003, 'k'],
-    [0x6765, 0x6765, 'l'], [0x5229, 0x5229, 'l'], [0x8054, 0x8054, 'l'],
-    [0x5217, 0x5217, 'l'], [0x6D41, 0x6D41, 'l'], [0x8DEF, 0x8DEF, 'l'],
-    [0x4E86, 0x4E86, 'l'], [0x529B, 0x529B, 'l'], [0x7406, 0x7406, 'l'],
-    [0x9EBB, 0x9EBB, 'm'], [0x5988, 0x5988, 'm'], [0x5356, 0x5356, 'm'],
-    [0x6CA1, 0x6CA1, 'm'], [0x6BCF, 0x6BCF, 'm'], [0x95E8, 0x95E8, 'm'],
-    [0x9762, 0x9762, 'm'], [0x6C11, 0x6C11, 'm'], [0x540D, 0x540D, 'm'],
-    [0x660E, 0x660E, 'm'], [0x76EE, 0x76EE, 'm'],
-    [0x90A3, 0x90A3, 'n'], [0x5185, 0x5185, 'n'], [0x80FD, 0x80FD, 'n'],
-    [0x5E74, 0x5E74, 'n'], [0x60A8, 0x60A8, 'n'], [0x5973, 0x5973, 'n'],
-    [0x6392, 0x6392, 'p'], [0x5E73, 0x5E73, 'p'], [0x6279, 0x6279, 'p'],
-    [0x54C1, 0x54C1, 'p'], [0x6295, 0x6295, 'p'], [0x666E, 0x666E, 'p'],
-    [0x671F, 0x671F, 'q'], [0x8D77, 0x8D77, 'q'], [0x524D, 0x524D, 'q'],
-    [0x533A, 0x533A, 'q'], [0x7FA4, 0x7FA4, 'q'], [0x5168, 0x5168, 'q'],
-    [0x8BF7, 0x8BF7, 'q'], [0x6E05, 0x6E05, 'q'],
-    [0x4EBA, 0x4EBA, 'r'], [0x65E5, 0x65E5, 'r'], [0x5165, 0x5165, 'r'],
-    [0x8BA4, 0x8BA4, 'r'], [0x4EFB, 0x4EFB, 'r'],
-    [0x4E09, 0x4E09, 's'], [0x4E0A, 0x4E0A, 's'], [0x5C11, 0x5C11, 's'],
-    [0x8BBE, 0x8BBE, 's'], [0x793E, 0x793E, 's'], [0x751F, 0x751F, 's'],
-    [0x5546, 0x5546, 's'], [0x5B9E, 0x5B9E, 's'], [0x65F6, 0x65F6, 's'],
-    [0x4ED6, 0x4ED6, 't'], [0x5929, 0x5929, 't'], [0x8C2D, 0x8C2D, 't'],
-    [0x5510, 0x5510, 't'],
-    [0x4E07, 0x4E07, 'w'], [0x4E3A, 0x4E3A, 'w'], [0x6211, 0x6211, 'w'],
-    [0x738B, 0x738B, 'w'],
-    [0x5C0F, 0x5C0F, 'x'], [0x5148, 0x5148, 'x'],
-    [0x4E00, 0x4E00, 'y'], [0x5DF2, 0x5DF2, 'y'], [0x4E5F, 0x4E5F, 'y'],
-    [0x5728, 0x5728, 'z'], [0x5C31, 0x5C31, 'z'], [0x6700, 0x6700, 'z'],
-  ];
-  // 使用标准 Unicode 区间法（更准确）
-  const unicodeRanges: [number, number, string][] = [
-    [0x3007, 0x3007, 'l'], // 〇
-    [0x4E00, 0x4E03, 'y'], // 一 丁
-    [0x4E07, 0x4E07, 'w'], // 万
-    [0x4E09, 0x4E0B, 's'], // 三 下
-    [0x4E0D, 0x4E0E, 'b'], // 不 与
-    [0x4E13, 0x4E14, 'z'], // 专 且
-    [0x4E16, 0x4E16, 's'], // 世
-    [0x4E1A, 0x4E1A, 'y'], // 业
-    [0x4E2D, 0x4E2D, 'z'], // 中
-    [0x4E3A, 0x4E3B, 'w'], // 为 主
-    [0x4E48, 0x4E48, 'm'], // 么
-    [0x4E49, 0x4E49, 'y'], // 义
-    [0x4E5F, 0x4E5F, 'y'], // 也
-    [0x4E86, 0x4E86, 'l'], // 了
-    [0x4E8B, 0x4E8C, 's'], // 事 二
-    [0x4EBA, 0x4EBA, 'r'], // 人
-    [0x4ECB, 0x4ECB, 'j'], // 介
-    [0x4EE3, 0x4EE3, 'd'], // 代
-    [0x4EF6, 0x4EF6, 'j'], // 件
-    [0x4EFB, 0x4EFB, 'r'], // 任
-    [0x4F1A, 0x4F1A, 'h'], // 会
-    [0x4F20, 0x4F20, 'c'], // 传
-    [0x4F46, 0x4F46, 'd'], // 但
-    [0x4F53, 0x4F53, 't'], // 体
-    [0x4F60, 0x4F60, 'n'], // 你
-    [0x4F7F, 0x4F7F, 's'], // 使
-    [0x5168, 0x5168, 'q'], // 全
-    [0x5185, 0x5185, 'n'], // 内
-    [0x5206, 0x5206, 'f'], // 分
-    [0x5229, 0x5229, 'l'], // 利
-    [0x5230, 0x5230, 'd'], // 到
-    [0x5236, 0x5236, 'z'], // 制
-    [0x5316, 0x5316, 'h'], // 化
-    [0x5317, 0x5317, 'b'], // 北
-    [0x5355, 0x5355, 'd'], // 单
-    [0x5404, 0x5404, 'g'], // 各
-    [0x5409, 0x5409, 'j'], // 吉
-    [0x5416, 0x5416, 'a'], // 啊
-    [0x5426, 0x5426, 'f'], // 否
-    [0x5546, 0x5546, 's'], // 商
-    [0x554A, 0x554A, 'a'], // 啊
-    [0x5728, 0x5728, 'z'], // 在
-    [0x5730, 0x5730, 'd'], // 地
-    [0x5929, 0x5929, 't'], // 天
-    [0x5C0F, 0x5C0F, 'x'], // 小
-    [0x5C31, 0x5C31, 'j'], // 就
-    [0x5DE5, 0x5DE5, 'g'], // 工
-    [0x5E74, 0x5E74, 'n'], // 年
-    [0x5F00, 0x5F00, 'k'], // 开
-    [0x5F53, 0x5F53, 'd'], // 当
-    [0x6211, 0x6211, 'w'], // 我
-    [0x6210, 0x6210, 'c'], // 成
-    [0x6280, 0x6280, 'j'], // 技
-    [0x6295, 0x6295, 't'], // 投
-    [0x6700, 0x6700, 'z'], // 最
-    [0x673A, 0x673A, 'j'], // 机
-    [0x6765, 0x6765, 'l'], // 来
-    [0x6D77, 0x6D77, 'h'], // 海
-    [0x738B, 0x738B, 'w'], // 王
-    [0x751F, 0x751F, 's'], // 生
-    [0x7684, 0x7684, 'd'], // 的
-    [0x793E, 0x793E, 's'], // 社
-    [0x7FA4, 0x7FA4, 'q'], // 群
-    [0x884C, 0x884C, 'h'], // 行
-    [0x8C2D, 0x8C2D, 't'], // 谭
-    [0x8DEF, 0x8DEF, 'l'], // 路
-    [0x9AD8, 0x9AD8, 'g'], // 高
-    [0x9762, 0x9762, 'm'], // 面
-  ];
-  return text.split('').map(char => {
-    const code = char.charCodeAt(0);
-    // 英文字母直接返回
-    if (code >= 65 && code <= 90) return char.toLowerCase();
-    if (code >= 97 && code <= 122) return char;
-    // 查找汉字对应的拼音首字母
-    for (const [start, end, initial] of unicodeRanges) {
-      if (code >= start && code <= end) return initial;
-    }
-    // 通用汉字区间估算（按 GB2312 分区规律）
-    if (code >= 0x4E00 && code <= 0x9FA5) {
-      // 按 Unicode 编码粗略映射到拼音首字母
-      const idx = code - 0x4E00;
-      const ranges = [
-        [0, 20901, 'abcdefghjklmnopqrstwxyz'.split('')]
-      ];
-      // 使用更精确的区间
-      if (idx < 500) return 'a';
-      if (idx < 1000) return 'b';
-      if (idx < 1800) return 'c';
-      if (idx < 2500) return 'd';
-      if (idx < 2800) return 'e';
-      if (idx < 3500) return 'f';
-      if (idx < 4200) return 'g';
-      if (idx < 5000) return 'h';
-      if (idx < 5800) return 'j';
-      if (idx < 6300) return 'k';
-      if (idx < 7000) return 'l';
-      if (idx < 7800) return 'm';
-      if (idx < 8400) return 'n';
-      if (idx < 9000) return 'p';
-      if (idx < 9800) return 'q';
-      if (idx < 10400) return 'r';
-      if (idx < 11900) return 's';
-      if (idx < 13000) return 't';
-      if (idx < 13500) return 'w';
-      if (idx < 14500) return 'x';
-      if (idx < 16000) return 'y';
-      return 'z';
-    }
-    return char.toLowerCase();
-  }).join('');
-}
 
 
 // 可拖拽的标签项组件
@@ -1359,18 +1094,24 @@ export default function ContactsList() {
       const name = (contact.name || '');
       const nameLower = name.toLowerCase();
       if (isAlphaQuery) {
-        // 拼音模式：用内置函数转换姓名为拼音首字母
+        // 拼音模式：用 pinyin-pro 转换姓名为拼音
         try {
           // 获取姓名每个字的拼音首字母（如 "张盛" -> "zs"）
-          const initials = getChinesePinyinInitials(name).toLowerCase();
+          const initials = pinyin(name, { pattern: 'first', toneType: 'none', separator: '' }).toLowerCase();
+          // 获取姓名完整拼音（如 "张盛" -> "zhangsheng"）
+          const fullPinyin = pinyin(name, { toneType: 'none', separator: '' }).toLowerCase();
           // 优先级1：拼音首字母以搜索词开头（如 "z" 匹配 "张盛" 的 "zs"）
           if (initials.startsWith(q)) return 5;
-          // 优先级2：拼音首字母包含搜索词
+          // 优先级2：完整拼音以搜索词开头（如 "zhang" 匹配 "张盛"）
+          if (fullPinyin.startsWith(q)) return 4;
+          // 优先级3：拼音首字母包含搜索词
           if (initials.includes(q)) return 3;
+          // 优先级4：完整拼音包含搜索词
+          if (fullPinyin.includes(q)) return 2;
         } catch (e) {
-          // 转换失败，降级处理
+          // pinyin 转换失败，降级处理
         }
-        // 优先级3：其他字段匹配（公司、标签等）
+        // 优先级5：其他字段匹配（公司、标签等）
         return 1;
       } else {
         // 汉字模式：直接匹配汉字
@@ -1534,35 +1275,56 @@ export default function ContactsList() {
                 </div>
               )}
             </div>
+            <button
+              onClick={handleAddContact}
+              className="flex items-center justify-center h-10 w-10 rounded-xl bg-[#D32F2F] text-white hover:bg-[#A80000] transition-all shadow-sm shrink-0"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+            {/* 强力全页刷新按钮 */}
+            <button
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                if (shareFilter === 'all') {
+                  params.delete('tab');
+                } else {
+                  params.set('tab', shareFilter);
+                }
+                const newSearch = params.toString();
+                const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '');
+                window.location.href = newUrl;
+              }}
+              className="flex items-center justify-center h-10 px-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all shadow-sm shrink-0 text-xs font-medium"
+            >
+              刷新
+            </button>
           </div>
         </div>
 
-        {/* 筛选工具栏 - 四个等宽按鈕横排 */}
+        {/* 筛选工具栏 */}
         <div className="mb-3">
-          <div className="grid grid-cols-4 gap-2">
-            {/* 筛选按鈕 */}
-            <button
-              onClick={() => setIsTagAreaExpanded(true)}
-              className={`flex items-center justify-center h-9 text-xs rounded-xl shadow-sm font-medium transition-all active:scale-95 ${
-                selectedTagIds.length > 0
-                  ? 'bg-[#D32F2F] text-white'
-                  : 'bg-white text-[#D32F2F] hover:bg-red-50'
-              }`}
-            >
-              {selectedTagIds.length > 0 ? `筛选(${selectedTagIds.length})` : '筛选'}
-            </button>
-
-            {/* 排序按鈕 */}
+          <div className="flex items-center gap-2">
+            {allTags && allTags.length > 0 && (
+              <button
+                onClick={() => setIsTagAreaExpanded(true)}
+                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
+              >
+                <Tag className="h-3.5 w-3.5 mr-1.5" />
+                {selectedTagIds.length > 0 ? `标签(${selectedTagIds.length})` : '按标签筛选'}
+              </button>
+            )}
+            
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className={`flex items-center justify-center h-9 text-xs rounded-xl shadow-sm font-medium transition-all active:scale-95 ${
-                    sortBy && sortBy !== 'tagCount_desc'
-                      ? 'bg-[#D32F2F] text-white'
-                      : 'bg-white text-[#D32F2F] hover:bg-red-50'
-                  }`}
+                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
                 >
-                  排序
+                  <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
+                  {!sortBy && '排序'}
+                  {sortBy === 'tagCount_desc' && '标签数↓'}
+                  {sortBy === 'tagCount_asc' && '标签数↑'}
+                  {sortBy === 'interactionCount_desc' && '联络次数↓'}
+                  {sortBy === 'interactionCount_asc' && '联络次数↑'}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
@@ -1584,50 +1346,18 @@ export default function ContactsList() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            {/* 刷新按鈕 */}
-            <button
-              onClick={() => {
-                const params = new URLSearchParams(window.location.search);
-                if (shareFilter === 'all') {
-                  params.delete('tab');
-                } else {
-                  params.set('tab', shareFilter);
-                }
-                const newSearch = params.toString();
-                const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '');
-                window.location.href = newUrl;
-              }}
-              className="flex items-center justify-center h-9 text-xs rounded-xl bg-white shadow-sm text-gray-600 font-medium hover:bg-gray-50 active:scale-95 transition-all"
-            >
-              刷新
-            </button>
-
-            {/* 添加按鈕 */}
-            <button
-              onClick={handleAddContact}
-              className="flex items-center justify-center h-9 text-xs rounded-xl bg-[#D32F2F] text-white font-medium hover:bg-[#A80000] active:scale-95 transition-all shadow-sm"
-            >
-              添加
-            </button>
-          </div>
-
-          {/* 共享人筛选 - 仅在共享Tab时显示，单独一行 */}
-          {shareFilter === 'shared' && (
-            <div className="mt-2">
+            {/* 共享人筛选 - 仅在选中"共享"Tab时显示 */}
+            {shareFilter === 'shared' && (
             <Popover open={sharerPopoverOpen} onOpenChange={setSharerPopoverOpen}>
               <PopoverTrigger asChild>
                 <button
                   role="combobox"
                   aria-expanded={sharerPopoverOpen}
-                  className={`flex items-center h-9 px-3 text-xs rounded-xl shadow-sm font-medium transition-all active:scale-95 w-full justify-center ${
-                    sharerFilter !== 'all'
-                      ? 'bg-[#D32F2F] text-white'
-                      : 'bg-white text-[#D32F2F] hover:bg-red-50'
-                  }`}
+                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
                 >
                   <Handshake className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                  <span className="truncate">
-                    {sharerFilter === 'all' ? '共享人：全部' : 
+                  <span className="truncate max-w-[80px]">
+                    {sharerFilter === 'all' ? '共享人' : 
                       sharerList.find(s => s.id === sharerFilter)?.name || '共享人'}
                   </span>
                   <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
@@ -1675,8 +1405,8 @@ export default function ContactsList() {
                 </Command>
               </PopoverContent>
             </Popover>
-            </div>
-          )}
+            )}
+          </div>
         </div>
         
         {/* 标签筛选器 */}
