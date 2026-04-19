@@ -226,9 +226,12 @@ export default function FunderManagement() {
     { ledgerId, orderIds: editingOrderId ? [editingOrderId] : [] },
     { enabled: !!editingOrderId && ledgerId > 0 }
   );
-  const previewPaidInterest = editingOrderId && editingPaidSummary
-    ? ((editingPaidSummary as any)[editingOrderId] ?? 0)
-    : 0;
+  // 受邀订单的已结佣金独立于利息结算记录，初始为 0（只有通过「记录结佣」按钮操作后才会有値）
+  const previewPaidInterest = editingOrder?.participantInfo
+    ? 0
+    : (editingOrderId && editingPaidSummary
+        ? ((editingPaidSummary as any)[editingOrderId] ?? 0)
+        : 0);
 
   // 担保价值（所有担保货币折算为 USDT 的总值）
   const computedCollateralValue = useMemo(() => {
