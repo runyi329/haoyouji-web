@@ -1256,6 +1256,23 @@ export default function ContactsList() {
             >
               <Plus className="h-5 w-5" />
             </button>
+            {/* 强力全页刷新按钮 */}
+            <button
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                if (shareFilter === 'all') {
+                  params.delete('tab');
+                } else {
+                  params.set('tab', shareFilter);
+                }
+                const newSearch = params.toString();
+                const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '');
+                window.location.href = newUrl;
+              }}
+              className="flex items-center justify-center h-10 px-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all shadow-sm shrink-0 text-xs font-medium"
+            >
+              刷新
+            </button>
           </div>
         </div>
 
