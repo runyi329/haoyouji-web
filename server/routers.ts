@@ -12422,7 +12422,40 @@ export const appRouter = router({
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
-        return { orders, livePrices };
+        // 附带当前用户在每个订单中的参与方配置
+        let participantInfoMap: Record<number, any> = {};
+        if (conn) {
+          try {
+            const piRows = await conn.execute(
+              'SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
+              [input.ledgerId, ctx.user.id]
+            ) as any;
+            const piArr = Array.isArray(piRows[0]) ? piRows[0] : (Array.isArray(piRows) ? piRows : []);
+            for (const pi of piArr) {
+              participantInfoMap[Number(pi.order_id)] = pi;
+            }
+          } catch {}
+        }
+        // 给每个订单附带 participantInfo（如果当前用户是参与方）
+        const ordersWithParticipant = orders.map((o: any) => {
+          const pi = participantInfoMap[Number(o.id)];
+          if (pi) {
+            // 参与方订单：附带参与方配置，默认值用订单的计息基数和计息日期
+            return {
+              ...o,
+              participantInfo: {
+                role: pi.role,
+                commissionRate: pi.commission_rate || null,
+                commissionBase: pi.commission_base || o.interest_base || null,
+                commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
+                paidCommission: pi.paid_commission || '0',
+                note: pi.note || null,
+              }
+            };
+          }
+          return o;
+        });
+        return { orders: ordersWithParticipant, livePrices };
       }),
 
     // 获取资方资产汇总（资金方首页用）
@@ -13220,10 +13253,6 @@ export const appRouter = router({
         participants: z.array(z.object({
           userId: z.number(),
           role: z.enum(['funder', 'borrower', 'broker']),
-          rate: z.string().optional(),
-          rateLabel: z.string().optional(),
-          amount: z.string().optional(),
-          note: z.string().optional(),
           sortOrder: z.number().optional(),
         })),
       }))
@@ -13261,13 +13290,65 @@ export const appRouter = router({
         // 批量插入新的参与方（以 user_id 为核心）
         for (const p of input.participants) {
           await conn.execute(
-            'INSERT INTO funder_order_participants (order_id, ledger_id, user_id, role, rate, rate_label, amount, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [input.orderId, input.ledgerId, p.userId, p.role, p.rate || null, p.rateLabel || null, p.amount || null, p.note || null, p.sortOrder ?? 0]
+            'INSERT INTO funder_order_participants (order_id, ledger_id, user_id, role, sort_order) VALUES (?, ?, ?, ?, ?)',
+            [input.orderId, input.ledgerId, p.userId, p.role, p.sortOrder ?? 0]
           );
         }
         return { success: true };
       }),
-    // ========== 资方订单 AI 邮件预警接口 ==========
+    // 更新参与方佣金配置（owner 在编辑页设置）
+    funderUpdateParticipantConfig: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        ledgerId: z.number(),
+        userId: z.number(), // 参与方的 userId
+        commissionRate: z.string().optional(),
+        commissionBase: z.string().optional(),
+        commissionStartDate: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可配置参与方' });
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await conn.execute(
+          'UPDATE funder_order_participants SET commission_rate = ?, commission_base = ?, commission_start_date = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ?',
+          [input.commissionRate || null, input.commissionBase || null, input.commissionStartDate || null, input.orderId, input.ledgerId, input.userId]
+        );
+        return { success: true };
+      }),
+    // 录入已结佣金（卡片上的按钮，owner 操作）
+    funderUpdatePaidCommission: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        ledgerId: z.number(),
+        userId: z.number(), // 参与方的 userId
+        paidCommission: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可录入已结佣金' });
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await conn.execute(
+          'UPDATE funder_order_participants SET paid_commission = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ?',
+          [input.paidCommission, input.orderId, input.ledgerId, input.userId]
+        );
+        return { success: true };
+      }),
+        // ========== 资方订单 AI 邮件预警接口 ==========
     // 获取订单预警配置和用户邮箱
     funderGetAlertState: protectedProcedure
       .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
