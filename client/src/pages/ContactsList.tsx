@@ -1915,8 +1915,8 @@ export default function ContactsList() {
             {[...Array(5)].map((_, i) => (
               <div key={i} className="bg-white rounded-2xl shadow-sm border-0 overflow-hidden" style={{ minHeight: 148 }}>
                 <Lottie
-                  path="/renmai-lottie.json"
-                  loop={true}
+                  path="/renmai-animation.json"
+                  loop={false}
                   autoplay={true}
                   style={{ width: '100%', height: '100%', minHeight: 148 }}
                 />
