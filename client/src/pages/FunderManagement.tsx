@@ -803,6 +803,12 @@ export default function FunderManagement() {
                           </span>
                         </div>
                       )}
+                      {/* DEBUG: 显示原始货币字段值 */}
+                      {order.participantInfo && (
+                        <div className="flex items-center gap-1 text-xs text-red-500">
+                          <span>DB字段实际内容: [{JSON.stringify(order.interest_base_currency)}] / participantInfo.interestBaseCurrency: [{order.participantInfo.interestBaseCurrency}]</span>
+                        </div>
+                      )}
                       {order.participantInfo?.commissionRate && (
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">佣金比例</span>
