@@ -1213,7 +1213,7 @@ export default function ContactsList() {
                   <div
                     ref={dropdownScrollRef}
                     className="overflow-y-auto"
-                    style={{ maxHeight: '384px' }}
+                    style={{ maxHeight: '384px', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
                     onScroll={() => {
                       const el = dropdownScrollRef.current;
                       if (el) {
@@ -1230,7 +1230,7 @@ export default function ContactsList() {
                         key={contact.id}
                         onClick={(e) => handleContactClick(contact.id, contact, e)}
                         onMouseEnter={() => setHighlightedDropdownIndex(idx)}
-                        className={`px-3 sm:px-4 py-2 sm:py-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 ${isHighlighted ? 'bg-[#FAF3ED] dark:bg-gray-700' : 'hover:bg-[#FAF3ED] dark:hover:bg-gray-700'}`}
+                        className={`px-3 py-2 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 ${isHighlighted ? 'bg-[#FAF3ED] dark:bg-gray-700' : 'hover:bg-[#FAF3ED] dark:hover:bg-gray-700'}`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
