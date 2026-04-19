@@ -491,8 +491,8 @@ export default function Home() {
       {/* Stats Cards - 使用SPA导航 */}
       <div className="px-4 mt-2 grid grid-cols-2 gap-2">
         <div className="block cursor-pointer" onClick={() => {
-          utils.contacts.list.invalidate();
-          navigate('/parent/contacts/list');
+          // 每次点击都带上时间戳，确保 ContactsList 的 searchParams 发生变化，触发刷新
+          navigate('/parent/contacts/list?_t=' + Date.now());
         }}>
         <Card className="bg-gradient-to-br from-[#A80000] to-[#d44] text-white p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
           <div className="flex items-center space-x-2 opacity-90">
