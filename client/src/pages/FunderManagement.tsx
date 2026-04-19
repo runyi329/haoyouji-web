@@ -319,8 +319,23 @@ export default function FunderManagement() {
   });
   // 参与方相关
   const saveParticipantsMutation = trpc.ledger.funderSaveOrderParticipants.useMutation({
-    onSuccess: () => {
+    onSuccess: async (_, variables) => {
       toast.success('参与方配置已保存');
+      // 保存成功后重新加载参与方列表，刷新面板显示
+      try {
+        const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId: variables.orderId, ledgerId });
+        const mapped = (result.participants || []).map((p: any) => ({
+          userId: p.user_id,
+          displayName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
+          role: p.role as ParticipantRole,
+          rate: p.rate || '',
+          rateLabel: p.rate_label || '',
+          amount: p.amount || '',
+          note: p.note || '',
+          sortOrder: p.sort_order || 0,
+        }));
+        setParticipantsList(mapped);
+      } catch {}
     },
     onError: (err) => toast.error(err.message),
   });

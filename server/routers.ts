@@ -13180,6 +13180,24 @@ export const appRouter = router({
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 自动建表（幂等，确保生产环境表存在）
+        await conn.execute(`CREATE TABLE IF NOT EXISTS funder_order_participants (
+          id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+          order_id int NOT NULL,
+          ledger_id int NOT NULL,
+          user_id int NOT NULL,
+          role varchar(20) NOT NULL,
+          rate varchar(20) NULL,
+          rate_label varchar(50) NULL,
+          amount varchar(50) NULL,
+          note text NULL,
+          sort_order int DEFAULT 0,
+          created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+          INDEX fop_order_idx (order_id),
+          INDEX fop_ledger_idx (ledger_id),
+          INDEX fop_user_idx (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
         // 先删除旧的参与方记录
         await conn.execute('DELETE FROM funder_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
         // 批量插入新的参与方（以 user_id 为核心）
