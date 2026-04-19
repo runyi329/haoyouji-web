@@ -803,12 +803,6 @@ export default function FunderManagement() {
                           </span>
                         </div>
                       )}
-                      {/* DEBUG: 显示原始货币字段值 */}
-                      {order.participantInfo && (
-                        <div className="flex items-center gap-1 text-xs text-red-500">
-                          <span>DB字段实际内容: [{JSON.stringify(order.interest_base_currency)}] / participantInfo.interestBaseCurrency: [{order.participantInfo.interestBaseCurrency}]</span>
-                        </div>
-                      )}
                       {order.participantInfo?.commissionRate && (
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">佣金比例</span>
@@ -1723,8 +1717,8 @@ export default function FunderManagement() {
                           </div>
                           {/* 待结利息/待结佣金大数字 */}
                           {(() => {
-                            // 货币单位统一使用 formData.interestBaseCurrency（handleOpenEdit 时已从 order.interest_base_currency 赋値）
-                            const isCNY = formData.interestBaseCurrency === 'CNY';
+                            // 货币单位跟随原始订单的结算货币（约定年化下面的人民币/USDT 按钒）
+                            const isCNY = formData.interestRateCurrency === 'CNY';
                             const mainVal = editingOrder?.participantInfo
                               ? (previewCommission > 0 ? previewCommission : 0)
                               : (previewAccrued > 0 ? previewAccrued : 0);
@@ -1752,8 +1746,8 @@ export default function FunderManagement() {
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
                                     {(() => {
                                       const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
-                                      // 货币单位统一使用 formData.interestBaseCurrency
-                                      const mainUnit = formData.interestBaseCurrency === 'CNY' ? ' 元' : ' U';
+                                      // 货币单位跟随结算货币
+                                      const mainUnit = formData.interestRateCurrency === 'CNY' ? ' 元' : ' U';
                                       return <>{val.toLocaleString(undefined, { maximumFractionDigits: 2 })}{mainUnit}</>;
                                     })()}
                                   </span>
@@ -1761,8 +1755,8 @@ export default function FunderManagement() {
                                 {(() => {
                                   const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
                                   if (val <= 0) return null;
-                                  // 货币单位统一使用 formData.interestBaseCurrency
-                                  const isCNY4 = formData.interestBaseCurrency === 'CNY';
+                                  // 货币单位跟随结算货币
+                                  const isCNY4 = formData.interestRateCurrency === 'CNY';
                                   const altVal = isCNY4 ? val / 7 : val * 7;
                                   const altUnit = isCNY4 ? 'U' : '元';
                                   return <div className="text-[10px] text-gray-400 mt-0.5">≈ {altVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} {altUnit}</div>;
