@@ -239,7 +239,6 @@ function getLevelClassName(level?: string): string {
 export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const utils = trpc.useUtils();
   const isLiulifan = user?.username === 'liulifan';
   const isJiang = user?.username === 'jiang';
   
