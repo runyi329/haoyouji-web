@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
+import Lottie from "lottie-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -1909,32 +1910,16 @@ export default function ContactsList() {
       {/* 人脉列表 */}
       <div className="mt-4">
         {(isLoading || isLoadingCompanyList) ? (
-          // Skeleton 骨架屏
+          // Lottie 动画骨架屏
           <div className="grid grid-cols-1 gap-3 px-4">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl p-4 shadow-sm">
-                {/* 名字行 */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-6 w-24 rounded-md" />
-                    <Skeleton className="h-4 w-12 rounded-md" />
-                    <Skeleton className="h-4 w-10 rounded-md" />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                  </div>
-                </div>
-                {/* 公司行 */}
-                <Skeleton className="h-4 w-32 rounded-md mb-3" />
-                {/* 联络状态行 */}
-                <Skeleton className="h-3 w-40 rounded-md mb-2" />
-                {/* 标签行 */}
-                <div className="flex gap-1">
-                  <Skeleton className="h-5 w-14 rounded-full" />
-                  <Skeleton className="h-5 w-10 rounded-full" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
+              <div key={i} className="bg-white rounded-2xl p-3 shadow-sm flex items-center justify-center overflow-hidden">
+                <Lottie
+                  path="/renmai-lottie.json"
+                  loop={true}
+                  autoplay={true}
+                  style={{ width: '100%', height: 72 }}
+                />
               </div>
             ))}
           </div>
