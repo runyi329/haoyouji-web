@@ -874,6 +874,20 @@ export default function ContactsList() {
     }
   }, [showDropdown, searchQuery]);
 
+  // 用原生 JS 绑定 touchmove 事件，阻止冒泡到父容器的原生监听器
+  // React 合成事件的 stopPropagation 无法阻止原生 addEventListener 监听器
+  React.useEffect(() => {
+    const el = dropdownScrollRef.current;
+    if (!el || !showDropdown) return;
+    const stopTouch = (e: TouchEvent) => {
+      e.stopPropagation();
+    };
+    el.addEventListener('touchmove', stopTouch, { passive: true });
+    return () => {
+      el.removeEventListener('touchmove', stopTouch);
+    };
+  }, [showDropdown]);
+
   const handleDeleteClick = (e: React.MouseEvent, contact: any) => {
     e.stopPropagation();
     setContactToDelete(contact);
@@ -1214,6 +1228,7 @@ export default function ContactsList() {
                     ref={dropdownScrollRef}
                     className="overflow-y-auto"
                     style={{ maxHeight: '384px', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                    onTouchMove={(e) => e.stopPropagation()}
                     onScroll={() => {
                       const el = dropdownScrollRef.current;
                       if (el) {
