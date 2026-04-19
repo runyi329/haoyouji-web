@@ -272,7 +272,7 @@ export default function ContactsList() {
   const SORT_BY_KEY = 'contacts_list_sort_by';
   const [sortBy, setSortBy] = useState<'tagCount_desc' | 'tagCount_asc' | 'interactionCount_desc' | 'interactionCount_asc' | undefined>(() => {
     const saved = localStorage.getItem(SORT_BY_KEY);
-    return saved ? (saved as any) : undefined;
+    return saved ? (saved as any) : 'tagCount_desc';
   });
   
   // 当 sortBy 变化时保存到 localStorage
