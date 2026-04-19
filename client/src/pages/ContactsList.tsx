@@ -871,7 +871,7 @@ export default function ContactsList() {
     } else {
       setCanScrollDown(false);
     }
-  }, [showDropdown, dropdownContacts.length]);
+  }, [showDropdown, searchQuery]);
 
   const handleDeleteClick = (e: React.MouseEvent, contact: any) => {
     e.stopPropagation();
