@@ -12330,8 +12330,24 @@ export const appRouter = router({
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         const isManager = role === 'owner' || role === 'admin';
         const isFunder = role === 'funder';
-        if (!isManager && !isFunder) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        // 资金方只能看自己的，管理员可以看指定用户或全部
+        // 检查当前用户是否是某些订单的参与方
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        let participantOrderIds: number[] = [];
+        if (conn) {
+          try {
+            const pRows = await conn.execute(
+              'SELECT DISTINCT order_id FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
+              [input.ledgerId, ctx.user.id]
+            ) as any;
+            const pArr = Array.isArray(pRows[0]) ? pRows[0] : (Array.isArray(pRows) ? pRows : []);
+            participantOrderIds = pArr.map((r: any) => Number(r.order_id)).filter(Boolean);
+          } catch {}
+        }
+        const isParticipant = participantOrderIds.length > 0;
+        // 无权限：既不是管理员/资金方，也不是任何订单的参与方
+        if (!isManager && !isFunder && !isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 资金方只能看自己的，管理员可以看指定用户或全部，参与方只能看自己参与的订单
         let targetUserId: number | null = null;
         if (isFunder && !isManager) {
           targetUserId = ctx.user.id;
@@ -12339,12 +12355,28 @@ export const appRouter = router({
           targetUserId = input.userId;
         }
         let rows: any;
-        if (targetUserId) {
+        if (isParticipant && !isManager && !isFunder) {
+          // 纯参与方：只返回参与的订单
+          if (participantOrderIds.length === 0) {
+            rows = [[]];
+          } else {
+            const placeholders = participantOrderIds.map(() => '?').join(',');
+            rows = await conn!.execute(
+              `SELECT fo.*, u.username, u.name as userName, u.avatar
+               FROM funder_asset_orders fo
+               LEFT JOIN users u ON u.id = fo.user_id
+               WHERE fo.ledger_id = ? AND fo.id IN (${placeholders})
+               ORDER BY fo.created_at DESC`,
+              [input.ledgerId, ...participantOrderIds]
+            );
+          }
+        } else if (targetUserId) {
+          // 资金方或管理员指定用户：按 user_id 过滤，但也合并参与的订单
           rows = await db.execute(
             sql`SELECT fo.*, u.username, u.name as userName, u.avatar
                 FROM funder_asset_orders fo
                 LEFT JOIN users u ON u.id = fo.user_id
-                WHERE fo.ledger_id = ${input.ledgerId} AND fo.user_id = ${targetUserId}
+                WHERE fo.ledger_id = ${input.ledgerId} AND (fo.user_id = ${targetUserId}${participantOrderIds.length > 0 ? sql` OR fo.id IN (${sql.raw(participantOrderIds.join(','))})` : sql``})
                 ORDER BY fo.created_at DESC`
           );
         } else {
