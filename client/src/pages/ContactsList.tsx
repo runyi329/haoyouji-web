@@ -416,8 +416,8 @@ export default function ContactsList() {
     filterType: filterType || undefined, // 传递筛选类型给后端
   }, {
     enabled: viewMode !== 'company', // 公司视图不使用这个 API
-    refetchOnMount: true, // 页面重新挂载时刷新
-    staleTime: 30_000, // 30秒内不重复请求，减少不必要的网络开销
+    refetchOnMount: 'always', // 每次进入页面都强制刷新，确保排序正确
+    staleTime: 0, // 不缓存，每次都获取最新数据
   });
   
   // 当 _refresh 参数变化时，重置分页并强制刷新数据（必须在 refetchContacts 声明之后）
