@@ -1382,7 +1382,7 @@ export default function ContactsList() {
               <Settings className="h-3 w-3 mr-1" />
               标签管理
             </button>
-              <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pb-1 pr-1">
+              <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pb-1 pr-1 overscroll-contain touch-pan-y">
               {allTags.map((tag) => {
                 const isSelected = selectedTagIds.includes(tag.id);
                 
