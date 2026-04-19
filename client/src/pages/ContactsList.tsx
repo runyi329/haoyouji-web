@@ -1438,32 +1438,49 @@ export default function ContactsList() {
           {/* 共享人筛选 - 仅在选中"共享"Tab时显示，单独一行 */}
           {shareFilter === 'shared' && (
           <div className="mt-2">
-            <div className="grid grid-cols-3 gap-2 w-full">
-              <button
-                onClick={() => setSharerFilter('all')}
-                className={`h-9 px-2 text-xs rounded-xl font-medium transition-all truncate ${
-                  sharerFilter === 'all' 
-                    ? 'bg-[#D32F2F] text-white shadow-sm' 
-                    : 'bg-white text-gray-600 shadow-sm hover:bg-red-50'
-                }`}
-              >
-                全部
-              </button>
-              {sharerList.map((sharer) => (
+            <Popover open={sharerPopoverOpen} onOpenChange={setSharerPopoverOpen}>
+              <PopoverTrigger asChild>
                 <button
-                  key={sharer.id}
-                  onClick={() => setSharerFilter(sharer.id)}
-                  className={`h-9 px-2 text-xs rounded-xl font-medium transition-all truncate ${
-                    sharerFilter === sharer.id 
-                      ? 'bg-[#D32F2F] text-white shadow-sm' 
-                      : 'bg-white text-gray-600 shadow-sm hover:bg-red-50'
-                  }`}
-                  title={sharer.name}
+                  role="combobox"
+                  aria-expanded={sharerPopoverOpen}
+                  className="flex items-center h-9 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all w-full justify-center"
                 >
-                  {sharer.name}
+                  <span className="truncate">
+                    {sharerFilter === 'all' ? '共享人：全部' : 
+                      sharerList.find((s: any) => s.id === sharerFilter)?.name || '共享人'}
+                  </span>
+                  <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                 </button>
-              ))}
-            </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-[calc(100vw-2rem)] max-w-sm p-3" align="center" side="bottom">
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => { setSharerFilter('all'); setSharerPopoverOpen(false); }}
+                    className={`h-9 px-2 text-xs rounded-lg font-medium transition-all truncate ${
+                      sharerFilter === 'all'
+                        ? 'bg-[#D32F2F] text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-red-50 hover:text-[#D32F2F]'
+                    }`}
+                  >
+                    全部
+                  </button>
+                  {sharerList.map((sharer: any) => (
+                    <button
+                      key={sharer.id}
+                      onClick={() => { setSharerFilter(sharer.id); setSharerPopoverOpen(false); }}
+                      className={`h-9 px-2 text-xs rounded-lg font-medium transition-all truncate ${
+                        sharerFilter === sharer.id
+                          ? 'bg-[#D32F2F] text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-red-50 hover:text-[#D32F2F]'
+                      }`}
+                      title={sharer.name}
+                    >
+                      {sharer.name}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
           )}
         </div>
