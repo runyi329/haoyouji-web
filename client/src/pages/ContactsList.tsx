@@ -36,6 +36,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Switch } from "@/components/ui/switch";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { InteractionHistoryDialog } from "@/components/InteractionHistoryDialog";
 import { ReferralRelationshipDialog } from "@/components/ReferralRelationshipDialog";
@@ -1265,11 +1266,11 @@ export default function ContactsList() {
           <div className="flex items-center gap-2">
             {allTags && allTags.length > 0 && (
               <button
-                onClick={() => setIsTagAreaExpanded(!isTagAreaExpanded)}
+                onClick={() => setIsTagAreaExpanded(true)}
                 className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
               >
                 <Tag className="h-3.5 w-3.5 mr-1.5" />
-                {isTagAreaExpanded ? '收起标签' : '按标签筛选'}
+                {selectedTagIds.length > 0 ? `标签(${selectedTagIds.length})` : '按标签筛选'}
               </button>
             )}
             
@@ -1369,87 +1370,91 @@ export default function ContactsList() {
         </div>
         
         {/* 标签筛选器 */}
-        {allTags && allTags.length > 0 && isTagAreaExpanded && (
-          <div className="mb-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                {/* 移除多选复选框，默认启用多选模式 */}
+        {/* 标签筛选底部抽屉 */}
+        <Sheet open={isTagAreaExpanded} onOpenChange={setIsTagAreaExpanded}>
+          <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-0 max-h-[60vh] flex flex-col">
+            <SheetHeader className="pb-2 pt-4">
+              <div className="flex items-center justify-between">
+                <SheetTitle className="text-base font-semibold text-gray-800">按标签筛选</SheetTitle>
+                <button
+                  onClick={() => setShowTagManagement(true)}
+                  className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#D32F2F] hover:bg-red-50 transition-all"
+                >
+                  <Settings className="h-3 w-3 mr-1" />
+                  标签管理
+                </button>
               </div>
-            <button
-              onClick={() => setShowTagManagement(true)}
-              className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#D32F2F] hover:bg-[#D32F2F]-light transition-all mb-2"
-            >
-              <Settings className="h-3 w-3 mr-1" />
-              标签管理
-            </button>
-              <div 
-                className="flex flex-wrap gap-2 max-h-36 overflow-y-auto pb-1 pr-1"
-                onTouchMove={(e) => e.stopPropagation()}
-              >
-              {allTags.map((tag) => {
-                const isSelected = selectedTagIds.includes(tag.id);
-                
-                return (
-                  <Badge
-                    key={tag.id}
-                    variant={isSelected ? "default" : "outline"}
-                    className="cursor-pointer transition-all hover:scale-105"
-                    style={{
-                      backgroundColor: isSelected ? mapColorToTheme(tag.color) : '#ffffff',
-                      borderColor: isSelected ? mapColorToTheme(tag.color) : '#d1d5db',
-                      color: isSelected ? '#fff' : '#9ca3af',
-                    }}
-                    onClick={() => {
-                      if (isMultiSelectMode) {
-                        // 多选模式：添加/移除标签
-                        let newTagIds: number[];
-                        if (isSelected) {
-                          // 移除该标签
-                          newTagIds = selectedTagIds.filter(id => id !== tag.id);
+              {selectedTagIds.length > 0 && (
+                <button
+                  onClick={() => {
+                    const newUrl = filterType
+                      ? `/parent/contacts/list?filter=${filterType}`
+                      : '/parent/contacts/list';
+                    setLocation(newUrl);
+                  }}
+                  className="text-xs text-gray-400 hover:text-[#D32F2F] self-start mt-1"
+                >
+                  清除已选 ({selectedTagIds.length})
+                </button>
+              )}
+            </SheetHeader>
+            <div className="flex-1 overflow-y-auto">
+              <div className="flex flex-wrap gap-2 pb-2">
+                {allTags && allTags.map((tag) => {
+                  const isSelected = selectedTagIds.includes(tag.id);
+                  return (
+                    <Badge
+                      key={tag.id}
+                      variant={isSelected ? "default" : "outline"}
+                      className="cursor-pointer transition-all hover:scale-105 text-sm py-1.5 px-3"
+                      style={{
+                        backgroundColor: isSelected ? mapColorToTheme(tag.color) : '#ffffff',
+                        borderColor: isSelected ? mapColorToTheme(tag.color) : '#d1d5db',
+                        color: isSelected ? '#fff' : '#9ca3af',
+                      }}
+                      onClick={() => {
+                        if (isMultiSelectMode) {
+                          let newTagIds: number[];
+                          if (isSelected) {
+                            newTagIds = selectedTagIds.filter(id => id !== tag.id);
+                          } else {
+                            newTagIds = [...selectedTagIds, tag.id];
+                          }
+                          if (newTagIds.length === 0) {
+                            const newUrl = filterType
+                              ? `/parent/contacts/list?filter=${filterType}`
+                              : '/parent/contacts/list';
+                            setLocation(newUrl);
+                          } else {
+                            const tagParam = newTagIds.join(',');
+                            const newUrl = filterType
+                              ? `/parent/contacts/list?filter=${filterType}&tag=${tagParam}`
+                              : `/parent/contacts/list?tag=${tagParam}`;
+                            setLocation(newUrl);
+                          }
                         } else {
-                          // 添加该标签
-                          newTagIds = [...selectedTagIds, tag.id];
+                          if (isSelected) {
+                            const newUrl = filterType
+                              ? `/parent/contacts/list?filter=${filterType}`
+                              : '/parent/contacts/list';
+                            setLocation(newUrl);
+                          } else {
+                            const newUrl = filterType
+                              ? `/parent/contacts/list?filter=${filterType}&tag=${tag.id}`
+                              : `/parent/contacts/list?tag=${tag.id}`;
+                            setLocation(newUrl);
+                          }
                         }
-                        
-                        // 更新URL
-                        if (newTagIds.length === 0) {
-                          const newUrl = filterType 
-                            ? `/parent/contacts/list?filter=${filterType}`
-                            : '/parent/contacts/list';
-                          setLocation(newUrl);
-                        } else {
-                          const tagParam = newTagIds.join(',');
-                          const newUrl = filterType
-                            ? `/parent/contacts/list?filter=${filterType}&tag=${tagParam}`
-                            : `/parent/contacts/list?tag=${tagParam}`;
-                          setLocation(newUrl);
-                        }
-                      } else {
-                        // 单选模式：切换选中状态
-                        if (isSelected) {
-                          // 取消筛选
-                          const newUrl = filterType 
-                            ? `/parent/contacts/list?filter=${filterType}`
-                            : '/parent/contacts/list';
-                          setLocation(newUrl);
-                        } else {
-                          // 应用筛选
-                          const newUrl = filterType
-                            ? `/parent/contacts/list?filter=${filterType}&tag=${tag.id}`
-                            : `/parent/contacts/list?tag=${tag.id}`;
-                          setLocation(newUrl);
-                        }
-                      }
-                    }}
-                  >
-                    {tag.name}
-                  </Badge>
-                );
-              })}
+                      }}
+                    >
+                      {tag.name}
+                    </Badge>
+                  );
+                })}
               </div>
             </div>
-          </div>
-        )}
+          </SheetContent>
+        </Sheet>
         
       </div>
 
