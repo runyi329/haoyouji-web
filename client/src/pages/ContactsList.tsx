@@ -1453,7 +1453,7 @@ export default function ContactsList() {
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-[calc(100vw-2rem)] max-w-sm p-3" align="center" side="bottom">
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
                   <button
                     onClick={() => { setSharerFilter('all'); setSharerPopoverOpen(false); }}
                     className={`h-9 px-2 text-xs rounded-lg font-medium transition-all truncate ${
