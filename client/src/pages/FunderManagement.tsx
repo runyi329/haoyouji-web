@@ -164,6 +164,10 @@ export default function FunderManagement() {
     showProfitShare: true,
     commissionShare: '',
     originalAmount: '', // 编辑时保存原订单金额，买入价格或数量为空时回退使用
+    // 受邀订单佣金配置
+    commissionRate: '' as string | undefined,
+    commissionBase: '' as string | undefined,
+    commissionStartDate: '' as string | undefined,
   });
 
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
@@ -318,6 +322,16 @@ export default function FunderManagement() {
     onError: (err) => toast.error(err.message),
   });
   // 参与方相关
+  const updateParticipantConfigMutation = trpc.ledger.funderUpdateParticipantConfig.useMutation({
+    onSuccess: () => {
+      toast.success('佣金配置已保存');
+      setShowForm(false);
+      setEditingOrder(null);
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
   const saveParticipantsMutation = trpc.ledger.funderSaveOrderParticipants.useMutation({
     onSuccess: async (_, variables) => {
       toast.success('参与方配置已保存');
@@ -472,6 +486,9 @@ export default function FunderManagement() {
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
       originalAmount: order.amount || '',
+      commissionRate: order.participantInfo?.commissionRate ? String(order.participantInfo.commissionRate) : '',
+      commissionBase: order.participantInfo?.commissionBase ? String(order.participantInfo.commissionBase) : '',
+      commissionStartDate: order.participantInfo?.commissionStartDate ? String(order.participantInfo.commissionStartDate).slice(0, 10) : '',
     });
     // 加载担保货币
     try {
@@ -505,6 +522,23 @@ export default function FunderManagement() {
   };
 
   const handleSubmit = () => {
+    // 受邀订单：仅保存佣金配置
+    if (editingOrder?.participantInfo) {
+      const participantUserId = editingOrder.participantInfo.userId ?? editingOrder.participantInfo.user_id;
+      if (!participantUserId) {
+        toast.error('无法确定参与方用户ID');
+        return;
+      }
+      updateParticipantConfigMutation.mutate({
+        orderId: editingOrder.id,
+        ledgerId,
+        userId: participantUserId,
+        commissionRate: formData.commissionRate || undefined,
+        commissionBase: formData.commissionBase || undefined,
+        commissionStartDate: formData.commissionStartDate || undefined,
+      });
+      return;
+    }
     // 编辑模式下，如果买入价/数量为空，使用原订单金额；新建模式必须填
     const finalAmount = computedAmount || (editingOrder ? formData.originalAmount : '');
     if (!finalAmount || parseFloat(finalAmount) <= 0) {
@@ -535,7 +569,7 @@ export default function FunderManagement() {
         : collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))).length > 0
           ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
           : undefined,
-      // 提交前确保 displayConfig 所有值都是 boolean
+      // 提交前确保 displayConfig 所有値都是 boolean
       displayConfig: Object.fromEntries(
         Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
       ) as Record<string, boolean>,
@@ -655,6 +689,11 @@ export default function FunderManagement() {
                         <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
                           {statusLabel}
                         </span>
+                        {order.participantInfo && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0' }}>
+                            受邀订单
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         <button
@@ -989,7 +1028,7 @@ export default function FunderManagement() {
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
-                {editingOrder ? '编辑订单' : '添加订单'}
+                {editingOrder?.participantInfo ? '受邀订单配置' : editingOrder ? '编辑订单' : '添加订单'}
               </h3>
               <button
                 onClick={() => { setShowForm(false); setEditingOrder(null); setShowDatePicker(false); }}
@@ -1000,8 +1039,18 @@ export default function FunderManagement() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
+              {/* 受邀订单：只读提示 */}
+              {editingOrder?.participantInfo && (
+                <div className="rounded-xl px-4 py-3 flex items-start gap-2" style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
+                  <span className="text-green-600 mt-0.5">✓</span>
+                  <div>
+                    <div className="text-sm font-medium text-green-800">受邀订单</div>
+                    <div className="text-xs text-green-600 mt-0.5">订单基础信息为只读，仅可配置佣金相关参数</div>
+                  </div>
+                </div>
+              )}
               {/* 币种 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种</label>
                 <div className="flex gap-2">
                   {COIN_OPTIONS.map(c => (
@@ -1022,7 +1071,7 @@ export default function FunderManagement() {
               </div>
 
               {/* 买入价格 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">
                   买入价格（USDT）<span className="text-red-400 ml-0.5">*</span>
                 </label>
@@ -1038,7 +1087,7 @@ export default function FunderManagement() {
               </div>
 
               {/* 买入数量 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">
                   买入数量（{formData.coin}）<span className="text-red-400 ml-0.5">*</span>
                 </label>
@@ -1108,7 +1157,7 @@ export default function FunderManagement() {
               </div>
 
               {/* 计息基数 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
                   计息基数
                   <span className="ml-1.5 text-xs text-gray-400 font-normal">利息计算的本金基数</span>
@@ -1146,8 +1195,61 @@ export default function FunderManagement() {
                 </div>
               </div>
 
+              {/* 受邀订单专属：佣金配置区 */}
+              {editingOrder?.participantInfo && (
+                <div className="rounded-2xl p-4 space-y-4" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                  <div className="text-sm font-semibold text-green-800 mb-1">佣金配置</div>
+                  {/* 佣金率 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">佣金率（%/年）</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={formData.commissionRate ?? ''}
+                        onChange={e => setFormData(d => ({ ...d, commissionRate: e.target.value }))}
+                        className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                        placeholder="如：1"
+                        style={{ display: 'block', boxSizing: 'border-box' }}
+                      />
+                      <span className="text-base font-medium text-gray-500 shrink-0">% / 年</span>
+                    </div>
+                  </div>
+                  {/* 计佣基数 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      计佣基数（USDT）
+                      <span className="text-xs text-gray-400 ml-1">默认=计息基数</span>
+                    </label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.commissionBase ?? ''}
+                      onChange={e => setFormData(d => ({ ...d, commissionBase: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                      placeholder={formData.interestBase ? `默认：${formData.interestBase}` : '默认=计息基数'}
+                      style={{ display: 'block', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  {/* 计佣开始日期 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">
+                      计佣开始日期
+                      <span className="text-xs text-gray-400 ml-1">默认=计息开始日</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.commissionStartDate ?? ''}
+                      onChange={e => setFormData(d => ({ ...d, commissionStartDate: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                      style={{ display: 'block', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* 计息开始日期 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">
                   计息开始日期
                   <span className="ml-1.5 text-xs text-gray-400 font-normal">利息从此日开始累计</span>
@@ -1170,7 +1272,7 @@ export default function FunderManagement() {
               </div>
 
               {/* 约定年化利息 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">约定年化利息（%）</label>
                 <div className="flex items-center gap-2">
                   <input

@@ -12457,13 +12457,14 @@ export const appRouter = router({
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
-        // 附带当前用户在每个订单中的参与方配置
+        // 附带参与方配置：管理员查看某用户时用 targetUserId，否则用当前用户
+        const participantQueryUserId = (isManager && targetUserId) ? targetUserId : ctx.user.id;
         let participantInfoMap: Record<number, any> = {};
         if (conn) {
           try {
             const piRows = await conn.execute(
               'SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
-              [input.ledgerId, ctx.user.id]
+              [input.ledgerId, participantQueryUserId]
             ) as any;
             const piArr = Array.isArray(piRows[0]) ? piRows[0] : (Array.isArray(piRows) ? piRows : []);
             for (const pi of piArr) {
@@ -12479,6 +12480,7 @@ export const appRouter = router({
             return {
               ...o,
               participantInfo: {
+                userId: participantQueryUserId,
                 role: pi.role,
                 commissionRate: pi.commission_rate || null,
                 commissionBase: pi.commission_base || o.interest_base || null,
