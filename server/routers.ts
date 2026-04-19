@@ -12402,7 +12402,19 @@ export const appRouter = router({
                 ORDER BY fo.created_at DESC`
           );
         }
-        const orders = ((rows[0] || rows) as any[]) || [];
+        const rawOrders = ((rows[0] || rows) as any[]) || [];
+        // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端 .replace() 崩溃
+        const orders = rawOrders.map((o: any) => {
+          const result = { ...o };
+          const dateFields = ['interest_start_date', 'created_at', 'updated_at', 'end_date', 'start_date'];
+          for (const field of dateFields) {
+            if (result[field] instanceof Date) {
+              const d = result[field] as Date;
+              result[field] = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            }
+          }
+          return result;
+        });
         // 附带实时价格
         const { getLatestPrice } = await import('./price-scanner');
         const livePrices: Record<string, number> = {};
