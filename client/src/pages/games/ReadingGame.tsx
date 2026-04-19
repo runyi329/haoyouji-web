@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, Volume2, BookOpen, Languages, Play, Pause } from "lucide-react";
 import { toast } from "sonner";
-import { pinyin } from "pinyin-pro";
+// pinyin-pro 使用动态导入避免循环引用
+let pinyinFn: ((char: string, opts: any) => string) | null = null;
+import('pinyin-pro').then(m => { pinyinFn = m.pinyin; }).catch(() => {});
+const getPinyinSymbol = (char: string) => {
+  try { return pinyinFn ? pinyinFn(char, { toneType: 'symbol' }) : char; } catch { return char; }
+};
 
 export default function ReadingGame() {
   const params = useParams();
@@ -43,7 +48,7 @@ export default function ReadingGame() {
       
       if (isReadable) {
         readableIndex++;
-        const py = showPinyin ? pinyin(char, { toneType: 'symbol' }) : '';
+        const py = showPinyin ? getPinyinSymbol(char) : '';
         const isCurrentReading = isAutoReading && readableIndex === currentReadingIndex;
         
         return (
