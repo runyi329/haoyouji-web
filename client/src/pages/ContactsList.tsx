@@ -1086,7 +1086,7 @@ export default function ContactsList() {
   const dropdownContacts = filteredContacts?.slice(0, 10) || [];
 
   return (
-      <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] min-h-screen" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
+      <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] h-screen flex flex-col" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
       {/* 顶部深红色头部 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-4 rounded-b-3xl mb-3">
         {/* 第一行：返回 + 标题 + 人脉总数 */}
@@ -1139,7 +1139,7 @@ export default function ContactsList() {
         </div>
       </div>
       {/* 工具栏区域 */}
-      <div className="px-4">
+      <div className="px-4 bg-[#FAF3ED]">
         {/* 搜索框独占一行 */}
         <div className="mb-2">
           <div ref={searchRef} className="relative flex items-center gap-2">
@@ -1456,11 +1456,11 @@ export default function ContactsList() {
           </SheetContent>
         </Sheet>
         
-      </div>
 
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
-        <div className="border border-[#D32F2F]/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-[#D32F2F]-light">
+        <div className="px-4 mb-2">
+        <div className="border border-[#D32F2F]/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 bg-[#D32F2F]-light">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-[#D32F2F]">
               已选择 {selectedContactIds.length} 人
@@ -1793,10 +1793,11 @@ export default function ContactsList() {
             </DropdownMenu>
           </div>
         </div>
+        </div>
       )}
 
-      {/* 人脉列表 */}
-      <div className="mt-4">
+      {/* 人脉列表 - 可滚动区域 */}
+      <div className="flex-1 overflow-y-auto mt-0 pb-20">
         {(isLoading || isLoadingCompanyList) ? (
           // Skeleton 骨架屏
           <div className="grid grid-cols-1 gap-3 px-4">
