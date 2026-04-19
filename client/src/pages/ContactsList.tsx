@@ -453,13 +453,15 @@ export default function ContactsList() {
   
   // 监听location变化，当返回列表页时强制刷新数据
   React.useEffect(() => {
-    if (location === '/contacts') {
-      // 重置分页、数据和搜索查询，触发重新加载
+    if (location.startsWith('/parent/contacts/list')) {
+      // 每次进入人脉列表页时，重置分页并强制刷新数据
       setPage(1);
       setAllLoadedContacts([]);
-      setSearchQuery(""); // 清空搜索查询
+      setTimeout(() => {
+        refetchContacts();
+      }, 50);
     }
-  }, [location]);
+  }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // 无限滚动：当滚动到底部时自动加载下一页
   React.useEffect(() => {
