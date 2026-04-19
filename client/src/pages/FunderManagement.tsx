@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
+import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 
 // 币种选项
@@ -126,6 +126,17 @@ export default function FunderManagement() {
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
+  // 多视角订单参与方相关 state
+  const [showParticipantsPanel, setShowParticipantsPanel] = useState<number | null>(null); // 当前展开参与方面板的订单id
+  type ParticipantRole = 'funder' | 'borrower' | 'broker';
+  type ParticipantItem = { role: ParticipantRole; contactName: string; contactPhone: string; rate: string; rateLabel: string; amount: string; note: string; sortOrder: number };
+  const [participantsList, setParticipantsList] = useState<ParticipantItem[]>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(false);
+  const ROLE_OPTIONS: { value: ParticipantRole; label: string; color: string; defaultRateLabel: string }[] = [
+    { value: 'funder', label: '资金方', color: '#1A56DB', defaultRateLabel: '年化利率' },
+    { value: 'borrower', label: '借款人', color: '#D97706', defaultRateLabel: '综合利率' },
+    { value: 'broker', label: '中间人', color: '#059669', defaultRateLabel: '介绍费' },
+  ];
   // 结息记录相关 state
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null); // 当前展开结息面板的订单id
   const [paymentForm, setPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
@@ -304,6 +315,70 @@ export default function FunderManagement() {
     },
     onError: (err) => toast.error(err.message),
   });
+  // 参与方相关
+  const saveParticipantsMutation = trpc.ledger.funderSaveOrderParticipants.useMutation({
+    onSuccess: () => {
+      toast.success('参与方配置已保存');
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const handleOpenParticipants = async (orderId: number) => {
+    if (showParticipantsPanel === orderId) {
+      setShowParticipantsPanel(null);
+      return;
+    }
+    setShowParticipantsPanel(orderId);
+    setParticipantsLoading(true);
+    try {
+      const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId, ledgerId });
+      const mapped = (result.participants || []).map((p: any) => ({
+        role: p.role as ParticipantRole,
+        contactName: p.contact_name || '',
+        contactPhone: p.contact_phone || '',
+        rate: p.rate || '',
+        rateLabel: p.rate_label || '',
+        amount: p.amount || '',
+        note: p.note || '',
+        sortOrder: p.sort_order || 0,
+      }));
+      setParticipantsList(mapped);
+    } catch (e) {
+      toast.error('加载参与方失败');
+      setParticipantsList([]);
+    } finally {
+      setParticipantsLoading(false);
+    }
+  };
+  const handleAddParticipant = (role: ParticipantRole) => {
+    const roleOpt = ROLE_OPTIONS.find(r => r.value === role);
+    setParticipantsList(list => [...list, {
+      role,
+      contactName: '',
+      contactPhone: '',
+      rate: '',
+      rateLabel: roleOpt?.defaultRateLabel || '',
+      amount: '',
+      note: '',
+      sortOrder: list.length,
+    }]);
+  };
+  const handleSaveParticipants = (orderId: number) => {
+    const valid = participantsList.filter(p => p.contactName.trim());
+    saveParticipantsMutation.mutate({
+      orderId,
+      ledgerId,
+      participants: valid.map((p, i) => ({
+        role: p.role,
+        contactName: p.contactName.trim(),
+        contactPhone: p.contactPhone || undefined,
+        rate: p.rate || undefined,
+        rateLabel: p.rateLabel || undefined,
+        amount: p.amount || undefined,
+        note: p.note || undefined,
+        sortOrder: i,
+      })),
+    });
+  };
 
   // 结息记录相关
   const { data: interestPayments, refetch: refetchPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
@@ -572,6 +647,13 @@ export default function FunderManagement() {
                       </div>
                       <div className="flex items-center gap-1">
                         <button
+                          onClick={() => handleOpenParticipants(order.id)}
+                          className="px-2 py-1 text-xs rounded-lg font-medium"
+                          style={{ backgroundColor: showParticipantsPanel === order.id ? '#059669' : '#ECFDF5', color: showParticipantsPanel === order.id ? '#fff' : '#059669' }}
+                        >
+                          参与方
+                        </button>
+                        <button
                           onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
                           className="px-2 py-1 text-xs rounded-lg font-medium"
                           style={{ backgroundColor: showPaymentPanel === order.id ? '#1A56DB' : '#EFF6FF', color: showPaymentPanel === order.id ? '#fff' : '#1A56DB' }}
@@ -650,6 +732,130 @@ export default function FunderManagement() {
                       </div>
                     )}
 
+                    {/* 参与方配置面板 */}
+                    {showParticipantsPanel === order.id && (
+                      <div className="mt-3 pt-3 border-t border-green-100">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-xs font-semibold text-green-700 flex items-center gap-1">
+                            <Users2 className="w-3.5 h-3.5" />
+                            多视角订单参与方
+                          </div>
+                          <div className="flex gap-1">
+                            {ROLE_OPTIONS.map(r => (
+                              <button
+                                key={r.value}
+                                onClick={() => handleAddParticipant(r.value)}
+                                className="px-2 py-0.5 text-xs rounded-full font-medium border"
+                                style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
+                              >
+                                +{r.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        {participantsLoading ? (
+                          <div className="text-center py-3 text-xs text-gray-400">加载中...</div>
+                        ) : participantsList.length === 0 ? (
+                          <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">
+                            暂无参与方配置，点击上方按钮添加
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {participantsList.map((p, idx) => {
+                              const roleOpt = ROLE_OPTIONS.find(r => r.value === p.role)!;
+                              return (
+                                <div key={idx} className="bg-gray-50 rounded-xl p-3 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: roleOpt.color }}>
+                                      {roleOpt.label}
+                                    </span>
+                                    <button
+                                      onClick={() => setParticipantsList(list => list.filter((_, i) => i !== idx))}
+                                      className="p-0.5 text-gray-300 hover:text-red-400"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-0.5">姓名 *</div>
+                                      <input
+                                        type="text"
+                                        value={p.contactName}
+                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, contactName: e.target.value } : item))}
+                                        placeholder="参与方姓名"
+                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-0.5">联系电话</div>
+                                      <input
+                                        type="text"
+                                        value={p.contactPhone}
+                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, contactPhone: e.target.value } : item))}
+                                        placeholder="选填"
+                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-0.5">利率标签</div>
+                                      <input
+                                        type="text"
+                                        value={p.rateLabel}
+                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rateLabel: e.target.value } : item))}
+                                        placeholder={roleOpt.defaultRateLabel}
+                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-0.5">利率/佣金 (%)</div>
+                                      <input
+                                        type="number"
+                                        value={p.rate}
+                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: e.target.value } : item))}
+                                        placeholder="如 9 表示9%"
+                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-0.5">对应金额 (USDT)</div>
+                                      <input
+                                        type="text"
+                                        value={p.amount}
+                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, amount: e.target.value } : item))}
+                                        placeholder="选填"
+                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="text-xs text-gray-400 mb-0.5">备注（该角色可见）</div>
+                                      <input
+                                        type="text"
+                                        value={p.note}
+                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, note: e.target.value } : item))}
+                                        placeholder="选填"
+                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => handleSaveParticipants(order.id)}
+                          disabled={saveParticipantsMutation.isPending}
+                          className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
+                          style={{ background: 'linear-gradient(135deg, #059669, #10B981)' }}
+                        >
+                          {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
+                        </button>
+                        <div className="mt-2 text-xs text-gray-400 text-center">
+                          💡 不同角色看到的是各自的利率/佣金，同一订单多视角展示
+                        </div>
+                      </div>
+                    )}
                     {/* 结息记录面板 */}
                     {showPaymentPanel === order.id && (
                       <div className="mt-3 pt-3 border-t border-blue-100">

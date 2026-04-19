@@ -13102,6 +13102,61 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // ========== 多视角订单参与方接口 ==========
+    // 获取订单的所有参与方
+    funderGetOrderParticipants: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
+        const rows = await db.execute(
+          sql`SELECT * FROM funder_order_participants WHERE order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} ORDER BY sort_order ASC, id ASC`
+        ) as any;
+        return { participants: ((rows[0] || rows) as any[]) || [] };
+      }),
+    // 保存（覆盖）订单的所有参与方
+    funderSaveOrderParticipants: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        ledgerId: z.number(),
+        participants: z.array(z.object({
+          role: z.enum(['funder', 'borrower', 'broker']),
+          contactName: z.string().min(1),
+          contactPhone: z.string().optional(),
+          rate: z.string().optional(),
+          rateLabel: z.string().optional(),
+          amount: z.string().optional(),
+          note: z.string().optional(),
+          sortOrder: z.number().optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可配置参与方' });
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 先删除旧的参与方记录
+        await conn.execute('DELETE FROM funder_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
+        // 批量插入新的参与方
+        for (const p of input.participants) {
+          await conn.execute(
+            'INSERT INTO funder_order_participants (order_id, ledger_id, role, contact_name, contact_phone, rate, rate_label, amount, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [input.orderId, input.ledgerId, p.role, p.contactName, p.contactPhone || null, p.rate || null, p.rateLabel || null, p.amount || null, p.note || null, p.sortOrder ?? 0]
+          );
+        }
+        return { success: true };
+      }),
     // ========== 资方订单 AI 邮件预警接口 ==========
     // 获取订单预警配置和用户邮箱
     funderGetAlertState: protectedProcedure

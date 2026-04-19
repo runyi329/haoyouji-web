@@ -1871,3 +1871,25 @@ export const cryptoBets = mysqlTable("crypto_bets", {
   index("crypto_bets_status_idx").on(table.status),
   index("crypto_bets_target_date_idx").on(table.targetDate),
 ]);
+
+// ========== 52号账本：订单参与方（多视角订单）==========
+// 同一订单可以有多个参与方，每个参与方只看到自己角色对应的利率/佣金
+export const funderOrderParticipants = mysqlTable("funder_order_participants", {
+  id: int().autoincrement().notNull(),
+  orderId: int('order_id').notNull(),              // 关联的 funder_asset_orders.id
+  ledgerId: int('ledger_id').notNull(),            // 冗余字段，方便权限校验
+  role: varchar({ length: 20 }).notNull(),         // 角色：funder=资金方, borrower=借款人, broker=中间人
+  contactName: varchar('contact_name', { length: 100 }).notNull(), // 参与方姓名
+  contactPhone: varchar('contact_phone', { length: 50 }),          // 联系电话（可选）
+  rate: varchar({ length: 20 }),                   // 该角色看到的利率/佣金率（如 "9" 表示9%）
+  rateLabel: varchar('rate_label', { length: 50 }), // 利率标签（如 "年化利率"、"综合利率"、"介绍费"）
+  amount: varchar({ length: 50 }),                 // 该角色对应的金额（可选，如本金）
+  note: text(),                                    // 该角色可见的备注
+  sortOrder: int('sort_order').default(0),         // 排序权重
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("fop_order_idx").on(table.orderId),
+  index("fop_ledger_idx").on(table.ledgerId),
+  index("fop_role_idx").on(table.role),
+]);
