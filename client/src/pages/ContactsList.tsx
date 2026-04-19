@@ -187,6 +187,8 @@ export default function ContactsList() {
   const searchRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollDown, setCanScrollDown] = useState(false);
 
   // 彻底禁用浏览器右滑返回手势（JS层拦截横向touchmove）
   useEffect(() => {
@@ -854,7 +856,23 @@ export default function ContactsList() {
       setShowHistory(true);
     }
   };
-  
+
+  // 当下拉框显示或内容变化时，检查是否可以向下滚动
+  React.useEffect(() => {
+    if (showDropdown) {
+      // 延迟一帧确保 DOM 已更新
+      const timer = setTimeout(() => {
+        const el = dropdownScrollRef.current;
+        if (el) {
+          setCanScrollDown(el.scrollHeight > el.clientHeight + 4);
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    } else {
+      setCanScrollDown(false);
+    }
+  }, [showDropdown, dropdownContacts.length]);
+
   const handleDeleteClick = (e: React.MouseEvent, contact: any) => {
     e.stopPropagation();
     setContactToDelete(contact);
@@ -1189,7 +1207,19 @@ export default function ContactsList() {
               )}
               {/* 搜索下拉列表 */}
               {showDropdown && dropdownContacts.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg z-50" style={{ maxHeight: '384px' }}>
+                  {/* 可滚动内容区 */}
+                  <div
+                    ref={dropdownScrollRef}
+                    className="overflow-y-auto"
+                    style={{ maxHeight: '384px' }}
+                    onScroll={() => {
+                      const el = dropdownScrollRef.current;
+                      if (el) {
+                        setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+                      }
+                    }}
+                  >
                   {dropdownContacts.map((contact: any, idx: number) => {
                     const company = getFieldValue(contact, "公司名称");
                     const position = getFieldValue(contact, "职位");
@@ -1224,8 +1254,20 @@ export default function ContactsList() {
                           </div>
                         </div>
                       </div>
-                    );
-                  })}
+                     })
+                  }
+                  </div>
+                  {/* 底部渐变滚动指示器 */}
+                  {canScrollDown && (
+                    <div
+                      className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 rounded-b-lg flex items-end justify-center pb-1"
+                      style={{ background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.95))' }}
+                    >
+                      <svg className="w-4 h-4 text-gray-400 animate-bounce" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  )}
                 </div>
               )}
               {/* 搜索历史记录 */}
