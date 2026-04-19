@@ -129,7 +129,7 @@ export default function FunderManagement() {
   // 多视角订单参与方相关 state
   const [showParticipantsPanel, setShowParticipantsPanel] = useState<number | null>(null); // 当前展开参与方面板的订单id
   type ParticipantRole = 'funder' | 'borrower' | 'broker';
-  type ParticipantItem = { userId: number; displayName: string; role: ParticipantRole; rate: string; rateLabel: string; amount: string; note: string; sortOrder: number };
+  type ParticipantItem = { userId: number; displayName: string; role: ParticipantRole; sortOrder: number };
   type LedgerMember = { userId: number; displayName: string; memberRole: string };
   const [participantsList, setParticipantsList] = useState<ParticipantItem[]>([]);
   const [ledgerMembers, setLedgerMembers] = useState<LedgerMember[]>([]);
@@ -328,10 +328,6 @@ export default function FunderManagement() {
           userId: p.user_id,
           displayName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
           role: p.role as ParticipantRole,
-          rate: p.rate || '',
-          rateLabel: p.rate_label || '',
-          amount: p.amount || '',
-          note: p.note || '',
           sortOrder: p.sort_order || 0,
         }));
         setParticipantsList(mapped);
@@ -354,10 +350,6 @@ export default function FunderManagement() {
         userId: p.user_id,
         displayName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
         role: p.role as ParticipantRole,
-        rate: p.rate || '',
-        rateLabel: p.rate_label || '',
-        amount: p.amount || '',
-        note: p.note || '',
         sortOrder: p.sort_order || 0,
       }));
       setParticipantsList(mapped);
@@ -375,7 +367,6 @@ export default function FunderManagement() {
     }
   };
   const handleAddParticipant = (role: ParticipantRole) => {
-    const roleOpt = ROLE_OPTIONS.find(r => r.value === role);
     setParticipantsList(list => {
       const usedIds = list.map(p => p.userId);
       const firstAvail = ledgerMembers.find(m => !usedIds.includes(m.userId));
@@ -383,10 +374,6 @@ export default function FunderManagement() {
         userId: firstAvail?.userId ?? 0,
         displayName: firstAvail?.displayName ?? '',
         role,
-        rate: '',
-        rateLabel: roleOpt?.defaultRateLabel || '',
-        amount: currentOrderAmount,
-        note: '',
         sortOrder: list.length,
       }];
     });
@@ -399,10 +386,6 @@ export default function FunderManagement() {
       participants: valid.map((p, i) => ({
         userId: p.userId,
         role: p.role,
-        rate: p.rate || undefined,
-        rateLabel: p.rateLabel || undefined,
-        amount: p.amount || undefined,
-        note: p.note || undefined,
         sortOrder: i,
       })),
     });
@@ -822,48 +805,7 @@ export default function FunderManagement() {
                                       ))}
                                     </select>
                                   </div>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <div className="text-xs text-gray-400 mb-0.5">利率标签</div>
-                                      <input
-                                        type="text"
-                                        value={p.rateLabel}
-                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rateLabel: e.target.value } : item))}
-                                        placeholder={roleOpt.defaultRateLabel}
-                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
-                                      />
-                                    </div>
-                                    <div>
-                                      <div className="text-xs text-gray-400 mb-0.5">利率/佣金 (%)</div>
-                                      <input
-                                        type="number"
-                                        value={p.rate}
-                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: e.target.value } : item))}
-                                        placeholder="如 9 表示9%"
-                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
-                                      />
-                                    </div>
-                                    <div>
-                                      <div className="text-xs text-gray-400 mb-0.5">对应金额 (USDT)</div>
-                                      <input
-                                        type="text"
-                                        value={p.amount}
-                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, amount: e.target.value } : item))}
-                                        placeholder="选填"
-                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
-                                      />
-                                    </div>
-                                    <div>
-                                      <div className="text-xs text-gray-400 mb-0.5">备注（该角色可见）</div>
-                                      <input
-                                        type="text"
-                                        value={p.note}
-                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, note: e.target.value } : item))}
-                                        placeholder="选填"
-                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
-                                      />
-                                    </div>
-                                  </div>
+                                  <div className="text-xs text-gray-400 mt-1">配置（佣金率、计佣基数等）请在该成员的订单编辑页设置</div>
                                 </div>
                               );
                             })}
@@ -878,7 +820,7 @@ export default function FunderManagement() {
                           {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
                         </button>
                         <div className="mt-2 text-xs text-gray-400 text-center">
-                          💡 不同角色看到的是各自的利率/佣金，同一订单多视角展示
+                          💡 添加成员后，在该成员的订单编辑页配置佣金率等详细信息
                         </div>
                       </div>
                     )}

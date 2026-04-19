@@ -434,6 +434,21 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
 
 function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices, dc, viewMode }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number>; dc?: Record<string, boolean>; viewMode?: 'medium' | 'large' }) {
   const show = (key: string) => dc ? (dc[key] !== false) : true;
+  // 参与方视图：显示佣金而非利息
+  const pi = order.participantInfo;
+  const isParticipantView = !!pi;
+  const commissionRate = pi?.commissionRate ? parseFloat(pi.commissionRate) : 0;
+  const commissionBase = pi?.commissionBase ? parseFloat(pi.commissionBase) : 0;
+  const commissionStartDate = pi?.commissionStartDate || null;
+  const paidCommission = pi?.paidCommission ? parseFloat(pi.paidCommission) : 0;
+  // 实时计算待结佣金（同待结利息算法）
+  const accruedCommission = (() => {
+    if (!commissionRate || !commissionBase || !commissionStartDate || order.status !== 'active') return 0;
+    const start = new Date(commissionStartDate);
+    const now = new Date();
+    const elapsedSecs = Math.max(0, (now.getTime() - start.getTime()) / 1000);
+    return commissionBase * (commissionRate / 100) / 365 / 24 / 3600 * elapsedSecs;
+  })();
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showInterestTip, setShowInterestTip] = useState(false);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number } | null>(null);
@@ -478,6 +493,47 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
     lowestAtLabel = `${d.getMonth()+1}月${d.getDate()}日`;
   } else if (order.buy_date) {
     lowestAtLabel = order.buy_date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_: string, y: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`);
+  }
+  // 参与方视图：显示佣金模块
+  if (isParticipantView) {
+    return (
+      <div className="flex flex-col h-full">
+        <div className="flex-1 flex flex-col justify-start">
+          <div className="h-5 flex items-center gap-1">
+            <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#16A34A' }}>待结佣金</span>
+            <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>({commissionRate}%/年)</span>
+          </div>
+          <div className="min-h-9 flex flex-col justify-center">
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                {accruedCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>U</span>
+            </div>
+          </div>
+          <div className="space-y-0.5">
+            <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
+              <span className="text-gray-400">已结佣金</span>
+              <span className="font-medium" style={{ color: '#4B5563' }}>{paidCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
+            </div>
+            {commissionStartDate && (
+              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
+                <span className="text-gray-400">计佣日期</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
+                  {String(commissionStartDate).replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_: string, _y: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                </span>
+              </div>
+            )}
+            {commissionBase > 0 && (
+              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
+                <span className="text-gray-400">计佣基数</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{commissionBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   }
   return (
     <div className="flex flex-col h-full">
@@ -1064,12 +1120,22 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
     } catch { return defaults; }
   })();
   const coinName = coinNameMap[order.coin] || order.coin;
+  // 受邀订单（参与方视图）
+  const isParticipantOrder = !!(order.participantInfo);
+  const cardBgColor = isEnded ? '#F3F4F6' : isParticipantOrder ? '#F0FDF4' : '#FFFFFF';
+  const cardBorderColor = isEnded ? '1px solid #D1D5DB' : isParticipantOrder ? '1px solid #86EFAC' : '1px solid #E0E8FF';
+  const cardShadow = isEnded ? 'none' : isParticipantOrder ? '0 2px 8px rgba(34,197,94,0.12)' : '0 2px 8px rgba(26,86,219,0.08)';
   return (
     <div
       className="rounded-2xl shadow-sm relative"
-      style={{ backgroundColor: isEnded ? '#F3F4F6' : '#FFFFFF', border: isEnded ? '1px solid #D1D5DB' : '1px solid #E0E8FF', boxShadow: isEnded ? 'none' : '0 2px 8px rgba(26,86,219,0.08)', cursor: canClick ? 'pointer' : 'default', overflow: 'hidden', opacity: isEnded ? 0.7 : 1 }}
+      style={{ backgroundColor: cardBgColor, border: cardBorderColor, boxShadow: cardShadow, cursor: canClick ? 'pointer' : 'default', overflow: 'hidden', opacity: isEnded ? 0.7 : 1 }}
       onClick={onClick}
     >
+      {isParticipantOrder && (
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(34,197,94,0.15)', color: '#16A34A', border: '1px solid rgba(34,197,94,0.3)' }}>
+          <span>受邀订单</span>
+        </div>
+      )}
       {String(order.admin_note || '').includes('[已卖出]') && (
         <div
           className="absolute bottom-4 left-4 pointer-events-none select-none"
@@ -1276,7 +1342,22 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           <FunderAIPanel
             orderId={order.id}
             ledgerId={ledgerId}
-            orderInfo={{
+            orderInfo={order.participantInfo ? {
+              coin: order.coin,
+              qty: buyQty,
+              buyValue: order.participantInfo.commissionBase ? parseFloat(order.participantInfo.commissionBase) : (buyValue || null),
+              accrued: (() => {
+                const cr = order.participantInfo.commissionRate ? parseFloat(order.participantInfo.commissionRate) : 0;
+                const cb = order.participantInfo.commissionBase ? parseFloat(order.participantInfo.commissionBase) : 0;
+                const sd = order.participantInfo.commissionStartDate;
+                if (!cr || !cb || !sd || order.status !== 'active') return 0;
+                const elapsedSecs = Math.max(0, (new Date().getTime() - new Date(sd).getTime()) / 1000);
+                return cb * (cr / 100) / 365 / 24 / 3600 * elapsedSecs;
+              })(),
+              paidInterest: order.participantInfo.paidCommission ? parseFloat(order.participantInfo.paidCommission) : 0,
+              collateralValue,
+              floatPnl,
+            } : {
               coin: order.coin,
               qty: buyQty,
               buyValue: buyValue || null,
