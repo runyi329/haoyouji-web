@@ -675,8 +675,10 @@ export default function FunderManagement() {
                 return (
                   <div
                     key={order.id}
-                    className="bg-white rounded-2xl p-4 shadow-sm"
-                    style={{ border: '1px solid #E5EDFF' }}
+                    className="rounded-2xl p-4 shadow-sm"
+                    style={order.participantInfo
+                      ? { backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', boxShadow: '0 2px 8px rgba(34,197,94,0.10)' }
+                      : { backgroundColor: '#FFFFFF', border: '1px solid #E5EDFF' }}
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
@@ -696,19 +698,21 @@ export default function FunderManagement() {
                         )}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleOpenParticipants(order.id, order.interest_base || '')}
-                          className="px-2 py-1 text-xs rounded-lg font-medium"
-                          style={{ backgroundColor: showParticipantsPanel === order.id ? '#059669' : '#ECFDF5', color: showParticipantsPanel === order.id ? '#fff' : '#059669' }}
-                        >
-                          参与方
-                        </button>
+                        {!order.participantInfo && (
+                          <button
+                            onClick={() => handleOpenParticipants(order.id, order.interest_base || '')}
+                            className="px-2 py-1 text-xs rounded-lg font-medium"
+                            style={{ backgroundColor: showParticipantsPanel === order.id ? '#059669' : '#ECFDF5', color: showParticipantsPanel === order.id ? '#fff' : '#059669' }}
+                          >
+                            参与方
+                          </button>
+                        )}
                         <button
                           onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
                           className="px-2 py-1 text-xs rounded-lg font-medium"
                           style={{ backgroundColor: showPaymentPanel === order.id ? '#1A56DB' : '#EFF6FF', color: showPaymentPanel === order.id ? '#fff' : '#1A56DB' }}
                         >
-                          记录结息
+                          {order.participantInfo ? '记录结佣' : '记录结息'}
                         </button>
                         <button onClick={() => handleOpenEdit(order)} className="p-1.5 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50">
                           <Pencil className="w-4 h-4" />
