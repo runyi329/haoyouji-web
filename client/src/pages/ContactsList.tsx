@@ -1259,12 +1259,12 @@ export default function ContactsList() {
             <button
               onClick={() => setIsTagAreaExpanded(!isTagAreaExpanded)}
               className={`flex items-center justify-center h-9 text-xs rounded-xl font-medium transition-all shadow-sm ${
-                selectedTags.length > 0 || isTagAreaExpanded
+                selectedTagIds.length > 0 || isTagAreaExpanded
                   ? 'bg-[#D32F2F] text-white'
                   : 'bg-white text-[#D32F2F] hover:bg-red-50'
               }`}
             >
-              {selectedTags.length > 0 ? `筛选(${selectedTags.length})` : '筛选'}
+              {selectedTagIds.length > 0 ? `筛选(${selectedTagIds.length})` : '筛选'}
             </button>
 
             {/* 排序按钮 */}
