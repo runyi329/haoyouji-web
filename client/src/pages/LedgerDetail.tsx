@@ -494,27 +494,95 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
   } else if (order.buy_date) {
     lowestAtLabel = order.buy_date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_: string, y: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`);
   }
-  // 参与方视图：显示佣金模块
+  // 参与方视图：显示佣金模块（带折算 + 问号说明）
+  const [showCommissionTip, setShowCommissionTip] = useState(false);
+  // 佣金折算（同利息折算逻辑，默认 U 计佣，折算为元）
+  const commissionAltAccrued = accruedCommission * 7;
+  const commissionAltPaid = paidCommission * 7;
   if (isParticipantView) {
     return (
       <div className="flex flex-col h-full">
         <div className="flex-1 flex flex-col justify-start">
-          <div className="h-5 flex items-center gap-1">
+          <div className="h-5 flex items-center gap-1 relative">
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#16A34A' }}>待结佣金</span>
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>({commissionRate}%/年)</span>
+            {/* 问号说明按钮 */}
+            <button
+              className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ml-0.5"
+              style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+              onClick={e => { e.stopPropagation(); setShowCommissionTip(true); }}
+            >?</button>
+            {showCommissionTip && (() => {
+              const startStr = commissionStartDate ? String(commissionStartDate).slice(0, 10) : null;
+              const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+              const elapsedMs = startStr ? Math.max(0, Date.now() - new Date(startStr + 'T00:00:00').getTime()) : 0;
+              const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+              const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+              const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+              const elapsedSecs = Math.floor(elapsedMs / 1000);
+              const elapsedLabel = elapsedDays > 0 ? `${elapsedDays}天 ${elapsedHours}小时 ${elapsedMins}分` : `${elapsedHours}小时 ${elapsedMins}分`;
+              return (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCommissionTip(false)}>
+                  <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-bold" style={{ color: '#1A2340' }}>计佣说明</span>
+                      <button onClick={() => setShowCommissionTip(false)} className="text-gray-400 text-lg leading-none">×</button>
+                    </div>
+                    <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                      <div className="p-2.5 rounded-lg" style={{ background: '#F0FDF4' }}>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计佣时间</div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{startStr || '--'}</span></div>
+                          <div className="flex justify-between"><span>当前日期</span><span className="font-mono font-medium">{todayStr}</span></div>
+                          <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
+                        </div>
+                      </div>
+                      <div className="p-2.5 rounded-lg" style={{ background: '#F0FDF4' }}>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
+                        <div>计佣基数 × 佣金率 ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × 已过秒数</div>
+                        <div className="mt-1 font-mono">
+                          <span style={{ color: '#16A34A' }}>{commissionBase.toLocaleString()}U × {commissionRate}% ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × {elapsedSecs.toLocaleString()}秒</span>
+                        </div>
+                      </div>
+                      <div className="p-2.5 rounded-lg" style={{ background: '#F0FDF4' }}>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计佣结果</div>
+                        <div className="font-mono flex items-baseline gap-1">
+                          <span style={{ color: '#16A34A', fontSize: '1.5em', fontWeight: 700 }}>= {accruedCommission.toFixed(6)} U</span>
+                        </div>
+                        <div className="mt-1 font-mono" style={{ color: '#16A34A', fontSize: '1.5em', fontWeight: 700 }}>≈ {commissionAltAccrued.toFixed(2)} 元</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="min-h-9 flex flex-col justify-center">
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                {accruedCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>U</span>
-            </div>
+            {viewMode === 'large' ? (
+              <div className="flex items-baseline gap-1 flex-wrap">
+                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  {accruedCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-base font-semibold" style={{ color: '#1A2340' }}>U</span>
+                <span className="text-base font-medium" style={{ color: '#4B5563' }}>≈{commissionAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元</span>
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  {accruedCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>U</span>
+                <span className="text-xs font-medium ml-1" style={{ color: '#6B7280' }}>≈{commissionAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}元</span>
+              </div>
+            )}
           </div>
           <div className="space-y-0.5">
             <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
               <span className="text-gray-400">已结佣金</span>
-              <span className="font-medium" style={{ color: '#4B5563' }}>{paidCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
+              <span className="font-medium" style={{ color: '#4B5563' }}>
+                {paidCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                <span className="text-gray-400 ml-1">≈{commissionAltPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}元</span>
+              </span>
             </div>
             {commissionStartDate && (
               <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
@@ -1131,11 +1199,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
       style={{ backgroundColor: cardBgColor, border: cardBorderColor, boxShadow: cardShadow, cursor: canClick ? 'pointer' : 'default', overflow: 'hidden', opacity: isEnded ? 0.7 : 1 }}
       onClick={onClick}
     >
-      {isParticipantOrder && (
-        <div className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(34,197,94,0.15)', color: '#16A34A', border: '1px solid rgba(34,197,94,0.3)' }}>
-          <span>受邀订单</span>
-        </div>
-      )}
+      {/* 受邀订单标签仅在后台管理界面显示，前端不显示 */}
       {String(order.admin_note || '').includes('[已卖出]') && (
         <div
           className="absolute bottom-4 left-4 pointer-events-none select-none"
@@ -1166,9 +1230,9 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
 
         {/* 左栏/上半：订单信息 */}
         <div className={viewMode === 'large' ? 'p-4 pb-2' : 'flex-1 p-4 pr-3'} style={{ position: 'relative' }}>
-          {/* 标题：持有资产（固定高度与右栏对齐） */}
-          <div className="h-5 flex items-center" style={{ color: '#3B82F6' }}>
-            <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`}>持有资产</span>
+          {/* 标题：持有资产/订单资产（受邀订单显示「订单资产」） */}
+          <div className="h-5 flex items-center" style={{ color: isParticipantOrder ? '#16A34A' : '#3B82F6' }}>
+            <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`}>{isParticipantOrder ? '订单资产' : '持有资产'}</span>
           </div>
           {dc.aiIcon && (
             <button
