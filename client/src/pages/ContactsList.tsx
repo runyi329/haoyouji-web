@@ -452,13 +452,17 @@ export default function ContactsList() {
   }, [searchQuery, sortBy, filterType]);
   
   // 监听location变化，当进入列表页时强制刷新数据
+  // 注意：utils 在第578行声明，不能在此处使用（TDZ问题）
+  // 改用 refetchContacts() 直接强制重新请求
   React.useEffect(() => {
     if (location.startsWith('/parent/contacts/list')) {
-      // 每次进入人脉列表页时，让缓存失效并重置分页
+      // 每次进入人脉列表页时，重置分页并强制重新请求数据
       setPage(1);
       setAllLoadedContacts([]);
-      // 让所有 contacts.list 缓存失效，tRPC 会自动重新请求
-      utils.contacts.list.invalidate();
+      // 延迟一帧确保 setPage(1) 生效后再请求
+      setTimeout(() => {
+        refetchContacts();
+      }, 50);
     }
   }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
   
