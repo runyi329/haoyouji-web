@@ -9,56 +9,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
-// 内置拼音首字母获取函数
-function getChinesePinyinInitials(text: string): string {
-  const unicodeRanges: [number, number, string][] = [
-    [0x4E00, 0x4E03, 'y'], [0x4E07, 0x4E07, 'w'], [0x4E09, 0x4E0B, 's'],
-    [0x4E0D, 0x4E0E, 'b'], [0x4E13, 0x4E14, 'z'], [0x4E16, 0x4E16, 's'],
-    [0x4E1A, 0x4E1A, 'y'], [0x4E2D, 0x4E2D, 'z'], [0x4E3A, 0x4E3B, 'w'],
-    [0x4E48, 0x4E48, 'm'], [0x4E49, 0x4E49, 'y'], [0x4E5F, 0x4E5F, 'y'],
-    [0x4E86, 0x4E86, 'l'], [0x4E8B, 0x4E8C, 's'], [0x4EBA, 0x4EBA, 'r'],
-    [0x4ECB, 0x4ECB, 'j'], [0x4EE3, 0x4EE3, 'd'], [0x4EF6, 0x4EF6, 'j'],
-    [0x4EFB, 0x4EFB, 'r'], [0x4F1A, 0x4F1A, 'h'], [0x4F20, 0x4F20, 'c'],
-    [0x4F46, 0x4F46, 'd'], [0x4F53, 0x4F53, 't'], [0x4F60, 0x4F60, 'n'],
-    [0x4F7F, 0x4F7F, 's'], [0x5168, 0x5168, 'q'], [0x5185, 0x5185, 'n'],
-    [0x5206, 0x5206, 'f'], [0x5229, 0x5229, 'l'], [0x5230, 0x5230, 'd'],
-    [0x5236, 0x5236, 'z'], [0x5316, 0x5316, 'h'], [0x5317, 0x5317, 'b'],
-    [0x5355, 0x5355, 'd'], [0x5404, 0x5404, 'g'], [0x5416, 0x5416, 'a'],
-    [0x5426, 0x5426, 'f'], [0x5546, 0x5546, 's'], [0x554A, 0x554A, 'a'],
-    [0x5728, 0x5728, 'z'], [0x5730, 0x5730, 'd'], [0x5929, 0x5929, 't'],
-    [0x5C0F, 0x5C0F, 'x'], [0x5C31, 0x5C31, 'j'], [0x5DE5, 0x5DE5, 'g'],
-    [0x5E74, 0x5E74, 'n'], [0x5F00, 0x5F00, 'k'], [0x5F53, 0x5F53, 'd'],
-    [0x6211, 0x6211, 'w'], [0x6210, 0x6210, 'c'], [0x6280, 0x6280, 'j'],
-    [0x6295, 0x6295, 't'], [0x6700, 0x6700, 'z'], [0x673A, 0x673A, 'j'],
-    [0x6765, 0x6765, 'l'], [0x6D77, 0x6D77, 'h'], [0x738B, 0x738B, 'w'],
-    [0x751F, 0x751F, 's'], [0x7684, 0x7684, 'd'], [0x793E, 0x793E, 's'],
-    [0x7FA4, 0x7FA4, 'q'], [0x884C, 0x884C, 'h'], [0x8C2D, 0x8C2D, 't'],
-    [0x8DEF, 0x8DEF, 'l'], [0x9AD8, 0x9AD8, 'g'], [0x9762, 0x9762, 'm'],
-  ];
-  return text.split('').map(char => {
-    const code = char.charCodeAt(0);
-    if (code >= 65 && code <= 90) return char.toLowerCase();
-    if (code >= 97 && code <= 122) return char;
-    for (const [start, end, initial] of unicodeRanges) {
-      if (code >= start && code <= end) return initial;
-    }
-    if (code >= 0x4E00 && code <= 0x9FA5) {
-      const idx = code - 0x4E00;
-      if (idx < 500) return 'a'; if (idx < 1000) return 'b';
-      if (idx < 1800) return 'c'; if (idx < 2500) return 'd';
-      if (idx < 2800) return 'e'; if (idx < 3500) return 'f';
-      if (idx < 4200) return 'g'; if (idx < 5000) return 'h';
-      if (idx < 5800) return 'j'; if (idx < 6300) return 'k';
-      if (idx < 7000) return 'l'; if (idx < 7800) return 'm';
-      if (idx < 8400) return 'n'; if (idx < 9000) return 'p';
-      if (idx < 9800) return 'q'; if (idx < 10400) return 'r';
-      if (idx < 11900) return 's'; if (idx < 13000) return 't';
-      if (idx < 13500) return 'w'; if (idx < 14500) return 'x';
-      if (idx < 16000) return 'y'; return 'z';
-    }
-    return char.toLowerCase();
-  }).join('');
-}
+import { pinyin } from "pinyin-pro";
 import BottomNav from "@/components/BottomNav";
 
 
@@ -227,8 +178,12 @@ export default function Ledger() {
       // 直接匹配
       if (displayName.toLowerCase().includes(searchTerm)) return true;
       
+      // 拼音全拼匹配
+      const fullPinyin = pinyin(displayName, { toneType: 'none', type: 'array' }).join('').toLowerCase();
+      if (fullPinyin.includes(searchTerm)) return true;
+      
       // 拼音首字母匹配
-      const initialPinyin = getChinesePinyinInitials(displayName).toLowerCase();
+      const initialPinyin = pinyin(displayName, { pattern: 'first', toneType: 'none', type: 'array' }).join('').toLowerCase();
       if (initialPinyin.includes(searchTerm)) return true;
       
       return false;
@@ -256,8 +211,12 @@ export default function Ledger() {
           // 直接匹配
           if (username.includes(searchTerm)) return true;
           
+          // 拼音全拼匹配
+          const fullPinyin = pinyin(m.username, { toneType: 'none', type: 'array' }).join('').toLowerCase();
+          if (fullPinyin.includes(searchTerm)) return true;
+          
           // 拼音首字母匹配
-          const initialPinyin = getChinesePinyinInitials(m.username).toLowerCase();
+          const initialPinyin = pinyin(m.username, { pattern: 'first', toneType: 'none', type: 'array' }).join('').toLowerCase();
           if (initialPinyin.includes(searchTerm)) return true;
           
           return false;
