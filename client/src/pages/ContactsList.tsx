@@ -419,6 +419,7 @@ export default function ContactsList() {
     enabled: viewMode !== 'company', // 公司视图不使用这个 API
     refetchOnMount: 'always', // 每次进入页面都强制刷新，确保排序正确
     staleTime: 0, // 不缓存，每次都获取最新数据
+    gcTime: 0, // 组件卸载后立即清除缓存，避免重新挂载时显示旧数据
   });
   
   // 当 _refresh 参数变化时，重置分页并强制刷新数据（必须在 refetchContacts 声明之后）
