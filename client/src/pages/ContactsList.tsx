@@ -1456,6 +1456,7 @@ export default function ContactsList() {
           </SheetContent>
         </Sheet>
         
+      </div>
 
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
