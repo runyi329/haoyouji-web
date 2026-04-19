@@ -1911,14 +1911,14 @@ export default function ContactsList() {
       <div className="mt-4">
         {(isLoading || isLoadingCompanyList) ? (
           // Lottie 动画骨架屏
-          <div className="grid grid-cols-1 gap-3 px-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 px-4">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl p-3 shadow-sm flex items-center justify-center overflow-hidden">
+              <div key={i} className="bg-white rounded-2xl shadow-sm border-0 overflow-hidden" style={{ minHeight: 148 }}>
                 <Lottie
                   path="/renmai-lottie.json"
                   loop={true}
                   autoplay={true}
-                  style={{ width: '100%', height: 72 }}
+                  style={{ width: '100%', height: '100%', minHeight: 148 }}
                 />
               </div>
             ))}
