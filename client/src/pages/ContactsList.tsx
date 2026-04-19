@@ -1168,7 +1168,7 @@ export default function ContactsList() {
               )}
               {/* 搜索下拉列表 */}
               {showDropdown && dropdownContacts.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-64 overflow-y-scroll z-50 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full">
                   {dropdownContacts.map((contact: any) => {
                     const company = getFieldValue(contact, "公司名称");
                     const position = getFieldValue(contact, "职位");
