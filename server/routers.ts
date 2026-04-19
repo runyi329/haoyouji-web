@@ -13108,6 +13108,24 @@ export const appRouter = router({
       .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
+        // 自动建表（幂等，确保生产环境表存在）
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS funder_order_participants (
+          id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+          order_id int NOT NULL,
+          ledger_id int NOT NULL,
+          user_id int NOT NULL,
+          role varchar(20) NOT NULL,
+          rate varchar(20) NULL,
+          rate_label varchar(50) NULL,
+          amount varchar(50) NULL,
+          note text NULL,
+          sort_order int DEFAULT 0,
+          created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+          INDEX fop_order_idx (order_id),
+          INDEX fop_ledger_idx (ledger_id),
+          INDEX fop_user_idx (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
