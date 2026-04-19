@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, ArrowLeft, X, Tag, Settings, Pencil, Trash2, MoreVertical, MessageCircle, UserCheck, UserX, Smile, Layers2, Layers3, Undo, Handshake, ArrowUpDown, Check, ChevronsUpDown } from "lucide-react";
@@ -1788,7 +1789,35 @@ export default function ContactsList() {
       {/* 人脉列表 */}
       <div className="mt-4">
         {(isLoading || isLoadingCompanyList) ? (
-          <div className="text-center py-8 text-muted-foreground">加载中...</div>
+          // Skeleton 骨架屏
+          <div className="grid grid-cols-1 gap-3 px-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl p-4 shadow-sm">
+                {/* 名字行 */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-6 w-24 rounded-md" />
+                    <Skeleton className="h-4 w-12 rounded-md" />
+                    <Skeleton className="h-4 w-10 rounded-md" />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                  </div>
+                </div>
+                {/* 公司行 */}
+                <Skeleton className="h-4 w-32 rounded-md mb-3" />
+                {/* 联络状态行 */}
+                <Skeleton className="h-3 w-40 rounded-md mb-2" />
+                {/* 标签行 */}
+                <div className="flex gap-1">
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-5 w-10 rounded-full" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : viewMode === 'company' ? (
           // 公司视图
           companyList && companyList.length > 0 ? (
@@ -2231,8 +2260,33 @@ export default function ContactsList() {
             })}
           </div>
         ) : !isLoading && !isLoadingCompanyList && filteredContacts && filteredContacts.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            {searchQuery ? '没有找到匹配的人脉' : ''}
+          <div className="flex flex-col items-center justify-center py-16 px-6">
+            {searchQuery ? (
+              <>
+                {/* 搜索无结果 */}
+                <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                  <Search className="h-9 w-9 text-gray-300" />
+                </div>
+                <p className="text-base font-medium text-gray-500 mb-1">未找到匹配的人脉</p>
+                <p className="text-sm text-gray-400 mb-5">换个关键词试试，或清空搜索</p>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="flex items-center gap-1.5 h-9 px-5 rounded-xl bg-[#D32F2F] text-white text-sm font-medium hover:bg-[#A80000] transition-all shadow-sm"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  清空搜索
+                </button>
+              </>
+            ) : (
+              <>
+                {/* 无人脉数据 */}
+                <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                  <UserX className="h-9 w-9 text-gray-300" />
+                </div>
+                <p className="text-base font-medium text-gray-500 mb-1">暂无人脉</p>
+                <p className="text-sm text-gray-400 mb-5">点击右上角 + 添加第一位人脉</p>
+              </>
+            )}
           </div>
         ) : null}
         
@@ -2240,9 +2294,16 @@ export default function ContactsList() {
         {contactsData && contactsData.hasMore && (
           <div 
             ref={loadMoreRef}
-            className="text-center py-4 text-muted-foreground"
+            className="flex items-center justify-center py-6 gap-2 text-muted-foreground"
           >
-            {isFetching ? '加载中...' : ''}
+            {isFetching ? (
+              <>
+                <div className="h-4 w-4 rounded-full border-2 border-[#D32F2F] border-t-transparent animate-spin" />
+                <span className="text-xs">加载更多...</span>
+              </>
+            ) : (
+              <span className="text-xs text-gray-300">上滑加载更多</span>
+            )}
           </div>
         )}
       </div>
