@@ -345,6 +345,7 @@ export default function ContactsList() {
   const filterType = urlParams.get('filter'); // thisWeek, thisMonth, thisYear
   const tagIdParam = urlParams.get('tag'); // 标签ID筛选（支持多个，用逗号分隔）
   const viewMode = urlParams.get('view'); // 视图模式：company显示公司信息
+  const refreshTimestamp = urlParams.get('_refresh'); // 强制刷新时间戳
   
   // 调试日志
   console.log('[ContactsList] searchParams:', searchParams);
@@ -412,9 +413,6 @@ export default function ContactsList() {
   );
   
   // 获取人脉列表（支持分页）
-  // 从URL参数读取 _refresh 时间戳，用于强制刷新
-  const refreshTimestamp = urlParams.get('_refresh');
-
   const { data: contactsData, isLoading, isFetching, refetch: refetchContacts } = trpc.contacts.list.useQuery({
     searchQuery: searchQuery || undefined,
     sortBy: sortBy,
