@@ -2160,7 +2160,7 @@ export default function ContactsList() {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="h-8 w-8 p-0"
+                        className="h-9 w-9 p-0 active:scale-95 transition-transform"
                         onClick={(e) => {
                           if (contact._isShared) {
                             e.stopPropagation();
@@ -2171,7 +2171,7 @@ export default function ContactsList() {
                         disabled={contact._isShared || contact.hasTodayInteraction}
                       >
                         <MessageCircle 
-                          className={`h-4 w-4 transition-colors ${
+                          className={`h-5 w-5 transition-colors ${
                             contact._isShared || contact.hasTodayInteraction
                               ? 'text-gray-400 opacity-50'
                               : 'text-[#D32F2F] hover:text-[#D32F2F]-dark'
@@ -2182,8 +2182,8 @@ export default function ContactsList() {
                       {!contact._isShared && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreVertical className="h-4 w-4" />
+                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 active:scale-95 transition-transform">
+                              <MoreVertical className="h-5 w-5" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
