@@ -1632,7 +1632,7 @@ export default function FunderManagement() {
                   <div className="flex" style={{ minHeight: '100px' }}>
                     {/* 左栏 */}
                     <div className="flex-1 p-4 pr-3">
-                      <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>持有资产</div>
+                      <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>{editingOrder?.participantInfo ? '订单资产' : '持有资产'}</div>
                       <div className="h-7 flex items-baseline gap-1 flex-wrap">
                         <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
                           {formData.buyQuantity ? parseFloat(parseFloat(formData.buyQuantity).toFixed(8)).toString() : '—'}
