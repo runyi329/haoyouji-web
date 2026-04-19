@@ -391,14 +391,6 @@ export default function ContactsList() {
     }
   }, [filterType]);
 
-  // 当 _refresh 参数变化时，重置分页并强制刷新数据
-  React.useEffect(() => {
-    if (refreshTimestamp) {
-      setPage(1);
-      setAllLoadedContacts([]);
-    }
-  }, [refreshTimestamp]);
-  
   // 轻量级获取联系人数量（全部、我的、共享）
   const { data: contactCounts } = trpc.contacts.counts.useQuery(undefined, {
     staleTime: 30_000,
@@ -428,6 +420,18 @@ export default function ContactsList() {
     staleTime: 30_000, // 30秒内不重复请求，减少不必要的网络开销
   });
   
+  // 当 _refresh 参数变化时，重置分页并强制刷新数据（必须在 refetchContacts 声明之后）
+  React.useEffect(() => {
+    if (refreshTimestamp) {
+      setPage(1);
+      setAllLoadedContacts([]);
+      // 延迟一帧再调用 refetch，确保 setPage(1) 已经生效
+      setTimeout(() => {
+        refetchContacts();
+      }, 50);
+    }
+  }, [refreshTimestamp]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 当数据加载完成时，累加到已加载列表
   React.useEffect(() => {
     if (contactsData) {
