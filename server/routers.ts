@@ -12476,6 +12476,8 @@ export const appRouter = router({
         const ordersWithParticipant = orders.map((o: any) => {
           const pi = participantInfoMap[Number(o.id)];
           if (pi) {
+            // DEBUG: 打印真实字段值
+            console.log(`[DEBUG participantInfo] order_no=${o.order_no} interest_base_currency=${JSON.stringify(o.interest_base_currency)} interest_rate_currency=${JSON.stringify(o.interest_rate_currency)}`);
             // 参与方订单：附带参与方配置，默认值用订单的计息基数和计息日期
             return {
               ...o,
