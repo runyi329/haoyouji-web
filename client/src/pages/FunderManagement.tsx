@@ -774,6 +774,24 @@ export default function FunderManagement() {
                           </span>
                         </div>
                       )}
+                      {order.participantInfo?.commissionRate && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">佣金比例</span>
+                          <span className="font-medium" style={{ color: '#059669' }}>{order.participantInfo.commissionRate}%/年</span>
+                        </div>
+                      )}
+                      {order.participantInfo?.commissionBase && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">计佣基数</span>
+                          <span className="font-medium" style={{ color: '#059669' }}>{parseFloat(order.participantInfo.commissionBase).toLocaleString()} USDT</span>
+                        </div>
+                      )}
+                      {order.participantInfo?.commissionStartDate && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">计佣日期</span>
+                          <span className="font-medium" style={{ color: '#059669' }}>{String(order.participantInfo.commissionStartDate).slice(0, 10)}</span>
+                        </div>
+                      )}
                     </div>
 
                     {order.admin_note && (
@@ -1117,7 +1135,7 @@ export default function FunderManagement() {
               </div>
 
               {/* 买入日期 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">买入日期</label>
                 <button
                   onClick={() => setShowDatePicker(v => !v)}
@@ -1137,7 +1155,7 @@ export default function FunderManagement() {
               </div>
 
               {/* 存放账号 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">存放账号</label>
                 <input
                   type="text"
@@ -1307,7 +1325,7 @@ export default function FunderManagement() {
               </div>
 
               {/* 利息支付方式 */}
-              <div>
+              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">利息支付方式</label>
                 <div className="grid grid-cols-2 gap-2">
                   {INTEREST_PAYMENT_OPTIONS.map(opt => (
@@ -1655,7 +1673,7 @@ export default function FunderManagement() {
                         <div className="flex-1">
                           {/* 待结利息标题 */}
                           <div className="h-5 flex items-center gap-1">
-                            <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
+                            <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>{editingOrder?.participantInfo ? '待结佣金' : '待结利息'}</span>
                             <span className="text-[10px] text-gray-400">
                               (年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%)
                             </span>
@@ -1679,7 +1697,7 @@ export default function FunderManagement() {
                             {displayConfig.paidInterest && (
                               <div className="text-xs">
                                 <div className="flex items-center justify-between">
-                                  <span className="text-gray-400">已结利息</span>
+                                  <span className="text-gray-400">{editingOrder?.participantInfo ? '已结佣金' : '已结利息'}</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
                                     {(() => {
                                       const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
@@ -1699,9 +1717,9 @@ export default function FunderManagement() {
                             )}
                             {displayConfig.interestStartDate && formData.interestStartDate && (
                               <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400">计息日期</span>
+                                <span className="text-gray-400">{editingOrder?.participantInfo ? '计佣日期' : '计息日期'}</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                                  {(editingOrder?.participantInfo ? formData.commissionStartDate || formData.interestStartDate : formData.interestStartDate).replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
                                 </span>
                               </div>
                             )}
@@ -1750,9 +1768,9 @@ export default function FunderManagement() {
                           </div>
                           {displayConfig.interestStartDate && formData.interestStartDate && (
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-gray-400">计息日期</span>
+                              <span className="text-gray-400">{editingOrder?.participantInfo ? '计佣日期' : '计息日期'}</span>
                               <span className="font-medium" style={{ color: '#4B5563' }}>
-                                {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                                {(editingOrder?.participantInfo ? formData.commissionStartDate || formData.interestStartDate : formData.interestStartDate).replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
                               </span>
                             </div>
                           )}
