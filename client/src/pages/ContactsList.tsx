@@ -451,15 +451,14 @@ export default function ContactsList() {
     setAllLoadedContacts([]);
   }, [searchQuery, sortBy, filterType]);
   
-  // 监听location变化，当返回列表页时强制刷新数据
+  // 监听location变化，当进入列表页时强制刷新数据
   React.useEffect(() => {
     if (location.startsWith('/parent/contacts/list')) {
-      // 每次进入人脉列表页时，重置分页并强制刷新数据
+      // 每次进入人脉列表页时，让缓存失效并重置分页
       setPage(1);
       setAllLoadedContacts([]);
-      setTimeout(() => {
-        refetchContacts();
-      }, 50);
+      // 让所有 contacts.list 缓存失效，tRPC 会自动重新请求
+      utils.contacts.list.invalidate();
     }
   }, [location]); // eslint-disable-line react-hooks/exhaustive-deps
   
