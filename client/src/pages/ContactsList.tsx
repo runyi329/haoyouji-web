@@ -1179,7 +1179,7 @@ export default function ContactsList() {
   const dropdownContacts = filteredContacts?.slice(0, 10) || [];
 
   return (
-      <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] min-h-screen" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
+      <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] h-screen flex flex-col overflow-hidden" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
       {/* 顶部深红色头部 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-4 rounded-b-3xl mb-3">
         {/* 第一行：返回 + 标题 + 人脉总数 */}
@@ -1567,6 +1567,8 @@ export default function ContactsList() {
         
       </div>
 
+      {/* 可滚动内容区域 */}
+      <div className="flex-1 overflow-y-auto">
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
         <div className="border border-[#D32F2F]/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-[#D32F2F]-light">
@@ -2393,6 +2395,7 @@ export default function ContactsList() {
           </div>
         )}
       </div>
+      </div>{/* 可滚动内容区域结束 */}
       
       {/* 标签管理Dialog */}
       <Dialog open={showTagManagement} onOpenChange={setShowTagManagement}>
