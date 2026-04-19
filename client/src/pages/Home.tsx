@@ -490,7 +490,7 @@ export default function Home() {
 
       {/* Stats Cards - 使用SPA导航 */}
       <div className="px-4 mt-2 grid grid-cols-2 gap-2">
-        <div className="block cursor-pointer" onClick={() => navigate("/parent/contacts/list")}>
+        <div className="block cursor-pointer" onClick={() => navigate(`/parent/contacts/list?_refresh=${Date.now()}`)}>
         <Card className="bg-gradient-to-br from-[#A80000] to-[#d44] text-white p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
           <div className="flex items-center space-x-2 opacity-90">
             <Users className="w-5 h-5" />

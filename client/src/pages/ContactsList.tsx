@@ -183,6 +183,7 @@ export default function ContactsList() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [highlightedDropdownIndex, setHighlightedDropdownIndex] = useState(-1);
   const searchRef = useRef<HTMLDivElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -385,6 +386,14 @@ export default function ContactsList() {
       setAllLoadedContacts([]); // 清空已加载的数据
     }
   }, [filterType]);
+
+  // 当 _refresh 参数变化时，重置分页并强制刷新数据
+  React.useEffect(() => {
+    if (refreshTimestamp) {
+      setPage(1);
+      setAllLoadedContacts([]);
+    }
+  }, [refreshTimestamp]);
   
   // 轻量级获取联系人数量（全部、我的、共享）
   const { data: contactCounts } = trpc.contacts.counts.useQuery(undefined, {
@@ -403,7 +412,10 @@ export default function ContactsList() {
   );
   
   // 获取人脉列表（支持分页）
-  const { data: contactsData, isLoading, isFetching } = trpc.contacts.list.useQuery({
+  // 从URL参数读取 _refresh 时间戳，用于强制刷新
+  const refreshTimestamp = urlParams.get('_refresh');
+
+  const { data: contactsData, isLoading, isFetching, refetch: refetchContacts } = trpc.contacts.list.useQuery({
     searchQuery: searchQuery || undefined,
     sortBy: sortBy,
     page: page,
@@ -824,6 +836,7 @@ export default function ContactsList() {
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchQuery(value);
+    setHighlightedDropdownIndex(-1); // 搜索内容变化时重置高亮索引
     // 当有输入内容时显示下拉框，否则隐藏
     if (value.trim()) {
       setShowDropdown(true);
@@ -1112,23 +1125,6 @@ export default function ContactsList() {
             {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
             {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
-          <span className="text-xs text-white/70 shrink-0">
-            {viewMode === 'company' && companyList ? (
-              `共 ${new Set(companyList.map(item => item.companyName)).size} 家`
-            ) : isLoading ? (
-              `加载中...`
-            ) : (filterType && filteredCounts) ? (
-              shareFilter === 'all' ? `共 ${filteredCounts.total} 位` :
-              shareFilter === 'mine' ? `共 ${filteredCounts.mine} 位` :
-              `共 ${filteredCounts.shared} 位`
-            ) : contactCounts ? (
-              shareFilter === 'all' ? `共 ${contactCounts.total} 位` :
-              shareFilter === 'mine' ? `共 ${contactCounts.mine} 位` :
-              `共 ${contactCounts.shared} 位`
-            ) : (
-              `共 0 位`
-            )}
-          </span>
         </div>
         {/* 第二行：全部 / 我的 / 共享 Tab */}
         <div className="flex items-center gap-2">
@@ -1164,8 +1160,21 @@ export default function ContactsList() {
                 onChange={handleSearchChange}
                 onFocus={handleSearchFocus}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && searchQuery.trim()) {
-                    console.log('搜索:', searchQuery);
+                  if (showDropdown && dropdownContacts.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setHighlightedDropdownIndex(prev => Math.min(prev + 1, dropdownContacts.length - 1));
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setHighlightedDropdownIndex(prev => Math.max(prev - 1, 0));
+                    } else if (e.key === 'Enter' && highlightedDropdownIndex >= 0) {
+                      e.preventDefault();
+                      const contact = dropdownContacts[highlightedDropdownIndex];
+                      if (contact) handleContactClick(contact.id, contact, e as any);
+                    } else if (e.key === 'Escape') {
+                      setShowDropdown(false);
+                      setHighlightedDropdownIndex(-1);
+                    }
                   }
                 }}
                 className="pr-8 h-10 text-sm rounded-xl border-divider focus:border-[#D32F2F] focus:ring-[#A80000]"
@@ -1183,14 +1192,16 @@ export default function ContactsList() {
               {/* 搜索下拉列表 */}
               {showDropdown && dropdownContacts.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
-                  {dropdownContacts.map((contact: any) => {
+                  {dropdownContacts.map((contact: any, idx: number) => {
                     const company = getFieldValue(contact, "公司名称");
                     const position = getFieldValue(contact, "职位");
+                    const isHighlighted = idx === highlightedDropdownIndex;
                     return (
                       <div
                         key={contact.id}
                         onClick={(e) => handleContactClick(contact.id, contact, e)}
-                        className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                        onMouseEnter={() => setHighlightedDropdownIndex(idx)}
+                        className={`px-3 sm:px-4 py-2 sm:py-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 ${isHighlighted ? 'bg-[#FAF3ED] dark:bg-gray-700' : 'hover:bg-[#FAF3ED] dark:hover:bg-gray-700'}`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
