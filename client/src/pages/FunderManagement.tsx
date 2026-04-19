@@ -129,8 +129,10 @@ export default function FunderManagement() {
   // 多视角订单参与方相关 state
   const [showParticipantsPanel, setShowParticipantsPanel] = useState<number | null>(null); // 当前展开参与方面板的订单id
   type ParticipantRole = 'funder' | 'borrower' | 'broker';
-  type ParticipantItem = { role: ParticipantRole; contactName: string; contactPhone: string; rate: string; rateLabel: string; amount: string; note: string; sortOrder: number };
+  type ParticipantItem = { userId: number; displayName: string; role: ParticipantRole; rate: string; rateLabel: string; amount: string; note: string; sortOrder: number };
+  type LedgerMember = { userId: number; displayName: string; memberRole: string };
   const [participantsList, setParticipantsList] = useState<ParticipantItem[]>([]);
+  const [ledgerMembers, setLedgerMembers] = useState<LedgerMember[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(false);
   const ROLE_OPTIONS: { value: ParticipantRole; label: string; color: string; defaultRateLabel: string }[] = [
     { value: 'funder', label: '资金方', color: '#1A56DB', defaultRateLabel: '年化利率' },
@@ -332,9 +334,9 @@ export default function FunderManagement() {
     try {
       const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId, ledgerId });
       const mapped = (result.participants || []).map((p: any) => ({
+        userId: p.user_id,
+        displayName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
         role: p.role as ParticipantRole,
-        contactName: p.contact_name || '',
-        contactPhone: p.contact_phone || '',
         rate: p.rate || '',
         rateLabel: p.rate_label || '',
         amount: p.amount || '',
@@ -342,6 +344,12 @@ export default function FunderManagement() {
         sortOrder: p.sort_order || 0,
       }));
       setParticipantsList(mapped);
+      const mappedMembers = (result.members || []).map((m: any) => ({
+        userId: m.userId,
+        displayName: m.nickname || m.userName || m.username || `用户${m.userId}`,
+        memberRole: m.memberRole,
+      }));
+      setLedgerMembers(mappedMembers);
     } catch (e) {
       toast.error('加载参与方失败');
       setParticipantsList([]);
@@ -351,26 +359,29 @@ export default function FunderManagement() {
   };
   const handleAddParticipant = (role: ParticipantRole) => {
     const roleOpt = ROLE_OPTIONS.find(r => r.value === role);
-    setParticipantsList(list => [...list, {
-      role,
-      contactName: '',
-      contactPhone: '',
-      rate: '',
-      rateLabel: roleOpt?.defaultRateLabel || '',
-      amount: '',
-      note: '',
-      sortOrder: list.length,
-    }]);
+    setParticipantsList(list => {
+      const usedIds = list.map(p => p.userId);
+      const firstAvail = ledgerMembers.find(m => !usedIds.includes(m.userId));
+      return [...list, {
+        userId: firstAvail?.userId ?? 0,
+        displayName: firstAvail?.displayName ?? '',
+        role,
+        rate: '',
+        rateLabel: roleOpt?.defaultRateLabel || '',
+        amount: '',
+        note: '',
+        sortOrder: list.length,
+      }];
+    });
   };
   const handleSaveParticipants = (orderId: number) => {
-    const valid = participantsList.filter(p => p.contactName.trim());
+    const valid = participantsList.filter(p => p.userId > 0);
     saveParticipantsMutation.mutate({
       orderId,
       ledgerId,
       participants: valid.map((p, i) => ({
+        userId: p.userId,
         role: p.role,
-        contactName: p.contactName.trim(),
-        contactPhone: p.contactPhone || undefined,
         rate: p.rate || undefined,
         rateLabel: p.rateLabel || undefined,
         amount: p.amount || undefined,
@@ -776,27 +787,25 @@ export default function FunderManagement() {
                                       <X className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
+                                  {/* 成员选择下拉 */}
+                                  <div>
+                                    <div className="text-xs text-gray-400 mb-0.5">选择账本成员 *</div>
+                                    <select
+                                      value={p.userId}
+                                      onChange={e => {
+                                        const uid = Number(e.target.value);
+                                        const member = ledgerMembers.find(m => m.userId === uid);
+                                        setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: uid, displayName: member?.displayName || '' } : item));
+                                      }}
+                                      className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                                    >
+                                      <option value={0}>-- 请选择成员 --</option>
+                                      {ledgerMembers.map(m => (
+                                        <option key={m.userId} value={m.userId}>{m.displayName}</option>
+                                      ))}
+                                    </select>
+                                  </div>
                                   <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                      <div className="text-xs text-gray-400 mb-0.5">姓名 *</div>
-                                      <input
-                                        type="text"
-                                        value={p.contactName}
-                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, contactName: e.target.value } : item))}
-                                        placeholder="参与方姓名"
-                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
-                                      />
-                                    </div>
-                                    <div>
-                                      <div className="text-xs text-gray-400 mb-0.5">联系电话</div>
-                                      <input
-                                        type="text"
-                                        value={p.contactPhone}
-                                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, contactPhone: e.target.value } : item))}
-                                        placeholder="选填"
-                                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
-                                      />
-                                    </div>
                                     <div>
                                       <div className="text-xs text-gray-400 mb-0.5">利率标签</div>
                                       <input
