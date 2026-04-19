@@ -165,9 +165,9 @@ export default function FunderManagement() {
     commissionShare: '',
     originalAmount: '', // 编辑时保存原订单金额，买入价格或数量为空时回退使用
     // 受邀订单佣金配置
-    commissionRate: '' as string | undefined,
-    commissionBase: '' as string | undefined,
-    commissionStartDate: '' as string | undefined,
+    commissionRate: '',
+    commissionBase: '',
+    commissionStartDate: '',
   });
 
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
@@ -277,6 +277,24 @@ export default function FunderManagement() {
     const timer = setInterval(compute, 1000);
     return () => clearInterval(timer);
   }, [formData.interestBase, formData.interestRateAnnual, formData.interestStartDate]);
+
+  // 预览卡片实时待结佣金（受邀订单专用，每秒更新）
+  const [previewCommission, setPreviewCommission] = useState<number>(0);
+  useEffect(() => {
+    const compute = () => {
+      const base = parseFloat(formData.commissionBase || '0');
+      const rate = parseFloat(formData.commissionRate || '0');
+      if (!base || !rate || !formData.commissionStartDate) { setPreviewCommission(0); return; }
+      const startTs = new Date(formData.commissionStartDate + 'T00:00:00').getTime();
+      if (isNaN(startTs)) { setPreviewCommission(0); return; }
+      const elapsedSeconds = Math.max(0, (Date.now() - startTs) / 1000);
+      const perSecond = (base * rate / 100) / (365 * 24 * 3600);
+      setPreviewCommission(perSecond * elapsedSeconds);
+    };
+    compute();
+    const timer = setInterval(compute, 1000);
+    return () => clearInterval(timer);
+  }, [formData.commissionBase, formData.commissionRate, formData.commissionStartDate]);
 
   // 预览卡片实时风险敎口
   const previewExposure = useMemo(() => {
@@ -457,6 +475,10 @@ export default function FunderManagement() {
       interestStartDate: '',
       showProfitShare: true,
       commissionShare: '',
+      originalAmount: '',
+      commissionRate: '',
+      commissionBase: '',
+      commissionStartDate: '',
     });
     setCollateralAssets([]);
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
@@ -708,7 +730,7 @@ export default function FunderManagement() {
                           </button>
                         )}
                         <button
-                          onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
+                          onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
                           className="px-2 py-1 text-xs rounded-lg font-medium"
                           style={{ backgroundColor: showPaymentPanel === order.id ? '#1A56DB' : '#EFF6FF', color: showPaymentPanel === order.id ? '#fff' : '#1A56DB' }}
                         >
@@ -1674,28 +1696,36 @@ export default function FunderManagement() {
                     <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
                     {/* 右栏 */}
                     <div className="w-44 p-4 pl-3 flex flex-col">
-                      {/* 上半：待结利息区 */}
-                      {displayConfig.accruedInterest && formData.interestBase && formData.interestRateAnnual && formData.interestStartDate ? (
+                      {/* 上半：待结利息区 / 待结佣金区 */}
+                      {displayConfig.accruedInterest && (
+                        editingOrder?.participantInfo
+                          ? (formData.commissionBase && formData.commissionRate && formData.commissionStartDate)
+                          : (formData.interestBase && formData.interestRateAnnual && formData.interestStartDate)
+                      ) ? (
                         <div className="flex-1">
-                          {/* 待结利息标题 */}
+                          {/* 待结利息/待结佣金标题 */}
                           <div className="h-5 flex items-center gap-1">
                             <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>{editingOrder?.participantInfo ? '待结佣金' : '待结利息'}</span>
                             <span className="text-[10px] text-gray-400">
-                              (年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%)
+                              (年化 {editingOrder?.participantInfo
+                                ? parseFloat(formData.commissionRate || '0').toFixed(0)
+                                : parseFloat(formData.interestRateAnnual || '0').toFixed(0)}%)
                             </span>
                           </div>
-                          {/* 待结利息大数字 */}
+                          {/* 待结利息/待结佣金大数字 */}
                           <div className="h-7 flex items-baseline gap-0.5 whitespace-nowrap overflow-hidden">
                             <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
-                              {previewAccrued > 0 ? previewAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
+                              {editingOrder?.participantInfo
+                                ? (previewCommission > 0 ? previewCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00')
+                                : (previewAccrued > 0 ? previewAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00')}
                             </span>
-                            <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
-                              {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}
-                            </span>
+                            <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>U</span>
                             <span className="text-[10px] text-gray-400">
-                              ({formData.interestBaseCurrency === 'CNY'
-                                ? (previewAccrued / 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'U'
-                                : (previewAccrued * 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '元'})
+                              {editingOrder?.participantInfo
+                                ? ('(≈' + (previewCommission * 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '元)')
+                                : (formData.interestBaseCurrency === 'CNY'
+                                    ? '(' + (previewAccrued / 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + 'U)'
+                                    : '(' + (previewAccrued * 7).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '元)')}
                             </span>
                           </div>
                           {/* 明细行 */}
@@ -1707,7 +1737,7 @@ export default function FunderManagement() {
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
                                     {(() => {
                                       const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
-                                      const mainUnit = formData.interestBaseCurrency === 'CNY' ? ' 元' : ' U';
+                                      const mainUnit = editingOrder?.participantInfo ? ' U' : (formData.interestBaseCurrency === 'CNY' ? ' 元' : ' U');
                                       return <>{val.toLocaleString(undefined, { maximumFractionDigits: 2 })}{mainUnit}</>;
                                     })()}
                                   </span>
@@ -1715,13 +1745,16 @@ export default function FunderManagement() {
                                 {(() => {
                                   const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
                                   if (val <= 0) return null;
+                                  if (editingOrder?.participantInfo) {
+                                    return <div className="text-[10px] text-gray-400 mt-0.5">≈ {(val * 7).toLocaleString(undefined, { maximumFractionDigits: 2 })} 元</div>;
+                                  }
                                   const altVal = formData.interestBaseCurrency === 'CNY' ? val / 7 : val * 7;
                                   const altUnit = formData.interestBaseCurrency === 'CNY' ? 'U' : '元';
                                   return <div className="text-[10px] text-gray-400 mt-0.5">≈ {altVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} {altUnit}</div>;
                                 })()}
                               </div>
                             )}
-                            {displayConfig.interestStartDate && formData.interestStartDate && (
+                            {displayConfig.interestStartDate && (editingOrder?.participantInfo ? formData.commissionStartDate : formData.interestStartDate) && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">{editingOrder?.participantInfo ? '计佣日期' : '计息日期'}</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -1772,14 +1805,14 @@ export default function FunderManagement() {
                           <div className="flex items-center justify-center">
                             <span className="text-xs text-gray-300">未配置利息</span>
                           </div>
-                          {displayConfig.interestStartDate && formData.interestStartDate && (
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-gray-400">{editingOrder?.participantInfo ? '计佣日期' : '计息日期'}</span>
-                              <span className="font-medium" style={{ color: '#4B5563' }}>
-                                {(editingOrder?.participantInfo ? formData.commissionStartDate || formData.interestStartDate : formData.interestStartDate).replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
-                              </span>
-                            </div>
-                          )}
+                            {displayConfig.interestStartDate && (editingOrder?.participantInfo ? formData.commissionStartDate : formData.interestStartDate) && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">{editingOrder?.participantInfo ? '计佣日期' : '计息日期'}</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {(editingOrder?.participantInfo ? formData.commissionStartDate! : formData.interestStartDate).replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                                </span>
+                              </div>
+                            )}
                         </div>
                       )}
                       {/* 中间分隔线：只在收益分成开启时显示 */}
