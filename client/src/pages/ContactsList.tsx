@@ -1438,62 +1438,32 @@ export default function ContactsList() {
           {/* 共享人筛选 - 仅在选中"共享"Tab时显示，单独一行 */}
           {shareFilter === 'shared' && (
           <div className="mt-2">
-            <Popover open={sharerPopoverOpen} onOpenChange={setSharerPopoverOpen}>
-              <PopoverTrigger asChild>
+            <div className="grid grid-cols-3 gap-2 w-full">
+              <button
+                onClick={() => setSharerFilter('all')}
+                className={`h-9 px-2 text-xs rounded-xl font-medium transition-all truncate ${
+                  sharerFilter === 'all' 
+                    ? 'bg-[#D32F2F] text-white shadow-sm' 
+                    : 'bg-white text-gray-600 shadow-sm hover:bg-red-50'
+                }`}
+              >
+                全部
+              </button>
+              {sharerList.map((sharer) => (
                 <button
-                  role="combobox"
-                  aria-expanded={sharerPopoverOpen}
-                  className="flex items-center h-9 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all w-full justify-center"
+                  key={sharer.id}
+                  onClick={() => setSharerFilter(sharer.id)}
+                  className={`h-9 px-2 text-xs rounded-xl font-medium transition-all truncate ${
+                    sharerFilter === sharer.id 
+                      ? 'bg-[#D32F2F] text-white shadow-sm' 
+                      : 'bg-white text-gray-600 shadow-sm hover:bg-red-50'
+                  }`}
+                  title={sharer.name}
                 >
-                  <span className="truncate">
-                    {sharerFilter === 'all' ? '共享人：全部' : 
-                      sharerList.find(s => s.id === sharerFilter)?.name || '共享人'}
-                  </span>
-                  <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+                  {sharer.name}
                 </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[200px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="搜索共享人..." className="h-9" />
-                  <CommandList>
-                    <CommandEmpty>未找到共享人</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        value="all"
-                        onSelect={() => {
-                          setSharerFilter('all');
-                          setSharerPopoverOpen(false);
-                        }}
-                      >
-                        <Check
-                          className={`mr-2 h-4 w-4 ${
-                            sharerFilter === 'all' ? 'opacity-100' : 'opacity-0'
-                          }`}
-                        />
-                        全部共享人
-                      </CommandItem>
-                      {sharerList.map((sharer) => (
-                        <CommandItem
-                          key={sharer.id}
-                          value={sharer.name}
-                          onSelect={() => {
-                            setSharerFilter(sharer.id);
-                            setSharerPopoverOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={`mr-2 h-4 w-4 ${
-                              sharerFilter === sharer.id ? 'opacity-100' : 'opacity-0'
-                            }`}
-                          />
-                          {sharer.name}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+              ))}
+            </div>
           </div>
           )}
         </div>
