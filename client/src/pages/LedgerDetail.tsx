@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } fro
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
 import { FunderAIPanel } from "@/components/FunderAIPanel";
+import RiskGapCalculator from "@/components/RiskGapCalculator";
 
 // PDF导出功能
 function exportLedgerToPDF() {
@@ -3861,6 +3862,11 @@ export default function LedgerDetail() {
               </button>
             </div>
         </div>
+      )}
+
+      {/* 三联动补足模拟计算器（仅管理员可见，非代看模式） */}
+      {isCustomAF && !effectiveIsFunder && (isOwner || isAdmin) && !viewAsUserId && (
+        <RiskGapCalculator />
       )}
 
       {/* 资金方专属：资产订单列表 */}
