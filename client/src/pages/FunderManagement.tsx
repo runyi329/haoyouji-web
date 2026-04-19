@@ -505,7 +505,7 @@ export default function FunderManagement() {
       interestRateAnnual: order.interest_rate_annual || '',
       interestPaymentType: order.interest_payment_type || '',
       interestBase: order.interest_base || '',
-      interestBaseCurrency: (order.interest_base_currency || 'USDT') as 'USDT' | 'CNY',
+      interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(order.interest_base_currency || '') ? 'CNY' : 'USDT') as 'USDT' | 'CNY',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
@@ -797,9 +797,9 @@ export default function FunderManagement() {
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">计息基数</span>
                           <span className="font-medium text-gray-700">
-                            {order.interest_base_currency === 'CNY'
+                            {(['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(order.interest_base_currency || '') 
                               ? `人民币 ${parseFloat(order.interest_base).toLocaleString()} 元`
-                              : `${parseFloat(order.interest_base).toLocaleString()} USDT`}
+                              : `${parseFloat(order.interest_base).toLocaleString()} USDT`)}
                           </span>
                         </div>
                       )}

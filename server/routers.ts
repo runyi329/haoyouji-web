@@ -12488,7 +12488,7 @@ export const appRouter = router({
                 paidCommission: pi.paid_commission || '0',
                 note: pi.note || null,
                 // 原始订单的计息货币单位，佣金显示跟随此字段
-                interestBaseCurrency: o.interest_base_currency || 'USDT',
+                interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(o.interest_base_currency || '') ? 'CNY' : 'USDT'),
               }
             };
           }
