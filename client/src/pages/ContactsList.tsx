@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { pinyin } from "pinyin-pro";
 import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, ArrowLeft, X, Tag, Settings, Pencil, Trash2, MoreVertical, MessageCircle, UserCheck, UserX, Smile, Layers2, Layers3, Undo, Handshake, ArrowUpDown, Check, ChevronsUpDown } from "lucide-react";
@@ -37,7 +35,6 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Switch } from "@/components/ui/switch";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { InteractionHistoryDialog } from "@/components/InteractionHistoryDialog";
 import { ReferralRelationshipDialog } from "@/components/ReferralRelationshipDialog";
@@ -273,7 +270,7 @@ export default function ContactsList() {
   const SORT_BY_KEY = 'contacts_list_sort_by';
   const [sortBy, setSortBy] = useState<'tagCount_desc' | 'tagCount_asc' | 'interactionCount_desc' | 'interactionCount_asc' | undefined>(() => {
     const saved = localStorage.getItem(SORT_BY_KEY);
-    return saved ? (saved as any) : 'tagCount_desc';
+    return saved ? (saved as any) : undefined;
   });
   
   // 当 sortBy 变化时保存到 localStorage
@@ -444,9 +441,8 @@ export default function ContactsList() {
       setPage(1);
       setAllLoadedContacts([]);
       setSearchQuery(""); // 清空搜索查询
-      utils.contacts.list.invalidate(); // 强制清除缓存，确保每次进入都按最新排序重新请求
     }
-  }, [location, utils]);
+  }, [location]);
   
   // 无限滚动：当滚动到底部时自动加载下一页
   React.useEffect(() => {
@@ -1084,49 +1080,11 @@ export default function ContactsList() {
     setShowDeleteTagDialog(true);
   };
   
-  // 下拉列表按匹配优先级排序：姓名拼音首字母匹配 > 姓名拼音包含 > 姓名汉字包含 > 其他字段
-  const dropdownContacts = React.useMemo(() => {
-    if (!filteredContacts || !searchQuery.trim()) return filteredContacts?.slice(0, 10) || [];
-    const q = searchQuery.trim().toLowerCase();
-    // 判断是否是纯字母搜索（拼音模式）
-    const isAlphaQuery = /^[a-zA-Z]+$/.test(q);
-    const getMatchScore = (contact: any): number => {
-      const name = (contact.name || '');
-      const nameLower = name.toLowerCase();
-      if (isAlphaQuery) {
-        // 拼音模式：用 pinyin-pro 转换姓名为拼音
-        try {
-          // 获取姓名每个字的拼音首字母（如 "张盛" -> "zs"）
-          const initials = pinyin(name, { pattern: 'first', toneType: 'none', separator: '' }).toLowerCase();
-          // 获取姓名完整拼音（如 "张盛" -> "zhangsheng"）
-          const fullPinyin = pinyin(name, { toneType: 'none', separator: '' }).toLowerCase();
-          // 优先级1：拼音首字母以搜索词开头（如 "z" 匹配 "张盛" 的 "zs"）
-          if (initials.startsWith(q)) return 5;
-          // 优先级2：完整拼音以搜索词开头（如 "zhang" 匹配 "张盛"）
-          if (fullPinyin.startsWith(q)) return 4;
-          // 优先级3：拼音首字母包含搜索词
-          if (initials.includes(q)) return 3;
-          // 优先级4：完整拼音包含搜索词
-          if (fullPinyin.includes(q)) return 2;
-        } catch (e) {
-          // pinyin 转换失败，降级处理
-        }
-        // 优先级5：其他字段匹配（公司、标签等）
-        return 1;
-      } else {
-        // 汉字模式：直接匹配汉字
-        if (nameLower.startsWith(q)) return 4;
-        if (nameLower.includes(q)) return 3;
-        return 1;
-      }
-    };
-    return [...filteredContacts]
-      .sort((a, b) => getMatchScore(b) - getMatchScore(a))
-      .slice(0, 10);
-  }, [filteredContacts, searchQuery]);
+  // 限制下拉列表最多显示10条
+  const dropdownContacts = filteredContacts?.slice(0, 10) || [];
 
   return (
-      <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] h-screen flex flex-col" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
+      <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] min-h-screen" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
       {/* 顶部深红色头部 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-4 rounded-b-3xl mb-3">
         {/* 第一行：返回 + 标题 + 人脉总数 */}
@@ -1154,7 +1112,23 @@ export default function ContactsList() {
             {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
             {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
-
+          <span className="text-xs text-white/70 shrink-0">
+            {viewMode === 'company' && companyList ? (
+              `共 ${new Set(companyList.map(item => item.companyName)).size} 家`
+            ) : isLoading ? (
+              `加载中...`
+            ) : (filterType && filteredCounts) ? (
+              shareFilter === 'all' ? `共 ${filteredCounts.total} 位` :
+              shareFilter === 'mine' ? `共 ${filteredCounts.mine} 位` :
+              `共 ${filteredCounts.shared} 位`
+            ) : contactCounts ? (
+              shareFilter === 'all' ? `共 ${contactCounts.total} 位` :
+              shareFilter === 'mine' ? `共 ${contactCounts.mine} 位` :
+              `共 ${contactCounts.shared} 位`
+            ) : (
+              `共 0 位`
+            )}
+          </span>
         </div>
         {/* 第二行：全部 / 我的 / 共享 Tab */}
         <div className="flex items-center gap-2">
@@ -1179,7 +1153,7 @@ export default function ContactsList() {
         </div>
       </div>
       {/* 工具栏区域 */}
-      <div className="px-4 bg-[#FAF3ED]">
+      <div className="px-4">
         {/* 搜索框独占一行 */}
         <div className="mb-2">
           <div ref={searchRef} className="relative flex items-center gap-2">
@@ -1208,7 +1182,7 @@ export default function ContactsList() {
               )}
               {/* 搜索下拉列表 */}
               {showDropdown && dropdownContacts.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-64 overflow-y-scroll z-50 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
                   {dropdownContacts.map((contact: any) => {
                     const company = getFieldValue(contact, "公司名称");
                     const position = getFieldValue(contact, "职位");
@@ -1281,23 +1255,6 @@ export default function ContactsList() {
             >
               <Plus className="h-5 w-5" />
             </button>
-            {/* 强力全页刷新按钮 */}
-            <button
-              onClick={() => {
-                const params = new URLSearchParams(window.location.search);
-                if (shareFilter === 'all') {
-                  params.delete('tab');
-                } else {
-                  params.set('tab', shareFilter);
-                }
-                const newSearch = params.toString();
-                const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '');
-                window.location.href = newUrl;
-              }}
-              className="flex items-center justify-center h-10 px-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all shadow-sm shrink-0 text-xs font-medium"
-            >
-              刷新
-            </button>
           </div>
         </div>
 
@@ -1306,11 +1263,11 @@ export default function ContactsList() {
           <div className="flex items-center gap-2">
             {allTags && allTags.length > 0 && (
               <button
-                onClick={() => setIsTagAreaExpanded(true)}
+                onClick={() => setIsTagAreaExpanded(!isTagAreaExpanded)}
                 className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
               >
                 <Tag className="h-3.5 w-3.5 mr-1.5" />
-                {selectedTagIds.length > 0 ? `标签(${selectedTagIds.length})` : '按标签筛选'}
+                {isTagAreaExpanded ? '收起标签' : '按标签筛选'}
               </button>
             )}
             
@@ -1410,98 +1367,90 @@ export default function ContactsList() {
         </div>
         
         {/* 标签筛选器 */}
-        {/* 标签筛选底部抽屉 */}
-        <Sheet open={isTagAreaExpanded} onOpenChange={setIsTagAreaExpanded}>
-          <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-0 max-h-[60vh] flex flex-col">
-            <SheetHeader className="pb-2 pt-4">
-              <div className="flex items-center justify-between">
-                <SheetTitle className="text-base font-semibold text-gray-800">按标签筛选</SheetTitle>
-                <button
-                  onClick={() => setShowTagManagement(true)}
-                  className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#D32F2F] hover:bg-red-50 transition-all"
-                >
-                  <Settings className="h-3 w-3 mr-1" />
-                  标签管理
-                </button>
+        {allTags && allTags.length > 0 && isTagAreaExpanded && (
+          <div className="mb-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                {/* 移除多选复选框，默认启用多选模式 */}
               </div>
-              {selectedTagIds.length > 0 && (
-                <button
-                  onClick={() => {
-                    const newUrl = filterType
-                      ? `/parent/contacts/list?filter=${filterType}`
-                      : '/parent/contacts/list';
-                    setLocation(newUrl);
-                  }}
-                  className="text-xs text-gray-400 hover:text-[#D32F2F] self-start mt-1"
-                >
-                  清除已选 ({selectedTagIds.length})
-                </button>
-              )}
-            </SheetHeader>
-            <div className="flex-1 overflow-y-auto">
-              <div className="flex flex-wrap gap-2 pb-2">
-                {allTags && allTags.map((tag) => {
-                  const isSelected = selectedTagIds.includes(tag.id);
-                  return (
-                    <Badge
-                      key={tag.id}
-                      variant={isSelected ? "default" : "outline"}
-                      className="cursor-pointer transition-all hover:scale-105 text-sm py-1.5 px-3"
-                      style={{
-                        backgroundColor: isSelected ? mapColorToTheme(tag.color) : '#ffffff',
-                        borderColor: isSelected ? mapColorToTheme(tag.color) : '#d1d5db',
-                        color: isSelected ? '#fff' : '#9ca3af',
-                      }}
-                      onClick={() => {
-                        if (isMultiSelectMode) {
-                          let newTagIds: number[];
-                          if (isSelected) {
-                            newTagIds = selectedTagIds.filter(id => id !== tag.id);
-                          } else {
-                            newTagIds = [...selectedTagIds, tag.id];
-                          }
-                          if (newTagIds.length === 0) {
-                            const newUrl = filterType
-                              ? `/parent/contacts/list?filter=${filterType}`
-                              : '/parent/contacts/list';
-                            setLocation(newUrl);
-                          } else {
-                            const tagParam = newTagIds.join(',');
-                            const newUrl = filterType
-                              ? `/parent/contacts/list?filter=${filterType}&tag=${tagParam}`
-                              : `/parent/contacts/list?tag=${tagParam}`;
-                            setLocation(newUrl);
-                          }
+            <button
+              onClick={() => setShowTagManagement(true)}
+              className="flex items-center h-7 px-2.5 text-xs rounded-lg text-[#D32F2F] hover:bg-[#D32F2F]-light transition-all mb-2"
+            >
+              <Settings className="h-3 w-3 mr-1" />
+              标签管理
+            </button>
+              <div className="flex flex-wrap gap-2">
+              {allTags.map((tag) => {
+                const isSelected = selectedTagIds.includes(tag.id);
+                
+                return (
+                  <Badge
+                    key={tag.id}
+                    variant={isSelected ? "default" : "outline"}
+                    className="cursor-pointer transition-all hover:scale-105"
+                    style={{
+                      backgroundColor: isSelected ? mapColorToTheme(tag.color) : '#ffffff',
+                      borderColor: isSelected ? mapColorToTheme(tag.color) : '#d1d5db',
+                      color: isSelected ? '#fff' : '#9ca3af',
+                    }}
+                    onClick={() => {
+                      if (isMultiSelectMode) {
+                        // 多选模式：添加/移除标签
+                        let newTagIds: number[];
+                        if (isSelected) {
+                          // 移除该标签
+                          newTagIds = selectedTagIds.filter(id => id !== tag.id);
                         } else {
-                          if (isSelected) {
-                            const newUrl = filterType
-                              ? `/parent/contacts/list?filter=${filterType}`
-                              : '/parent/contacts/list';
-                            setLocation(newUrl);
-                          } else {
-                            const newUrl = filterType
-                              ? `/parent/contacts/list?filter=${filterType}&tag=${tag.id}`
-                              : `/parent/contacts/list?tag=${tag.id}`;
-                            setLocation(newUrl);
-                          }
+                          // 添加该标签
+                          newTagIds = [...selectedTagIds, tag.id];
                         }
-                      }}
-                    >
-                      {tag.name}
-                    </Badge>
-                  );
-                })}
+                        
+                        // 更新URL
+                        if (newTagIds.length === 0) {
+                          const newUrl = filterType 
+                            ? `/parent/contacts/list?filter=${filterType}`
+                            : '/parent/contacts/list';
+                          setLocation(newUrl);
+                        } else {
+                          const tagParam = newTagIds.join(',');
+                          const newUrl = filterType
+                            ? `/parent/contacts/list?filter=${filterType}&tag=${tagParam}`
+                            : `/parent/contacts/list?tag=${tagParam}`;
+                          setLocation(newUrl);
+                        }
+                      } else {
+                        // 单选模式：切换选中状态
+                        if (isSelected) {
+                          // 取消筛选
+                          const newUrl = filterType 
+                            ? `/parent/contacts/list?filter=${filterType}`
+                            : '/parent/contacts/list';
+                          setLocation(newUrl);
+                        } else {
+                          // 应用筛选
+                          const newUrl = filterType
+                            ? `/parent/contacts/list?filter=${filterType}&tag=${tag.id}`
+                            : `/parent/contacts/list?tag=${tag.id}`;
+                          setLocation(newUrl);
+                        }
+                      }
+                    }}
+                  >
+                    {tag.name}
+                  </Badge>
+                );
+              })}
               </div>
             </div>
-          </SheetContent>
-        </Sheet>
+          </div>
+        )}
         
       </div>
 
       {/* 批量操作工具栏 */}
       {selectedContactIds.length > 0 && (
-        <div className="px-4 mb-2">
-        <div className="border border-[#D32F2F]/30 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2 bg-[#D32F2F]-light">
+        <div className="border border-[#D32F2F]/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-2 bg-[#D32F2F]-light">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-[#D32F2F]">
               已选择 {selectedContactIds.length} 人
@@ -1834,41 +1783,12 @@ export default function ContactsList() {
             </DropdownMenu>
           </div>
         </div>
-        </div>
       )}
 
-      {/* 人脉列表 - 可滚动区域 */}
-      <div className="flex-1 overflow-y-auto mt-0 pb-20">
+      {/* 人脉列表 */}
+      <div className="mt-4">
         {(isLoading || isLoadingCompanyList) ? (
-          // Skeleton 骨架屏
-          <div className="grid grid-cols-1 gap-3 px-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl p-4 shadow-sm">
-                {/* 名字行 */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-6 w-24 rounded-md" />
-                    <Skeleton className="h-4 w-12 rounded-md" />
-                    <Skeleton className="h-4 w-10 rounded-md" />
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                    <Skeleton className="h-8 w-8 rounded-full" />
-                  </div>
-                </div>
-                {/* 公司行 */}
-                <Skeleton className="h-4 w-32 rounded-md mb-3" />
-                {/* 联络状态行 */}
-                <Skeleton className="h-3 w-40 rounded-md mb-2" />
-                {/* 标签行 */}
-                <div className="flex gap-1">
-                  <Skeleton className="h-5 w-14 rounded-full" />
-                  <Skeleton className="h-5 w-10 rounded-full" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <div className="text-center py-8 text-muted-foreground">加载中...</div>
         ) : viewMode === 'company' ? (
           // 公司视图
           companyList && companyList.length > 0 ? (
@@ -2194,7 +2114,7 @@ export default function ContactsList() {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="h-9 w-9 p-0 active:scale-95 transition-transform"
+                        className="h-8 w-8 p-0"
                         onClick={(e) => {
                           if (contact._isShared) {
                             e.stopPropagation();
@@ -2205,7 +2125,7 @@ export default function ContactsList() {
                         disabled={contact._isShared || contact.hasTodayInteraction}
                       >
                         <MessageCircle 
-                          className={`h-5 w-5 transition-colors ${
+                          className={`h-4 w-4 transition-colors ${
                             contact._isShared || contact.hasTodayInteraction
                               ? 'text-gray-400 opacity-50'
                               : 'text-[#D32F2F] hover:text-[#D32F2F]-dark'
@@ -2216,8 +2136,8 @@ export default function ContactsList() {
                       {!contact._isShared && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 active:scale-95 transition-transform">
-                              <MoreVertical className="h-5 w-5" />
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
@@ -2311,33 +2231,8 @@ export default function ContactsList() {
             })}
           </div>
         ) : !isLoading && !isLoadingCompanyList && filteredContacts && filteredContacts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 px-6">
-            {searchQuery ? (
-              <>
-                {/* 搜索无结果 */}
-                <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                  <Search className="h-9 w-9 text-gray-300" />
-                </div>
-                <p className="text-base font-medium text-gray-500 mb-1">未找到匹配的人脉</p>
-                <p className="text-sm text-gray-400 mb-5">换个关键词试试，或清空搜索</p>
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="flex items-center gap-1.5 h-9 px-5 rounded-xl bg-[#D32F2F] text-white text-sm font-medium hover:bg-[#A80000] transition-all shadow-sm"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  清空搜索
-                </button>
-              </>
-            ) : (
-              <>
-                {/* 无人脉数据 */}
-                <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                  <UserX className="h-9 w-9 text-gray-300" />
-                </div>
-                <p className="text-base font-medium text-gray-500 mb-1">暂无人脉</p>
-                <p className="text-sm text-gray-400 mb-5">点击右上角 + 添加第一位人脉</p>
-              </>
-            )}
+          <div className="text-center py-8 text-muted-foreground">
+            {searchQuery ? '没有找到匹配的人脉' : ''}
           </div>
         ) : null}
         
@@ -2345,16 +2240,9 @@ export default function ContactsList() {
         {contactsData && contactsData.hasMore && (
           <div 
             ref={loadMoreRef}
-            className="flex items-center justify-center py-6 gap-2 text-muted-foreground"
+            className="text-center py-4 text-muted-foreground"
           >
-            {isFetching ? (
-              <>
-                <div className="h-4 w-4 rounded-full border-2 border-[#D32F2F] border-t-transparent animate-spin" />
-                <span className="text-xs">加载更多...</span>
-              </>
-            ) : (
-              <span className="text-xs text-gray-300">上滑加载更多</span>
-            )}
+            {isFetching ? '加载中...' : ''}
           </div>
         )}
       </div>
