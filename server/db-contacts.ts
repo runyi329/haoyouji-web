@@ -3369,11 +3369,23 @@ export async function getContactsByParentPaginated(
   let baseContacts: any[];
   
   if (!searchQuery) {
-    baseContacts = await db.select().from(contacts)
-      .where(eq(contacts.parentUserId, parentUserId))
-      .orderBy(desc(contacts.updatedAt))
-      .limit(pageSize)
-      .offset(offset);
+    // 按标签数量从多到少排序，标签数相同时按updatedAt倒序
+    const noSearchResult = await db.execute(sql`
+      SELECT c.*,
+        (
+          SELECT COUNT(*) FROM contact_tag_relations ctr WHERE ctr.contactId = c.id
+        ) + (
+          SELECT COUNT(*) FROM personal_contact_tags pct WHERE pct.contactId = c.id
+        ) AS tagCount
+      FROM contacts c
+      WHERE c.parentUserId = ${parentUserId}
+      ORDER BY tagCount DESC, c.updatedAt DESC
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    `);
+    baseContacts = Array.isArray(noSearchResult) && Array.isArray(noSearchResult[0])
+      ? (noSearchResult[0] as any[])
+      : (noSearchResult as any[]);
   } else {
     const searchPattern = `%${searchQuery}%`;
     
@@ -3403,6 +3415,11 @@ export async function getContactsByParentPaginated(
           WHEN c.title COLLATE utf8mb4_unicode_ci LIKE ${searchPattern} THEN 4
           ELSE 5
         END,
+        (
+          SELECT COUNT(*) FROM contact_tag_relations ctr2 WHERE ctr2.contactId = c.id
+        ) + (
+          SELECT COUNT(*) FROM personal_contact_tags pct2 WHERE pct2.contactId = c.id
+        ) DESC,
         c.updatedAt DESC
       LIMIT ${pageSize}
       OFFSET ${offset}
