@@ -12355,8 +12355,30 @@ export const appRouter = router({
           targetUserId = input.userId;
         }
         let rows: any;
-        if (isParticipant && !isManager && !isFunder) {
-          // 纯参与方：只返回参与的订单
+        if (!isManager && targetUserId) {
+          // 资金方（funder）：自己名下的订单 + 作为参与方的订单，统一用原生 SQL 合并
+          if (participantOrderIds.length > 0) {
+            const placeholders = participantOrderIds.map(() => '?').join(',');
+            rows = await conn!.execute(
+              `SELECT fo.*, u.username, u.name as userName, u.avatar
+               FROM funder_asset_orders fo
+               LEFT JOIN users u ON u.id = fo.user_id
+               WHERE fo.ledger_id = ? AND (fo.user_id = ? OR fo.id IN (${placeholders}))
+               ORDER BY fo.created_at DESC`,
+              [input.ledgerId, targetUserId, ...participantOrderIds]
+            );
+          } else {
+            rows = await conn!.execute(
+              `SELECT fo.*, u.username, u.name as userName, u.avatar
+               FROM funder_asset_orders fo
+               LEFT JOIN users u ON u.id = fo.user_id
+               WHERE fo.ledger_id = ? AND fo.user_id = ?
+               ORDER BY fo.created_at DESC`,
+              [input.ledgerId, targetUserId]
+            );
+          }
+        } else if (isParticipant && !isManager) {
+          // 纯参与方（非 funder）：只返回参与的订单
           if (participantOrderIds.length === 0) {
             rows = [[]];
           } else {
@@ -12370,16 +12392,8 @@ export const appRouter = router({
               [input.ledgerId, ...participantOrderIds]
             );
           }
-        } else if (targetUserId) {
-          // 资金方或管理员指定用户：按 user_id 过滤，但也合并参与的订单
-          rows = await db.execute(
-            sql`SELECT fo.*, u.username, u.name as userName, u.avatar
-                FROM funder_asset_orders fo
-                LEFT JOIN users u ON u.id = fo.user_id
-                WHERE fo.ledger_id = ${input.ledgerId} AND (fo.user_id = ${targetUserId}${participantOrderIds.length > 0 ? sql` OR fo.id IN (${sql.raw(participantOrderIds.join(','))})` : sql``})
-                ORDER BY fo.created_at DESC`
-          );
         } else {
+          // 管理员：看全部
           rows = await db.execute(
             sql`SELECT fo.*, u.username, u.name as userName, u.avatar
                 FROM funder_asset_orders fo
