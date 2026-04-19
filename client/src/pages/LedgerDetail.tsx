@@ -496,9 +496,21 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
   }
   // 参与方视图：显示佣金模块（带折算 + 问号说明）
   const [showCommissionTip, setShowCommissionTip] = useState(false);
-  // 佣金折算（同利息折算逻辑，默认 U 计佣，折算为元）
-  const commissionAltAccrued = accruedCommission * 7;
-  const commissionAltPaid = paidCommission * 7;
+  // 佣金折算：跟随原始订单的结算货币（rateCur），与待结利息货币规则完全一致
+  // commissionBase 存储单位与 interest_base_currency 一致，结算显示单位与 rateCur 一致
+  const convertCommission = (val: number): number => {
+    if (baseCur === rateCur) return val;
+    if (baseCur === 'USDT' && rateCur === 'CNY') return val * 7;
+    if (baseCur === 'CNY' && rateCur === 'USDT') return val / 7;
+    return val;
+  };
+  const commissionUnit = rateCur === 'CNY' ? '元' : 'U';
+  const commissionAltUnit = rateCur === 'CNY' ? 'U' : '元';
+  const displayCommissionAccrued = convertCommission(accruedCommission);
+  const displayCommissionPaid = convertCommission(paidCommission);
+  const commissionAltAccrued = rateCur === 'CNY' ? displayCommissionAccrued / 7 : displayCommissionAccrued * 7;
+  const commissionAltPaid = rateCur === 'CNY' ? displayCommissionPaid / 7 : displayCommissionPaid * 7;
+  const displayCommissionBase = convertCommission(commissionBase);
   if (isParticipantView) {
     return (
       <div className="flex flex-col h-full">
@@ -541,15 +553,15 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
                         <div>计佣基数 × 佣金率 ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × 已过秒数</div>
                         <div className="mt-1 font-mono">
-                          <span style={{ color: '#16A34A' }}>{commissionBase.toLocaleString()}U × {commissionRate}% ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × {elapsedSecs.toLocaleString()}秒</span>
+                          <span style={{ color: '#16A34A' }}>{displayCommissionBase.toLocaleString()}{commissionUnit} × {commissionRate}% ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × {elapsedSecs.toLocaleString()}秒</span>
                         </div>
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0FDF4' }}>
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计佣结果</div>
                         <div className="font-mono flex items-baseline gap-1">
-                          <span style={{ color: '#16A34A', fontSize: '1.5em', fontWeight: 700 }}>= {accruedCommission.toFixed(6)} U</span>
+                          <span style={{ color: '#16A34A', fontSize: '1.5em', fontWeight: 700 }}>= {displayCommissionAccrued.toFixed(6)} {commissionUnit}</span>
                         </div>
-                        <div className="mt-1 font-mono" style={{ color: '#16A34A', fontSize: '1.5em', fontWeight: 700 }}>≈ {commissionAltAccrued.toFixed(2)} 元</div>
+                        <div className="mt-1 font-mono" style={{ color: '#16A34A', fontSize: '1.5em', fontWeight: 700 }}>≈ {commissionAltAccrued.toFixed(2)} {commissionAltUnit}</div>
                       </div>
                     </div>
                   </div>
@@ -561,18 +573,18 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             {viewMode === 'large' ? (
               <div className="flex items-baseline gap-1 flex-wrap">
                 <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {accruedCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {displayCommissionAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
-                <span className="text-base font-semibold" style={{ color: '#1A2340' }}>U</span>
-                <span className="text-base font-medium" style={{ color: '#4B5563' }}>≈{commissionAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元</span>
+                <span className="text-base font-semibold" style={{ color: '#1A2340' }}>{commissionUnit}</span>
+                <span className="text-base font-medium" style={{ color: '#4B5563' }}>≈{commissionAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {commissionAltUnit}</span>
               </div>
             ) : (
               <div className="flex items-baseline gap-0.5">
                 <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {accruedCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {displayCommissionAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
-                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>U</span>
-                <span className="text-xs font-medium ml-1" style={{ color: '#6B7280' }}>≈{commissionAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}元</span>
+                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{commissionUnit}</span>
+                <span className="text-xs font-medium ml-1" style={{ color: '#6B7280' }}>≈{commissionAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{commissionAltUnit}</span>
               </div>
             )}
           </div>
@@ -580,8 +592,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
               <span className="text-gray-400">已结佣金</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
-                {paidCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
-                <span className="text-gray-400 ml-1">≈{commissionAltPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}元</span>
+                {displayCommissionPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {commissionUnit}
+                <span className="text-gray-400 ml-1">≈{commissionAltPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{commissionAltUnit}</span>
               </span>
             </div>
             {commissionStartDate && (
@@ -595,7 +607,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
             {commissionBase > 0 && (
               <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
                 <span className="text-gray-400">计佣基数</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{commissionBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{displayCommissionBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} {commissionUnit}</span>
               </div>
             )}
           </div>
