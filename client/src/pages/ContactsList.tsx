@@ -874,17 +874,34 @@ export default function ContactsList() {
     }
   }, [showDropdown, searchQuery]);
 
-  // 用原生 JS 绑定 touchmove 事件，阻止冒泡到父容器的原生监听器
-  // React 合成事件的 stopPropagation 无法阻止原生 addEventListener 监听器
+  // 用原生 JS 绑定 touchmove 事件，阻止下拉框内滑动触发页面滚动
+  // passive: false 才能调用 preventDefault() 阻止默认的页面滚动行为
   React.useEffect(() => {
     const el = dropdownScrollRef.current;
     if (!el || !showDropdown) return;
-    const stopTouch = (e: TouchEvent) => {
+    let startY = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const dy = e.touches[0].clientY - startY;
+      const scrollTop = el.scrollTop;
+      const scrollHeight = el.scrollHeight;
+      const clientHeight = el.clientHeight;
+      // 已到顶部还要继续上滑，或已到底部还要继续下滑时，阻止默认行为（防止页面跟着滚动）
+      const atTop = scrollTop <= 0 && dy > 0;
+      const atBottom = scrollTop + clientHeight >= scrollHeight && dy < 0;
+      if (atTop || atBottom) {
+        e.preventDefault();
+      }
+      // 始终阻止冒泡，确保下拉框内的滑动不传递给父容器
       e.stopPropagation();
     };
-    el.addEventListener('touchmove', stopTouch, { passive: true });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
     return () => {
-      el.removeEventListener('touchmove', stopTouch);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
     };
   }, [showDropdown]);
 
