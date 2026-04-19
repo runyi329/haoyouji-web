@@ -600,7 +600,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
             <span className="text-gray-400">计息日期</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>
-              {order.interest_start_date.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+              {String(order.interest_start_date).slice(0, 10).replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
             </span>
           </div>
         )}
