@@ -1,0 +1,45 @@
+name: 创建订单参与方表
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/create-funder-participants-table.yml'
+  workflow_dispatch:
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 创建 funder_order_participants 表
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 创建 funder_order_participants 表 ==="
+            mysql -u root -pMiao@20190603 crm_db -e "
+CREATE TABLE IF NOT EXISTS \`funder_order_participants\` (
+  \`id\` INT AUTO_INCREMENT NOT NULL,
+  \`order_id\` INT NOT NULL,
+  \`ledger_id\` INT NOT NULL,
+  \`user_id\` INT NOT NULL COMMENT '账本成员的 userId',
+  \`role\` VARCHAR(20) NOT NULL COMMENT '参与角色: funder=资金方, borrower=借款人, broker=中间人',
+  \`rate\` VARCHAR(20) NULL COMMENT '该角色看到的利率/佣金率（如9表示9%）',
+  \`rate_label\` VARCHAR(50) NULL COMMENT '利率标签（如年化利率、综合利率、介绍费）',
+  \`amount\` VARCHAR(50) NULL COMMENT '该角色对应的金额',
+  \`note\` TEXT NULL COMMENT '该角色可见的备注',
+  \`sort_order\` INT DEFAULT 0,
+  \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+  PRIMARY KEY (\`id\`),
+  INDEX \`fop_order_idx\` (\`order_id\`),
+  INDEX \`fop_ledger_idx\` (\`ledger_id\`),
+  INDEX \`fop_user_idx\` (\`user_id\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+"
+            echo "=== 验证表已创建 ==="
+            mysql -u root -pMiao@20190603 crm_db -e "DESCRIBE funder_order_participants;"
+            echo "=== 完成 ==="
+          ENDSSH

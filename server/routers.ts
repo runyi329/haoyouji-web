@@ -13114,10 +13114,27 @@ export const appRouter = router({
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         const isManager = role === 'owner' || role === 'admin';
         if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
+        // 已配置的参与方
         const rows = await db.execute(
-          sql`SELECT * FROM funder_order_participants WHERE order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} ORDER BY sort_order ASC, id ASC`
+          sql`SELECT p.*, u.username, u.name as userName, u.avatar, lm.nickname
+              FROM funder_order_participants p
+              LEFT JOIN users u ON u.id = p.user_id
+              LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
+              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
+              ORDER BY p.sort_order ASC, p.id ASC`
         ) as any;
-        return { participants: ((rows[0] || rows) as any[]) || [] };
+        // 账本所有成员（供前端下拉选择）
+        const memberRows = await db.execute(
+          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as userName, u.avatar
+              FROM ledger_members lm
+              LEFT JOIN users u ON u.id = lm.userId
+              WHERE lm.ledgerId = ${input.ledgerId}
+              ORDER BY lm.id ASC`
+        ) as any;
+        return {
+          participants: ((rows[0] || rows) as any[]) || [],
+          members: ((memberRows[0] || memberRows) as any[]) || [],
+        };
       }),
     // 保存（覆盖）订单的所有参与方
     funderSaveOrderParticipants: protectedProcedure
@@ -13125,9 +13142,8 @@ export const appRouter = router({
         orderId: z.number(),
         ledgerId: z.number(),
         participants: z.array(z.object({
+          userId: z.number(),
           role: z.enum(['funder', 'borrower', 'broker']),
-          contactName: z.string().min(1),
-          contactPhone: z.string().optional(),
           rate: z.string().optional(),
           rateLabel: z.string().optional(),
           amount: z.string().optional(),
@@ -13148,11 +13164,11 @@ export const appRouter = router({
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         // 先删除旧的参与方记录
         await conn.execute('DELETE FROM funder_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
-        // 批量插入新的参与方
+        // 批量插入新的参与方（以 user_id 为核心）
         for (const p of input.participants) {
           await conn.execute(
-            'INSERT INTO funder_order_participants (order_id, ledger_id, role, contact_name, contact_phone, rate, rate_label, amount, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [input.orderId, input.ledgerId, p.role, p.contactName, p.contactPhone || null, p.rate || null, p.rateLabel || null, p.amount || null, p.note || null, p.sortOrder ?? 0]
+            'INSERT INTO funder_order_participants (order_id, ledger_id, user_id, role, rate, rate_label, amount, note, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [input.orderId, input.ledgerId, p.userId, p.role, p.rate || null, p.rateLabel || null, p.amount || null, p.note || null, p.sortOrder ?? 0]
           );
         }
         return { success: true };
