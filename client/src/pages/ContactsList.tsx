@@ -1379,7 +1379,6 @@ export default function ContactsList() {
                 </Command>
               </PopoverContent>
             </Popover>
-            )}
           </div>
           )}
         </div>
