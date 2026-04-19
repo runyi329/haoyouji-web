@@ -1967,7 +1967,7 @@ export default function ContactsList() {
                   <div className="flex items-start justify-between">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <CardTitle className="text-base sm:text-lg">
+                        <CardTitle className="text-xl sm:text-2xl">
                           {contact.name}
                         </CardTitle>
                         {/* 推荐人状态指示器 - 放在名字右边 */}
