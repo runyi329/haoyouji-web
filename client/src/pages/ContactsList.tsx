@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { pinyin } from "pinyin-pro";
 import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -1082,8 +1083,46 @@ export default function ContactsList() {
     setShowDeleteTagDialog(true);
   };
   
-  // 限制下拉列表最多显示10条
-  const dropdownContacts = filteredContacts?.slice(0, 10) || [];
+  // 下拉列表按匹配优先级排序：姓名拼音首字母匹配 > 姓名拼音包含 > 姓名汉字包含 > 其他字段
+  const dropdownContacts = React.useMemo(() => {
+    if (!filteredContacts || !searchQuery.trim()) return filteredContacts?.slice(0, 10) || [];
+    const q = searchQuery.trim().toLowerCase();
+    // 判断是否是纯字母搜索（拼音模式）
+    const isAlphaQuery = /^[a-zA-Z]+$/.test(q);
+    const getMatchScore = (contact: any): number => {
+      const name = (contact.name || '');
+      const nameLower = name.toLowerCase();
+      if (isAlphaQuery) {
+        // 拼音模式：用 pinyin-pro 转换姓名为拼音
+        try {
+          // 获取姓名每个字的拼音首字母（如 "张盛" -> "zs"）
+          const initials = pinyin(name, { pattern: 'first', toneType: 'none', separator: '' }).toLowerCase();
+          // 获取姓名完整拼音（如 "张盛" -> "zhangsheng"）
+          const fullPinyin = pinyin(name, { toneType: 'none', separator: '' }).toLowerCase();
+          // 优先级1：拼音首字母以搜索词开头（如 "z" 匹配 "张盛" 的 "zs"）
+          if (initials.startsWith(q)) return 5;
+          // 优先级2：完整拼音以搜索词开头（如 "zhang" 匹配 "张盛"）
+          if (fullPinyin.startsWith(q)) return 4;
+          // 优先级3：拼音首字母包含搜索词
+          if (initials.includes(q)) return 3;
+          // 优先级4：完整拼音包含搜索词
+          if (fullPinyin.includes(q)) return 2;
+        } catch (e) {
+          // pinyin 转换失败，降级处理
+        }
+        // 优先级5：其他字段匹配（公司、标签等）
+        return 1;
+      } else {
+        // 汉字模式：直接匹配汉字
+        if (nameLower.startsWith(q)) return 4;
+        if (nameLower.includes(q)) return 3;
+        return 1;
+      }
+    };
+    return [...filteredContacts]
+      .sort((a, b) => getMatchScore(b) - getMatchScore(a))
+      .slice(0, 10);
+  }, [filteredContacts, searchQuery]);
 
   return (
       <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] h-screen flex flex-col" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
