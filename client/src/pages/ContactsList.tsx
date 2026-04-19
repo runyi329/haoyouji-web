@@ -532,6 +532,9 @@ export default function ContactsList() {
   // 当用户点击"共享"或"全部"筛选时加载共享联系人列表（懒加载优化）
   const { data: sharedContacts, isLoading: isLoadingShared } = trpc.sharing.getSharedContacts.useQuery(undefined, {
     enabled: shareFilter === 'shared' || shareFilter === 'all', // 选中"共享"或"全部"时才加载
+    staleTime: 0, // 不缓存，每次都获取最新数据
+    gcTime: 0, // 组件卸载后立即清除缓存
+    refetchOnMount: 'always', // 每次进入页面都强制刷新
   });
   
   // 获取所有标签
