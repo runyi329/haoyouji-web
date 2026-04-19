@@ -444,8 +444,9 @@ export default function ContactsList() {
       setPage(1);
       setAllLoadedContacts([]);
       setSearchQuery(""); // 清空搜索查询
+      utils.contacts.list.invalidate(); // 强制清除缓存，确保每次进入都按最新排序重新请求
     }
-  }, [location]);
+  }, [location, utils]);
   
   // 无限滚动：当滚动到底部时自动加载下一页
   React.useEffect(() => {
