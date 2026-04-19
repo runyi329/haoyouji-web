@@ -1086,79 +1086,185 @@ export default function ContactsList() {
   return (
       <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] min-h-screen" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
       {/* 顶部深红色头部 */}
-      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-5 rounded-b-3xl mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-lg sm:text-xl font-bold text-white">
-          {filterType === 'thisWeek' && '本周新增人脉'}
-          {filterType === 'thisMonth' && '本月新增人脉'}
-          {filterType === 'thisYear' && '本年新增人脉'}
-          {filterType === 'needsAttention' && '需要关注的人脉'}
-          {filterType === 'monthlyActive' && '本月活跃人脉'}
-          {filterType === 'todayActive' && '今日活跃人脉'}
-          {filterType === 'weeklyActive' && '本周活跃人脉'}
-          {filterType === 'yearlyActive' && '今年活跃人脉'}
-          {filterType === 'blacklist' && '拉黑名单'}
-          {filterType === 'todayReminders' && '今日提醒'}
-          {filterType === 'weekReminders' && '本周提醒'}
-          {filterType === 'monthReminders' && '本月提醒'}
-          {viewMode === 'company' && '公司数量'}
-          {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
-          {!filterType && !selectedTagId && !viewMode && '所有人脉'}
+      <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-4 rounded-b-3xl mb-3">
+        {/* 第一行：返回 + 标题 + 人脉总数 */}
+        <div className="flex items-center gap-2 mb-3">
+          <button
+            onClick={() => window.history.back()}
+            className="flex items-center justify-center h-8 w-8 rounded-full bg-white/20 hover:bg-white/30 transition-all shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4 text-white" />
+          </button>
+          <h1 className="flex-1 text-lg font-bold text-white truncate">
+            {filterType === 'thisWeek' && '本周新增人脉'}
+            {filterType === 'thisMonth' && '本月新增人脉'}
+            {filterType === 'thisYear' && '本年新增人脉'}
+            {filterType === 'needsAttention' && '需要关注的人脉'}
+            {filterType === 'monthlyActive' && '本月活跃人脉'}
+            {filterType === 'todayActive' && '今日活跃人脉'}
+            {filterType === 'weeklyActive' && '本周活跃人脉'}
+            {filterType === 'yearlyActive' && '今年活跃人脉'}
+            {filterType === 'blacklist' && '拉黑名单'}
+            {filterType === 'todayReminders' && '今日提醒'}
+            {filterType === 'weekReminders' && '本周提醒'}
+            {filterType === 'monthReminders' && '本月提醒'}
+            {viewMode === 'company' && '公司数量'}
+            {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
+            {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
-          
-          <div className="flex items-center gap-1">
-            {/* 共享人脉筛选按钮 */}
-              <button
-                onClick={() => setShareFilter('all')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'all' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
-              >
-                全部{(filterType && filteredCounts) ? ` (${filteredCounts.total})` : (contactCounts ? ` (${contactCounts.total})` : '')}
-              </button>
-              <button
-                onClick={() => setShareFilter('mine')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'mine' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
-              >
-                我的{(filterType && filteredCounts) ? ` (${filteredCounts.mine})` : (contactCounts ? ` (${contactCounts.mine})` : '')}
-              </button>
-              <button
-                onClick={() => setShareFilter('shared')}
-                className={`h-7 px-2.5 text-xs rounded-full font-medium transition-all ${shareFilter === 'shared' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
-              >
-                共享{(filterType && filteredCounts) ? ` (${filteredCounts.shared})` : (contactCounts ? ` (${contactCounts.shared})` : '')}
-              </button>
-          </div>
+          <span className="text-xs text-white/70 shrink-0">
+            {viewMode === 'company' && companyList ? (
+              `共 ${new Set(companyList.map(item => item.companyName)).size} 家`
+            ) : isLoading ? (
+              `加载中...`
+            ) : (filterType && filteredCounts) ? (
+              shareFilter === 'all' ? `共 ${filteredCounts.total} 位` :
+              shareFilter === 'mine' ? `共 ${filteredCounts.mine} 位` :
+              `共 ${filteredCounts.shared} 位`
+            ) : contactCounts ? (
+              shareFilter === 'all' ? `共 ${contactCounts.total} 位` :
+              shareFilter === 'mine' ? `共 ${contactCounts.mine} 位` :
+              `共 ${contactCounts.shared} 位`
+            ) : (
+              `共 0 位`
+            )}
+          </span>
         </div>
-        
-        <p className="text-xs sm:text-sm text-white/70 mb-3">
-          {viewMode === 'company' && companyList ? (
-            `共 ${new Set(companyList.map(item => item.companyName)).size} 家公司`
-          ) : isLoading ? (
-            `加载中...`
-          ) : (filterType && filteredCounts) ? (
-            // 有筛选类型时，根据 shareFilter 显示对应的分类数量
-            shareFilter === 'all' ? `共 ${filteredCounts.total} 位人脉` :
-            shareFilter === 'mine' ? `共 ${filteredCounts.mine} 位人脉` :
-            `共 ${filteredCounts.shared} 位人脉`
-          ) : contactCounts ? (
-            // 无筛选类型时，显示总人脉数量
-            shareFilter === 'all' ? `共 ${contactCounts.total} 位人脉` :
-            shareFilter === 'mine' ? `共 ${contactCounts.mine} 位人脉` :
-            `共 ${contactCounts.shared} 位人脉`
-          ) : (
-            `共 0 位人脉`
-          )}
-        </p>
-        
+        {/* 第二行：全部 / 我的 / 共享 Tab */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShareFilter('all')}
+            className={`flex-1 h-8 text-sm rounded-xl font-medium transition-all ${shareFilter === 'all' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+          >
+            全部{(filterType && filteredCounts) ? ` (${filteredCounts.total})` : (contactCounts ? ` (${contactCounts.total})` : '')}
+          </button>
+          <button
+            onClick={() => setShareFilter('mine')}
+            className={`flex-1 h-8 text-sm rounded-xl font-medium transition-all ${shareFilter === 'mine' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+          >
+            我的{(filterType && filteredCounts) ? ` (${filteredCounts.mine})` : (contactCounts ? ` (${contactCounts.mine})` : '')}
+          </button>
+          <button
+            onClick={() => setShareFilter('shared')}
+            className={`flex-1 h-8 text-sm rounded-xl font-medium transition-all ${shareFilter === 'shared' ? 'bg-white text-[#D32F2F]' : 'bg-white/20 text-white/90 hover:bg-white/30'}`}
+          >
+            共享{(filterType && filteredCounts) ? ` (${filteredCounts.shared})` : (contactCounts ? ` (${contactCounts.shared})` : '')}
+          </button>
+        </div>
       </div>
       {/* 工具栏区域 */}
       <div className="px-4">
-        {/* 折叠标签按钮和排序按钮 */}
+        {/* 搜索框独占一行 */}
+        <div className="mb-2">
+          <div ref={searchRef} className="relative flex items-center gap-2">
+            <div className="relative flex-1">
+              <Input
+                placeholder="搜索人脉..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                onFocus={handleSearchFocus}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchQuery.trim()) {
+                    console.log('搜索:', searchQuery);
+                  }
+                }}
+                className="pr-8 h-10 text-sm rounded-xl border-divider focus:border-[#D32F2F] focus:ring-[#A80000]"
+              />
+              {searchQuery && (
+                <X
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground cursor-pointer hover:text-foreground z-10"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setShowDropdown(false);
+                    setShowHistory(false);
+                  }}
+                />
+              )}
+              {/* 搜索下拉列表 */}
+              {showDropdown && dropdownContacts.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
+                  {dropdownContacts.map((contact: any) => {
+                    const company = getFieldValue(contact, "公司名称");
+                    const position = getFieldValue(contact, "职位");
+                    return (
+                      <div
+                        key={contact.id}
+                        onClick={(e) => handleContactClick(contact.id, contact, e)}
+                        className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm sm:text-base truncate">{contact.name}</span>
+                              {contact.title && (
+                                <span className="text-xs sm:text-sm text-muted-foreground truncate">{contact.title}</span>
+                              )}
+                            </div>
+                            {contact.username && (
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                @{contact.username}
+                              </div>
+                            )}
+                            {(company || position) && (
+                              <div className="text-xs sm:text-sm text-muted-foreground mt-1 truncate">
+                                {company && <span>{company}</span>}
+                                {company && position && <span className="mx-1">·</span>}
+                                {position && <span>{position}</span>}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* 搜索历史记录 */}
+              {showHistory && searchHistory.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg z-50">
+                  <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                    <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
+                    <button
+                      onClick={handleClearHistory}
+                      className="text-xs text-[#D32F2F] hover:underline"
+                    >
+                      清空
+                    </button>
+                  </div>
+                  {searchHistory.map((query, index) => (
+                    <div
+                      key={index}
+                      onClick={() => handleHistoryClick(query)}
+                      className="flex items-center justify-between px-3 sm:px-4 py-2 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                    >
+                      <span className="text-sm truncate flex-1">{query}</span>
+                      <button
+                        onClick={(e) => handleDeleteHistory(query, e)}
+                        className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleAddContact}
+              className="flex items-center justify-center h-10 w-10 rounded-xl bg-[#D32F2F] text-white hover:bg-[#A80000] transition-all shadow-sm shrink-0"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* 筛选工具栏 */}
         <div className="mb-3">
           <div className="flex items-center gap-2">
             {allTags && allTags.length > 0 && (
               <button
                 onClick={() => setIsTagAreaExpanded(!isTagAreaExpanded)}
-                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-[#D32F2F]-light transition-all"
+                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
               >
                 <Tag className="h-3.5 w-3.5 mr-1.5" />
                 {isTagAreaExpanded ? '收起标签' : '按标签筛选'}
@@ -1168,14 +1274,14 @@ export default function ContactsList() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-[#D32F2F]-light transition-all"
+                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
                 >
                   <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
-                  {!sortBy && '按排序筛选'}
-                  {sortBy === 'tagCount_desc' && '排序：标签数↓'}
-                  {sortBy === 'tagCount_asc' && '排序：标签数↑'}
-                  {sortBy === 'interactionCount_desc' && '排序：联络次数↓'}
-                  {sortBy === 'interactionCount_asc' && '排序：联络次数↑'}
+                  {!sortBy && '排序'}
+                  {sortBy === 'tagCount_desc' && '标签数↓'}
+                  {sortBy === 'tagCount_asc' && '标签数↑'}
+                  {sortBy === 'interactionCount_desc' && '联络次数↓'}
+                  {sortBy === 'interactionCount_asc' && '联络次数↑'}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
@@ -1197,21 +1303,19 @@ export default function ContactsList() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            {/* 共享人筛选 - 带搜索功能的Combobox，只在选中“共享”时可用 */}
+            {/* 共享人筛选 - 仅在选中"共享"Tab时显示 */}
+            {shareFilter === 'shared' && (
             <Popover open={sharerPopoverOpen} onOpenChange={setSharerPopoverOpen}>
               <PopoverTrigger asChild>
                 <button
                   role="combobox"
                   aria-expanded={sharerPopoverOpen}
-                  disabled={shareFilter !== 'shared'}
-                  className={`flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm font-medium transition-all ${
-                    shareFilter !== 'shared' ? 'opacity-40 cursor-not-allowed text-gray-400' : 'text-[#D32F2F] hover:bg-[#D32F2F]-light'
-                  }`}
+                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
                 >
                   <Handshake className="h-3.5 w-3.5 mr-1.5 shrink-0" />
                   <span className="truncate max-w-[80px]">
-                    {sharerFilter === 'all' ? '按共享人筛选' : 
-                      sharerList.find(s => s.id === sharerFilter)?.name || '按共享人筛选'}
+                    {sharerFilter === 'all' ? '共享人' : 
+                      sharerList.find(s => s.id === sharerFilter)?.name || '共享人'}
                   </span>
                   <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
                 </button>
@@ -1258,6 +1362,7 @@ export default function ContactsList() {
                 </Command>
               </PopoverContent>
             </Popover>
+            )}
           </div>
         </div>
         
@@ -1341,141 +1446,6 @@ export default function ContactsList() {
           </div>
         )}
         
-        {/* 搜索框和按钮 */}
-        <div className="flex gap-2 sm:gap-4">
-          <div ref={searchRef} className="relative flex-1">
-            <Input
-              placeholder="搜索人脉..."
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onFocus={handleSearchFocus}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchQuery.trim()) {
-                  // 回车键也可以触发搜索
-                  console.log('搜索:', searchQuery);
-                }
-              }}
-              className="pr-8 h-9 text-sm rounded-xl border-divider focus:border-[#D32F2F] focus:ring-[#A80000]"
-            />
-            {searchQuery && (
-              <X
-                className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground cursor-pointer hover:text-foreground z-10"
-                onClick={() => {
-                  setSearchQuery("");
-                  setShowDropdown(false);
-                  setShowHistory(false);
-                }}
-              />
-            )}
-            
-            {/* 搜索下拉列表 */}
-            {showDropdown && dropdownContacts.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg max-h-96 overflow-y-auto z-50">
-                {dropdownContacts.map((contact: any) => {
-                  const company = getFieldValue(contact, "公司名称");
-                  const position = getFieldValue(contact, "职位");
-                  
-                  return (
-                    <div
-                      key={contact.id}
-                      onClick={(e) => handleContactClick(contact.id, contact, e)}
-                      className="px-3 sm:px-4 py-2 sm:py-3 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm sm:text-base truncate">{contact.name}</span>
-                            {contact.title && (
-                              <span className="text-xs sm:text-sm text-muted-foreground truncate">{contact.title}</span>
-                            )}
-                          </div>
-                          {contact.username && (
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              @{contact.username}
-                            </div>
-                          )}
-                          {(company || position) && (
-                            <div className="text-xs sm:text-sm text-muted-foreground mt-1 truncate">
-                              {company && <span>{company}</span>}
-                              {company && position && <span className="mx-1">·</span>}
-                              {position && <span>{position}</span>}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            
-            {/* 搜索历史记录 */}
-            {showHistory && searchHistory.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-divider dark:border-gray-700 rounded-lg shadow-lg z-50">
-                <div className="flex items-center justify-between px-3 sm:px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                  <span className="text-xs sm:text-sm text-muted-foreground">搜索历史</span>
-                  <button
-                    onClick={handleClearHistory}
-                    className="text-xs text-[#D32F2F] hover:underline"
-                  >
-                    清空
-                  </button>
-                </div>
-                {searchHistory.map((query, index) => (
-                  <div
-                    key={index}
-                    onClick={() => handleHistoryClick(query)}
-                    className="flex items-center justify-between px-3 sm:px-4 py-2 hover:bg-[#FAF3ED] dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                  >
-                    <span className="text-sm truncate flex-1">{query}</span>
-                    <button
-                      onClick={(e) => handleDeleteHistory(query, e)}
-                      className="ml-2 p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          <button 
-            onClick={handleAddContact}
-            className="flex items-center justify-center h-9 w-9 rounded-xl bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark transition-all shadow-sm"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          
-          {/* 强制刷新按钮 */}
-          <button
-            onClick={() => {
-              // 刷新前将当前Tab写入URL参数，刷新后从URL恢复
-              const params = new URLSearchParams(window.location.search);
-              if (shareFilter === 'all') {
-                params.delete('tab');
-              } else {
-                params.set('tab', shareFilter);
-              }
-              const newSearch = params.toString();
-              const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '');
-              window.location.href = newUrl;
-            }}
-            className="flex items-center justify-center h-9 px-3 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all shadow-sm text-xs font-medium"
-          >
-            刷新
-          </button>
-          
-          {/* 返回按钮 */}
-          <button
-            onClick={() => {
-              window.history.back();
-            }}
-            className="flex items-center justify-center h-9 px-3 rounded-xl bg-gray-100 text-gray-500 hover:bg-gray-200 transition-all shadow-sm text-xs font-medium"
-          >
-            返回
-          </button>
-        </div>
       </div>
 
       {/* 批量操作工具栏 */}
