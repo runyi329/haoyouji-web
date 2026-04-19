@@ -110,10 +110,61 @@ export const useColorTheme = () => {
   return context;
 };
 
+// 同步读取 localStorage 中缓存的初始主题（避免刷新时闪现默认红色）
+function getInitialTheme(): ThemeTemplate {
+  try {
+    const savedCustomColors = localStorage.getItem('customColors');
+    if (savedCustomColors) return themeTemplates[0]; // 自定义颜色，先用默认占位，applyTheme 会立即覆盖
+    const savedThemeId = localStorage.getItem('colorThemeId');
+    if (savedThemeId) {
+      const found = themeTemplates.find(t => t.id === savedThemeId);
+      if (found) return found;
+    }
+  } catch {}
+  return themeTemplates[0];
+}
+
+function getInitialCustomColors(): ThemeColors | null {
+  try {
+    const saved = localStorage.getItem('customColors');
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return null;
+}
+
 export const ColorThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentTheme, setCurrentTheme] = useState<ThemeTemplate>(themeTemplates[0]);
-  const [customColors, setCustomColors] = useState<ThemeColors | null>(null);
+  const [currentTheme, setCurrentTheme] = useState<ThemeTemplate>(getInitialTheme);
+  const [customColors, setCustomColors] = useState<ThemeColors | null>(getInitialCustomColors);
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // 立即同步应用 localStorage 中的主题（在首次渲染前生效，消除闪烁）
+  if (typeof window !== 'undefined' && !isLoaded) {
+    try {
+      const savedCustomColors = localStorage.getItem('customColors');
+      const savedThemeId = localStorage.getItem('colorThemeId');
+      const root = document.documentElement;
+      const applyImmediate = (colors: ThemeColors) => {
+        root.style.setProperty('--color-primary', colors.primary);
+        root.style.setProperty('--color-secondary', colors.secondary);
+        root.style.setProperty('--color-background', colors.background);
+        root.style.setProperty('--color-text', colors.text);
+        root.style.setProperty('--color-accent1', colors.accent1);
+        root.style.setProperty('--color-accent2', colors.accent2);
+        root.style.setProperty('--primary', colors.primary);
+        root.style.setProperty('--primary-foreground', colors.accent1);
+        root.style.setProperty('--secondary', colors.secondary);
+        root.style.setProperty('--secondary-foreground', colors.text);
+        root.style.setProperty('--background', colors.background);
+        root.style.setProperty('--foreground', colors.text);
+      };
+      if (savedCustomColors) {
+        applyImmediate(JSON.parse(savedCustomColors));
+      } else if (savedThemeId) {
+        const t = themeTemplates.find(x => x.id === savedThemeId);
+        if (t) applyImmediate(t.colors);
+      }
+    } catch {}
+  }
 
   // 从云端加载主题设置
   useEffect(() => {
