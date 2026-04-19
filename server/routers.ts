@@ -12393,14 +12393,49 @@ export const appRouter = router({
             );
           }
         } else {
-          // 管理员：看全部
-          rows = await db.execute(
-            sql`SELECT fo.*, u.username, u.name as userName, u.avatar
-                FROM funder_asset_orders fo
-                LEFT JOIN users u ON u.id = fo.user_id
-                WHERE fo.ledger_id = ${input.ledgerId}
-                ORDER BY fo.created_at DESC`
-          );
+          // 管理员：全部 or 按 targetUserId 过滤
+          if (targetUserId) {
+            // 管理员选了某个用户：显示该用户名下订单 + 以该用户为参与方的订单
+            let pIds: number[] = [];
+            if (conn) {
+              try {
+                const pR = await conn.execute(
+                  'SELECT DISTINCT order_id FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
+                  [input.ledgerId, targetUserId]
+                ) as any;
+                const pArr = Array.isArray(pR[0]) ? pR[0] : (Array.isArray(pR) ? pR : []);
+                pIds = pArr.map((r: any) => Number(r.order_id)).filter(Boolean);
+              } catch {}
+            }
+            if (pIds.length > 0) {
+              const ph = pIds.map(() => '?').join(',');
+              rows = await conn!.execute(
+                `SELECT fo.*, u.username, u.name as userName, u.avatar
+                 FROM funder_asset_orders fo
+                 LEFT JOIN users u ON u.id = fo.user_id
+                 WHERE fo.ledger_id = ? AND (fo.user_id = ? OR fo.id IN (${ph}))
+                 ORDER BY fo.created_at DESC`,
+                [input.ledgerId, targetUserId, ...pIds]
+              );
+            } else {
+              rows = await conn!.execute(
+                `SELECT fo.*, u.username, u.name as userName, u.avatar
+                 FROM funder_asset_orders fo
+                 LEFT JOIN users u ON u.id = fo.user_id
+                 WHERE fo.ledger_id = ? AND fo.user_id = ?
+                 ORDER BY fo.created_at DESC`,
+                [input.ledgerId, targetUserId]
+              );
+            }
+          } else {
+            rows = await db.execute(
+              sql`SELECT fo.*, u.username, u.name as userName, u.avatar
+                  FROM funder_asset_orders fo
+                  LEFT JOIN users u ON u.id = fo.user_id
+                  WHERE fo.ledger_id = ${input.ledgerId}
+                  ORDER BY fo.created_at DESC`
+            );
+          }
         }
         const rawOrders = ((rows[0] || rows) as any[]) || [];
         // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端 .replace() 崩溃
