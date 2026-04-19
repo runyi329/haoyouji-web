@@ -1254,8 +1254,8 @@ export default function ContactsList() {
                           </div>
                         </div>
                       </div>
-                     })
-                  }
+                    );
+                  })}
                   </div>
                   {/* 底部渐变滚动指示器 */}
                   {canScrollDown && (
