@@ -1275,56 +1275,35 @@ export default function ContactsList() {
                 </div>
               )}
             </div>
-            <button
-              onClick={handleAddContact}
-              className="flex items-center justify-center h-10 w-10 rounded-xl bg-[#D32F2F] text-white hover:bg-[#A80000] transition-all shadow-sm shrink-0"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-            {/* 强力全页刷新按钮 */}
-            <button
-              onClick={() => {
-                const params = new URLSearchParams(window.location.search);
-                if (shareFilter === 'all') {
-                  params.delete('tab');
-                } else {
-                  params.set('tab', shareFilter);
-                }
-                const newSearch = params.toString();
-                const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '');
-                window.location.href = newUrl;
-              }}
-              className="flex items-center justify-center h-10 px-3 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 active:scale-95 transition-all shadow-sm shrink-0 text-xs font-medium"
-            >
-              刷新
-            </button>
           </div>
         </div>
 
-        {/* 筛选工具栏 */}
+        {/* 筛选工具栏 - 四个等宽按鈕横排 */}
         <div className="mb-3">
-          <div className="flex items-center gap-2">
-            {allTags && allTags.length > 0 && (
-              <button
-                onClick={() => setIsTagAreaExpanded(true)}
-                className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
-              >
-                <Tag className="h-3.5 w-3.5 mr-1.5" />
-                {selectedTagIds.length > 0 ? `标签(${selectedTagIds.length})` : '按标签筛选'}
-              </button>
-            )}
-            
+          <div className="grid grid-cols-4 gap-2">
+            {/* 筛选按鈕 */}
+            <button
+              onClick={() => setIsTagAreaExpanded(true)}
+              className={`flex items-center justify-center h-9 text-xs rounded-xl shadow-sm font-medium transition-all active:scale-95 ${
+                selectedTagIds.length > 0
+                  ? 'bg-[#D32F2F] text-white'
+                  : 'bg-white text-[#D32F2F] hover:bg-red-50'
+              }`}
+            >
+              {selectedTagIds.length > 0 ? `筛选(${selectedTagIds.length})` : '筛选'}
+            </button>
+
+            {/* 排序按鈕 */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
+                  className={`flex items-center justify-center h-9 text-xs rounded-xl shadow-sm font-medium transition-all active:scale-95 ${
+                    sortBy && sortBy !== 'tagCount_desc'
+                      ? 'bg-[#D32F2F] text-white'
+                      : 'bg-white text-[#D32F2F] hover:bg-red-50'
+                  }`}
                 >
-                  <ArrowUpDown className="h-3.5 w-3.5 mr-1.5" />
-                  {!sortBy && '排序'}
-                  {sortBy === 'tagCount_desc' && '标签数↓'}
-                  {sortBy === 'tagCount_asc' && '标签数↑'}
-                  {sortBy === 'interactionCount_desc' && '联络次数↓'}
-                  {sortBy === 'interactionCount_asc' && '联络次数↑'}
+                  排序
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
@@ -1346,18 +1325,50 @@ export default function ContactsList() {
               </DropdownMenuContent>
             </DropdownMenu>
             
-            {/* 共享人筛选 - 仅在选中"共享"Tab时显示 */}
-            {shareFilter === 'shared' && (
+            {/* 刷新按鈕 */}
+            <button
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search);
+                if (shareFilter === 'all') {
+                  params.delete('tab');
+                } else {
+                  params.set('tab', shareFilter);
+                }
+                const newSearch = params.toString();
+                const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '');
+                window.location.href = newUrl;
+              }}
+              className="flex items-center justify-center h-9 text-xs rounded-xl bg-white shadow-sm text-gray-600 font-medium hover:bg-gray-50 active:scale-95 transition-all"
+            >
+              刷新
+            </button>
+
+            {/* 添加按鈕 */}
+            <button
+              onClick={handleAddContact}
+              className="flex items-center justify-center h-9 text-xs rounded-xl bg-[#D32F2F] text-white font-medium hover:bg-[#A80000] active:scale-95 transition-all shadow-sm"
+            >
+              添加
+            </button>
+          </div>
+
+          {/* 共享人筛选 - 仅在共享Tab时显示，单独一行 */}
+          {shareFilter === 'shared' && (
+            <div className="mt-2">
             <Popover open={sharerPopoverOpen} onOpenChange={setSharerPopoverOpen}>
               <PopoverTrigger asChild>
                 <button
                   role="combobox"
                   aria-expanded={sharerPopoverOpen}
-                  className="flex items-center h-8 px-3 text-xs rounded-xl bg-white shadow-sm text-[#D32F2F] font-medium hover:bg-red-50 transition-all"
+                  className={`flex items-center h-9 px-3 text-xs rounded-xl shadow-sm font-medium transition-all active:scale-95 w-full justify-center ${
+                    sharerFilter !== 'all'
+                      ? 'bg-[#D32F2F] text-white'
+                      : 'bg-white text-[#D32F2F] hover:bg-red-50'
+                  }`}
                 >
                   <Handshake className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                  <span className="truncate max-w-[80px]">
-                    {sharerFilter === 'all' ? '共享人' : 
+                  <span className="truncate">
+                    {sharerFilter === 'all' ? '共享人：全部' : 
                       sharerList.find(s => s.id === sharerFilter)?.name || '共享人'}
                   </span>
                   <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
@@ -1405,8 +1416,8 @@ export default function ContactsList() {
                 </Command>
               </PopoverContent>
             </Popover>
-            )}
-          </div>
+            </div>
+          )}
         </div>
         
         {/* 标签筛选器 */}
