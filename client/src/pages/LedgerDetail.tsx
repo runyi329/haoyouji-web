@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } fro
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
 import { FunderAIPanel } from "@/components/FunderAIPanel";
-import RiskGapCalculator from "@/components/RiskGapCalculator";
+import EthLeverageProduct from "@/components/EthLeverageProduct";
 
 // PDF导出功能
 function exportLedgerToPDF() {
@@ -3937,9 +3937,9 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* 三联动补足模拟计算器（仅管理员可见，非代看模式） */}
+      {/* ETH 杠杆产品参数展示（仅管理员/创建者可见，非代看模式） */}
       {isCustomAF && !effectiveIsFunder && (isOwner || isAdmin) && !viewAsUserId && (
-        <RiskGapCalculator />
+        <EthLeverageProduct />
       )}
 
       {/* 资金方专属：资产订单列表 */}
