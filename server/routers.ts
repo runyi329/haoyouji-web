@@ -13562,9 +13562,10 @@ export const appRouter = router({
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
 
-        // 1. 获取订单资金方（funder_asset_orders.userId 就是资金方）
+        // 1. 获取订单资金方（funder_asset_orders.user_id 就是资金方的系统 userId）
         const orderRows = await db.execute(
-          sql`SELECT o.user_id as funderUserId, u.username, u.name as userName, u.avatar, u.phone as userPhone, lm.nickname
+          sql`SELECT o.user_id as funderUserId, u.username, u.name as userName, u.avatar,
+                     lm.nickname
               FROM funder_asset_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN ledger_members lm ON lm.userId = o.user_id AND lm.ledgerId = ${input.ledgerId}
@@ -13573,20 +13574,21 @@ export const appRouter = router({
         ) as any;
         const orderRow = (orderRows[0]?.[0] ?? orderRows[0]) as any;
 
-        // 2. 获取订单参与方（funder_order_participants），通过手机号匹配系统用户
+        // 2. 获取订单参与方（funder_order_participants.user_id 直接是系统用户 ID）
         const participantRows = await db.execute(
-          sql`SELECT p.id, p.role as participantRole, p.contact_name as contactName, p.contact_phone as contactPhone,
-                     u.id as userId, u.username, u.name as userName, u.avatar, lm.nickname
+          sql`SELECT p.id, p.user_id as userId, p.role as participantRole,
+                     u.username, u.name as userName, u.avatar,
+                     lm.nickname
               FROM funder_order_participants p
-              LEFT JOIN users u ON u.phone = p.contact_phone AND p.contact_phone IS NOT NULL AND p.contact_phone != ''
-              LEFT JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ${input.ledgerId}
+              LEFT JOIN users u ON u.id = p.user_id
+              LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
               WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
               ORDER BY p.sort_order ASC, p.id ASC`
         ) as any;
         const participants = ((participantRows[0] || participantRows) as any[]) || [];
 
         // 3. 合并参与者列表：资金方优先，参与方去重（同一系统用户只出现一次）
-        const participantMap = new Map<string, { userId: number | null; participantRole: string; displayName: string; avatar: string | null; phone: string | null; matched: boolean }>();
+        const participantMap = new Map<string, { userId: number; participantRole: string; displayName: string; avatar: string | null; matched: boolean }>();
 
         // 先加资金方
         if (orderRow?.funderUserId) {
@@ -13596,23 +13598,21 @@ export const appRouter = router({
             participantRole: 'funder',
             displayName: orderRow.nickname || orderRow.userName || orderRow.username || `用户${orderRow.funderUserId}`,
             avatar: orderRow.avatar || null,
-            phone: orderRow.userPhone || null,
             matched: true,
           });
         }
 
         // 再加参与方
         for (const p of participants) {
-          // 如果匹配到系统用户，用 userId 去重；否则用参与方 id 去重
-          const key = p.userId ? `user_${p.userId}` : `participant_${p.id}`;
+          if (!p.userId) continue; // 跳过没有绑定系统用户的参与方
+          const key = `user_${p.userId}`;
           if (!participantMap.has(key)) {
             participantMap.set(key, {
-              userId: p.userId ? Number(p.userId) : null,
+              userId: Number(p.userId),
               participantRole: p.participantRole || 'participant',
-              displayName: p.nickname || p.userName || p.username || p.contactName || '未知',
+              displayName: p.nickname || p.userName || p.username || `用户${p.userId}`,
               avatar: p.avatar || null,
-              phone: p.contactPhone || null,
-              matched: !!p.userId,
+              matched: true,
             });
           }
         }
@@ -13620,26 +13620,23 @@ export const appRouter = router({
         const allParticipants = Array.from(participantMap.values());
         if (allParticipants.length === 0) return { participants: [] };
 
-        // 4. 批量查询每个已匹配系统用户的收款方式（银行卡 + 数字钱包）
+        // 4. 批量查询每个用户的收款方式（银行卡 + 数字钱包）
         const mainDb = await getDb();
         const result = await Promise.all(allParticipants.map(async (p) => {
           let bankCards: any[] = [];
           let digitalWallets: any[] = [];
-          if (p.userId) {
-            const userId = String(p.userId);
-            try {
-              bankCards = await mainDb.select().from(schema.bankCards).where(eq(schema.bankCards.userId, userId));
-            } catch (e) { /* 忽略错误 */ }
-            try {
-              digitalWallets = await mainDb.select().from(schema.digitalWallets).where(eq(schema.digitalWallets.userId, userId));
-            } catch (e) { /* 忽略错误 */ }
-          }
+          const userId = String(p.userId);
+          try {
+            bankCards = await mainDb.select().from(schema.bankCards).where(eq(schema.bankCards.userId, userId));
+          } catch (e) { /* 忽略错误 */ }
+          try {
+            digitalWallets = await mainDb.select().from(schema.digitalWallets).where(eq(schema.digitalWallets.userId, userId));
+          } catch (e) { /* 忽略错误 */ }
           return {
             userId: p.userId,
             participantRole: p.participantRole,
             displayName: p.displayName,
             avatar: p.avatar,
-            phone: p.phone,
             matched: p.matched,
             bankCards: bankCards.map((c: any) => ({
               id: c.id,
@@ -13665,6 +13662,7 @@ export const appRouter = router({
         }));
         return { participants: result };
       }),
+
         // 管理员删除融资付息订单
     financeDeleteOrder: protectedProcedure
       .input(z.object({ id: z.number(), ledgerId: z.number() }))
