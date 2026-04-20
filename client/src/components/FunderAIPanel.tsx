@@ -597,7 +597,7 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                   const roleInfo = ROLE_LABELS[participant.participantRole] || { label: participant.participantRole, color: '#6B7280', bg: '#F3F4F6' };
                   const hasAnyPayment = (participant.bankCards?.length > 0) || (participant.digitalWallets?.length > 0);
                   return (
-                    <div key={participant.userId} className="rounded-2xl overflow-hidden" style={{ border: '1px solid #E5E7EB' }}>
+                    <div key={participant.userId ?? `p_${participant.phone ?? participant.displayName}`} className="rounded-2xl overflow-hidden" style={{ border: '1px solid #E5E7EB' }}>
                       {/* 参与者头部 */}
                       <div className="flex items-center gap-3 px-4 py-3" style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
                         {participant.avatar ? (
@@ -605,11 +605,16 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                         ) : (
                           <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
                             style={{ background: roleInfo.bg, color: roleInfo.color }}>
-                            {participant.userName.slice(0, 1)}
+                            {(participant.displayName || participant.userName || '?').slice(0, 1)}
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold truncate" style={{ color: '#1A2340' }}>{participant.userName}</div>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-sm font-semibold truncate" style={{ color: '#1A2340' }}>{participant.displayName || participant.userName || '未知'}</span>
+                            {!participant.matched && (
+                              <span className="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ background: '#FEF3C7', color: '#D97706' }}>未注册</span>
+                            )}
+                          </div>
                         </div>
                         <span className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0"
                           style={{ background: roleInfo.bg, color: roleInfo.color }}>
