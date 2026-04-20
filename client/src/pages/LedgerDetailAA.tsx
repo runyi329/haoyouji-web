@@ -756,16 +756,15 @@ export default function LedgerDetailAA({
           </div>
         </div>
         {/* 第二行：充值 + 刷新 + 返回 + 全部下拉 */}
-        <div className="px-4 pb-2 flex items-center gap-1.5">
+        <div className="px-4 pb-2 flex items-center gap-1.5 w-full">
               {/* 充值按钮 */}
               <button
                 onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}`)}
-                className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
+                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
                   border: "1px solid rgba(255,255,255,0.4)",
-                  minWidth: "44px",
                 }}
               >
                 充值
@@ -773,12 +772,11 @@ export default function LedgerDetailAA({
               {/* 刷新按钮 */}
               <button
                 onClick={() => window.location.reload()}
-                className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
+                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
                   border: "1px solid rgba(255,255,255,0.4)",
-                  minWidth: "44px",
                 }}
               >
                 刷新
@@ -786,12 +784,11 @@ export default function LedgerDetailAA({
               {/* 返回按钮 */}
               <button
                 onClick={() => setLocation("/ledger")}
-                className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
+                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
                   border: "1px solid rgba(255,255,255,0.4)",
-                  minWidth: "44px",
                 }}
               >
                 返回
@@ -799,10 +796,10 @@ export default function LedgerDetailAA({
 
             {/* 标签下拉选择器（全部按钮变大） */}
             {categories && categories.length > 0 && (
-              <div className="relative flex-shrink-0">
+              <div className="relative flex-1">
                 <button
                   onClick={() => setShowTagDropdown(!showTagDropdown)}
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+                  className="flex-1 flex items-center justify-center gap-1 h-9 rounded-full text-sm font-semibold transition-all"
                   style={{
                     backgroundColor: selectedTag ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.2)",
                     color: selectedTag ? "#D32F2F" : "#FFFFFF",
