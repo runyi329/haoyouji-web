@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 // 整数型币种（单价较低，通常以整数计量）
@@ -79,6 +79,21 @@ const COIN_COLORS: Record<CoinType, string> = {
   ENA: '#1A1A1A',
   ARKM: '#FF6B35',
   USDT: '#26A17B',
+  TSLA: '#CC0000',
+  NVDA: '#76B900',
+  AAPL: '#555555',
+  MSFT: '#00A4EF',
+  GOOGL: '#4285F4',
+  META: '#0866FF',
+  AMZN: '#FF9900',
+  SPY: '#1A56DB',
+  QQQ: '#7C3AED',
+  NFLX: '#E50914',
+  ORCL: '#F80000',
+  TSM: '#0070C0',
+  AMD: '#ED1C24',
+  CL: '#8B4513',
+  NG: '#4A90D9',
 };
 
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {

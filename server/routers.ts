@@ -12453,7 +12453,7 @@ export const appRouter = router({
         // 附带实时价格
         const { getLatestPrice } = await import('./price-scanner');
         const livePrices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL']) {
+        for (const coin of ['BTC', 'ETH', 'SOL', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
@@ -12565,7 +12565,7 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']),
         amount: z.string(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -12628,7 +12628,7 @@ export const appRouter = router({
       .input(z.object({
         id: z.number(),
         ledgerId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL']).optional(),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']).optional(),
         amount: z.string().optional(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -13029,7 +13029,7 @@ export const appRouter = router({
         // 附带实时价格（全部10种币）
         const { getLatestPrice } = await import('./price-scanner');
         const livePrices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT']) {
+        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
@@ -13041,7 +13041,7 @@ export const appRouter = router({
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']),
         amount: z.string(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -13107,7 +13107,7 @@ export const appRouter = router({
         id: z.number(),
         ledgerId: z.number(),
         userId: z.number().optional(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT']).optional(),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']).optional(),
         amount: z.string().optional(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),

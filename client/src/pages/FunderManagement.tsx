@@ -5,7 +5,7 @@ import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as Cal
 import { toast } from "sonner";
 
 // 币种选项
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 const STATUS_OPTIONS = [
@@ -28,6 +28,22 @@ const COIN_COLORS: Record<CoinType, string> = {
   BTC: '#F7931A',
   ETH: '#627EEA',
   SOL: '#9945FF',
+  USDT: '#26A17B',
+  TSLA: '#CC0000',
+  NVDA: '#76B900',
+  AAPL: '#555555',
+  MSFT: '#00A4EF',
+  GOOGL: '#4285F4',
+  META: '#0866FF',
+  AMZN: '#FF9900',
+  SPY: '#1A56DB',
+  QQQ: '#7C3AED',
+  NFLX: '#E50914',
+  ORCL: '#F80000',
+  TSM: '#0070C0',
+  AMD: '#ED1C24',
+  CL: '#8B4513',
+  NG: '#4A90D9',
 };
 
 // 简单日历选择器组件

@@ -16,6 +16,8 @@ const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 const latestPrices: Record<string, { price: number; updatedAt: string }> = {};
 
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM'];
+// 股票类合约（仅 OKX SWAP 有价格，Gate.io/火币无此品种）
+const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
 
 // 从文件恢复缓存（服务启动时调用）
 function loadCacheFromFile() {
@@ -23,7 +25,7 @@ function loadCacheFromFile() {
     if (fs.existsSync(CACHE_FILE)) {
       const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
       const cached = JSON.parse(raw);
-      for (const coin of COINS) {
+      for (const coin of [...COINS, ...STOCK_COINS]) {
         if (cached[coin]?.price && cached[coin]?.updatedAt) {
           latestPrices[coin] = cached[coin];
         }
@@ -95,11 +97,41 @@ async function fetchPrice(coin: string): Promise<number | null> {
   return null;
 }
 
+// 股票类合约专用：通过 OKX SWAP 接口获取价格
+async function fetchStockPrice(coin: string): Promise<number | null> {
+  try {
+    const instId = `${coin}-USDT-SWAP`;
+    const r = await fetch(
+      `https://www.okx.com/api/v5/market/ticker?instId=${instId}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (r.ok) {
+      const j: any = await r.json();
+      if (j.code === '0' && j.data?.[0]?.last) {
+        return parseFloat(j.data[0].last);
+      }
+    }
+  } catch {}
+  return null;
+}
+
 async function scanPrices() {
   let updated = false;
   for (const coin of COINS) {
     try {
       const price = await fetchPrice(coin);
+      if (price !== null && price > 0) {
+        latestPrices[coin] = { price, updatedAt: new Date().toISOString() };
+        updated = true;
+      }
+    } catch (err) {
+      console.error(`[价格扫描] ${coin} 获取失败:`, err);
+    }
+  }
+  // 扫描股票类合约（OKX SWAP 接口）
+  for (const coin of STOCK_COINS) {
+    try {
+      const price = await fetchStockPrice(coin);
       if (price !== null && price > 0) {
         latestPrices[coin] = { price, updatedAt: new Date().toISOString() };
         updated = true;
@@ -137,5 +169,5 @@ export function startPriceScanner() {
   setInterval(() => {
     scanPrices().catch(err => console.error('[价格扫描] 定时扫描失败:', err));
   }, 30 * 1000);
-  console.log('[价格扫描] 已启动，每30秒刷新 BTC/ETH/SOL/AAVE/SUI/ONDO/ASTER/LDO/ENA/ARKM 价格（含文件持久化）');
+  console.log('[价格扫描] 已启动，每30秒刷新加密货币+股票合约价格（含文件持久化）');
 }
