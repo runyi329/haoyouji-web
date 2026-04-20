@@ -13561,21 +13561,61 @@ export const appRouter = router({
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        // 获取订单所有参与者
-        const participantRows = await db.execute(
-          sql`SELECT p.user_id, p.role as participantRole, u.username, u.name as userName, u.avatar, lm.nickname
-              FROM funder_order_participants p
-              LEFT JOIN users u ON u.id = p.user_id
-              LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
-              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
-              ORDER BY p.sort_order ASC, p.id ASC`
+
+        // 1. 获取订单资金方（funder_asset_orders.userId 就是资金方）
+        const orderRows = await db.execute(
+          sql`SELECT o.user_id as funderUserId, u.username, u.name as userName, u.avatar, lm.nickname
+              FROM funder_asset_orders o
+              LEFT JOIN users u ON u.id = o.user_id
+              LEFT JOIN ledger_members lm ON lm.userId = o.user_id AND lm.ledgerId = ${input.ledgerId}
+              WHERE o.id = ${input.orderId} AND o.ledger_id = ${input.ledgerId}
+              LIMIT 1`
         ) as any;
-        const participants = ((participantRows[0] || participantRows) as any[]) || [];
+        const orderRow = (orderRows[0]?.[0] ?? orderRows[0]) as any;
+
+        // 2. 获取账本所有其他成员
+        const memberRows = await db.execute(
+          sql`SELECT lm.userId, lm.role as memberRole, lm.nickname, u.username, u.name as userName, u.avatar
+              FROM ledger_members lm
+              LEFT JOIN users u ON u.id = lm.userId
+              WHERE lm.ledgerId = ${input.ledgerId}
+              ORDER BY FIELD(lm.role, 'owner', 'admin', 'member') ASC, lm.id ASC`
+        ) as any;
+        const members = ((memberRows[0] || memberRows) as any[]) || [];
+
+        // 3. 合并参与者列表：资金方优先，其他成员去重
+        const participantMap = new Map<number, { userId: number; participantRole: string; userName: string; avatar: string | null }>();
+
+        // 先加资金方
+        if (orderRow?.funderUserId) {
+          participantMap.set(Number(orderRow.funderUserId), {
+            userId: Number(orderRow.funderUserId),
+            participantRole: 'funder',
+            userName: orderRow.nickname || orderRow.userName || orderRow.username || `用户${orderRow.funderUserId}`,
+            avatar: orderRow.avatar || null,
+          });
+        }
+
+        // 再加账本成员
+        for (const m of members) {
+          const uid = Number(m.userId);
+          if (!participantMap.has(uid)) {
+            participantMap.set(uid, {
+              userId: uid,
+              participantRole: m.memberRole === 'owner' ? 'owner' : m.memberRole === 'admin' ? 'admin' : 'member',
+              userName: m.nickname || m.userName || m.username || `用户${uid}`,
+              avatar: m.avatar || null,
+            });
+          }
+        }
+
+        const participants = Array.from(participantMap.values());
         if (participants.length === 0) return { participants: [] };
-        // 批量查询每个参与者的收款方式（银行卡 + 数字钱包）
+
+        // 4. 批量查询每个参与者的收款方式（银行卡 + 数字钱包）
         const mainDb = await getDb();
-        const result = await Promise.all(participants.map(async (p: any) => {
-          const userId = String(p.user_id);
+        const result = await Promise.all(participants.map(async (p) => {
+          const userId = String(p.userId);
           let bankCards: any[] = [];
           let digitalWallets: any[] = [];
           try {
@@ -13585,10 +13625,10 @@ export const appRouter = router({
             digitalWallets = await mainDb.select().from(schema.digitalWallets).where(eq(schema.digitalWallets.userId, userId));
           } catch (e) { /* 忽略错误 */ }
           return {
-            userId: p.user_id,
+            userId: p.userId,
             participantRole: p.participantRole,
-            userName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
-            avatar: p.avatar || null,
+            userName: p.userName,
+            avatar: p.avatar,
             bankCards: bankCards.map((c: any) => ({
               id: c.id,
               bankName: c.bankName,
@@ -13613,8 +13653,7 @@ export const appRouter = router({
         }));
         return { participants: result };
       }),
-
-    // 管理员删除融资付息订单
+        // 管理员删除融资付息订单
     financeDeleteOrder: protectedProcedure
       .input(z.object({ id: z.number(), ledgerId: z.number() }))
       .mutation(async ({ ctx, input }) => {
