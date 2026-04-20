@@ -1243,9 +1243,14 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
 
         {/* 左栏/上半：订单信息 */}
         <div className={viewMode === 'large' ? 'p-4 pb-2' : 'flex-1 p-4 pr-3'} style={{ position: 'relative' }}>
-          {/* 标题：持有资产/订单资产（受邀订单显示「订单资产」） */}
-          <div className="h-5 flex items-center" style={{ color: isParticipantOrder ? '#16A34A' : '#3B82F6' }}>
+          {/* 标题：持有资产/订单资产（受邀订单显示「订单资产」+资金方名字） */}
+          <div className="h-5 flex items-center gap-1" style={{ color: isParticipantOrder ? '#16A34A' : '#3B82F6' }}>
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`}>{isParticipantOrder ? '订单资产' : '持有资产'}</span>
+            {isParticipantOrder && (order.userName || order.username) && (
+              <span className={`${viewMode === 'large' ? 'text-sm' : 'text-[10px]'} font-normal`} style={{ color: '#16A34A', opacity: 0.75 }}>
+                （{order.userName || order.username}）
+              </span>
+            )}
           </div>
           {dc.aiIcon && (
             <button
