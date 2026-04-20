@@ -729,7 +729,7 @@ export default function LedgerDetailAA({
               {/* 数字B快捷按钮（跳转52号账本）——最左边 */}
               {myShortcuts?.digitalB && (
                 <div
-                  className="w-7 h-7 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
+                  className="w-8 h-8 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
                   style={{ border: '1.5px solid rgba(255,255,255,0.5)', position: 'relative' }}
                   onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }}
                   title="数字B"
