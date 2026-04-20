@@ -2604,8 +2604,10 @@ export default function LedgerDetail() {
               </div>
               <div className="flex items-center gap-2">
                 {/* 快捷按钮：根据数据库配置动态显示（37/52/59号账本） */}
-                {isShortcutLedger && myShortcuts && (
-                  <>
+                {isShortcutLedger && myShortcuts && (() => {
+                  const _sc = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59].filter(Boolean).length;
+                  if (_sc >= 4) return null;
+                  return (<>
                     {/* 黄金（MT5）*/}
                     {myShortcuts.gold && (
                       <div
@@ -2696,8 +2698,8 @@ export default function LedgerDetail() {
                         />
                       </div>
                     )}
-                  </>
-                )}
+                  </>);
+                })()}
 
                 {/* AI账本：按鈕移到第二行，此处不再渲染 */}
                 {effectiveIsManager && (
@@ -2713,6 +2715,45 @@ export default function LedgerDetail() {
             </div>
             {/* 第二行：操作按钮 */}
             <div className="flex items-center gap-2 mt-2">
+              {/* AI账本：圆圈多时（>=4个）移到第二行，与头像左对齐 */}
+              {isCustomAI && isShortcutLedger && myShortcuts && (() => {
+                const _sc2 = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59].filter(Boolean).length;
+                if (_sc2 < 4) return null;
+                return (
+                  <div className="flex items-center gap-1.5 w-full mb-1.5">
+                    {myShortcuts.gold && (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => setLocation(`/ledger/${ledgerId}/gold`)} title="黄金行情">
+                        <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/OPICjhxYcoKhRcPL.png" alt="MT5" className="w-full h-full object-cover rounded-full" />
+                      </div>
+                    )}
+                    {myShortcuts.qq && (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => setLocation(`/ledger/${ledgerId}/qq`)} title="QQ">
+                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/qq-icon-circle.png" alt="QQ" className="w-full h-full object-cover rounded-full" />
+                      </div>
+                    )}
+                    {myShortcuts.oil && (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setLocation(`/ledger/${ledgerId}/oil`)} title="石油业务">
+                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oil-pump-icon-circle.png" alt="石油" className="w-full h-full object-cover rounded-full" />
+                      </div>
+                    )}
+                    {myShortcuts.stock && (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/37'); }} title="股票行情">
+                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ths-stock-icon-circle.png" alt="股票" className="w-full h-full object-cover rounded-full" />
+                      </div>
+                    )}
+                    {myShortcuts.digitalB && (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }} title="数字B">
+                        <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png" alt="数字B" className="w-full h-full object-cover rounded-full" />
+                      </div>
+                    )}
+                    {myShortcuts.ledger59 && (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/59'); }} title="蓄水池股东">
+                        <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/gZMsAzlHHuDFuUTJ.png" alt="蓄水池" className="w-full h-full object-cover rounded-full" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {/* AI账本：第二行四个按钮 */}
               {isCustomAI && (
                 <>
