@@ -688,7 +688,7 @@ export default function LedgerDetailAA({
       {/* ── 顶部红色区域 ── */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         {/* 用户信息行 + 标签下拉（直接顶部，无返回栏） */}
-        <div className="px-4 pt-3 pb-2 flex items-center gap-3">
+        <div className="px-4 pt-3 pb-1 flex items-center gap-3">
           {/* 头像（管理员可点击切换视角） */}
           <div
             className="flex-shrink-0 relative"
@@ -752,7 +752,25 @@ export default function LedgerDetailAA({
                   <Settings className="w-3.5 h-3.5 text-white" />
                 </button>
               )}
-              {/* 刷新按鈕 */}
+            </div>
+          </div>
+        </div>
+        {/* 第二行：充值 + 刷新 + 返回 + 全部下拉 */}
+        <div className="px-4 pb-2 flex items-center gap-1.5">
+              {/* 充值按钮 */}
+              <button
+                onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}`)}
+                className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.9)",
+                  color: "#D32F2F",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                  minWidth: "44px",
+                }}
+              >
+                充值
+              </button>
+              {/* 刷新按钮 */}
               <button
                 onClick={() => window.location.reload()}
                 className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
@@ -765,7 +783,7 @@ export default function LedgerDetailAA({
               >
                 刷新
               </button>
-              {/* 返回按鈕：渿圆形，点击返回账本首页 */}
+              {/* 返回按钮 */}
               <button
                 onClick={() => setLocation("/ledger")}
                 className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-medium"
@@ -779,12 +797,12 @@ export default function LedgerDetailAA({
                 返回
               </button>
 
-            {/* 标签下拉选择器 */}
+            {/* 标签下拉选择器（全部按钮变大） */}
             {categories && categories.length > 0 && (
               <div className="relative flex-shrink-0">
                 <button
                   onClick={() => setShowTagDropdown(!showTagDropdown)}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
                   style={{
                     backgroundColor: selectedTag ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.2)",
                     color: selectedTag ? "#D32F2F" : "#FFFFFF",
