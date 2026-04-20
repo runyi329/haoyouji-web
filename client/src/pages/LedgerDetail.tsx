@@ -2713,8 +2713,8 @@ export default function LedgerDetail() {
                 )}
               </div>
             </div>
-            {/* 第二行：操作按钮 */}
-            <div className="flex items-center gap-2 mt-2">
+            {/* 第二行：操作按钮（圆圈多时分三行） */}
+            <div className="flex flex-col gap-1.5 mt-2">
               {/* AI账本：圆圈多时（>=4个）移到第二行，与头像左对齐 */}
               {isCustomAI && isShortcutLedger && myShortcuts && (() => {
                 const _sc2 = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59].filter(Boolean).length;
@@ -2754,9 +2754,9 @@ export default function LedgerDetail() {
                   </div>
                 );
               })()}
-              {/* AI账本：第二行四个按钮 */}
+              {/* AI账本：操作按钮行（刷新/结构/记录/返回） */}
               {isCustomAI && (
-                <>
+                <div className="flex items-center gap-2 w-full">
                   <button
                     onClick={() => window.location.reload()}
                     className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
@@ -2792,7 +2792,7 @@ export default function LedgerDetail() {
                   >
                     返回
                   </button>
-                </>
+                </div>
               )}
               {isCustomAH && (
                 <span className="text-xs text-white/70 mr-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{ahRoleName}</span>
