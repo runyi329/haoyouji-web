@@ -571,9 +571,18 @@ export default function FinanceManagement() {
                         </div>
                       )}
 
-                      {order.public_note && (
-                        <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
-                          备注：{order.public_note}
+                      {(order.public_note || order.admin_note) && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
+                          {order.public_note && (
+                            <div className="text-xs text-gray-400">
+                              公开备注：{order.public_note}
+                            </div>
+                          )}
+                          {order.admin_note && (
+                            <div className="text-xs text-gray-400">
+                              内部备注：{order.admin_note}
+                            </div>
+                          )}
                         </div>
                       )}
 
