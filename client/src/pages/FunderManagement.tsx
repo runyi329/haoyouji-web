@@ -5,7 +5,7 @@ import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as Cal
 import { toast } from "sonner";
 
 // 币种选项
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 const STATUS_OPTIONS = [
@@ -29,6 +29,7 @@ const COIN_COLORS: Record<CoinType, string> = {
   ETH: '#627EEA',
   SOL: '#9945FF',
   USDT: '#26A17B',
+  CNY: '#DE2910',
   TSLA: '#CC0000',
   NVDA: '#76B900',
   AAPL: '#555555',
