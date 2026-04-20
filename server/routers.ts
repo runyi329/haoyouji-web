@@ -312,7 +312,7 @@ export const appRouter = router({
     // 添加数字钱包
     addDigitalWallet: protectedProcedure
       .input(z.object({
-        walletType: z.enum(['blockchain', 'alipay', 'wechat', 'other']),
+        walletType: z.enum(['blockchain', 'binance', 'okx', 'alipay', 'wechat', 'other']),
         network: z.string().optional(),
         walletAddress: z.string().optional(),
         currency: z.string().optional(),
@@ -332,7 +332,7 @@ export const appRouter = router({
     updateDigitalWallet: protectedProcedure
       .input(z.object({
         walletId: z.string(),
-        walletType: z.enum(['blockchain', 'alipay', 'wechat', 'other']).optional(),
+        walletType: z.enum(['blockchain', 'binance', 'okx', 'alipay', 'wechat', 'other']).optional(),
         network: z.string().optional(),
         walletAddress: z.string().optional(),
         currency: z.string().optional(),
