@@ -1247,8 +1247,8 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           <div className="h-5 flex items-center gap-1" style={{ color: isParticipantOrder ? '#16A34A' : '#3B82F6' }}>
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`}>{isParticipantOrder ? '订单资产' : '持有资产'}</span>
             {isParticipantOrder && (order.userName || order.username) && (
-              <span className={`${viewMode === 'large' ? 'text-sm' : 'text-[10px]'} font-normal text-gray-400`}>
-                （{order.userName || order.username}）
+              <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>
+                ({order.userName || order.username})
               </span>
             )}
           </div>
