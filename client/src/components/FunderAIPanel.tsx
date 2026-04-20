@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
-import { X, Mail, Phone, Loader2, AlertTriangle, CheckCircle2, Info, ExternalLink } from "lucide-react";
+import { X, Mail, Phone, Loader2, AlertTriangle, CheckCircle2, Info, ExternalLink, Wallet, CreditCard, Copy } from "lucide-react";
 import { centerToast as toast } from "@/components/ui/center-toast";
 import { useLocation } from "wouter";
 
@@ -99,8 +99,46 @@ function Toggle({ enabled, onChange, disabled }: { enabled: boolean; onChange: (
   );
 }
 
+// 角色标签
+const ROLE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  funder: { label: '资方', color: '#1A56DB', bg: '#EFF6FF' },
+  borrower: { label: '借款方', color: '#059669', bg: '#ECFDF5' },
+  broker: { label: '中间人', color: '#7C3AED', bg: '#F5F3FF' },
+};
+
+// 钱包类型标签
+const WALLET_TYPE_LABELS: Record<string, string> = {
+  blockchain: '链上钱包',
+  alipay: '支付宝',
+  wechat: '微信',
+  other: '其他',
+};
+
+// 复制到剪贴板
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text).then(() => {
+    toast.success('已复制');
+  }).catch(() => {
+    toast.error('复制失败');
+  });
+}
+
+// 脱敏显示卡号（保留前4后4）
+function maskCardNumber(num: string): string {
+  if (!num) return '';
+  if (num.length <= 8) return num;
+  return num.slice(0, 4) + ' **** **** ' + num.slice(-4);
+}
+
+// 脱敏显示账号（保留前3后3）
+function maskAccount(acc: string): string {
+  if (!acc) return '';
+  if (acc.length <= 6) return acc;
+  return acc.slice(0, 3) + '****' + acc.slice(-3);
+}
+
 export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderAIPanelProps) {
-  const [activeTab, setActiveTab] = useState<'analysis' | 'notify'>('analysis');
+  const [activeTab, setActiveTab] = useState<'analysis' | 'notify' | 'wallet'>('analysis');
   const [selectedLevel, setSelectedLevel] = useState<AlertLevel>('none');
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [phoneEnabled, setPhoneEnabled] = useState(true);
@@ -112,6 +150,12 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
   const { data: alertState, isLoading: alertLoading, refetch } = trpc.ledger.funderGetAlertState.useQuery(
     { orderId, ledgerId },
     { refetchOnWindowFocus: false }
+  );
+
+  // AI 智能钱包：获取参与者收款方式
+  const { data: paymentInfo, isLoading: paymentLoading } = trpc.ledger.funderGetParticipantsPaymentInfo.useQuery(
+    { orderId, ledgerId },
+    { enabled: activeTab === 'wallet', refetchOnWindowFocus: false }
   );
 
   const sendTestNotification = trpc.ledger.funderSendTestNotification.useMutation({
@@ -280,17 +324,17 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-t-3xl overflow-hidden"
+        className="w-full max-w-md rounded-t-3xl overflow-hidden flex flex-col"
         style={{ background: '#fff', maxHeight: '85vh' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 顶部拖拽条 */}
-        <div className="flex justify-center pt-3 pb-1">
+        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
           <div className="w-10 h-1 rounded-full" style={{ background: '#E5E7EB' }} />
         </div>
 
         {/* 标题栏 */}
-        <div className="flex items-center justify-between px-5 py-3">
+        <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', boxShadow: '0 2px 8px rgba(26,86,219,0.35)' }}>
@@ -307,14 +351,15 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
         </div>
 
         {/* Tab 切换 */}
-        <div className="mx-5 mb-4 p-1 rounded-xl flex" style={{ background: '#F3F4F6' }}>
+        <div className="mx-5 mb-4 p-1 rounded-xl flex flex-shrink-0" style={{ background: '#F3F4F6' }}>
           {[
             { key: 'analysis', label: 'AI 智能分析' },
             { key: 'notify', label: 'AI 智能通知' },
+            { key: 'wallet', label: 'AI 智能钱包' },
           ].map(tab => (
             <button
               key={tab.key}
-              className="flex-1 py-2 text-sm font-medium transition-all rounded-[10px]"
+              className="flex-1 py-2 text-xs font-medium transition-all rounded-[10px]"
               style={{
                 background: activeTab === tab.key ? '#fff' : 'transparent',
                 color: activeTab === tab.key ? '#1A56DB' : '#6B7280',
@@ -326,10 +371,8 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
             </button>
           ))}
         </div>
-
         {/* 内容区 */}
-        <div className="px-5 pb-8 overflow-y-auto" style={{ maxHeight: '60vh' }}>
-
+        <div className="px-5 pb-8 overflow-y-auto flex-1">
           {/* ── AI 智能分析 ── */}
           {activeTab === 'analysis' && (
             <div className="space-y-3">
@@ -340,98 +383,78 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                     riskLevel === 'pct20' ? '#FFF7ED' :
                       riskLevel === 'pct10' ? '#FFFBEB' :
                         riskLevel === 'negative' ? '#FFF7ED' :
-                          riskLevel === 'no_collateral' ? '#EFF6FF' : '#F9FAFB',
-                border: `1px solid ${riskLevel === 'safe' ? '#BBF7D0' : riskLevel === 'pct30' ? '#FECACA' : riskLevel === 'pct20' ? '#FED7AA' : riskLevel === 'pct10' ? '#FDE68A' : riskLevel === 'negative' ? '#FED7AA' : riskLevel === 'no_collateral' ? '#BFDBFE' : '#E5E7EB'}`
+                          '#F9FAFB',
+                border: `1px solid ${riskLevel === 'safe' ? '#BBF7D0' :
+                  riskLevel === 'pct30' ? '#FECACA' :
+                    riskLevel === 'pct20' ? '#FED7AA' :
+                      riskLevel === 'pct10' ? '#FDE68A' :
+                        riskLevel === 'negative' ? '#FED7AA' :
+                          '#E5E7EB'}`,
               }}>
-                <div className="flex items-center gap-2 mb-2">
-                  {riskLevel === 'safe' && <CheckCircle2 className="w-4 h-4" style={{ color: '#16A34A' }} />}
-                  {riskLevel !== 'safe' && riskLevel !== null && riskLevel !== 'no_collateral' && <AlertTriangle className="w-4 h-4" style={{ color: riskLevel === 'pct30' ? '#EF4444' : riskLevel === 'pct20' ? '#F97316' : '#F59E0B' }} />}
-                  {riskLevel === 'no_collateral' && <Info className="w-4 h-4" style={{ color: '#1A56DB' }} />}
-                  {riskLevel === null && <Info className="w-4 h-4" style={{ color: '#9CA3AF' }} />}
-                  <span className="text-sm font-semibold" style={{
-                    color: riskLevel === 'safe' ? '#15803D' : riskLevel === 'pct30' ? '#DC2626' : riskLevel === 'pct20' ? '#C2410C' : riskLevel === 'pct10' ? '#B45309' : riskLevel === 'negative' ? '#C2410C' : riskLevel === 'no_collateral' ? '#1A56DB' : '#6B7280'
-                  }}>
-                    {riskLevel === 'safe' ? '担保充足' : riskLevel === 'pct30' ? '缺口较大' : riskLevel === 'pct20' ? '缺口偏大' : riskLevel === 'pct10' ? '缺口提示' : riskLevel === 'negative' ? '轻微缺口' : riskLevel === 'no_collateral' ? '无担保物订单' : '暂无数据'}
-                  </span>
+                <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {riskLevel === 'safe' ? (
+                      <CheckCircle2 className="w-5 h-5" style={{ color: '#059669' }} />
+                    ) : riskLevel === 'no_collateral' ? (
+                      <Info className="w-5 h-5" style={{ color: '#6B7280' }} />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5" style={{
+                        color: riskLevel === 'pct30' ? '#EF4444' :
+                          riskLevel === 'pct20' ? '#F97316' : '#F59E0B'
+                      }} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold mb-1" style={{
+                      color: riskLevel === 'safe' ? '#065F46' :
+                        riskLevel === 'pct30' ? '#991B1B' :
+                          riskLevel === 'pct20' ? '#9A3412' :
+                            riskLevel === 'pct10' ? '#92400E' :
+                              riskLevel === 'negative' ? '#9A3412' :
+                                '#374151'
+                    }}>
+                      {riskLevel === 'safe' ? '担保充足，风险可控' :
+                        riskLevel === 'pct30' ? '⚠️ 担保严重不足' :
+                          riskLevel === 'pct20' ? '担保缺口较大' :
+                            riskLevel === 'pct10' ? '担保缺口预警' :
+                              riskLevel === 'negative' ? '担保轻微不足' :
+                                '暂无担保物'}
+                    </div>
+                    <div className="text-xs leading-relaxed" style={{
+                      color: riskLevel === 'safe' ? '#065F46' :
+                        riskLevel === 'pct30' ? '#7F1D1D' :
+                          riskLevel === 'pct20' ? '#7C2D12' :
+                            riskLevel === 'pct10' ? '#78350F' :
+                              '#6B7280'
+                    }}>
+                      {riskLevel === 'safe' ? (
+                        `担保净值 ${exposure !== null ? `+${exposure.toFixed(2)} U` : '—'}，覆盖待结利息后仍有盈余`
+                      ) : riskLevel === 'no_collateral' ? (
+                        `当前订单无担保物，待结利息 ${accrued.toFixed(2)} U`
+                      ) : (
+                        `担保缺口约 ${exposure !== null ? Math.abs(exposure).toFixed(2) : '—'} U，占买入价值 ${exposurePct !== null ? exposurePct.toFixed(1) : '—'}%`
+                      )}
+                    </div>
+                  </div>
                 </div>
-                {exposure !== null ? (
-                  <div className="text-xs space-y-1" style={{ color: '#4B5563' }}>
-                    <div className="flex justify-between">
-                      <span>风险敞口</span>
-                      <span className="font-semibold" style={{ color: exposure >= 0 ? '#16A34A' : '#DC2626' }}>
-                        {exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U
-                      </span>
-                    </div>
-                    {exposurePct !== null && exposure < 0 && (
-                      <div className="flex justify-between">
-                        <span>缺口占比</span>
-                        <span className="font-semibold" style={{ color: '#DC2626' }}>{exposurePct.toFixed(1)}%</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span>待结利息</span>
-                      <span>{accrued.toFixed(2)} U</span>
-                    </div>
-                    {collateralValue !== null && (
-                      <div className="flex justify-between">
-                        <span>担保物价值</span>
-                        <span>{collateralValue.toFixed(2)} U</span>
-                      </div>
-                    )}
-                  </div>
-                ) : riskLevel === 'no_collateral' ? (
-                  <div className="text-xs space-y-1" style={{ color: '#4B5563' }}>
-                    {buyValue !== null && buyValue > 0 && (
-                      <div className="flex justify-between">
-                        <span>买入价值</span>
-                        <span className="font-semibold">{buyValue.toFixed(2)} U</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span>待结利息</span>
-                      <span className="font-semibold" style={{ color: accrued > 0 ? '#D97706' : '#16A34A' }}>{accrued.toFixed(2)} U</span>
-                    </div>
-                    {paidInterest > 0 && (
-                      <div className="flex justify-between">
-                        <span>已结利息</span>
-                        <span>{paidInterest.toFixed(2)} U</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span>担保物</span>
-                      <span style={{ color: '#9CA3AF' }}>未设置</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-xs" style={{ color: '#9CA3AF' }}>暂无实时价格，无法计算风险敞口</div>
-                )}
               </div>
 
-              {/* AI 分析说明 */}
-              <div className="rounded-2xl p-4" style={{ background: '#F0F4FF', border: '1px solid #DBEAFE' }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
-                    <span className="text-white text-[9px] font-bold">AI</span>
+              {/* 数据摘要 */}
+              <div className="rounded-2xl p-4 space-y-2.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                <div className="text-xs font-semibold mb-1" style={{ color: '#374151' }}>订单数据摘要</div>
+                {[
+                  { label: '持有数量', value: `${orderInfo.qty} ${orderInfo.coin}` },
+                  { label: '买入价值', value: buyValue ? `${buyValue.toFixed(2)} U` : '—' },
+                  { label: '待结利息', value: `${accrued.toFixed(2)} U` },
+                  { label: '已结利息', value: `${paidInterest.toFixed(2)} U` },
+                  { label: '担保市值', value: collateralValue !== null ? `${collateralValue.toFixed(2)} U` : '无' },
+                  { label: '浮动盈亏', value: floatPnl !== null ? `${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)} U` : '—' },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: '#9CA3AF' }}>{item.label}</span>
+                    <span className="text-xs font-medium" style={{ color: '#374151' }}>{item.value}</span>
                   </div>
-                  <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>AI 分析建议</span>
-                </div>
-                <p className="text-xs leading-relaxed" style={{ color: '#374151' }}>
-                  {riskLevel === 'safe'
-                    ? `当前担保充足，风险敞口为正值 ${exposure?.toFixed(2)} U，整体状况良好。建议持续关注 ${orderInfo.coin} 价格走势，若价格出现较大回调可提前与对方沟通。`
-                    : riskLevel === 'pct30'
-                      ? `担保缺口已达买入价值的 ${exposurePct?.toFixed(1)}%，建议尽快与对方沟通，协商补充担保物或安排付息，以保持良好的合作关系。`
-                      : riskLevel === 'pct20'
-                        ? `担保缺口达到 ${exposurePct?.toFixed(1)}%，建议关注 ${orderInfo.coin} 后续走势，并适时与对方保持沟通，必要时补充担保物。`
-                        : riskLevel === 'pct10'
-                          ? `担保缺口约 ${exposurePct?.toFixed(1)}%，目前处于轻微缺口区间，建议留意价格变化，与对方保持正常沟通即可。`
-                          : riskLevel === 'negative'
-                            ? `担保物略低于待结利息，建议与对方确认后续安排，保持良好的沟通节奏。`
-                            : riskLevel === 'no_collateral'
-                              ? `该订单未设置担保物，待结利息 ${accrued.toFixed(2)} U。建议与对方确认利息结算安排，如需可考虑补充担保物以降低风险。`
-                              : `当前无实时价格数据，无法进行风险评估。建议手动确认 ${orderInfo.coin} 当前价格并评估担保充足性。`
-                  }
-                </p>
+                ))}
               </div>
             </div>
           )}
@@ -439,9 +462,6 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
           {/* ── AI 智能通知 ── */}
           {activeTab === 'notify' && (
             <div className="space-y-3">
-              {/* 接收渠道 */}
-              <div className="text-xs font-medium" style={{ color: '#6B7280' }}>接收渠道</div>
-
               {/* 邮箱行 */}
               <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                 <Mail className="w-5 h-5 flex-shrink-0" style={{ color: alertState?.userEmail ? '#1A56DB' : '#9CA3AF' }} />
@@ -476,7 +496,6 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                   disabled={!alertState?.userEmail}
                 />
               </div>
-
               {/* 手机行 */}
               <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                 <Phone className="w-5 h-5 flex-shrink-0" style={{ color: alertState?.userPhone ? '#1A56DB' : '#9CA3AF' }} />
@@ -511,7 +530,6 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                   disabled={!alertState?.userPhone}
                 />
               </div>
-
               {/* 预警级别 —— 一排 4 个紧凑按鈕 */}
               <div className="flex items-center justify-between pt-1">
                 <span className="text-xs font-medium" style={{ color: '#6B7280' }}>缺口提醒</span>
@@ -543,14 +561,12 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                   );
                 })}
               </div>
-
               {/* 规则说明 */}
               <div className="rounded-xl px-3 py-2.5" style={{ background: '#F0F4FF', border: '1px solid #DBEAFE' }}>
                 <p className="text-xs leading-relaxed" style={{ color: '#4B5563' }}>
                   每个阈值只提醒一次，缺口在同一区间内波动不重复通知。缺口完全恢复或跌破更高阈值时，将再次发送提醒。
                 </p>
               </div>
-
               {/* 上次触发记录 */}
               {alertState?.lastTriggeredAt && alertState.lastTriggeredState && alertState.lastTriggeredState !== 'none' && (
                 <div className="rounded-xl p-3" style={{ background: '#FFFBEB', border: '1px solid #FDE68A' }}>
@@ -558,6 +574,142 @@ export function FunderAIPanel({ orderId, ledgerId, orderInfo, onClose }: FunderA
                     上次提醒：缺口超过{alertState.lastTriggeredState === 'pct10' ? '10%' : alertState.lastTriggeredState === 'pct20' ? '20%' : '30%'}
                     &nbsp;·&nbsp;{alertState.lastTriggeredAt}
                   </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── AI 智能钱包 ── */}
+          {activeTab === 'wallet' && (
+            <div className="space-y-4">
+              {paymentLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 className="w-6 h-6 animate-spin" style={{ color: '#1A56DB' }} />
+                </div>
+              ) : !paymentInfo?.participants || paymentInfo.participants.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 space-y-2">
+                  <Wallet className="w-10 h-10" style={{ color: '#D1D5DB' }} />
+                  <div className="text-sm font-medium" style={{ color: '#9CA3AF' }}>暂无参与者收款信息</div>
+                  <div className="text-xs text-center" style={{ color: '#D1D5DB' }}>请先在订单中配置参与方，参与方在个人中心添加收款方式后即可在此查看</div>
+                </div>
+              ) : (
+                paymentInfo.participants.map((participant: any) => {
+                  const roleInfo = ROLE_LABELS[participant.participantRole] || { label: participant.participantRole, color: '#6B7280', bg: '#F3F4F6' };
+                  const hasAnyPayment = (participant.bankCards?.length > 0) || (participant.digitalWallets?.length > 0);
+                  return (
+                    <div key={participant.userId} className="rounded-2xl overflow-hidden" style={{ border: '1px solid #E5E7EB' }}>
+                      {/* 参与者头部 */}
+                      <div className="flex items-center gap-3 px-4 py-3" style={{ background: '#F9FAFB', borderBottom: '1px solid #E5E7EB' }}>
+                        {participant.avatar ? (
+                          <img src={participant.avatar} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold"
+                            style={{ background: roleInfo.bg, color: roleInfo.color }}>
+                            {participant.userName.slice(0, 1)}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate" style={{ color: '#1A2340' }}>{participant.userName}</div>
+                        </div>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0"
+                          style={{ background: roleInfo.bg, color: roleInfo.color }}>
+                          {roleInfo.label}
+                        </span>
+                      </div>
+
+                      {/* 收款方式列表 */}
+                      <div className="px-4 py-3 space-y-3">
+                        {!hasAnyPayment ? (
+                          <div className="text-xs text-center py-3" style={{ color: '#9CA3AF' }}>该用户暂未添加收款方式</div>
+                        ) : (
+                          <>
+                            {/* 银行卡 */}
+                            {participant.bankCards?.map((card: any) => (
+                              <div key={card.id} className="rounded-xl p-3 space-y-1.5" style={{ background: '#F0F4FF', border: '1px solid #DBEAFE' }}>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <CreditCard className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#1A56DB' }} />
+                                    <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>
+                                      {card.bankName} · {card.cardType === 'credit' ? '信用卡' : '储蓄卡'}
+                                    </span>
+                                  </div>
+                                  {card.isDefault && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#DBEAFE', color: '#1A56DB' }}>默认</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-mono" style={{ color: '#374151' }}>{maskCardNumber(card.cardNumber)}</span>
+                                  <button onClick={() => copyToClipboard(card.cardNumber)} className="p-1 rounded">
+                                    <Copy className="w-3 h-3" style={{ color: '#9CA3AF' }} />
+                                  </button>
+                                </div>
+                                {card.cardHolder && (
+                                  <div className="text-xs" style={{ color: '#6B7280' }}>持卡人：{card.cardHolder}</div>
+                                )}
+                                {card.notes && (
+                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>{card.notes}</div>
+                                )}
+                              </div>
+                            ))}
+
+                            {/* 数字钱包 */}
+                            {participant.digitalWallets?.map((wallet: any) => (
+                              <div key={wallet.id} className="rounded-xl p-3 space-y-1.5" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <Wallet className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#059669' }} />
+                                    <span className="text-xs font-semibold" style={{ color: '#059669' }}>
+                                      {WALLET_TYPE_LABELS[wallet.walletType] || wallet.walletType}
+                                      {wallet.network && ` · ${wallet.network}`}
+                                      {wallet.currency && ` · ${wallet.currency}`}
+                                    </span>
+                                  </div>
+                                  {wallet.isDefault && (
+                                    <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#D1FAE5', color: '#059669' }}>默认</span>
+                                  )}
+                                </div>
+                                {wallet.walletAddress && (
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-mono truncate" style={{ color: '#374151' }}>
+                                      {wallet.walletAddress.length > 20
+                                        ? wallet.walletAddress.slice(0, 10) + '...' + wallet.walletAddress.slice(-8)
+                                        : wallet.walletAddress}
+                                    </span>
+                                    <button onClick={() => copyToClipboard(wallet.walletAddress)} className="p-1 rounded flex-shrink-0">
+                                      <Copy className="w-3 h-3" style={{ color: '#9CA3AF' }} />
+                                    </button>
+                                  </div>
+                                )}
+                                {wallet.account && (
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs" style={{ color: '#374151' }}>账号：{maskAccount(wallet.account)}</span>
+                                    <button onClick={() => copyToClipboard(wallet.account)} className="p-1 rounded flex-shrink-0">
+                                      <Copy className="w-3 h-3" style={{ color: '#9CA3AF' }} />
+                                    </button>
+                                  </div>
+                                )}
+                                {wallet.accountName && (
+                                  <div className="text-xs" style={{ color: '#6B7280' }}>收款人：{wallet.accountName}</div>
+                                )}
+                                {wallet.notes && (
+                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>{wallet.notes}</div>
+                                )}
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {/* 说明 */}
+              {paymentInfo?.participants && paymentInfo.participants.length > 0 && (
+                <div className="rounded-xl px-3 py-2.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                  <p className="text-xs leading-relaxed" style={{ color: '#9CA3AF' }}>
+                    收款信息来自各参与者的个人中心，仅供参考。请在转账前与对方确认最新收款方式。
+                  </p>
                 </div>
               )}
             </div>
