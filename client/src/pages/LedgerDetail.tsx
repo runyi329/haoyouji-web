@@ -2797,32 +2797,51 @@ export default function LedgerDetail() {
               {isCustomAH && (
                 <span className="text-xs text-white/70 mr-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{ahRoleName}</span>
               )}
-              {isCustomAF && !effectiveIsFunder && (
-                <button
-                  onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                  className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                >
-                  充值
-                </button>
-              )}
-              {isCustomAF && !effectiveIsFunder && (
-                <button
-                  onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                  className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                >
-                  提现
-                </button>
-              )}
-              {isCustomAF && !effectiveIsFunder && (
-                <button
-                  onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                  className="flex-1 py-1.5 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                >
-                  邀请
-                </button>
+              {/* 52号账本（AF）：操作按钮行（充值/提现/邀请/刷新/返回）横排一行 */}
+              {isCustomAF && (
+                <div className="flex items-center gap-2 w-full">
+                  {!effectiveIsFunder && (
+                    <button
+                      onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                      className="flex-1 h-9 rounded-full text-sm font-medium border border-white/60 text-white text-center"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                    >
+                      充值
+                    </button>
+                  )}
+                  {!effectiveIsFunder && (
+                    <button
+                      onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                      className="flex-1 h-9 rounded-full text-sm font-medium border border-white/60 text-white text-center"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                    >
+                      提现
+                    </button>
+                  )}
+                  {!effectiveIsFunder && (
+                    <button
+                      onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                      className="flex-1 h-9 rounded-full text-sm font-medium border border-white/60 text-white text-center"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+                    >
+                      邀请
+                    </button>
+                  )}
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="flex-1 h-9 rounded-full text-sm font-medium text-center"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
+                  >
+                    刷新
+                  </button>
+                  <button
+                    onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
+                    className="flex-1 h-9 rounded-full text-sm font-medium text-center"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
+                  >
+                    返回
+                  </button>
+                </div>
               )}
               {isCustomAH && (isOwner || isAdmin) && (
                 <button
@@ -2833,7 +2852,7 @@ export default function LedgerDetail() {
                   新建
                 </button>
               )}
-              {!isCustomAI && (
+              {!isCustomAI && !isCustomAF && (
                 <button
                   onClick={() => window.location.reload()}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
@@ -2842,7 +2861,7 @@ export default function LedgerDetail() {
                   刷新
                 </button>
               )}
-              {!isCustomAI && (
+              {!isCustomAI && !isCustomAF && (
                 <button
                   onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
