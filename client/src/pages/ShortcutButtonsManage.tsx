@@ -5,16 +5,17 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 
-const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock", "digitalB"] as const;
+const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock", "digitalB", "ledger59"] as const;
 const SHORTCUT_LABELS: Record<string, string> = {
   gold: "黄金",
   qq: "QQ",
   oil: "石油",
   stock: "股票",
   digitalB: "数字B",
+  ledger59: "蓄水池",
 };
-const DEFAULT_SHORTCUTS = { gold: false, qq: false, oil: false, stock: false, digitalB: false };
-type ShortcutValues = { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean };
+const DEFAULT_SHORTCUTS = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false };
+type ShortcutValues = { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean };
 type ShortcutMap = Record<string, ShortcutValues>;
 
 export default function ShortcutButtonsManage() {
@@ -47,6 +48,7 @@ export default function ShortcutButtonsManage() {
           oil: !!(val as any)?.oil,
           stock: !!(val as any)?.stock,
           digitalB: !!(val as any)?.digitalB,
+          ledger59: !!(val as any)?.ledger59,
         };
       }
       setLocalMap(normalized);
@@ -68,7 +70,7 @@ export default function ShortcutButtonsManage() {
       setLocalMap(prev => ({
         ...prev,
         [uid]: serverVal
-          ? { gold: !!serverVal.gold, qq: !!serverVal.qq, oil: !!serverVal.oil, stock: !!serverVal.stock, digitalB: !!serverVal.digitalB }
+          ? { gold: !!serverVal.gold, qq: !!serverVal.qq, oil: !!serverVal.oil, stock: !!serverVal.stock, digitalB: !!serverVal.digitalB, ledger59: !!serverVal.ledger59 }
           : DEFAULT_SHORTCUTS,
       }));
       toast.error(err.message || "保存失败，请重试");
@@ -122,7 +124,7 @@ export default function ShortcutButtonsManage() {
           {/* 表头 */}
           <div
             className="border-b border-gray-300 text-sm text-gray-700 font-medium bg-white sticky top-[44px] z-10 shadow-sm"
-            style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(5, 1fr)" }}
+            style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(6, 1fr)" }}
           >
             <div className="py-3 px-2 text-center">成员</div>
             {SHORTCUT_KEYS.map((key) => (
@@ -131,6 +133,11 @@ export default function ShortcutButtonsManage() {
                   <div className="flex flex-col items-center gap-0.5">
                     <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png" alt="数字B" className="w-5 h-5 rounded-full object-cover" />
                     <span className="text-[10px] leading-none">数字B</span>
+                  </div>
+                ) : key === 'ledger59' ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/gZMsAzlHHuDFuUTJ.png" alt="蓄水池" className="w-5 h-5 rounded-full object-cover" />
+                    <span className="text-[10px] leading-none">蓄水池</span>
                   </div>
                 ) : SHORTCUT_LABELS[key]}
               </div>
@@ -146,7 +153,7 @@ export default function ShortcutButtonsManage() {
                 <div
                   key={member.id}
                   className="border-b border-gray-100"
-                  style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(5, 1fr)" }}
+                  style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(6, 1fr)" }}
                 >
                   {/* 成员头像+名字 */}
                   <div className="py-3 px-2 flex flex-col items-center justify-center gap-1">
