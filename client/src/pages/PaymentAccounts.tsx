@@ -330,9 +330,14 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
         toast.error("请填写完整的区块链钱包信息");
         return;
       }
-    } else if (walletForm.walletType === "alipay" || walletForm.walletType === "wechat") {
-      if (!walletForm.account || !walletForm.accountName) {
-        toast.error("请填写完整的账户信息");
+    } else if (walletForm.walletType === "binance") {
+      if (!walletForm.account) {
+        toast.error("请填写币安交易所 ID");
+        return;
+      }
+    } else if (walletForm.walletType === "okx") {
+      if (!walletForm.account) {
+        toast.error("请填写欧易 UID");
         return;
       }
     }
@@ -413,24 +418,24 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
             银行卡
           </button>
           <button
-            onClick={() => setActiveTab("alipay")}
+            onClick={() => setActiveTab("binance")}
             className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
-              activeTab === "alipay"
+              activeTab === "binance"
                 ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
                 : "text-gray-500"
             }`}
           >
-            支付宝
+            币安
           </button>
           <button
-            onClick={() => setActiveTab("wechat")}
+            onClick={() => setActiveTab("okx")}
             className={`flex-1 py-3 text-center text-sm font-medium transition-colors ${
-              activeTab === "wechat"
+              activeTab === "okx"
                 ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
                 : "text-gray-500"
             }`}
           >
-            微信
+            欧易
           </button>
           <button
             onClick={() => setActiveTab("blockchain")}
@@ -560,16 +565,16 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
         </div>
       )}
 
-      {/* 支付宝列表 */}
-      {activeTab === "alipay" && (
+      {/* 币安账户列表 */}
+      {activeTab === "binance" && (
         <div className="p-4 space-y-3">
-          {digitalWallets.filter(w => w.walletType === "alipay").length === 0 ? (
+          {digitalWallets.filter(w => w.walletType === "binance").length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Wallet className="w-16 h-16 mx-auto mb-3 opacity-30" />
-              <p>暂无支付宝账户</p>
+              <p>暂无币安账户</p>
             </div>
           ) : (
-            digitalWallets.filter(w => w.walletType === "alipay").map((wallet) => (
+            digitalWallets.filter(w => w.walletType === "binance").map((wallet) => (
               <div
                 key={wallet.id}
                 className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
@@ -577,7 +582,7 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">支付宝</h3>
+                      <h3 className="font-semibold text-gray-900">币安账户</h3>
                       {wallet.isDefault === 1 && (
                         <span className="flex items-center gap-1 text-xs bg-[#D32F2F] text-white px-2 py-0.5 rounded">
                           <Star className="w-3 h-3 fill-current" />
@@ -602,13 +607,13 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                 <div className="space-y-2 mb-3">
                   {wallet.account && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">账号</span>
-                      <span className="text-sm font-medium">{wallet.account}</span>
+                      <span className="text-sm text-gray-600">交易所 ID</span>
+                      <span className="text-sm font-medium font-mono">{wallet.account}</span>
                     </div>
                   )}
                   {wallet.accountName && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">姓名</span>
+                      <span className="text-sm text-gray-600">备注名</span>
                       <span className="text-sm font-medium">{wallet.accountName}</span>
                     </div>
                   )}
@@ -645,27 +650,27 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
           <Button
             onClick={() => {
               resetWalletForm();
-              setWalletForm({ ...walletForm, walletType: "alipay" });
+              setWalletForm({ ...walletForm, walletType: "binance" });
               setIsWalletDialogOpen(true);
             }}
             className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
           >
             <Plus className="w-5 h-5 mr-1" />
-            添加支付宝账户
+            添加币安账户
           </Button>
         </div>
       )}
 
-      {/* 微信支付列表 */}
-      {activeTab === "wechat" && (
+      {/* 欧易账户列表 */}
+      {activeTab === "okx" && (
         <div className="p-4 space-y-3">
-          {digitalWallets.filter(w => w.walletType === "wechat").length === 0 ? (
+          {digitalWallets.filter(w => w.walletType === "okx").length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <Wallet className="w-16 h-16 mx-auto mb-3 opacity-30" />
-              <p>暂无微信支付账户</p>
+              <p>暂无欧易账户</p>
             </div>
           ) : (
-            digitalWallets.filter(w => w.walletType === "wechat").map((wallet) => (
+            digitalWallets.filter(w => w.walletType === "okx").map((wallet) => (
               <div
                 key={wallet.id}
                 className="bg-white rounded-lg p-4 shadow-sm border border-gray-200"
@@ -673,7 +678,7 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">微信支付</h3>
+                      <h3 className="font-semibold text-gray-900">欧易账户</h3>
                       {wallet.isDefault === 1 && (
                         <span className="flex items-center gap-1 text-xs bg-[#D32F2F] text-white px-2 py-0.5 rounded">
                           <Star className="w-3 h-3 fill-current" />
@@ -698,13 +703,13 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                 <div className="space-y-2 mb-3">
                   {wallet.account && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">账号</span>
-                      <span className="text-sm font-medium">{wallet.account}</span>
+                      <span className="text-sm text-gray-600">UID 账号</span>
+                      <span className="text-sm font-medium font-mono">{wallet.account}</span>
                     </div>
                   )}
                   {wallet.accountName && (
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">姓名</span>
+                      <span className="text-sm text-gray-600">备注名</span>
                       <span className="text-sm font-medium">{wallet.accountName}</span>
                     </div>
                   )}
@@ -741,13 +746,13 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
           <Button
             onClick={() => {
               resetWalletForm();
-              setWalletForm({ ...walletForm, walletType: "wechat" });
+              setWalletForm({ ...walletForm, walletType: "okx" });
               setIsWalletDialogOpen(true);
             }}
             className="w-full bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
           >
             <Plus className="w-5 h-5 mr-1" />
-            添加微信支付账户
+            添加欧易账户
           </Button>
         </div>
       )}
@@ -1009,9 +1014,8 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="blockchain">区块链钱包</SelectItem>
-                  <SelectItem value="alipay">支付宝</SelectItem>
-                  <SelectItem value="wechat">微信支付</SelectItem>
-                  <SelectItem value="other">其他</SelectItem>
+                  <SelectItem value="binance">币安账户</SelectItem>
+                  <SelectItem value="okx">欧易账户</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1082,29 +1086,57 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
               </>
             )}
 
-            {(walletForm.walletType === "alipay" || walletForm.walletType === "wechat") && (
+            {walletForm.walletType === "binance" && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="account">账号 *</Label>
+                  <Label htmlFor="account">交易所 ID *</Label>
                   <Input
                     id="account"
                     value={walletForm.account}
                     onChange={(e) =>
                       setWalletForm({ ...walletForm, account: e.target.value })
                     }
-                    placeholder="手机号或账号"
+                    placeholder="请输入币安交易所 ID"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="accountName">账户名 *</Label>
+                  <Label htmlFor="accountName">备注名</Label>
                   <Input
                     id="accountName"
                     value={walletForm.accountName}
                     onChange={(e) =>
                       setWalletForm({ ...walletForm, accountName: e.target.value })
                     }
-                    placeholder="真实姓名"
+                    placeholder="选填，如：张三的币安"
+                  />
+                </div>
+              </>
+            )}
+
+            {walletForm.walletType === "okx" && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="account">UID 账号 *</Label>
+                  <Input
+                    id="account"
+                    value={walletForm.account}
+                    onChange={(e) =>
+                      setWalletForm({ ...walletForm, account: e.target.value })
+                    }
+                    placeholder="请输入欧易 UID"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="accountName">备注名</Label>
+                  <Input
+                    id="accountName"
+                    value={walletForm.accountName}
+                    onChange={(e) =>
+                      setWalletForm({ ...walletForm, accountName: e.target.value })
+                    }
+                    placeholder="选填，如：张三的欧易"
                   />
                 </div>
               </>
@@ -1216,9 +1248,8 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
               <span className="text-gray-600">钱包类型：</span>
               <span className="font-medium">
                 {walletForm.walletType === "blockchain" && "区块链钱包"}
-                {walletForm.walletType === "alipay" && "支付宝"}
-                {walletForm.walletType === "wechat" && "微信支付"}
-                {walletForm.walletType === "other" && "其他"}
+                {walletForm.walletType === "binance" && "币安账户"}
+                {walletForm.walletType === "okx" && "欧易账户"}
               </span>
             </div>
             
@@ -1239,16 +1270,33 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
               </>
             )}
             
-            {(walletForm.walletType === "alipay" || walletForm.walletType === "wechat") && (
+            {walletForm.walletType === "binance" && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">账号：</span>
-                  <span className="font-medium">{walletForm.account}</span>
+                  <span className="text-gray-600">交易所 ID：</span>
+                  <span className="font-medium font-mono">{walletForm.account}</span>
                 </div>
+                {walletForm.accountName && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">备注名：</span>
+                    <span className="font-medium">{walletForm.accountName}</span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {walletForm.walletType === "okx" && (
+              <>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">账户名：</span>
-                  <span className="font-medium">{walletForm.accountName}</span>
+                  <span className="text-gray-600">UID 账号：</span>
+                  <span className="font-medium font-mono">{walletForm.account}</span>
                 </div>
+                {walletForm.accountName && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">备注名：</span>
+                    <span className="font-medium">{walletForm.accountName}</span>
+                  </div>
+                )}
               </>
             )}
             
