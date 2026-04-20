@@ -518,7 +518,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
         <div className="flex-1 flex flex-col justify-start">
           <div className="h-5 flex items-center gap-1 relative">
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#16A34A' }}>待结佣金</span>
-            <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>({commissionRate}%/年)</span>
+            <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>(年化{commissionRate}%)</span>
             {/* 问号说明按钮 */}
             <button
               className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ml-0.5"
@@ -1247,7 +1247,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
           <div className="h-5 flex items-center gap-1" style={{ color: isParticipantOrder ? '#16A34A' : '#3B82F6' }}>
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`}>{isParticipantOrder ? '订单资产' : '持有资产'}</span>
             {isParticipantOrder && (order.userName || order.username) && (
-              <span className={`${viewMode === 'large' ? 'text-sm' : 'text-[10px]'} font-normal`} style={{ color: '#16A34A', opacity: 0.75 }}>
+              <span className={`${viewMode === 'large' ? 'text-sm' : 'text-[10px]'} font-normal text-gray-400`}>
                 （{order.userName || order.username}）
               </span>
             )}
