@@ -860,8 +860,6 @@ export default function LedgerDetailAA({
                 )}
               </div>
             )}
-            </div>{/* end: 操作按钮+标签容器 */}
-          </div>
         </div>
 
         {/* 4个统计卡片 */}
