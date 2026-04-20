@@ -13550,6 +13550,70 @@ export const appRouter = router({
         }
       }),
 
+    // 获取订单所有参与者的收款方式（AI 智能钱包 Tab 使用）
+    funderGetParticipantsPaymentInfo: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证权限（账本成员均可查看）
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 获取订单所有参与者
+        const participantRows = await db.execute(
+          sql`SELECT p.user_id, p.role as participantRole, u.username, u.name as userName, u.avatar, lm.nickname
+              FROM funder_order_participants p
+              LEFT JOIN users u ON u.id = p.user_id
+              LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
+              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
+              ORDER BY p.sort_order ASC, p.id ASC`
+        ) as any;
+        const participants = ((participantRows[0] || participantRows) as any[]) || [];
+        if (participants.length === 0) return { participants: [] };
+        // 批量查询每个参与者的收款方式（银行卡 + 数字钱包）
+        const mainDb = await getDb();
+        const result = await Promise.all(participants.map(async (p: any) => {
+          const userId = String(p.user_id);
+          let bankCards: any[] = [];
+          let digitalWallets: any[] = [];
+          try {
+            bankCards = await mainDb.select().from(schema.bankCards).where(eq(schema.bankCards.userId, userId));
+          } catch (e) { /* 忽略错误 */ }
+          try {
+            digitalWallets = await mainDb.select().from(schema.digitalWallets).where(eq(schema.digitalWallets.userId, userId));
+          } catch (e) { /* 忽略错误 */ }
+          return {
+            userId: p.user_id,
+            participantRole: p.participantRole,
+            userName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
+            avatar: p.avatar || null,
+            bankCards: bankCards.map((c: any) => ({
+              id: c.id,
+              bankName: c.bankName,
+              cardHolder: c.cardHolder,
+              cardNumber: c.cardNumber,
+              cardType: c.cardType,
+              isDefault: !!c.isDefault,
+              notes: c.notes,
+            })),
+            digitalWallets: digitalWallets.map((w: any) => ({
+              id: w.id,
+              walletType: w.walletType,
+              network: w.network,
+              walletAddress: w.walletAddress,
+              currency: w.currency,
+              account: w.account,
+              accountName: w.accountName,
+              isDefault: !!w.isDefault,
+              notes: w.notes,
+            })),
+          };
+        }));
+        return { participants: result };
+      }),
+
     // 管理员删除融资付息订单
     financeDeleteOrder: protectedProcedure
       .input(z.object({ id: z.number(), ledgerId: z.number() }))
