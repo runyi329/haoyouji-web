@@ -14267,7 +14267,7 @@ export const appRouter = router({
           .select({ userId: ledgerMembers.userId, shortcutButtons: ledgerMembers.shortcutButtons })
           .from(ledgerMembers)
           .where(eq(ledgerMembers.ledgerId, input.ledgerId));
-        const shortcutMap: Record<number, { gold: boolean; qq: boolean; oil: boolean; stock: boolean }> = {};
+        const shortcutMap: Record<number, { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean }> = {};
         for (const row of rows) {
           try {
             const raw = row.shortcutButtons;
@@ -14276,10 +14276,10 @@ export const appRouter = router({
             } else if (raw && typeof raw === 'string') {
               shortcutMap[row.userId] = JSON.parse(raw);
             } else {
-              shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false };
+              shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false };
             }
           } catch {
-            shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false };
+            shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false };
           }
         }
         return shortcutMap;
@@ -14294,6 +14294,7 @@ export const appRouter = router({
           oil: z.boolean(),
           stock: z.boolean(),
           digitalB: z.boolean().optional().default(false),
+          ledger59: z.boolean().optional().default(false),
         }),
       }))
       .mutation(async ({ input, ctx }) => {

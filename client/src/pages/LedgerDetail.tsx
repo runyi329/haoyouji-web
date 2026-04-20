@@ -2681,6 +2681,21 @@ export default function LedgerDetail() {
                         />
                       </div>
                     )}
+                    {/* 59号账本（蓄水池股东）快捷按钮 */}
+                    {myShortcuts.ledger59 && (
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0"
+                        style={{ border: '1.5px solid rgba(255,255,255,0.5)' }}
+                        onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/59'); }}
+                        title="蓄水池股东"
+                      >
+                        <img
+                          src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/gZMsAzlHHuDFuUTJ.png"
+                          alt="蓄水池"
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      </div>
+                    )}
                   </>
                 )}
 

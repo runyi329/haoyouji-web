@@ -741,6 +741,21 @@ export default function LedgerDetailAA({
                   />
                 </div>
               )}
+              {/* 59号账本快捷按钮（蓄水池股东）*/}
+              {myShortcuts?.ledger59 && (
+                <div
+                  className="w-8 h-8 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
+                  style={{ border: '1.5px solid rgba(255,255,255,0.5)', position: 'relative' }}
+                  onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/59'); }}
+                  title="蓄水池股东"
+                >
+                  <img
+                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/gZMsAzlHHuDFuUTJ.png"
+                    alt="蓄水池"
+                    style={{ width: '105%', height: '105%', objectFit: 'cover', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                  />
+                </div>
+              )}
               {/* 搜索和数据按钮已隐藏 */}
               {/* 设置按钮仅账本创建者（owner）可见，管理员不显示 */}
               {canSwitchView && !viewAsUserId && (

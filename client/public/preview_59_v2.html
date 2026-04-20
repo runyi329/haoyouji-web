@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>59号账本图标预览 v2</title>
+<style>
+  body {
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: sans-serif;
+    color: white;
+    gap: 40px;
+    margin: 0;
+  }
+  h2 { margin: 0; font-size: 18px; opacity: 0.8; }
+  .row { display: flex; align-items: flex-end; gap: 32px; }
+  .icon-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .label { font-size: 11px; opacity: 0.5; }
+
+  /* ===== 图标容器 ===== */
+  .icon-container {
+    border-radius: 50%;
+    overflow: hidden;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* 原图 */
+  .icon-container img.base {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 50%;
+  }
+
+  /* 动效叠加层：螺旋流光扫过 */
+  @keyframes shimmer-rotate {
+    0%   { transform: rotate(0deg); opacity: 0.6; }
+    50%  { opacity: 0.9; }
+    100% { transform: rotate(360deg); opacity: 0.6; }
+  }
+  @keyframes shimmer-flow {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 4px 1px rgba(217,38,38,0.4), 0 0 8px 2px rgba(51,115,230,0.3); }
+    25%       { box-shadow: 0 0 6px 2px rgba(242,190,26,0.5), 0 0 12px 3px rgba(217,38,38,0.3); }
+    50%       { box-shadow: 0 0 8px 3px rgba(51,115,230,0.5), 0 0 16px 4px rgba(26,163,64,0.3); }
+    75%       { box-shadow: 0 0 6px 2px rgba(26,163,64,0.5), 0 0 12px 3px rgba(242,190,26,0.3); }
+  }
+
+  .icon-container {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  /* 流光扫描层 */
+  .shimmer-layer {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: linear-gradient(
+      105deg,
+      transparent 30%,
+      rgba(255,255,255,0.12) 45%,
+      rgba(255,255,255,0.22) 50%,
+      rgba(255,255,255,0.12) 55%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-flow 2.5s linear infinite;
+    pointer-events: none;
+  }
+
+  /* 旋转光环 */
+  .ring-layer {
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 0deg,
+      rgba(217,38,38,0.8),
+      rgba(242,190,26,0.8),
+      rgba(51,115,230,0.8),
+      rgba(26,163,64,0.8),
+      rgba(217,38,38,0.8)
+    );
+    animation: shimmer-rotate 4s linear infinite;
+    mask: radial-gradient(circle, transparent 46%, black 48%, black 50%, transparent 52%);
+    -webkit-mask: radial-gradient(circle, transparent 46%, black 48%, black 50%, transparent 52%);
+    pointer-events: none;
+  }
+
+  /* 模拟头部栏 */
+  .header-bar {
+    background: linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%);
+    padding: 10px 14px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 320px;
+  }
+  .avatar { width: 38px; height: 38px; background: rgba(255,255,255,0.3); border-radius: 50%; }
+  .name { flex: 1; font-size: 14px; font-weight: 600; }
+  .icon-circle { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; border: 1.5px solid rgba(255,255,255,0.5); flex-shrink: 0; }
+  .icon-circle img { width: 100%; height: 100%; object-fit: cover; }
+  .settings-btn { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<h2>59号账本 · 蓄水池股东 · 图标预览 v2</h2>
+<p style="opacity:0.5;font-size:12px;margin:0">原图圆形裁切 + 彩色流光 + 外圈旋转光环</p>
+
+<div class="row">
+  <!-- 大尺寸 -->
+  <div class="icon-wrap">
+    <div class="icon-container" style="width:120px;height:120px">
+      <img class="base" src="/icon-59-circle.png" alt="59号账本">
+      <div class="ring-layer"></div>
+      <div class="shimmer-layer"></div>
+    </div>
+    <div class="label">大尺寸 120px</div>
+  </div>
+
+  <!-- 中尺寸 -->
+  <div class="icon-wrap">
+    <div class="icon-container" style="width:64px;height:64px">
+      <img class="base" src="/icon-59-circle.png" alt="59号账本">
+      <div class="ring-layer"></div>
+      <div class="shimmer-layer"></div>
+    </div>
+    <div class="label">中尺寸 64px</div>
+  </div>
+
+  <!-- 实际尺寸 32px -->
+  <div class="icon-wrap">
+    <div class="icon-container" style="width:32px;height:32px">
+      <img class="base" src="/icon-59-circle.png" alt="59号账本">
+      <div class="ring-layer"></div>
+      <div class="shimmer-layer"></div>
+    </div>
+    <div class="label">实际尺寸 32px</div>
+  </div>
+</div>
+
+<!-- 实际使用场景 -->
+<div class="icon-wrap">
+  <div class="header-bar">
+    <div class="avatar"></div>
+    <div class="name">蓄水池股东</div>
+    <!-- BTC 图标 -->
+    <div class="icon-circle">
+      <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png">
+    </div>
+    <!-- 新的 59 号图标 -->
+    <div class="icon-container" style="width:32px;height:32px">
+      <img class="base" src="/icon-59-circle.png" alt="59号账本">
+      <div class="ring-layer"></div>
+      <div class="shimmer-layer"></div>
+    </div>
+    <div class="settings-btn">⚙</div>
+  </div>
+  <div class="label" style="margin-top:8px">实际使用场景（头部栏）</div>
+</div>
+
+</body>
+</html>
