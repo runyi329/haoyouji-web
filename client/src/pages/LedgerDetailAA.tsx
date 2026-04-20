@@ -799,7 +799,7 @@ export default function LedgerDetailAA({
               <div className="relative flex-1">
                 <button
                   onClick={() => setShowTagDropdown(!showTagDropdown)}
-                  className="flex-1 flex items-center justify-center gap-1 h-9 rounded-full text-sm font-semibold transition-all"
+                  className="w-full flex items-center justify-center gap-1 h-9 rounded-full text-sm font-semibold transition-all"
                   style={{
                     backgroundColor: selectedTag ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.2)",
                     color: selectedTag ? "#D32F2F" : "#FFFFFF",
