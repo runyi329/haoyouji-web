@@ -335,9 +335,17 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
         toast.error("请填写币安交易所 ID");
         return;
       }
+      if (!/^\d{9}$/.test(walletForm.account.trim())) {
+        toast.error("币安 ID 必须为 9 位纯数字，请检查后重新输入");
+        return;
+      }
     } else if (walletForm.walletType === "okx") {
       if (!walletForm.account) {
         toast.error("请填写欧易 UID");
+        return;
+      }
+      if (!/^\d{8,12}$/.test(walletForm.account.trim())) {
+        toast.error("欧易 UID 必须为 8～12 位纯数字，请检查后重新输入");
         return;
       }
     } else if (walletForm.walletType === "wechat") {
@@ -1116,8 +1124,11 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                     onChange={(e) =>
                       setWalletForm({ ...walletForm, account: e.target.value })
                     }
-                    placeholder="请输入币安交易所 ID"
+                    placeholder="请输入 9 位币安 ID"
+                    maxLength={9}
+                    inputMode="numeric"
                   />
+                  <p className="text-xs text-gray-400">币安 ID 为 9 位纯数字，可在币安 App 个人中心查看</p>
                 </div>
 
                 <div className="space-y-2">
@@ -1144,8 +1155,11 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                     onChange={(e) =>
                       setWalletForm({ ...walletForm, account: e.target.value })
                     }
-                    placeholder="请输入欧易 UID"
+                    placeholder="请输入 8～12 位欧易 UID"
+                    maxLength={12}
+                    inputMode="numeric"
                   />
+                  <p className="text-xs text-gray-400">欧易 UID 为 8～12 位纯数字，可在欧易 App 个人中心查看</p>
                 </div>
 
                 <div className="space-y-2">
