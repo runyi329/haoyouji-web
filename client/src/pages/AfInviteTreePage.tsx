@@ -3,11 +3,11 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch } from "lucide-react";
 
-// ===== 组织架构图树状图弹层组件（标准T形连接线样式）=====
+// ===== 家族树状图弹层组件（紧凑家谱样式）=====
 type TreeUser = { id: number; name: string; invitedByUserId: number | null; payoutRatio: number };
 
-// 单个节点卡片
-function OrgCard({
+// 单个节点卡片（紧凑版）
+function FamilyCard({
   user, yjhUserId, editingId, setEditingId, inputVal, setInputVal, onSave, isSaving, localRatios,
 }: {
   user: TreeUser; yjhUserId: number; editingId: number | null;
@@ -20,45 +20,38 @@ function OrgCard({
   const isYJH = user.id === yjhUserId;
   return (
     <div
-      className="flex flex-col items-center justify-center select-none"
       style={{
-        border: isYJH ? '2px solid #D32F2F' : '1.5px solid #9E9E9E',
-        backgroundColor: isYJH ? '#FFF3F3' : '#FFFFFF',
-        borderRadius: 6,
-        minWidth: 64, maxWidth: 84,
-        padding: '5px 8px',
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: isYJH ? '1.5px solid #C62828' : '1px solid #BDBDBD',
+        backgroundColor: isYJH ? '#FFEBEE' : '#FAFAFA',
+        borderRadius: 5,
+        padding: '3px 7px',
+        minWidth: 52,
+        maxWidth: 72,
         cursor: 'pointer',
-        boxShadow: isYJH ? '0 2px 6px rgba(211,47,47,0.15)' : '0 1px 4px rgba(0,0,0,0.10)',
+        boxShadow: isYJH ? '0 1px 4px rgba(198,40,40,0.18)' : '0 1px 3px rgba(0,0,0,0.08)',
+        userSelect: 'none',
       }}
-      onClick={() => {
-        if (!isEditing) {
-          setEditingId(user.id);
-          setInputVal(String(currentRatio.toFixed(1)));
-        }
-      }}
+      onClick={() => { if (!isEditing) { setEditingId(user.id); setInputVal(String(currentRatio.toFixed(1))); } }}
     >
-      <span
-        style={{
-          color: isYJH ? '#D32F2F' : '#222',
-          fontWeight: 600,
-          fontSize: 12,
-          maxWidth: 76,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          display: 'block',
-          textAlign: 'center',
-        }}
-      >
+      <span style={{
+        fontSize: 11, fontWeight: 600, color: isYJH ? '#C62828' : '#333',
+        maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        lineHeight: '15px',
+      }}>
         {isYJH ? 'YJH' : (user.name || '未知')}
       </span>
-      <div style={{ width: '100%', height: 1, backgroundColor: isYJH ? '#FFCDD2' : '#E0E0E0', margin: '3px 0' }} />
       {isEditing ? (
-        <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2 }}
+          onClick={e => e.stopPropagation()}>
           <input
             type="number" min={0} max={100} step={0.1} value={inputVal}
             onChange={e => setInputVal(e.target.value)}
-            style={{ width: 36, fontSize: 11, padding: '1px 3px', border: '1px solid #FFA726', borderRadius: 3, textAlign: 'center', outline: 'none', backgroundColor: '#fff' }}
+            style={{ width: 32, fontSize: 10, padding: '1px 2px', border: '1px solid #FFA726',
+              borderRadius: 3, textAlign: 'center', outline: 'none', backgroundColor: '#fff' }}
             autoFocus
             onKeyDown={e => {
               if (e.key === 'Enter') onSave(user.id, parseFloat(inputVal) || 0);
@@ -68,11 +61,13 @@ function OrgCard({
           <button
             onClick={() => onSave(user.id, parseFloat(inputVal) || 0)}
             disabled={isSaving}
-            style={{ backgroundColor: '#D32F2F', color: '#fff', fontSize: 10, padding: '2px 4px', borderRadius: 3, border: 'none', cursor: 'pointer' }}
+            style={{ backgroundColor: '#C62828', color: '#fff', fontSize: 9, padding: '1px 3px',
+              borderRadius: 3, border: 'none', cursor: 'pointer', lineHeight: '14px' }}
           >✓</button>
         </div>
       ) : (
-        <span style={{ fontSize: 11, fontWeight: 700, color: isYJH ? '#D32F2F' : (currentRatio > 0 ? '#E65100' : '#9E9E9E'), textAlign: 'center' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, lineHeight: '14px',
+          color: isYJH ? '#C62828' : (currentRatio > 0 ? '#E65100' : '#9E9E9E') }}>
           {`${currentRatio.toFixed(1)}%`}
         </span>
       )}
@@ -80,8 +75,8 @@ function OrgCard({
   );
 }
 
-// 递归渲染组织架构图（标准T形连接线）
-function OrgTree({
+// 递归渲染家族树节点
+function FamilyNode({
   node, allUsers, yjhUserId, editingId, setEditingId, inputVal, setInputVal,
   onSave, isSaving, localRatios, collapsedIds, toggleCollapse,
 }: {
@@ -98,45 +93,42 @@ function OrgTree({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      {/* 节点卡片 */}
-      <div style={{ position: 'relative' }}>
-        <OrgCard
+      {/* 节点卡片 + 折叠按钮 */}
+      <div style={{ position: 'relative', paddingBottom: hasChildren ? 8 : 0 }}>
+        <FamilyCard
           user={node} yjhUserId={yjhUserId} editingId={editingId}
           setEditingId={setEditingId} inputVal={inputVal} setInputVal={setInputVal}
           onSave={onSave} isSaving={isSaving} localRatios={localRatios}
         />
-        {/* 展开/折叠按钮 */}
         {hasChildren && (
           <button
             onClick={e => { e.stopPropagation(); toggleCollapse(node.id); }}
             style={{
-              position: 'absolute', bottom: -10, left: '50%', transform: 'translateX(-50%)',
-              width: 18, height: 18, borderRadius: '50%',
-              backgroundColor: isCollapsed ? '#D32F2F' : '#757575',
-              color: '#fff', border: '2px solid #fff',
-              fontSize: 12, lineHeight: '14px', textAlign: 'center',
-              cursor: 'pointer', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              position: 'absolute', bottom: -2, left: '50%', transform: 'translateX(-50%)',
+              width: 14, height: 14, borderRadius: '50%',
+              backgroundColor: isCollapsed ? '#C62828' : '#9E9E9E',
+              color: '#fff', border: '1.5px solid #fff',
+              fontSize: 10, cursor: 'pointer', zIndex: 2,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              lineHeight: 1, padding: 0,
             }}
-          >
-            {isCollapsed ? '+' : '−'}
-          </button>
+          >{isCollapsed ? '+' : '−'}</button>
         )}
       </div>
 
       {/* 子节点区域 */}
       {hasChildren && !isCollapsed && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          {/* 父节点到横线的竖线 */}
-          <div style={{ width: 2, height: 20, backgroundColor: '#BDBDBD' }} />
-
+          {/* 父→横线的竖线 */}
+          <div style={{ width: 1, height: 12, backgroundColor: '#BDBDBD' }} />
           {/* 子节点行 */}
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', position: 'relative' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', position: 'relative', gap: 0 }}>
             {children.map((child, idx) => (
-              <div key={child.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', paddingLeft: idx > 0 ? 12 : 0, paddingRight: idx < children.length - 1 ? 12 : 0 }}>
-                {/* 每个子节点顶部的竖线 */}
-                <div style={{ width: 2, height: 20, backgroundColor: '#BDBDBD' }} />
-                <OrgTree
+              <div key={child.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center',
+                paddingLeft: idx > 0 ? 8 : 0, paddingRight: idx < children.length - 1 ? 8 : 0 }}>
+                {/* 子节点顶部竖线 */}
+                <div style={{ width: 1, height: 12, backgroundColor: '#BDBDBD' }} />
+                <FamilyNode
                   node={child} allUsers={allUsers} yjhUserId={yjhUserId}
                   editingId={editingId} setEditingId={setEditingId}
                   inputVal={inputVal} setInputVal={setInputVal}
@@ -145,17 +137,12 @@ function OrgTree({
                 />
               </div>
             ))}
-            {/* T形横线（覆盖在子节点顶部竖线上方）*/}
+            {/* T形横线 */}
             {children.length > 1 && (
               <div style={{
-                position: 'absolute',
-                top: 0,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                height: 2,
-                backgroundColor: '#BDBDBD',
-                width: `calc(100% - 32px)`,
-                zIndex: 1,
+                position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+                height: 1, backgroundColor: '#BDBDBD',
+                width: `calc(100% - 16px)`, zIndex: 1,
               }} />
             )}
           </div>
@@ -165,7 +152,7 @@ function OrgTree({
   );
 }
 
-// 顶层渲染入口
+// 顶层渲染入口（保持 OrgLevel 名称兼容）
 function OrgLevel({
   nodes, allUsers, yjhUserId, editingId, setEditingId, inputVal, setInputVal,
   onSave, isSaving, localRatios, collapsedIds, toggleCollapse,
@@ -178,9 +165,10 @@ function OrgLevel({
   toggleCollapse: (id: number) => void;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 24, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start',
+      justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
       {nodes.map(node => (
-        <OrgTree
+        <FamilyNode
           key={node.id}
           node={node} allUsers={allUsers} yjhUserId={yjhUserId}
           editingId={editingId} setEditingId={setEditingId}
