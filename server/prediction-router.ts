@@ -829,6 +829,38 @@ export const predictionRouter = router({
       return result;
     }),
 
+  // 撤销结算（管理员用）：把指定订单状态重置为 pending，并删除对应派奖记录
+  revertSettle: protectedProcedure
+    .input(z.object({
+      betId: z.number(), // crypto_bets.id
+    }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+      // 1. 查询订单当前状态
+      const [rows] = await conn.execute(
+        `SELECT id, order_no, ledger_id, user_id, status, expected_return FROM crypto_bets WHERE id = ? LIMIT 1`,
+        [input.betId]
+      ) as any[];
+      const bet = (rows as any[])[0];
+      if (!bet) throw new Error(`订单#${input.betId} 不存在`);
+      if (bet.status === 'pending') return { success: true, message: '订单已是 pending 状态，无需撤销' };
+      // 2. 如果是 won，删除对应派奖记录
+      if (bet.status === 'won') {
+        const [delRows] = await conn.execute(
+          `DELETE FROM af_manual_balances WHERE ledger_id = ? AND user_id = ? AND amount = ? AND note LIKE ? ORDER BY created_at DESC LIMIT 1`,
+          [bet.ledger_id, bet.user_id, parseFloat(bet.expected_return), `%编号${bet.order_no}%`]
+        ) as any[];
+        console.log(`[撤销结算] 删除派奖记录: ledger=${bet.ledger_id} user=${bet.user_id} amount=${bet.expected_return} order=${bet.order_no}`);
+      }
+      // 3. 重置订单状态为 pending
+      await conn.execute(
+        `UPDATE crypto_bets SET status = 'pending', settled_at = NULL, actual_change_pct = NULL, settle_note = NULL WHERE id = ?`,
+        [input.betId]
+      );
+      console.log(`[撤销结算] 订单#${input.betId} (${bet.order_no}) 已重置为 pending`);
+      return { success: true, message: `订单#${input.betId} (${bet.order_no}) 已撤销结算，状态重置为 pending` };
+    }),
   // 行情竞猜订单汇总（供邀请页面展示）
   getAllBetsStats: protectedProcedure
     .input(z.object({
