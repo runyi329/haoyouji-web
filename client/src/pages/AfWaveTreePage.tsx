@@ -290,11 +290,31 @@ export default function AfWaveTreePage() {
   }, []);
 
   // 构建波比关系映射：key = "sourceUserId-beneficiaryUserId" -> ratio
+  // 不足100%的部分自动实时补给直接上级（仅展示层，不写入数据库）
   const ratioMap = useMemo(() => {
     const map = new Map<string, number>();
     const allRatios = (inviteTreeData as any)?.allPayoutRatios ?? [];
+    const users = inviteTreeData?.users ?? [];
+    // 先将所有已有数据写入 map
     for (const r of allRatios) {
       map.set(`${r.sourceUserId}-${r.beneficiaryUserId}`, r.ratio);
+    }
+    // 对每个非 YJH 用户，计算已分配总和，不足100%的剩余自动补给直接上级
+    for (const u of users as any[]) {
+      if (u.id === YJH_USER_ID_CONST) continue;
+      if (!u.invitedByUserId) continue; // 没有上级的跳过
+      // 计算该用户作为 source 的所有分配总和
+      let total = 0;
+      for (const r of allRatios) {
+        if (r.sourceUserId === u.id) total += r.ratio;
+      }
+      const remaining = parseFloat((100 - total).toFixed(1));
+      if (remaining > 0) {
+        // 将剩余部分加到直接上级的抽成上（展示层叠加）
+        const key = `${u.id}-${u.invitedByUserId}`;
+        const existing = map.get(key) ?? 0;
+        map.set(key, parseFloat((existing + remaining).toFixed(1)));
+      }
     }
     return map;
   }, [inviteTreeData]);
@@ -328,8 +348,8 @@ export default function AfWaveTreePage() {
         }
       }
       const rounded = parseFloat(total.toFixed(1));
-      if (rounded !== 100.0 && rounded !== 0) {
-        // 只有已经开始分配但不等于100%的才报警
+      // 只有超过100%才报警（不足100%已自动补给上级，不需要报警）
+      if (rounded > 100.0) {
         chainWarnings.push({
           memberName: u.name || `用户${u.id}`,
           total: rounded,
