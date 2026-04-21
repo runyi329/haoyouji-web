@@ -723,6 +723,36 @@ export const predictionRouter = router({
         [orderNo, ledgerId, userId, coin, direction, rangeIndex, rangeLabel, betAmount, odds, expectedReturn, houseEdge, probability, targetDate]
       ) as any;
 
+      // 6. YJH 返佣：若下单人是 YJH 本人或其下线，则给 YJH 打 10% 返佣
+      const YJH_USER_ID_REBATE = 4957151;
+      const isYJHOrDownline = async (uid: number, depth = 0): Promise<boolean> => {
+        if (depth > 10) return false;
+        if (uid === YJH_USER_ID_REBATE) return true;
+        const [urows] = await conn.execute(
+          `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+          [uid]
+        ) as any[];
+        const urow = (urows as any[])[0];
+        if (!urow || !urow.invited_by_user_id) return false;
+        if (urow.invited_by_user_id === YJH_USER_ID_REBATE) return true;
+        return isYJHOrDownline(urow.invited_by_user_id, depth + 1);
+      };
+      try {
+        const shouldRebate = await isYJHOrDownline(userId);
+        if (shouldRebate) {
+          const rebateAmount = parseFloat((betAmount * 0.1).toFixed(8));
+          const rebateNote = `行情评估返佣 ${coinFullName} ${shortDate} ${dirLabel} 编号${orderNo}`;
+          await conn.execute(
+            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+             VALUES (?, ?, ?, ?, NOW(), NOW())`,
+            [ledgerId, YJH_USER_ID_REBATE, rebateAmount, rebateNote]
+          );
+          console.log(`[竞猜返佣] 订单${orderNo} 下单人${userId} → YJH返佣${rebateAmount}U`);
+        }
+      } catch (e) {
+        console.error('[竞猜返佣] 返佣写入失败（不影响下单）:', e);
+      }
+
       const newBalance = await getUserBalance(userId, ledgerId);
 
       return {
@@ -861,6 +891,25 @@ export const predictionRouter = router({
       console.log(`[撤销结算] 订单#${input.betId} (${bet.order_no}) 已重置为 pending`);
       return { success: true, message: `订单#${input.betId} (${bet.order_no}) 已撤销结算，状态重置为 pending` };
     }),
+  // 补录历史返佣（一次性，内部管理用）
+  addHistoricalRebate: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      userId: z.number(),   // 返佣接收方 user_id
+      amount: z.number(),   // 返佣金额
+      note: z.string(),     // 备注
+    }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+      await conn.execute(
+        `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        [input.ledgerId, input.userId, input.amount, input.note]
+      );
+      console.log(`[补录返佣] ledger=${input.ledgerId} user=${input.userId} amount=${input.amount} note=${input.note}`);
+      return { success: true };
+    }),
+
   // 行情竞猜订单汇总（供邀请页面展示）
   getAllBetsStats: protectedProcedure
     .input(z.object({
