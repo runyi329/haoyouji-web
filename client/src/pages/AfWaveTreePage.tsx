@@ -135,10 +135,10 @@ function FamilyNode({
   const isCollapsed = collapsedIds.has(node.id);
   const hasChildren = children.length > 0;
 
-  // 上级从这条线拿多少：source=当前节点, beneficiary=父节点
-  const edgeRatio = parentId !== null
-    ? (ratioMap.get(`${node.id}-${parentId}`) ?? 0)
-    : 0;
+  // 连接线上的数字 = 父节点（上级）的自留比例
+  // 因为上级对所有下级都拿同样的比例
+  const parentNode = parentId !== null ? allUsers.find(u => u.id === parentId) : null;
+  const edgeRatio = parentNode ? parentNode.selfRatio : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -290,31 +290,11 @@ export default function AfWaveTreePage() {
   }, []);
 
   // 构建波比关系映射：key = "sourceUserId-beneficiaryUserId" -> ratio
-  // 不足100%的部分自动实时补给直接上级（仅展示层，不写入数据库）
   const ratioMap = useMemo(() => {
     const map = new Map<string, number>();
     const allRatios = (inviteTreeData as any)?.allPayoutRatios ?? [];
-    const users = inviteTreeData?.users ?? [];
-    // 先将所有已有数据写入 map
     for (const r of allRatios) {
       map.set(`${r.sourceUserId}-${r.beneficiaryUserId}`, r.ratio);
-    }
-    // 对每个非 YJH 用户，计算已分配总和，不足100%的剩余自动补给直接上级
-    for (const u of users as any[]) {
-      if (u.id === YJH_USER_ID_CONST) continue;
-      if (!u.invitedByUserId) continue; // 没有上级的跳过
-      // 计算该用户作为 source 的所有分配总和
-      let total = 0;
-      for (const r of allRatios) {
-        if (r.sourceUserId === u.id) total += r.ratio;
-      }
-      const remaining = parseFloat((100 - total).toFixed(1));
-      if (remaining > 0) {
-        // 将剩余部分加到直接上级的抽成上（展示层叠加）
-        const key = `${u.id}-${u.invitedByUserId}`;
-        const existing = map.get(key) ?? 0;
-        map.set(key, parseFloat((existing + remaining).toFixed(1)));
-      }
     }
     return map;
   }, [inviteTreeData]);
@@ -333,27 +313,25 @@ export default function AfWaveTreePage() {
     });
   }, [inviteTreeData, ratioMap]);
 
-  // 链完整性检查（基于 allPayoutRatios 数据）
+  // 链完整性检查：从每个叶子节点往上追溯，检查链上所有 selfRatio 之和是否 = 100%
   const chainWarnings: { memberName: string; total: number; gap: number }[] = [];
   if (treeUsers.length > 0) {
-    // 对每个用户（非 YJH），检查以该用户为 source 的所有 ratio 之和是否 = 100%
-    for (const u of treeUsers) {
-      if (u.id === YJH_USER_ID_CONST) continue;
-      // 找到该用户作为 source 的所有分配
-      let total = 0;
-      const allRatios = (inviteTreeData as any)?.allPayoutRatios ?? [];
-      for (const r of allRatios) {
-        if (r.sourceUserId === u.id) {
-          total += r.ratio;
-        }
+    const userMap = new Map(treeUsers.map(u => [u.id, u]));
+    const childIds = new Set(treeUsers.filter(u => u.invitedByUserId !== null).map(u => u.invitedByUserId!));
+    const leafUsers = treeUsers.filter(u => u.id !== YJH_USER_ID_CONST && !childIds.has(u.id));
+    for (const leaf of leafUsers) {
+      let chainTotal = 0;
+      let current: TreeUser | undefined = leaf;
+      while (current) {
+        chainTotal += current.selfRatio;
+        current = current.invitedByUserId ? userMap.get(current.invitedByUserId) : undefined;
       }
-      const rounded = parseFloat(total.toFixed(1));
-      // 只有超过100%才报警（不足100%已自动补给上级，不需要报警）
+      const rounded = parseFloat(chainTotal.toFixed(1));
       if (rounded > 100.0) {
         chainWarnings.push({
-          memberName: u.name || `用户${u.id}`,
+          memberName: leaf.name || `用户${leaf.id}`,
           total: rounded,
-          gap: parseFloat((100.0 - rounded).toFixed(1)),
+          gap: parseFloat((rounded - 100.0).toFixed(1)),
         });
       }
     }
