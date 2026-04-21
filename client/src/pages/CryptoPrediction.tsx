@@ -629,6 +629,23 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                       {bet.order_no && <span className="font-mono">编号{bet.order_no}</span>}
                       {timeStr && <span className="font-mono">{timeStr}</span>}
                     </div>
+                    {/* 实际涨跌幅（已结算订单，展示在左列） */}
+                    {!isPending && !isCancelled && (bet.actual_change_pct != null || bet.actualChangePct != null) && (() => {
+                      const actPct = parseFloat(bet.actual_change_pct ?? bet.actualChangePct);
+                      const actColor = actPct >= 0 ? '#e53935' : '#43a047';
+                      // 从 target_date 解析月日，如 "2026-04-18" -> "4月4日"
+                      const td = String(bet.target_date || '');
+                      const tdMatch = td.match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
+                      const dateLabel = tdMatch ? `${parseInt(tdMatch[1])}月${parseInt(tdMatch[2])}日` : td;
+                      return (
+                        <div style={{ fontSize: '0.7rem', marginTop: 2 }}>
+                          <span style={{ color: '#aaa' }}>{dateLabel}涨跌幅</span>
+                          <span style={{ color: actColor, fontWeight: 600, marginLeft: 2 }}>
+                            {actPct >= 0 ? '+' : ''}{actPct.toFixed(2)}%
+                          </span>
+                        </div>
+                      );
+                    })()}
                     {/* 实时价格 + 开奖倒计时（仅待结算订单，始终占位避免跳动） */}
                     {isPending && (
                       <div className="flex items-center gap-2" style={{ fontSize: '0.7rem', marginTop: 2, minHeight: '1rem' }}>
@@ -679,19 +696,7 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                       <span>{parseFloat(bet.odds).toFixed(2)}x</span>
                       <span>目标<span style={{ color: '#e65100', fontWeight: 600 }}>{parseFloat(bet.expected_return).toFixed(0)}U</span></span>
                     </div>
-                    {/* 实际涨跌幅（已结算订单显示） */}
-                    {!isPending && !isCancelled && (bet.actual_change_pct != null || bet.actualChangePct != null) && (
-                      <div style={{ fontSize: '0.7rem', marginTop: 1 }}>
-                        <span style={{ color: '#aaa' }}>实际</span>
-                        <span style={{
-                          color: parseFloat(bet.actual_change_pct ?? bet.actualChangePct) >= 0 ? '#e53935' : '#43a047',
-                          fontWeight: 600,
-                          marginLeft: 2,
-                        }}>
-                          {parseFloat(bet.actual_change_pct ?? bet.actualChangePct) >= 0 ? '+' : ''}{parseFloat(bet.actual_change_pct ?? bet.actualChangePct).toFixed(2)}%
-                        </span>
-                      </div>
-                    )}
+
                   </div>
                 </div>
               );
