@@ -12,8 +12,8 @@ import path from 'path';
 // 持久化缓存文件路径（服务器本地）
 const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 
-// 内存价格缓存（含24h涨跌幅）
-const latestPrices: Record<string, { price: number; changePercent: number; updatedAt: string }> = {};
+// 内存价格缓存（含今日开盘价和24h涨跌幅）
+const latestPrices: Record<string, { price: number; todayOpen: number; changePercent: number; updatedAt: string }> = {};
 
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM'];
 // 股票类合约（仅 OKX SWAP 有价格，Gate.io/火币无此品种）
@@ -27,7 +27,7 @@ function loadCacheFromFile() {
       const cached = JSON.parse(raw);
       for (const coin of [...COINS, ...STOCK_COINS]) {
         if (cached[coin]?.price && cached[coin]?.updatedAt) {
-          latestPrices[coin] = { price: cached[coin].price, changePercent: cached[coin].changePercent ?? 0, updatedAt: cached[coin].updatedAt };
+          latestPrices[coin] = { price: cached[coin].price, todayOpen: cached[coin].todayOpen ?? 0, changePercent: cached[coin].changePercent ?? 0, updatedAt: cached[coin].updatedAt };
         }
       }
       const coins = Object.entries(latestPrices).map(([k, v]) => `${k}=${v.price}`).join(', ');
@@ -68,7 +68,7 @@ async function fetchTodayOpen(coin: string): Promise<number | null> {
   return null;
 }
 
-async function fetchPriceWithChange(coin: string): Promise<{ price: number; changePercent: number | null } | null> {
+async function fetchPriceWithChange(coin: string): Promise<{ price: number; todayOpen: number | null; changePercent: number | null } | null> {
   let price: number | null = null;
 
   // Gate.io 主用（只取价格）
@@ -130,7 +130,7 @@ async function fetchPriceWithChange(coin: string): Promise<{ price: number; chan
     ? ((price - todayOpen) / todayOpen) * 100
     : null;
 
-  return { price, changePercent };
+  return { price, todayOpen, changePercent };
 }
 
 async function fetchPrice(coin: string): Promise<number | null> {
@@ -164,8 +164,10 @@ async function scanPrices() {
       if (result !== null && result.price > 0) {
         // changePercent 为 null 时（火币日K查不到）保留上次缓存值，不覆盖
         const prevChange = latestPrices[coin]?.changePercent ?? 0;
+        const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
         latestPrices[coin] = {
           price: result.price,
+          todayOpen: result.todayOpen !== null ? result.todayOpen : prevOpen,
           changePercent: result.changePercent !== null ? result.changePercent : prevChange,
           updatedAt: new Date().toISOString()
         };
@@ -180,9 +182,10 @@ async function scanPrices() {
     try {
       const price = await fetchStockPrice(coin);
       if (price !== null && price > 0) {
-        // 股票类合约保留已有的 changePercent，暂不计算
+        // 股票类合约保留已有的 todayOpen 和 changePercent，暂不计算
         const prevChange = latestPrices[coin]?.changePercent ?? 0;
-        latestPrices[coin] = { price, changePercent: prevChange, updatedAt: new Date().toISOString() };
+        const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
+        latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, updatedAt: new Date().toISOString() };
         updated = true;
       }
     } catch (err) {
@@ -203,7 +206,7 @@ export function getLatestPrice(coin: string): number | null {
   return entry.price;
 }
 
-export function getAllLatestPrices(): Record<string, { price: number; changePercent: number; updatedAt: string }> {
+export function getAllLatestPrices(): Record<string, { price: number; todayOpen: number; changePercent: number; updatedAt: string }> {
   return { ...latestPrices };
 }
 
