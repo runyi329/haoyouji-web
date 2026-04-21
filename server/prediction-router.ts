@@ -741,7 +741,7 @@ export const predictionRouter = router({
         const shouldRebate = await isYJHOrDownline(userId);
         if (shouldRebate) {
           const rebateAmount = parseFloat((betAmount * 0.1).toFixed(8));
-          const rebateNote = `行情评估返佣 ${coinFullName} ${shortDate} ${dirLabel} 编号${orderNo}`;
+          const rebateNote = `${coinFullName} ${shortDate} ${dirLabel} 编号${orderNo}`;
           // 1. 写入下单账本（竞猜子账本，用于竞猜页面展示返佣明细）
           await conn.execute(
             `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
