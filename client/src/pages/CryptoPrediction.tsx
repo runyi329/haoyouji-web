@@ -626,14 +626,18 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                       {bet.order_no && <span className="font-mono">编号{bet.order_no}</span>}
                       {timeStr && <span className="font-mono">{timeStr}</span>}
                     </div>
-                    {/* 实时涨跌幅 + 开奖倒计时（仅待结算订单） */}
-                    {isPending && (liveChangeStr || countdownStr) && (
-                      <div className="flex items-center gap-2" style={{ fontSize: '0.7rem', marginTop: 2 }}>
-                        {liveChangeStr && (
+                    {/* 实时涨跌幅 + 开奖倒计时（仅待结算订单，始终占位避免跳动） */}
+                    {isPending && (
+                      <div className="flex items-center gap-2" style={{ fontSize: '0.7rem', marginTop: 2, minHeight: '1rem' }}>
+                        {liveChangeStr ? (
                           <span style={{ color: liveChangeColor, fontWeight: 600 }}>今日 {liveChangeStr}</span>
+                        ) : (
+                          <span style={{ display: 'inline-block', width: 48, height: 10, borderRadius: 4, background: '#f0f0f0' }} />
                         )}
-                        {countdownStr && (
+                        {countdownStr ? (
                           <span style={{ color: '#888', fontVariantNumeric: 'tabular-nums', fontFamily: 'monospace' }}>{countdownStr}</span>
+                        ) : (
+                          <span style={{ display: 'inline-block', width: 56, height: 10, borderRadius: 4, background: '#f0f0f0' }} />
                         )}
                       </div>
                     )}
