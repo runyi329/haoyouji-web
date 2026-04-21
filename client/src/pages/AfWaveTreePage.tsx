@@ -10,8 +10,17 @@ type TreeUser = {
   id: number;
   name: string;
   invitedByUserId: number | null;
-  selfRatio: number; // 自留比例（source=self, beneficiary=self）
+  payoutRatio: number; // 邀请名单里的本人拨比（source=self, beneficiary=self）
 };
+
+function getDirectEdgeRatio(
+  ratioMap: Map<string, number>,
+  sourceUserId: number,
+  beneficiaryUserId: number | null,
+) {
+  if (beneficiaryUserId === null) return 0;
+  return ratioMap.get(`${sourceUserId}-${beneficiaryUserId}`) ?? 0;
+}
 
 type PayoutRelation = {
   sourceUserId: number;
@@ -67,16 +76,16 @@ function FamilyCard({
       >
         {isYJH ? "YJH" : user.name || "未知"}
       </span>
-      {/* 名字下方：自留比例 */}
+      {/* 名字下方：邀请名单里的本人拨比 */}
       <span
         style={{
           fontSize: 8,
           fontWeight: 700,
           lineHeight: "12px",
-          color: user.selfRatio > 0 ? "#1B5E20" : "#9E9E9E",
+          color: user.payoutRatio > 0 ? "#1B5E20" : "#9E9E9E",
         }}
       >
-        {user.selfRatio > 0 ? `自${user.selfRatio.toFixed(1)}%` : "0%"}
+        {`${user.payoutRatio.toFixed(1)}%`}
       </span>
     </div>
   );
@@ -135,35 +144,9 @@ function FamilyNode({
   const isCollapsed = collapsedIds.has(node.id);
   const hasChildren = children.length > 0;
 
-  // 连接线上的数字 = 上级从这个人身上能拿到多少
-  // 即 source=当前节点, beneficiary=父节点 的 ratio
-  // 如果没有设置（新人），则自动计算：100% 减去这条链上面所有已设置的橙色数字和自留之和
-  let edgeRatio = 0;
-  if (parentId !== null) {
-    const dbRatio = ratioMap.get(`${node.id}-${parentId}`);
-    if (dbRatio !== undefined && dbRatio > 0) {
-      // 数据库里有设置，直接用
-      edgeRatio = dbRatio;
-    } else {
-      // 没有设置，自动计算：
-      // 连接线 = 100% - 这条链上所有已设置的橙色数字之和
-      // 即从当前节点的父节点往上，累加所有已设置的连接线 ratio
-      let setTotal = 0;
-      // 先加上父节点到其上级的已设置连接线
-      let cur: number | null = parentId;
-      while (cur !== null) {
-        const curNode = allUsers.find(u => u.id === cur);
-        if (!curNode) break;
-        const curParent = curNode.invitedByUserId;
-        if (curParent !== null) {
-          const r = ratioMap.get(`${cur}-${curParent}`);
-          if (r !== undefined && r > 0) setTotal += r;
-        }
-        cur = curParent;
-      }
-      edgeRatio = Math.max(0, parseFloat((100 - setTotal).toFixed(1)));
-    }
-  }
+  // 连接线上的数字直接复用邀请名单对应的实际拨比关系：
+  // source=当前节点（下级），beneficiary=父节点（上级）
+  const edgeRatio = getDirectEdgeRatio(ratioMap, node.id, parentId);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -324,19 +307,15 @@ export default function AfWaveTreePage() {
     return map;
   }, [inviteTreeData]);
 
-  // 构建树用户数据
+  // 构建树用户数据：直接复用邀请名单里的本人拨比
   const treeUsers: TreeUser[] = useMemo(() => {
-    return (inviteTreeData?.users ?? []).map((u: any) => {
-      // 自留比例：source=self, beneficiary=self
-      const selfRatio = ratioMap.get(`${u.id}-${u.id}`) ?? u.payoutRatio ?? 0;
-      return {
-        id: u.id,
-        name: u.name,
-        invitedByUserId: u.invitedByUserId ?? null,
-        selfRatio,
-      };
-    });
-  }, [inviteTreeData, ratioMap]);
+    return (inviteTreeData?.users ?? []).map((u: any) => ({
+      id: u.id,
+      name: u.name,
+      invitedByUserId: u.invitedByUserId ?? null,
+      payoutRatio: Number(u.payoutRatio ?? 0),
+    }));
+  }, [inviteTreeData]);
 
   const rootNodes = treeUsers.filter(
     (u) => u.invitedByUserId === null || u.id === YJH_USER_ID_CONST
