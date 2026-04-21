@@ -212,15 +212,8 @@ export default function AfInviteTreePage() {
   const [editingNoteUserId, setEditingNoteUserId] = useState<number | null>(null);
   const [noteInputValue, setNoteInputValue] = useState('');
   const [localNotes, setLocalNotes] = useState<Record<number, string>>({});
-  const [editingRatioUserId, setEditingRatioUserId] = useState<number | null>(null);
-  const [editingBeneficiaryId, setEditingBeneficiaryId] = useState<number | null>(null);
-  const [beneficiaryRatioInput, setBeneficiaryRatioInput] = useState<string>('');
 
-  // 拨比数据
-  const { data: editingMemberRatios = [], refetch: refetchMemberRatios } = trpc.ledger.afGetMemberPayoutRatios.useQuery(
-    { ledgerId, sourceUserId: editingRatioUserId ?? 0 },
-    { enabled: isYJH && editingRatioUserId !== null }
-  );
+
 
   // Mutations
   const saveInviteNoteMutation = trpc.ledger.afSaveInviteNote.useMutation({
@@ -229,16 +222,7 @@ export default function AfInviteTreePage() {
       setEditingNoteUserId(null);
     }
   });
-  const setYjhRatioMutation = trpc.ledger.afSetYjhPayoutRatio.useMutation({
-    onSuccess: () => {
-      refetchMemberRatios();
-      setEditingBeneficiaryId(null);
-      setBeneficiaryRatioInput('');
-    },
-    onError: (err: any) => {
-      alert('保存失败：' + err.message);
-    }
-  });
+
 
   // ===== 简化树状图弹层状态 =====
   const [showSimpleTree, setShowSimpleTree] = useState(false);
@@ -606,15 +590,7 @@ export default function AfInviteTreePage() {
                           style={{ backgroundColor: u.payoutRatio > 0 ? '#FFF8E1' : '#F5F5F5', color: u.payoutRatio > 0 ? '#B8860B' : '#9E9E9E' }}
                           onClick={() => {
                             if (!isYJH) return;
-                            if (editingRatioUserId === u.id) {
-                              setEditingRatioUserId(null);
-                              setEditingBeneficiaryId(null);
-                              setBeneficiaryRatioInput('');
-                            } else {
-                              setEditingRatioUserId(u.id);
-                              setEditingBeneficiaryId(null);
-                              setBeneficiaryRatioInput('');
-                            }
+                            setLocation(`/ledger/${ledgerId}/af-ratio/${u.id}`);
                           }}
                         >
                           {u.payoutRatio > 0 ? `拨${u.payoutRatio}%` : '拨0%'}
@@ -722,81 +698,7 @@ export default function AfInviteTreePage() {
                   </table>
                 </div>
 
-                {/* YJH专属：拨比编辑面板 */}
-                {isYJH && editingRatioUserId === u.id && (
-                  <div className="px-3 pb-3 pt-2" style={{ backgroundColor: '#FFFBF0', borderTop: '1px solid #F5E6C8' }}>
-                    <div className="text-xs font-semibold mb-2" style={{ color: '#B8860B' }}>拨比配置（来源：{u.name}）</div>
-                    {editingMemberRatios.length === 0 ? (
-                      <div className="text-xs text-gray-400">加载中...</div>
-                    ) : (
-                      <>
-                        <div className="space-y-0 mb-2" style={{ borderRadius: 6, overflow: 'hidden', border: '1px solid #F5E6C8' }}>
-                          {(editingMemberRatios as any[]).map((r: any, idx: number) => (
-                            <div key={r.beneficiaryUserId}
-                              className="flex items-center justify-between gap-2"
-                              style={{ padding: '10px 10px', backgroundColor: idx % 2 === 0 ? '#FFFDF5' : '#FFF8E8', borderBottom: idx < editingMemberRatios.length - 1 ? '1px solid #F5E6C8' : 'none', minHeight: 44 }}
-                            >
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm text-gray-700 font-medium">{r.name}</span>
-                                {r.username ? <span className="text-xs text-gray-400 ml-1">({r.username})</span> : null}
-                              </div>
-                              {editingBeneficiaryId === r.beneficiaryUserId ? (
-                                <div className="flex items-center gap-1.5 flex-shrink-0">
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={100}
-                                    step={0.1}
-                                    value={beneficiaryRatioInput}
-                                    onChange={e => setBeneficiaryRatioInput(e.target.value)}
-                                    className="text-sm px-2 py-1 rounded border border-amber-300 outline-none text-center"
-                                    style={{ backgroundColor: '#fff', width: 72 }}
-                                    autoFocus
-                                  />
-                                  <span className="text-sm text-gray-500">%</span>
-                                  <button
-                                    onClick={() => setYjhRatioMutation.mutate({
-                                      ledgerId,
-                                      sourceUserId: u.id,
-                                      beneficiaryUserId: r.beneficiaryUserId,
-                                      newRatio: parseFloat(beneficiaryRatioInput) || 0,
-                                    })}
-                                    disabled={setYjhRatioMutation.isPending}
-                                    className="text-sm px-3 py-1 rounded text-white font-medium"
-                                    style={{ backgroundColor: '#D32F2F' }}
-                                  >保存</button>
-                                  <button
-                                    onClick={() => { setEditingBeneficiaryId(null); setBeneficiaryRatioInput(''); }}
-                                    className="text-sm px-2 py-1 rounded text-gray-500"
-                                    style={{ backgroundColor: '#EEEEEE' }}
-                                  >取消</button>
-                                </div>
-                              ) : (
-                                <div
-                                  className="flex items-center gap-1.5 flex-shrink-0 cursor-pointer"
-                                  onClick={() => { setEditingBeneficiaryId(r.beneficiaryUserId); setBeneficiaryRatioInput(String(r.ratio)); }}
-                                >
-                                  <span className="text-sm font-semibold" style={{ color: r.ratio > 0 ? '#B8860B' : '#9E9E9E' }}>{r.ratio.toFixed(1)}%</span>
-                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#B8860B" strokeWidth="1.8" strokeLinecap="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="text-xs text-gray-400 mb-2">
-                          已分配：{(editingMemberRatios as any[]).reduce((s: number, r: any) => s + r.ratio, 0).toFixed(1)}%　剩余：{(100 - (editingMemberRatios as any[]).reduce((s: number, r: any) => s + r.ratio, 0)).toFixed(1)}%
-                        </div>
-                        <div className="mt-2">
-                          <button
-                            onClick={() => { setEditingRatioUserId(null); setEditingBeneficiaryId(null); setBeneficiaryRatioInput(''); }}
-                            className="text-xs px-3 py-1 rounded text-gray-500"
-                            style={{ backgroundColor: '#EEEEEE' }}
-                          >关闭</button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
+
 
                 {/* 备注编辑区 */}
                 {editingNoteUserId === u.id && (
