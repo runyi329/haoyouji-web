@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation, useSearch } from "wouter";
-import { ChevronLeft, Copy, Check } from "lucide-react";
+import { ChevronLeft, Copy, Check, Network } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import QRCode from "qrcode";
 
@@ -68,9 +68,17 @@ export default function AfLedgerInvite() {
           >
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
-          <h1 className="flex-1 text-center text-lg font-semibold text-white pr-8">
+          <h1 className="flex-1 text-center text-lg font-semibold text-white">
             我的邀请
           </h1>
+          {/* 右上角树状图按钮 */}
+          <button
+            onClick={() => setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+            className="p-1.5 -mr-1 rounded-full bg-white/20 active:bg-white/30 transition-colors"
+            title="邀请关系树"
+          >
+            <Network className="w-5 h-5 text-white" />
+          </button>
         </div>
         {/* 专属邀请码 - 一行显示，右侧一键复制图标 */}
         <div className="px-4 pb-5 flex items-center gap-2">
