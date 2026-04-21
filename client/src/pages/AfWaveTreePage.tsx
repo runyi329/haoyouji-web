@@ -256,6 +256,11 @@ function FamilyNode({
 export default function AfWaveTreePage() {
   const [, params] = useRoute("/ledger/:id/af-wave-tree");
   const [, setLocation] = useLocation();
+  const handleHardRefresh = useCallback(() => {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set("_forceRefresh", `${Date.now()}`);
+    window.location.replace(nextUrl.toString());
+  }, []);
   const ledgerId = params?.id ? Number(params.id) : 0;
   const { data: user } = trpc.auth.me.useQuery();
 
@@ -343,13 +348,19 @@ export default function AfWaveTreePage() {
           <ArrowLeft className="w-5 h-5" />
           <span className="text-sm">返回</span>
         </button>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="text-base font-bold text-gray-900">波比树状图</div>
           <div className="text-xs text-gray-400">
             共 {treeUsers.length} 人 · 点击节点可编辑
           </div>
         </div>
-
+        <button
+          onClick={handleHardRefresh}
+          className="ml-3 shrink-0 text-sm font-medium"
+          style={{ color: "#C62828" }}
+        >
+          强制刷新
+        </button>
       </div>
 
       {/* 图例说明 */}
