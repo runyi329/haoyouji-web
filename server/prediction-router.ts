@@ -742,12 +742,21 @@ export const predictionRouter = router({
         if (shouldRebate) {
           const rebateAmount = parseFloat((betAmount * 0.1).toFixed(8));
           const rebateNote = `行情评估返佣 ${coinFullName} ${shortDate} ${dirLabel} 编号${orderNo}`;
+          // 1. 写入下单账本（竞猜子账本，用于竞猜页面展示返佣明细）
           await conn.execute(
             `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
              VALUES (?, ?, ?, ?, NOW(), NOW())`,
             [ledgerId, YJH_USER_ID_REBATE, rebateAmount, rebateNote]
           );
-          console.log(`[竞猜返佣] 订单${orderNo} 下单人${userId} → YJH返佣${rebateAmount}U`);
+          // 2. 同时写入主账本52（实际到账，避免下单账本本身就是52时重复写入）
+          if (ledgerId !== 52) {
+            await conn.execute(
+              `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+               VALUES (52, ?, ?, ?, NOW(), NOW())`,
+              [YJH_USER_ID_REBATE, rebateAmount, rebateNote]
+            );
+          }
+          console.log(`[竞猜返佣] 订单${orderNo} 下单人${userId} → YJH返佣${rebateAmount}U (账本${ledgerId}+账本52)`);
         }
       } catch (e) {
         console.error('[竞猜返佣] 返佣写入失败（不影响下单）:', e);
