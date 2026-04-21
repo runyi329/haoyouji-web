@@ -1244,13 +1244,13 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: order.side === 'buy', staleTime: 120000, refetchOnWindowFocus: false, refetchOnMount: false } // 委托中和已成交的买单都查询，2分钟缓存避免重复加载
   );
-  // 实时价格（用于计算当前市值）
-  const coinSymbol = order.coin === 'BTC' ? 'BTCUSDT' : order.coin === 'ETH' ? 'ETHUSDT' : order.coin === 'SOL' ? 'SOLUSDT' : order.coin + 'USDT';
-  const { data: liveTickerData } = trpc.ledger.getBinanceTicker.useQuery(
-    { symbol: coinSymbol },
-    { enabled: order.side === 'buy', staleTime: 30000, refetchInterval: 30000 }
-  );
-  const livePrice = liveTickerData ? parseFloat((liveTickerData as any).lastPrice || '0') : 0;
+  // 实时价格（用于计算当前市值）- 使用统一价格接口
+  const { data: cryptoPricesForOrder } = trpc.getCryptoPrices.useQuery(undefined, {
+    enabled: order.side === 'buy',
+    refetchInterval: 30000,
+    staleTime: 25000,
+  });
+  const livePrice = cryptoPricesForOrder?.[order.coin] ?? 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => { toast.success('委托已撒销'); },
     onError: (e) => toast.error('撒单失败', { description: e.message }),
@@ -1984,16 +1984,23 @@ export default function CryptoPrediction() {
     onError: (e) => toast.error("撤单失败", { description: e.message }),
   });
 
-  // Binance 行情（后端代理）
+  // Binance 行情（后端代理）- 仅用于涨跌幅、最高最低价、成交量等完整行情数据
   const { data: tickerData, isLoading: tickerLoading, refetch: refetchTicker } =
     trpc.ledger.getBinanceTicker.useQuery({ symbol: coin.symbol }, { staleTime: 30000, refetchInterval: 30000 });
   const { data: klinesData, isLoading: klinesLoading, refetch: refetchKlines } =
     trpc.ledger.getBinanceKlines.useQuery({ symbol: coin.symbol, interval, limit: 60 }, { staleTime: 30000 });
+  // 当前价格使用统一价格接口（三级备用，更稳定）
+  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, {
+    refetchInterval: 30000,
+    staleTime: 25000,
+  });
 
   const bars: KlineBar[] = (klinesData as KlineBar[] | undefined) || [];
   const ticker = tickerData as any;
   const priceChange = ticker ? parseFloat(ticker.priceChangePercent) : 0;
   const isUp = priceChange >= 0;
+  // 当前价格优先用 getCryptoPrices，回落到 ticker.lastPrice
+  const currentPrice = (coinKey && cryptoPrices?.[coinKey]) ? cryptoPrices[coinKey] : (ticker?.lastPrice ? parseFloat(ticker.lastPrice) : 0);
 
   // 竞猜（行情评估 Tab）- 从数据库缓存读取，不依赖外网
   const predCoin = (coinKey === "SOL" ? "BTC" : coinKey) as "BTC" | "ETH";
@@ -2536,7 +2543,7 @@ export default function CryptoPrediction() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-xs text-gray-500 mb-1">当前价</div>
-                  <div className={`text-base font-bold ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>{formatPrice(ticker?.lastPrice)}</div>
+                  <div className={`text-base font-bold ${isUp ? "text-[#26a69a]" : "text-[#ef5350]"}`}>{formatPrice(currentPrice || ticker?.lastPrice)}</div>
                 </div>
                 <div>
                   <div className="text-xs text-gray-500 mb-1">24H涨跌</div>
