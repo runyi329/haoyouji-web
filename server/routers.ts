@@ -7675,11 +7675,11 @@ export const appRouter = router({
                      VALUES (52, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, NOW(), NOW())`,
                     [ctx.user.id]
                   );
-                  // 自动初始化拨比：继承直接邀请人（上级）的拨比，如果上级没有配置则用默认値
+                  // 自动初始化拨比：继承直接邀请人（上级）的 YJH 拨比；新用户本人默认 0%
                   try {
                     const YJH_USER_ID_AF = 4957151;
                     let yjhRatio = 33.40;
-                    let selfRatio = 66.60;
+                    let selfRatio = 0.00;
                     // 查询直接邀请人（invited_by_user_id）的 YJH 拨比
                     try {
                       const [inviterRows] = await db52.execute(
@@ -7696,9 +7696,9 @@ export const appRouter = router({
                         const inviterRatioRow = (inviterRatioRows as any[])[0];
                         if (inviterRatioRow) {
                           yjhRatio = parseFloat(inviterRatioRow.ratio);
-                          selfRatio = parseFloat((100 - yjhRatio).toFixed(2));
-                          console.log(`[52号账本自动准入] 用户${ctx.user.id}继承上级${inviterId}的拨比: YJH=${yjhRatio}%, 自己=${selfRatio}%`);
+                          console.log(`[52号账本自动准入] 用户${ctx.user.id}继承上级${inviterId}的YJH拨比: YJH=${yjhRatio}%, 自己=${selfRatio}%`);
                         }
+
                       }
                     } catch (inheritErr) {
                       console.error('[52号账本自动准入] 查询上级拨比失败，使用默认値:', inheritErr);
@@ -14320,10 +14320,10 @@ export const appRouter = router({
           username: r.username || '',
         });
         const list = (rows as any[]).map(mapRow);
-        // 如果该成员还没有任何拨比配置，自动初始化：继承直接上级的拨比，如果上级没有配置则用默认値
+        // 如果该成员还没有任何拨比配置，自动初始化：继承直接上级的 YJH 拨比；本人默认 0%
         if (list.length === 0) {
           let yjhRatio = 33.40;
-          let selfRatio = 66.60;
+          let selfRatio = 0.00;
           try {
             const [inviterRows] = await (conn as any).execute(
               `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
@@ -14339,7 +14339,6 @@ export const appRouter = router({
               const inviterRatioRow = (inviterRatioRows as any[])[0];
               if (inviterRatioRow) {
                 yjhRatio = parseFloat(inviterRatioRow.ratio);
-                selfRatio = parseFloat((100 - yjhRatio).toFixed(2));
               }
             }
           } catch (inheritErr) {
