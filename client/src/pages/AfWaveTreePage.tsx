@@ -41,10 +41,10 @@ function FamilyCard({
         justifyContent: "center",
         border: isYJH ? "1.5px solid #C62828" : "1px solid #BDBDBD",
         backgroundColor: isYJH ? "#FFEBEE" : "#FAFAFA",
-        borderRadius: 4,
-        padding: "2px 4px",
-        minWidth: 36,
-        maxWidth: 56,
+        borderRadius: 3,
+        padding: "1px 3px",
+        minWidth: 28,
+        maxWidth: 46,
         cursor: "pointer",
         boxShadow: isYJH
           ? "0 1px 3px rgba(198,40,40,0.18)"
@@ -55,14 +55,14 @@ function FamilyCard({
     >
       <span
         style={{
-          fontSize: 9,
+          fontSize: 8,
           fontWeight: 600,
           color: isYJH ? "#C62828" : "#333",
-          maxWidth: 52,
+          maxWidth: 42,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
-          lineHeight: "13px",
+          lineHeight: "11px",
         }}
       >
         {isYJH ? "YJH" : user.name || "未知"}
@@ -70,9 +70,9 @@ function FamilyCard({
       {/* 名字下方：自留比例 */}
       <span
         style={{
-          fontSize: 8,
+          fontSize: 7,
           fontWeight: 700,
-          lineHeight: "12px",
+          lineHeight: "10px",
           color: user.selfRatio > 0 ? "#1B5E20" : "#9E9E9E",
         }}
       >
@@ -163,12 +163,12 @@ function FamilyNode({
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       {/* 连接线（从父节点到当前节点）+ 上级抽成标签（始终显示）*/}
       {parentId !== null && (
-        <div style={{ position: "relative", width: 1, height: 20, backgroundColor: "#BDBDBD" }}>
+        <div style={{ position: "relative", width: 1, height: 14, backgroundColor: "#BDBDBD" }}>
           <EdgeLabel ratio={edgeRatio} />
         </div>
       )}
 
-      <div style={{ position: "relative", paddingBottom: hasChildren ? 6 : 0 }}>
+      <div style={{ position: "relative", paddingBottom: hasChildren ? 4 : 0 }}>
         <FamilyCard
           user={node}
           yjhUserId={yjhUserId}
@@ -186,13 +186,13 @@ function FamilyNode({
               bottom: -2,
               left: "50%",
               transform: "translateX(-50%)",
-              width: 12,
-              height: 12,
+              width: 10,
+              height: 10,
               borderRadius: "50%",
               backgroundColor: isCollapsed ? "#C62828" : "#9E9E9E",
               color: "#fff",
-              border: "1.5px solid #fff",
-              fontSize: 9,
+              border: "1px solid #fff",
+              fontSize: 8,
               cursor: "pointer",
               zIndex: 2,
               display: "flex",
@@ -209,7 +209,7 @@ function FamilyNode({
 
       {hasChildren && !isCollapsed && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div style={{ width: 1, height: 6, backgroundColor: "#BDBDBD" }} />
+          <div style={{ width: 1, height: 4, backgroundColor: "#BDBDBD" }} />
           <div
             style={{
               display: "flex",
@@ -226,8 +226,8 @@ function FamilyNode({
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  paddingLeft: idx > 0 ? 6 : 0,
-                  paddingRight: idx < children.length - 1 ? 6 : 0,
+                  paddingLeft: idx > 0 ? 4 : 0,
+                  paddingRight: idx < children.length - 1 ? 4 : 0,
                 }}
               >
                 <FamilyNode
