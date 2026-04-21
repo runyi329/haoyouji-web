@@ -135,10 +135,11 @@ function FamilyNode({
   const isCollapsed = collapsedIds.has(node.id);
   const hasChildren = children.length > 0;
 
-  // 连接线上的数字 = 父节点（上级）的自留比例
-  // 因为上级对所有下级都拿同样的比例
-  const parentNode = parentId !== null ? allUsers.find(u => u.id === parentId) : null;
-  const edgeRatio = parentNode ? parentNode.selfRatio : 0;
+  // 连接线上的数字 = 上级从这个人身上能拿到多少
+  // 即 source=当前节点, beneficiary=父节点 的 ratio
+  const edgeRatio = parentId !== null
+    ? (ratioMap.get(`${node.id}-${parentId}`) ?? 0)
+    : 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
