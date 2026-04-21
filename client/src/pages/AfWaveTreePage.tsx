@@ -137,9 +137,27 @@ function FamilyNode({
 
   // 连接线上的数字 = 上级从这个人身上能拿到多少
   // 即 source=当前节点, beneficiary=父节点 的 ratio
-  const edgeRatio = parentId !== null
-    ? (ratioMap.get(`${node.id}-${parentId}`) ?? 0)
-    : 0;
+  // 如果没有设置（新人），则自动计算：100% 减去这条链上面所有已设置的橙色数字和自留之和
+  let edgeRatio = 0;
+  if (parentId !== null) {
+    const dbRatio = ratioMap.get(`${node.id}-${parentId}`);
+    if (dbRatio !== undefined && dbRatio > 0) {
+      // 数据库里有设置，直接用
+      edgeRatio = dbRatio;
+    } else {
+      // 没有设置，自动计算：从当前节点往上追溯，累加所有祖先的 selfRatio
+      // 连接线 = 100% - 链上所有祖先的 selfRatio 之和
+      let ancestorTotal = 0;
+      let cur = parentId;
+      while (cur !== null) {
+        const ancestor = allUsers.find(u => u.id === cur);
+        if (!ancestor) break;
+        ancestorTotal += ancestor.selfRatio;
+        cur = ancestor.invitedByUserId;
+      }
+      edgeRatio = Math.max(0, parseFloat((100 - ancestorTotal).toFixed(1)));
+    }
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
