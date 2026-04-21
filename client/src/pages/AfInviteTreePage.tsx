@@ -3,123 +3,131 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch } from "lucide-react";
 
-// ===== 简化树状图弹层组件 =====
+// ===== 组织架构图树状图弹层组件 =====
 type TreeUser = { id: number; name: string; invitedByUserId: number | null; payoutRatio: number };
 
-function TreeNode({
-  user,
-  allUsers,
-  depth,
-  yjhUserId,
-  editingId,
-  setEditingId,
-  inputVal,
-  setInputVal,
-  onSave,
-  isSaving,
-  localRatios,
+// 单个节点卡片
+function OrgCard({
+  user, yjhUserId, editingId, setEditingId, inputVal, setInputVal, onSave, isSaving, localRatios,
 }: {
-  user: TreeUser;
-  allUsers: TreeUser[];
-  depth: number;
-  yjhUserId: number;
-  editingId: number | null;
-  setEditingId: (id: number | null) => void;
-  inputVal: string;
-  setInputVal: (v: string) => void;
-  onSave: (userId: number, ratio: number) => void;
-  isSaving: boolean;
-  localRatios: Record<number, number>;
+  user: TreeUser; yjhUserId: number; editingId: number | null;
+  setEditingId: (id: number | null) => void; inputVal: string;
+  setInputVal: (v: string) => void; onSave: (userId: number, ratio: number) => void;
+  isSaving: boolean; localRatios: Record<number, number>;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const children = allUsers.filter(u => u.invitedByUserId === user.id);
   const currentRatio = localRatios[user.id] ?? user.payoutRatio;
   const isEditing = editingId === user.id;
-
+  const isYJH = user.id === yjhUserId;
   return (
-    <div style={{ marginLeft: depth > 0 ? 16 : 0 }}>
-      <div className="flex items-center gap-1 py-1" style={{ borderLeft: depth > 0 ? '2px solid #E0E0E0' : 'none', paddingLeft: depth > 0 ? 10 : 0 }}>
-        {/* 展开/折叠按钮 */}
-        {children.length > 0 ? (
+    <div
+      className="flex flex-col items-center justify-center rounded-lg px-2 py-1.5 select-none"
+      style={{
+        border: isYJH ? '1.5px solid #D32F2F' : '1.5px solid #BDBDBD',
+        backgroundColor: isYJH ? '#FFF3F3' : '#FAFAFA',
+        minWidth: 60, maxWidth: 76,
+        cursor: isYJH ? 'default' : 'pointer',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      }}
+      onClick={() => {
+        if (!isYJH && !isEditing) {
+          setEditingId(user.id);
+          setInputVal(String(currentRatio.toFixed(1)));
+        }
+      }}
+    >
+      <span
+        className="text-xs font-medium text-center leading-tight"
+        style={{ color: isYJH ? '#D32F2F' : '#333', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+      >
+        {isYJH ? 'YJH' : (user.name || '未知')}
+      </span>
+      {isEditing ? (
+        <div className="flex items-center gap-0.5 mt-1" onClick={e => e.stopPropagation()}>
+          <input
+            type="number" min={0} max={100} step={0.1} value={inputVal}
+            onChange={e => setInputVal(e.target.value)}
+            className="text-xs px-1 py-0.5 rounded border border-amber-300 outline-none text-center"
+            style={{ width: 38, backgroundColor: '#fff', fontSize: 11 }}
+            autoFocus
+            onKeyDown={e => {
+              if (e.key === 'Enter') onSave(user.id, parseFloat(inputVal) || 0);
+              if (e.key === 'Escape') setEditingId(null);
+            }}
+          />
           <button
-            onClick={() => setCollapsed(v => !v)}
-            className="w-4 h-4 flex items-center justify-center text-gray-400 flex-shrink-0"
-            style={{ fontSize: 10 }}
-          >
-            {collapsed ? '▶' : '▼'}
-          </button>
-        ) : (
-          <span className="w-4 flex-shrink-0" />
-        )}
-        {/* 用户名字 */}
-        <span className="text-sm text-gray-800 flex-shrink-0" style={{ minWidth: 60, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {user.id === yjhUserId ? 'YJH（我）' : (user.name || '未知')}
+            onClick={() => onSave(user.id, parseFloat(inputVal) || 0)}
+            disabled={isSaving}
+            className="text-white rounded leading-none"
+            style={{ backgroundColor: '#D32F2F', fontSize: 10, padding: '2px 4px' }}
+          >✓</button>
+        </div>
+      ) : (
+        <span className="text-xs mt-0.5 font-semibold" style={{ color: isYJH ? '#D32F2F' : (currentRatio > 0 ? '#B8860B' : '#9E9E9E') }}>
+          {isYJH ? 'YJH分成' : `${currentRatio.toFixed(1)}%`}
         </span>
-        {/* 波比输入 */}
-        {user.id !== yjhUserId && (
-          isEditing ? (
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
-                value={inputVal}
-                onChange={e => setInputVal(e.target.value)}
-                className="text-xs px-1.5 py-0.5 rounded border border-amber-300 outline-none text-center"
-                style={{ width: 52, backgroundColor: '#fff' }}
-                autoFocus
-              />
-              <span className="text-xs text-gray-400">%</span>
-              <button
-                onClick={() => { onSave(user.id, parseFloat(inputVal) || 0); }}
-                disabled={isSaving}
-                className="text-xs px-2 py-0.5 rounded text-white"
-                style={{ backgroundColor: '#D32F2F' }}
-              >存</button>
-              <button
-                onClick={() => setEditingId(null)}
-                className="text-xs px-1.5 py-0.5 rounded text-gray-500"
-                style={{ backgroundColor: '#EEE' }}
-              >取</button>
-            </div>
-          ) : (
-            <button
-              onClick={() => { setEditingId(user.id); setInputVal(String(currentRatio.toFixed(1))); }}
-              className="flex items-center gap-0.5"
-            >
-              <span className="text-xs font-semibold" style={{ color: currentRatio > 0 ? '#B8860B' : '#9E9E9E' }}>
-                {currentRatio.toFixed(1)}%
-              </span>
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#B8860B" strokeWidth="1.8" strokeLinecap="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
-            </button>
-          )
-        )}
-        {user.id === yjhUserId && (
-          <span className="text-xs text-gray-400">YJH分成</span>
-        )}
-      </div>
-      {/* 子节点 */}
-      {!collapsed && children.map(child => (
-        <TreeNode
-          key={child.id}
-          user={child}
-          allUsers={allUsers}
-          depth={depth + 1}
-          yjhUserId={yjhUserId}
-          editingId={editingId}
-          setEditingId={setEditingId}
-          inputVal={inputVal}
-          setInputVal={setInputVal}
-          onSave={onSave}
-          isSaving={isSaving}
-          localRatios={localRatios}
-        />
-      ))}
+      )}
     </div>
   );
 }
 
+// 递归渲染一层（横向排列子节点）
+function OrgLevel({
+  nodes, allUsers, yjhUserId, editingId, setEditingId, inputVal, setInputVal,
+  onSave, isSaving, localRatios, collapsedIds, toggleCollapse,
+}: {
+  nodes: TreeUser[]; allUsers: TreeUser[]; yjhUserId: number;
+  editingId: number | null; setEditingId: (id: number | null) => void;
+  inputVal: string; setInputVal: (v: string) => void;
+  onSave: (userId: number, ratio: number) => void; isSaving: boolean;
+  localRatios: Record<number, number>; collapsedIds: Set<number>;
+  toggleCollapse: (id: number) => void;
+}) {
+  return (
+    <div className="flex flex-row items-start justify-center" style={{ gap: 8, flexWrap: 'wrap' }}>
+      {nodes.map(node => {
+        const children = allUsers.filter(u => u.invitedByUserId === node.id);
+        const isCollapsed = collapsedIds.has(node.id);
+        return (
+          <div key={node.id} className="flex flex-col items-center">
+            {/* 节点卡片 + 折叠按钮 */}
+            <div className="relative" style={{ paddingBottom: children.length > 0 ? 10 : 0 }}>
+              <OrgCard
+                user={node} yjhUserId={yjhUserId} editingId={editingId}
+                setEditingId={setEditingId} inputVal={inputVal} setInputVal={setInputVal}
+                onSave={onSave} isSaving={isSaving} localRatios={localRatios}
+              />
+              {children.length > 0 && (
+                <button
+                  onClick={() => toggleCollapse(node.id)}
+                  className="absolute left-1/2 -translate-x-1/2 w-4 h-4 rounded-full flex items-center justify-center text-white z-10"
+                  style={{ bottom: -2, backgroundColor: '#9E9E9E', fontSize: 10, lineHeight: 1 }}
+                >
+                  {isCollapsed ? '+' : '−'}
+                </button>
+              )}
+            </div>
+            {/* 竖线 + 子层 */}
+            {children.length > 0 && !isCollapsed && (
+              <div className="flex flex-col items-center">
+                <div style={{ width: 2, height: 14, backgroundColor: '#BDBDBD' }} />
+                <OrgLevel
+                  nodes={children} allUsers={allUsers} yjhUserId={yjhUserId}
+                  editingId={editingId} setEditingId={setEditingId}
+                  inputVal={inputVal} setInputVal={setInputVal}
+                  onSave={onSave} isSaving={isSaving} localRatios={localRatios}
+                  collapsedIds={collapsedIds} toggleCollapse={toggleCollapse}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// 兼容旧调用（实际不再使用）
+function TreeNode(_props: any) { return null; }
 const YJH_USER_ID_CONST = 4957151;
 
 export default function AfInviteTreePage() {
@@ -218,6 +226,14 @@ export default function AfInviteTreePage() {
   const [treeEditingId, setTreeEditingId] = useState<number | null>(null);
   const [treeInputVal, setTreeInputVal] = useState('');
   const [treeLocalRatios, setTreeLocalRatios] = useState<Record<number, number>>({});
+  const [treeCollapsedIds, setTreeCollapsedIds] = useState<Set<number>>(new Set());
+  const toggleTreeCollapse = useCallback((id: number) => {
+    setTreeCollapsedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
 
   // 简化树状图的波比保存（直接复用 afSetYjhPayoutRatio，beneficiaryUserId = sourceUserId = 该用户自己）
   const treeSetRatioMutation = trpc.ledger.afSetYjhPayoutRatio.useMutation({
@@ -293,22 +309,20 @@ export default function AfInviteTreePage() {
             </span>
           </div>
           <div className="px-3 py-2">
-            {treeUsers.filter(u => u.invitedByUserId === null || u.id === YJH_USER_ID_CONST).map(rootUser => (
-              <TreeNode
-                key={rootUser.id}
-                user={rootUser}
-                allUsers={treeUsers}
-                depth={0}
-                yjhUserId={YJH_USER_ID_CONST}
-                editingId={treeEditingId}
-                setEditingId={setTreeEditingId}
-                inputVal={treeInputVal}
-                setInputVal={setTreeInputVal}
-                onSave={handleTreeSave}
-                isSaving={treeSetRatioMutation.isPending}
-                localRatios={treeLocalRatios}
-              />
-            ))}
+            <OrgLevel
+              nodes={treeUsers.filter(u => u.invitedByUserId === null || u.id === YJH_USER_ID_CONST)}
+              allUsers={treeUsers}
+              yjhUserId={YJH_USER_ID_CONST}
+              editingId={treeEditingId}
+              setEditingId={setTreeEditingId}
+              inputVal={treeInputVal}
+              setInputVal={setTreeInputVal}
+              onSave={handleTreeSave}
+              isSaving={treeSetRatioMutation.isPending}
+              localRatios={treeLocalRatios}
+              collapsedIds={treeCollapsedIds}
+              toggleCollapse={toggleTreeCollapse}
+            />
           </div>
         </div>
       )}
