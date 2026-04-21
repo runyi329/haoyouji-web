@@ -47,8 +47,31 @@ function saveCacheToFile() {
   }
 }
 
+/**
+ * 获取当日开盘价（火币日K，北京时间 00:00 对齐）
+ * 火币日K线的 id 就是当天北京时间 00:00 的 Unix 时间戳
+ */
+async function fetchTodayOpen(coin: string): Promise<number | null> {
+  try {
+    const sym = `${coin.toLowerCase()}usdt`;
+    const r = await fetch(
+      `https://api.huobi.pro/market/history/kline?symbol=${sym}&period=1day&size=1`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (r.ok) {
+      const j: any = await r.json();
+      if (j.status === 'ok' && j.data?.[0]?.open) {
+        return j.data[0].open;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 async function fetchPriceWithChange(coin: string): Promise<{ price: number; changePercent: number } | null> {
-  // Gate.io 主用（返回 last 和 change_percentage）
+  let price: number | null = null;
+
+  // Gate.io 主用（只取价格）
   try {
     const pair = `${coin}_USDT`;
     const r = await fetch(
@@ -58,51 +81,55 @@ async function fetchPriceWithChange(coin: string): Promise<{ price: number; chan
     if (r.ok) {
       const data: any[] = await r.json();
       if (Array.isArray(data) && data.length > 0 && data[0].last) {
-        const price = parseFloat(data[0].last);
-        // Gate.io change_percentage 已是百分比形式（如 0.69 表示 +0.69%），无需 *100
-        const changePercent = data[0].change_percentage ? parseFloat(data[0].change_percentage) : 0;
-        if (!isNaN(price) && price > 0) return { price, changePercent };
+        const p = parseFloat(data[0].last);
+        if (!isNaN(p) && p > 0) price = p;
       }
     }
   } catch {}
 
-  // 火币备用（open + close 计算涨跌幅）
-  try {
-    const sym = `${coin.toLowerCase()}usdt`;
-    const r = await fetch(
-      `https://api.huobi.pro/market/detail/merged?symbol=${sym}`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (r.ok) {
-      const j: any = await r.json();
-      if (j.status === 'ok' && j.tick?.close) {
-        const price = j.tick.close;
-        const open = j.tick.open;
-        const changePercent = open ? ((price - open) / open) * 100 : 0;
-        return { price, changePercent };
+  // 火币备用（获取价格）
+  if (!price) {
+    try {
+      const sym = `${coin.toLowerCase()}usdt`;
+      const r = await fetch(
+        `https://api.huobi.pro/market/detail/merged?symbol=${sym}`,
+        { signal: AbortSignal.timeout(5000) }
+      );
+      if (r.ok) {
+        const j: any = await r.json();
+        if (j.status === 'ok' && j.tick?.close) {
+          price = j.tick.close;
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
-  // OKX 备用（open24h + last 计算涨跌幅）
-  try {
-    const instId = `${coin}-USDT`;
-    const r = await fetch(
-      `https://www.okx.com/api/v5/market/ticker?instId=${instId}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (r.ok) {
-      const j: any = await r.json();
-      if (j.code === '0' && j.data?.[0]?.last) {
-        const price = parseFloat(j.data[0].last);
-        const open24h = parseFloat(j.data[0].open24h);
-        const changePercent = open24h ? ((price - open24h) / open24h) * 100 : 0;
-        return { price, changePercent };
+  // OKX 备用（获取价格）
+  if (!price) {
+    try {
+      const instId = `${coin}-USDT`;
+      const r = await fetch(
+        `https://www.okx.com/api/v5/market/ticker?instId=${instId}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (r.ok) {
+        const j: any = await r.json();
+        if (j.code === '0' && j.data?.[0]?.last) {
+          price = parseFloat(j.data[0].last);
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
-  return null;
+  if (!price) return null;
+
+  // 用火币日K线开盘价计算当日涨跌幅（北京时间 00:00 对齐）
+  const todayOpen = await fetchTodayOpen(coin);
+  const changePercent = todayOpen && todayOpen > 0
+    ? ((price - todayOpen) / todayOpen) * 100
+    : 0;
+
+  return { price, changePercent };
 }
 
 async function fetchPrice(coin: string): Promise<number | null> {
