@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -10,24 +10,27 @@ type TreeUser = {
   id: number;
   name: string;
   invitedByUserId: number | null;
-  payoutRatio: number;
+  selfRatio: number; // 自留比例（source=self, beneficiary=self）
+};
+
+type PayoutRelation = {
+  sourceUserId: number;
+  beneficiaryUserId: number;
+  ratio: number;
 };
 
 // ===== 紧凑节点卡片 =====
 function FamilyCard({
   user,
   yjhUserId,
-  localRatios,
   ledgerId,
   onNavigate,
 }: {
   user: TreeUser;
   yjhUserId: number;
-  localRatios: Record<number, number>;
   ledgerId: number;
   onNavigate: (path: string) => void;
 }) {
-  const currentRatio = localRatios[user.id] ?? user.payoutRatio;
   const isYJH = user.id === yjhUserId;
   return (
     <div
@@ -41,7 +44,7 @@ function FamilyCard({
         borderRadius: 4,
         padding: "2px 4px",
         minWidth: 36,
-        maxWidth: 48,
+        maxWidth: 56,
         cursor: "pointer",
         boxShadow: isYJH
           ? "0 1px 3px rgba(198,40,40,0.18)"
@@ -55,7 +58,7 @@ function FamilyCard({
           fontSize: 9,
           fontWeight: 600,
           color: isYJH ? "#C62828" : "#333",
-          maxWidth: 44,
+          maxWidth: 52,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -64,20 +67,44 @@ function FamilyCard({
       >
         {isYJH ? "YJH" : user.name || "未知"}
       </span>
+      {/* 名字下方：自留比例 */}
       <span
         style={{
           fontSize: 8,
           fontWeight: 700,
           lineHeight: "12px",
-          color: isYJH
-            ? "#C62828"
-            : currentRatio > 0
-            ? "#E65100"
-            : "#9E9E9E",
+          color: user.selfRatio > 0 ? "#1B5E20" : "#9E9E9E",
         }}
       >
-        {`${currentRatio.toFixed(1)}%`}
+        {user.selfRatio > 0 ? `自${user.selfRatio.toFixed(1)}%` : "0%"}
       </span>
+    </div>
+  );
+}
+
+// ===== 连接线上的上级抽成标签 =====
+function EdgeLabel({ ratio }: { ratio: number }) {
+  if (ratio <= 0) return null;
+  return (
+    <div
+      style={{
+        fontSize: 7,
+        fontWeight: 700,
+        color: "#E65100",
+        backgroundColor: "#FFF3E0",
+        border: "1px solid #FFE0B2",
+        borderRadius: 3,
+        padding: "0 2px",
+        lineHeight: "11px",
+        whiteSpace: "nowrap",
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        transform: "translate(-50%, -50%)",
+        zIndex: 3,
+      }}
+    >
+      ↑{ratio.toFixed(1)}%
     </div>
   );
 }
@@ -87,32 +114,45 @@ function FamilyNode({
   node,
   allUsers,
   yjhUserId,
-  localRatios,
   collapsedIds,
   toggleCollapse,
   ledgerId,
   onNavigate,
+  ratioMap,
+  parentId,
 }: {
   node: TreeUser;
   allUsers: TreeUser[];
   yjhUserId: number;
-  localRatios: Record<number, number>;
   collapsedIds: Set<number>;
   toggleCollapse: (id: number) => void;
   ledgerId: number;
   onNavigate: (path: string) => void;
+  ratioMap: Map<string, number>; // key: "sourceUserId-beneficiaryUserId"
+  parentId: number | null;
 }) {
   const children = allUsers.filter((u) => u.invitedByUserId === node.id);
   const isCollapsed = collapsedIds.has(node.id);
   const hasChildren = children.length > 0;
 
+  // 上级从这条线拿多少：source=当前节点, beneficiary=父节点
+  const edgeRatio = parentId !== null
+    ? (ratioMap.get(`${node.id}-${parentId}`) ?? 0)
+    : 0;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {/* 连接线（从父节点到当前节点）+ 上级抽成标签 */}
+      {parentId !== null && (
+        <div style={{ position: "relative", width: 1, height: edgeRatio > 0 ? 20 : 10, backgroundColor: "#BDBDBD" }}>
+          {edgeRatio > 0 && <EdgeLabel ratio={edgeRatio} />}
+        </div>
+      )}
+
       <div style={{ position: "relative", paddingBottom: hasChildren ? 6 : 0 }}>
         <FamilyCard
           user={node}
           yjhUserId={yjhUserId}
-          localRatios={localRatios}
           ledgerId={ledgerId}
           onNavigate={onNavigate}
         />
@@ -150,7 +190,7 @@ function FamilyNode({
 
       {hasChildren && !isCollapsed && (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div style={{ width: 1, height: 10, backgroundColor: "#BDBDBD" }} />
+          <div style={{ width: 1, height: 6, backgroundColor: "#BDBDBD" }} />
           <div
             style={{
               display: "flex",
@@ -171,16 +211,16 @@ function FamilyNode({
                   paddingRight: idx < children.length - 1 ? 6 : 0,
                 }}
               >
-                <div style={{ width: 1, height: 10, backgroundColor: "#BDBDBD" }} />
                 <FamilyNode
                   node={child}
                   allUsers={allUsers}
                   yjhUserId={yjhUserId}
-                  localRatios={localRatios}
                   collapsedIds={collapsedIds}
                   toggleCollapse={toggleCollapse}
                   ledgerId={ledgerId}
                   onNavigate={onNavigate}
+                  ratioMap={ratioMap}
+                  parentId={node.id}
                 />
               </div>
             ))}
@@ -237,9 +277,8 @@ export default function AfWaveTreePage() {
   const { data: inviteTreeData, isLoading } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId, ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
     { enabled: ledgerLoaded && !!ledgerId }
-  );;
+  );
 
-  const [localRatios] = useState<Record<number, number>>({});
   const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
   const toggleCollapse = useCallback((id: number) => {
     setCollapsedIds((prev) => {
@@ -250,38 +289,49 @@ export default function AfWaveTreePage() {
     });
   }, []);
 
-  const treeUsers: TreeUser[] = (inviteTreeData?.users ?? []).map((u: any) => ({
-    id: u.id,
-    name: u.name,
-    invitedByUserId: u.invitedByUserId ?? null,
-    payoutRatio: localRatios[u.id] ?? u.payoutRatio ?? 0,
-  }));
+  // 构建波比关系映射：key = "sourceUserId-beneficiaryUserId" -> ratio
+  const ratioMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const allRatios = (inviteTreeData as any)?.allPayoutRatios ?? [];
+    for (const r of allRatios) {
+      map.set(`${r.sourceUserId}-${r.beneficiaryUserId}`, r.ratio);
+    }
+    return map;
+  }, [inviteTreeData]);
 
-  // 链完整性检查
+  // 构建树用户数据
+  const treeUsers: TreeUser[] = useMemo(() => {
+    return (inviteTreeData?.users ?? []).map((u: any) => {
+      // 自留比例：source=self, beneficiary=self
+      const selfRatio = ratioMap.get(`${u.id}-${u.id}`) ?? u.payoutRatio ?? 0;
+      return {
+        id: u.id,
+        name: u.name,
+        invitedByUserId: u.invitedByUserId ?? null,
+        selfRatio,
+      };
+    });
+  }, [inviteTreeData, ratioMap]);
+
+  // 链完整性检查（基于 allPayoutRatios 数据）
   const chainWarnings: { memberName: string; total: number; gap: number }[] = [];
   if (treeUsers.length > 0) {
-    const childIds = new Set(
-      treeUsers.filter((u) => u.invitedByUserId !== null).map((u) => u.invitedByUserId!)
-    );
-    const leafUsers = treeUsers.filter(
-      (u) => u.id !== YJH_USER_ID_CONST && !childIds.has(u.id)
-    );
-    for (const leaf of leafUsers) {
-      let chainTotal = 0;
-      let cur: TreeUser | undefined = leaf;
-      while (cur) {
-        chainTotal += parseFloat((localRatios[cur.id] ?? cur.payoutRatio).toFixed(1));
-        if (cur.invitedByUserId === null) break;
-        cur = treeUsers.find((u) => u.id === cur!.invitedByUserId);
+    // 对每个用户（非 YJH），检查以该用户为 source 的所有 ratio 之和是否 = 100%
+    for (const u of treeUsers) {
+      if (u.id === YJH_USER_ID_CONST) continue;
+      // 找到该用户作为 source 的所有分配
+      let total = 0;
+      const allRatios = (inviteTreeData as any)?.allPayoutRatios ?? [];
+      for (const r of allRatios) {
+        if (r.sourceUserId === u.id) {
+          total += r.ratio;
+        }
       }
-      const yjhUser = treeUsers.find((u) => u.id === YJH_USER_ID_CONST);
-      if (yjhUser) {
-        chainTotal += parseFloat((localRatios[yjhUser.id] ?? yjhUser.payoutRatio).toFixed(1));
-      }
-      const rounded = parseFloat(chainTotal.toFixed(1));
-      if (rounded !== 100.0) {
+      const rounded = parseFloat(total.toFixed(1));
+      if (rounded !== 100.0 && rounded !== 0) {
+        // 只有已经开始分配但不等于100%的才报警
         chainWarnings.push({
-          memberName: leaf.name || `用户${leaf.id}`,
+          memberName: u.name || `用户${u.id}`,
           total: rounded,
           gap: parseFloat((100.0 - rounded).toFixed(1)),
         });
@@ -318,34 +368,41 @@ export default function AfWaveTreePage() {
         <div className="flex-1">
           <div className="text-base font-bold text-gray-900">波比树状图</div>
           <div className="text-xs text-gray-400">
-            共 {treeUsers.length} 人 · 点击节点可编辑波比
+            共 {treeUsers.length} 人 · 点击节点可编辑
           </div>
         </div>
         {/* 链完整性状态 */}
         <div className="flex-shrink-0">
           {chainWarnings.length === 0 ? (
             <span className="text-xs font-medium" style={{ color: "#388E3C" }}>
-              ✓ 全链 100%
+              ✓ 正常
             </span>
           ) : (
             <span className="text-xs font-bold" style={{ color: "#D32F2F" }}>
-              ⚠️ {chainWarnings.length} 条异常
+              ⚠️ {chainWarnings.length} 人异常
             </span>
           )}
         </div>
       </div>
 
+      {/* 图例说明 */}
+      <div className="mx-4 mt-2 flex items-center gap-4 flex-wrap" style={{ fontSize: 10 }}>
+        <span style={{ color: "#1B5E20" }}>■ 名字下方 = 自留比例</span>
+        <span style={{ color: "#E65100" }}>■ 连接线 ↑ = 上级抽成</span>
+        <span style={{ color: "#9E9E9E" }}>■ 0% = 未分配</span>
+      </div>
+
       {/* 链异常提示 */}
       {chainWarnings.length > 0 && (
-        <div className="mx-4 mt-3 space-y-1">
-          {chainWarnings.map((w, i) => (
+        <div className="mx-4 mt-2 space-y-1">
+          {chainWarnings.slice(0, 5).map((w, i) => (
             <div
               key={i}
-              className="flex items-center justify-between rounded-lg px-3 py-2"
+              className="flex items-center justify-between rounded-lg px-3 py-1.5"
               style={{ backgroundColor: "#FFF3F3", border: "1px solid #FFCDD2" }}
             >
               <span className="text-xs" style={{ color: "#B71C1C" }}>
-                {w.memberName} 链合计 {w.total.toFixed(1)}%
+                {w.memberName} 已分配 {w.total.toFixed(1)}%
               </span>
               <span className="text-xs font-bold" style={{ color: "#D32F2F" }}>
                 {w.gap > 0
@@ -354,6 +411,11 @@ export default function AfWaveTreePage() {
               </span>
             </div>
           ))}
+          {chainWarnings.length > 5 && (
+            <div className="text-xs text-gray-400 text-center">
+              还有 {chainWarnings.length - 5} 人异常...
+            </div>
+          )}
         </div>
       )}
 
@@ -370,11 +432,10 @@ export default function AfWaveTreePage() {
             style={{
               overflowX: "auto",
               WebkitOverflowScrolling: "touch",
-              padding: "16px 12px 24px",
+              padding: "12px 12px 24px",
             }}
           >
             <div style={{ minWidth: "max-content" }}>
-              {/* 根节点横排 */}
               <div
                 style={{
                   display: "flex",
@@ -391,11 +452,12 @@ export default function AfWaveTreePage() {
                     node={node}
                     allUsers={treeUsers}
                     yjhUserId={YJH_USER_ID_CONST}
-                    localRatios={localRatios}
                     collapsedIds={collapsedIds}
                     toggleCollapse={toggleCollapse}
                     ledgerId={ledgerId}
                     onNavigate={setLocation}
+                    ratioMap={ratioMap}
+                    parentId={null}
                   />
                 ))}
               </div>
@@ -407,9 +469,10 @@ export default function AfWaveTreePage() {
       {/* 底部说明 */}
       <div className="px-4 py-3 border-t border-gray-100" style={{ backgroundColor: "#fff" }}>
         <p className="text-xs text-gray-400 leading-relaxed">
-          · 点击节点跳转到该成员的波比编辑页<br />
-          · 红色节点为 YJH（根节点）<br />
-          · 点击节点下方的 −/+ 可折叠/展开子树
+          · 名字下方绿色数字 = 该成员自留比例<br />
+          · 连接线上橙色 ↑ 数字 = 上级从该成员拿的抽成<br />
+          · 新注册成员默认 0%，需手动分配<br />
+          · 点击节点跳转到波比编辑页
         </p>
       </div>
     </div>
