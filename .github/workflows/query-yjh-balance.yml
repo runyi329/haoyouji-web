@@ -1,0 +1,20 @@
+name: 查询YJH余额
+on:
+  workflow_dispatch:
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 查询YJH余额
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            DB_CMD="mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db"
+            echo "=== YJH(4957151) 账本1 余额明细（最近20条）==="
+            $DB_CMD -e "SELECT id, amount, note, created_at FROM af_manual_balances WHERE ledger_id=1 AND user_id=4957151 ORDER BY created_at DESC LIMIT 20;"
+            echo "=== YJH 总余额 ==="
+            $DB_CMD -e "SELECT SUM(amount) as total_balance FROM af_manual_balances WHERE ledger_id=1 AND user_id=4957151;"
