@@ -210,15 +210,34 @@ export default function AfWaveTreePage() {
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? Number(params.id) : 0;
   const { data: user } = trpc.auth.me.useQuery();
-  const isYJH =
-    (user as any)?.id === YJH_USER_ID_CONST ||
-    (user as any)?.role === "admin" ||
-    (user as any)?.role === "super_admin";
 
-  const { data: inviteTreeData, isLoading } = trpc.ledger.afGetInviteTree.useQuery(
+  // 账本基本信息（判断权限，与 AfInviteTreePage 保持一致）
+  const { data: ledgerData, isLoading: ledgerLoading } = trpc.ledger.getById.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
   );
+  const isOwner = (ledgerData as any)?.userRole === 'owner';
+  const isAdmin = (ledgerData as any)?.userRole === 'admin';
+  const ledgerLoaded = !ledgerLoading && !!ledgerData;
+
+  // isYJH 判断（与 AfInviteTreePage 保持一致）
+  const isYJH =
+    (user as any)?.id === YJH_USER_ID_CONST ||
+    (user as any)?.id === 870413 ||
+    isOwner ||
+    isAdmin;
+
+  // viewAsUserId 逻辑：owner/admin 且不是 YJH 本人时，以 YJH 视角查询
+  const inviteTreeViewAsId = ledgerLoaded
+    ? ((isOwner || isAdmin) && (user as any)?.id !== YJH_USER_ID_CONST
+        ? YJH_USER_ID_CONST
+        : undefined)
+    : undefined;
+
+  const { data: inviteTreeData, isLoading } = trpc.ledger.afGetInviteTree.useQuery(
+    { ledgerId, ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
+    { enabled: ledgerLoaded && !!ledgerId }
+  );;
 
   const [localRatios] = useState<Record<number, number>>({});
   const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
