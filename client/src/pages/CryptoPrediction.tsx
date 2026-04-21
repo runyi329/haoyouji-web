@@ -416,6 +416,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   });
   const betCardPrices = (betCardPricesRaw as any)?.prices ?? betCardPricesRaw ?? {};
   const betCardChanges = (betCardPricesRaw as any)?.changes ?? {};
+  const betCardOpens = (betCardPricesRaw as any)?.opens ?? {};
 
   // 全局倒计时状态（每秒更新）
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -558,15 +559,17 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                     const bjTime = bet.created_at ? new Date(new Date(bet.created_at).getTime() + 8 * 60 * 60 * 1000) : null;
                     const timeStr = bjTime ? `${String(bjTime.getUTCHours()).padStart(2,'0')}:${String(bjTime.getUTCMinutes()).padStart(2,'0')}:${String(bjTime.getUTCSeconds()).padStart(2,'0')}` : '';
 
-              // 实时涨跌幅（仅待结算订单显示）
+              // 实时价格信息（仅待结算订单显示）
               const liveCoin = String(bet.coin).toUpperCase();
+              const liveCurPrice = betCardPrices?.[liveCoin];
+              const liveTodayOpen = betCardOpens?.[liveCoin];
+              const hasPriceInfo = isPending && liveCurPrice && liveCurPrice > 0;
+              // 涨跌幅辅助显示
               const liveChangeVal = betCardChanges?.[liveCoin];
-              const hasLiveChange = isPending && liveChangeVal !== undefined && liveChangeVal !== null;
-              const liveChangeNum = hasLiveChange ? Number(liveChangeVal) : 0;
+              const liveChangeNum = (liveChangeVal !== undefined && liveChangeVal !== null) ? Number(liveChangeVal) : 0;
               const liveChangeColor = liveChangeNum >= 0 ? '#e53935' : '#43a047';
-              const liveChangeStr = hasLiveChange
-                ? `${liveChangeNum >= 0 ? '+' : ''}${liveChangeNum.toFixed(2)}%`
-                : null;
+              // 格式化价格（去掉1个小数位）
+              const fmtP = (v: number) => v >= 1000 ? v.toFixed(0) : v >= 100 ? v.toFixed(1) : v.toFixed(2);
 
               // 开奖倒计时（仅待结算订单显示）
               let countdownStr: string | null = null;
@@ -626,13 +629,21 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                       {bet.order_no && <span className="font-mono">编号{bet.order_no}</span>}
                       {timeStr && <span className="font-mono">{timeStr}</span>}
                     </div>
-                    {/* 实时涨跌幅 + 开奖倒计时（仅待结算订单，始终占位避免跳动） */}
+                    {/* 实时价格 + 开奖倒计时（仅待结算订单，始终占位避免跳动） */}
                     {isPending && (
                       <div className="flex items-center gap-2" style={{ fontSize: '0.7rem', marginTop: 2, minHeight: '1rem' }}>
-                        {liveChangeStr ? (
-                          <span style={{ color: liveChangeColor, fontWeight: 600 }}>今日 {liveChangeStr}</span>
+                        {hasPriceInfo ? (
+                          <span style={{ color: '#555' }}>
+                            {liveTodayOpen && liveTodayOpen > 0 ? (
+                              <span style={{ color: '#999' }}>{fmtP(liveTodayOpen)}→</span>
+                            ) : null}
+                            <span style={{ color: liveChangeColor, fontWeight: 600, marginLeft: 2 }}>{fmtP(liveCurPrice!)}</span>
+                            {liveChangeNum !== 0 && (
+                              <span style={{ color: liveChangeColor, marginLeft: 3 }}>({liveChangeNum >= 0 ? '+' : ''}{liveChangeNum.toFixed(2)}%)</span>
+                            )}
+                          </span>
                         ) : (
-                          <span style={{ display: 'inline-block', width: 48, height: 10, borderRadius: 4, background: '#f0f0f0' }} />
+                          <span style={{ display: 'inline-block', width: 80, height: 10, borderRadius: 4, background: '#f0f0f0' }} />
                         )}
                         {countdownStr ? (
                           <span style={{ color: '#888', fontVariantNumeric: 'tabular-nums', fontFamily: 'monospace' }}>{countdownStr}</span>

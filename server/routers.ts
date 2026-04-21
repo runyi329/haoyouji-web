@@ -17914,13 +17914,15 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     // 不再查数据库，直接返回缓存即可
     const { getAllLatestPrices } = await import('./price-scanner');
     const allPrices = getAllLatestPrices();
-    const result: Record<string, number> = {};
+    const prices: Record<string, number> = {};
     const changes: Record<string, number> = {};
+    const opens: Record<string, number> = {};
     for (const [coin, entry] of Object.entries(allPrices)) {
-      result[coin] = entry.price;
+      prices[coin] = entry.price;
       changes[coin] = entry.changePercent ?? 0;
+      opens[coin] = entry.todayOpen ?? 0;
     }
-    return { prices: result, changes };
+    return { prices, changes, opens };
   }),
 
   // 分红功能：获取某用户在某账本的分红汇总（按标签分组）
