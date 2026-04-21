@@ -3,7 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch } from "lucide-react";
 
-// ===== 组织架构图树状图弹层组件 =====
+// ===== 组织架构图树状图弹层组件（标准T形连接线样式）=====
 type TreeUser = { id: number; name: string; invitedByUserId: number | null; payoutRatio: number };
 
 // 单个节点卡片
@@ -20,13 +20,15 @@ function OrgCard({
   const isYJH = user.id === yjhUserId;
   return (
     <div
-      className="flex flex-col items-center justify-center rounded-lg px-2 py-1.5 select-none"
+      className="flex flex-col items-center justify-center select-none"
       style={{
-        border: isYJH ? '1.5px solid #D32F2F' : '1.5px solid #BDBDBD',
-        backgroundColor: isYJH ? '#FFF3F3' : '#FAFAFA',
-        minWidth: 60, maxWidth: 76,
+        border: isYJH ? '2px solid #D32F2F' : '1.5px solid #9E9E9E',
+        backgroundColor: isYJH ? '#FFF3F3' : '#FFFFFF',
+        borderRadius: 6,
+        minWidth: 64, maxWidth: 84,
+        padding: '5px 8px',
         cursor: 'pointer',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        boxShadow: isYJH ? '0 2px 6px rgba(211,47,47,0.15)' : '0 1px 4px rgba(0,0,0,0.10)',
       }}
       onClick={() => {
         if (!isEditing) {
@@ -36,18 +38,27 @@ function OrgCard({
       }}
     >
       <span
-        className="text-xs font-medium text-center leading-tight"
-        style={{ color: isYJH ? '#D32F2F' : '#333', maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+        style={{
+          color: isYJH ? '#D32F2F' : '#222',
+          fontWeight: 600,
+          fontSize: 12,
+          maxWidth: 76,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          display: 'block',
+          textAlign: 'center',
+        }}
       >
         {isYJH ? 'YJH' : (user.name || '未知')}
       </span>
+      <div style={{ width: '100%', height: 1, backgroundColor: isYJH ? '#FFCDD2' : '#E0E0E0', margin: '3px 0' }} />
       {isEditing ? (
-        <div className="flex items-center gap-0.5 mt-1" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
           <input
             type="number" min={0} max={100} step={0.1} value={inputVal}
             onChange={e => setInputVal(e.target.value)}
-            className="text-xs px-1 py-0.5 rounded border border-amber-300 outline-none text-center"
-            style={{ width: 38, backgroundColor: '#fff', fontSize: 11 }}
+            style={{ width: 36, fontSize: 11, padding: '1px 3px', border: '1px solid #FFA726', borderRadius: 3, textAlign: 'center', outline: 'none', backgroundColor: '#fff' }}
             autoFocus
             onKeyDown={e => {
               if (e.key === 'Enter') onSave(user.id, parseFloat(inputVal) || 0);
@@ -57,12 +68,11 @@ function OrgCard({
           <button
             onClick={() => onSave(user.id, parseFloat(inputVal) || 0)}
             disabled={isSaving}
-            className="text-white rounded leading-none"
-            style={{ backgroundColor: '#D32F2F', fontSize: 10, padding: '2px 4px' }}
+            style={{ backgroundColor: '#D32F2F', color: '#fff', fontSize: 10, padding: '2px 4px', borderRadius: 3, border: 'none', cursor: 'pointer' }}
           >✓</button>
         </div>
       ) : (
-        <span className="text-xs mt-0.5 font-semibold" style={{ color: isYJH ? '#D32F2F' : (currentRatio > 0 ? '#B8860B' : '#9E9E9E') }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: isYJH ? '#D32F2F' : (currentRatio > 0 ? '#E65100' : '#9E9E9E'), textAlign: 'center' }}>
           {`${currentRatio.toFixed(1)}%`}
         </span>
       )}
@@ -70,7 +80,92 @@ function OrgCard({
   );
 }
 
-// 递归渲染一层（横向排列子节点）
+// 递归渲染组织架构图（标准T形连接线）
+function OrgTree({
+  node, allUsers, yjhUserId, editingId, setEditingId, inputVal, setInputVal,
+  onSave, isSaving, localRatios, collapsedIds, toggleCollapse,
+}: {
+  node: TreeUser; allUsers: TreeUser[]; yjhUserId: number;
+  editingId: number | null; setEditingId: (id: number | null) => void;
+  inputVal: string; setInputVal: (v: string) => void;
+  onSave: (userId: number, ratio: number) => void; isSaving: boolean;
+  localRatios: Record<number, number>; collapsedIds: Set<number>;
+  toggleCollapse: (id: number) => void;
+}) {
+  const children = allUsers.filter(u => u.invitedByUserId === node.id);
+  const isCollapsed = collapsedIds.has(node.id);
+  const hasChildren = children.length > 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      {/* 节点卡片 */}
+      <div style={{ position: 'relative' }}>
+        <OrgCard
+          user={node} yjhUserId={yjhUserId} editingId={editingId}
+          setEditingId={setEditingId} inputVal={inputVal} setInputVal={setInputVal}
+          onSave={onSave} isSaving={isSaving} localRatios={localRatios}
+        />
+        {/* 展开/折叠按钮 */}
+        {hasChildren && (
+          <button
+            onClick={e => { e.stopPropagation(); toggleCollapse(node.id); }}
+            style={{
+              position: 'absolute', bottom: -10, left: '50%', transform: 'translateX(-50%)',
+              width: 18, height: 18, borderRadius: '50%',
+              backgroundColor: isCollapsed ? '#D32F2F' : '#757575',
+              color: '#fff', border: '2px solid #fff',
+              fontSize: 12, lineHeight: '14px', textAlign: 'center',
+              cursor: 'pointer', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+            }}
+          >
+            {isCollapsed ? '+' : '−'}
+          </button>
+        )}
+      </div>
+
+      {/* 子节点区域 */}
+      {hasChildren && !isCollapsed && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {/* 父节点到横线的竖线 */}
+          <div style={{ width: 2, height: 20, backgroundColor: '#BDBDBD' }} />
+
+          {/* 子节点行 */}
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', position: 'relative' }}>
+            {children.map((child, idx) => (
+              <div key={child.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', paddingLeft: idx > 0 ? 12 : 0, paddingRight: idx < children.length - 1 ? 12 : 0 }}>
+                {/* 每个子节点顶部的竖线 */}
+                <div style={{ width: 2, height: 20, backgroundColor: '#BDBDBD' }} />
+                <OrgTree
+                  node={child} allUsers={allUsers} yjhUserId={yjhUserId}
+                  editingId={editingId} setEditingId={setEditingId}
+                  inputVal={inputVal} setInputVal={setInputVal}
+                  onSave={onSave} isSaving={isSaving} localRatios={localRatios}
+                  collapsedIds={collapsedIds} toggleCollapse={toggleCollapse}
+                />
+              </div>
+            ))}
+            {/* T形横线（覆盖在子节点顶部竖线上方）*/}
+            {children.length > 1 && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                height: 2,
+                backgroundColor: '#BDBDBD',
+                width: `calc(100% - 32px)`,
+                zIndex: 1,
+              }} />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 顶层渲染入口
 function OrgLevel({
   nodes, allUsers, yjhUserId, editingId, setEditingId, inputVal, setInputVal,
   onSave, isSaving, localRatios, collapsedIds, toggleCollapse,
@@ -83,45 +178,17 @@ function OrgLevel({
   toggleCollapse: (id: number) => void;
 }) {
   return (
-    <div className="flex flex-row items-start justify-center" style={{ gap: 8, flexWrap: 'wrap' }}>
-      {nodes.map(node => {
-        const children = allUsers.filter(u => u.invitedByUserId === node.id);
-        const isCollapsed = collapsedIds.has(node.id);
-        return (
-          <div key={node.id} className="flex flex-col items-center">
-            {/* 节点卡片 + 折叠按钮 */}
-            <div className="relative" style={{ paddingBottom: children.length > 0 ? 10 : 0 }}>
-              <OrgCard
-                user={node} yjhUserId={yjhUserId} editingId={editingId}
-                setEditingId={setEditingId} inputVal={inputVal} setInputVal={setInputVal}
-                onSave={onSave} isSaving={isSaving} localRatios={localRatios}
-              />
-              {children.length > 0 && (
-                <button
-                  onClick={() => toggleCollapse(node.id)}
-                  className="absolute left-1/2 -translate-x-1/2 w-4 h-4 rounded-full flex items-center justify-center text-white z-10"
-                  style={{ bottom: -2, backgroundColor: '#9E9E9E', fontSize: 10, lineHeight: 1 }}
-                >
-                  {isCollapsed ? '+' : '−'}
-                </button>
-              )}
-            </div>
-            {/* 竖线 + 子层 */}
-            {children.length > 0 && !isCollapsed && (
-              <div className="flex flex-col items-center">
-                <div style={{ width: 2, height: 14, backgroundColor: '#BDBDBD' }} />
-                <OrgLevel
-                  nodes={children} allUsers={allUsers} yjhUserId={yjhUserId}
-                  editingId={editingId} setEditingId={setEditingId}
-                  inputVal={inputVal} setInputVal={setInputVal}
-                  onSave={onSave} isSaving={isSaving} localRatios={localRatios}
-                  collapsedIds={collapsedIds} toggleCollapse={toggleCollapse}
-                />
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 24, flexWrap: 'wrap' }}>
+      {nodes.map(node => (
+        <OrgTree
+          key={node.id}
+          node={node} allUsers={allUsers} yjhUserId={yjhUserId}
+          editingId={editingId} setEditingId={setEditingId}
+          inputVal={inputVal} setInputVal={setInputVal}
+          onSave={onSave} isSaving={isSaving} localRatios={localRatios}
+          collapsedIds={collapsedIds} toggleCollapse={toggleCollapse}
+        />
+      ))}
     </div>
   );
 }
