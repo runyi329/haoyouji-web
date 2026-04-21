@@ -1633,7 +1633,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 {/* 累计扫描行 */}
                 <span className="text-[#9CA3AF]">累计扫描</span>
                 <span className="font-semibold text-[#1A56DB]">{tierData?.scanCount ?? 0} 次</span>
-                <span className="text-[#94A3B8] text-right">每30秒一次</span>
+                <span className="text-[#94A3B8] text-right">每10秒一次</span>
 
                 {/* 上次扫描行 */}
                 {(tierData?.latestLowPrice || tierData?.scanStatus?.lastScanAt) && (
@@ -1674,7 +1674,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 <span>
                   <span className="text-[#CBD5E1]">0 次</span>
                   <span className="text-[#CBD5E1] mx-1.5">·</span>
-                  <span className="text-[#94A3B8]">每30秒一次</span>
+                  <span className="text-[#94A3B8]">每10秒一次</span>
                 </span>
               </div>
             </div>

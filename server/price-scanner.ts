@@ -1,6 +1,6 @@
 /**
  * 实时价格扫描器
- * 每30秒从 Gate.io / 火币 / OKX 获取 BTC/ETH/SOL 的最新价格
+ * 每10秒从 Gate.io / 火币 / OKX 获取 BTC/ETH/SOL 的最新价格
  * 内存缓存供盈亏计算使用
  * 数据源优先级与 af-tier-scanner 保持一致：Gate.io > 火币 > OKX
  * 持久化：每次更新后写入本地文件，服务重启时自动恢复上次价格
