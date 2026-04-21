@@ -17910,16 +17910,50 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
   // 数字币实时价格（服务端缓存，前端直接读取）
   getCryptoPrices: publicProcedure.query(async () => {
     // 从 price-scanner 内存缓存读取（规范：crypto-price-unified）
-    // 不从数据库读取，确保价格实时且不为空（保留上次数据）
+    // 不从外部 API 读取，确保价格实时且不为空（保留上次数据）
     const { getAllLatestPrices } = await import('./price-scanner');
     const allPrices = getAllLatestPrices();
-    // 返回 price 和 changePercent 两个字段，向下兼容（直接索引字段为 price）
     const result: Record<string, number> = {};
     const changes: Record<string, number> = {};
     for (const [coin, entry] of Object.entries(allPrices)) {
       result[coin] = entry.price;
       changes[coin] = entry.changePercent ?? 0;
     }
+
+    // 用数据库中当日日K线开盘价重新计算涨跌幅（更准确）
+    // 涨跌幅 = (current - open) / open * 100
+    try {
+      const { getDbConnection } = await import('./db');
+      const conn = await getDbConnection();
+      if (conn) {
+        // 取当前 UTC 日期（日K线用 UTC）
+        const todayUTC = new Date().toISOString().slice(0, 10);
+        // 映射 coin key 到 klines symbol
+        const COIN_TO_SYMBOL: Record<string, string> = {
+          BTC: 'BTCUSDT', ETH: 'ETHUSDT', SOL: 'SOLUSDT',
+          TSLA: 'TSLA', NVDA: 'NVDA', AAPL: 'AAPL',
+          MSFT: 'MSFT', GOOGL: 'GOOGL', META: 'META',
+          AMZN: 'AMZN',
+        };
+        for (const [coin, currentPrice] of Object.entries(result)) {
+          const symbol = COIN_TO_SYMBOL[coin];
+          if (!symbol || !currentPrice) continue;
+          try {
+            const [rows]: any = await conn.execute(
+              `SELECT open FROM crypto_klines WHERE symbol = ? AND date = ? LIMIT 1`,
+              [symbol, todayUTC]
+            );
+            if (rows && rows.length > 0) {
+              const openPrice = parseFloat(rows[0].open);
+              if (openPrice > 0) {
+                changes[coin] = (currentPrice - openPrice) / openPrice * 100;
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+
     return { prices: result, changes };
   }),
 
