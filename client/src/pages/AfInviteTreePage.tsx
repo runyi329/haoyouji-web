@@ -25,11 +25,11 @@ function OrgCard({
         border: isYJH ? '1.5px solid #D32F2F' : '1.5px solid #BDBDBD',
         backgroundColor: isYJH ? '#FFF3F3' : '#FAFAFA',
         minWidth: 60, maxWidth: 76,
-        cursor: isYJH ? 'default' : 'pointer',
+        cursor: 'pointer',
         boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       }}
       onClick={() => {
-        if (!isYJH && !isEditing) {
+        if (!isEditing) {
           setEditingId(user.id);
           setInputVal(String(currentRatio.toFixed(1)));
         }
@@ -63,7 +63,7 @@ function OrgCard({
         </div>
       ) : (
         <span className="text-xs mt-0.5 font-semibold" style={{ color: isYJH ? '#D32F2F' : (currentRatio > 0 ? '#B8860B' : '#9E9E9E') }}>
-          {isYJH ? 'YJH分成' : `${currentRatio.toFixed(1)}%`}
+          {`${currentRatio.toFixed(1)}%`}
         </span>
       )}
     </div>
