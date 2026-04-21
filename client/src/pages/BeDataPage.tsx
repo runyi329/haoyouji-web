@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { MarketBetPanelWithTabs } from "./CryptoPrediction";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -1465,7 +1466,9 @@ export default function BeDataPage() {
 
       {/* ===== 预测未来 Tab ===== */}
       {activeTab === "predict" && (
-        <PredictTab allData={allChangePcts ?? []} symbol={activeSymbol} />
+        <div className="flex-1 overflow-auto" style={{ minHeight: 0 }}>
+          <MarketBetPanelWithTabs ledgerId={ledgerId} />
+        </div>
       )}
 
       {/* 分页（仅日线数据 Tab 显示） */}

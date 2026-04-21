@@ -304,7 +304,7 @@ const MARKET_SYMBOLS = [
 ];
 
 // ─── 明日涨跌竞猜面板 ─────────────────────────────────────────
-function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
+export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   const [activeCoin, setActiveCoin] = useState('BTC');
   // 订单列表Tab：最近购买记录 / 持仓订单
   const [orderTab, setOrderTab] = useState<'recent' | 'position'>('recent');
