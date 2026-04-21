@@ -85,4 +85,8 @@ echo "📊 补录4REBN2 BTC 4-21 竞猜返佣 10U 给 YJH..."
 $DB_CMD -e "INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) SELECT 1, 4957151, 10.00, '竞猜返佣 比特币 4-21 编号4REBN2', NOW(), NOW() WHERE NOT EXISTS (SELECT 1 FROM af_manual_balances WHERE user_id = 4957151 AND note = '竞猜返佣 比特币 4-21 编号4REBN2');" || true
 echo "✅ 4REBN2返佣补录完成"
 
+echo "📊 查询YJH(4957151)账本1当前余额..."
+$DB_CMD -e "SELECT SUM(amount) as YJH_total_balance FROM af_manual_balances WHERE ledger_id=1 AND user_id=4957151;"
+echo "📋 YJH最近10条余额明细:"
+$DB_CMD -e "SELECT id, amount, note, created_at FROM af_manual_balances WHERE ledger_id=1 AND user_id=4957151 ORDER BY created_at DESC LIMIT 10;"
 echo "✅ 所有数据库迁移完成"
