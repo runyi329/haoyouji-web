@@ -81,14 +81,25 @@ $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_
 $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='funder_order_alert_state' AND COLUMN_NAME='phone_enabled'; SET @s = IF(@c=0, 'ALTER TABLE funder_order_alert_state ADD COLUMN phone_enabled TINYINT NOT NULL DEFAULT 1', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
 echo "✅ AI预警表新字段确认完成"
 
-echo "📊 补录4REBN2 BTC 4-21 竞猜返佣 10U 给 YJH..."
-$DB_CMD -e "INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) SELECT 1, 4957151, 10.00, '竞猜返佣 比特币 4-21 编号4REBN2', NOW(), NOW() WHERE NOT EXISTS (SELECT 1 FROM af_manual_balances WHERE user_id = 4957151 AND note = '竞猜返佣 比特币 4-21 编号4REBN2');" || true
-echo "✅ 4REBN2返佣补录完成"
-
-echo "🗑️ 删除重复的4REBN2返佣记录(id=107)..."
-$DB_CMD -e "DELETE FROM af_manual_balances WHERE id = 107 AND user_id = 4957151 AND note = '竞猜返佣 比特币 4-21 编号4REBN2';" || true
-echo "📊 查询YJH(4957151)账本1当前余额..."
-$DB_CMD -e "SELECT SUM(amount) as YJH_total_balance FROM af_manual_balances WHERE ledger_id=1 AND user_id=4957151;"
-echo "📋 YJH最近10条余额明细:"
-$DB_CMD -e "SELECT id, amount, note, created_at FROM af_manual_balances WHERE ledger_id=1 AND user_id=4957151 ORDER BY created_at DESC LIMIT 10;"
+# 补录历史竞猜返佣到账本52：将账本1中 YJH 的返佣记录（正数）同步到账本52
+echo "📊 补录YJH竞猜返佣到账本52..."
+$DB_CMD -e "
+  INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+  SELECT 52, b1.user_id, b1.amount, b1.note, b1.created_at, b1.updated_at
+  FROM af_manual_balances b1
+  WHERE b1.ledger_id = 1
+    AND b1.user_id = 4957151
+    AND b1.amount > 0
+    AND NOT EXISTS (
+      SELECT 1 FROM af_manual_balances b2
+      WHERE b2.ledger_id = 52
+        AND b2.user_id = 4957151
+        AND b2.amount = b1.amount
+        AND b2.note = b1.note
+        AND ABS(TIMESTAMPDIFF(SECOND, b2.created_at, b1.created_at)) < 5
+    );
+" || true
+echo "✅ YJH竞猜返佣补录完成"
+echo "📊 查询YJH(4957151)账本52竞猜返佣记录:"
+$DB_CMD -e "SELECT id, amount, note, created_at FROM af_manual_balances WHERE ledger_id=52 AND user_id=4957151 AND amount > 0 AND note LIKE '%返佣%' ORDER BY created_at DESC LIMIT 10;"
 echo "✅ 所有数据库迁移完成"
