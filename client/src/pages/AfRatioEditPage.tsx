@@ -110,7 +110,7 @@ export default function AfRatioEditPage() {
         style={{ backgroundColor: "#fff" }}
       >
         <button
-          onClick={() => setLocation(`/ledger/${LEDGER_ID}/af-invite-tree`)}
+          onClick={() => window.history.back()}
           className="flex items-center gap-1.5 text-gray-600 mr-3"
         >
           <ArrowLeft className="w-5 h-5" />
