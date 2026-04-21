@@ -74,10 +74,11 @@ export default function LedgerDetailAA({
     { enabled: true }
   );
 
-  // 数字币价格（从服务端数据库缓存读取，每5分钟自动刷新）
+  // 数字币价格（每10秒刷新，规范：crypto-price-unified）
   const { data: cryptoPricesData } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 5 * 60 * 1000, // 每5分钟刷新一次
-    staleTime: 60 * 1000,           // 1分钟内不重复请求
+    refetchInterval: 10000,
+    staleTime: 0,
+    placeholderData: (prev: any) => prev,
   });
   // 适配新的返回结构 { prices: {...}, changes: {...} }
   const aaCryptoPrices: Record<string, number> = (cryptoPricesData as any)?.prices ?? cryptoPricesData ?? {};

@@ -410,7 +410,7 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   // 实时价格（吤24h涨跌幅）——用于订单卡片底部显示
   // placeholderData: keepPreviousData 确保刷新时不闪烁，保留上次数据
   const { data: betCardPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 30000,
+    refetchInterval: 10000,
     staleTime: 0,
     placeholderData: (prev: any) => prev,
   });
@@ -1326,7 +1326,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   // 实时价格（用于计算当前市値）- 使用统一价格接口
   const { data: cryptoPricesForOrder } = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: order.side === 'buy',
-    refetchInterval: 30000,
+    refetchInterval: 10000,
     staleTime: 0,
     placeholderData: (prev: any) => prev,
   });
@@ -2073,7 +2073,7 @@ export default function CryptoPrediction() {
     trpc.ledger.getBinanceKlines.useQuery({ symbol: coin.symbol, interval, limit: 60 }, { staleTime: 30000 });
   // 当前价格使用统一价格接口（三级备用，更稳定）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 30000,
+    refetchInterval: 10000,
     staleTime: 0,
     placeholderData: (prev: any) => prev,
   });

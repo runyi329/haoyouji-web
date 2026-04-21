@@ -68,7 +68,7 @@ async function fetchTodayOpen(coin: string): Promise<number | null> {
   return null;
 }
 
-async function fetchPriceWithChange(coin: string): Promise<{ price: number; changePercent: number } | null> {
+async function fetchPriceWithChange(coin: string): Promise<{ price: number; changePercent: number | null } | null> {
   let price: number | null = null;
 
   // Gate.io 主用（只取价格）
@@ -125,9 +125,10 @@ async function fetchPriceWithChange(coin: string): Promise<{ price: number; chan
 
   // 用火币日K线开盘价计算当日涨跌幅（北京时间 00:00 对齐）
   const todayOpen = await fetchTodayOpen(coin);
+  // 查不到开盘价时返回 null，让上层保留上次缓存的 changePercent
   const changePercent = todayOpen && todayOpen > 0
     ? ((price - todayOpen) / todayOpen) * 100
-    : 0;
+    : null;
 
   return { price, changePercent };
 }
@@ -161,7 +162,13 @@ async function scanPrices() {
     try {
       const result = await fetchPriceWithChange(coin);
       if (result !== null && result.price > 0) {
-        latestPrices[coin] = { price: result.price, changePercent: result.changePercent, updatedAt: new Date().toISOString() };
+        // changePercent 为 null 时（火币日K查不到）保留上次缓存值，不覆盖
+        const prevChange = latestPrices[coin]?.changePercent ?? 0;
+        latestPrices[coin] = {
+          price: result.price,
+          changePercent: result.changePercent !== null ? result.changePercent : prevChange,
+          updatedAt: new Date().toISOString()
+        };
         updated = true;
       }
     } catch (err) {
@@ -213,9 +220,9 @@ export function startPriceScanner() {
   scanPrices().then(() => {
     console.log('[价格扫描] 首次扫描完成:', Object.entries(latestPrices).map(([k, v]) => `${k}=${v.price}`).join(', '));
   });
-  // 每30秒扫描一次（规范：crypto-price-unified，前端 refetchInterval: 30000）
+  // 每10秒扫描一次（规范：crypto-price-unified，前端 refetchInterval: 10000）
   setInterval(() => {
     scanPrices().catch(err => console.error('[价格扫描] 定时扫描失败:', err));
-  }, 30 * 1000);
-  console.log('[价格扫描] 已启动，每30秒刷新加密货币+股票合约价格（含文件持久化）');
+  }, 10 * 1000);
+  console.log('[价格扫描] 已启动，每10秒刷新加密货币+股票合约价格（含文件持久化）');
 }
