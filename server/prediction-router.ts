@@ -822,9 +822,10 @@ export const predictionRouter = router({
   manualSettle: protectedProcedure
     .input(z.object({
       targetDate: z.string().optional(), // YYYY-MM-DD，不传则结算昨天
+      overrideChangePctMap: z.record(z.string(), z.number()).optional(), // 历史补开奖：手动指定各币种涨跌幅，如 { ETH: -2.84, MSFT: -0.48 }
     }))
     .mutation(async ({ input }) => {
-      const result = await settleDailyBets(input.targetDate);
+      const result = await settleDailyBets(input.targetDate, input.overrideChangePctMap);
       return result;
     }),
 
@@ -1039,7 +1040,74 @@ export const predictionRouter = router({
  * 3. 命中：status='won'，往 af_manual_balances 写 +expected_return
  * 4. 未命中：status='lost'
  */
-export async function settleDailyBets(targetDateInput?: string): Promise<{
+/**
+ * 从第三方 API 实时获取指定币种的当日涨跌幅
+ * BTC/ETH: Binance 日K（UTC 当日 open→close）
+ * 美股: 使用 OKX SWAP 日K
+ * 备用: 火币日K
+ */
+async function fetchDayChangePct(coin: string, targetDate: string): Promise<number | null> {
+  const US_STOCKS = new Set(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META']);
+  
+  // 将 targetDate 转为时间戳范围（UTC 当日）
+  const startTs = new Date(targetDate + 'T00:00:00Z').getTime();
+  const endTs = startTs + 86400000;
+
+  if (!US_STOCKS.has(coin)) {
+    // BTC/ETH: 从 Binance 日K获取
+    try {
+      const symbol = coin + 'USDT';
+      const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&startTime=${startTs}&endTime=${endTs}&limit=1`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) {
+        const data: any[] = await r.json();
+        if (data.length > 0) {
+          const open = parseFloat(data[0][1]);
+          const close = parseFloat(data[0][4]);
+          if (open > 0) return ((close - open) / open) * 100;
+        }
+      }
+    } catch {}
+    // 备用：火币日K
+    try {
+      const sym = coin.toLowerCase() + 'usdt';
+      const url = `https://api.huobi.pro/market/history/kline?symbol=${sym}&period=1day&size=10`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) {
+        const j: any = await r.json();
+        const klines: any[] = j.data || [];
+        // 找到对应日期的K线（火币时间戳是北京时间00:00）
+        const targetDay = new Date(targetDate + 'T00:00:00+08:00').getTime() / 1000;
+        const k = klines.find((k: any) => Math.abs(k.id - targetDay) < 3600);
+        if (k) return ((k.close - k.open) / k.open) * 100;
+      }
+    } catch {}
+  } else {
+    // 美股: OKX SWAP 日K
+    try {
+      const instId = `${coin}-USD-SWAP`;
+      const url = `https://www.okx.com/api/v5/market/history-candles?instId=${instId}&bar=1D&limit=10`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) {
+        const j: any = await r.json();
+        const candles: any[] = j.data || [];
+        // 找到对应日期的K线
+        for (const c of candles) {
+          const ts = parseInt(c[0]);
+          const d = new Date(ts).toISOString().slice(0, 10);
+          if (d === targetDate) {
+            const open = parseFloat(c[1]);
+            const close = parseFloat(c[4]);
+            if (open > 0) return ((close - open) / open) * 100;
+          }
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+export async function settleDailyBets(targetDateInput?: string, overrideChangePctMap?: Record<string, number>): Promise<{
   settled: number;
   won: number;
   lost: number;
@@ -1098,33 +1166,41 @@ export async function settleDailyBets(targetDateInput?: string): Promise<{
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ETH竞猜亏损自动买入ETH持仓记录'
   `);
 
-  // ★ 取当日ETH价格（用于亏损单自动买入）
+  // ★ 取当日ETH价格（用于亏损单自动买入）——从 price-scanner 实时缓存取，不查数据库
   let ethPriceForBuy: number | null = null;
-  const [ethPriceRows] = await conn.execute(
-    `SELECT close FROM crypto_klines WHERE symbol = 'ETHUSDT' AND date = ? LIMIT 1`,
-    [targetDate]
-  ) as any;
-  const ethPriceRow = (ethPriceRows as any[])[0];
-  if (ethPriceRow) {
-    ethPriceForBuy = parseFloat(ethPriceRow.close);
-    console.log(`[竞猜结算] 当日ETH价格: ${ethPriceForBuy} U`);
+  const { getLatestPrice } = await import('./price-scanner.js');
+  const cachedEthPrice = getLatestPrice('ETH');
+  if (cachedEthPrice && cachedEthPrice > 0) {
+    ethPriceForBuy = cachedEthPrice;
+    console.log(`[竞猜结算] 当日ETH价格(实时缓存): ${ethPriceForBuy} U`);
   } else {
-    console.log(`[竞猜结算] 未找到当日ETH价格，亏损单将不写入持仓记录`);
+    // 备用：实时查询 Binance ETH 价格
+    try {
+      const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT', { signal: AbortSignal.timeout(5000) });
+      if (r.ok) {
+        const j: any = await r.json();
+        if (j.price) ethPriceForBuy = parseFloat(j.price);
+      }
+    } catch {}
+    if (ethPriceForBuy) {
+      console.log(`[竞猜结算] 当日ETH价格(Binance实时): ${ethPriceForBuy} U`);
+    } else {
+      console.log(`[竞猜结算] 未找到当日ETH价格，亏损单将不写入持仓记录`);
+    }
   }
 
-  // 3. 从 crypto_klines 取实际涨跌幅
-  // BTC/ETH: symbol = coin + 'USDT'；美股七姐妹: symbol = coin（直接存储）
-  const US_STOCKS = new Set(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META']);
+  // 3. 获取实际涨跌幅：优先用 overrideChangePctMap（历史补开奖），否则从第三方 API 实时获取
   const changePctMap: Record<string, number | null> = {};
   for (const coin of coins) {
-    const symbol = US_STOCKS.has(coin) ? coin : coin + 'USDT';
-    const [rows] = await conn.execute(
-      `SELECT change_pct FROM crypto_klines WHERE symbol = ? AND date = ? LIMIT 1`,
-      [symbol, targetDate]
-    ) as any;
-    const row = (rows as any[])[0];
-    changePctMap[coin] = row ? parseFloat(row.change_pct) : null;
-    console.log(`[竞猜结算] ${coin} (${symbol}) ${targetDate} 实际涨跌幅: ${changePctMap[coin]}%`);
+    if (overrideChangePctMap && overrideChangePctMap[coin] !== undefined) {
+      // 历史补开奖：使用传入的涨跌幅
+      changePctMap[coin] = overrideChangePctMap[coin];
+      console.log(`[竞猜结算] ${coin} ${targetDate} 使用手动传入涨跌幅: ${changePctMap[coin]}%`);
+    } else {
+      // 实时开奖：从第三方 API 获取当日涨跌幅
+      changePctMap[coin] = await fetchDayChangePct(coin, targetDate);
+      console.log(`[竞猜结算] ${coin} ${targetDate} 实时涨跌幅: ${changePctMap[coin]}%`);
+    }
   }
 
   // 4. 区间边界定义（与前端 RANGE_LABELS 一致）
