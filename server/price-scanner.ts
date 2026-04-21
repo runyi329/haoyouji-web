@@ -12,8 +12,8 @@ import path from 'path';
 // 持久化缓存文件路径（服务器本地）
 const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 
-// 内存价格缓存
-const latestPrices: Record<string, { price: number; updatedAt: string }> = {};
+// 内存价格缓存（含24h涨跌幅）
+const latestPrices: Record<string, { price: number; changePercent: number; updatedAt: string }> = {};
 
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM'];
 // 股票类合约（仅 OKX SWAP 有价格，Gate.io/火币无此品种）
@@ -27,7 +27,7 @@ function loadCacheFromFile() {
       const cached = JSON.parse(raw);
       for (const coin of [...COINS, ...STOCK_COINS]) {
         if (cached[coin]?.price && cached[coin]?.updatedAt) {
-          latestPrices[coin] = cached[coin];
+          latestPrices[coin] = { price: cached[coin].price, changePercent: cached[coin].changePercent ?? 0, updatedAt: cached[coin].updatedAt };
         }
       }
       const coins = Object.entries(latestPrices).map(([k, v]) => `${k}=${v.price}`).join(', ');
@@ -47,8 +47,8 @@ function saveCacheToFile() {
   }
 }
 
-async function fetchPrice(coin: string): Promise<number | null> {
-  // Gate.io 主用（与 af-tier-scanner 一致）
+async function fetchPriceWithChange(coin: string): Promise<{ price: number; changePercent: number } | null> {
+  // Gate.io 主用（返回 last 和 change_percentage）
   try {
     const pair = `${coin}_USDT`;
     const r = await fetch(
@@ -59,12 +59,13 @@ async function fetchPrice(coin: string): Promise<number | null> {
       const data: any[] = await r.json();
       if (Array.isArray(data) && data.length > 0 && data[0].last) {
         const price = parseFloat(data[0].last);
-        if (!isNaN(price) && price > 0) return price;
+        const changePercent = data[0].change_percentage ? parseFloat(data[0].change_percentage) * 100 : 0;
+        if (!isNaN(price) && price > 0) return { price, changePercent };
       }
     }
   } catch {}
 
-  // 火币备用
+  // 火币备用（open + close 计算涨跌幅）
   try {
     const sym = `${coin.toLowerCase()}usdt`;
     const r = await fetch(
@@ -74,12 +75,15 @@ async function fetchPrice(coin: string): Promise<number | null> {
     if (r.ok) {
       const j: any = await r.json();
       if (j.status === 'ok' && j.tick?.close) {
-        return j.tick.close;
+        const price = j.tick.close;
+        const open = j.tick.open;
+        const changePercent = open ? ((price - open) / open) * 100 : 0;
+        return { price, changePercent };
       }
     }
   } catch {}
 
-  // OKX 备用
+  // OKX 备用（open24h + last 计算涨跌幅）
   try {
     const instId = `${coin}-USDT`;
     const r = await fetch(
@@ -89,12 +93,20 @@ async function fetchPrice(coin: string): Promise<number | null> {
     if (r.ok) {
       const j: any = await r.json();
       if (j.code === '0' && j.data?.[0]?.last) {
-        return parseFloat(j.data[0].last);
+        const price = parseFloat(j.data[0].last);
+        const open24h = parseFloat(j.data[0].open24h);
+        const changePercent = open24h ? ((price - open24h) / open24h) * 100 : 0;
+        return { price, changePercent };
       }
     }
   } catch {}
 
   return null;
+}
+
+async function fetchPrice(coin: string): Promise<number | null> {
+  const result = await fetchPriceWithChange(coin);
+  return result ? result.price : null;
 }
 
 // 股票类合约专用：通过 OKX SWAP 接口获取价格
@@ -119,9 +131,9 @@ async function scanPrices() {
   let updated = false;
   for (const coin of COINS) {
     try {
-      const price = await fetchPrice(coin);
-      if (price !== null && price > 0) {
-        latestPrices[coin] = { price, updatedAt: new Date().toISOString() };
+      const result = await fetchPriceWithChange(coin);
+      if (result !== null && result.price > 0) {
+        latestPrices[coin] = { price: result.price, changePercent: result.changePercent, updatedAt: new Date().toISOString() };
         updated = true;
       }
     } catch (err) {
@@ -133,7 +145,9 @@ async function scanPrices() {
     try {
       const price = await fetchStockPrice(coin);
       if (price !== null && price > 0) {
-        latestPrices[coin] = { price, updatedAt: new Date().toISOString() };
+        // 股票类合约保留已有的 changePercent，暂不计算
+        const prevChange = latestPrices[coin]?.changePercent ?? 0;
+        latestPrices[coin] = { price, changePercent: prevChange, updatedAt: new Date().toISOString() };
         updated = true;
       }
     } catch (err) {
@@ -154,8 +168,14 @@ export function getLatestPrice(coin: string): number | null {
   return entry.price;
 }
 
-export function getAllLatestPrices(): Record<string, { price: number; updatedAt: string }> {
+export function getAllLatestPrices(): Record<string, { price: number; changePercent: number; updatedAt: string }> {
   return { ...latestPrices };
+}
+
+export function getLatestChangePercent(coin: string): number | null {
+  const entry = latestPrices[coin.toUpperCase()];
+  if (!entry) return null;
+  return entry.changePercent;
 }
 
 export function startPriceScanner() {

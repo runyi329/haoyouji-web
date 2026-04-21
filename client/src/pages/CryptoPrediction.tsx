@@ -407,6 +407,21 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   );
   const ethPos = ethPositionData as any;
 
+  // 实时价格（含24h涨跌幅）——用于订单卡片底部显示
+  const { data: betCardPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
+    refetchInterval: 30000,
+    staleTime: 25000,
+  });
+  const betCardPrices = (betCardPricesRaw as any)?.prices ?? betCardPricesRaw ?? {};
+  const betCardChanges = (betCardPricesRaw as any)?.changes ?? {};
+
+  // 全局倒计时状态（每秒更新）
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // 撤销 mutation
   const cancelBetMutation = trpc.prediction.cancelBet.useMutation({
     onSuccess: (data: any) => {
@@ -540,6 +555,53 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                     const dirColor = bet.direction === 'up' ? '#e53935' : '#43a047';
                     const bjTime = bet.created_at ? new Date(new Date(bet.created_at).getTime() + 8 * 60 * 60 * 1000) : null;
                     const timeStr = bjTime ? `${String(bjTime.getUTCHours()).padStart(2,'0')}:${String(bjTime.getUTCMinutes()).padStart(2,'0')}:${String(bjTime.getUTCSeconds()).padStart(2,'0')}` : '';
+
+              // 实时涨跌幅（仅待结算订单显示）
+              const liveCoin = String(bet.coin).toUpperCase();
+              const liveChangeVal = betCardChanges?.[liveCoin];
+              const hasLiveChange = isPending && liveChangeVal !== undefined && liveChangeVal !== null;
+              const liveChangeNum = hasLiveChange ? Number(liveChangeVal) : 0;
+              const liveChangeColor = liveChangeNum >= 0 ? '#e53935' : '#43a047';
+              const liveChangeStr = hasLiveChange
+                ? `${liveChangeNum >= 0 ? '+' : ''}${liveChangeNum.toFixed(2)}%`
+                : null;
+
+              // 开奖倒计时（仅待结算订单显示）
+              let countdownStr: string | null = null;
+              if (isPending && bet.target_date) {
+                const isUSStock = US_STOCK_KEYS.has(liveCoin);
+                const targetDateStr2 = String(bet.target_date);
+                let deadlineMs: number;
+                if (isUSStock) {
+                  // 美股：判断目标日是否处于夏令时
+                  const targetDayDate = new Date(targetDateStr2 + 'T12:00:00Z');
+                  if (isUSDST(targetDayDate)) {
+                    // 夏令时：美东收盘 BJT次日 04:00 = UTC次日 20:00
+                    deadlineMs = new Date(targetDateStr2 + 'T20:00:00Z').getTime() + 24 * 60 * 60 * 1000;
+                  } else {
+                    // 冬令时：美东收盘 BJT次日 05:00 = UTC次日 21:00
+                    deadlineMs = new Date(targetDateStr2 + 'T21:00:00Z').getTime() + 24 * 60 * 60 * 1000;
+                  }
+                } else {
+                  // BTC/ETH：当日 BJT 23:59:59 = UTC 15:59:59
+                  deadlineMs = new Date(targetDateStr2 + 'T15:59:59Z').getTime();
+                }
+                const diffMs = deadlineMs - nowMs;
+                if (diffMs > 0) {
+                  const totalSec = Math.floor(diffMs / 1000);
+                  const h = Math.floor(totalSec / 3600);
+                  const m = Math.floor((totalSec % 3600) / 60);
+                  const s = totalSec % 60;
+                  if (h > 0) {
+                    countdownStr = `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                  } else {
+                    countdownStr = `${m}:${String(s).padStart(2,'0')}`;
+                  }
+                } else {
+                  countdownStr = '待开奖';
+                }
+              }
+
               return (
                 <div
                   key={bet.id}
@@ -562,8 +624,19 @@ function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                       {bet.order_no && <span className="font-mono">编号{bet.order_no}</span>}
                       {timeStr && <span className="font-mono">{timeStr}</span>}
                     </div>
+                    {/* 实时涨跌幅 + 开奖倒计时（仅待结算订单） */}
+                    {isPending && (liveChangeStr || countdownStr) && (
+                      <div className="flex items-center gap-2" style={{ fontSize: '0.7rem', marginTop: 2 }}>
+                        {liveChangeStr && (
+                          <span style={{ color: liveChangeColor, fontWeight: 600 }}>今日 {liveChangeStr}</span>
+                        )}
+                        {countdownStr && (
+                          <span style={{ color: '#888', fontVariantNumeric: 'tabular-nums', fontFamily: 'monospace' }}>{countdownStr}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  {/* 右列：第一行=金额+撤销按钮，第二行=倍数+目标 */}
+                  {/* 右列：第一行=金额+撤销按鈕，第二行=倍数+目标 */}
                   <div className="flex-shrink-0 flex flex-col items-end gap-0.5 ml-3">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold" style={{ color: '#1a1a1a' }}>{parseFloat(bet.bet_amount).toFixed(0)}U</span>
@@ -1250,7 +1323,9 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     refetchInterval: 30000,
     staleTime: 25000,
   });
-  const livePrice = cryptoPricesForOrder?.[order.coin] ?? 0;
+  // 适配新的返回结构 { prices: {...}, changes: {...} }
+  const _pricesForOrder = (cryptoPricesForOrder as any)?.prices ?? cryptoPricesForOrder;
+  const livePrice = _pricesForOrder?.[order.coin] ?? 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => { toast.success('委托已撒销'); },
     onError: (e) => toast.error('撒单失败', { description: e.message }),
@@ -1990,14 +2065,18 @@ export default function CryptoPrediction() {
   const { data: klinesData, isLoading: klinesLoading, refetch: refetchKlines } =
     trpc.ledger.getBinanceKlines.useQuery({ symbol: coin.symbol, interval, limit: 60 }, { staleTime: 30000 });
   // 当前价格使用统一价格接口（三级备用，更稳定）
-  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, {
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     refetchInterval: 30000,
     staleTime: 25000,
   });
+  // 适配新的返回结构 { prices: {...}, changes: {...} }
+  const cryptoPrices = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
+  const cryptoChanges = (cryptoPricesRaw as any)?.changes ?? {};
 
   const bars: KlineBar[] = (klinesData as KlineBar[] | undefined) || [];
   const ticker = tickerData as any;
-  const priceChange = ticker ? parseFloat(ticker.priceChangePercent) : 0;
+  // 涨跌幅优先用 price-scanner 缓存（已包含24h涨跌幅），回落到 ticker.priceChangePercent
+  const priceChange = (coinKey && cryptoChanges?.[coinKey] !== undefined) ? cryptoChanges[coinKey] : (ticker ? parseFloat(ticker.priceChangePercent) : 0);
   const isUp = priceChange >= 0;
   // 当前价格优先用 getCryptoPrices，回落到 ticker.lastPrice
   const currentPrice = (coinKey && cryptoPrices?.[coinKey]) ? cryptoPrices[coinKey] : (ticker?.lastPrice ? parseFloat(ticker.lastPrice) : 0);
