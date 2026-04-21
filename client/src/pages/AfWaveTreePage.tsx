@@ -145,9 +145,23 @@ function FamilyNode({
       // 数据库里有设置，直接用
       edgeRatio = dbRatio;
     } else {
-      // 没有设置，自动计算：连接线 = 100% - 当前节点自留比例
-      // 即上级从这个人身上能拿到 = 这个人没有自留的剩余部分
-      edgeRatio = Math.max(0, parseFloat((100 - node.selfRatio).toFixed(1)));
+      // 没有设置，自动计算：
+      // 连接线 = 100% - 这条链上所有已设置的橙色数字之和
+      // 即从当前节点的父节点往上，累加所有已设置的连接线 ratio
+      let setTotal = 0;
+      // 先加上父节点到其上级的已设置连接线
+      let cur: number | null = parentId;
+      while (cur !== null) {
+        const curNode = allUsers.find(u => u.id === cur);
+        if (!curNode) break;
+        const curParent = curNode.invitedByUserId;
+        if (curParent !== null) {
+          const r = ratioMap.get(`${cur}-${curParent}`);
+          if (r !== undefined && r > 0) setTotal += r;
+        }
+        cur = curParent;
+      }
+      edgeRatio = Math.max(0, parseFloat((100 - setTotal).toFixed(1)));
     }
   }
 
