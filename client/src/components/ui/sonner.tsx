@@ -9,32 +9,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
       position="top-center"
-      toastOptions={{
-        style: {
-          fontSize: '15px',
-          padding: '14px 20px',
-          borderRadius: '12px',
-          textAlign: 'center',
-          minWidth: '240px',
-          maxWidth: '300px',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-          marginLeft: 'auto',
-          marginRight: 'auto',
-        },
-      }}
       style={
         {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
-          // 强制居中：固定在视口水平中心
-          position: "fixed",
-          left: "50%",
-          right: "auto",
-          transform: "translateX(-50%)",
-          width: "fit-content",
-          maxWidth: "100vw",
-          pointerEvents: "auto",
         } as React.CSSProperties
       }
       {...props}
