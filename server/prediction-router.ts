@@ -994,11 +994,9 @@ export const predictionRouter = router({
       // 实际持有ETH数量 = 累计买入数量 × 持仓占比
       const actualEthQty = totalEthQty * positionRatio;
 
-      // 3. 取最新ETH价格
-      const [latestPriceRows] = await conn.execute(
-        `SELECT close FROM crypto_klines WHERE symbol = 'ETHUSDT' ORDER BY date DESC LIMIT 1`
-      ) as any;
-      const currentEthPrice = (latestPriceRows as any[])[0] ? parseFloat((latestPriceRows as any[])[0].close) : 0;
+      // 3. 取最新ETH价格（使用 price-scanner 内存缓存，实时价格，规范：crypto-price-unified）
+      const { getLatestPrice } = await import('./price-scanner');
+      const currentEthPrice = getLatestPrice('ETH') ?? 0;
 
       // 持仓市值 & 浮盈浮亏
       const positionValue = actualEthQty * currentEthPrice;
