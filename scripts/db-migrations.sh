@@ -81,4 +81,8 @@ $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_
 $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='funder_order_alert_state' AND COLUMN_NAME='phone_enabled'; SET @s = IF(@c=0, 'ALTER TABLE funder_order_alert_state ADD COLUMN phone_enabled TINYINT NOT NULL DEFAULT 1', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
 echo "✅ AI预警表新字段确认完成"
 
+echo "📊 补录4REBN2 BTC 4-21 竞猜返佣 10U 给 YJH..."
+$DB_CMD -e "INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) SELECT 1, 4957151, 10.00, '竞猜返佣 比特币 4-21 编号4REBN2', NOW(), NOW() WHERE NOT EXISTS (SELECT 1 FROM af_manual_balances WHERE user_id = 4957151 AND note = '竞猜返佣 比特币 4-21 编号4REBN2');" || true
+echo "✅ 4REBN2返佣补录完成"
+
 echo "✅ 所有数据库迁移完成"
