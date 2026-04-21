@@ -10452,11 +10452,11 @@ export const appRouter = router({
         }
         const YJH_USER_ID = 4957151;
         if (targetUserId !== YJH_USER_ID) {
-          return { users: [] };
+          return { users: [], allPayoutRatios: [] };
         }
         try {
           const rawDb = await getDbConnection();
-          if (!rawDb) return { users: [] };
+          if (!rawDb) return { users: [], allPayoutRatios: [] };
           // BFS 递归查询所有层级下线，记录层数
           type InviteUser = { id: number; name: string; username: string; layer: number; invitedAt: string | null; inviterName: string | null; registeredAt: string | null };
           const result: InviteUser[] = [];
@@ -10517,6 +10517,7 @@ export const appRouter = router({
           result.sort((a, b) => a.layer - b.layer || a.name.localeCompare(b.name));
           // 查询每个用户作为下单人、自己作为受益人的拨比（source_user_id=beneficiary_user_id=该用户）
           let payoutMap = new Map<number, number>();
+          const allPayoutRatios: { sourceUserId: number; beneficiaryUserId: number; ratio: number }[] = [];
           if (result.length > 0) {
             try {
               await rawDb.execute(`
@@ -10540,6 +10541,18 @@ export const appRouter = router({
               ) as any[];
               for (const row of (payoutRows as any[])) {
                 payoutMap.set(row.source_user_id, parseFloat(row.ratio));
+              }
+              // 查询所有波比分配关系（用于波比树连接线显示）
+              const [allRatioRows] = await rawDb.execute(
+                `SELECT source_user_id, beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id = ? AND source_user_id IN (${placeholders2})`,
+                [input.ledgerId, ...userIds]
+              ) as any[];
+              for (const row of (allRatioRows as any[])) {
+                allPayoutRatios.push({
+                  sourceUserId: row.source_user_id,
+                  beneficiaryUserId: row.beneficiary_user_id,
+                  ratio: parseFloat(row.ratio),
+                });
               }
             } catch (e) {
               console.error('[AF] 拨比查询失败:', e);
@@ -10850,10 +10863,10 @@ export const appRouter = router({
           });
           // 按账户总値降序排列
           mappedUsers.sort((a, b) => b.totalValue - a.totalValue);
-          return { users: mappedUsers };
+          return { users: mappedUsers, allPayoutRatios };
         } catch (e) {
           console.error('[AF] 邀请树查询失败:', e);
-          return { users: [] };
+          return { users: [], allPayoutRatios: [] };
         }
       }),
     // AF 邀请名单备注：保存备注
