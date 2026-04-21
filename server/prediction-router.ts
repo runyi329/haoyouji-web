@@ -1245,6 +1245,32 @@ export async function settleDailyBets(targetDateInput?: string, overrideChangePc
     return { min, max };
   };
 
+  // 解析 4档模式的 range_label，返回中奖判断函数
+  // range_label 格式："大涨 ≥X%" | "小涨 0~X%" | "大跌 ≥Y%" | "小跌 0~Y%"
+  const parseTierLabel = (rangeLabel: string): ((pct: number) => boolean) | null => {
+    const bigUpMatch = rangeLabel.match(/大涨[\s≥>=]+([\d.]+)%/);
+    if (bigUpMatch) {
+      const threshold = parseFloat(bigUpMatch[1]);
+      return (pct: number) => pct >= threshold;
+    }
+    const smallUpMatch = rangeLabel.match(/小涨[\s0~]+([\d.]+)%/);
+    if (smallUpMatch) {
+      const threshold = parseFloat(smallUpMatch[1]);
+      return (pct: number) => pct >= 0 && pct < threshold;
+    }
+    const bigDownMatch = rangeLabel.match(/大跌[\s≥>=]+([\d.]+)%/);
+    if (bigDownMatch) {
+      const threshold = parseFloat(bigDownMatch[1]);
+      return (pct: number) => pct <= -threshold;
+    }
+    const smallDownMatch = rangeLabel.match(/小跌[\s0~]+([\d.]+)%/);
+    if (smallDownMatch) {
+      const threshold = parseFloat(smallDownMatch[1]);
+      return (pct: number) => pct <= 0 && pct > -threshold;
+    }
+    return null;
+  };
+
   let wonCount = 0, lostCount = 0, totalPayout = 0;
   const details: string[] = [];
 
@@ -1256,13 +1282,21 @@ export async function settleDailyBets(targetDateInput?: string, overrideChangePc
       continue;
     }
 
-    const { min, max } = getRangeBounds(parseInt(bet.range_index));
+    // 优先用 range_label 解析 4档模式（大涨/小涨/大跌/小跌）
+    const tierJudge = parseTierLabel(bet.range_label);
     let isWon = false;
-    if (bet.direction === 'up') {
-      isWon = actualPct >= min && actualPct < max;
+    if (tierJudge) {
+      // 4档模式：直接用 range_label 判断
+      isWon = tierJudge(actualPct);
     } else {
-      // direction='down': 跌幅在区间内，即 changePct <= -min && > -max
-      isWon = actualPct <= -min && actualPct > -max;
+      // 旧版区间模式：用 range_index 判断
+      const { min, max } = getRangeBounds(parseInt(bet.range_index));
+      if (bet.direction === 'up') {
+        isWon = actualPct >= min && actualPct < max;
+      } else {
+        // direction='down': 跌幅在区间内，即 changePct <= -min && > -max
+        isWon = actualPct <= -min && actualPct > -max;
+      }
     }
 
     const expectedReturn = parseFloat(bet.expected_return);
