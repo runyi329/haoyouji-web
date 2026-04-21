@@ -1466,8 +1466,10 @@ export default function BeDataPage() {
 
       {/* ===== 预测未来 Tab ===== */}
       {activeTab === "predict" && (
-        <div className="flex-1 overflow-auto" style={{ minHeight: 0 }}>
-          <MarketBetPanelWithTabs ledgerId={ledgerId} />
+        <div className="flex-1 overflow-auto bg-gray-50" style={{ minHeight: 0 }}>
+          <div className="px-3 py-3">
+            <MarketBetPanelWithTabs ledgerId={ledgerId} />
+          </div>
         </div>
       )}
 
