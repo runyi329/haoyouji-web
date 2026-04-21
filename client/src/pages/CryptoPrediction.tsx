@@ -679,6 +679,19 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                       <span>{parseFloat(bet.odds).toFixed(2)}x</span>
                       <span>目标<span style={{ color: '#e65100', fontWeight: 600 }}>{parseFloat(bet.expected_return).toFixed(0)}U</span></span>
                     </div>
+                    {/* 实际涨跌幅（已结算订单显示） */}
+                    {!isPending && !isCancelled && (bet.actual_change_pct != null || bet.actualChangePct != null) && (
+                      <div style={{ fontSize: '0.7rem', marginTop: 1 }}>
+                        <span style={{ color: '#aaa' }}>实际</span>
+                        <span style={{
+                          color: parseFloat(bet.actual_change_pct ?? bet.actualChangePct) >= 0 ? '#e53935' : '#43a047',
+                          fontWeight: 600,
+                          marginLeft: 2,
+                        }}>
+                          {parseFloat(bet.actual_change_pct ?? bet.actualChangePct) >= 0 ? '+' : ''}{parseFloat(bet.actual_change_pct ?? bet.actualChangePct).toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
