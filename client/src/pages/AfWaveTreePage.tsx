@@ -332,30 +332,6 @@ export default function AfWaveTreePage() {
     });
   }, [inviteTreeData, ratioMap]);
 
-  // 链完整性检查：从每个叶子节点往上追溯，检查链上所有 selfRatio 之和是否 = 100%
-  const chainWarnings: { memberName: string; total: number; gap: number }[] = [];
-  if (treeUsers.length > 0) {
-    const userMap = new Map(treeUsers.map(u => [u.id, u]));
-    const childIds = new Set(treeUsers.filter(u => u.invitedByUserId !== null).map(u => u.invitedByUserId!));
-    const leafUsers = treeUsers.filter(u => u.id !== YJH_USER_ID_CONST && !childIds.has(u.id));
-    for (const leaf of leafUsers) {
-      let chainTotal = 0;
-      let current: TreeUser | undefined = leaf;
-      while (current) {
-        chainTotal += current.selfRatio;
-        current = current.invitedByUserId ? userMap.get(current.invitedByUserId) : undefined;
-      }
-      const rounded = parseFloat(chainTotal.toFixed(1));
-      if (rounded > 100.0) {
-        chainWarnings.push({
-          memberName: leaf.name || `用户${leaf.id}`,
-          total: rounded,
-          gap: parseFloat((rounded - 100.0).toFixed(1)),
-        });
-      }
-    }
-  }
-
   const rootNodes = treeUsers.filter(
     (u) => u.invitedByUserId === null || u.id === YJH_USER_ID_CONST
   );
@@ -388,18 +364,7 @@ export default function AfWaveTreePage() {
             共 {treeUsers.length} 人 · 点击节点可编辑
           </div>
         </div>
-        {/* 链完整性状态 */}
-        <div className="flex-shrink-0">
-          {chainWarnings.length === 0 ? (
-            <span className="text-xs font-medium" style={{ color: "#388E3C" }}>
-              ✓ 正常
-            </span>
-          ) : (
-            <span className="text-xs font-bold" style={{ color: "#D32F2F" }}>
-              ⚠️ {chainWarnings.length} 人异常
-            </span>
-          )}
-        </div>
+
       </div>
 
       {/* 图例说明 */}
@@ -408,33 +373,6 @@ export default function AfWaveTreePage() {
         <span style={{ color: "#E65100" }}>■ 连接线 ↑ = 上级抽成</span>
         <span style={{ color: "#9E9E9E" }}>■ 0% = 未分配</span>
       </div>
-
-      {/* 链异常提示 */}
-      {chainWarnings.length > 0 && (
-        <div className="mx-4 mt-2 space-y-1">
-          {chainWarnings.slice(0, 5).map((w, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between rounded-lg px-3 py-1.5"
-              style={{ backgroundColor: "#FFF3F3", border: "1px solid #FFCDD2" }}
-            >
-              <span className="text-xs" style={{ color: "#B71C1C" }}>
-                {w.memberName} 已分配 {w.total.toFixed(1)}%
-              </span>
-              <span className="text-xs font-bold" style={{ color: "#D32F2F" }}>
-                {w.gap > 0
-                  ? `缺 ${w.gap.toFixed(1)}%`
-                  : `超 ${Math.abs(w.gap).toFixed(1)}%`}
-              </span>
-            </div>
-          ))}
-          {chainWarnings.length > 5 && (
-            <div className="text-xs text-gray-400 text-center">
-              还有 {chainWarnings.length - 5} 人异常...
-            </div>
-          )}
-        </div>
-      )}
 
       {/* 树状图主体 */}
       <div className="flex-1 overflow-auto">
