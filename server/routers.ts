@@ -17910,7 +17910,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
   // 数字币实时价格（服务端缓存，前端直接读取）
   getCryptoPrices: publicProcedure.query(async () => {
     // 从 price-scanner 内存缓存读取（规范：crypto-price-unified）
-    // 不从外部 API 读取，确保价格实时且不为空（保留上次数据）
+    // changePercent 已由 price-scanner 用火币日K开盘价实时计算（北京时间 00:00 对齐）
+    // 不再查数据库，直接返回缓存即可
     const { getAllLatestPrices } = await import('./price-scanner');
     const allPrices = getAllLatestPrices();
     const result: Record<string, number> = {};
@@ -17919,44 +17920,6 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       result[coin] = entry.price;
       changes[coin] = entry.changePercent ?? 0;
     }
-
-    // 用数据库中「UTC前一天的 close」作为北京时间当日开盘参考价重新计算涨跌幅
-    // 口径：北京时间 00:00 = UTC 前一天 16:00，Binance 日线 UTC 前一天的 close 即为开盘参考价
-    // 涨跌幅 = (current - prevClose) / prevClose * 100
-    try {
-      const { getDbConnection } = await import('./db');
-      const conn = await getDbConnection();
-      if (conn) {
-        // UTC 前一天日期
-        const yesterday = new Date();
-        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        const prevDateUTC = yesterday.toISOString().slice(0, 10);
-        // 映射 coin key 到 klines symbol
-        const COIN_TO_SYMBOL: Record<string, string> = {
-          BTC: 'BTCUSDT', ETH: 'ETHUSDT', SOL: 'SOLUSDT',
-          TSLA: 'TSLA', NVDA: 'NVDA', AAPL: 'AAPL',
-          MSFT: 'MSFT', GOOGL: 'GOOGL', META: 'META',
-          AMZN: 'AMZN',
-        };
-        for (const [coin, currentPrice] of Object.entries(result)) {
-          const symbol = COIN_TO_SYMBOL[coin];
-          if (!symbol || !currentPrice) continue;
-          try {
-            const [rows]: any = await conn.execute(
-              `SELECT close FROM crypto_klines WHERE symbol = ? AND date = ? LIMIT 1`,
-              [symbol, prevDateUTC]
-            );
-            if (rows && rows.length > 0) {
-              const prevClose = parseFloat(rows[0].close);
-              if (prevClose > 0) {
-                changes[coin] = (currentPrice - prevClose) / prevClose * 100;
-              }
-            }
-          } catch {}
-        }
-      }
-    } catch {}
-
     return { prices: result, changes };
   }),
 
