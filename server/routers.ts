@@ -17913,11 +17913,14 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     // 不从数据库读取，确保价格实时且不为空（保留上次数据）
     const { getAllLatestPrices } = await import('./price-scanner');
     const allPrices = getAllLatestPrices();
+    // 返回 price 和 changePercent 两个字段，向下兼容（直接索引字段为 price）
     const result: Record<string, number> = {};
+    const changes: Record<string, number> = {};
     for (const [coin, entry] of Object.entries(allPrices)) {
       result[coin] = entry.price;
+      changes[coin] = entry.changePercent ?? 0;
     }
-    return result;
+    return { prices: result, changes };
   }),
 
   // 分红功能：获取某用户在某账本的分红汇总（按标签分组）

@@ -79,7 +79,8 @@ export default function LedgerDetailAA({
     refetchInterval: 5 * 60 * 1000, // 每5分钟刷新一次
     staleTime: 60 * 1000,           // 1分钟内不重复请求
   });
-  const aaCryptoPrices: Record<string, number> = cryptoPricesData ?? {};
+  // 适配新的返回结构 { prices: {...}, changes: {...} }
+  const aaCryptoPrices: Record<string, number> = (cryptoPricesData as any)?.prices ?? cryptoPricesData ?? {};
 
   // 日历当前月份
   const [calendarDate, setCalendarDate] = useState(() => {

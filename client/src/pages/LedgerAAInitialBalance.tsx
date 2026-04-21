@@ -92,7 +92,9 @@ export default function LedgerAAInitialBalance() {
   // 价格单位为 USDT，需乘以 CNY_RATE 转换为人民币
   const cryptoPrices: Record<string, number> = {};
   if (cryptoPricesRaw) {
-    for (const [coin, usdtPrice] of Object.entries(cryptoPricesRaw as Record<string, number>)) {
+    // 适配新的返回结构 { prices: {...}, changes: {...} }
+    const pricesMap = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
+    for (const [coin, usdtPrice] of Object.entries(pricesMap as Record<string, number>)) {
       cryptoPrices[coin] = usdtPrice * CNY_RATE;
     }
     // USDT 稳定币价格固定为 1 USDT = CNY_RATE 元
