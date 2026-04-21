@@ -17920,14 +17920,17 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       changes[coin] = entry.changePercent ?? 0;
     }
 
-    // 用数据库中当日日K线开盘价重新计算涨跌幅（更准确）
-    // 涨跌幅 = (current - open) / open * 100
+    // 用数据库中「UTC前一天的 close」作为北京时间当日开盘参考价重新计算涨跌幅
+    // 口径：北京时间 00:00 = UTC 前一天 16:00，Binance 日线 UTC 前一天的 close 即为开盘参考价
+    // 涨跌幅 = (current - prevClose) / prevClose * 100
     try {
       const { getDbConnection } = await import('./db');
       const conn = await getDbConnection();
       if (conn) {
-        // 取当前 UTC 日期（日K线用 UTC）
-        const todayUTC = new Date().toISOString().slice(0, 10);
+        // UTC 前一天日期
+        const yesterday = new Date();
+        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+        const prevDateUTC = yesterday.toISOString().slice(0, 10);
         // 映射 coin key 到 klines symbol
         const COIN_TO_SYMBOL: Record<string, string> = {
           BTC: 'BTCUSDT', ETH: 'ETHUSDT', SOL: 'SOLUSDT',
@@ -17940,13 +17943,13 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           if (!symbol || !currentPrice) continue;
           try {
             const [rows]: any = await conn.execute(
-              `SELECT open FROM crypto_klines WHERE symbol = ? AND date = ? LIMIT 1`,
-              [symbol, todayUTC]
+              `SELECT close FROM crypto_klines WHERE symbol = ? AND date = ? LIMIT 1`,
+              [symbol, prevDateUTC]
             );
             if (rows && rows.length > 0) {
-              const openPrice = parseFloat(rows[0].open);
-              if (openPrice > 0) {
-                changes[coin] = (currentPrice - openPrice) / openPrice * 100;
+              const prevClose = parseFloat(rows[0].close);
+              if (prevClose > 0) {
+                changes[coin] = (currentPrice - prevClose) / prevClose * 100;
               }
             }
           } catch {}
