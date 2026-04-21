@@ -285,10 +285,40 @@ export default function AfInviteTreePage() {
     payoutRatio: treeLocalRatios[u.id] ?? u.payoutRatio ?? 0,
   }));
 
-  // 总波比（所有非YJH用户的波比之和）
-  const totalRatio = treeUsers
-    .filter(u => u.id !== YJH_USER_ID_CONST)
-    .reduce((sum, u) => sum + (treeLocalRatios[u.id] ?? u.payoutRatio), 0);
+  // 按链检查波比完整性（每条链从叶子节点往上到 YJH，所有人波比之和必须精确等于 100.0%）
+  const chainWarnings: { memberName: string; total: number; gap: number }[] = [];
+  if (treeUsers.length > 0) {
+    // 找出所有叶子节点（没有下级的成员，且不是 YJH）
+    const childIds = new Set(treeUsers.filter(u => u.invitedByUserId !== null).map(u => u.invitedByUserId!));
+    const leafUsers = treeUsers.filter(u => u.id !== YJH_USER_ID_CONST && !childIds.has(u.id));
+    // 对每个叶子节点，往上追溯整条链
+    for (const leaf of leafUsers) {
+      let chainTotal = 0;
+      let cur: TreeUser | undefined = leaf;
+      const chainNames: string[] = [];
+      while (cur) {
+        const ratio = parseFloat((treeLocalRatios[cur.id] ?? cur.payoutRatio).toFixed(1));
+        chainTotal += ratio;
+        chainNames.push(cur.name || `用户${cur.id}`);
+        if (cur.invitedByUserId === null) break;
+        cur = treeUsers.find(u => u.id === cur!.invitedByUserId);
+      }
+      // YJH 的波比也要加进去
+      const yjhUser = treeUsers.find(u => u.id === YJH_USER_ID_CONST);
+      if (yjhUser) {
+        const yjhRatio = parseFloat((treeLocalRatios[yjhUser.id] ?? yjhUser.payoutRatio).toFixed(1));
+        chainTotal += yjhRatio;
+      }
+      const chainTotalRounded = parseFloat(chainTotal.toFixed(1));
+      if (chainTotalRounded !== 100.0) {
+        chainWarnings.push({
+          memberName: leaf.name || `用户${leaf.id}`,
+          total: chainTotalRounded,
+          gap: parseFloat((100.0 - chainTotalRounded).toFixed(1)),
+        });
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F5F5' }}>
@@ -321,11 +351,29 @@ export default function AfInviteTreePage() {
       {/* 简化树状图弹层 */}
       {showSimpleTree && isYJH && (
         <div className="bg-white border-b border-gray-200" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-          <div className="px-4 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
-            <span className="text-xs font-semibold text-gray-700">波比树状图</span>
-            <span className="text-xs" style={{ color: Math.abs(totalRatio - 100) < 0.1 ? '#388E3C' : '#D32F2F' }}>
-              总分成: {totalRatio.toFixed(1)}% {Math.abs(totalRatio - 100) < 0.1 ? '✓' : '⚠️应为100%'}
-            </span>
+          <div className="px-4 py-2" style={{ borderBottom: '1px solid #F0F0F0' }}>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-gray-700">波比树状图</span>
+              {chainWarnings.length === 0 ? (
+                <span className="text-xs font-medium" style={{ color: '#388E3C' }}>✓ 所有链合计 100.0%</span>
+              ) : (
+                <span className="text-xs font-bold" style={{ color: '#D32F2F' }}>⚠️ {chainWarnings.length} 条链异常</span>
+              )}
+            </div>
+            {chainWarnings.length > 0 && (
+              <div className="mt-1.5 space-y-1">
+                {chainWarnings.map((w, i) => (
+                  <div key={i} className="flex items-center justify-between rounded px-2 py-1" style={{ backgroundColor: '#FFF3F3', border: '1px solid #FFCDD2' }}>
+                    <span className="text-xs" style={{ color: '#B71C1C' }}>
+                      {w.memberName} 链合计 {w.total.toFixed(1)}%
+                    </span>
+                    <span className="text-xs font-bold" style={{ color: '#D32F2F' }}>
+                      {w.gap > 0 ? `缺 ${w.gap.toFixed(1)}%` : `超 ${Math.abs(w.gap).toFixed(1)}%`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any, paddingBottom: 8 }}>
             <div style={{ minWidth: 'max-content', padding: '8px 12px' }}>
