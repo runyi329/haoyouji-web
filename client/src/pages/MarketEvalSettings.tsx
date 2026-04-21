@@ -202,11 +202,16 @@ function EventGroupCard({
 }
 
 // ============================================================
-// 结算按鈕组件
+// 结算按钮组件
 // ============================================================
+const SUPPORTED_COINS = ['BTC', 'ETH', 'SOL', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'];
+
 function SettleButton({ ledgerId }: { ledgerId: number }) {
   const [result, setResult] = useState<any>(null);
   const [dateInput, setDateInput] = useState("");
+  const [showOverride, setShowOverride] = useState(false);
+  const [overrideInputs, setOverrideInputs] = useState<Record<string, string>>({});
+
   const settleMutation = trpc.prediction.manualSettle.useMutation({
     onSuccess: (data) => {
       setResult(data);
@@ -220,18 +225,46 @@ function SettleButton({ ledgerId }: { ledgerId: number }) {
     },
     onError: (e) => toast.error("结算失败", { description: e.message }),
   });
+
+  const handleSettle = () => {
+    // 构建 overrideChangePctMap（只取有值的币种）
+    const overrideMap: Record<string, number> = {};
+    if (showOverride) {
+      for (const coin of SUPPORTED_COINS) {
+        const val = overrideInputs[coin];
+        if (val !== undefined && val !== '') {
+          const num = parseFloat(val);
+          if (!isNaN(num)) overrideMap[coin] = num;
+        }
+      }
+    }
+    settleMutation.mutate({
+      targetDate: dateInput || undefined,
+      overrideChangePctMap: showOverride && Object.keys(overrideMap).length > 0 ? overrideMap : undefined,
+    });
+  };
+
   return (
-    <div className="flex flex-col items-end gap-2">
+    <div className="flex flex-col gap-3">
+      {/* 基础行：日期 + 结算按钮 */}
       <div className="flex items-center gap-2">
         <input
           type="date"
           value={dateInput}
           onChange={(e) => setDateInput(e.target.value)}
-          className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600 w-32"
+          className="text-xs border border-gray-200 rounded px-2 py-1 text-gray-600 flex-1"
           placeholder="不填=昨天"
         />
         <button
-          onClick={() => settleMutation.mutate({ targetDate: dateInput || undefined })}
+          onClick={() => setShowOverride(v => !v)}
+          className={`text-xs px-2 py-1.5 rounded border transition-colors ${
+            showOverride ? 'bg-amber-50 border-amber-300 text-amber-700' : 'border-gray-200 text-gray-500'
+          }`}
+        >
+          补开奖
+        </button>
+        <button
+          onClick={handleSettle}
           disabled={settleMutation.isPending}
           className="flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-60 active:scale-95 transition-transform"
         >
@@ -239,12 +272,44 @@ function SettleButton({ ledgerId }: { ledgerId: number }) {
           {settleMutation.isPending ? "结算中..." : "手动结算"}
         </button>
       </div>
+
+      {/* 补开奖面板：手动输入各币种涨跌幅 */}
+      {showOverride && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <div className="text-xs font-semibold text-amber-800 mb-2">手动指定涨跌幅（历史补开奖）</div>
+          <div className="text-xs text-amber-600 mb-3">填入当日实际涨跌幅（%），如跌2.84%填 -2.84，不填的币种将自动从API获取</div>
+          <div className="grid grid-cols-2 gap-2">
+            {SUPPORTED_COINS.map(coin => (
+              <div key={coin} className="flex items-center gap-1.5">
+                <span className="text-xs font-medium text-gray-600 w-10 flex-shrink-0">{coin}</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={overrideInputs[coin] ?? ''}
+                  onChange={(e) => setOverrideInputs(prev => ({ ...prev, [coin]: e.target.value }))}
+                  placeholder="涨跌幅%"
+                  className="text-xs border border-amber-200 rounded px-2 py-1 w-full bg-white text-gray-700 placeholder-gray-300"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 结算结果 */}
       {result && (
-        <div className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1 max-w-xs text-right">
+        <div className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">
           {result.settled > 0 ? (
             <span className="text-emerald-600">✓ 中奖{result.won}单 未中{result.lost}单 派奖{result.totalPayout.toFixed(2)}U</span>
           ) : (
             <span className="text-gray-400">{result.details[0]}</span>
+          )}
+          {result.details?.length > 1 && (
+            <div className="mt-1 space-y-0.5">
+              {result.details.slice(1).map((d: string, i: number) => (
+                <div key={i} className="text-gray-400">{d}</div>
+              ))}
+            </div>
           )}
         </div>
       )}
