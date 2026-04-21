@@ -82,17 +82,17 @@ function FamilyCard({
   );
 }
 
-// ===== 连接线上的上级抽成标签 =====
+// ===== 连接线上的上级抽成标签（0% 也显示）=====
 function EdgeLabel({ ratio }: { ratio: number }) {
-  if (ratio <= 0) return null;
+  const isZero = ratio <= 0;
   return (
     <div
       style={{
         fontSize: 7,
         fontWeight: 700,
-        color: "#E65100",
-        backgroundColor: "#FFF3E0",
-        border: "1px solid #FFE0B2",
+        color: isZero ? "#9E9E9E" : "#E65100",
+        backgroundColor: isZero ? "#F5F5F5" : "#FFF3E0",
+        border: `1px solid ${isZero ? "#E0E0E0" : "#FFE0B2"}`,
         borderRadius: 3,
         padding: "0 2px",
         lineHeight: "11px",
@@ -104,7 +104,7 @@ function EdgeLabel({ ratio }: { ratio: number }) {
         zIndex: 3,
       }}
     >
-      ↑{ratio.toFixed(1)}%
+      ↑{isZero ? "0%" : `${ratio.toFixed(1)}%`}
     </div>
   );
 }
@@ -142,10 +142,10 @@ function FamilyNode({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      {/* 连接线（从父节点到当前节点）+ 上级抽成标签 */}
+      {/* 连接线（从父节点到当前节点）+ 上级抽成标签（始终显示）*/}
       {parentId !== null && (
-        <div style={{ position: "relative", width: 1, height: edgeRatio > 0 ? 20 : 10, backgroundColor: "#BDBDBD" }}>
-          {edgeRatio > 0 && <EdgeLabel ratio={edgeRatio} />}
+        <div style={{ position: "relative", width: 1, height: 20, backgroundColor: "#BDBDBD" }}>
+          <EdgeLabel ratio={edgeRatio} />
         </div>
       )}
 
