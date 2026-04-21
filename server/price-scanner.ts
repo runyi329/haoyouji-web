@@ -59,7 +59,8 @@ async function fetchPriceWithChange(coin: string): Promise<{ price: number; chan
       const data: any[] = await r.json();
       if (Array.isArray(data) && data.length > 0 && data[0].last) {
         const price = parseFloat(data[0].last);
-        const changePercent = data[0].change_percentage ? parseFloat(data[0].change_percentage) * 100 : 0;
+        // Gate.io change_percentage 已是百分比形式（如 0.69 表示 +0.69%），无需 *100
+        const changePercent = data[0].change_percentage ? parseFloat(data[0].change_percentage) : 0;
         if (!isNaN(price) && price > 0) return { price, changePercent };
       }
     }
