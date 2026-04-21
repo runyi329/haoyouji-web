@@ -217,14 +217,12 @@ export async function getUserRechargeOrders(userId: number, limit: number = 20) 
 }
 
 /**
- * 根据金额查找匹配的订单（改进版：submitted优先 + 精确匹配优先 + 模糊匹配兜底）
- * 
- * 匹配策略（按/**
  * 改进的订单匹配算法（按优先级）：
  * 1. 完全匹配（金额完全相同）— 直接自动确认
  * 2. 精确匹配（误差 ±0.01 USDT）— 直接自动确认
- * 3. 模糊匹配（到账金额 < 订单金额，差额在手续费范围内 ≤0.1 USDT）— 自动确认，按实际到账金额入账
- * 4. 无法匹配 — 记录未匹配交易，等待管理员手动处理
+ * 3. 模糊匹配（双向，差额 ≤1 USDT，覆盖手续费场景）— 自动确认，按实际到账金额入账
+ *    注意：欧易等平台提币后转入，实际到账可能略多或略少于订单金额
+ * 4. 无法匹配 — 记录未匹配交易，等待手动处理
  * 
  * @param amount 交易金额
  * @param txnHash 交易哈希（用于防止重复匹配）
@@ -237,6 +235,7 @@ export async function findOrderByAmount(amount: number, txnHash?: string): Promi
   const db = await getDb();
   
   // 按优先级搜索：先submitted，再pending
+  // 注意：submitted 状态优先，因为用户已确认转账，即使订单过期也应尝试匹配
   const statusPriority = ['submitted', 'pending'] as const;
   
   for (const status of statusPriority) {
@@ -266,11 +265,12 @@ export async function findOrderByAmount(amount: number, txnHash?: string): Promi
       };
     }
     
-    // 模糊匹配（到账金额略少于订单金额，差额 ≤0.1 USDT，覆盖手续费场景）
+    // 模糊匹配：双向容差 ≤1 USDT
+    // 说明：欧易等平台提币后转入，实际到账可能略多或略少于订单金额（手续费差异）
+    // 例：订单100.134，到账100.4729（多0.34），或到账99.9（少0.234）均可匹配
     const fuzzyConditions = [
       eq(rechargeOrders.status, status),
-      sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) > ${amount}`,
-      sql`CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount} <= 0.1`
+      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`
     ];
     
     // 如果提供了txnHash，排除已被其他交易使用的订单
@@ -287,7 +287,8 @@ export async function findOrderByAmount(amount: number, txnHash?: string): Promi
     
     if (fuzzyOrders.length > 0) {
       const orderAmount = parseFloat(fuzzyOrders[0].amount);
-      console.log(`[Recharge] Fuzzy match found in ${status} orders`);
+      const diff = parseFloat((amount - orderAmount).toFixed(4));
+      console.log(`[Recharge] Fuzzy match found in ${status} orders (diff: ${diff > 0 ? '+' : ''}${diff} USDT)`);
       return {
         order: fuzzyOrders[0],
         matchType: 'fuzzy',
@@ -338,15 +339,39 @@ export async function completeRechargeOrder(
 ) {
   const db = await getDb();
   
-  // 更新订单状态
-  await db
+  // ⚠️ 安全检查：先查订单当前状态，只允许对 submitted/pending 状态的订单入账
+  // 严禁对 expired/completed/cancelled 状态的订单操作，防止重复入账
+  const orderCheck = await db
+    .select()
+    .from(rechargeOrders)
+    .where(eq(rechargeOrders.id, orderId))
+    .limit(1);
+  
+  if (orderCheck.length === 0) {
+    console.error(`[Recharge] completeRechargeOrder: order ${orderId} not found`);
+    return false;
+  }
+  
+  const currentStatus = orderCheck[0].status;
+  if (currentStatus !== 'submitted' && currentStatus !== 'pending') {
+    console.error(`[Recharge] ⛔ BLOCKED: order ${orderId} is in status '${currentStatus}', NOT submitted/pending. Refusing to credit to prevent duplicate payment.`);
+    return false;
+  }
+  
+  // 更新订单状态（使用 WHERE 条件限制，防止并发重复处理）
+  const updateResult = await db
     .update(rechargeOrders)
     .set({
       status: 'completed',
       txnHash,
       completedAt: new Date().toISOString().slice(0, 19).replace('T', ' ')
     })
-    .where(eq(rechargeOrders.id, orderId));
+    .where(
+      and(
+        eq(rechargeOrders.id, orderId),
+        sql`${rechargeOrders.status} IN ('submitted', 'pending')`
+      )
+    );
   
   // 获取订单信息
   const order = await db
@@ -357,11 +382,19 @@ export async function completeRechargeOrder(
   
   if (order.length === 0) return false;
   
+  // 再次确认订单已被成功更新为 completed（防止并发竞争）
+  if (order[0].status !== 'completed' || order[0].txnHash !== txnHash) {
+    console.error(`[Recharge] ⛔ BLOCKED: order ${orderId} status update failed (concurrent processing?). Refusing to credit.`);
+    return false;
+  }
+  
   // 按实际到账金额入账（而不是订单金额）
   const creditAmount = actualAmount;
-  const description = matchType === 'fuzzy' 
-    ? `充值到账（订单金额${order[0].amount}，实际到账${actualAmount}，差额为手续费）`
-    : `充值到账`;
+  const orderAmt = parseFloat(order[0].amount);
+  const diffAmt = parseFloat((actualAmount - orderAmt).toFixed(4));
+  const description = matchType === 'fuzzy'
+    ? `充値到账（订单金额${orderAmt} USDT，实际到账${actualAmount} USDT，${diffAmt >= 0 ? '多' : '少'}${Math.abs(diffAmt)} USDT）`
+    : `充値到账`;
   
   await addUserBalance(order[0].userId, creditAmount, 'recharge', orderId, description);
   
