@@ -6,17 +6,15 @@ import { ArrowLeft, GitBranch } from "lucide-react";
 // ===== 家族树状图弹层组件（紧凑家谱样式）=====
 type TreeUser = { id: number; name: string; invitedByUserId: number | null; payoutRatio: number };
 
-// 单个节点卡片（紧凑版）
+// 单个节点卡片（紧凑版，点击跳转到波比编辑页）
 function FamilyCard({
-  user, yjhUserId, editingId, setEditingId, inputVal, setInputVal, onSave, isSaving, localRatios,
+  user, yjhUserId, localRatios, ledgerId, onNavigate,
 }: {
-  user: TreeUser; yjhUserId: number; editingId: number | null;
-  setEditingId: (id: number | null) => void; inputVal: string;
-  setInputVal: (v: string) => void; onSave: (userId: number, ratio: number) => void;
-  isSaving: boolean; localRatios: Record<number, number>;
+  user: TreeUser; yjhUserId: number;
+  localRatios: Record<number, number>; ledgerId: number;
+  onNavigate: (path: string) => void;
 }) {
   const currentRatio = localRatios[user.id] ?? user.payoutRatio;
-  const isEditing = editingId === user.id;
   const isYJH = user.id === yjhUserId;
   return (
     <div
@@ -28,64 +26,38 @@ function FamilyCard({
         border: isYJH ? '1.5px solid #C62828' : '1px solid #BDBDBD',
         backgroundColor: isYJH ? '#FFEBEE' : '#FAFAFA',
         borderRadius: 5,
-        padding: '3px 7px',
-        minWidth: 52,
-        maxWidth: 72,
+        padding: '3px 6px',
+        minWidth: 44,
+        maxWidth: 60,
         cursor: 'pointer',
         boxShadow: isYJH ? '0 1px 4px rgba(198,40,40,0.18)' : '0 1px 3px rgba(0,0,0,0.08)',
         userSelect: 'none',
       }}
-      onClick={() => { if (!isEditing) { setEditingId(user.id); setInputVal(String(currentRatio.toFixed(1))); } }}
+      onClick={() => onNavigate(`/ledger/${ledgerId}/af-ratio/${user.id}`)}
     >
       <span style={{
-        fontSize: 11, fontWeight: 600, color: isYJH ? '#C62828' : '#333',
-        maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        lineHeight: '15px',
+        fontSize: 10, fontWeight: 600, color: isYJH ? '#C62828' : '#333',
+        maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        lineHeight: '14px',
       }}>
         {isYJH ? 'YJH' : (user.name || '未知')}
       </span>
-      {isEditing ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2 }}
-          onClick={e => e.stopPropagation()}>
-          <input
-            type="number" min={0} max={100} step={0.1} value={inputVal}
-            onChange={e => setInputVal(e.target.value)}
-            style={{ width: 32, fontSize: 10, padding: '1px 2px', border: '1px solid #FFA726',
-              borderRadius: 3, textAlign: 'center', outline: 'none', backgroundColor: '#fff' }}
-            autoFocus
-            onKeyDown={e => {
-              if (e.key === 'Enter') onSave(user.id, parseFloat(inputVal) || 0);
-              if (e.key === 'Escape') setEditingId(null);
-            }}
-          />
-          <button
-            onClick={() => onSave(user.id, parseFloat(inputVal) || 0)}
-            disabled={isSaving}
-            style={{ backgroundColor: '#C62828', color: '#fff', fontSize: 9, padding: '1px 3px',
-              borderRadius: 3, border: 'none', cursor: 'pointer', lineHeight: '14px' }}
-          >✓</button>
-        </div>
-      ) : (
-        <span style={{ fontSize: 10, fontWeight: 700, lineHeight: '14px',
-          color: isYJH ? '#C62828' : (currentRatio > 0 ? '#E65100' : '#9E9E9E') }}>
-          {`${currentRatio.toFixed(1)}%`}
-        </span>
-      )}
+      <span style={{ fontSize: 9, fontWeight: 700, lineHeight: '13px',
+        color: isYJH ? '#C62828' : (currentRatio > 0 ? '#E65100' : '#9E9E9E') }}>
+        {`${currentRatio.toFixed(1)}%`}
+      </span>
     </div>
   );
 }
 
 // 递归渲染家族树节点
 function FamilyNode({
-  node, allUsers, yjhUserId, editingId, setEditingId, inputVal, setInputVal,
-  onSave, isSaving, localRatios, collapsedIds, toggleCollapse,
+  node, allUsers, yjhUserId, localRatios, collapsedIds, toggleCollapse, ledgerId, onNavigate,
 }: {
   node: TreeUser; allUsers: TreeUser[]; yjhUserId: number;
-  editingId: number | null; setEditingId: (id: number | null) => void;
-  inputVal: string; setInputVal: (v: string) => void;
-  onSave: (userId: number, ratio: number) => void; isSaving: boolean;
   localRatios: Record<number, number>; collapsedIds: Set<number>;
-  toggleCollapse: (id: number) => void;
+  toggleCollapse: (id: number) => void; ledgerId: number;
+  onNavigate: (path: string) => void;
 }) {
   const children = allUsers.filter(u => u.invitedByUserId === node.id);
   const isCollapsed = collapsedIds.has(node.id);
@@ -96,9 +68,8 @@ function FamilyNode({
       {/* 节点卡片 + 折叠按钮 */}
       <div style={{ position: 'relative', paddingBottom: hasChildren ? 8 : 0 }}>
         <FamilyCard
-          user={node} yjhUserId={yjhUserId} editingId={editingId}
-          setEditingId={setEditingId} inputVal={inputVal} setInputVal={setInputVal}
-          onSave={onSave} isSaving={isSaving} localRatios={localRatios}
+          user={node} yjhUserId={yjhUserId} localRatios={localRatios}
+          ledgerId={ledgerId} onNavigate={onNavigate}
         />
         {hasChildren && (
           <button
@@ -130,10 +101,8 @@ function FamilyNode({
                 <div style={{ width: 1, height: 12, backgroundColor: '#BDBDBD' }} />
                 <FamilyNode
                   node={child} allUsers={allUsers} yjhUserId={yjhUserId}
-                  editingId={editingId} setEditingId={setEditingId}
-                  inputVal={inputVal} setInputVal={setInputVal}
-                  onSave={onSave} isSaving={isSaving} localRatios={localRatios}
-                  collapsedIds={collapsedIds} toggleCollapse={toggleCollapse}
+                  localRatios={localRatios} collapsedIds={collapsedIds}
+                  toggleCollapse={toggleCollapse} ledgerId={ledgerId} onNavigate={onNavigate}
                 />
               </div>
             ))}
@@ -154,15 +123,12 @@ function FamilyNode({
 
 // 顶层渲染入口（保持 OrgLevel 名称兼容）
 function OrgLevel({
-  nodes, allUsers, yjhUserId, editingId, setEditingId, inputVal, setInputVal,
-  onSave, isSaving, localRatios, collapsedIds, toggleCollapse,
+  nodes, allUsers, yjhUserId, localRatios, collapsedIds, toggleCollapse, ledgerId, onNavigate,
 }: {
   nodes: TreeUser[]; allUsers: TreeUser[]; yjhUserId: number;
-  editingId: number | null; setEditingId: (id: number | null) => void;
-  inputVal: string; setInputVal: (v: string) => void;
-  onSave: (userId: number, ratio: number) => void; isSaving: boolean;
   localRatios: Record<number, number>; collapsedIds: Set<number>;
-  toggleCollapse: (id: number) => void;
+  toggleCollapse: (id: number) => void; ledgerId: number;
+  onNavigate: (path: string) => void;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start',
@@ -171,10 +137,8 @@ function OrgLevel({
         <FamilyNode
           key={node.id}
           node={node} allUsers={allUsers} yjhUserId={yjhUserId}
-          editingId={editingId} setEditingId={setEditingId}
-          inputVal={inputVal} setInputVal={setInputVal}
-          onSave={onSave} isSaving={isSaving} localRatios={localRatios}
-          collapsedIds={collapsedIds} toggleCollapse={toggleCollapse}
+          localRatios={localRatios} collapsedIds={collapsedIds}
+          toggleCollapse={toggleCollapse} ledgerId={ledgerId} onNavigate={onNavigate}
         />
       ))}
     </div>
@@ -363,21 +327,19 @@ export default function AfInviteTreePage() {
               总分成: {totalRatio.toFixed(1)}% {Math.abs(totalRatio - 100) < 0.1 ? '✓' : '⚠️应为100%'}
             </span>
           </div>
-          <div className="px-3 py-2">
-            <OrgLevel
-              nodes={treeUsers.filter(u => u.invitedByUserId === null || u.id === YJH_USER_ID_CONST)}
-              allUsers={treeUsers}
-              yjhUserId={YJH_USER_ID_CONST}
-              editingId={treeEditingId}
-              setEditingId={setTreeEditingId}
-              inputVal={treeInputVal}
-              setInputVal={setTreeInputVal}
-              onSave={handleTreeSave}
-              isSaving={treeSetRatioMutation.isPending}
-              localRatios={treeLocalRatios}
-              collapsedIds={treeCollapsedIds}
-              toggleCollapse={toggleTreeCollapse}
-            />
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any, paddingBottom: 8 }}>
+            <div style={{ minWidth: 'max-content', padding: '8px 12px' }}>
+              <OrgLevel
+                nodes={treeUsers.filter(u => u.invitedByUserId === null || u.id === YJH_USER_ID_CONST)}
+                allUsers={treeUsers}
+                yjhUserId={YJH_USER_ID_CONST}
+                localRatios={treeLocalRatios}
+                collapsedIds={treeCollapsedIds}
+                toggleCollapse={toggleTreeCollapse}
+                ledgerId={ledgerId}
+                onNavigate={setLocation}
+              />
+            </div>
           </div>
         </div>
       )}
