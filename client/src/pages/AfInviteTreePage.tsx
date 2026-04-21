@@ -322,9 +322,9 @@ export default function AfInviteTreePage() {
         {/* 简化树状图按钮 */}
         {isYJH && (
           <button
-            onClick={() => setShowSimpleTree(v => !v)}
+            onClick={() => setLocation(`/ledger/${ledgerId}/af-wave-tree`)}
             className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium"
-            style={{ backgroundColor: showSimpleTree ? '#D32F2F' : '#FFF3F3', color: showSimpleTree ? '#fff' : '#D32F2F', border: '1px solid #FFCDD2' }}
+            style={{ backgroundColor: '#FFF3F3', color: '#D32F2F', border: '1px solid #FFCDD2' }}
           >
             <GitBranch className="w-3.5 h-3.5" />
             <span>波比树</span>
@@ -332,49 +332,6 @@ export default function AfInviteTreePage() {
         )}
       </div>
 
-      {/* 简化树状图弹层 */}
-      {showSimpleTree && isYJH && (
-        <div className="bg-white border-b border-gray-200" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-          <div className="px-4 py-2" style={{ borderBottom: '1px solid #F0F0F0' }}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-700">波比树状图</span>
-              {chainWarnings.length === 0 ? (
-                <span className="text-xs font-medium" style={{ color: '#388E3C' }}>✓ 所有链合计 100.0%</span>
-              ) : (
-                <span className="text-xs font-bold" style={{ color: '#D32F2F' }}>⚠️ {chainWarnings.length} 条链异常</span>
-              )}
-            </div>
-            {chainWarnings.length > 0 && (
-              <div className="mt-1.5 space-y-1">
-                {chainWarnings.map((w, i) => (
-                  <div key={i} className="flex items-center justify-between rounded px-2 py-1" style={{ backgroundColor: '#FFF3F3', border: '1px solid #FFCDD2' }}>
-                    <span className="text-xs" style={{ color: '#B71C1C' }}>
-                      {w.memberName} 链合计 {w.total.toFixed(1)}%
-                    </span>
-                    <span className="text-xs font-bold" style={{ color: '#D32F2F' }}>
-                      {w.gap > 0 ? `缺 ${w.gap.toFixed(1)}%` : `超 ${Math.abs(w.gap).toFixed(1)}%`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any, paddingBottom: 8 }}>
-            <div style={{ minWidth: 'max-content', padding: '8px 12px' }}>
-              <OrgLevel
-                nodes={treeUsers.filter(u => u.invitedByUserId === null || u.id === YJH_USER_ID_CONST)}
-                allUsers={treeUsers}
-                yjhUserId={YJH_USER_ID_CONST}
-                localRatios={treeLocalRatios}
-                collapsedIds={treeCollapsedIds}
-                toggleCollapse={toggleTreeCollapse}
-                ledgerId={ledgerId}
-                onNavigate={setLocation}
-              />
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 最新动态区 */}
       {canSeeRecentDynamics && (
