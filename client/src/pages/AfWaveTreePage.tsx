@@ -145,17 +145,9 @@ function FamilyNode({
       // 数据库里有设置，直接用
       edgeRatio = dbRatio;
     } else {
-      // 没有设置，自动计算：从当前节点往上追溯，累加所有祖先的 selfRatio
-      // 连接线 = 100% - 链上所有祖先的 selfRatio 之和
-      let ancestorTotal = 0;
-      let cur = parentId;
-      while (cur !== null) {
-        const ancestor = allUsers.find(u => u.id === cur);
-        if (!ancestor) break;
-        ancestorTotal += ancestor.selfRatio;
-        cur = ancestor.invitedByUserId;
-      }
-      edgeRatio = Math.max(0, parseFloat((100 - ancestorTotal).toFixed(1)));
+      // 没有设置，自动计算：连接线 = 100% - 当前节点自留比例
+      // 即上级从这个人身上能拿到 = 这个人没有自留的剩余部分
+      edgeRatio = Math.max(0, parseFloat((100 - node.selfRatio).toFixed(1)));
     }
   }
 
