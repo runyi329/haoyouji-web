@@ -1,7 +1,124 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, GitBranch } from "lucide-react";
+
+// ===== 简化树状图弹层组件 =====
+type TreeUser = { id: number; name: string; invitedByUserId: number | null; payoutRatio: number };
+
+function TreeNode({
+  user,
+  allUsers,
+  depth,
+  yjhUserId,
+  editingId,
+  setEditingId,
+  inputVal,
+  setInputVal,
+  onSave,
+  isSaving,
+  localRatios,
+}: {
+  user: TreeUser;
+  allUsers: TreeUser[];
+  depth: number;
+  yjhUserId: number;
+  editingId: number | null;
+  setEditingId: (id: number | null) => void;
+  inputVal: string;
+  setInputVal: (v: string) => void;
+  onSave: (userId: number, ratio: number) => void;
+  isSaving: boolean;
+  localRatios: Record<number, number>;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  const children = allUsers.filter(u => u.invitedByUserId === user.id);
+  const currentRatio = localRatios[user.id] ?? user.payoutRatio;
+  const isEditing = editingId === user.id;
+
+  return (
+    <div style={{ marginLeft: depth > 0 ? 16 : 0 }}>
+      <div className="flex items-center gap-1 py-1" style={{ borderLeft: depth > 0 ? '2px solid #E0E0E0' : 'none', paddingLeft: depth > 0 ? 10 : 0 }}>
+        {/* 展开/折叠按钮 */}
+        {children.length > 0 ? (
+          <button
+            onClick={() => setCollapsed(v => !v)}
+            className="w-4 h-4 flex items-center justify-center text-gray-400 flex-shrink-0"
+            style={{ fontSize: 10 }}
+          >
+            {collapsed ? '▶' : '▼'}
+          </button>
+        ) : (
+          <span className="w-4 flex-shrink-0" />
+        )}
+        {/* 用户名字 */}
+        <span className="text-sm text-gray-800 flex-shrink-0" style={{ minWidth: 60, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {user.id === yjhUserId ? 'YJH（我）' : (user.name || '未知')}
+        </span>
+        {/* 波比输入 */}
+        {user.id !== yjhUserId && (
+          isEditing ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.1}
+                value={inputVal}
+                onChange={e => setInputVal(e.target.value)}
+                className="text-xs px-1.5 py-0.5 rounded border border-amber-300 outline-none text-center"
+                style={{ width: 52, backgroundColor: '#fff' }}
+                autoFocus
+              />
+              <span className="text-xs text-gray-400">%</span>
+              <button
+                onClick={() => { onSave(user.id, parseFloat(inputVal) || 0); }}
+                disabled={isSaving}
+                className="text-xs px-2 py-0.5 rounded text-white"
+                style={{ backgroundColor: '#D32F2F' }}
+              >存</button>
+              <button
+                onClick={() => setEditingId(null)}
+                className="text-xs px-1.5 py-0.5 rounded text-gray-500"
+                style={{ backgroundColor: '#EEE' }}
+              >取</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setEditingId(user.id); setInputVal(String(currentRatio.toFixed(1))); }}
+              className="flex items-center gap-0.5"
+            >
+              <span className="text-xs font-semibold" style={{ color: currentRatio > 0 ? '#B8860B' : '#9E9E9E' }}>
+                {currentRatio.toFixed(1)}%
+              </span>
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="#B8860B" strokeWidth="1.8" strokeLinecap="round"><path d="M11 2l3 3-9 9H2v-3L11 2z"/></svg>
+            </button>
+          )
+        )}
+        {user.id === yjhUserId && (
+          <span className="text-xs text-gray-400">YJH分成</span>
+        )}
+      </div>
+      {/* 子节点 */}
+      {!collapsed && children.map(child => (
+        <TreeNode
+          key={child.id}
+          user={child}
+          allUsers={allUsers}
+          depth={depth + 1}
+          yjhUserId={yjhUserId}
+          editingId={editingId}
+          setEditingId={setEditingId}
+          inputVal={inputVal}
+          setInputVal={setInputVal}
+          onSave={onSave}
+          isSaving={isSaving}
+          localRatios={localRatios}
+        />
+      ))}
+    </div>
+  );
+}
 
 const YJH_USER_ID_CONST = 4957151;
 
@@ -35,7 +152,7 @@ export default function AfInviteTreePage() {
         : (viewAsUserId || undefined))
     : undefined;
 
-  const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
+  const { data: inviteTreeData, isLoading: inviteTreeLoading, refetch: refetchInviteTree } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId, ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
     { enabled: ledgerLoaded && !!ledgerId }
   );
@@ -96,6 +213,48 @@ export default function AfInviteTreePage() {
     }
   });
 
+  // ===== 简化树状图弹层状态 =====
+  const [showSimpleTree, setShowSimpleTree] = useState(false);
+  const [treeEditingId, setTreeEditingId] = useState<number | null>(null);
+  const [treeInputVal, setTreeInputVal] = useState('');
+  const [treeLocalRatios, setTreeLocalRatios] = useState<Record<number, number>>({});
+
+  // 简化树状图的波比保存（直接复用 afSetYjhPayoutRatio，beneficiaryUserId = sourceUserId = 该用户自己）
+  const treeSetRatioMutation = trpc.ledger.afSetYjhPayoutRatio.useMutation({
+    onSuccess: (_data: any, variables: any) => {
+      setTreeLocalRatios(prev => ({ ...prev, [variables.beneficiaryUserId]: variables.newRatio }));
+      setTreeEditingId(null);
+      setTreeInputVal('');
+      // 刷新邀请树数据
+      refetchInviteTree();
+    },
+    onError: (err: any) => {
+      alert('波比保存失败：' + err.message);
+    }
+  });
+
+  const handleTreeSave = useCallback((userId: number, ratio: number) => {
+    treeSetRatioMutation.mutate({
+      ledgerId,
+      beneficiaryUserId: userId,
+      sourceUserId: userId,
+      newRatio: ratio,
+    });
+  }, [ledgerId, treeSetRatioMutation]);
+
+  // 构建树状图用的扁平数据（只需 id, name, invitedByUserId, payoutRatio）
+  const treeUsers: TreeUser[] = (inviteTreeData?.users ?? []).map((u: any) => ({
+    id: u.id,
+    name: u.name,
+    invitedByUserId: u.invitedByUserId ?? null,
+    payoutRatio: treeLocalRatios[u.id] ?? u.payoutRatio ?? 0,
+  }));
+
+  // 总波比（所有非YJH用户的波比之和）
+  const totalRatio = treeUsers
+    .filter(u => u.id !== YJH_USER_ID_CONST)
+    .reduce((sum, u) => sum + (treeLocalRatios[u.id] ?? u.payoutRatio), 0);
+
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F5F5' }}>
       {/* 顶部导航栏 */}
@@ -111,7 +270,48 @@ export default function AfInviteTreePage() {
           <div className="text-base font-bold text-gray-900">邀请名单</div>
           <div className="text-xs text-gray-400">共 {inviteTreeData?.users?.length ?? 0} 人</div>
         </div>
+        {/* 简化树状图按钮 */}
+        {isYJH && (
+          <button
+            onClick={() => setShowSimpleTree(v => !v)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium"
+            style={{ backgroundColor: showSimpleTree ? '#D32F2F' : '#FFF3F3', color: showSimpleTree ? '#fff' : '#D32F2F', border: '1px solid #FFCDD2' }}
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            <span>波比树</span>
+          </button>
+        )}
       </div>
+
+      {/* 简化树状图弹层 */}
+      {showSimpleTree && isYJH && (
+        <div className="bg-white border-b border-gray-200" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          <div className="px-4 py-2 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
+            <span className="text-xs font-semibold text-gray-700">波比树状图</span>
+            <span className="text-xs" style={{ color: Math.abs(totalRatio - 100) < 0.1 ? '#388E3C' : '#D32F2F' }}>
+              总分成: {totalRatio.toFixed(1)}% {Math.abs(totalRatio - 100) < 0.1 ? '✓' : '⚠️应为100%'}
+            </span>
+          </div>
+          <div className="px-3 py-2">
+            {treeUsers.filter(u => u.invitedByUserId === null || u.id === YJH_USER_ID_CONST).map(rootUser => (
+              <TreeNode
+                key={rootUser.id}
+                user={rootUser}
+                allUsers={treeUsers}
+                depth={0}
+                yjhUserId={YJH_USER_ID_CONST}
+                editingId={treeEditingId}
+                setEditingId={setTreeEditingId}
+                inputVal={treeInputVal}
+                setInputVal={setTreeInputVal}
+                onSave={handleTreeSave}
+                isSaving={treeSetRatioMutation.isPending}
+                localRatios={treeLocalRatios}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 最新动态区 */}
       {canSeeRecentDynamics && (

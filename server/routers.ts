@@ -10798,6 +10798,23 @@ export const appRouter = router({
           const ethPrice = getLatestPrice('ETH') ?? 0;
           const solPrice = getLatestPrice('SOL') ?? 0;
 
+          // 构建 id -> invitedByUserId 映射（用于前端构建树状图）
+          const invitedByMap = new Map<number, number>();
+          try {
+            const rawDb2 = await getDbConnection();
+            if (rawDb2 && result.length > 0) {
+              const allIds = result.map(u => u.id);
+              const ph = allIds.map(() => '?').join(',');
+              const [ibRows] = await rawDb2.execute(
+                `SELECT id, invited_by_user_id FROM users WHERE id IN (${ph})`,
+                allIds
+              ) as any[];
+              for (const row of (ibRows as any[])) {
+                if (row.invited_by_user_id) invitedByMap.set(row.id, row.invited_by_user_id);
+              }
+            }
+          } catch (e) { /* ignore */ }
+
           const mappedUsers = result.map(u => {
             const balance = balanceMap.get(u.id) ?? 0;
             const holdingBTC = holdingMap.get(u.id)?.BTC ?? 0;
@@ -10828,9 +10845,10 @@ export const appRouter = router({
               totalValue,
               totalRecharge: totalRechargeMap.get(u.id) ?? 0,
               totalProfit: profitMap.get(u.id) ?? 0,
+              invitedByUserId: invitedByMap.get(u.id) ?? null,
             };
           });
-          // 按账户总值降序排列
+          // 按账户总値降序排列
           mappedUsers.sort((a, b) => b.totalValue - a.totalValue);
           return { users: mappedUsers };
         } catch (e) {
