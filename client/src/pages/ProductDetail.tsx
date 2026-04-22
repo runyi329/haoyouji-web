@@ -583,6 +583,35 @@ function ImageCarousel({ images }: { images: string[] }) {
 }
 
 // ============================================================
+// 随机收货信息生成
+// ============================================================
+const RANDOM_PROVINCES = [
+  { province: '广东省', cities: ['广州市', '深圳市', '佛山市', '东莞市'] },
+  { province: '浙江省', cities: ['杭州市', '宁波市', '温州市', '绍兴市'] },
+  { province: '江苏省', cities: ['南京市', '苏州市', '无锡市', '南通市'] },
+  { province: '北京市', cities: ['朝阳区', '海淀区', '西城区', '东城区'] },
+  { province: '上海市', cities: ['浦东新区', '徐汇区', '静安区', '长宁区'] },
+  { province: '四川省', cities: ['成都市', '绵阳市', '德阳市', '宜宾市'] },
+  { province: '湖北省', cities: ['武汉市', '宜昌市', '襄阳市', '荆州市'] },
+  { province: '福建省', cities: ['福州市', '厦门市', '泉州市', '漳州市'] },
+];
+const RANDOM_STREETS = ['人民路', '解放路', '建设路', '中山路', '文化路', '科技路', '幸福路', '和平路', '兴业路', '振兴路'];
+const RANDOM_SURNAMES = ['张', '李', '王', '刘', '陈', '杨', '赵', '黄', '周', '吴', '徐', '孙', '马', '朱', '胡'];
+const RANDOM_NAMES_2 = ['伟', '芳', '娜', '秀英', '敏', '静', '丽', '强', '磊', '洋', '艳', '勇', '军', '杰', '娟'];
+function generateRandomAddress() {
+  const p = RANDOM_PROVINCES[Math.floor(Math.random() * RANDOM_PROVINCES.length)];
+  const city = p.cities[Math.floor(Math.random() * p.cities.length)];
+  const street = RANDOM_STREETS[Math.floor(Math.random() * RANDOM_STREETS.length)];
+  const num = Math.floor(Math.random() * 200) + 1;
+  const surname = RANDOM_SURNAMES[Math.floor(Math.random() * RANDOM_SURNAMES.length)];
+  const given = RANDOM_NAMES_2[Math.floor(Math.random() * RANDOM_NAMES_2.length)];
+  const name = surname + given;
+  const phone = '1' + ['3','5','7','8','9'][Math.floor(Math.random()*5)] +
+    Array.from({length:9}, () => Math.floor(Math.random()*10)).join('');
+  return { name, phone, address: `${p.province}${city}${street}${num}号` };
+}
+
+// ============================================================
 // 支付弹窗组件
 // ============================================================
 function PaymentModal({ product, onClose }: { product: ProductData; onClose: () => void }) {
@@ -590,6 +619,7 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
   const [confirming, setConfirming] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
+  const [receiver, setReceiver] = useState(() => generateRandomAddress());
 
   const handlePay = async () => {
     if (selected === 'wechat') {
@@ -643,7 +673,48 @@ function PaymentModal({ product, onClose }: { product: ProductData; onClose: () 
             <X size={16} className="text-gray-500" />
           </button>
         </div>
-        <div className="px-5 py-4">
+        <div className="px-5 py-4 overflow-y-auto max-h-[70vh]">
+          {/* 商品信息 */}
+          <div className="flex items-center gap-3 mb-4 pb-4 border-b border-gray-100">
+            <img src={product.images[0]} alt={product.name} className="w-14 h-14 rounded-xl object-cover flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">{product.fullName}</p>
+              <p className="text-xs text-gray-400 mt-0.5">数量：1 {product.unit}</p>
+              <p className="text-base font-bold text-[#D32F2F] mt-0.5">¥{product.price % 1 === 0 ? product.price : product.price.toFixed(1)}</p>
+            </div>
+          </div>
+          {/* 收货信息 */}
+          <div className="mb-4 pb-4 border-b border-gray-100">
+            <p className="text-sm font-medium text-gray-700 mb-2">收货信息</p>
+            <div className="bg-gray-50 rounded-xl p-3 space-y-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-14 flex-shrink-0">收货人</span>
+                <input
+                  value={receiver.name}
+                  onChange={e => setReceiver(r => ({ ...r, name: e.target.value }))}
+                  className="flex-1 text-sm text-gray-800 bg-transparent border-none outline-none"
+                />
+              </div>
+              <div className="h-px bg-gray-200" />
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-14 flex-shrink-0">手机号</span>
+                <input
+                  value={receiver.phone}
+                  onChange={e => setReceiver(r => ({ ...r, phone: e.target.value }))}
+                  className="flex-1 text-sm text-gray-800 bg-transparent border-none outline-none"
+                />
+              </div>
+              <div className="h-px bg-gray-200" />
+              <div className="flex items-start gap-2">
+                <span className="text-xs text-gray-400 w-14 flex-shrink-0 mt-0.5">收货地址</span>
+                <input
+                  value={receiver.address}
+                  onChange={e => setReceiver(r => ({ ...r, address: e.target.value }))}
+                  className="flex-1 text-sm text-gray-800 bg-transparent border-none outline-none"
+                />
+              </div>
+            </div>
+          </div>
           <p className="text-sm font-medium text-gray-700 mb-3">选择支付方式</p>
           <div className="space-y-3">
             <button
