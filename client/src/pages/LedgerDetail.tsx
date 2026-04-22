@@ -3946,6 +3946,23 @@ export default function LedgerDetail() {
       {isCustomAF && effectiveIsFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4">
+            {/* 持仓计算入口 */}
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl mb-3"
+              style={{ background: 'linear-gradient(135deg, #1A2340 0%, #2D3A5C 100%)', border: 'none' }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                  <Calculator className="w-4 h-4 text-white" />
+                </div>
+                <div className="text-left">
+                  <div className="text-sm font-semibold text-white">ETH 持仓计算</div>
+                  <div className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>分档建仓 · 盈亏分析</div>
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
+            </button>
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>

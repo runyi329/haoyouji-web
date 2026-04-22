@@ -214,6 +214,8 @@ const SentiaHome = lazy(() => import("./pages/SentiaHome"));
 const LotteryCreate = lazy(() => import("./pages/LotteryCreate"));
 // AF 加密货币竞猜
 const CryptoPrediction = lazy(() => import("./pages/CryptoPrediction"));
+// ETH 持仓计算
+const PositionCalc = lazy(() => import("./pages/PositionCalc"));
 const LotteryEdit = lazy(() => import("./pages/LotteryEdit"));
 const LotteryActivity = lazy(() => import("./pages/LotteryActivity"));
 const LotteryList = lazy(() => import("./pages/LotteryList"));
@@ -550,6 +552,8 @@ function Router() {
         <Route path="/lottery/create" component={LotteryCreate} />
         {/* AF 加密货币竞猜 */}
         <Route path="/ledger/:id/crypto-prediction" component={CryptoPrediction} />
+        {/* ETH 持仓计算 */}
+        <Route path="/ledger/:id/position-calc" component={PositionCalc} />
         {/* QQ 在线人数记录 */}
         <Route path="/ledger/:id/qq" component={QQOnlinePage} />
         <Route path="/ledger/:id/qq/history" component={QQOnlineHistory} />
