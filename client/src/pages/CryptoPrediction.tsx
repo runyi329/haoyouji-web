@@ -3035,16 +3035,25 @@ export default function CryptoPrediction() {
                                 if (_isSoldOrder) return null;
                                 return hasCollateral ? (
                                   <>
-                                    {/* 多笔担保物逐行展示 */}
+                                    {/* 多笔担保物逐行展示：数量一行，折算价值另起一行 */}
                                     {collAssets.map((a, i) => {
                                       const av = collAssetValues[i];
                                       return (
-                                        <div key={i} className="flex items-center justify-between mt-0.5 text-xs">
-                                          <span className="text-gray-400">{collAssets.length > 1 ? `担保物${i+1}` : '担保物'}</span>
-                                          <span className="font-medium" style={{ color: '#4B5563' }}>
-                                            {av.qty % 1 === 0 ? av.qty.toFixed(0) : av.qty} {a.coin}
-                                            {av.price > 0 ? ` ≈ ${av.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : ''}
-                                          </span>
+                                        <div key={i}>
+                                          <div className="flex items-center justify-between mt-0.5 text-xs">
+                                            <span className="text-gray-400">{collAssets.length > 1 ? `担保物${i+1}` : '担保物'}</span>
+                                            <span className="font-medium" style={{ color: '#4B5563' }}>
+                                              {av.qty % 1 === 0 ? av.qty.toFixed(0) : av.qty} {a.coin}
+                                            </span>
+                                          </div>
+                                          {av.price > 0 && (
+                                            <div className="flex items-center justify-between text-xs">
+                                              <span className="text-gray-300 text-[10px]">折算</span>
+                                              <span className="text-[10px]" style={{ color: '#9CA3AF' }}>
+                                                ≈ {av.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} U
+                                              </span>
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}

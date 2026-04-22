@@ -398,8 +398,14 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
                   {collateral.map((a, idx) => {
                     const itemVal = collateralItemValues[idx];
                     return (
-                      <div key={idx} className="font-mono mt-1" style={{ color: '#3B82F6' }}>
-                        {a.qty} {a.coin}{itemVal !== null ? ' ≈ ' + itemVal.toFixed(2) + ' U' : ' （暂无实时价）'}
+                      <div key={idx} className="mt-1">
+                        <div className="font-mono" style={{ color: '#3B82F6' }}>
+                          {a.qty} {a.coin}
+                        </div>
+                        {itemVal !== null
+                          ? <div className="font-mono text-xs" style={{ color: '#9CA3AF' }}>≈ {itemVal.toFixed(2)} U</div>
+                          : <div className="font-mono text-xs" style={{ color: '#D1D5DB' }}>（暂无实时价）</div>
+                        }
                       </div>
                     );
                   })}
@@ -814,14 +820,25 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
                       <span className="font-medium" style={{ color: '#4B5563' }}>0</span>
                     </div>
                   )
-                  : collateral.map((a, idx) => (
-                    <div key={idx} className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'} mt-0.5`}>
-                      <span className="text-gray-400">{collateral.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
-                      <span className="font-medium" style={{ color: '#4B5563' }}>
-                        {a.qty} {a.coin}
-                      </span>
-                    </div>
-                  ))
+                  : collateral.map((a, idx) => {
+                    const itemVal = collateralItemValues[idx];
+                    return (
+                      <div key={idx}>
+                        <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'} mt-0.5`}>
+                          <span className="text-gray-400">{collateral.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                          <span className="font-medium" style={{ color: '#4B5563' }}>
+                            {a.qty} {a.coin}
+                          </span>
+                        </div>
+                        {itemVal !== null && (
+                          <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-sm' : 'text-[10px]'}`}>
+                            <span className="text-gray-300">折算</span>
+                            <span style={{ color: '#9CA3AF' }}>≈ {itemVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
               )}
               {show('collateralValue') && (
                 <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
