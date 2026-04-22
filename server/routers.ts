@@ -13233,6 +13233,10 @@ export const appRouter = router({
           password: decodeURIComponent(parsedUrl.password),
           database: parsedUrl.pathname.replace(/^\//, ''),
         });
+        // 确保 collateral_assets 等新字段存在（兼容旧表结构）
+        try {
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_assets TEXT DEFAULT NULL`);
+        } catch(e) {}
         await conn.execute(`UPDATE finance_interest_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
         await conn.end();
         return { success: true };
