@@ -54,6 +54,12 @@ interface ModalState {
   inputValue: string;
 }
 
+// 汇总卡片编辑弹窗
+interface SummaryEditModal {
+  field: 'totalActual' | 'totalPlanned';
+  inputValue: string;
+}
+
 export default function PositionCalc() {
   const [, params] = useRoute("/ledger/:id/position-calc");
   const [, setLocation] = useLocation();
@@ -63,6 +69,7 @@ export default function PositionCalc() {
   const [actual, setActual] = useState<Record<number, number>>(getDefaultActual);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [summaryEdit, setSummaryEdit] = useState<SummaryEditModal | null>(null);
 
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     refetchInterval: 30000,
@@ -99,6 +106,39 @@ export default function PositionCalc() {
       hasData(p) || (p >= nearPrice - 500 && p <= nearPrice + 500)
     );
   }, [planned, actual, currentPrice]);
+
+  // 汇总卡片编辑确认
+  const confirmSummaryEdit = () => {
+    if (!summaryEdit) return;
+    const num = parseFloat(summaryEdit.inputValue);
+    const val = isNaN(num) || num < 0 ? 0 : num;
+    if (summaryEdit.field === 'totalActual') {
+      // 按比例分配到各有计划的档位
+      const totalPlan = PRICE_LEVELS.reduce((s, p) => s + (planned[p] || 0), 0);
+      if (totalPlan > 0) {
+        const ratio = val / totalPlan;
+        const newActual: Record<number, number> = {};
+        PRICE_LEVELS.forEach(p => {
+          if ((planned[p] || 0) > 0) newActual[p] = parseFloat(((planned[p] || 0) * ratio).toFixed(4));
+          else newActual[p] = actual[p] || 0;
+        });
+        setActual(newActual);
+      }
+    } else {
+      // 按比例缩放各档计划
+      const totalPlan = PRICE_LEVELS.reduce((s, p) => s + (planned[p] || 0), 0);
+      if (totalPlan > 0) {
+        const ratio = val / totalPlan;
+        const newPlanned: Record<number, number> = {};
+        PRICE_LEVELS.forEach(p => {
+          if ((planned[p] || 0) > 0) newPlanned[p] = parseFloat(((planned[p] || 0) * ratio).toFixed(4));
+          else newPlanned[p] = 0;
+        });
+        setPlanned(newPlanned);
+      }
+    }
+    setSummaryEdit(null);
+  };
 
   // 打开弹窗
   const openModal = (price: number) => {
@@ -149,13 +189,54 @@ export default function PositionCalc() {
       <div className="px-4 pt-4 pb-2">
         <div className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: '1px solid #E0E8FF' }}>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-blue-50 rounded-xl p-3">
-              <div className="text-xs text-gray-500 mb-1">总持仓量</div>
-              <div className="text-xl font-bold" style={{ color: '#1A56DB' }}>
-                {summary.totalQty.toFixed(4)}
-                <span className="text-sm font-normal text-gray-400 ml-1">ETH</span>
+            {/* 总持仓卡片：计划+实际+达成率，点击可编辑 */}
+            <div
+              className="bg-blue-50 rounded-xl p-3 col-span-2 cursor-pointer active:bg-blue-100 transition-colors"
+              onClick={() => setSummaryEdit({ field: 'totalActual', inputValue: String(summary.totalQty.toFixed(4)) })}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs text-gray-500">总持仓量</div>
+                <div className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                  style={{
+                    background: summary.totalPlanned > 0 ? (summary.totalQty / summary.totalPlanned >= 1 ? '#D1FAE5' : '#DBEAFE') : '#F3F4F6',
+                    color: summary.totalPlanned > 0 ? (summary.totalQty / summary.totalPlanned >= 1 ? '#059669' : '#1A56DB') : '#9CA3AF',
+                  }}
+                >
+                  达成率 {summary.totalPlanned > 0 ? `${Math.min((summary.totalQty / summary.totalPlanned) * 100, 100).toFixed(1)}%` : '--'}
+                </div>
               </div>
-              <div className="text-xs text-gray-400 mt-0.5">计划 {summary.totalPlanned.toFixed(2)} ETH</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div
+                  className="bg-white rounded-lg px-3 py-2 text-center cursor-pointer"
+                  onClick={e => { e.stopPropagation(); setSummaryEdit({ field: 'totalActual', inputValue: String(summary.totalQty.toFixed(4)) }); }}
+                >
+                  <div className="text-[10px] text-gray-400 mb-0.5">实际持仓</div>
+                  <div className="text-lg font-bold tabular-nums" style={{ color: '#1A56DB' }}>
+                    {summary.totalQty.toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-gray-400">ETH</div>
+                </div>
+                <div
+                  className="bg-white rounded-lg px-3 py-2 text-center cursor-pointer"
+                  onClick={e => { e.stopPropagation(); setSummaryEdit({ field: 'totalPlanned', inputValue: String(summary.totalPlanned.toFixed(4)) }); }}
+                >
+                  <div className="text-[10px] text-gray-400 mb-0.5">计划持仓</div>
+                  <div className="text-lg font-bold tabular-nums text-gray-600">
+                    {summary.totalPlanned.toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-gray-400">ETH</div>
+                </div>
+              </div>
+              {/* 达成进度条 */}
+              <div className="mt-2 h-1.5 rounded-full bg-blue-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${summary.totalPlanned > 0 ? Math.min((summary.totalQty / summary.totalPlanned) * 100, 100) : 0}%`,
+                    background: 'linear-gradient(90deg, #1A56DB, #3B82F6)',
+                  }}
+                />
+              </div>
             </div>
             <div className="bg-gray-50 rounded-xl p-3">
               <div className="text-xs text-gray-500 mb-1">加权均价</div>
@@ -304,6 +385,59 @@ export default function PositionCalc() {
       <div className="px-4 pt-4 pb-2 text-center text-xs text-gray-300">
         价格范围 $1,000 ~ $3,500 · 每50元一档 · 共50档
       </div>
+
+      {/* 汇总卡片编辑弹窗 */}
+      {summaryEdit && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setSummaryEdit(null); }}
+        >
+          <div className="bg-white w-full max-w-md rounded-t-2xl px-5 pt-5 pb-8 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-base font-semibold text-gray-800">
+                {summaryEdit.field === 'totalActual' ? '修改实际总持仓' : '修改计划总持仓'}
+              </div>
+              <button onClick={() => setSummaryEdit(null)} className="p-1.5 rounded-full hover:bg-gray-100">
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+            <div className="text-xs text-gray-400 mb-3">
+              {summaryEdit.field === 'totalActual'
+                ? '输入实际总持仓量，系统将按计划比例自动分配到各档位'
+                : '输入计划总持仓量，系统将按原比例缩放各档计划'
+              }
+            </div>
+            <input
+              autoFocus
+              type="number"
+              value={summaryEdit.inputValue}
+              onChange={e => setSummaryEdit(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmSummaryEdit(); if (e.key === 'Escape') setSummaryEdit(null); }}
+              placeholder="输入 ETH 数量"
+              className="w-full px-4 py-3 rounded-xl text-base border outline-none"
+              style={{ borderColor: summaryEdit.field === 'totalActual' ? '#3B82F6' : '#D1D5DB' }}
+              step="0.01"
+              min="0"
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setSummaryEdit(null)}
+                className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-600 bg-gray-100"
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmSummaryEdit}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
+                style={{ background: summaryEdit.field === 'totalActual' ? '#1A56DB' : '#6B7280' }}
+              >
+                确认
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 编辑弹窗 */}
       {modal && (
