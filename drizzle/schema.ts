@@ -1908,3 +1908,16 @@ export const ethPositionLevels = mysqlTable("eth_position_levels", {
   uniqueIndex("eth_pos_ledger_price_uniq").on(table.ledgerId, table.price),
   index("eth_pos_ledger_idx").on(table.ledgerId),
 ]);
+
+// ========== ETH 持仓计算全局设置表 ==========
+// 每个账本一行，存储目标止盈利润（人民币）和自定义汇率
+export const ethPositionSettings = mysqlTable("eth_position_settings", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  targetProfitCny: decimal('target_profit_cny', { precision: 18, scale: 2 }).default('0').notNull(),
+  cnyRate: decimal('cny_rate', { precision: 10, scale: 4 }).default('7.2800').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  uniqueIndex("eth_settings_ledger_uniq").on(table.ledgerId),
+]);

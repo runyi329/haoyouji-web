@@ -1,6 +1,6 @@
 import { getLedgerDb } from "./db";
-import { ethPositionLevels } from "../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { ethPositionLevels, ethPositionSettings } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 export interface EthPositionLevel {
   price: number;
@@ -62,7 +62,6 @@ export async function batchUpsertEthPositionLevels(
   const db = await getLedgerDb();
   if (!db) return;
   if (levels.length === 0) return;
-  // 逐条 upsert（MySQL 支持 INSERT ... ON DUPLICATE KEY UPDATE）
   for (const level of levels) {
     await db
       .insert(ethPositionLevels)
@@ -79,4 +78,53 @@ export async function batchUpsertEthPositionLevels(
         },
       });
   }
+}
+
+// ========== ETH 持仓全局设置 ==========
+
+export interface EthPositionSettingsData {
+  targetProfitCny: number;
+  cnyRate: number;
+}
+
+/**
+ * 获取某账本的 ETH 持仓全局设置
+ */
+export async function getEthPositionSettings(ledgerId: number): Promise<EthPositionSettingsData> {
+  const db = await getLedgerDb();
+  if (!db) return { targetProfitCny: 0, cnyRate: 7.28 };
+  const rows = await db
+    .select()
+    .from(ethPositionSettings)
+    .where(eq(ethPositionSettings.ledgerId, ledgerId));
+  if (rows.length === 0) return { targetProfitCny: 0, cnyRate: 7.28 };
+  return {
+    targetProfitCny: parseFloat(rows[0].targetProfitCny as string),
+    cnyRate: parseFloat(rows[0].cnyRate as string),
+  };
+}
+
+/**
+ * 保存某账本的 ETH 持仓全局设置（upsert）
+ */
+export async function upsertEthPositionSettings(
+  ledgerId: number,
+  targetProfitCny: number,
+  cnyRate: number
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) return;
+  await db
+    .insert(ethPositionSettings)
+    .values({
+      ledgerId,
+      targetProfitCny: String(targetProfitCny),
+      cnyRate: String(cnyRate),
+    })
+    .onDuplicateKeyUpdate({
+      set: {
+        targetProfitCny: String(targetProfitCny),
+        cnyRate: String(cnyRate),
+      },
+    });
 }
