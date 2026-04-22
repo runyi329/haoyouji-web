@@ -13809,6 +13809,24 @@ export const appRouter = router({
         return result;
       }),
 
+    // 融资付息订单结息记录 - 删除
+    financeDeleteInterestPayment: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        paymentId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await db.execute(
+          sql`DELETE FROM finance_interest_payments WHERE id = ${input.paymentId} AND ledger_id = ${input.ledgerId}`
+        );
+        return { success: true };
+      }),
     // ========== AF 拨比管理 API ==========
     // 获取某个下单人的所有拨比配置
     afGetPayoutRatios: protectedProcedure

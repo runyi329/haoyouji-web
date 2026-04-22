@@ -233,6 +233,10 @@ export default function FinanceManagement() {
     onSuccess: () => { toast.success('结息记录已添加'); refetchOrders(); setShowPaymentPanel(null); },
     onError: (e) => toast.error(e.message),
   });
+  const deletePaymentMutation = trpc.ledger.financeDeleteInterestPayment.useMutation({
+    onSuccess: () => { toast.success('结息记录已删除'); refetchOrders(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const realMembers = (members as any[] || []).filter((m: any) => !m.isAiClone);
   // 当前登录用户在账本中的角色（通过 orders 返回的 user_id 推断：管理员能看到多个用户的订单）
@@ -746,11 +750,24 @@ export default function FinanceManagement() {
                           <div className="space-y-1.5">
                             {openedPaymentList.map((p: any) => (
                               <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
-                                <div>
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                   <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} USDT</span>
-                                  {p.note && <span className="text-gray-400 ml-2">{p.note}</span>}
+                                  {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
                                 </div>
-                                <span className="text-gray-400">{p.payment_date}</span>
+                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                  <span className="text-gray-400">{p.payment_date}</span>
+                                  <button
+                                    onClick={() => {
+                                      if (window.confirm('确认删除这条结息记录？')) {
+                                        deletePaymentMutation.mutate({ ledgerId, paymentId: p.id });
+                                      }
+                                    }}
+                                    className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                                    title="删除"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
