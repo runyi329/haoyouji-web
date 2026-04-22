@@ -78,8 +78,25 @@ export default function PositionCalc() {
 
   // 保存单个档位
   const saveLevelMutation = trpc.ethPositionSaveLevel.useMutation();
-  // 批量保存
   const batchSaveMutation = trpc.ethPositionBatchSave.useMutation();
+  // 从数据库读取目标止盈和汇率设置
+  const { data: settingsData } = trpc.ethPositionGetSettings.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 }
+  );
+  const saveSettingsMutation = trpc.ethPositionSaveSettings.useMutation();
+
+  // 从数据库加载目标止盈和汇率
+  useEffect(() => {
+    if (settingsData) {
+      if (settingsData.targetProfitCny > 0) {
+        setTargetProfitCny(String(settingsData.targetProfitCny));
+      }
+      if (settingsData.cnyRate > 0 && !editingRate) {
+        setCnyRate(settingsData.cnyRate);
+      }
+    }
+  }, [settingsData]);
 
   // 初始化数据：从数据库加载，若无数据则用默认展示
   useEffect(() => {
@@ -328,8 +345,14 @@ export default function PositionCalc() {
             <button
               onClick={() => {
                 const v = parseFloat(cnyRateInput);
+                const rate = (!isNaN(v) && v > 0) ? v : cnyRate;
+                const profit = parseFloat(targetProfitCny) || 0;
                 if (!isNaN(v) && v > 0) setCnyRate(v);
                 setEditingRate(false);
+                // 保存到数据库
+                if (ledgerId > 0) {
+                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: rate });
+                }
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
               style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}

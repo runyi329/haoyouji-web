@@ -19562,6 +19562,26 @@ export const adminFeatureRouter = router({
       await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, input.levels);
       return { success: true };
     }),
+  ethPositionGetSettings: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input }) => {
+      const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId);
+      return settings;
+    }),
+  ethPositionSaveSettings: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      targetProfitCny: z.number().min(0),
+      cnyRate: z.number().min(0),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.upsertEthPositionSettings(
+        input.ledgerId,
+        input.targetProfitCny,
+        input.cnyRate
+      );
+      return { success: true };
+    }),
 });
 export type AppRouter = typeof appRouter;
 
