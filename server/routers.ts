@@ -19573,12 +19573,14 @@ export const adminFeatureRouter = router({
       ledgerId: z.number(),
       targetProfitCny: z.number().min(0),
       cnyRate: z.number().min(0),
+      targetEthQty: z.number().min(0).optional().default(0),
     }))
     .mutation(async ({ input }) => {
       await dbEthPosition.upsertEthPositionSettings(
         input.ledgerId,
         input.targetProfitCny,
-        input.cnyRate
+        input.cnyRate,
+        input.targetEthQty ?? 0
       );
       return { success: true };
     }),
