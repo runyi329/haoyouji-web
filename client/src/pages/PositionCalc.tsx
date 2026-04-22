@@ -7,7 +7,7 @@
  */
 import React, { useState, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ChevronLeft, TrendingUp, TrendingDown, X, Check } from "lucide-react";
+import { ChevronLeft, TrendingUp, TrendingDown, X, Check, Pencil } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const MIN_PRICE = 1000;
@@ -245,6 +245,104 @@ export default function PositionCalc() {
         </button>
       </div>
 
+      {/* 目标止盈利润 */}
+      <div className="px-4 pb-3">
+        {!editingRate ? (
+          // 展示模式：财经质感卡片
+          <div
+            className="relative overflow-hidden rounded-2xl cursor-pointer"
+            style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
+            onClick={() => { setCnyRateInput(cnyRate.toFixed(4)); setEditingRate(true); }}
+          >
+            {/* 装饰光晕 */}
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #e2b96f 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
+            <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full opacity-5" style={{ background: 'radial-gradient(circle, #4fc3f7 0%, transparent 70%)', transform: 'translate(-30%, 30%)' }} />
+            <div className="relative px-5 py-4">
+              {/* 标题行 */}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium tracking-widest" style={{ color: '#e2b96f', letterSpacing: '0.15em' }}>目标止盈利润</span>
+                <Pencil className="w-3.5 h-3.5" style={{ color: 'rgba(226,185,111,0.5)' }} />
+              </div>
+              {/* 主数字区 */}
+              <div className="mb-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
+                    {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
+                      ? `¥${Number(targetProfitCny).toLocaleString('zh-CN')}`
+                      : <span style={{ color: 'rgba(226,185,111,0.3)' }}>¥ --</span>
+                    }
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>=</span>
+                  <span className="text-lg font-semibold" style={{ color: '#4fc3f7', fontVariantNumeric: 'tabular-nums' }}>
+                    {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
+                      ? `$${(parseFloat(targetProfitCny) / cnyRate).toLocaleString('en-US', { maximumFractionDigits: 0 })} U`
+                      : <span style={{ color: 'rgba(79,195,247,0.3)' }}>-- U</span>
+                    }
+                  </span>
+                </div>
+              </div>
+              {/* 汇率行 */}
+              <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>USD/CNY</span>
+                <span className="text-xs font-mono font-semibold" style={{ color: 'rgba(255,255,255,0.6)' }}>{cnyRate.toFixed(4)}</span>
+                <span className="text-xs ml-auto" style={{ color: 'rgba(255,255,255,0.25)' }}>实时汇率</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // 编辑模式
+          <div className="rounded-2xl border-2 border-blue-400 bg-white px-5 py-4 shadow-lg">
+            <div className="text-xs font-medium text-gray-500 mb-3 tracking-wide">目标止盈利润—编辑</div>
+            {/* 人民币输入 */}
+            <div className="mb-3">
+              <div className="text-xs text-gray-400 mb-1">目标利润（人民币）</div>
+              <div className="flex items-center gap-2 border-b-2 border-blue-300 pb-1">
+                <span className="text-lg font-bold text-gray-400">¥</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="输入金额"
+                  value={targetProfitCny}
+                  onChange={e => setTargetProfitCny(e.target.value)}
+                  className="flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                  autoFocus
+                />
+              </div>
+            </div>
+            {/* 汇率输入 */}
+            <div className="mb-4">
+              <div className="text-xs text-gray-400 mb-1">USD/CNY 汇率</div>
+              <div className="flex items-center gap-2 border-b border-gray-200 pb-1">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={cnyRateInput}
+                  onChange={e => setCnyRateInput(e.target.value)}
+                  className="flex-1 text-base font-semibold text-gray-700 outline-none bg-transparent"
+                />
+              </div>
+            </div>
+            {/* 保存按钮 */}
+            <button
+              onClick={() => {
+                const v = parseFloat(cnyRateInput);
+                if (!isNaN(v) && v > 0) setCnyRate(v);
+                setEditingRate(false);
+              }}
+              className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
+              style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
+            >
+              保存
+            </button>
+          </div>
+        )}
+      </div>
+
+
+
+
       {/* 汇总卡片 */}
       <div className="px-4 pt-4 pb-2">
         <div className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: '1px solid #E0E8FF' }}>
@@ -329,103 +427,6 @@ export default function PositionCalc() {
           </div>
         </div>
       </div>
-
-      {/* 目标止盈利润 */}
-      <div className="px-4 pb-3">
-        {!editingRate ? (
-          // 展示模式：财经质感卡片
-          <div
-            className="relative overflow-hidden rounded-2xl cursor-pointer"
-            style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
-            onClick={() => { setCnyRateInput(cnyRate.toFixed(4)); setEditingRate(true); }}
-          >
-            {/* 装饰光晕 */}
-            <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #e2b96f 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
-            <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full opacity-5" style={{ background: 'radial-gradient(circle, #4fc3f7 0%, transparent 70%)', transform: 'translate(-30%, 30%)' }} />
-            <div className="relative px-5 py-4">
-              {/* 标题行 */}
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium tracking-widest" style={{ color: '#e2b96f', letterSpacing: '0.15em' }}>目标止盈利润</span>
-                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'rgba(226,185,111,0.15)', color: '#e2b96f' }}>点击编辑</span>
-              </div>
-              {/* 主数字区 */}
-              <div className="mb-3">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
-                    {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
-                      ? `¥${Number(targetProfitCny).toLocaleString('zh-CN')}`
-                      : <span style={{ color: 'rgba(226,185,111,0.3)' }}>¥ --</span>
-                    }
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>=</span>
-                  <span className="text-lg font-semibold" style={{ color: '#4fc3f7', fontVariantNumeric: 'tabular-nums' }}>
-                    {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
-                      ? `$${(parseFloat(targetProfitCny) / cnyRate).toLocaleString('en-US', { maximumFractionDigits: 0 })} U`
-                      : <span style={{ color: 'rgba(79,195,247,0.3)' }}>-- U</span>
-                    }
-                  </span>
-                </div>
-              </div>
-              {/* 汇率行 */}
-              <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>USD/CNY</span>
-                <span className="text-xs font-mono font-semibold" style={{ color: 'rgba(255,255,255,0.6)' }}>{cnyRate.toFixed(4)}</span>
-                <span className="text-xs ml-auto" style={{ color: 'rgba(255,255,255,0.25)' }}>实时汇率</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          // 编辑模式
-          <div className="rounded-2xl border-2 border-blue-400 bg-white px-5 py-4 shadow-lg">
-            <div className="text-xs font-medium text-gray-500 mb-3 tracking-wide">目标止盈利润—编辑</div>
-            {/* 人民币输入 */}
-            <div className="mb-3">
-              <div className="text-xs text-gray-400 mb-1">目标利润（人民币）</div>
-              <div className="flex items-center gap-2 border-b-2 border-blue-300 pb-1">
-                <span className="text-lg font-bold text-gray-400">¥</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="输入金额"
-                  value={targetProfitCny}
-                  onChange={e => setTargetProfitCny(e.target.value)}
-                  className="flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
-                  autoFocus
-                />
-              </div>
-            </div>
-            {/* 汇率输入 */}
-            <div className="mb-4">
-              <div className="text-xs text-gray-400 mb-1">USD/CNY 汇率</div>
-              <div className="flex items-center gap-2 border-b border-gray-200 pb-1">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={cnyRateInput}
-                  onChange={e => setCnyRateInput(e.target.value)}
-                  className="flex-1 text-base font-semibold text-gray-700 outline-none bg-transparent"
-                />
-              </div>
-            </div>
-            {/* 保存按钮 */}
-            <button
-              onClick={() => {
-                const v = parseFloat(cnyRateInput);
-                if (!isNaN(v) && v > 0) setCnyRate(v);
-                setEditingRate(false);
-              }}
-              className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
-              style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
-            >
-              保存
-            </button>
-          </div>
-        )}
-      </div>
-
-
 
       {/* 档位列表：每档一条进度条 */}
       <div className="px-4 space-y-1.5">
