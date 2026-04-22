@@ -3139,8 +3139,8 @@ export default function CryptoPrediction() {
                                                 <div style={{ color: '#1F2937' }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {isNegativeRate ? unpaidInterest.toFixed(2) : '0.00'} = <span style={{ color: '#D97706', fontWeight: 600 }}>{(collValue - (isNegativeRate ? unpaidInterest : 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
                                               </div>
                                               <div className="p-3 rounded-lg" style={{ background: gap < 0 ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${gap < 0 ? '#FECACA' : '#BBF7D0'}` }}>
-                                                <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 净担保价値 - 基数</div>
-                                                <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{(collValue - (isNegativeRate ? unpaidInterest : 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} - {(buyValue * 0.24).toLocaleString(undefined, { maximumFractionDigits: 2 })} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                                <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 净担保价値 + 已结利息 - 基数</div>
+                                                <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{(collValue - (isNegativeRate ? unpaidInterest : 0)).toLocaleString(undefined, { maximumFractionDigits: 2 })} + {paidInterest.toFixed(2)} - {(buyValue * 0.24).toLocaleString(undefined, { maximumFractionDigits: 2 })} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
                                               </div>
                                             </div>
                                           ) : (
@@ -3160,13 +3160,13 @@ export default function CryptoPrediction() {
                                               <div className="p-3 rounded-lg" style={{ background: gap < 0 ? '#FEF2F2' : '#F0FDF4', border: `1px solid ${gap < 0 ? '#FECACA' : '#BBF7D0'}` }}>
                                                 {order.coin === 'USDT' ? (
                                                   <>
-                                                    <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 担保价値 - 买入价値 - 待收利息</div>
-                                                    <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {unpaidInterest.toFixed(2)} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                                    <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 担保价値 - 买入价値 - 代结利息 + 已结利息</div>
+                                                    <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {unpaidInterest.toFixed(2)} + {paidInterest.toFixed(2)} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
                                                   </>
                                                 ) : (
                                                   <>
-                                                    <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 当前市値 + 担保价値 - 买入价値 - 待收利息</div>
-                                                    <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} + {collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {unpaidInterest.toFixed(2)} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+                                                    <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保缺口 = 当前市値 + 担保价値 - 买入价値 - 代结利息 + 已结利息</div>
+                                                    <div style={{ color: gap < 0 ? '#EF4444' : '#059669', fontWeight: 700, fontSize: '15px' }}>{marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} + {collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - {unpaidInterest.toFixed(2)} + {paidInterest.toFixed(2)} = {gap.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
                                                   </>
                                                 )}
                                               </div>
