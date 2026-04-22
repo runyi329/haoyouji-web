@@ -50,7 +50,23 @@ export default function PositionCalc() {
   const [summaryEdit, setSummaryEdit] = useState<SummaryEditModal | null>(null);
   const [saving, setSaving] = useState(false);
   const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标离场利润（人民币）
-  const CNY_RATE = 7.28; // 人民币/USDT 汇率（近似值）
+  const [cnyRate, setCnyRate] = useState<number>(7.28); // 人民币/USDT 汇率
+  const [cnyRateInput, setCnyRateInput] = useState<string>(''); // 手动修改汇率的输入内容
+  const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
+
+  // 获取实时 USDT/CNY 汇率
+  const { data: rateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { staleTime: 60000, refetchInterval: 60000 }
+  );
+  useEffect(() => {
+    if (rateData?.success && rateData.money) {
+      const r = parseFloat(rateData.money);
+      if (!isNaN(r) && r > 0 && !editingRate) {
+        setCnyRate(r);
+      }
+    }
+  }, [rateData, editingRate]);
 
   const utils = trpc.useUtils();
 
@@ -317,7 +333,44 @@ export default function PositionCalc() {
       {/* 目标离场利润 */}
       <div className="px-4 pb-3">
         <div className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
-          <div className="text-xs text-gray-500 mb-2 font-medium">目标离场利润</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs text-gray-500 font-medium">目标离场利润</div>
+            {/* 汇率显示与编辑 */}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-400">汇率</span>
+              {editingRate ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={cnyRateInput}
+                    onChange={e => setCnyRateInput(e.target.value)}
+                    className="w-14 text-xs text-gray-800 border-b border-blue-400 outline-none bg-transparent text-right"
+                    autoFocus
+                    onBlur={() => {
+                      const v = parseFloat(cnyRateInput);
+                      if (!isNaN(v) && v > 0) setCnyRate(v);
+                      setEditingRate(false);
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        const v = parseFloat(cnyRateInput);
+                        if (!isNaN(v) && v > 0) setCnyRate(v);
+                        setEditingRate(false);
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setCnyRateInput(cnyRate.toFixed(4)); setEditingRate(true); }}
+                  className="text-xs font-semibold text-blue-500 underline underline-offset-2"
+                >
+                  {cnyRate.toFixed(4)}
+                </button>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 flex-1">
               <span className="text-sm text-gray-400">¥</span>
@@ -334,7 +387,7 @@ export default function PositionCalc() {
               <span className="text-gray-400">=</span>
               <span className="font-bold text-blue-600">
                 {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
-                  ? `$${(parseFloat(targetProfitCny) / CNY_RATE).toFixed(0)} U`
+                  ? `$${(parseFloat(targetProfitCny) / cnyRate).toFixed(0)} U`
                   : <span className="text-gray-300 font-normal">-- U</span>
                 }
               </span>
