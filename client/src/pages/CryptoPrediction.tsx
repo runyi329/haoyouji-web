@@ -3048,8 +3048,8 @@ export default function CryptoPrediction() {
                                           </div>
                                           {av.price > 0 && (
                                             <div className="flex items-center justify-between text-xs">
-                                              <span className="text-gray-300 text-[10px]">折算</span>
-                                              <span className="text-[10px]" style={{ color: '#9CA3AF' }}>
+                                              <span></span>
+                                              <span className="font-medium" style={{ color: '#4B5563' }}>
                                                 ≈ {av.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} U
                                               </span>
                                             </div>
