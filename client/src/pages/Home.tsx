@@ -241,6 +241,7 @@ export default function Home() {
   const [, navigate] = useLocation();
   const isLiulifan = user?.username === 'liulifan';
   const isJiang = user?.username === 'jiang';
+  const isYunting = user?.id === 540801;
   
 
 
@@ -458,35 +459,53 @@ export default function Home() {
       `}</style>
 
       {/* Header Banner Carousel */}
-      <div className="relative">
-        <Carousel 
-          className="w-full"
-          opts={{
-            loop: true,
-            align: "start",
-          }}
-          plugins={[
-            Autoplay({
-              delay: 5000,
-              stopOnInteraction: false,
-            }),
-          ]}
+      {isYunting ? (
+        /* yunting：算力中心商城入口 */
+        <div
+          className="relative w-full cursor-pointer overflow-hidden"
+          style={{ aspectRatio: '16/9' }}
+          onClick={() => navigate('/jiang/shop')}
         >
-          <CarouselContent>
-            {banners.map((banner) => (
-              <CarouselItem key={banner.id}>
-                <div className="relative w-full aspect-[16/9] overflow-hidden">
-                  <img
-                    src={banner.image}
-                    alt={banner.title}
-                    className="w-full h-full object-cover"
-                  />
+          <div className="w-full h-full bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col items-center justify-center relative">
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="absolute top-2 left-4 w-16 h-16 rounded-full bg-[#D32F2F]/10 blur-xl" />
+              <div className="absolute bottom-4 right-6 w-24 h-24 rounded-full bg-blue-500/10 blur-2xl" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-[#D32F2F]/5 blur-3xl" />
+            </div>
+            <div className="relative z-10 flex flex-col items-center space-y-2 px-6 text-center">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-full bg-[#D32F2F] flex items-center justify-center shadow-lg">
+                  <span className="text-white text-xs font-bold">R1</span>
                 </div>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-        </Carousel>
-      </div>
+                <span className="text-white/90 text-sm font-semibold tracking-wide">润仪算力研发中心</span>
+              </div>
+              <h2 className="text-white text-xl font-bold leading-tight">算力中心商城</h2>
+              <p className="text-white/60 text-xs">AI算力包 · 智能服务 · 一键购买</p>
+              <div className="mt-2 px-5 py-1.5 bg-[#D32F2F] rounded-full text-white text-xs font-medium shadow-lg">
+                立即进入 →
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="relative">
+          <Carousel
+            className="w-full"
+            opts={{ loop: true, align: "start" }}
+            plugins={[Autoplay({ delay: 5000, stopOnInteraction: false })]}
+          >
+            <CarouselContent>
+              {banners.map((banner) => (
+                <CarouselItem key={banner.id}>
+                  <div className="relative w-full aspect-[16/9] overflow-hidden">
+                    <img src={banner.image} alt={banner.title} className="w-full h-full object-cover" />
+                  </div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+        </div>
+      )}
 
       {/* Stats Cards - 使用SPA导航 */}
       <div className="px-4 mt-2 grid grid-cols-2 gap-2">
