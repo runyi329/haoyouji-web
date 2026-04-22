@@ -23,6 +23,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const isYJH = user?.username === 'YJH';
   const isStevenHuang = user?.username === 'STEVEN_HUANG';
   const isHanming = user?.id === 4957321;
+  const isYunting = user?.id === 540801;
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
@@ -58,6 +59,10 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       // 汉明：跳转到汉明专属产品页面
       setShowLedgerMenu(false);
       setLocation('/hanming');
+    } else if (isYunting) {
+      // yunting：跳转到算力中心商城
+      setShowLedgerMenu(false);
+      setLocation('/jiang/shop');
     } else if (isYJH) {
       // YJH：跳转到数金研投网站
       setShowLedgerMenu(false);
@@ -191,6 +196,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                   <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb/idealight_icon_white_ca457943.png" className="w-full h-full object-cover" alt="IDEALIGHT" />
                 ) : isHanming ? (
                   <span className="text-white text-xs font-bold leading-tight text-center">汉明</span>
+                ) : isYunting ? (
+                  <Cpu className="w-7 h-7 text-white" />
                 ) : (
                   <Plus className="w-7 h-7 text-white" />
                 )}
