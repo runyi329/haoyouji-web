@@ -72,6 +72,8 @@ export default function PositionCalc() {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [summaryEdit, setSummaryEdit] = useState<SummaryEditModal | null>(null);
   const [saving, setSaving] = useState(false);
+  const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标离场利润（人民币）
+  const CNY_RATE = 7.28; // 人民币/USDT 汇率（近似值）
 
   const utils = trpc.useUtils();
 
@@ -330,6 +332,35 @@ export default function PositionCalc() {
               <div className={`text-xs mt-0.5 ${isPnlPositive ? 'text-red-400' : 'text-green-500'}`}>
                 {summary.pnlPct !== 0 ? `${isPnlPositive ? '+' : ''}${summary.pnlPct.toFixed(2)}%` : '--'}
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 目标离场利润 */}
+      <div className="px-4 pb-3">
+        <div className="bg-white rounded-xl px-4 py-3 shadow-sm border border-gray-100">
+          <div className="text-xs text-gray-500 mb-2 font-medium">目标离场利润</div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 flex-1">
+              <span className="text-sm text-gray-400">¥</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="输入目标利润（元）"
+                value={targetProfitCny}
+                onChange={e => setTargetProfitCny(e.target.value)}
+                className="flex-1 text-sm font-semibold text-gray-800 border-b border-gray-200 focus:border-blue-400 outline-none py-0.5 bg-transparent placeholder:text-gray-300 placeholder:font-normal"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="text-gray-400">=</span>
+              <span className="font-bold text-blue-600">
+                {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
+                  ? `$${(parseFloat(targetProfitCny) / CNY_RATE).toFixed(0)} U`
+                  : <span className="text-gray-300 font-normal">-- U</span>
+                }
+              </span>
             </div>
           </div>
         </div>
