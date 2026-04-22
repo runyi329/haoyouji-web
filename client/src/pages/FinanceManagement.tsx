@@ -196,6 +196,8 @@ export default function FinanceManagement() {
 
   // 结息记录
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null);
+  // 用户 Tab 筛选（管理员可切换，普通成员固定看自己）
+  const [activeUserTab, setActiveUserTab] = useState<number | 'all'>('all');
   const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
 
@@ -233,6 +235,24 @@ export default function FinanceManagement() {
   });
 
   const realMembers = (members as any[] || []).filter((m: any) => !m.isAiClone);
+  // 当前登录用户在账本中的角色（通过 orders 返回的 user_id 推断：管理员能看到多个用户的订单）
+  // 更可靠的方式：检查 members 列表中是否有多于一个用户的订单
+  const uniqueOrderUserIds = Array.from(new Set(orders.map((o: any) => o.user_id)));
+  // 如果 orders 中有多个不同 user_id，说明当前用户是管理员
+  const amIManager = uniqueOrderUserIds.length > 1 || (realMembers.length > 0 && (() => {
+    // 备用：通过 members 中找到当前用户的 role
+    // 由于前端没有直接的 currentUserId，通过 orders 中自己的 user_id 来判断
+    // 如果 orders 为空但有成员列表，无法判断，默认显示全部
+    return false;
+  })());
+  // 按 activeUserTab 筛选订单
+  const displayOrders = activeUserTab === 'all'
+    ? orders
+    : orders.filter((o: any) => o.user_id === activeUserTab);
+  // 获取有订单的用户列表（用于 Tab 展示）
+  const usersWithOrders = realMembers.filter((m: any) =>
+    orders.some((o: any) => o.user_id === m.userId)
+  );
 
   const filteredMembers = realMembers.filter((m: any) => {
     const name = (m.nickname || m.username || '').toLowerCase();
@@ -403,19 +423,60 @@ export default function FinanceManagement() {
         </div>
 
         <div>
+          {/* 用户 Tab：有多个用户有订单时才显示 */}
+          {usersWithOrders.length > 1 && (
+            <div className="flex gap-2 mb-3 overflow-x-auto pb-1 scrollbar-none">
+              <button
+                onClick={() => setActiveUserTab('all')}
+                className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                style={
+                  activeUserTab === 'all'
+                    ? { background: '#1A56DB', color: '#fff', boxShadow: '0 2px 6px rgba(26,86,219,0.3)' }
+                    : { background: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }
+                }
+              >
+                全部 {orders.length > 0 ? `(${orders.length})` : ''}
+              </button>
+              {usersWithOrders.map((m: any) => {
+                const name = m.nickname || m.username || `用户${m.userId}`;
+                const count = orders.filter((o: any) => o.user_id === m.userId).length;
+                const isActive = activeUserTab === m.userId;
+                return (
+                  <button
+                    key={m.userId}
+                    onClick={() => setActiveUserTab(m.userId)}
+                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                    style={
+                      isActive
+                        ? { background: '#1A56DB', color: '#fff', boxShadow: '0 2px 6px rgba(26,86,219,0.3)' }
+                        : { background: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }
+                    }
+                  >
+                    {m.avatar && (
+                      <img src={m.avatar} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+                    )}
+                    {name}
+                    {count > 0 && <span className="opacity-70">({count})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
-            融资订单列表 {orders.length > 0 ? `· ${orders.length} 笔` : ''}
+            {activeUserTab === 'all'
+              ? `融资订单列表 ${orders.length > 0 ? `· ${orders.length} 笔` : ''}`
+              : `${(realMembers.find((m: any) => m.userId === activeUserTab)?.nickname || realMembers.find((m: any) => m.userId === activeUserTab)?.username || '用户')} 的订单 · ${displayOrders.length} 笔`}
           </h2>
           {ordersLoading ? (
             <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
-          ) : orders.length === 0 ? (
+          ) : displayOrders.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-2xl shadow-sm">
               <TrendingUp className="w-10 h-10 text-gray-200 mx-auto mb-2" />
               <div className="text-gray-400 text-sm">暂无融资订单</div>
             </div>
           ) : (
             <div className="space-y-3">
-              {orders.map((order: any) => {
+              {displayOrders.map((order: any) => {
                 const totalPaid = (interestPaymentSummary as any)?.[order.id] ?? 0;
                 const rateStr = String(order.interest_rate_annual || '');
                 const isNegRate = rateStr.startsWith('-');
