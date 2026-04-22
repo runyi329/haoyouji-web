@@ -246,7 +246,7 @@ export default function PositionCalc() {
       </div>
 
       {/* 目标止盈利润 */}
-      <div className="px-4 pb-3">
+      <div className="px-4 pt-4 pb-3">
         {!editingRate ? (
           // 展示模式：财经质感卡片
           <div
