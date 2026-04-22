@@ -92,23 +92,18 @@ export default function PositionCalc() {
   );
   const saveSettingsMutation = trpc.ethPositionSaveSettings.useMutation();
 
-  // 从数据库加载目标止盈和汇率
-  // 注意：汇率优先级：实时 API > 数据库保存值 > 默认 7.28
-  // 数据库值仅在实时 API 尚未返回时作为初始占位
+  // 从数据库加载目标止盈和 ETH 数量（不加载汇率，汇率始终用实时 API 值）
   useEffect(() => {
     if (settingsData) {
       if (settingsData.targetProfitCny > 0) {
         setTargetProfitCny(String(settingsData.targetProfitCny));
       }
-      // 只在实时汇率还未获取到时，才用数据库保存的汇率作为初始值
-      if (settingsData.cnyRate > 0 && !editingRate && rateFromApi === null) {
-        setCnyRate(settingsData.cnyRate);
-      }
+      // 汇率不从数据库读取，始终使用实时 API 值（方案A）
       if (settingsData.targetEthQty > 0) {
         setTargetEthQty(String(settingsData.targetEthQty));
       }
     }
-  }, [settingsData, rateFromApi]);
+  }, [settingsData]);
 
   // 初始化数据：从数据库加载，若无数据则用默认展示
   useEffect(() => {
@@ -417,9 +412,9 @@ export default function PositionCalc() {
                 const profit = parseFloat(targetProfitCny) || 0;
                 if (!isNaN(v) && v > 0) setCnyRate(v);
                 setEditingRate(false);
-                // 保存到数据库
+                // 保存到数据库（汇率不保存，始终用实时值）
                 if (ledgerId > 0) {
-                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: rate, targetEthQty: parseFloat(targetEthQty) || 0 });
+                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0 });
                 }
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
