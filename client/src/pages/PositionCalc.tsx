@@ -242,7 +242,8 @@ export default function PositionCalc() {
           const planQty = planned[price] || 0;
           const actualQty = actual[price] || 0;
           const maxQty = Math.max(planQty, actualQty, 0.01);
-          const actualPct = Math.min((actualQty / maxQty) * 100, 100);
+          // 已买占计划的百分比（计划为满格100%，已买逐步填充）
+          const actualPct = planQty > 0 ? Math.min((actualQty / planQty) * 100, 100) : (actualQty > 0 ? 100 : 0);
           const planPct = 100; // 计划始终是满格
           const isNearCurrent = currentPrice && Math.abs(price - currentPrice) <= 25;
           const isBelowCurrent = currentPrice ? price < currentPrice : false;
@@ -265,37 +266,39 @@ export default function PositionCalc() {
                   )}
                 </div>
 
-                {/* 进度条区域 */}
-                <div className="flex-1 space-y-1">
-                  {/* 实际持仓进度条（上方，蓝色） */}
-                  <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="absolute left-0 top-0 h-full rounded-full transition-all duration-300"
-                      style={{
-                        width: `${actualPct}%`,
-                        background: actualQty > 0
-                          ? 'linear-gradient(90deg, #1A56DB, #3B82F6)'
-                          : 'transparent',
-                        minWidth: actualQty > 0 ? '4px' : '0',
-                      }}
-                    />
-                    {planQty > 0 && (
+                {/* 进度条区域：单条双色，计划=灰底，已买=蓝色填充 */}
+                <div className="flex-1">
+                  <div className="relative h-4 rounded-full overflow-hidden" style={{ background: planQty > 0 ? '#E5E7EB' : '#F3F4F6' }}>
+                    {/* 已买部分（蓝色，从左向右填充） */}
+                    {actualQty > 0 && (
                       <div
-                        className="absolute right-0 top-0 h-full w-0.5 bg-gray-300 rounded-full"
-                        style={{ right: '0' }}
+                        className="absolute left-0 top-0 h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: `${actualPct}%`,
+                          background: 'linear-gradient(90deg, #1A56DB, #3B82F6)',
+                          minWidth: '4px',
+                        }}
+                      />
+                    )}
+                    {/* 计划目标刻度线（右端） */}
+                    {planQty > 0 && actualPct < 98 && (
+                      <div
+                        className="absolute top-0 h-full w-0.5"
+                        style={{ right: '0', background: 'rgba(107,114,128,0.4)' }}
                       />
                     )}
                   </div>
-                  {/* 预计目标进度条（下方，灰色虚线） */}
-                  {planQty > 0 && (
-                    <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="absolute left-0 top-0 h-full rounded-full"
-                        style={{
-                          width: '100%',
-                          background: 'repeating-linear-gradient(90deg, #D1D5DB 0px, #D1D5DB 6px, transparent 6px, transparent 10px)',
-                        }}
-                      />
+                  {/* 进度文字：已买/计划 */}
+                  {(planQty > 0 || actualQty > 0) && (
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>
+                        {actualQty > 0 ? `已买 ${actualQty.toFixed(2)}` : '未买入'}
+                      </span>
+                      {planQty > 0 && (
+                        <span className="text-[10px] text-gray-400">
+                          计划 {planQty.toFixed(2)}
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
