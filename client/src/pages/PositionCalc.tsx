@@ -131,8 +131,10 @@ export default function PositionCalc() {
   });
 
   useEffect(() => {
-    if (cryptoPricesRaw && (cryptoPricesRaw as any)?.ETH) {
-      setCurrentPrice((cryptoPricesRaw as any).ETH);
+    // getCryptoPrices 返回 { prices: { ETH: ... }, changes: {...} } 结构
+    const ethPrice = (cryptoPricesRaw as any)?.prices?.ETH ?? (cryptoPricesRaw as any)?.ETH;
+    if (ethPrice && ethPrice > 0) {
+      setCurrentPrice(ethPrice);
     }
   }, [cryptoPricesRaw]);
 
