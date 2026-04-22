@@ -5,6 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
+import * as dbEthPosition from "./db-eth-position";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
 import { loginWithPassword, registerWithPassword, hashPassword } from "./auth";
