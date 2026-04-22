@@ -3964,8 +3964,8 @@ export default function LedgerDetail() {
       {isCustomAF && effectiveIsFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4">
-            {/* 持仓计算入口 */}
-            <button
+            {/* 持仓计算入口 - 仅账本创建者可见 */}
+            {isOwner && !viewAsUserId && <button
               onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl mb-3"
               style={{ background: 'linear-gradient(135deg, #1A2340 0%, #2D3A5C 100%)', border: 'none' }}
@@ -3980,7 +3980,7 @@ export default function LedgerDetail() {
                 </div>
               </div>
               <ChevronRight className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
-            </button>
+            </button>}
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
