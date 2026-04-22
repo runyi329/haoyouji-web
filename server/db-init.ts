@@ -471,6 +471,44 @@ export async function initDatabase() {
       console.warn('[DB Init] ⚠️ equity_weight_logs table skipped:', e instanceof Error ? e.message : e);
     }
 
+    // ===== 建立 eth_position_levels ETH持仓档位表 =====
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS \`eth_position_levels\` (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL COMMENT '账本ID',
+          price INT NOT NULL COMMENT '价格档位（美元）',
+          planned_qty DECIMAL(18,8) NOT NULL DEFAULT '0.00000000' COMMENT '计划买入数量',
+          actual_qty DECIMAL(18,8) NOT NULL DEFAULT '0.00000000' COMMENT '已买入数量',
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY eth_pos_ledger_price_uniq (ledger_id, price),
+          KEY eth_pos_ledger_idx (ledger_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ETH持仓档位表'
+      `);
+      console.log('[DB Init] ✅ eth_position_levels table ready');
+    } catch (e) {
+      console.warn('[DB Init] ⚠️ eth_position_levels table skipped:', e instanceof Error ? e.message : e);
+    }
+    // ===== 建立 eth_position_settings ETH持仓全局设置表 =====
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS \`eth_position_settings\` (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL COMMENT '账本ID',
+          target_profit_cny DECIMAL(18,2) NOT NULL DEFAULT '0.00' COMMENT '目标止盈利润（人民币）',
+          cny_rate DECIMAL(10,4) NOT NULL DEFAULT '7.2800' COMMENT 'USD/CNY汇率',
+          target_eth_qty DECIMAL(18,8) NOT NULL DEFAULT '0.00000000' COMMENT '目标持仓ETH数量',
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY eth_settings_ledger_uniq (ledger_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ETH持仓全局设置表'
+      `);
+      console.log('[DB Init] ✅ eth_position_settings table ready');
+    } catch (e) {
+      console.warn('[DB Init] ⚠️ eth_position_settings table skipped:', e instanceof Error ? e.message : e);
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
