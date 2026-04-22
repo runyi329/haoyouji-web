@@ -176,20 +176,14 @@ export default function PositionCalc() {
         </button>
         <div className="flex-1">
           <div className="text-white font-semibold text-base">ETH 持仓计算</div>
-          <div className="text-white/70 text-xs">以太坊 · 每50元一档 · 点击档位可编辑</div>
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="mr-2 px-3 py-1 rounded-lg text-sm font-medium"
+          className="px-3 py-1 rounded-lg text-sm font-medium"
           style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
         >
           刷新
         </button>
-        <img
-          src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png"
-          alt="ETH"
-          className="w-8 h-8 rounded-full object-contain"
-        />
       </div>
 
       {/* 汇总卡片 */}
