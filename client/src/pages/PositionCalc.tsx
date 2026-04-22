@@ -11,7 +11,7 @@ import { ChevronLeft, TrendingUp, TrendingDown, RefreshCw, X, Check } from "luci
 import { trpc } from "@/lib/trpc";
 
 const MIN_PRICE = 1000;
-const MAX_PRICE = 3500;
+const MAX_PRICE = 2500;
 const STEP = 50;
 
 function generatePriceLevels(): number[] {
