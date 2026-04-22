@@ -2778,7 +2778,11 @@ export default function CryptoPrediction() {
               </div>
             ) : (
               <div className="space-y-3">
-                {financeOrders.map((order: any) => {
+                {[...financeOrders].sort((a: any, b: any) => {
+                  const aSold = String(a.admin_note || '').includes('[已卖出]') ? 1 : 0;
+                  const bSold = String(b.admin_note || '').includes('[已卖出]') ? 1 : 0;
+                  return aSold - bSold;
+                }).map((order: any) => {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                   const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
                   const isNegativeRate = true; // 融资付息页面用户均为付息方，利息一律显示为负数
