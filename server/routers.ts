@@ -18991,6 +18991,64 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       return { success: true };
     }),
 
+  // ========== ETH 持仓计算 (已从 adminFeatureRouter 移入 appRouter) ==========
+  ethPositionGetLevels: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input }) => {
+      const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId);
+      return { levels };
+    }),
+  ethPositionSaveLevel: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      price: z.number(),
+      plannedQty: z.number().min(0),
+      actualQty: z.number().min(0),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.upsertEthPositionLevel(
+        input.ledgerId,
+        input.price,
+        input.plannedQty,
+        input.actualQty
+      );
+      return { success: true };
+    }),
+  ethPositionBatchSave: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      levels: z.array(z.object({
+        price: z.number(),
+        plannedQty: z.number().min(0),
+        actualQty: z.number().min(0),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, input.levels);
+      return { success: true };
+    }),
+  ethPositionGetSettings: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input }) => {
+      const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId);
+      return settings;
+    }),
+  ethPositionSaveSettings: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      targetProfitCny: z.number().min(0),
+      cnyRate: z.number().min(0),
+      targetEthQty: z.number().min(0).optional().default(0),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.upsertEthPositionSettings(
+        input.ledgerId,
+        input.targetProfitCny,
+        input.cnyRate,
+        input.targetEthQty ?? 0
+      );
+      return { success: true };
+    }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
