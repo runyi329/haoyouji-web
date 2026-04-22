@@ -169,6 +169,7 @@ const emptyForm = {
   status: 'active',
   collateralCoin: 'BTC' as CoinType,
   collateralQty: '',
+  collateralAssets: [] as { coin: string; qty: string }[],
   financeType: '保本分成' as '保本分成' | '自负盈亏',
 };
 
@@ -280,6 +281,16 @@ export default function FinanceManagement() {
       status: order.status || 'active',
       collateralCoin: (order.collateral_coin || 'BTC') as CoinType,
       collateralQty: order.collateral_qty ? String(parseFloat(order.collateral_qty)) : '',
+      collateralAssets: (() => {
+        try {
+          if (order.collateral_assets) return JSON.parse(order.collateral_assets);
+        } catch(e) {}
+        // 兼容旧数据：将单笔 collateral_coin/qty 转为数组
+        if (order.collateral_coin && order.collateral_qty) {
+          return [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
+        }
+        return [];
+      })(),
       financeType: (order.finance_type || '保本分成') as '保本分成' | '自负盈亏',
     });
     setSelectedUserId(order.user_id || null);
@@ -318,6 +329,7 @@ export default function FinanceManagement() {
         status: formData.status,
         collateralCoin: formData.collateralCoin || undefined,
         collateralQty: formData.collateralQty || undefined,
+        collateralAssets: formData.collateralAssets.length > 0 ? formData.collateralAssets : undefined,
         financeType: formData.financeType,
       });
     } else {
@@ -340,6 +352,7 @@ export default function FinanceManagement() {
         adminNote: formData.adminNote,
         collateralCoin: formData.collateralCoin || undefined,
         collateralQty: formData.collateralQty || undefined,
+        collateralAssets: formData.collateralAssets.length > 0 ? formData.collateralAssets : undefined,
         financeType: formData.financeType,
       });
     }
@@ -559,17 +572,28 @@ export default function FinanceManagement() {
                         )}
                       </div>
 
-                      {order.collateral_coin && order.collateral_qty && (
-                        <div className="mt-2 pt-2 border-t border-gray-100">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-400">担保利息</span>
-                            <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>
-                              {parseFloat(order.collateral_qty)} {order.collateral_coin}
-                            </span>
+                      {(() => {
+                        // 多笔担保物：优先读 collateral_assets，兼容旧单笔字段
+                        let assets: { coin: string; qty: string }[] = [];
+                        try {
+                          if (order.collateral_assets) assets = JSON.parse(order.collateral_assets);
+                        } catch(e) {}
+                        if (assets.length === 0 && order.collateral_coin && order.collateral_qty) {
+                          assets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
+                        }
+                        if (assets.length === 0) return null;
+                        return (
+                          <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
+                            <span className="text-xs text-gray-400">担保物</span>
+                            {assets.map((a, i) => (
+                              <div key={i} className="flex items-center justify-between">
+                                <span className="text-xs font-semibold ml-2" style={{ color: '#1A2340' }}>{a.qty} {a.coin}</span>
+                                <CollateralValueDisplay coin={a.coin} qty={a.qty} ledgerId={ledgerId} />
+                              </div>
+                            ))}
                           </div>
-                          <CollateralValueDisplay coin={order.collateral_coin} qty={String(parseFloat(order.collateral_qty))} ledgerId={ledgerId} />
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {(order.public_note || order.admin_note) && (
                         <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
@@ -952,42 +976,68 @@ export default function FinanceManagement() {
                 </div>
               </div>
 
-              {/* 担保利息 */}
+              {/* 担保物（多笔） */}
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">担保利息</label>
-                <div className="rounded-xl border border-gray-200 overflow-hidden">
-                  {/* 币种选择 */}
-                  <div className="px-4 pt-3 pb-2">
-                    <span className="text-xs text-gray-400 block mb-2">担保币种</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {COIN_OPTIONS.map(c => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setFormData(d => ({ ...d, collateralCoin: c }))}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                            formData.collateralCoin === c
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >{c}</button>
-                      ))}
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-600">担保物</label>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(d => ({ ...d, collateralAssets: [...d.collateralAssets, { coin: 'BTC', qty: '' }] }))}
+                    className="flex items-center gap-1 text-xs text-blue-600 font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> 添加担保物
+                  </button>
+                </div>
+                {formData.collateralAssets.length === 0 && (
+                  <div className="text-xs text-gray-400 py-2 text-center border border-dashed border-gray-200 rounded-xl">暂无担保物，点击上方添加</div>
+                )}
+                <div className="space-y-2">
+                  {formData.collateralAssets.map((item, idx) => (
+                    <div key={idx} className="rounded-xl border border-gray-200 overflow-hidden">
+                      <div className="px-4 pt-3 pb-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-gray-400">担保币种 #{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(d => ({ ...d, collateralAssets: d.collateralAssets.filter((_, i) => i !== idx) }))}
+                            className="text-red-400 text-xs"
+                          >删除</button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {COIN_OPTIONS.map(c => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setFormData(d => {
+                                const arr = [...d.collateralAssets];
+                                arr[idx] = { ...arr[idx], coin: c };
+                                return { ...d, collateralAssets: arr };
+                              })}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                                item.coin === c ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >{c}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="px-4 py-3 border-t border-gray-100">
+                        <span className="text-xs text-gray-400 block mb-1.5">担保数量 ({item.coin})</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={item.qty}
+                          onChange={e => setFormData(d => {
+                            const arr = [...d.collateralAssets];
+                            arr[idx] = { ...arr[idx], qty: e.target.value };
+                            return { ...d, collateralAssets: arr };
+                          })}
+                          className="w-full bg-transparent text-base focus:outline-none"
+                          placeholder="如：12"
+                        />
+                      </div>
+                      <CollateralValueDisplay coin={item.coin} qty={item.qty} ledgerId={ledgerId} />
                     </div>
-                  </div>
-                  {/* 数量输入 */}
-                  <div className="px-4 py-3 border-t border-gray-100">
-                    <span className="text-xs text-gray-400 block mb-1.5">担保数量 ({formData.collateralCoin})</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={formData.collateralQty}
-                      onChange={e => setFormData(d => ({ ...d, collateralQty: e.target.value }))}
-                      className="w-full bg-transparent text-base focus:outline-none"
-                      placeholder="如：12"
-                    />
-                  </div>
-                  {/* 实时担保价值显示 */}
-                  <CollateralValueDisplay coin={formData.collateralCoin} qty={formData.collateralQty} ledgerId={ledgerId} />
+                  ))}
                 </div>
               </div>
 
