@@ -1893,3 +1893,18 @@ export const funderOrderParticipants = mysqlTable("funder_order_participants", {
   index("fop_ledger_idx").on(table.ledgerId),
   index("fop_role_idx").on(table.role),
 ]);
+
+// ========== ETH 持仓计算档位表 ==========
+// 每个账本的 ETH 持仓计划和实际买入量，按价格档位存储
+export const ethPositionLevels = mysqlTable("eth_position_levels", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  price: int('price').notNull(),
+  plannedQty: decimal('planned_qty', { precision: 18, scale: 8 }).default('0').notNull(),
+  actualQty: decimal('actual_qty', { precision: 18, scale: 8 }).default('0').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  uniqueIndex("eth_pos_ledger_price_uniq").on(table.ledgerId, table.price),
+  index("eth_pos_ledger_idx").on(table.ledgerId),
+]);

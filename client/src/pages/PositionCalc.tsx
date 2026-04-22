@@ -65,11 +65,49 @@ export default function PositionCalc() {
   const [, setLocation] = useLocation();
   const ledgerId = params ? parseInt(params.id) : 0;
 
-  const [planned, setPlanned] = useState<Record<number, number>>(getDefaultPlanned);
-  const [actual, setActual] = useState<Record<number, number>>(getDefaultActual);
+  const [planned, setPlanned] = useState<Record<number, number>>({});
+  const [actual, setActual] = useState<Record<number, number>>({});
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [summaryEdit, setSummaryEdit] = useState<SummaryEditModal | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const utils = trpc.useUtils();
+
+  // 获取持仓数据
+  const { data: positionData, isLoading: positionLoading } = trpc.ethPositionGetLevels.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 }
+  );
+
+  // 保存单个档位
+  const saveLevelMutation = trpc.ethPositionSaveLevel.useMutation();
+  // 批量保存
+  const batchSaveMutation = trpc.ethPositionBatchSave.useMutation();
+
+  // 初始化数据：从数据库加载，若无数据则用默认展示
+  useEffect(() => {
+    if (!positionLoading && positionData && !dataLoaded) {
+      const newPlanned: Record<number, number> = {};
+      const newActual: Record<number, number> = {};
+      if (positionData.levels.length > 0) {
+        positionData.levels.forEach(l => {
+          newPlanned[l.price] = l.plannedQty;
+          newActual[l.price] = l.actualQty;
+        });
+      } else {
+        // 无数据时用默认展示（不写入数据库）
+        PRICE_LEVELS.forEach(p => {
+          newPlanned[p] = 0;
+          newActual[p] = 0;
+        });
+      }
+      setPlanned(newPlanned);
+      setActual(newActual);
+      setDataLoaded(true);
+    }
+  }, [positionData, positionLoading, dataLoaded]);
 
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     refetchInterval: 30000,
@@ -123,6 +161,11 @@ export default function PositionCalc() {
           else newActual[p] = actual[p] || 0;
         });
         setActual(newActual);
+        // 批量保存到数据库
+        const levels = PRICE_LEVELS
+          .filter(p => (planned[p] || 0) > 0 || (newActual[p] || 0) > 0)
+          .map(p => ({ price: p, plannedQty: planned[p] || 0, actualQty: newActual[p] || 0 }));
+        batchSaveMutation.mutate({ ledgerId, levels });
       }
     } else {
       // 按比例缩放各档计划
@@ -135,6 +178,11 @@ export default function PositionCalc() {
           else newPlanned[p] = 0;
         });
         setPlanned(newPlanned);
+        // 批量保存到数据库
+        const levels = PRICE_LEVELS
+          .filter(p => (newPlanned[p] || 0) > 0 || (actual[p] || 0) > 0)
+          .map(p => ({ price: p, plannedQty: newPlanned[p] || 0, actualQty: actual[p] || 0 }));
+        batchSaveMutation.mutate({ ledgerId, levels });
       }
     }
     setSummaryEdit(null);
@@ -151,14 +199,41 @@ export default function PositionCalc() {
     const num = parseFloat(modal.inputValue);
     const val = isNaN(num) || num < 0 ? 0 : num;
     if (modal.mode === 'editPlanned') {
-      setPlanned(prev => ({ ...prev, [modal.price]: val }));
+      const newPlanned = { ...planned, [modal.price]: val };
+      setPlanned(newPlanned);
+      // 保存到数据库
+      saveLevelMutation.mutate({
+        ledgerId,
+        price: modal.price,
+        plannedQty: val,
+        actualQty: actual[modal.price] || 0,
+      });
     } else if (modal.mode === 'editActual') {
-      setActual(prev => ({ ...prev, [modal.price]: val }));
+      const newActual = { ...actual, [modal.price]: val };
+      setActual(newActual);
+      // 保存到数据库
+      saveLevelMutation.mutate({
+        ledgerId,
+        price: modal.price,
+        plannedQty: planned[modal.price] || 0,
+        actualQty: val,
+      });
     }
     setModal(null);
   };
 
   const isPnlPositive = summary.totalPnl >= 0;
+
+  if (positionLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <div className="text-sm text-gray-400">加载持仓数据...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative">
