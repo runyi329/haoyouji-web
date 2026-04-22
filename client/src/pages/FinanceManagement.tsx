@@ -384,7 +384,7 @@ export default function FinanceManagement() {
       orderId,
       ledgerId,
       amount: parseFloat(paymentForm.amount),
-      paymentDate: paymentForm.payDate,
+      payDate: paymentForm.payDate,
       note: paymentForm.note,
     });
   }
@@ -711,8 +711,10 @@ export default function FinanceManagement() {
                                     {paymentForm.payDate || '选择日期'}
                                   </button>
                                   {showPaymentDatePicker && (
-                                    <div className="absolute top-full left-0 z-50 mt-1 bg-white rounded-xl shadow-lg" style={{ minWidth: 260 }}>
-                                      <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm(f => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
+                                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowPaymentDatePicker(false)}>
+                                      <div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}>
+                                        <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm(f => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
+                                      </div>
                                     </div>
                                   )}
                                 </div>
