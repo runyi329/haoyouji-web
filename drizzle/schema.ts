@@ -1916,6 +1916,7 @@ export const ethPositionSettings = mysqlTable("eth_position_settings", {
   ledgerId: int('ledger_id').notNull(),
   targetProfitCny: decimal('target_profit_cny', { precision: 18, scale: 2 }).default('0').notNull(),
   cnyRate: decimal('cny_rate', { precision: 10, scale: 4 }).default('7.2800').notNull(),
+  targetEthQty: decimal('target_eth_qty', { precision: 18, scale: 8 }).default('0').notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 }, (table) => [

@@ -49,7 +49,8 @@ export default function PositionCalc() {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [summaryEdit, setSummaryEdit] = useState<SummaryEditModal | null>(null);
   const [saving, setSaving] = useState(false);
-  const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标离场利润（人民币）
+  const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标止盈利润（人民币）
+  const [targetEthQty, setTargetEthQty] = useState<string>('');  // 目标持仓 ETH 数量
   const [cnyRate, setCnyRate] = useState<number>(7.28); // 人民币/USDT 汇率
   const [cnyRateInput, setCnyRateInput] = useState<string>(''); // 手动修改汇率的输入内容
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
@@ -94,6 +95,9 @@ export default function PositionCalc() {
       }
       if (settingsData.cnyRate > 0 && !editingRate) {
         setCnyRate(settingsData.cnyRate);
+      }
+      if (settingsData.targetEthQty > 0) {
+        setTargetEthQty(String(settingsData.targetEthQty));
       }
     }
   }, [settingsData]);
@@ -300,6 +304,43 @@ export default function PositionCalc() {
                   </span>
                 </div>
               </div>
+              {/* 目标 ETH 数量 + 目标离场价 */}
+              <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs mb-0.5" style={{ color: 'rgba(226,185,111,0.5)' }}>目标持仓</div>
+                    <span className="text-2xl font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
+                      {targetEthQty && parseFloat(targetEthQty) > 0
+                        ? `${parseFloat(targetEthQty).toFixed(2)} ETH`
+                        : <span style={{ color: 'rgba(226,185,111,0.3)' }}>-- ETH</span>
+                      }
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>当前 ETH 价</div>
+                    <span className="text-lg font-semibold" style={{ color: '#4fc3f7' }}>
+                      {currentPrice ? `$${currentPrice.toFixed(0)}` : <span style={{ color: 'rgba(79,195,247,0.3)' }}>--</span>}
+                    </span>
+                  </div>
+                </div>
+                {/* 目标离场价计算 */}
+                {targetEthQty && parseFloat(targetEthQty) > 0 && targetProfitCny && parseFloat(targetProfitCny) > 0 && currentPrice && (() => {
+                  const ethQty = parseFloat(targetEthQty);
+                  const profitUsdt = parseFloat(targetProfitCny) / cnyRate;
+                  const targetExitPrice = currentPrice + profitUsdt / ethQty;
+                  return (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>目标离场价</span>
+                      <span className="text-base font-bold" style={{ color: '#f97316', fontVariantNumeric: 'tabular-nums' }}>
+                        ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                      </span>
+                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                        (+{((targetExitPrice - currentPrice) / currentPrice * 100).toFixed(1)}%)
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
               {/* 汇率行 */}
               <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>USD/CNY</span>
@@ -328,6 +369,21 @@ export default function PositionCalc() {
                 />
               </div>
             </div>
+            {/* 目标 ETH 数量输入 */}
+            <div className="mb-3">
+              <div className="text-xs text-gray-400 mb-1">目标持仓 ETH 数量</div>
+              <div className="flex items-center gap-2 border-b-2 border-blue-300 pb-1">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="输入 ETH 数量"
+                  value={targetEthQty}
+                  onChange={e => setTargetEthQty(e.target.value)}
+                  className="flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                />
+                <span className="text-sm font-medium text-gray-400">ETH</span>
+              </div>
+            </div>
             {/* 汇率输入 */}
             <div className="mb-4">
               <div className="text-xs text-gray-400 mb-1">USD/CNY 汇率</div>
@@ -351,7 +407,7 @@ export default function PositionCalc() {
                 setEditingRate(false);
                 // 保存到数据库
                 if (ledgerId > 0) {
-                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: rate });
+                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: rate, targetEthQty: parseFloat(targetEthQty) || 0 });
                 }
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-white"

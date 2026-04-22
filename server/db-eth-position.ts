@@ -85,6 +85,7 @@ export async function batchUpsertEthPositionLevels(
 export interface EthPositionSettingsData {
   targetProfitCny: number;
   cnyRate: number;
+  targetEthQty: number;
 }
 
 /**
@@ -97,10 +98,11 @@ export async function getEthPositionSettings(ledgerId: number): Promise<EthPosit
     .select()
     .from(ethPositionSettings)
     .where(eq(ethPositionSettings.ledgerId, ledgerId));
-  if (rows.length === 0) return { targetProfitCny: 0, cnyRate: 7.28 };
+  if (rows.length === 0) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0 };
   return {
     targetProfitCny: parseFloat(rows[0].targetProfitCny as string),
     cnyRate: parseFloat(rows[0].cnyRate as string),
+    targetEthQty: parseFloat((rows[0] as any).targetEthQty as string || '0'),
   };
 }
 
@@ -110,7 +112,8 @@ export async function getEthPositionSettings(ledgerId: number): Promise<EthPosit
 export async function upsertEthPositionSettings(
   ledgerId: number,
   targetProfitCny: number,
-  cnyRate: number
+  cnyRate: number,
+  targetEthQty: number = 0
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) return;
@@ -120,11 +123,13 @@ export async function upsertEthPositionSettings(
       ledgerId,
       targetProfitCny: String(targetProfitCny),
       cnyRate: String(cnyRate),
+      targetEthQty: String(targetEthQty),
     })
     .onDuplicateKeyUpdate({
       set: {
         targetProfitCny: String(targetProfitCny),
         cnyRate: String(cnyRate),
+        targetEthQty: String(targetEthQty),
       },
     });
 }
