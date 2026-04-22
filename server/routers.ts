@@ -13113,6 +13113,7 @@ export const appRouter = router({
         counterparty: z.string().optional(),
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
+        collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -13122,7 +13123,7 @@ export const appRouter = router({
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        // 自动建表时添加 collateral_coin / collateral_qty / finance_type 列（如果不存在）
+        // 自动建表时添加 collateral_coin / collateral_qty / finance_type / collateral_assets 列（如果不存在）
         try {
           const mysql = await import('mysql2/promise');
           const dbUrl = process.env.DATABASE_URL || '';
@@ -13135,6 +13136,7 @@ export const appRouter = router({
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_coin VARCHAR(20) DEFAULT NULL`);
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_qty DECIMAL(20,8) DEFAULT NULL`);
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS finance_type VARCHAR(20) DEFAULT '保本分成'`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_assets TEXT DEFAULT NULL`);
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -13151,8 +13153,8 @@ export const appRouter = router({
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, created_by)
-              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${ctx.user.id})`
+          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, created_by)
+              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -13180,6 +13182,7 @@ export const appRouter = router({
         counterparty: z.string().optional(),
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
+        collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -13200,6 +13203,11 @@ export const appRouter = router({
           collateralCoin: 'collateral_coin', collateralQty: 'collateral_qty',
           financeType: 'finance_type',
         };
+        // 特殊处理 collateralAssets（JSON 序列化）
+        if (input.collateralAssets !== undefined) {
+          updateCols.push('collateral_assets = ?');
+          updateVals.push(input.collateralAssets && input.collateralAssets.length > 0 ? JSON.stringify(input.collateralAssets) : null);
+        }
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
         // DECIMAL/数字列：空字符串需转为 null，否则 MySQL 报 Incorrect decimal value
         const decimalCols = new Set(['amount', 'buy_price', 'buy_quantity', 'interest_rate_annual', 'interest_base', 'collateral_qty']);
