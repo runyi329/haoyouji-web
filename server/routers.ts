@@ -19523,6 +19523,45 @@ export const adminFeatureRouter = router({
     }),
 
 
+
+  // ========== ETH 持仓计算 ==========
+  ethPositionGetLevels: protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input }) => {
+      const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId);
+      return { levels };
+    }),
+
+  ethPositionSaveLevel: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      price: z.number(),
+      plannedQty: z.number().min(0),
+      actualQty: z.number().min(0),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.upsertEthPositionLevel(
+        input.ledgerId,
+        input.price,
+        input.plannedQty,
+        input.actualQty
+      );
+      return { success: true };
+    }),
+
+  ethPositionBatchSave: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      levels: z.array(z.object({
+        price: z.number(),
+        plannedQty: z.number().min(0),
+        actualQty: z.number().min(0),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, input.levels);
+      return { success: true };
+    }),
 });
 export type AppRouter = typeof appRouter;
 
