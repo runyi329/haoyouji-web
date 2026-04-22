@@ -88,3 +88,27 @@ echo "✅ 返佣备注修正完成"
 echo "📊 查询YJH(4957151)账本52返佣记录:"
 $DB_CMD -e "SELECT id, ledger_id, amount, note, created_at FROM af_manual_balances WHERE user_id=4957151 AND amount > 0 ORDER BY created_at DESC LIMIT 10;"
 echo "✅ 所有数据库迁移完成"
+
+echo "📊 确保ETH持仓计算表存在..."
+$DB_CMD -e "CREATE TABLE IF NOT EXISTS eth_position_levels (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ledger_id INT NOT NULL,
+  price INT NOT NULL,
+  planned_qty DECIMAL(18,8) NOT NULL DEFAULT 0,
+  actual_qty DECIMAL(18,8) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_ledger_price (ledger_id, price),
+  INDEX eth_levels_ledger_idx (ledger_id)
+)" || true
+$DB_CMD -e "CREATE TABLE IF NOT EXISTS eth_position_settings (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ledger_id INT NOT NULL UNIQUE,
+  target_profit_cny DECIMAL(18,2) NOT NULL DEFAULT 0,
+  cny_rate DECIMAL(10,4) NOT NULL DEFAULT 7.28,
+  target_eth_qty DECIMAL(18,8) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX eth_settings_ledger_idx (ledger_id)
+)" || true
+echo "✅ ETH持仓计算表确认完成"
