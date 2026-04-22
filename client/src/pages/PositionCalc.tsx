@@ -51,22 +51,27 @@ export default function PositionCalc() {
   const [saving, setSaving] = useState(false);
   const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标止盈利润（人民币）
   const [targetEthQty, setTargetEthQty] = useState<string>('');  // 目标持仓 ETH 数量
-  const [cnyRate, setCnyRate] = useState<number>(7.28); // 人民币/USDT 汇率
+  const [cnyRate, setCnyRate] = useState<number>(7.28); // 人民币/USDT 汇率（初始占位，会被实时值覆盖）
   const [cnyRateInput, setCnyRateInput] = useState<string>(''); // 手动修改汇率的输入内容
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
+  const [rateFromApi, setRateFromApi] = useState<number | null>(null); // 实时汇率（API 成功后设置）
 
-  // 获取实时 USDT/CNY 汇率
+  // 获取实时 USDT/CNY 汇率 — 10秒刷新，保留上次值
   const { data: rateData } = trpc.exchange.getRate.useQuery(
     { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
-    { staleTime: 60000, refetchInterval: 60000 }
+    { staleTime: 8000, refetchInterval: 10000 }
   );
   useEffect(() => {
     if (rateData?.success && rateData.money) {
       const r = parseFloat(rateData.money);
-      if (!isNaN(r) && r > 0 && !editingRate) {
-        setCnyRate(r);
+      if (!isNaN(r) && r > 0) {
+        setRateFromApi(r); // 记录实时汇率
+        if (!editingRate) {
+          setCnyRate(r); // 实时汇率优先，非编辑状态下立即更新显示
+        }
       }
     }
+    // 若接口失败，rateFromApi 保留上次成功值，不清空
   }, [rateData, editingRate]);
 
   const utils = trpc.useUtils();
@@ -88,19 +93,22 @@ export default function PositionCalc() {
   const saveSettingsMutation = trpc.ethPositionSaveSettings.useMutation();
 
   // 从数据库加载目标止盈和汇率
+  // 注意：汇率优先级：实时 API > 数据库保存值 > 默认 7.28
+  // 数据库值仅在实时 API 尚未返回时作为初始占位
   useEffect(() => {
     if (settingsData) {
       if (settingsData.targetProfitCny > 0) {
         setTargetProfitCny(String(settingsData.targetProfitCny));
       }
-      if (settingsData.cnyRate > 0 && !editingRate) {
+      // 只在实时汇率还未获取到时，才用数据库保存的汇率作为初始值
+      if (settingsData.cnyRate > 0 && !editingRate && rateFromApi === null) {
         setCnyRate(settingsData.cnyRate);
       }
       if (settingsData.targetEthQty > 0) {
         setTargetEthQty(String(settingsData.targetEthQty));
       }
     }
-  }, [settingsData]);
+  }, [settingsData, rateFromApi]);
 
   // 初始化数据：从数据库加载，若无数据则用默认展示
   useEffect(() => {
@@ -125,17 +133,19 @@ export default function PositionCalc() {
     }
   }, [positionData, positionLoading, dataLoaded]);
 
+  // ETH 价格 — 10秒刷新，保留上次值（新数据未到前不清空）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 30000,
-    staleTime: 15000,
+    refetchInterval: 10000,
+    staleTime: 8000,
   });
 
   useEffect(() => {
     // getCryptoPrices 返回 { prices: { ETH: ... }, changes: {...} } 结构
     const ethPrice = (cryptoPricesRaw as any)?.prices?.ETH ?? (cryptoPricesRaw as any)?.ETH;
     if (ethPrice && ethPrice > 0) {
-      setCurrentPrice(ethPrice);
+      setCurrentPrice(ethPrice); // 只在有效值时更新，保留上次值
     }
+    // 若接口失败，currentPrice 保留上次成功值，不清空
   }, [cryptoPricesRaw]);
 
   const summary = useMemo(() => {
