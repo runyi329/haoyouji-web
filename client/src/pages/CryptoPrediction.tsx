@@ -2805,7 +2805,7 @@ export default function CryptoPrediction() {
                   const elapsedSeconds = startTs > 0 ? Math.max(0, (nowTs - startTs) / 1000) : 0;
                   const perSecond = interestBase && annualRate ? (interestBase * Math.abs(annualRate) / 100) / (365 * 24 * 3600) : 0;
                   const accruedInterest = perSecond * elapsedSeconds;
-                  let unpaidInterest = Math.max(0, accruedInterest - paidInterest);
+                  let unpaidInterest = accruedInterest; // 代付利息=应计总额，与已付利息独立展示，不做减法
                   // 已卖出标记：从 admin_note 中读取 [代付:xxx] 固定代付利息值
                   const _adminNoteForInterest = String(order.admin_note || '');
                   if (_adminNoteForInterest.includes('[已卖出]')) {
