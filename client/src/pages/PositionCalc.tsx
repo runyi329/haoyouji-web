@@ -7,7 +7,7 @@
  */
 import React, { useState, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ChevronLeft, TrendingUp, TrendingDown, RefreshCw, X, Check } from "lucide-react";
+import { ChevronLeft, TrendingUp, TrendingDown, X, Check } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const MIN_PRICE = 1000;
@@ -23,29 +23,6 @@ function generatePriceLevels(): number[] {
 }
 
 const PRICE_LEVELS = generatePriceLevels();
-
-function getDefaultPlanned(): Record<number, number> {
-  const result: Record<number, number> = {};
-  PRICE_LEVELS.forEach(p => {
-    if (p <= 1500) result[p] = 2;
-    else if (p <= 2000) result[p] = 1;
-    else if (p <= 2500) result[p] = 0.5;
-    else result[p] = 0;
-  });
-  return result;
-}
-
-function getDefaultActual(): Record<number, number> {
-  const result: Record<number, number> = {};
-  PRICE_LEVELS.forEach(p => {
-    if (p === 1800) result[p] = 1;
-    else if (p === 1750) result[p] = 0.8;
-    else if (p === 1700) result[p] = 1.2;
-    else if (p === 1650) result[p] = 0.5;
-    else result[p] = 0;
-  });
-  return result;
-}
 
 // 弹窗状态
 interface ModalState {
@@ -366,25 +343,7 @@ export default function PositionCalc() {
         </div>
       </div>
 
-      {/* 说明栏 */}
-      <div className="px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-3 text-xs text-gray-400">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-2 rounded-sm" style={{ background: 'linear-gradient(90deg,#1A56DB,#3B82F6)' }} />
-            已买
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-2 rounded-sm bg-gray-200" />
-            计划
-          </span>
-        </div>
-        <button
-          onClick={() => { setPlanned(getDefaultPlanned()); setActual(getDefaultActual()); }}
-          className="text-xs text-blue-500 flex items-center gap-1"
-        >
-          <RefreshCw className="w-3 h-3" />重置
-        </button>
-      </div>
+
 
       {/* 档位列表：每档一条进度条 */}
       <div className="px-4 space-y-1.5">
