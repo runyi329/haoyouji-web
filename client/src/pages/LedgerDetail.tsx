@@ -789,11 +789,11 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
           const currentValue = liveP !== null ? liveP * buyQty : null;
           // 浮动盈亏 = 当前市値 - 计息基数（正数为浮盈，负数为亏损）
           const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
-          // 风险敞口 = 担保物 + 浮动盈亏 - 待结利息（已结利息独立展示，不参与计算）
+          // 风险敞口 = 担保物 + 浮动盈亏 - 代结利息 + 已结利息
           // 正数表示充足，负数表示缺口
           const exposure = floatPnl !== null
-            ? collateralValue + floatPnl - accrued
-            : collateralValue - accrued;
+            ? collateralValue + floatPnl - accrued + paidInterest
+            : collateralValue - accrued + paidInterest;
           const isSufficient = exposure >= 0;
           const shortfallAmt = -exposure; // 负数表示缺口量（取负得正数）
           return (
