@@ -3016,18 +3016,20 @@ export default function CryptoPrediction() {
                                 const collPrice = financeLivePrices[collCoin] || 0;
                                 const financeType = order.finance_type || '保本分成';
                                 // 担保缺口计算（多笔汇总）
+                                // netOwedInterest = 实际还欠的利息 = 应计总额 - 已付利息（≥0）
+                                const netOwedInterest = Math.max(0, unpaidInterest - paidInterest);
                                 let gap: number | null = null;
                                 if (hasCollateral && allPricesLoaded) {
                                   if (financeType === '保本分成') {
                                     const base = buyValue * 0.24;
-                                    const advancedInterest = isNegativeRate ? unpaidInterest : 0;
+                                    const advancedInterest = isNegativeRate ? netOwedInterest : 0;
                                     const netCollValue = collValue - advancedInterest;
                                     gap = netCollValue - base;
                                   } else {
                                     if (order.coin === 'USDT') {
-                                      gap = collValue - buyValue - unpaidInterest;
+                                      gap = collValue - buyValue - netOwedInterest;
                                     } else if (coinPrice > 0) {
-                                      gap = marketValue + collValue - buyValue - unpaidInterest;
+                                      gap = marketValue + collValue - buyValue - netOwedInterest;
                                     }
                                   }
                                 }
