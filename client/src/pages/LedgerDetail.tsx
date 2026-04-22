@@ -1496,6 +1496,7 @@ import {
   Minus,
   LayoutGrid,
   LayoutList,
+  Calculator,
 } from "lucide-react";
 
 
