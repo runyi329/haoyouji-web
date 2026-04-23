@@ -489,8 +489,8 @@ export default function PositionCalc() {
                         </div>
                       </div>
 
-                      {/* 进度条：目标=深蓝底，实际=亮蓝高光 */}
-                      <div className="relative rounded-full overflow-hidden" style={{ height: '10px', background: 'rgba(99,102,241,0.2)' }}>
+                      {/* 进度条：目标=深蓝底，实际=亮蓝高光，百分比内嵌右端 */}
+                      <div className="relative rounded-full overflow-hidden" style={{ height: '18px', background: 'rgba(99,102,241,0.2)' }}>
                         {/* 目标底条（满宽，深蓝低光） */}
                         <div className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(90deg, rgba(99,102,241,0.35) 0%, rgba(99,102,241,0.15) 100%)' }} />
                         {/* 实际填充（亮蓝高光） */}
@@ -506,24 +506,30 @@ export default function PositionCalc() {
                             }}
                           />
                         )}
+                        {/* 百分比内嵌进度条右端 */}
+                        {targetQty > 0 && (
+                          <div className="absolute right-2 top-0 bottom-0 flex items-center">
+                            <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 0 4px rgba(79,70,229,0.8)' }}>
+                              {(pct * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        )}
                       </div>
-
-                      {/* 百分比 + 离场价行 */}
-                      <div className="flex items-center justify-between mt-1.5">
-                        <span className="text-xs font-bold" style={{ color: pct >= 1 ? '#a5b4fc' : '#818cf8' }}>
-                          {targetQty > 0 ? `${(pct * 100).toFixed(0)}%` : '--'}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          {actualExitPrice > 0 && (
-                            <div className="text-right">
-                              <div className="text-xs" style={{ color: 'rgba(165,180,252,0.5)' }}>实际离场</div>
+                      {/* 离场价对照行：实际离场（左）和目标离场（右） */}
+                      <div className="flex items-start justify-between mt-1.5">
+                        <div>
+                          {actualExitPrice > 0 ? (
+                            <>
+                              <div className="text-xs" style={{ color: 'rgba(165,180,252,0.6)' }}>实际离场</div>
                               <span className="text-xs font-bold" style={{ color: '#a5b4fc' }}>
                                 ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                               </span>
-                            </div>
-                          )}
+                            </>
+                          ) : <span />}
+                        </div>
+                        <div className="text-right">
                           {targetExitPrice > 0 && (
-                            <div className="text-right">
+                            <>
                               <div className="flex items-center gap-0.5 justify-end">
                                 <span className="text-xs" style={{ color: 'rgba(99,102,241,0.5)' }}>目标离场</span>
                                 <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(99,102,241,0.5)', lineHeight: 1 }}>
@@ -533,7 +539,7 @@ export default function PositionCalc() {
                               <span className="text-xs font-bold" style={{ color: '#6366f1' }}>
                                 ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                               </span>
-                            </div>
+                            </>
                           )}
                         </div>
                       </div>
