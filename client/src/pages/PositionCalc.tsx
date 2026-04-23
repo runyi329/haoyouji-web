@@ -496,37 +496,27 @@ export default function PositionCalc() {
                       <div className="relative rounded-full overflow-hidden" style={{ height: '18px', background: 'rgba(99,102,241,0.2)' }}>
                         {/* 目标底条（满宽，深蓝低光） */}
                         <div className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(90deg, rgba(99,102,241,0.35) 0%, rgba(99,102,241,0.15) 100%)' }} />
-                        {/* 实际填充（亮蓝高光） */}
+                        {/* 实际填充（亮蓝高光），内含百分比数字 */}
                         {pct > 0 && (
                           <div
-                            className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
+                            className="absolute top-0 left-0 h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                             style={{
                               width: `${pct * 100}%`,
                               background: pct >= 1
                                 ? 'linear-gradient(90deg, #6366f1 0%, #818cf8 60%, #a5b4fc 100%)'
                                 : 'linear-gradient(90deg, #4f46e5 0%, #6366f1 60%, #818cf8 100%)',
                               boxShadow: '0 0 8px rgba(129,140,248,0.6)',
-                            }}
-                          />
-                        )}
-                        {/* 百分比：跟随实际进度条右边缘移动 */}
-                        {targetQty > 0 && (
-                          <div
-                            className="absolute top-0 bottom-0 flex items-center transition-all duration-500"
-                            style={{
-                              left: `${pct * 100}%`,
-                              transform: pct >= 0.85 ? 'translateX(-100%) translateX(-4px)' : 'translateX(4px)',
+                              minWidth: targetQty > 0 ? '2rem' : '0',
                             }}
                           >
-                            <span
-                              className="text-[10px] font-bold whitespace-nowrap"
-                              style={{
-                                color: pct >= 0.85 ? 'rgba(255,255,255,0.95)' : '#818cf8',
-                                textShadow: pct >= 0.85 ? '0 0 4px rgba(79,70,229,0.8)' : 'none',
-                              }}
-                            >
-                              {(pct * 100).toFixed(0)}%
-                            </span>
+                            {targetQty > 0 && (
+                              <span
+                                className="text-[10px] font-bold whitespace-nowrap"
+                                style={{ color: 'rgba(255,255,255,0.95)', textShadow: '0 0 4px rgba(79,70,229,0.8)' }}
+                              >
+                                {(pct * 100).toFixed(0)}%
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
