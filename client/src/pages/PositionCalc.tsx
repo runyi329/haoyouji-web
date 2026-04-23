@@ -895,21 +895,21 @@ export default function PositionCalc() {
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-xs text-gray-500">公差（0=均匀，越大梯度越大）</span>
-                                <span className="text-xs font-bold" style={{ color: '#3B82F6' }}>{parseFloat(allocArithDiff).toFixed(1)} ETH</span>
+                                <span className="text-xs font-bold" style={{ color: '#3B82F6' }}>{Math.round(parseFloat(allocArithDiff))} ETH</span>
                               </div>
                               <input
                                 type="range"
                                 min="0"
                                 max="10"
-                                step="0.1"
-                                value={allocArithDiff}
-                                onChange={e => setAllocArithDiff(e.target.value)}
+                                step="1"
+                                value={Math.round(parseFloat(allocArithDiff) || 0)}
+                                onChange={e => setAllocArithDiff(String(Math.round(parseFloat(e.target.value))))}
                                 onClick={e => e.stopPropagation()}
                                 className="w-full h-2 rounded-full appearance-none cursor-pointer"
                                 style={{ accentColor: '#3B82F6' }}
                               />
                               <div className="flex justify-between text-[10px] text-gray-300 mt-0.5">
-                                <span>0</span><span>2.5</span><span>5</span><span>7.5</span><span>10</span>
+                                <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span>
                               </div>
                             </div>
                           )}
@@ -936,15 +936,15 @@ export default function PositionCalc() {
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-xs text-gray-500">公比（1.0=均匀，越大梯度越大）</span>
-                                <span className="text-xs font-bold" style={{ color: '#F97316' }}>{parseFloat(allocGeomRatio).toFixed(1)}x</span>
+                                <span className="text-xs font-bold" style={{ color: '#F97316' }}>{(Math.round(parseFloat(allocGeomRatio) * 2) / 2).toFixed(1)}x</span>
                               </div>
                               <input
                                 type="range"
                                 min="1.0"
                                 max="3.0"
-                                step="0.1"
-                                value={allocGeomRatio}
-                                onChange={e => setAllocGeomRatio(e.target.value)}
+                                step="0.5"
+                                value={Math.round(parseFloat(allocGeomRatio) * 2) / 2}
+                                onChange={e => setAllocGeomRatio(String(Math.round(parseFloat(e.target.value) * 2) / 2))}
                                 onClick={e => e.stopPropagation()}
                                 className="w-full h-2 rounded-full appearance-none cursor-pointer"
                                 style={{ accentColor: '#F97316' }}
@@ -1032,13 +1032,16 @@ export default function PositionCalc() {
                               <span className="text-sm font-mono text-gray-500 w-16 flex-shrink-0">${p}</span>
                               <input
                                 type="number"
-                                inputMode="decimal"
+                                inputMode="numeric"
                                 value={allocManualQtys[p] || ''}
-                                onChange={e => setAllocManualQtys(prev => ({ ...prev, [p]: e.target.value }))}
+                                onChange={e => {
+                                  const v = Math.round(parseFloat(e.target.value) || 0);
+                                  setAllocManualQtys(prev => ({ ...prev, [p]: String(v) }));
+                                }}
                                 placeholder="0"
                                 className="flex-1 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-800 outline-none"
                                 style={{ border: '1px solid #E5E7EB', background: '#F9FAFB' }}
-                                step="0.01"
+                                step="1"
                                 min="0"
                               />
                               <span className="text-xs text-gray-400 flex-shrink-0">ETH</span>
