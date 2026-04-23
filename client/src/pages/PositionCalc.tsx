@@ -389,13 +389,25 @@ export default function PositionCalc() {
         <div className="flex-1">
           <div className="text-white font-semibold text-base">ETH 持仓计算</div>
         </div>
-        <button
-          onClick={() => window.location.reload()}
-          className="px-3 py-1 rounded-lg text-sm font-medium"
-          style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
-        >
-          刷新
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setAllocStep('setup');
+              setShowAutoAlloc(true);
+            }}
+            className="px-3 py-1 rounded-lg text-sm font-medium"
+            style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+          >
+            配置
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1 rounded-lg text-sm font-medium"
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }}
+          >
+            刷新
+          </button>
+        </div>
       </div>
 
       {/* 目标止盈利润 */}
@@ -413,17 +425,7 @@ export default function PositionCalc() {
               {/* 标题行 */}
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium tracking-widest" style={{ color: '#e2b96f', letterSpacing: '0.15em' }}>目标止盈利润</span>
-                <button
-                  onClick={() => {
-                    setCnyRateInput(cnyRate.toFixed(4));
-                    setAllocStep('setup');
-                    setShowAutoAlloc(true);
-                  }}
-                  className="p-1 rounded-md"
-                  style={{ background: 'rgba(226,185,111,0.12)' }}
-                >
-                  <Pencil className="w-3.5 h-3.5" style={{ color: 'rgba(226,185,111,0.8)' }} />
-                </button>
+
               </div>
               {/* 主数字区 */}
               <div className="mb-3">
@@ -485,47 +487,7 @@ export default function PositionCalc() {
                           <span className="text-xs ml-1" style={{ color: 'rgba(165,180,252,0.6)' }}>ETH</span>
                         </div>
                         <div className="flex items-end gap-2">
-                          {/* 配置按钮：在目标持仓左边 */}
-                          {targetEthQty && parseFloat(targetEthQty) > 0 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                try {
-                                  const saved = localStorage.getItem(`alloc_config_${ledgerId}`);
-                                  if (saved) {
-                                    const cfg = JSON.parse(saved);
-                                    if (cfg.method) setAllocMethod(cfg.method);
-                                    if (cfg.arithDiff) setAllocArithDiff(cfg.arithDiff);
-                                    if (cfg.geomRatio) setAllocGeomRatio(cfg.geomRatio);
-                                    if (typeof cfg.geomAsc === 'boolean') setAllocGeomAsc(cfg.geomAsc);
-                                    if (typeof cfg.equalAsc === 'boolean') setAllocEqualAsc(cfg.equalAsc);
-                                    if (cfg.normalSigma) setAllocNormalSigma(cfg.normalSigma);
-                                    if (cfg.minPrice) setAllocMinPrice(cfg.minPrice);
-                                    if (cfg.maxPrice) setAllocMaxPrice(cfg.maxPrice);
-                                  }
-                                } catch {}
-                                const hasAlloc = PRICE_LEVELS.some(p => (planned[p] || 0) > 0);
-                                if (hasAlloc) {
-                                  const allocedLevels = PRICE_LEVELS.filter(p => (planned[p] || 0) > 0);
-                                  if (allocedLevels.length > 0) {
-                                    const detectedMin = Math.min(...allocedLevels);
-                                    const detectedMax = Math.max(...allocedLevels);
-                                    setAllocMinPrice(String(detectedMin));
-                                    setAllocMaxPrice(String(detectedMax));
-                                    const preview: Record<number, number> = {};
-                                    allocedLevels.forEach(p => { preview[p] = planned[p] || 0; });
-                                    setAllocPreview(preview);
-                                  }
-                                  setAllocStep('preview');
-                                } else {
-                                  setAllocStep('range');
-                                }
-                                setShowAutoAlloc(true);
-                              }}
-                              className="px-1.5 py-0.5 rounded font-semibold self-end mb-0.5"
-                              style={{ background: 'rgba(98,126,234,0.18)', color: '#818cf8', border: '1px solid rgba(98,126,234,0.35)', fontSize: '10px' }}
-                            >配置</button>
-                          )}
+
                           <div className="text-right">
                             <div className="text-xs mb-0.5" style={{ color: 'rgba(98,126,234,0.5)' }}>目标持仓</div>
                             <span className="text-lg font-semibold" style={{ color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
@@ -960,27 +922,25 @@ export default function PositionCalc() {
                   <X className="w-4 h-4 text-gray-400" />
                 </button>
               </div>
-              {/* 步骤指示器（setup步骤不显示） */}
-              {allocStep !== 'setup' && (
-                <div className="flex items-center px-5 py-3 gap-2">
-                  {(['range', 'method', 'preview'] as const).map((step, i) => (
-                    <React.Fragment key={step}>
-                      <div className="flex items-center gap-1">
-                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
-                          style={{
-                            background: allocStep === step ? '#1A56DB' : (i < ['range','method','preview'].indexOf(allocStep) ? '#10B981' : '#E5E7EB'),
-                            color: allocStep === step || i < ['range','method','preview'].indexOf(allocStep) ? 'white' : '#9CA3AF'
-                          }}
-                        >{i + 1}</div>
-                        <span className="text-xs" style={{ color: allocStep === step ? '#1A56DB' : '#9CA3AF' }}>
-                          {step === 'range' ? '区间' : step === 'method' ? '方式' : '预览'}
-                        </span>
-                      </div>
-                      {i < 2 && <div className="flex-1 h-px bg-gray-200" />}
-                    </React.Fragment>
-                  ))}
-                </div>
-              )}
+              {/* 步骤指示器 */}
+              <div className="flex items-center px-5 py-3 gap-2">
+                {(['setup', 'method', 'preview'] as const).map((step, i) => (
+                  <React.Fragment key={step}>
+                    <div className="flex items-center gap-1">
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{
+                          background: allocStep === step ? '#1A56DB' : (i < ['setup','method','preview'].indexOf(allocStep) ? '#10B981' : '#E5E7EB'),
+                          color: allocStep === step || i < ['setup','method','preview'].indexOf(allocStep) ? 'white' : '#9CA3AF'
+                        }}
+                      >{i + 1}</div>
+                      <span className="text-xs" style={{ color: allocStep === step ? '#1A56DB' : '#9CA3AF' }}>
+                        {step === 'setup' ? '目标' : step === 'method' ? '分配' : '预览'}
+                      </span>
+                    </div>
+                    {i < 2 && <div className="flex-1 h-px bg-gray-200" />}
+                  </React.Fragment>
+                ))}
+              </div>
               {/* 内容区 */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-4">
                 {/* 步骤 0：目标止盈 + 持仓数量联动 */}
@@ -1081,18 +1041,67 @@ export default function PositionCalc() {
                         </div>
                       )}
                       {/* 保存并继续按钮 */}
+                      {/* 价格区间选择（合并进 setup 步骤） */}
+                      {(() => {
+                        const SLIDER_MIN = 1000;
+                        const SLIDER_MAX = 3500;
+                        const SLIDER_STEP = 50;
+                        const minVal2 = parseFloat(allocMinPrice) || SLIDER_MIN;
+                        const maxVal2 = parseFloat(allocMaxPrice) || SLIDER_MAX;
+                        const minPct2 = ((minVal2 - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+                        const maxPct2 = ((maxVal2 - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+                        const allocLevels2 = PRICE_LEVELS.filter(p => p >= minVal2 && p <= maxVal2);
+                        return (
+                          <div className="mb-5">
+                            <div className="text-sm font-semibold text-gray-700 mb-3">买入价格区间</div>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="text-center">
+                                <div className="text-xs text-gray-400 mb-0.5">最低价</div>
+                                <div className="text-lg font-bold text-blue-600">${minVal2.toLocaleString()}</div>
+                              </div>
+                              <div className="flex-1 mx-3 text-center">
+                                <div className="text-xs text-gray-400">{allocLevels2.length > 0 ? allocLevels2.length : '--'} 个档位</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-xs text-gray-400 mb-0.5">最高价</div>
+                                <div className="text-lg font-bold text-blue-600">${maxVal2.toLocaleString()}</div>
+                              </div>
+                            </div>
+                            <div className="relative mx-1 dual-range" style={{ height: '44px' }}>
+                              <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', background: '#E5E7EB' }} />
+                              <div className="absolute top-1/2 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', left: `${minPct2}%`, right: `${100 - maxPct2}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
+                              <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={minVal2}
+                                onChange={e => setAllocMinPrice(String(Math.min(parseInt(e.target.value), maxVal2 - SLIDER_STEP)))}
+                                className="absolute w-full appearance-none bg-transparent cursor-pointer"
+                                style={{ top: '50%', transform: 'translateY(-50%)', height: '44px', zIndex: 3, clipPath: `inset(0 ${100 - (minPct2 + maxPct2) / 2}% 0 0)` }}
+                              />
+                              <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={maxVal2}
+                                onChange={e => setAllocMaxPrice(String(Math.max(parseInt(e.target.value), minVal2 + SLIDER_STEP)))}
+                                className="absolute w-full appearance-none bg-transparent cursor-pointer"
+                                style={{ top: '50%', transform: 'translateY(-50%)', height: '44px', zIndex: 4, clipPath: `inset(0 0 0 ${(minPct2 + maxPct2) / 2}%)` }}
+                              />
+                            </div>
+                            <div className="flex justify-between mt-1 px-0.5">
+                              <span className="text-xs text-gray-300">$1000</span>
+                              <span className="text-xs text-gray-300">$1750</span>
+                              <span className="text-xs text-gray-300">$2500</span>
+                              <span className="text-xs text-gray-300">$3500</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       <button
                         onClick={() => {
-                          // 保存到数据库
                           if (ledgerId > 0) {
                             saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0 });
                           }
-                          setAllocStep('range');
+                          setAllocStep('method');
                         }}
-                        className="w-full py-3 rounded-xl text-sm font-bold text-white mb-3"
+                        disabled={parseFloat(targetEthQty) <= 0 || !targetProfitCny}
+                        className="w-full py-3 rounded-xl text-sm font-bold text-white mb-3 disabled:opacity-40"
                         style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
                       >
-                        保存并继续配置分配
+                        下一步：选择分配方式
                       </button>
                       <button
                         onClick={() => {
