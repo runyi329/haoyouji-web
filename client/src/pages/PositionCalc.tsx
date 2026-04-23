@@ -591,7 +591,7 @@ export default function PositionCalc() {
                             {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice ? (
                               <>
                                 <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>实际需要涨幅</div>
-                                <span className="text-sm font-bold font-mono" style={{ color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
+                                <span className="text-xl font-bold font-mono" style={{ color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
                                   +{((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100).toFixed(1)}%
                                 </span>
                               </>
@@ -601,7 +601,7 @@ export default function PositionCalc() {
                             {targetAvgPrice > 0 && targetExitPrice > targetAvgPrice ? (
                               <>
                                 <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>目标需要涨幅</div>
-                                <span className="text-sm font-bold font-mono" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums' }}>
+                                <span className="text-xl font-bold font-mono" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums' }}>
                                   +{((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%
                                 </span>
                               </>
