@@ -450,7 +450,7 @@ export default function PositionCalc() {
               {/* 主数字区：左右两栏 */}
               <div className="flex items-start gap-0 mb-3">
                 {/* 左栏：目标止盈利润 */}
-                <div className="flex-1 pr-4 pt-1">
+                <div className="flex-1 pr-4">
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold" style={{ color: '#f5e27a', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 20px rgba(212,175,55,0.5)' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
