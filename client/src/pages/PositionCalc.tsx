@@ -1421,22 +1421,10 @@ export default function PositionCalc() {
               {/* 基础参数 */}
               {profitCny > 0 && (
                 <div className="rounded-xl p-4 mb-3" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
-                  <div className="text-xs font-semibold text-blue-600 mb-3 tracking-wide">基础参数</div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">目标均价</span>
-                      <span className="font-semibold text-gray-800">{targetAvgForModal > 0 ? `$${targetAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}</span>
-                    </div>
-                    {actualAvgForModal > 0 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">实际均价</span>
-                      <span className="font-semibold text-gray-800">${actualAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                    </div>
-                    )}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">目标利润</span>
-                      <span className="font-semibold text-gray-800">¥{profitCny.toLocaleString('zh-CN')} ≈ {profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</span>
-                    </div>
+                  <div className="text-xs font-semibold text-blue-600 mb-2 tracking-wide">目标利润</div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">¥{profitCny.toLocaleString('zh-CN')}</span>
+                    <span className="font-semibold text-gray-800">≈ {profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</span>
                   </div>
                 </div>
               )}
@@ -1452,14 +1440,22 @@ export default function PositionCalc() {
                       </div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-gray-500">持仓数量</span>
-                        <span className="text-sm font-semibold text-gray-800">{ethQty.toFixed(2)} ETH</span>
+                        <span className="text-sm font-semibold text-gray-800">{ethQty.toFixed(0)} ETH</span>
                       </div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-500">需涨幅度</span>
-                        <span className="text-sm font-semibold" style={{ color: '#f97316' }}>+${(profitUsdt / ethQty).toLocaleString('en-US', { maximumFractionDigits: 0 })} / ETH</span>
+                        <span className="text-sm text-gray-500">持仓均价</span>
+                        <span className="text-sm font-semibold text-gray-800">{targetAvgForModal > 0 ? `$${targetAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}</span>
+                      </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-500">每币需涨</span>
+                        <span className="text-sm font-semibold" style={{ color: '#f97316' }}>+${(profitUsdt / ethQty).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      {/* 公式推导 */}
+                      <div className="rounded-lg px-3 py-2 mb-2 text-xs font-mono text-orange-700" style={{ background: 'rgba(251,146,60,0.1)' }}>
+                        {targetAvgForModal > 0 ? `$${targetAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '均价'} + {profitUsdt > 0 ? `${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '利润'} ÷ {ethQty.toFixed(0)} = <span className="font-bold">${exitPrice ? exitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}</span>
                       </div>
                       <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid #FED7AA' }}>
-                        <span className="text-sm font-semibold text-gray-700">目标离场价</span>
+                        <span className="text-sm font-semibold text-gray-700">目标止盈价</span>
                         <span className="text-xl font-bold" style={{ color: '#f97316' }}>
                           ${exitPrice ? exitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
                         </span>
@@ -1475,14 +1471,22 @@ export default function PositionCalc() {
                       </div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-gray-500">持仓数量</span>
-                        <span className="text-sm font-semibold text-gray-800">{actualEthQty.toFixed(2)} ETH</span>
+                        <span className="text-sm font-semibold text-gray-800">{actualEthQty.toFixed(0)} ETH</span>
                       </div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-500">需涨幅度</span>
-                        <span className="text-sm font-semibold" style={{ color: '#16a34a' }}>+${(profitUsdt / actualEthQty).toLocaleString('en-US', { maximumFractionDigits: 0 })} / ETH</span>
+                        <span className="text-sm text-gray-500">持仓均价</span>
+                        <span className="text-sm font-semibold text-gray-800">{actualAvgForModal > 0 ? `$${actualAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}</span>
+                      </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-gray-500">每币需涨</span>
+                        <span className="text-sm font-semibold" style={{ color: '#16a34a' }}>+${(profitUsdt / actualEthQty).toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      {/* 公式推导 */}
+                      <div className="rounded-lg px-3 py-2 mb-2 text-xs font-mono text-green-700" style={{ background: 'rgba(34,197,94,0.1)' }}>
+                        {actualAvgForModal > 0 ? `$${actualAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '均价'} + {profitUsdt > 0 ? `${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '利润'} ÷ {actualEthQty.toFixed(0)} = <span className="font-bold">${actualExitPrice ? actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}</span>
                       </div>
                       <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid #BBF7D0' }}>
-                        <span className="text-sm font-semibold text-gray-700">目标离场价</span>
+                        <span className="text-sm font-semibold text-gray-700">实际止盈价</span>
                         <span className="text-xl font-bold" style={{ color: '#16a34a' }}>
                           ${actualExitPrice ? actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
                         </span>
