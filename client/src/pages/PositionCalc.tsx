@@ -678,10 +678,12 @@ export default function PositionCalc() {
 
       {/* 目标离场价说明弹窗 */}
       {showExitPriceInfo && (() => {
-        const ethQty = parseFloat(targetEthQty) || 0;
+        const ethQty = parseFloat(targetEthQty) || 0;  // 计划持仓数量
+        const actualEthQty = summary.totalQty;           // 实际持仓数量
         const profitCny = parseFloat(targetProfitCny) || 0;
         const profitUsdt = cnyRate > 0 ? profitCny / cnyRate : 0;
         const exitPrice = currentPrice && ethQty > 0 ? currentPrice + profitUsdt / ethQty : null;
+        const actualExitPrice = currentPrice && actualEthQty > 0 ? currentPrice + profitUsdt / actualEthQty : null;
         return (
           <div
             className="fixed inset-0 z-50 flex items-end justify-center"
@@ -723,39 +725,79 @@ export default function PositionCalc() {
                 <p className="text-gray-400 text-xs">即：每涨 $1，持仓盈利 = 持仓数量 × $1。因此涨幅 = 目标利润 ÷ 持仓数量。</p>
               </div>
 
-              {/* 当前数值展示 */}
-              {ethQty > 0 && profitCny > 0 && currentPrice && (
-                <div className="rounded-xl p-4" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
-                  <div className="text-xs font-semibold text-blue-600 mb-3 tracking-wide">当前参数代入</div>
+              {/* 基础参数 */}
+              {profitCny > 0 && currentPrice && (
+                <div className="rounded-xl p-4 mb-3" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+                  <div className="text-xs font-semibold text-blue-600 mb-3 tracking-wide">基础参数</div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500">当前 ETH 价</span>
                       <span className="font-semibold text-gray-800">${currentPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">目标利润（CNY）</span>
-                      <span className="font-semibold text-gray-800">¥{profitCny.toLocaleString('zh-CN')}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">目标利润（USDT）</span>
-                      <span className="font-semibold text-gray-800">{profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">目标持仓</span>
-                      <span className="font-semibold text-gray-800">{ethQty.toFixed(2)} ETH</span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">需涨幅度</span>
-                      <span className="font-semibold" style={{ color: '#f97316' }}>+${(profitUsdt / ethQty).toLocaleString('en-US', { maximumFractionDigits: 0 })} / ETH</span>
-                    </div>
-                    <div className="h-px" style={{ background: '#BAE6FD' }} />
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-semibold text-gray-700">目标离场价</span>
-                      <span className="text-lg font-bold" style={{ color: '#f97316' }}>
-                        ${exitPrice ? exitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
-                      </span>
+                      <span className="text-gray-500">目标利润</span>
+                      <span className="font-semibold text-gray-800">¥{profitCny.toLocaleString('zh-CN')} ≈ {profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</span>
                     </div>
                   </div>
+                </div>
+              )}
+              {/* 计划持仓 vs 实际持仓 对比 */}
+              {profitCny > 0 && currentPrice && (ethQty > 0 || actualEthQty > 0) && (
+                <div className="space-y-2">
+                  {/* 计划持仓 */}
+                  {ethQty > 0 && (
+                    <div className="rounded-xl p-4" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                        <span className="text-xs font-semibold text-orange-600 tracking-wide">计划持仓</span>
+                      </div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-500">持仓数量</span>
+                        <span className="text-sm font-semibold text-gray-800">{ethQty.toFixed(2)} ETH</span>
+                      </div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-500">需涨幅度</span>
+                        <span className="text-sm font-semibold" style={{ color: '#f97316' }}>+${(profitUsdt / ethQty).toLocaleString('en-US', { maximumFractionDigits: 0 })} / ETH</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid #FED7AA' }}>
+                        <span className="text-sm font-semibold text-gray-700">目标离场价</span>
+                        <span className="text-xl font-bold" style={{ color: '#f97316' }}>
+                          ${exitPrice ? exitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {/* 实际持仓 */}
+                  {actualEthQty > 0 ? (
+                    <div className="rounded-xl p-4" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        <span className="text-xs font-semibold text-green-600 tracking-wide">实际持仓</span>
+                      </div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-500">持仓数量</span>
+                        <span className="text-sm font-semibold text-gray-800">{actualEthQty.toFixed(2)} ETH</span>
+                      </div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm text-gray-500">需涨幅度</span>
+                        <span className="text-sm font-semibold" style={{ color: '#16a34a' }}>+${(profitUsdt / actualEthQty).toLocaleString('en-US', { maximumFractionDigits: 0 })} / ETH</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid #BBF7D0' }}>
+                        <span className="text-sm font-semibold text-gray-700">目标离场价</span>
+                        <span className="text-xl font-bold" style={{ color: '#16a34a' }}>
+                          ${actualExitPrice ? actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl p-4" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <div className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                        <span className="text-xs font-semibold text-gray-400 tracking-wide">实际持仓</span>
+                      </div>
+                      <div className="text-sm text-gray-400">暂无实际买入记录</div>
+                    </div>
+                  )}
                 </div>
               )}
 
