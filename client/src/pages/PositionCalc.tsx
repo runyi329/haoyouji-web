@@ -66,6 +66,7 @@ export default function PositionCalc() {
   const [allocArithDiff, setAllocArithDiff] = useState<string>('1'); // 等差公差
   const [allocEqualAsc, setAllocEqualAsc] = useState(false); // 等差：false=越低越多（默认），true=越高越多
   const [allocGeomAsc, setAllocGeomAsc] = useState(false); // 等比：false=越低越多（默认），true=越高越多
+  const [allocNormalSigma, setAllocNormalSigma] = useState<string>('4'); // 正态分布集中度：1=极度集中，10=趋向均匀
   const [allocManualQtys, setAllocManualQtys] = useState<Record<number, string>>({}); // 手动分配数量
   const [allocPreview, setAllocPreview] = useState<Record<number, number>>({}); // 预览分配结果
 
@@ -110,7 +111,9 @@ export default function PositionCalc() {
     } else if (method === 'normal') {
       // 正态分布：中间价格区间买最多，两端买最少
       const mid = (n - 1) / 2;
-      const sigma = n / 4; // 标准差：覆盖整个区间
+      // sigma 用户可调：1=极度集中在中心，10=趋向均匀；将用户输入值映射为实际 sigma
+      const sigmaLevel = Math.max(1, Math.min(10, parseFloat(allocNormalSigma) || 4));
+      const sigma = (n / 2) * (sigmaLevel / 10); // sigmaLevel=1 时 sigma=n/20（极度集中），sigmaLevel=10 时 sigma=n/2（趋向均匀）
       const weights = levels.map((_, i) => Math.exp(-0.5 * Math.pow((i - mid) / sigma, 2)));
       const totalW = weights.reduce((s, w) => s + w, 0);
       let sum = 0;
@@ -1017,8 +1020,25 @@ export default function PositionCalc() {
                           <div className="text-sm font-semibold text-gray-800">正态分布</div>
                           <div className="text-xs text-gray-400 mt-0.5">中间价格区间买最多，两端价格区间买最少</div>
                           {allocMethod === 'normal' && (
-                            <div className="mt-2 text-xs text-purple-500">
-                              按高斯曲线分布，价格区间中心仙位分配最多，向两端递减
+                            <div className="mt-2" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-500">集中度（1=极度集中，10=趋向均匀）</span>
+                                <span className="text-xs font-bold" style={{ color: '#8B5CF6' }}>{Math.round(parseFloat(allocNormalSigma) || 4)}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="1"
+                                max="10"
+                                step="1"
+                                value={Math.round(parseFloat(allocNormalSigma) || 4)}
+                                onChange={e => setAllocNormalSigma(String(Math.round(parseFloat(e.target.value))))}
+                                onClick={e => e.stopPropagation()}
+                                className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                                style={{ accentColor: '#8B5CF6' }}
+                              />
+                              <div className="flex justify-between text-[10px] text-gray-300 mt-0.5">
+                                <span>极集中</span><span>3</span><span>5</span><span>7</span><span>9</span><span>均匀</span>
+                              </div>
                             </div>
                           )}
                         </div>
