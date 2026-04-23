@@ -786,33 +786,20 @@ export default function PositionCalc() {
         </div>
       </div>
 
-      {/* 档位列表：精细单条进度条风格 */}
-      <div className="px-3 space-y-1">
+      {/* 档位列表：每档一条进度条 */}
+      <div className="px-4 space-y-1.5">
         {visibleLevels.map(price => {
           const planQty = planned[price] || 0;
           const actualQty = actual[price] || 0;
-          // 计划量占最大计划量的百分比（全宽背景色块）
+          // 计划量占最大计划量的百分比（用于进度条背景宽度）
           const planPct = planQty > 0 ? Math.max(Math.round(planQty / maxPlannedQty * 100), 8) : 100;
-          // 实际占计划的百分比（用于中间单条进度）
+          // 已买占计划的百分比；若无计划但有实际，显示满格
           const actualPct = planQty > 0
             ? Math.min((actualQty / planQty) * 100, 100)
             : (actualQty > 0 ? 100 : 0);
           const isNearCurrent = currentPrice && Math.abs(price - currentPrice) <= 25;
-          const isBelowCurrent = currentPrice ? price < currentPrice : false;
-          const isCurrentPrice = currentPrice && Math.abs(price - currentPrice) <= 25;
+          const isBelowCurrent = currentPrice ? price <= currentPrice : false;
           const isFullyBought = planQty > 0 && actualQty >= planQty;
-          const hasAny = planQty > 0 || actualQty > 0;
-
-          // 卡片背景色：已买档位用深色背景，未买用深灰
-          const cardBg = isCurrentPrice
-            ? 'linear-gradient(90deg, rgba(212,175,55,0.18) 0%, rgba(22,18,6,0.96) 60%)'
-            : isFullyBought
-              ? 'linear-gradient(90deg, rgba(16,120,80,0.45) 0%, rgba(10,30,20,0.92) 55%)'
-              : actualQty > 0
-                ? 'linear-gradient(90deg, rgba(160,30,30,0.42) 0%, rgba(18,10,10,0.92) 55%)'
-                : isBelowCurrent
-                  ? 'rgba(22,18,10,0.88)'
-                  : 'rgba(22,22,30,0.72)';
 
           return (
             <button
@@ -820,138 +807,79 @@ export default function PositionCalc() {
               onClick={() => openModal(price)}
               className="w-full block"
             >
+              {/* 进度条容器 */}
               <div
-                className="relative overflow-hidden transition-all duration-200 active:scale-[0.985]"
+                className="relative h-8 rounded-lg overflow-hidden transition-all duration-200 active:scale-[0.98]"
                 style={{
-                  height: '42px',
-                  borderRadius: '12px',
-                  background: cardBg,
-                  border: isCurrentPrice
-                    ? '1px solid rgba(212,175,55,0.5)'
-                    : isFullyBought
-                      ? '1px solid rgba(52,211,153,0.2)'
-                      : actualQty > 0
-                        ? '1px solid rgba(239,68,68,0.18)'
-                        : '1px solid rgba(255,255,255,0.04)',
-                  boxShadow: isCurrentPrice
-                    ? '0 0 14px rgba(212,175,55,0.2), inset 0 1px 0 rgba(212,175,55,0.1)'
-                    : isFullyBought
-                      ? '0 0 8px rgba(52,211,153,0.12)'
-                      : 'none',
+                  background: '#F3F4F6',
+                  boxShadow: isNearCurrent ? '0 0 0 2px #3B82F6' : 'none',
                 }}
               >
-                {/* 计划量背景宽度块（金色半透明，反映该档计划数量相对大小） */}
+                {/* 计划量背景宽度（灰色，反映该档计划数量相对大小） */}
                 {planQty > 0 && (
                   <div
-                    className="absolute left-0 top-0 h-full transition-all duration-500"
+                    className="absolute left-0 top-0 h-full transition-all duration-300"
+                    style={{ width: `${planPct}%`, background: 'linear-gradient(90deg, #CBA471, #E2B96F)' }}
+                  />
+                )}
+                {/* 已买填充（蓝色） */}
+                {actualQty > 0 && (
+                  <div
+                    className="absolute left-0 top-0 h-full transition-all duration-300"
                     style={{
-                      width: `${planPct}%`,
-                      background: 'linear-gradient(90deg, rgba(212,175,55,0.13) 0%, rgba(212,175,55,0.03) 100%)',
+                      width: `${actualPct}%`,
+                      background: isFullyBought
+                        ? 'linear-gradient(90deg, #047857, #059669)'  // 满仓翠绿
+                        : 'linear-gradient(90deg, #B71C1C, #D32F2F)',
+                      minWidth: '4px',
                     }}
                   />
                 )}
 
-                {/* 内容层 */}
+                {/* 价格文字（叠加在进度条上，始终可见） */}
                 <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
-                  {/* 左：价格 + NOW标签 */}
-                  <div className="flex items-center gap-1.5" style={{ minWidth: '80px' }}>
+                  <span
+                    className="text-xs font-bold tabular-nums"
+                    style={{
+                      color: actualPct > 30
+                        ? 'rgba(255,255,255,0.95)'
+                        : (isBelowCurrent ? '#374151' : '#9CA3AF'),
+                      textShadow: actualPct > 30 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
+                    }}
+                  >
+                    ${price.toLocaleString()}
+                  </span>
+                  {isNearCurrent && (
                     <span
-                      className="font-bold font-mono tabular-nums"
+                      className="ml-1.5 text-[10px] font-semibold px-1 py-0.5 rounded"
                       style={{
-                        fontSize: '15px',
-                        letterSpacing: '-0.01em',
-                        color: isCurrentPrice
-                          ? '#f5e27a'
-                          : isFullyBought
-                            ? '#6ee7b7'
-                            : actualQty > 0
-                              ? '#fca5a5'
-                              : isBelowCurrent
-                                ? 'rgba(240,230,192,0.85)'
-                                : 'rgba(200,195,180,0.38)',
+                        background: 'rgba(59,130,246,0.15)',
+                        color: actualPct > 30 ? 'rgba(255,255,255,0.9)' : '#3B82F6',
                       }}
                     >
-                      {price.toLocaleString()}
+                      ↑当前
                     </span>
-                    {isCurrentPrice && (
-                      <span
-                        className="font-bold"
-                        style={{
-                          fontSize: '9px',
-                          padding: '1px 4px',
-                          borderRadius: '4px',
-                          background: 'rgba(212,175,55,0.28)',
-                          color: '#f5e27a',
-                          border: '1px solid rgba(212,175,55,0.45)',
-                          letterSpacing: '0.04em',
-                        }}
-                      >
-                        NOW
-                      </span>
-                    )}
-                  </div>
-
-                  {/* 中：单条粗进度条 */}
-                  <div className="flex-1 mx-3">
-                    <div
-                      className="w-full rounded-full overflow-hidden"
-                      style={{ height: '5px', background: 'rgba(255,255,255,0.07)' }}
-                    >
-                      {/* 计划量底色（金色淡） */}
-                      {planQty > 0 && (
-                        <div
-                          className="absolute rounded-full"
-                          style={{
-                            height: '5px',
-                            width: `${planPct}%`,
-                            background: 'rgba(212,175,55,0.25)',
-                            top: 0, left: 0,
-                          }}
-                        />
-                      )}
-                      {/* 实际买入覆盖层（红/绿，宽度=计划宽度×实际比例） */}
-                      {hasAny && (
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{
-                            width: planQty > 0
-                              ? `${planPct * actualPct / 100}%`
-                              : (actualQty > 0 ? '35%' : '0%'),
-                            background: isFullyBought
-                              ? 'linear-gradient(90deg, #34d399, #10b981)'
-                              : actualQty > 0
-                                ? 'linear-gradient(90deg, #f87171, #ef4444)'
-                                : 'transparent',
-                            minWidth: actualQty > 0 ? '4px' : '0',
-                          }}
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 右：数量 */}
-                  <div className="text-right" style={{ minWidth: '64px' }}>
-                    {hasAny ? (
-                      <span className="font-mono tabular-nums" style={{ fontSize: '13px' }}>
-                        {actualQty > 0 && (
-                          <span style={{ color: isFullyBought ? '#34d399' : '#f87171', fontWeight: 600 }}>
-                            {actualQty % 1 === 0 ? actualQty.toFixed(0) : actualQty.toFixed(2)}
-                          </span>
-                        )}
-                        {planQty > 0 && actualQty > 0 && (
-                          <span style={{ color: 'rgba(212,175,55,0.35)', fontWeight: 400 }}>/</span>
-                        )}
-                        {planQty > 0 && (
-                          <span style={{ color: 'rgba(212,175,55,0.6)', fontWeight: 500 }}>
-                            {planQty % 1 === 0 ? planQty.toFixed(0) : planQty.toFixed(2)}
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <span style={{ color: 'rgba(255,255,255,0.08)', fontSize: '11px' }}>—</span>
-                    )}
-                  </div>
+                  )}
                 </div>
+
+                {/* 右侧数量标注 */}
+                {(planQty > 0 || actualQty > 0) && (
+                  <div className="absolute right-3 top-0 h-full flex items-center pointer-events-none">
+                    <span
+                      className="text-[11px] font-medium tabular-nums"
+                      style={{
+                        color: actualPct > 70
+                          ? 'rgba(255,255,255,0.9)'
+                          : '#6B7280',
+                        textShadow: actualPct > 70 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
+                      }}
+                    >
+                      {actualQty > 0 ? actualQty.toFixed(2) : ''}
+                      {planQty > 0 && actualQty > 0 ? <span style={{ opacity: 0.6 }}>/</span> : ''}
+                      {planQty > 0 && <span style={{ opacity: actualQty > 0 ? 0.6 : 1 }}>{planQty.toFixed(2)}</span>}
+                    </span>
+                  </div>
+                )}
               </div>
             </button>
           );
@@ -959,8 +887,8 @@ export default function PositionCalc() {
       </div>
 
       {/* 底部提示 */}
-      <div className="px-4 pt-3 pb-2 text-center" style={{ color: 'rgba(212,175,55,0.2)', fontSize: '10px', letterSpacing: '0.05em' }}>
-        $1,000 — $3,500 · 每50档 · 共50档
+      <div className="px-4 pt-4 pb-2 text-center text-xs text-gray-300">
+        价格范围 $1,000 ~ $3,500 · 每50元一档 · 共50档
       </div>
 
       {/* 汇总卡片编辑弹窗 */}
