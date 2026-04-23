@@ -850,7 +850,7 @@ export default function PositionCalc() {
                       textShadow: actualPct > 30 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
                     }}
                   >
-                    ${price.toLocaleString()}
+                    {price.toLocaleString()}
                   </span>
                   {isNearCurrent && (
                     <svg
