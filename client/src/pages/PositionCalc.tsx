@@ -251,6 +251,11 @@ export default function PositionCalc() {
       hasData(p) || (p >= nearPrice - 500 && p <= nearPrice + 500)
     );
   }, [planned, actual, currentPrice]);
+  // 所有档位中最大的计划数量，用于进度条背景宽度比例
+  const maxPlannedQty = useMemo(() => {
+    const vals = PRICE_LEVELS.map(p => planned[p] || 0);
+    return Math.max(...vals, 1);
+  }, [planned]);
 
   // 汇总卡片编辑确认
   const confirmSummaryEdit = () => {
@@ -662,6 +667,8 @@ export default function PositionCalc() {
         {visibleLevels.map(price => {
           const planQty = planned[price] || 0;
           const actualQty = actual[price] || 0;
+          // 计划量占最大计划量的百分比（用于进度条背景宽度）
+          const planPct = planQty > 0 ? Math.max(Math.round(planQty / maxPlannedQty * 100), 8) : 100;
           // 已买占计划的百分比；若无计划但有实际，显示满格
           const actualPct = planQty > 0
             ? Math.min((actualQty / planQty) * 100, 100)
@@ -680,10 +687,17 @@ export default function PositionCalc() {
               <div
                 className="relative h-8 rounded-lg overflow-hidden transition-all duration-200 active:scale-[0.98]"
                 style={{
-                  background: planQty > 0 ? '#E5E7EB' : '#F3F4F6',
+                  background: '#F3F4F6',
                   boxShadow: isNearCurrent ? '0 0 0 2px #3B82F6' : 'none',
                 }}
               >
+                {/* 计划量背景宽度（灰色，反映该档计划数量相对大小） */}
+                {planQty > 0 && (
+                  <div
+                    className="absolute left-0 top-0 h-full transition-all duration-300"
+                    style={{ width: `${planPct}%`, background: '#E5E7EB' }}
+                  />
+                )}
                 {/* 已买填充（蓝色） */}
                 {actualQty > 0 && (
                   <div
