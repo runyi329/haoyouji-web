@@ -537,10 +537,45 @@ export default function PositionCalc() {
                           )}
                         </div>
                       </div>
+                      {/* 均价对照行 */}
+                      {(() => {
+                        // 目标均价：按计划数量加权均价
+                        let planCost = 0, planQtyTotal = 0;
+                        PRICE_LEVELS.forEach(p => {
+                          const q = planned[p] || 0;
+                          if (q > 0) { planCost += q * p; planQtyTotal += q; }
+                        });
+                        const targetAvg = planQtyTotal > 0 ? planCost / planQtyTotal : 0;
+                        // 实际均价：按实际买入数量加权均价
+                        let actCost = 0, actQtyTotal = 0;
+                        PRICE_LEVELS.forEach(p => {
+                          const q = actual[p] || 0;
+                          if (q > 0) { actCost += q * p; actQtyTotal += q; }
+                        });
+                        const actualAvg = actQtyTotal > 0 ? actCost / actQtyTotal : 0;
+                        if (targetAvg === 0 && actualAvg === 0) return null;
+                        return (
+                          <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: '1px solid rgba(99,102,241,0.15)' }}>
+                            <div>
+                              <div className="text-xs mb-0.5" style={{ color: 'rgba(129,140,248,0.6)' }}>实际均价</div>
+                              <span className="text-sm font-bold" style={{ color: '#a5b4fc', fontVariantNumeric: 'tabular-nums' }}>
+                                {actualAvg > 0 ? `$${actualAvg.toFixed(0)}` : '--'}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs mb-0.5" style={{ color: 'rgba(99,102,241,0.5)' }}>目标均价</div>
+                              <span className="text-sm font-bold" style={{ color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
+                                {targetAvg > 0 ? `$${targetAvg.toFixed(0)}` : '--'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
-                })()}
-              </div>
+                })()
+              }
+            </div>
                             {/* 汇率行 */}
               <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>USD/CNY</span>
