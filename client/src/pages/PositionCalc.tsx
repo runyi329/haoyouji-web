@@ -476,19 +476,17 @@ export default function PositionCalc() {
                 </div>
                 {/* 竖分割线 */}
                 <div className="w-px self-stretch" style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(212,175,55,0.3) 20%, rgba(212,175,55,0.3) 80%, transparent 100%)' }} />
-                {/* 右栏：ETH价格 + 汇率 */}
-                <div className="pl-4 flex flex-col justify-center gap-2">
+                {/* 右栏：ETH/USDT + USDT/CNY */}
+                <div className="pl-4 flex flex-col justify-center gap-3">
                   <div>
-                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH 实时</div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-bold" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                        {currentPrice ? `$${currentPrice.toFixed(0)}` : '--'}
-                      </span>
+                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH/USDT</div>
+                    <div className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                      {currentPrice ? currentPrice.toFixed(0) : '--'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>USD/CNY</div>
-                    <div className="text-sm font-mono font-semibold" style={{ color: 'rgba(255,255,255,0.6)' }}>{cnyRate.toFixed(4)}</div>
+                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>USDT/CNY</div>
+                    <div className="text-xl font-bold font-mono" style={{ color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>{cnyRate.toFixed(4)}</div>
                   </div>
                 </div>
               </div>
