@@ -7,7 +7,7 @@
  */
 import React, { useState, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ChevronLeft, TrendingUp, TrendingDown, X, Check, Pencil } from "lucide-react";
+import { ChevronLeft, TrendingUp, TrendingDown, X, Check, Pencil, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const MIN_PRICE = 1000;
@@ -55,6 +55,7 @@ export default function PositionCalc() {
   const [cnyRateInput, setCnyRateInput] = useState<string>(''); // 手动修改汇率的输入内容
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
   const [rateFromApi, setRateFromApi] = useState<number | null>(null); // 实时汇率（API 成功后设置）
+  const [showExitPriceInfo, setShowExitPriceInfo] = useState(false); // 目标离场价说明弹窗
 
   // 获取实时 USDT/CNY 汇率 — 10秒刷新，保留上次值
   const { data: rateData } = trpc.exchange.getRate.useQuery(
@@ -343,6 +344,13 @@ export default function PositionCalc() {
                   return (
                     <div className="mt-2 flex items-center gap-2">
                       <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>目标离场价</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }}
+                        className="flex items-center justify-center flex-shrink-0"
+                        style={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1 }}
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" />
+                      </button>
                       <span className="text-base font-bold" style={{ color: '#f97316', fontVariantNumeric: 'tabular-nums' }}>
                         ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                       </span>
@@ -667,6 +675,101 @@ export default function PositionCalc() {
           </div>
         </div>
       )}
+
+      {/* 目标离场价说明弹窗 */}
+      {showExitPriceInfo && (() => {
+        const ethQty = parseFloat(targetEthQty) || 0;
+        const profitCny = parseFloat(targetProfitCny) || 0;
+        const profitUsdt = cnyRate > 0 ? profitCny / cnyRate : 0;
+        const exitPrice = currentPrice && ethQty > 0 ? currentPrice + profitUsdt / ethQty : null;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setShowExitPriceInfo(false)}
+          >
+            <div
+              className="bg-white w-full max-w-md rounded-t-2xl px-5 pt-5 pb-10 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* 标题 */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #f97316, #fb923c)' }}>
+                    <HelpCircle className="w-4 h-4 text-white" />
+                  </div>
+                  <span className="text-base font-semibold text-gray-800">目标离场价 — 计算说明</span>
+                </div>
+                <button onClick={() => setShowExitPriceInfo(false)} className="p-1.5 rounded-full hover:bg-gray-100">
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              </div>
+
+              {/* 公式说明 */}
+              <div className="rounded-xl p-4 mb-4" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                <div className="text-xs font-semibold text-orange-600 mb-2 tracking-wide">计算公式</div>
+                <div className="text-sm font-mono text-gray-700 leading-relaxed">
+                  目标离场价 = 当前价 + 目标利润(USDT) ÷ 持仓数量
+                </div>
+                <div className="text-xs text-gray-400 mt-1.5">
+                  其中：目标利润(USDT) = 目标利润(CNY) ÷ 汇率
+                </div>
+              </div>
+
+              {/* 逻辑说明 */}
+              <div className="text-sm text-gray-600 leading-relaxed mb-4">
+                <p className="mb-2">当你持有一定数量的 ETH，并设定了目标利润后，系统会计算出：</p>
+                <p className="mb-2">ETH 价格需要从<span className="font-semibold text-gray-800">当前价</span>上涨多少，才能让你的持仓产生足够的浮盈，恰好达到目标利润。</p>
+                <p className="text-gray-400 text-xs">即：每涨 $1，持仓盈利 = 持仓数量 × $1。因此涨幅 = 目标利润 ÷ 持仓数量。</p>
+              </div>
+
+              {/* 当前数值展示 */}
+              {ethQty > 0 && profitCny > 0 && currentPrice && (
+                <div className="rounded-xl p-4" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+                  <div className="text-xs font-semibold text-blue-600 mb-3 tracking-wide">当前参数代入</div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">当前 ETH 价</span>
+                      <span className="font-semibold text-gray-800">${currentPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">目标利润（CNY）</span>
+                      <span className="font-semibold text-gray-800">¥{profitCny.toLocaleString('zh-CN')}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">目标利润（USDT）</span>
+                      <span className="font-semibold text-gray-800">{profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">目标持仓</span>
+                      <span className="font-semibold text-gray-800">{ethQty.toFixed(2)} ETH</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">需涨幅度</span>
+                      <span className="font-semibold" style={{ color: '#f97316' }}>+${(profitUsdt / ethQty).toLocaleString('en-US', { maximumFractionDigits: 0 })} / ETH</span>
+                    </div>
+                    <div className="h-px" style={{ background: '#BAE6FD' }} />
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold text-gray-700">目标离场价</span>
+                      <span className="text-lg font-bold" style={{ color: '#f97316' }}>
+                        ${exitPrice ? exitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowExitPriceInfo(false)}
+                className="w-full mt-4 py-3 rounded-xl text-sm font-semibold text-white"
+                style={{ background: 'linear-gradient(90deg, #f97316, #fb923c)' }}
+              >
+                明白了
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 编辑弹窗 */}
       {modal && (
