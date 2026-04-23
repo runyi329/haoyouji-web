@@ -458,6 +458,48 @@ export default function Home() {
         }
       `}</style>
 
+      {/* 🛍️ Kiskis 水蜜桃薄荷糖产品卡片（只对 jiang 用户显示） */}
+      {isJiang && (
+        <div className="mx-4 mt-4 rounded-2xl overflow-hidden shadow-lg" style={{ background: 'linear-gradient(145deg, #fff0f5 0%, #fff8e7 100%)', border: '1px solid #ffd6e0' }}>
+          <div className="flex items-stretch">
+            {/* 产品图 */}
+            <div className="w-28 flex-shrink-0 relative overflow-hidden" style={{ background: '#ffb6d0', minHeight: '112px' }}>
+              <img
+                src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/kiskis-peach-product.jpg"
+                alt="Kiskis水蜜桃薄荷糖"
+                className="w-full h-full object-cover"
+                style={{ minHeight: '112px' }}
+              />
+            </div>
+            {/* 产品信息 */}
+            <div className="flex-1 px-3 py-3 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="text-white font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#ff4488', fontSize: '10px' }}>新品</span>
+                  <span className="text-white font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#ff8800', fontSize: '10px' }}>无糖</span>
+                </div>
+                <div className="font-bold text-gray-800 text-sm leading-tight">Kiskis 无糖薄荷糖</div>
+                <div className="text-xs font-medium mt-0.5" style={{ color: '#ff4488' }}>水蜜桃味 · 21g压片糖果</div>
+                <div className="text-xs text-gray-400 mt-1">清新口气 不留痕迹 ✨</div>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <div>
+                  <span className="text-lg font-bold" style={{ color: '#ff2244' }}>¥9.9</span>
+                  <span className="text-xs text-gray-400 ml-1 line-through">¥19.9</span>
+                </div>
+                <a
+                  href="/api/alipay/quick-pay?amount=9.9&subject=Kiskis水蜜桃无糖薄荷糖&returnPath=/"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-white text-xs font-bold shadow-sm"
+                  style={{ background: 'linear-gradient(90deg, #ff4488 0%, #ff8800 100%)' }}
+                >
+                  立即购买
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 🎂 印总生日祝福横幅（临时，只对 jiang 用户显示） */}
       {isJiang && (
         <div className="mx-4 mt-4 rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #ff4444 0%, #ff8c00 100%)' }}>
