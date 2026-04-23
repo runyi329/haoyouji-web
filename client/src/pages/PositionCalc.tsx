@@ -115,18 +115,27 @@ export default function PositionCalc() {
     const result: Record<number, number> = {};
     const n = levels.length;
 
-    // 辅助：除最后一档外全部取整，最后一档吸收剩余（确保总量严格一致）
+    // 辅助：按权重分配总量，确保总和严格等于 targetQty
     const applyWeights = (weights: number[], asc: boolean) => {
       // asc=false: 越低价格越多（weights[0]对应最高价，weights[n-1]对应最低价，越大越多）
       // asc=true: 越高价格越多（反转权重）
       const w = asc ? [...weights].reverse() : weights;
       const totalW = w.reduce((s, x) => s + x, 0);
+      if (totalW === 0) { levels.forEach(p => { result[p] = 0; }); return; }
+      // 第一轮：按权重比例取整
       let sum = 0;
-      levels.slice(0, -1).forEach((p, i) => {
-        result[p] = Math.max(1, Math.round(w[i] / totalW * totalQty));
+      levels.forEach((p, i) => {
+        result[p] = Math.round(w[i] / totalW * totalQty);
         sum += result[p];
       });
-      result[levels[n - 1]] = Math.max(1, totalQty - sum);
+      // 第二轮：纠正取整误差，将差异加到权重最大的档位上
+      const diff = totalQty - sum;
+      if (diff !== 0) {
+        // 找到权重最大的档位索引
+        let maxWIdx = 0;
+        for (let i = 1; i < n; i++) { if (w[i] > w[maxWIdx]) maxWIdx = i; }
+        result[levels[maxWIdx]] = Math.max(0, result[levels[maxWIdx]] + diff);
+      }
     };
 
     if (method === 'equal') {
