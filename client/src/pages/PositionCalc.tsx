@@ -69,7 +69,7 @@ export default function PositionCalc() {
 
   // 计算自动分配结果
   const calcAutoAlloc = (method: 'equal' | 'geometric' | 'manual', minP: number, maxP: number): Record<number, number> => {
-    const totalQty = parseFloat(targetEthQty) || 0;
+    const totalQty = Math.round(parseFloat(targetEthQty) || 0); // 强制取整，确保整个分配链路都是整数运算
     if (totalQty <= 0) return {};
     const levels = PRICE_LEVELS.filter(p => p >= minP && p <= maxP);
     if (levels.length === 0) return {};
@@ -80,32 +80,34 @@ export default function PositionCalc() {
       // 总量约束： sum = n*a + d*(0+1+...+(n-1)) = n*a + d*n*(n-1)/2 = totalQty
       // => a = (totalQty - d*n*(n-1)/2) / n
       const n = levels.length;
-      let d = parseFloat(allocArithDiff) || 1;
-      // 公差最大允许値：确保最高价档至少分配 0.001 ETH
-      // a = (totalQty - d*n*(n-1)/2) / n >= 0.001
-      // => d <= (totalQty - 0.001*n) * 2 / (n*(n-1))
+      let d = Math.round(parseFloat(allocArithDiff) || 1); // 公差强制取整
+      // 公差最大允许値：确保最高价档至少分配 1 ETH
       if (n > 1) {
-        const maxD = (totalQty - 0.001 * n) * 2 / (n * (n - 1));
+        const maxD = Math.floor((totalQty - n) * 2 / (n * (n - 1)));
         if (d > maxD) d = Math.max(0, maxD);
       }
       const a = (totalQty - d * n * (n - 1) / 2) / n;
-      levels.forEach((p, i) => {
-        result[p] = Math.max(0, Math.round((a + i * d) * 10000) / 10000);
+      // 先分配除最后一档以外的所有档位，全部取整
+      let allocatedSum = 0;
+      levels.slice(0, -1).forEach((p, i) => {
+        result[p] = Math.max(1, Math.round(a + i * d));
+        allocatedSum += result[p];
       });
-      // 修正浮点误差
-      const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
-      result[levels[levels.length - 1]] = Math.max(0, Math.round((totalQty - allocated) * 10000) / 10000);
+      // 最后一档吸收剩余，确保总量不变
+      result[levels[levels.length - 1]] = Math.max(1, totalQty - allocatedSum);
     } else if (method === 'geometric') {
       const ratio = parseFloat(allocGeomRatio) || 1.2;
       // 价格越低，权重越大：权重 = ratio^(index from bottom)
       const weights = levels.map((_, i) => Math.pow(ratio, levels.length - 1 - i)); // levels 从高到低排列
       const totalWeight = weights.reduce((s, w) => s + w, 0);
-      levels.forEach((p, i) => {
-        result[p] = Math.round((weights[i] / totalWeight * totalQty) * 10000) / 10000;
+      // 除最后一档外全部取整
+      let geomAllocated = 0;
+      levels.slice(0, -1).forEach((p, i) => {
+        result[p] = Math.max(1, Math.round(weights[i] / totalWeight * totalQty));
+        geomAllocated += result[p];
       });
-      // 修正浮点误差
-      const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
-      result[levels[levels.length - 1]] = Math.round((totalQty - allocated) * 10000) / 10000;
+      // 最后一档吸收剩余
+      result[levels[levels.length - 1]] = Math.max(1, totalQty - geomAllocated);
     } else {
       // 手动模式：直接使用 allocManualQtys
       levels.forEach(p => { result[p] = parseFloat(allocManualQtys[p] || '0') || 0; });
