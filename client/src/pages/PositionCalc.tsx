@@ -676,15 +676,6 @@ export default function PositionCalc() {
               </div>
             </div>
             <div className="bg-gray-50 rounded-xl p-3">
-              <div className="text-xs text-gray-500 mb-1">加权均价</div>
-              <div className="text-xl font-bold text-gray-800">
-                ${summary.avgPrice > 0 ? summary.avgPrice.toFixed(0) : '--'}
-              </div>
-              <div className="text-xs text-gray-400 mt-0.5">
-                现价 {currentPrice ? `$${currentPrice.toFixed(0)}` : '加载中...'}
-              </div>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-3">
               <div className="text-xs text-gray-500 mb-1">当前市值</div>
               <div className="text-xl font-bold text-gray-800">
                 {summary.totalValue > 0 ? `$${summary.totalValue.toFixed(0)}` : '--'}
