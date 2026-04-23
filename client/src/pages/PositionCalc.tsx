@@ -794,11 +794,10 @@ export default function PositionCalc() {
         const previewTotal = Object.values(previewResult).reduce((s, v) => s + v, 0);
         return (
           <div
-            className="fixed inset-0 z-50 flex items-end justify-center"
-            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-            onClick={(e) => { if (e.target === e.currentTarget) setShowAutoAlloc(false); }}
+            className="fixed inset-0 z-50"
+            style={{ background: '#F9FAFB' }}
           >
-            <div className="bg-white w-full max-w-md rounded-t-2xl shadow-2xl" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="bg-white w-full h-full max-w-md mx-auto" style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
               {/* 头部 */}
               <div className="flex items-center justify-between px-5 pt-5 pb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
                 <div>
@@ -1063,7 +1062,7 @@ export default function PositionCalc() {
                             <div className="text-xs font-semibold text-gray-500">实时分配预览</div>
                             <div className="text-xs text-gray-400">{allocLevels.length} 个档位 · {totalQty.toFixed(2)} ETH</div>
                           </div>
-                          <div className="space-y-1 max-h-44 overflow-y-auto">
+                          <div className="space-y-1">
                             {allocLevels.map(p => {
                               const qty = previewQtys[p] || 0;
                               const pct = maxQty > 0 ? qty / maxQty * 100 : 0;
@@ -1094,7 +1093,7 @@ export default function PositionCalc() {
                             已分配 {manualTotal.toFixed(4)} / {totalQty.toFixed(4)} ETH
                           </div>
                         </div>
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                        <div className="space-y-2">
                           {allocLevels.map(p => (
                             <div key={p} className="flex items-center gap-3">
                               <span className="text-sm font-mono text-gray-500 w-16 flex-shrink-0">${p}</span>
@@ -1149,7 +1148,7 @@ export default function PositionCalc() {
                         共 {previewTotal.toFixed(4)} ETH
                       </div>
                     </div>
-                    <div className="space-y-1.5 max-h-64 overflow-y-auto mb-4">
+                    <div className="space-y-1.5 mb-4">
                       {allocLevels.map(p => {
                         const qty = previewResult[p] || 0;
                         const pct = totalQty > 0 ? qty / totalQty * 100 : 0;
