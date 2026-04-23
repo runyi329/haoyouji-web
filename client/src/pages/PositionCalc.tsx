@@ -80,22 +80,21 @@ export default function PositionCalc() {
       // 总量约束： sum = n*a + d*(0+1+...+(n-1)) = n*a + d*n*(n-1)/2 = totalQty
       // => a = (totalQty - d*n*(n-1)/2) / n
       const n = levels.length;
-      const d = parseFloat(allocArithDiff) || 1;
-      const a = (totalQty - d * n * (n - 1) / 2) / n; // 最高价档的基础量
-      if (a > 0) {
-        levels.forEach((p, i) => {
-          result[p] = Math.max(0, Math.round((a + i * d) * 10000) / 10000);
-        });
-        // 修正浮点误差
-        const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
-        result[levels[levels.length - 1]] = Math.max(0, Math.round((totalQty - allocated) * 10000) / 10000);
-      } else {
-        // 公差过大导致最高价档为负，退化为均匀分配
-        const each = totalQty / n;
-        levels.forEach(p => { result[p] = Math.round(each * 10000) / 10000; });
-        const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
-        result[levels[levels.length - 1]] = Math.round((totalQty - allocated) * 10000) / 10000;
+      let d = parseFloat(allocArithDiff) || 1;
+      // 公差最大允许値：确保最高价档至少分配 0.001 ETH
+      // a = (totalQty - d*n*(n-1)/2) / n >= 0.001
+      // => d <= (totalQty - 0.001*n) * 2 / (n*(n-1))
+      if (n > 1) {
+        const maxD = (totalQty - 0.001 * n) * 2 / (n * (n - 1));
+        if (d > maxD) d = Math.max(0, maxD);
       }
+      const a = (totalQty - d * n * (n - 1) / 2) / n;
+      levels.forEach((p, i) => {
+        result[p] = Math.max(0, Math.round((a + i * d) * 10000) / 10000);
+      });
+      // 修正浮点误差
+      const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
+      result[levels[levels.length - 1]] = Math.max(0, Math.round((totalQty - allocated) * 10000) / 10000);
     } else if (method === 'geometric') {
       const ratio = parseFloat(allocGeomRatio) || 1.2;
       // 价格越低，权重越大：权重 = ratio^(index from bottom)
