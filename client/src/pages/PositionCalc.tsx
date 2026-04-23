@@ -443,14 +443,11 @@ export default function PositionCalc() {
             {/* 顶部金色细线 */}
             <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 0%, #d4af37 30%, #f5e27a 50%, #d4af37 70%, transparent 100%)' }} />
             <div className="relative px-5 py-4">
-              {/* 标题行 */}
-              <div className="flex items-center mb-3">
-                <span className="text-xs font-medium tracking-widest" style={{ color: '#d4af37', letterSpacing: '0.2em', textShadow: '0 0 8px rgba(212,175,55,0.4)' }}>目标止盈利润</span>
-              </div>
               {/* 主数字区：左右两栏 */}
               <div className="flex items-start gap-0 mb-3">
                 {/* 左栏：目标止盈利润 */}
                 <div className="flex-1 pr-4">
+                  <div className="text-xs font-medium tracking-widest mb-2" style={{ color: '#d4af37', letterSpacing: '0.2em', textShadow: '0 0 8px rgba(212,175,55,0.4)' }}>目标止盈利润</div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold" style={{ color: '#f5e27a', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 20px rgba(212,175,55,0.5)' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
