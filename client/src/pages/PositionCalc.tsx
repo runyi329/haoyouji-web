@@ -56,6 +56,54 @@ export default function PositionCalc() {
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
   const [rateFromApi, setRateFromApi] = useState<number | null>(null); // 实时汇率（API 成功后设置）
   const [showExitPriceInfo, setShowExitPriceInfo] = useState(false); // 目标离场价说明弹窗
+  // ===== 自动分配计划持仓 =====
+  const [showAutoAlloc, setShowAutoAlloc] = useState(false); // 是否显示自动分配弹窗
+  const [allocStep, setAllocStep] = useState<'range' | 'method' | 'preview'>('range'); // 分配步骤
+  const [allocMinPrice, setAllocMinPrice] = useState<string>(''); // 买入最低价
+  const [allocMaxPrice, setAllocMaxPrice] = useState<string>(''); // 买入最高价
+  const [allocMethod, setAllocMethod] = useState<'equal' | 'geometric' | 'manual'>('equal'); // 分配方式
+  const [allocGeomRatio, setAllocGeomRatio] = useState<string>('1.2'); // 等比公比（越低价格越多）
+  const [allocManualQtys, setAllocManualQtys] = useState<Record<number, string>>({}); // 手动分配数量
+  const [allocPreview, setAllocPreview] = useState<Record<number, number>>({}); // 预览分配结果
+
+  // 计算自动分配结果
+  const calcAutoAlloc = (method: 'equal' | 'geometric' | 'manual', minP: number, maxP: number): Record<number, number> => {
+    const totalQty = parseFloat(targetEthQty) || 0;
+    if (totalQty <= 0) return {};
+    const levels = PRICE_LEVELS.filter(p => p >= minP && p <= maxP);
+    if (levels.length === 0) return {};
+    const result: Record<number, number> = {};
+    if (method === 'equal') {
+      const each = totalQty / levels.length;
+      levels.forEach(p => { result[p] = Math.round(each * 10000) / 10000; });
+      // 修正最后一档的浮点误差
+      const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
+      result[levels[levels.length - 1]] = Math.round((totalQty - allocated) * 10000) / 10000;
+    } else if (method === 'geometric') {
+      const ratio = parseFloat(allocGeomRatio) || 1.2;
+      // 价格越低，权重越大：权重 = ratio^(index from bottom)
+      const weights = levels.map((_, i) => Math.pow(ratio, levels.length - 1 - i)); // levels 从高到低排列
+      const totalWeight = weights.reduce((s, w) => s + w, 0);
+      levels.forEach((p, i) => {
+        result[p] = Math.round((weights[i] / totalWeight * totalQty) * 10000) / 10000;
+      });
+      // 修正浮点误差
+      const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
+      result[levels[levels.length - 1]] = Math.round((totalQty - allocated) * 10000) / 10000;
+    } else {
+      // 手动模式：直接使用 allocManualQtys
+      levels.forEach(p => { result[p] = parseFloat(allocManualQtys[p] || '0') || 0; });
+    }
+    return result;
+  };
+
+  // 手动模式：总量显示
+  const manualTotal = useMemo(() => {
+    const minP = parseFloat(allocMinPrice) || 0;
+    const maxP = parseFloat(allocMaxPrice) || 0;
+    const levels = PRICE_LEVELS.filter(p => p >= minP && p <= maxP);
+    return levels.reduce((s, p) => s + (parseFloat(allocManualQtys[p] || '0') || 0), 0);
+  }, [allocManualQtys, allocMinPrice, allocMaxPrice]);
 
   // 获取实时 USDT/CNY 汇率 — 10秒刷新，保留上次值
   const { data: rateData } = trpc.exchange.getRate.useQuery(
@@ -328,6 +376,16 @@ export default function PositionCalc() {
                         : <span style={{ color: 'rgba(226,185,111,0.3)' }}>-- ETH</span>
                       }
                     </span>
+                    {targetEthQty && parseFloat(targetEthQty) > 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setAllocStep('range'); setShowAutoAlloc(true); }}
+                        className="mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+                        style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}
+                      >
+                        <span>↻</span>
+                        <span>自动分配档位</span>
+                      </button>
+                    )}
                   </div>
                   <div className="text-right">
                     <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>当前 ETH 价</div>
@@ -676,6 +734,302 @@ export default function PositionCalc() {
         </div>
       )}
 
+      {/* 自动分配计划持仓弹窗 */}
+      {showAutoAlloc && (() => {
+        const totalQty = parseFloat(targetEthQty) || 0;
+        const minP = parseFloat(allocMinPrice) || 0;
+        const maxP = parseFloat(allocMaxPrice) || 0;
+        const allocLevels = PRICE_LEVELS.filter(p => p >= minP && p <= maxP);
+        const previewResult = allocStep === 'preview' ? allocPreview : {};
+        const previewTotal = Object.values(previewResult).reduce((s, v) => s + v, 0);
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowAutoAlloc(false); }}
+          >
+            <div className="bg-white w-full max-w-md rounded-t-2xl shadow-2xl" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+              {/* 头部 */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                <div>
+                  <div className="text-base font-bold text-gray-800">自动分配计划持仓</div>
+                  <div className="text-xs text-gray-400 mt-0.5">目标持仓 {totalQty.toFixed(2)} ETH</div>
+                </div>
+                <button onClick={() => setShowAutoAlloc(false)} className="p-1.5 rounded-full hover:bg-gray-100">
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              </div>
+              {/* 步骤指示器 */}
+              <div className="flex items-center px-5 py-3 gap-2">
+                {(['range', 'method', 'preview'] as const).map((step, i) => (
+                  <React.Fragment key={step}>
+                    <div className="flex items-center gap-1">
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                        style={{
+                          background: allocStep === step ? '#1A56DB' : (i < ['range','method','preview'].indexOf(allocStep) ? '#10B981' : '#E5E7EB'),
+                          color: allocStep === step || i < ['range','method','preview'].indexOf(allocStep) ? 'white' : '#9CA3AF'
+                        }}
+                      >{i + 1}</div>
+                      <span className="text-xs" style={{ color: allocStep === step ? '#1A56DB' : '#9CA3AF' }}>
+                        {step === 'range' ? '区间' : step === 'method' ? '方式' : '预览'}
+                      </span>
+                    </div>
+                    {i < 2 && <div className="flex-1 h-px bg-gray-200" />}
+                  </React.Fragment>
+                ))}
+              </div>
+              {/* 内容区 */}
+              <div className="flex-1 overflow-y-auto px-5 pb-4">
+                {/* 步骤 1：设置价格区间 */}
+                {allocStep === 'range' && (
+                  <div>
+                    <div className="text-sm font-semibold text-gray-700 mb-4">设置买入价格区间</div>
+                    <div className="text-xs text-gray-400 mb-4">只在此区间内的档位进行分配，共 {allocLevels.length > 0 ? allocLevels.length : '--'} 个档位</div>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">最低价（底部）</div>
+                        <div className="flex items-center gap-1 border-b-2 pb-1" style={{ borderColor: '#3B82F6' }}>
+                          <span className="text-sm text-gray-400">$</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="如 1000"
+                            value={allocMinPrice}
+                            onChange={e => setAllocMinPrice(e.target.value)}
+                            className="flex-1 text-lg font-bold text-gray-800 outline-none bg-transparent"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">最高价（顶部）</div>
+                        <div className="flex items-center gap-1 border-b-2 pb-1" style={{ borderColor: '#3B82F6' }}>
+                          <span className="text-sm text-gray-400">$</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="如 2000"
+                            value={allocMaxPrice}
+                            onChange={e => setAllocMaxPrice(e.target.value)}
+                            className="flex-1 text-lg font-bold text-gray-800 outline-none bg-transparent"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    {allocLevels.length > 0 && (
+                      <div className="rounded-xl p-3 mb-4" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
+                        <div className="text-xs text-blue-600">将在 {allocLevels.length} 个档位分配 {totalQty.toFixed(2)} ETH</div>
+                        <div className="text-xs text-blue-400 mt-0.5">价格区间：${Math.min(...allocLevels)} ~ ${Math.max(...allocLevels)}</div>
+                      </div>
+                    )}
+                    <button
+                      disabled={allocLevels.length === 0 || totalQty <= 0}
+                      onClick={() => setAllocStep('method')}
+                      className="w-full py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40"
+                      style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
+                    >
+                      下一步：选择分配方式
+                    </button>
+                  </div>
+                )}
+                {/* 步骤 2：选择分配方式 */}
+                {allocStep === 'method' && (
+                  <div>
+                    <div className="text-sm font-semibold text-gray-700 mb-4">选择分配方式</div>
+                    <div className="space-y-3 mb-4">
+                      {/* 等差 */}
+                      <button
+                        onClick={() => setAllocMethod('equal')}
+                        className="w-full flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
+                        style={{
+                          background: allocMethod === 'equal' ? '#EFF6FF' : '#F9FAFB',
+                          border: `1px solid ${allocMethod === 'equal' ? '#3B82F6' : '#E5E7EB'}`
+                        }}
+                      >
+                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
+                          style={{ borderColor: allocMethod === 'equal' ? '#3B82F6' : '#D1D5DB' }}
+                        >
+                          {allocMethod === 'equal' && <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-800">等差分配</div>
+                          <div className="text-xs text-gray-400 mt-0.5">每个档位分配相同数量，每档 {allocLevels.length > 0 ? (totalQty / allocLevels.length).toFixed(4) : '--'} ETH</div>
+                        </div>
+                      </button>
+                      {/* 等比 */}
+                      <button
+                        onClick={() => setAllocMethod('geometric')}
+                        className="w-full flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
+                        style={{
+                          background: allocMethod === 'geometric' ? '#FFF7ED' : '#F9FAFB',
+                          border: `1px solid ${allocMethod === 'geometric' ? '#F97316' : '#E5E7EB'}`
+                        }}
+                      >
+                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
+                          style={{ borderColor: allocMethod === 'geometric' ? '#F97316' : '#D1D5DB' }}
+                        >
+                          {allocMethod === 'geometric' && <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold text-gray-800">等比分配（越低越多）</div>
+                          <div className="text-xs text-gray-400 mt-0.5">价格越低分配越多，按等比递增</div>
+                          {allocMethod === 'geometric' && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="text-xs text-gray-500">公比</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={allocGeomRatio}
+                                onChange={e => setAllocGeomRatio(e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                                className="w-20 px-2 py-1 text-sm font-semibold text-gray-800 rounded-lg outline-none"
+                                style={{ border: '1px solid #FED7AA', background: '#FFF7ED' }}
+                                step="0.1"
+                                min="1.0"
+                              />
+                              <span className="text-xs text-gray-400">（1.0=均匀，1.5=较大差异）</span>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                      {/* 手动 */}
+                      <button
+                        onClick={() => {
+                          setAllocMethod('manual');
+                          // 初始化手动输入（等差预填）
+                          if (allocLevels.length > 0) {
+                            const each = (totalQty / allocLevels.length).toFixed(4);
+                            const init: Record<number, string> = {};
+                            allocLevels.forEach(p => { init[p] = each; });
+                            setAllocManualQtys(init);
+                          }
+                        }}
+                        className="w-full flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
+                        style={{
+                          background: allocMethod === 'manual' ? '#F0FDF4' : '#F9FAFB',
+                          border: `1px solid ${allocMethod === 'manual' ? '#10B981' : '#E5E7EB'}`
+                        }}
+                      >
+                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
+                          style={{ borderColor: allocMethod === 'manual' ? '#10B981' : '#D1D5DB' }}
+                        >
+                          {allocMethod === 'manual' && <div className="w-2.5 h-2.5 rounded-full bg-green-500" />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-800">手动分配</div>
+                          <div className="text-xs text-gray-400 mt-0.5">自定义每档数量，总量必须等于目标持仓</div>
+                        </div>
+                      </button>
+                    </div>
+                    {/* 手动模式输入表 */}
+                    {allocMethod === 'manual' && (
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-semibold text-gray-600">各档位分配量</div>
+                          <div className="text-xs" style={{ color: Math.abs(manualTotal - totalQty) < 0.0001 ? '#10B981' : '#EF4444' }}>
+                            已分配 {manualTotal.toFixed(4)} / {totalQty.toFixed(4)} ETH
+                          </div>
+                        </div>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {allocLevels.map(p => (
+                            <div key={p} className="flex items-center gap-3">
+                              <span className="text-sm font-mono text-gray-500 w-16 flex-shrink-0">${p}</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={allocManualQtys[p] || ''}
+                                onChange={e => setAllocManualQtys(prev => ({ ...prev, [p]: e.target.value }))}
+                                placeholder="0"
+                                className="flex-1 px-3 py-1.5 rounded-lg text-sm font-semibold text-gray-800 outline-none"
+                                style={{ border: '1px solid #E5E7EB', background: '#F9FAFB' }}
+                                step="0.01"
+                                min="0"
+                              />
+                              <span className="text-xs text-gray-400 flex-shrink-0">ETH</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setAllocStep('range')}
+                        className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-600 bg-gray-100"
+                      >返回</button>
+                      <button
+                        disabled={allocMethod === 'manual' && Math.abs(manualTotal - totalQty) > 0.001}
+                        onClick={() => {
+                          const result = calcAutoAlloc(allocMethod, minP, maxP);
+                          setAllocPreview(result);
+                          setAllocStep('preview');
+                        }}
+                        className="flex-2 flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40"
+                        style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
+                      >
+                        {allocMethod === 'manual' && Math.abs(manualTotal - totalQty) > 0.001
+                          ? `差 ${(totalQty - manualTotal).toFixed(4)} ETH`
+                          : '下一步：预览分配'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {/* 步骤 3：预览并确认 */}
+                {allocStep === 'preview' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-sm font-semibold text-gray-700">分配预览</div>
+                      <div className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#D1FAE5', color: '#059669' }}>
+                        共 {previewTotal.toFixed(4)} ETH
+                      </div>
+                    </div>
+                    <div className="space-y-1.5 max-h-64 overflow-y-auto mb-4">
+                      {allocLevels.map(p => {
+                        const qty = previewResult[p] || 0;
+                        const pct = totalQty > 0 ? qty / totalQty * 100 : 0;
+                        return (
+                          <div key={p} className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-gray-500 w-14 flex-shrink-0">${p}</span>
+                            <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #1A56DB, #3B82F6)' }}
+                              />
+                            </div>
+                            <span className="text-xs font-semibold text-gray-700 w-16 text-right flex-shrink-0">{qty.toFixed(4)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setAllocStep('method')}
+                        className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-600 bg-gray-100"
+                      >返回</button>
+                      <button
+                        onClick={() => {
+                          // 将预览结果写入 planned
+                          const newPlanned = { ...planned };
+                          allocLevels.forEach(p => {
+                            newPlanned[p] = previewResult[p] || 0;
+                          });
+                          setPlanned(newPlanned);
+                          // 保存到数据库
+                          const levels = PRICE_LEVELS.map(p => ({ price: p, plannedQty: newPlanned[p] || 0, actualQty: actual[p] || 0 }));
+                          batchSaveMutation.mutate({ ledgerId, levels });
+                          setShowAutoAlloc(false);
+                        }}
+                        className="flex-1 py-3 rounded-xl text-sm font-bold text-white"
+                        style={{ background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)' }}
+                      >
+                        确认并应用
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* 目标离场价说明弹窗 */}
       {showExitPriceInfo && (() => {
         const ethQty = parseFloat(targetEthQty) || 0;  // 计划持仓数量
