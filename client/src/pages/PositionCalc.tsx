@@ -452,36 +452,48 @@ export default function PositionCalc() {
                   <div className="w-1 h-1 rounded-full" style={{ background: '#d4af37', opacity: 0.6 }} />
                 </div>
               </div>
-              {/* 主数字区 */}
-              <div className="mb-3">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-3xl font-bold" style={{ color: '#f5e27a', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 20px rgba(212,175,55,0.5)' }}>
-                    {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
-                      ? `¥${Number(targetProfitCny).toLocaleString('zh-CN')}`
-                      : <span style={{ color: 'rgba(212,175,55,0.2)' }}>¥ --</span>
-                    }
-                  </span>
+              {/* 主数字区：左右两栏 */}
+              <div className="flex items-stretch gap-0 mb-3">
+                {/* 左栏：目标止盈利润 */}
+                <div className="flex-1 pr-4">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-3xl font-bold" style={{ color: '#f5e27a', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 20px rgba(212,175,55,0.5)' }}>
+                      {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
+                        ? `¥${Number(targetProfitCny).toLocaleString('zh-CN')}`
+                        : <span style={{ color: 'rgba(212,175,55,0.2)' }}>¥ --</span>
+                      }
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>=</span>
+                    <span className="text-lg font-semibold" style={{ color: 'rgba(212,175,55,0.7)', fontVariantNumeric: 'tabular-nums' }}>
+                      {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
+                        ? `$${(parseFloat(targetProfitCny) / cnyRate).toLocaleString('en-US', { maximumFractionDigits: 0 })} U`
+                        : <span style={{ color: 'rgba(212,175,55,0.2)' }}>-- U</span>
+                      }
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>=</span>
-                  <span className="text-lg font-semibold" style={{ color: 'rgba(212,175,55,0.7)', fontVariantNumeric: 'tabular-nums' }}>
-                    {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
-                      ? `$${(parseFloat(targetProfitCny) / cnyRate).toLocaleString('en-US', { maximumFractionDigits: 0 })} U`
-                      : <span style={{ color: 'rgba(212,175,55,0.2)' }}>-- U</span>
-                    }
-                  </span>
+                {/* 竖分割线 */}
+                <div className="w-px self-stretch" style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(212,175,55,0.3) 20%, rgba(212,175,55,0.3) 80%, transparent 100%)' }} />
+                {/* 右栏：ETH价格 + 汇率 */}
+                <div className="pl-4 flex flex-col justify-center gap-2">
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH 实时</div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl font-bold" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                        {currentPrice ? `$${currentPrice.toFixed(0)}` : '--'}
+                      </span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>USD/CNY</div>
+                    <div className="text-sm font-mono font-semibold" style={{ color: 'rgba(255,255,255,0.6)' }}>{cnyRate.toFixed(4)}</div>
+                  </div>
                 </div>
               </div>
               {/* 持仓进度区 - ETH 蓝色系 */}
               <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(212,175,55,0.2)' }}>
-                {/* ETH 实时价格行（左对齐，放大） */}
-                <div className="flex items-center mb-2">
-                  <span className="text-xs mr-1" style={{ color: 'rgba(212,175,55,0.5)' }}>ETH</span>
-                  <span className="text-base font-bold" style={{ color: '#f0e6c0' }}>
-                    {currentPrice ? `$${currentPrice.toFixed(0)}` : '--'}
-                  </span>
-                </div>
-
                 {/* 数量标注行 */}
                 {(() => {
                   const targetQty = parseFloat(targetEthQty) || 0;
@@ -632,12 +644,7 @@ export default function PositionCalc() {
                 })()
               }
             </div>
-                            {/* 汇率行 */}
-              <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(212,175,55,0.12)' }}>
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>USD/CNY</span>
-                <span className="text-xs font-mono font-semibold" style={{ color: 'rgba(255,255,255,0.6)' }}>{cnyRate.toFixed(4)}</span>
-                <span className="text-xs ml-auto" style={{ color: 'rgba(255,255,255,0.25)' }}>实时汇率</span>
-              </div>
+
             </div>
           </div>
         ) : (
