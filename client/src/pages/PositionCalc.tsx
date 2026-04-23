@@ -695,7 +695,7 @@ export default function PositionCalc() {
                 {planQty > 0 && (
                   <div
                     className="absolute left-0 top-0 h-full transition-all duration-300"
-                    style={{ width: `${planPct}%`, background: '#E5E7EB' }}
+                    style={{ width: `${planPct}%`, background: 'linear-gradient(90deg, #92400E, #D97706)' }}
                   />
                 )}
                 {/* 已买填充（蓝色） */}
@@ -705,8 +705,8 @@ export default function PositionCalc() {
                     style={{
                       width: `${actualPct}%`,
                       background: isFullyBought
-                        ? 'linear-gradient(90deg, #059669, #10B981)'  // 满仓绿色
-                        : 'linear-gradient(90deg, #1A56DB, #3B82F6)',
+                        ? 'linear-gradient(90deg, #047857, #059669)'  // 满仓翠绿
+                        : 'linear-gradient(90deg, #0369A1, #0EA5E9)',
                       minWidth: '4px',
                     }}
                   />
