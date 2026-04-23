@@ -508,19 +508,18 @@ export default function PositionCalc() {
                       <div className="flex items-end justify-between mb-1.5">
                         <div>
                           <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.5)' }}>实际持仓</div>
-                          <span className="text-2xl font-bold" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                          <span className="text-2xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
                             {actualQty > 0 ? actualQty.toFixed(0) : '--'}
                           </span>
                           <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH</span>
                         </div>
                         <div className="flex items-end gap-2">
-
                           <div className="text-right">
                             <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>目标持仓</div>
-                            <span className="text-lg font-semibold" style={{ color: 'rgba(212,175,55,0.7)', fontVariantNumeric: 'tabular-nums' }}>
+                            <span className="text-2xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
                               {targetQty > 0 ? targetQty.toFixed(0) : '--'}
                             </span>
-                            <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.3)' }}>ETH</span>
+                            <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH</span>
                           </div>
                         </div>
                       </div>
