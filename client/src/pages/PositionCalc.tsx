@@ -94,7 +94,7 @@ export default function PositionCalc() {
   const [showExitPriceInfo, setShowExitPriceInfo] = useState(false); // 目标离场价说明弹窗
   // ===== 自动分配计划持仓 =====
   const [showAutoAlloc, setShowAutoAlloc] = useState(false); // 是否显示自动分配弹窗
-  const [allocStep, setAllocStep] = useState<'range' | 'method' | 'preview'>('range'); // 分配步骤
+  const [allocStep, setAllocStep] = useState<'setup' | 'range' | 'method' | 'preview'>('setup'); // 分配步骤
   const [allocMinPrice, setAllocMinPrice] = useState<string>(''); // 买入最低价
   const [allocMaxPrice, setAllocMaxPrice] = useState<string>(''); // 买入最高价
   const [allocMethod, setAllocMethod] = useState<'equal' | 'geometric' | 'normal' | 'manual'>('equal'); // 分配方式
@@ -414,7 +414,11 @@ export default function PositionCalc() {
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium tracking-widest" style={{ color: '#e2b96f', letterSpacing: '0.15em' }}>目标止盈利润</span>
                 <button
-                  onClick={() => { setCnyRateInput(cnyRate.toFixed(4)); setEditingRate(true); }}
+                  onClick={() => {
+                    setCnyRateInput(cnyRate.toFixed(4));
+                    setAllocStep('setup');
+                    setShowAutoAlloc(true);
+                  }}
                   className="p-1 rounded-md"
                   style={{ background: 'rgba(226,185,111,0.12)' }}
                 >
@@ -945,34 +949,165 @@ export default function PositionCalc() {
               {/* 头部 */}
               <div className="flex items-center justify-between px-5 pt-5 pb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
                 <div>
-                  <div className="text-base font-bold text-gray-800">自动分配计划持仓</div>
-                  <div className="text-xs text-gray-400 mt-0.5">目标持仓 {totalQty.toFixed(2)} ETH</div>
+                  <div className="text-base font-bold text-gray-800">
+                    {allocStep === 'setup' ? '持仓配置' : '自动分配计划持仓'}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {allocStep === 'setup' ? '设置目标止盈与持仓数量' : `目标持仓 ${totalQty.toFixed(2)} ETH`}
+                  </div>
                 </div>
                 <button onClick={() => setShowAutoAlloc(false)} className="p-1.5 rounded-full hover:bg-gray-100">
                   <X className="w-4 h-4 text-gray-400" />
                 </button>
               </div>
-              {/* 步骤指示器 */}
-              <div className="flex items-center px-5 py-3 gap-2">
-                {(['range', 'method', 'preview'] as const).map((step, i) => (
-                  <React.Fragment key={step}>
-                    <div className="flex items-center gap-1">
-                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
-                        style={{
-                          background: allocStep === step ? '#1A56DB' : (i < ['range','method','preview'].indexOf(allocStep) ? '#10B981' : '#E5E7EB'),
-                          color: allocStep === step || i < ['range','method','preview'].indexOf(allocStep) ? 'white' : '#9CA3AF'
-                        }}
-                      >{i + 1}</div>
-                      <span className="text-xs" style={{ color: allocStep === step ? '#1A56DB' : '#9CA3AF' }}>
-                        {step === 'range' ? '区间' : step === 'method' ? '方式' : '预览'}
-                      </span>
-                    </div>
-                    {i < 2 && <div className="flex-1 h-px bg-gray-200" />}
-                  </React.Fragment>
-                ))}
-              </div>
+              {/* 步骤指示器（setup步骤不显示） */}
+              {allocStep !== 'setup' && (
+                <div className="flex items-center px-5 py-3 gap-2">
+                  {(['range', 'method', 'preview'] as const).map((step, i) => (
+                    <React.Fragment key={step}>
+                      <div className="flex items-center gap-1">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                          style={{
+                            background: allocStep === step ? '#1A56DB' : (i < ['range','method','preview'].indexOf(allocStep) ? '#10B981' : '#E5E7EB'),
+                            color: allocStep === step || i < ['range','method','preview'].indexOf(allocStep) ? 'white' : '#9CA3AF'
+                          }}
+                        >{i + 1}</div>
+                        <span className="text-xs" style={{ color: allocStep === step ? '#1A56DB' : '#9CA3AF' }}>
+                          {step === 'range' ? '区间' : step === 'method' ? '方式' : '预览'}
+                        </span>
+                      </div>
+                      {i < 2 && <div className="flex-1 h-px bg-gray-200" />}
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
               {/* 内容区 */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-4">
+                {/* 步骤 0：目标止盈 + 持仓数量联动 */}
+                {allocStep === 'setup' && (() => {
+                  const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
+                  const qty = parseFloat(targetEthQty) || 0;
+                  // 简单估算目标止盈价：当前价 + 利润/数量（粗略，不依赖均价）
+                  const simpleTargetPrice = qty > 0 && profitUsdt > 0 ? (currentPrice || 0) + profitUsdt / qty : 0;
+                  const simpleRisePct = currentPrice && simpleTargetPrice > currentPrice
+                    ? ((simpleTargetPrice - currentPrice) / currentPrice * 100)
+                    : 0;
+                  // 进度条：当前价距目标止盈价的进度（以当前价为0%，目标止盈价为100%）
+                  // 用 currentPrice / simpleTargetPrice 来表示已完成的涨幅比例
+                  const progressPct = simpleTargetPrice > 0 && currentPrice ? Math.min(currentPrice / simpleTargetPrice, 1) : 0;
+                  return (
+                    <div>
+                      {/* 目标止盈利润 */}
+                      <div className="mb-5">
+                        <div className="text-sm font-semibold text-gray-700 mb-2">目标止盈利润</div>
+                        <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: '#F59E0B' }}>
+                          <span className="text-xl font-bold text-amber-500">¥</span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="输入目标利润（人民币）"
+                            value={targetProfitCny}
+                            onChange={e => setTargetProfitCny(e.target.value)}
+                            className="flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                            autoFocus
+                          />
+                        </div>
+                        {profitUsdt > 0 && (
+                          <div className="text-xs text-blue-500 mt-1">≈ ${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</div>
+                        )}
+                      </div>
+                      {/* 目标持仓数量 */}
+                      <div className="mb-5">
+                        <div className="text-sm font-semibold text-gray-700 mb-2">目标持仓数量</div>
+                        <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: '#3B82F6' }}>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="输入 ETH 数量"
+                            value={targetEthQty}
+                            onChange={e => setTargetEthQty(e.target.value)}
+                            className="min-w-0 flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                          />
+                          <span className="text-sm font-medium text-gray-400 flex-shrink-0">ETH</span>
+                        </div>
+                      </div>
+                      {/* 联动计算结果 */}
+                      {profitUsdt > 0 && qty > 0 && currentPrice ? (
+                        <div className="rounded-2xl p-4 mb-5" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}>
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>当前 ETH 价格</div>
+                              <div className="text-lg font-bold" style={{ color: '#93c5fd' }}>${(currentPrice || 0).toFixed(0)}</div>
+                            </div>
+                            <div className="text-2xl" style={{ color: 'rgba(255,255,255,0.2)' }}>→</div>
+                            <div className="text-right">
+                              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>需涨至（估算）</div>
+                              <div className="text-lg font-bold" style={{ color: '#fbbf24' }}>
+                                ${simpleTargetPrice > 0 ? simpleTargetPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
+                              </div>
+                            </div>
+                          </div>
+                          {/* 进度条 */}
+                          <div className="relative rounded-full overflow-hidden mb-2" style={{ height: '16px', background: 'rgba(255,255,255,0.1)' }}>
+                            <div
+                              className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${progressPct * 100}%`,
+                                background: 'linear-gradient(90deg, #3B82F6 0%, #60A5FA 100%)',
+                                boxShadow: '0 0 8px rgba(96,165,250,0.6)',
+                              }}
+                            />
+                            <div className="absolute inset-0 flex items-center justify-end pr-2">
+                              <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>
+                                {(progressPct * 100).toFixed(0)}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>当前价</span>
+                            <span className="text-xs font-semibold" style={{ color: '#fbbf24' }}>
+                              还需涨 {simpleRisePct > 0 ? `+${simpleRisePct.toFixed(1)}%` : '--'}
+                            </span>
+                            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>止盈价</span>
+                          </div>
+                          <div className="text-xs mt-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                            * 此为基于当前价的粗略估算，实际止盈价以建仓均价为准
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl p-4 mb-5 text-center" style={{ background: '#F9FAFB', border: '1px dashed #E5E7EB' }}>
+                          <div className="text-sm text-gray-400">输入目标利润和持仓数量</div>
+                          <div className="text-xs text-gray-300 mt-1">系统将实时计算需要涨到的价格</div>
+                        </div>
+                      )}
+                      {/* 保存并继续按钮 */}
+                      <button
+                        onClick={() => {
+                          // 保存到数据库
+                          if (ledgerId > 0) {
+                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0 });
+                          }
+                          setAllocStep('range');
+                        }}
+                        className="w-full py-3 rounded-xl text-sm font-bold text-white mb-3"
+                        style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
+                      >
+                        保存并继续配置分配
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (ledgerId > 0) {
+                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0 });
+                          }
+                          setShowAutoAlloc(false);
+                        }}
+                        className="w-full py-2.5 rounded-xl text-sm font-medium text-gray-500 bg-gray-100"
+                      >
+                        仅保存，不配置分配
+                      </button>
+                    </div>
+                  );
+                })()}
                 {/* 步骤 1：设置价格区间 */}
                 {allocStep === 'range' && (
                   <div>
