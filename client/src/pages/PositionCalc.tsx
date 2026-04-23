@@ -987,9 +987,10 @@ export default function PositionCalc() {
                           placeholder="输入 ETH 数量"
                           value={targetEthQty}
                           onChange={e => setTargetEthQty(e.target.value)}
-                          className="flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                          className="min-w-0 flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                          style={{ minWidth: 0 }}
                         />
-                        <span className="text-sm font-medium text-gray-400">ETH</span>
+                        <span className="text-sm font-medium text-gray-400 flex-shrink-0">ETH</span>
                       </div>
                     </div>
                     {/* 双端滑动区间选择器 */}
@@ -1019,7 +1020,7 @@ export default function PositionCalc() {
                             </div>
                           </div>
                           {/* 滑动轨道 */}
-                          <div className="relative mx-1 dual-range" style={{ height: '40px' }}>
+                          <div className="relative mx-1 dual-range" style={{ height: '44px' }}>
                             {/* 背景轨道 */}
                             <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', background: '#E5E7EB' }} />
                             {/* 选中区间高亮 */}
@@ -1033,7 +1034,7 @@ export default function PositionCalc() {
                                 background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)',
                               }}
                             />
-                            {/* 最低价滑块（下层） */}
+                            {/* 最低价滑块：只在左半区域（0% ~ midPct）接收事件 */}
                             <input
                               type="range"
                               min={SLIDER_MIN}
@@ -1048,12 +1049,12 @@ export default function PositionCalc() {
                               style={{
                                 top: '50%',
                                 transform: 'translateY(-50%)',
-                                height: '40px',
-                                zIndex: minVal > SLIDER_MAX - SLIDER_STEP * 2 ? 5 : 3,
-                                pointerEvents: 'auto',
+                                height: '44px',
+                                zIndex: 3,
+                                clipPath: `inset(0 ${100 - (minPct + maxPct) / 2}% 0 0)`,
                               }}
                             />
-                            {/* 最高价滑块（上层） */}
+                            {/* 最高价滑块：只在右半区域（midPct ~ 100%）接收事件 */}
                             <input
                               type="range"
                               min={SLIDER_MIN}
@@ -1068,9 +1069,9 @@ export default function PositionCalc() {
                               style={{
                                 top: '50%',
                                 transform: 'translateY(-50%)',
-                                height: '40px',
+                                height: '44px',
                                 zIndex: 4,
-                                pointerEvents: 'auto',
+                                clipPath: `inset(0 0 0 ${(minPct + maxPct) / 2}%)`,
                               }}
                             />
                           </div>
