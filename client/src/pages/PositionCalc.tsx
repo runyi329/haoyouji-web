@@ -407,17 +407,12 @@ export default function PositionCalc() {
               </div>
               {/* 持仓进度区 - ETH 蓝色系 */}
               <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(98,126,234,0.2)' }}>
-                {/* 标题行：当前 ETH 价 */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium" style={{ color: 'rgba(98,126,234,0.7)' }}>持仓进度</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>ETH </span>
-                    <span className="text-sm font-semibold" style={{ color: '#93c5fd' }}>
-                      {currentPrice ? `$${currentPrice.toFixed(0)}` : '--'}
-                    </span>
-                  </div>
+                {/* ETH 实时价格行（左对齐，放大） */}
+                <div className="flex items-center mb-2">
+                  <span className="text-xs mr-1" style={{ color: 'rgba(255,255,255,0.35)' }}>ETH</span>
+                  <span className="text-base font-bold" style={{ color: '#93c5fd' }}>
+                    {currentPrice ? `$${currentPrice.toFixed(0)}` : '--'}
+                  </span>
                 </div>
 
                 {/* 数量标注行 */}
@@ -525,8 +520,8 @@ export default function PositionCalc() {
                         <div>
                           {actualExitPrice > 0 ? (
                             <>
-                              <div className="text-xs" style={{ color: 'rgba(165,180,252,0.6)' }}>实际离场</div>
-                              <span className="text-xs font-bold" style={{ color: '#a5b4fc' }}>
+                              <div className="text-xs" style={{ color: 'rgba(165,180,252,0.6)' }}>实际止盈</div>
+                              <span className="text-sm font-bold" style={{ color: '#a5b4fc', fontVariantNumeric: 'tabular-nums' }}>
                                 ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                               </span>
                             </>
@@ -536,12 +531,12 @@ export default function PositionCalc() {
                           {targetExitPrice > 0 && (
                             <>
                               <div className="flex items-center gap-0.5 justify-end">
-                                <span className="text-xs" style={{ color: 'rgba(99,102,241,0.5)' }}>目标离场</span>
+                                <span className="text-xs" style={{ color: 'rgba(99,102,241,0.5)' }}>目标止盈</span>
                                 <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(99,102,241,0.5)', lineHeight: 1 }}>
                                   <HelpCircle className="w-2.5 h-2.5" />
                                 </button>
                               </div>
-                              <span className="text-xs font-bold" style={{ color: '#6366f1' }}>
+                              <span className="text-sm font-bold" style={{ color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
                                 ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                               </span>
                             </>
