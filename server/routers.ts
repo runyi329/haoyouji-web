@@ -14923,34 +14923,77 @@ export const appRouter = router({
 
   // ==================== 汇率计算器 ====================
   exchange: router({
-    // 天行数据单对汇率查询
-    getRate: publicProcedure
-      .input(z.object({
-        fromcoin: z.string().default('USD'),
-        tocoin: z.string().default('CNY'),
-        money: z.number().default(1),
-      }))
-      .query(async ({ input }) => {
-        const TIANAPI_KEY = '3878a89bed4728b65cc7d8dc0a644c07';
-        try {
-          const params = new URLSearchParams({
-            key: TIANAPI_KEY,
-            fromcoin: input.fromcoin,
-            tocoin: input.tocoin,
-            money: String(input.money),
-          });
-          const res = await fetch(`https://apis.tianapi.com/fxrate/index?${params}`, {
-            signal: AbortSignal.timeout(8000),
-          });
-          const data = await res.json() as { code: number; msg: string; result?: { money: string } };
-          if (data.code === 200 && data.result) {
-            return { success: true, money: data.result.money, fromcoin: input.fromcoin, tocoin: input.tocoin };
+    // 多源汇率查询：主 API 失败依次尝试备用，全部失败返回缓存
+    getRate: (() => {
+      // 进程级缓存，key = "USD_CNY"
+      const _cache: Record<string, { rate: string; updatedAt: number }> = {};
+
+      // 主 API：天行数据
+      async function fetchTianapi(from: string, to: string, money: number): Promise<string | null> {
+        const key = '3878a89bed4728b65cc7d8dc0a644c07';
+        const p = new URLSearchParams({ key, fromcoin: from, tocoin: to, money: String(money) });
+        const res = await fetch(`https://apis.tianapi.com/fxrate/index?${p}`, { signal: AbortSignal.timeout(5000) });
+        const d = await res.json() as { code: number; result?: { money: string } };
+        return (d.code === 200 && d.result?.money) ? d.result.money : null;
+      }
+
+      // 备用 API 1：open.er-api.com（免费，无需 key）
+      async function fetchErApi(from: string, to: string, money: number): Promise<string | null> {
+        const res = await fetch(`https://open.er-api.com/v6/latest/${from}`, { signal: AbortSignal.timeout(5000) });
+        const d = await res.json() as { result: string; rates?: Record<string, number> };
+        if (d.result === 'success' && d.rates?.[to]) return String((d.rates[to] * money).toFixed(6));
+        return null;
+      }
+
+      // 备用 API 2：Frankfurter（欧洲央行数据，免费）
+      async function fetchFrankfurter(from: string, to: string, money: number): Promise<string | null> {
+        const res = await fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`, { signal: AbortSignal.timeout(5000) });
+        const d = await res.json() as { rates?: Record<string, number> };
+        if (d.rates?.[to]) return String((d.rates[to] * money).toFixed(6));
+        return null;
+      }
+
+      // 备用 API 3：fawazahmed0 currency-api（GitHub CDN，覆盖广）
+      async function fetchFawaz(from: string, to: string, money: number): Promise<string | null> {
+        const f = from.toLowerCase(), t = to.toLowerCase();
+        const res = await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/${f}.json`, { signal: AbortSignal.timeout(5000) });
+        const d = await res.json() as Record<string, Record<string, number>>;
+        const rate = d?.[f]?.[t];
+        return rate ? String((rate * money).toFixed(6)) : null;
+      }
+
+      return publicProcedure
+        .input(z.object({
+          fromcoin: z.string().default('USD'),
+          tocoin: z.string().default('CNY'),
+          money: z.number().default(1),
+        }))
+        .query(async ({ input }) => {
+          const cacheKey = `${input.fromcoin}_${input.tocoin}`;
+          const fetchers = [
+            () => fetchTianapi(input.fromcoin, input.tocoin, input.money),
+            () => fetchErApi(input.fromcoin, input.tocoin, input.money),
+            () => fetchFrankfurter(input.fromcoin, input.tocoin, input.money),
+            () => fetchFawaz(input.fromcoin, input.tocoin, input.money),
+          ];
+          for (const fetcher of fetchers) {
+            try {
+              const result = await fetcher();
+              if (result && parseFloat(result) > 0) {
+                _cache[cacheKey] = { rate: result, updatedAt: Date.now() };
+                return { success: true, money: result, fromcoin: input.fromcoin, tocoin: input.tocoin };
+              }
+            } catch { /* 继续下一个 */ }
+          }
+          // 所有 API 失败：返回缓存值
+          const cached = _cache[cacheKey];
+          if (cached) {
+            console.warn(`[exchange.getRate] 所有API失败，使用缓存 ${cached.rate}（${Math.round((Date.now() - cached.updatedAt) / 60000)}分钟前）`);
+            return { success: true, money: cached.rate, fromcoin: input.fromcoin, tocoin: input.tocoin };
           }
           return { success: false, money: '0', fromcoin: input.fromcoin, tocoin: input.tocoin };
-        } catch {
-          return { success: false, money: '0', fromcoin: input.fromcoin, tocoin: input.tocoin };
-        }
-      }),
+        });
+    })(),
     // 批量获取常用货币对基准货币的汇率（一次请求多个币种）
     getRates: publicProcedure
       .input(z.object({ base: z.string().default('CNY') }))
