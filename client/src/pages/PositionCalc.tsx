@@ -853,15 +853,31 @@ export default function PositionCalc() {
                     ${price.toLocaleString()}
                   </span>
                   {isNearCurrent && (
-                    <span
-                      className="ml-1.5 text-[10px] font-semibold px-1 py-0.5 rounded"
-                      style={{
-                        background: 'rgba(59,130,246,0.15)',
-                        color: actualPct > 30 ? 'rgba(255,255,255,0.9)' : '#3B82F6',
-                      }}
+                    <svg
+                      className="ml-1.5 flex-shrink-0"
+                      width="14" height="22"
+                      viewBox="0 0 14 22"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
                     >
-                      ↑当前
-                    </span>
+                      {/* ETH 菱形 logo：上半渐变金色，下半渐变蓝色 */}
+                      <defs>
+                        <linearGradient id="eth-top" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#f5e27a" />
+                          <stop offset="100%" stopColor="#d4af37" />
+                        </linearGradient>
+                        <linearGradient id="eth-bot" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#60a5fa" />
+                          <stop offset="100%" stopColor="#3b82f6" />
+                        </linearGradient>
+                      </defs>
+                      {/* 上半部分 */}
+                      <polygon points="7,0 14,11 7,8" fill="url(#eth-top)" opacity="0.95" />
+                      <polygon points="7,0 0,11 7,8" fill="url(#eth-top)" opacity="0.7" />
+                      {/* 下半部分 */}
+                      <polygon points="7,22 14,13 7,16" fill="url(#eth-bot)" opacity="0.95" />
+                      <polygon points="7,22 0,13 7,16" fill="url(#eth-bot)" opacity="0.7" />
+                    </svg>
                   )}
                 </div>
 
