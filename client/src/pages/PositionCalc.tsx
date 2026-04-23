@@ -402,6 +402,14 @@ export default function PositionCalc() {
           <button
             onClick={() => {
               setAllocStep('setup');
+              // 初始化最低价为当前 ETH 价格（取整到最近的50档，不低于1000，不高于3500）
+              if (currentPrice && currentPrice > 0) {
+                const snapped = Math.min(3450, Math.max(1000, Math.round(currentPrice / 50) * 50));
+                setAllocMinPrice(String(snapped));
+                // 如果当前最高价低于最低价，重置最高价
+                const curMax = parseFloat(allocMaxPrice) || 3500;
+                if (curMax <= snapped) setAllocMaxPrice(String(Math.min(3500, snapped + 50)));
+              }
               setShowAutoAlloc(true);
             }}
             className="px-3 py-1 rounded-lg text-sm font-medium"
@@ -1109,22 +1117,35 @@ export default function PositionCalc() {
                           <span style={labelStyle}>买入价格区间</span>
                           <span className="text-xs" style={{ color: 'rgba(96,165,250,0.8)' }}>{allocLevels2.length > 0 ? `${allocLevels2.length} 个档位` : '--'}</span>
                         </div>
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>最低价</div>
-                            <div className="text-lg font-bold" style={{ color: '#93c5fd' }}>${minVal2.toLocaleString()}</div>
-                          </div>
-                          <div className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>~</div>
-                          <div className="text-right">
-                            <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>最高价</div>
-                            <div className="text-lg font-bold" style={{ color: '#93c5fd' }}>${maxVal2.toLocaleString()}</div>
-                          </div>
-                        </div>
+                        {/* 当前价下限 */}
+                        {(() => {
+                          const priceFloor = currentPrice ? Math.min(3450, Math.max(1000, Math.round(currentPrice / 50) * 50)) : SLIDER_MIN;
+                          return (
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <div className="flex items-center gap-1 mb-0.5">
+                                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>最低价</span>
+                                  {currentPrice && <span className="text-[10px] px-1 rounded" style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}>≥当前价</span>}
+                                </div>
+                                <div className="text-lg font-bold" style={{ color: '#93c5fd' }}>${minVal2.toLocaleString()}</div>
+                              </div>
+                              <div className="text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>~</div>
+                              <div className="text-right">
+                                <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>最高价</div>
+                                <div className="text-lg font-bold" style={{ color: '#93c5fd' }}>${maxVal2.toLocaleString()}</div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         <div className="relative mx-1 dual-range" style={{ height: '40px' }}>
                           <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)' }} />
                           <div className="absolute top-1/2 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', left: `${minPct2}%`, right: `${100 - maxPct2}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
                           <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={minVal2}
-                            onChange={e => setAllocMinPrice(String(Math.min(parseInt(e.target.value), maxVal2 - SLIDER_STEP)))}
+                            onChange={e => {
+                              const priceFloor = currentPrice ? Math.min(3450, Math.max(1000, Math.round(currentPrice / 50) * 50)) : SLIDER_MIN;
+                              const v = Math.max(priceFloor, Math.min(parseInt(e.target.value), maxVal2 - SLIDER_STEP));
+                              setAllocMinPrice(String(v));
+                            }}
                             className="absolute w-full appearance-none bg-transparent cursor-pointer"
                             style={{ top: '50%', transform: 'translateY(-50%)', height: '40px', zIndex: 3, clipPath: `inset(0 ${100 - (minPct2 + maxPct2) / 2}% 0 0)` }}
                           />
