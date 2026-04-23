@@ -6,6 +6,31 @@
  * - 点击档位弹出 modal，选择修改计划量或已买量
  */
 import React, { useState, useEffect, useMemo } from "react";
+// 注入双端滑块样式
+const RANGE_SLIDER_STYLE = `
+  .dual-range input[type=range] { pointer-events: none; }
+  .dual-range input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    pointer-events: all;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid #3B82F6;
+    box-shadow: 0 1px 4px rgba(59,130,246,0.4);
+    cursor: pointer;
+  }
+  .dual-range input[type=range]::-moz-range-thumb {
+    pointer-events: all;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid #3B82F6;
+    box-shadow: 0 1px 4px rgba(59,130,246,0.4);
+    cursor: pointer;
+  }
+`;
 import { useRoute, useLocation } from "wouter";
 import { ChevronLeft, TrendingUp, TrendingDown, X, Check, Pencil, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -41,6 +66,17 @@ export default function PositionCalc() {
   const [, params] = useRoute("/ledger/:id/position-calc");
   const [, setLocation] = useLocation();
   const ledgerId = params ? parseInt(params.id) : 0;
+
+  // 注入双端滑块 CSS
+  useEffect(() => {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'dual-range-style';
+    styleEl.textContent = RANGE_SLIDER_STYLE;
+    if (!document.getElementById('dual-range-style')) {
+      document.head.appendChild(styleEl);
+    }
+    return () => { document.getElementById('dual-range-style')?.remove(); };
+  }, []);
 
   const [planned, setPlanned] = useState<Record<number, number>>({});
   const [actual, setActual] = useState<Record<number, number>>({});
@@ -902,10 +938,10 @@ export default function PositionCalc() {
         const previewTotal = Object.values(previewResult).reduce((s, v) => s + v, 0);
         return (
           <div
-            className="fixed inset-0 z-50"
+            className="fixed inset-0 z-50 overflow-x-hidden"
             style={{ background: '#F9FAFB' }}
           >
-            <div className="bg-white w-full h-full max-w-md mx-auto" style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
+            <div className="bg-white w-full h-full max-w-md mx-auto overflow-x-hidden" style={{ display: 'flex', flexDirection: 'column', height: '100dvh' }}>
               {/* 头部 */}
               <div className="flex items-center justify-between px-5 pt-5 pb-3" style={{ borderBottom: '1px solid #F3F4F6' }}>
                 <div>
@@ -936,7 +972,7 @@ export default function PositionCalc() {
                 ))}
               </div>
               {/* 内容区 */}
-              <div className="flex-1 overflow-y-auto px-5 pb-4">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pb-4">
                 {/* 步骤 1：设置价格区间 */}
                 {allocStep === 'range' && (
                   <div>
@@ -956,37 +992,99 @@ export default function PositionCalc() {
                         <span className="text-sm font-medium text-gray-400">ETH</span>
                       </div>
                     </div>
+                    {/* 双端滑动区间选择器 */}
+                    {(() => {
+                      const SLIDER_MIN = 1000;
+                      const SLIDER_MAX = 3500;
+                      const SLIDER_STEP = 50;
+                      const TOTAL_STEPS = (SLIDER_MAX - SLIDER_MIN) / SLIDER_STEP; // 50 steps = 51 points
+                      const minVal = parseFloat(allocMinPrice) || SLIDER_MIN;
+                      const maxVal = parseFloat(allocMaxPrice) || SLIDER_MAX;
+                      const minPct = ((minVal - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+                      const maxPct = ((maxVal - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+                      return (
+                        <div className="mb-5">
+                          {/* 当前区间显示 */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="text-center">
+                              <div className="text-xs text-gray-400 mb-0.5">最低价</div>
+                              <div className="text-lg font-bold text-blue-600">${minVal.toLocaleString()}</div>
+                            </div>
+                            <div className="flex-1 mx-3 text-center">
+                              <div className="text-xs text-gray-400">{allocLevels.length > 0 ? allocLevels.length : '--'} 个档位</div>
+                            </div>
+                            <div className="text-center">
+                              <div className="text-xs text-gray-400 mb-0.5">最高价</div>
+                              <div className="text-lg font-bold text-blue-600">${maxVal.toLocaleString()}</div>
+                            </div>
+                          </div>
+                          {/* 滑动轨道 */}
+                          <div className="relative mx-1 dual-range" style={{ height: '40px' }}>
+                            {/* 背景轨道 */}
+                            <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', background: '#E5E7EB' }} />
+                            {/* 选中区间高亮 */}
+                            <div
+                              className="absolute top-1/2 rounded-full"
+                              style={{
+                                height: '6px',
+                                transform: 'translateY(-50%)',
+                                left: `${minPct}%`,
+                                right: `${100 - maxPct}%`,
+                                background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)',
+                              }}
+                            />
+                            {/* 最低价滑块（下层） */}
+                            <input
+                              type="range"
+                              min={SLIDER_MIN}
+                              max={SLIDER_MAX}
+                              step={SLIDER_STEP}
+                              value={minVal}
+                              onChange={e => {
+                                const v = Math.min(parseInt(e.target.value), maxVal - SLIDER_STEP);
+                                setAllocMinPrice(String(v));
+                              }}
+                              className="absolute w-full appearance-none bg-transparent cursor-pointer"
+                              style={{
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                height: '40px',
+                                zIndex: minVal > SLIDER_MAX - SLIDER_STEP * 2 ? 5 : 3,
+                                pointerEvents: 'auto',
+                              }}
+                            />
+                            {/* 最高价滑块（上层） */}
+                            <input
+                              type="range"
+                              min={SLIDER_MIN}
+                              max={SLIDER_MAX}
+                              step={SLIDER_STEP}
+                              value={maxVal}
+                              onChange={e => {
+                                const v = Math.max(parseInt(e.target.value), minVal + SLIDER_STEP);
+                                setAllocMaxPrice(String(v));
+                              }}
+                              className="absolute w-full appearance-none bg-transparent cursor-pointer"
+                              style={{
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                height: '40px',
+                                zIndex: 4,
+                                pointerEvents: 'auto',
+                              }}
+                            />
+                          </div>
+                          {/* 刻度标注 */}
+                          <div className="flex justify-between mt-1 px-0.5">
+                            <span className="text-xs text-gray-300">$1000</span>
+                            <span className="text-xs text-gray-300">$1750</span>
+                            <span className="text-xs text-gray-300">$2500</span>
+                            <span className="text-xs text-gray-300">$3500</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div className="text-xs text-gray-400 mb-4">只在此区间内的档位进行分配，共 {allocLevels.length > 0 ? allocLevels.length : '--'} 个档位</div>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <div className="text-xs text-gray-400 mb-1">最低价（底部）</div>
-                        <div className="flex items-center gap-1 border-b-2 pb-1" style={{ borderColor: '#3B82F6' }}>
-                          <span className="text-sm text-gray-400">$</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="如 1000"
-                            value={allocMinPrice}
-                            onChange={e => setAllocMinPrice(e.target.value)}
-                            className="flex-1 text-lg font-bold text-gray-800 outline-none bg-transparent"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-400 mb-1">最高价（顶部）</div>
-                        <div className="flex items-center gap-1 border-b-2 pb-1" style={{ borderColor: '#3B82F6' }}>
-                          <span className="text-sm text-gray-400">$</span>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="如 2000"
-                            value={allocMaxPrice}
-                            onChange={e => setAllocMaxPrice(e.target.value)}
-                            className="flex-1 text-lg font-bold text-gray-800 outline-none bg-transparent"
-                          />
-                        </div>
-                      </div>
-                    </div>
                     {allocLevels.length > 0 && (
                       <div className="rounded-xl p-3 mb-4" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
                         <div className="text-xs text-blue-600">将在 {allocLevels.length} 个档位分配 {totalQty.toFixed(2)} ETH</div>
