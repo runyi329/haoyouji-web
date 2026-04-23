@@ -509,10 +509,22 @@ export default function PositionCalc() {
                             }}
                           />
                         )}
-                        {/* 百分比内嵌进度条右端 */}
+                        {/* 百分比：跟随实际进度条右边缘移动 */}
                         {targetQty > 0 && (
-                          <div className="absolute right-2 top-0 bottom-0 flex items-center">
-                            <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.9)', textShadow: '0 0 4px rgba(79,70,229,0.8)' }}>
+                          <div
+                            className="absolute top-0 bottom-0 flex items-center transition-all duration-500"
+                            style={{
+                              left: `${pct * 100}%`,
+                              transform: pct >= 0.85 ? 'translateX(-100%) translateX(-4px)' : 'translateX(4px)',
+                            }}
+                          >
+                            <span
+                              className="text-[10px] font-bold whitespace-nowrap"
+                              style={{
+                                color: pct >= 0.85 ? 'rgba(255,255,255,0.95)' : '#818cf8',
+                                textShadow: pct >= 0.85 ? '0 0 4px rgba(79,70,229,0.8)' : 'none',
+                              }}
+                            >
                               {(pct * 100).toFixed(0)}%
                             </span>
                           </div>
