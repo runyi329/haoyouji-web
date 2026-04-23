@@ -892,20 +892,25 @@ export default function PositionCalc() {
                           <div className="text-sm font-semibold text-gray-800">等差分配</div>
                           <div className="text-xs text-gray-400 mt-0.5">越低价格买越多，相邻档位数量差异固定</div>
                           {allocMethod === 'equal' && (
-                            <div className="mt-2 flex items-center gap-2">
-                              <span className="text-xs text-gray-500">公差</span>
+                            <div className="mt-2" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-500">公差（0=均匀，越大梯度越大）</span>
+                                <span className="text-xs font-bold" style={{ color: '#3B82F6' }}>{parseFloat(allocArithDiff).toFixed(1)} ETH</span>
+                              </div>
                               <input
-                                type="number"
-                                inputMode="decimal"
+                                type="range"
+                                min="0"
+                                max="10"
+                                step="0.1"
                                 value={allocArithDiff}
                                 onChange={e => setAllocArithDiff(e.target.value)}
                                 onClick={e => e.stopPropagation()}
-                                className="w-20 px-2 py-1 text-sm font-semibold text-gray-800 rounded-lg outline-none"
-                                style={{ border: '1px solid #BFDBFE', background: '#EFF6FF' }}
-                                step="0.1"
-                                min="0"
+                                className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                                style={{ accentColor: '#3B82F6' }}
                               />
-                              <span className="text-xs text-gray-400">ETH（0=均匀，越大差异越大）</span>
+                              <div className="flex justify-between text-[10px] text-gray-300 mt-0.5">
+                                <span>0</span><span>2.5</span><span>5</span><span>7.5</span><span>10</span>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -928,20 +933,25 @@ export default function PositionCalc() {
                           <div className="text-sm font-semibold text-gray-800">等比分配（越低越多）</div>
                           <div className="text-xs text-gray-400 mt-0.5">价格越低分配越多，按等比递增</div>
                           {allocMethod === 'geometric' && (
-                            <div className="mt-2 flex items-center gap-2">
-                              <span className="text-xs text-gray-500">公比</span>
+                            <div className="mt-2" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-500">公比（1.0=均匀，越大梯度越大）</span>
+                                <span className="text-xs font-bold" style={{ color: '#F97316' }}>{parseFloat(allocGeomRatio).toFixed(1)}x</span>
+                              </div>
                               <input
-                                type="number"
-                                inputMode="decimal"
+                                type="range"
+                                min="1.0"
+                                max="3.0"
+                                step="0.1"
                                 value={allocGeomRatio}
                                 onChange={e => setAllocGeomRatio(e.target.value)}
                                 onClick={e => e.stopPropagation()}
-                                className="w-20 px-2 py-1 text-sm font-semibold text-gray-800 rounded-lg outline-none"
-                                style={{ border: '1px solid #FED7AA', background: '#FFF7ED' }}
-                                step="0.1"
-                                min="1.0"
+                                className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                                style={{ accentColor: '#F97316' }}
                               />
-                              <span className="text-xs text-gray-400">（1.0=均匀，1.5=较大差异）</span>
+                              <div className="flex justify-between text-[10px] text-gray-300 mt-0.5">
+                                <span>1.0</span><span>1.5</span><span>2.0</span><span>2.5</span><span>3.0</span>
+                              </div>
                             </div>
                           )}
                         </div>
