@@ -1160,28 +1160,37 @@ export default function PositionCalc() {
                   </div>
                 )}
                 {/* 步骤 3：预览并确认 */}
-                {allocStep === 'preview' && (
+                {allocStep === 'preview' && (() => {
+                  // 实时重算，确保滑动条变化后预览立即更新
+                  const liveResult = allocMethod === 'manual' ? allocPreview : calcAutoAlloc(allocMethod, minP, maxP);
+                  const liveTotal = Object.values(liveResult).reduce((s, v) => s + v, 0);
+                  const liveMax = allocLevels.length > 0 ? Math.max(...allocLevels.map(p => liveResult[p] || 0)) : 1;
+                  return (
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="text-sm font-semibold text-gray-700">分配预览</div>
                       <div className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#D1FAE5', color: '#059669' }}>
-                        共 {previewTotal.toFixed(4)} ETH
+                        共 {liveTotal} ETH
                       </div>
                     </div>
                     <div className="space-y-1.5 mb-4">
                       {allocLevels.map(p => {
-                        const qty = previewResult[p] || 0;
-                        const pct = totalQty > 0 ? qty / totalQty * 100 : 0;
+                        const qty = liveResult[p] || 0;
+                        const pct = liveMax > 0 ? qty / liveMax * 100 : 0;
+                        const barColor = allocMethod === 'equal' ? 'linear-gradient(90deg, #1A56DB, #3B82F6)'
+                          : allocMethod === 'geometric' ? 'linear-gradient(90deg, #EA580C, #F97316)'
+                          : allocMethod === 'normal' ? 'linear-gradient(90deg, #7C3AED, #8B5CF6)'
+                          : 'linear-gradient(90deg, #059669, #10B981)';
                         return (
                           <div key={p} className="flex items-center gap-2">
                             <span className="text-xs font-mono text-gray-500 w-14 flex-shrink-0">${p}</span>
-                            <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                            <div className="flex-1 h-3 rounded-full bg-gray-100 overflow-hidden">
                               <div
-                                className="h-full rounded-full"
-                                style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #1A56DB, #3B82F6)' }}
+                                className="h-full rounded-full transition-all duration-200"
+                                style={{ width: `${pct}%`, background: barColor }}
                               />
                             </div>
-                            <span className="text-xs font-semibold text-gray-700 w-16 text-right flex-shrink-0">{qty.toFixed(4)}</span>
+                            <span className="text-xs font-semibold text-gray-700 w-12 text-right flex-shrink-0">{qty} ETH</span>
                           </div>
                         );
                       })}
@@ -1193,10 +1202,10 @@ export default function PositionCalc() {
                       >重新分配</button>
                       <button
                         onClick={() => {
-                          // 将预览结果写入 planned
+                          // 将实时计算结果写入 planned
                           const newPlanned = { ...planned };
                           allocLevels.forEach(p => {
-                            newPlanned[p] = previewResult[p] || 0;
+                            newPlanned[p] = liveResult[p] || 0;
                           });
                           setPlanned(newPlanned);
                           // 保存到数据库
@@ -1211,7 +1220,8 @@ export default function PositionCalc() {
                       </button>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
               </div>
             </div>
           </div>
