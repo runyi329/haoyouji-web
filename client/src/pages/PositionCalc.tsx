@@ -559,8 +559,8 @@ export default function PositionCalc() {
                             <>
                               <div className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>实际止盈</div>
                               <div className="flex items-baseline gap-1">
-                                <span className="text-sm font-bold" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                  ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                <span className="text-sm font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                                  {actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span>
                                 </span>
                                 {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice && (
                                   <span className="text-[10px] font-semibold px-1 py-0.5 rounded" style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>
@@ -586,8 +586,8 @@ export default function PositionCalc() {
                                     +{((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%
                                   </span>
                                 )}
-                                <span className="text-sm font-bold" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums' }}>
-                                  ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                <span className="text-sm font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                                  {targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span>
                                 </span>
                               </div>
                             </>
@@ -615,14 +615,14 @@ export default function PositionCalc() {
                           <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: '1px solid rgba(212,175,55,0.15)' }}>
                             <div>
                               <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.5)' }}>实际均价</div>
-                              <span className="text-sm font-bold" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                {actualAvg > 0 ? `$${actualAvg.toFixed(0)}` : '--'}
+                              <span className="text-sm font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                                {actualAvg > 0 ? <>{actualAvg.toFixed(0)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></> : '--'}
                               </span>
                             </div>
                             <div className="text-right">
                               <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>目标均价</div>
-                              <span className="text-sm font-bold" style={{ color: 'rgba(212,175,55,0.7)', fontVariantNumeric: 'tabular-nums' }}>
-                                {targetAvg > 0 ? `$${targetAvg.toFixed(0)}` : '--'}
+                              <span className="text-sm font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                                {targetAvg > 0 ? <>{targetAvg.toFixed(0)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></> : '--'}
                               </span>
                             </div>
                           </div>
