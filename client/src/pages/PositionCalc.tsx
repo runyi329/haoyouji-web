@@ -1468,54 +1468,40 @@ export default function PositionCalc() {
                     {(allocMethod === 'equal' || allocMethod === 'geometric' || allocMethod === 'normal') && allocLevels.length > 0 && (() => {
                       const previewQtys = calcAutoAlloc(allocMethod, minP, maxP);
                       const maxQty = Math.max(...allocLevels.map(p => previewQtys[p] || 0));
+                      // 计算加权均价
+                      let _totalCost = 0, _totalQty = 0;
+                      allocLevels.forEach(p => { const q = previewQtys[p] || 0; if (q > 0) { _totalCost += q * p; _totalQty += q; } });
+                      const previewAvgPrice = _totalQty > 0 ? _totalCost / _totalQty : 0;
+                      const livePrice = currentPrice || 0;
+                      const priceDiff = previewAvgPrice > 0 && livePrice > 0 ? previewAvgPrice - livePrice : 0;
+                      const priceDiffPct = livePrice > 0 && priceDiff !== 0 ? (priceDiff / livePrice * 100) : 0;
+                      const isNearTarget = Math.abs(priceDiffPct) < 2;
+                      const isHigher = priceDiff > 0;
+                      const accentColor = allocMethod === 'equal' ? '#3B82F6' : allocMethod === 'geometric' ? '#F97316' : '#8B5CF6';
                       return (
-                        {(() => {
-                          // 计算当前分配方案的加权均价
-                          const previewQtysForAvg = calcAutoAlloc(allocMethod, minP, maxP);
-                          let _cost = 0, _qty = 0;
-                          allocLevels.forEach(p => { const q = previewQtysForAvg[p] || 0; if (q > 0) { _cost += q * p; _qty += q; } });
-                          const previewAvg = _qty > 0 ? _cost / _qty : 0;
-                          const targetPrice = currentPrice || 0;
-                          const avgDiff = previewAvg > 0 && targetPrice > 0 ? previewAvg - targetPrice : 0;
-                          const avgDiffPct = targetPrice > 0 && avgDiff !== 0 ? (avgDiff / targetPrice * 100) : 0;
-                          return null; // 仅声明变量，实际渲染在下方
-                        })()}
-                        <div className="mb-4 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                        <div className="mb-4 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${accentColor}33` }}>
                           {/* 均价指示器 */}
-                          {(() => {
-                            const previewQtysForAvg2 = calcAutoAlloc(allocMethod, minP, maxP);
-                            let _cost2 = 0, _qty2 = 0;
-                            allocLevels.forEach(p => { const q = previewQtysForAvg2[p] || 0; if (q > 0) { _cost2 += q * p; _qty2 += q; } });
-                            const previewAvg2 = _qty2 > 0 ? _cost2 / _qty2 : 0;
-                            const targetPrice2 = currentPrice || 0;
-                            const avgDiff2 = previewAvg2 > 0 && targetPrice2 > 0 ? previewAvg2 - targetPrice2 : 0;
-                            const avgDiffPct2 = targetPrice2 > 0 && avgDiff2 !== 0 ? (avgDiff2 / targetPrice2 * 100) : 0;
-                            const isClose = Math.abs(avgDiffPct2) < 2;
-                            const isAbove = avgDiff2 > 0;
-                            return (
-                              <div className="flex items-center justify-between mb-3 pb-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                                <div>
-                                  <div className="text-[10px] mb-0.5" style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: '0.08em' }}>预计均价</div>
-                                  <div className="flex items-baseline gap-1.5">
-                                    <span className="text-lg font-bold" style={{ color: isClose ? '#4ade80' : isAbove ? '#fb923c' : '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
-                                      {previewAvg2 > 0 ? `$${previewAvg2.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}
-                                    </span>
-                                    {avgDiff2 !== 0 && previewAvg2 > 0 && (
-                                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: isAbove ? 'rgba(251,146,60,0.15)' : 'rgba(96,165,250,0.15)', color: isAbove ? '#fb923c' : '#60a5fa' }}>
-                                        {isAbove ? '↑' : '↓'}{Math.abs(avgDiffPct2).toFixed(1)}%
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="text-[10px] mb-0.5" style={{ color: 'rgba(255,255,255,0.35)', letterSpacing: '0.08em' }}>当前行情</div>
-                                  <div className="text-base font-semibold" style={{ color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
-                                    {targetPrice2 > 0 ? `$${targetPrice2.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}
-                                  </div>
-                                </div>
+                          <div className="flex items-center justify-between mb-3 pb-2" style={{ borderBottom: `1px solid ${accentColor}22` }}>
+                            <div>
+                              <div className="text-[10px] mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>预计均价</div>
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="text-base font-bold" style={{ color: isNearTarget ? '#4ade80' : isHigher ? '#fb923c' : '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
+                                  {previewAvgPrice > 0 ? `$${previewAvgPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}
+                                </span>
+                                {priceDiff !== 0 && previewAvgPrice > 0 && (
+                                  <span className="text-[10px] font-semibold px-1 py-0.5 rounded" style={{ background: isHigher ? 'rgba(251,146,60,0.15)' : 'rgba(96,165,250,0.15)', color: isHigher ? '#fb923c' : '#60a5fa' }}>
+                                    {isHigher ? '↑' : '↓'}{Math.abs(priceDiffPct).toFixed(1)}%
+                                  </span>
+                                )}
                               </div>
-                            );
-                          })()}
+                            </div>
+                            <div className="text-right">
+                              <div className="text-[10px] mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>当前行情</div>
+                              <div className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.55)', fontVariantNumeric: 'tabular-nums' }}>
+                                {livePrice > 0 ? `$${livePrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}
+                              </div>
+                            </div>
+                          </div>
                           <div className="flex items-center justify-between mb-2">
                             <div className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>实时分配预览</div>
                             <div className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>{allocLevels.length} 个档位 · {totalQty.toFixed(2)} ETH</div>
@@ -1528,7 +1514,7 @@ export default function PositionCalc() {
                               return (
                                 <div key={p} className="flex items-center gap-2">
                                   <span className="text-[10px] font-mono text-gray-400 w-12 flex-shrink-0 text-right">${p}</span>
-                                  <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+                                  <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: '#E5E7EB' }}>
                                     <div
                                       className="h-full rounded-full transition-all duration-200"
                                       style={{ width: `${pct}%`, background: barColor }}
