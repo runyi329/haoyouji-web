@@ -855,28 +855,19 @@ export default function PositionCalc() {
                   {isNearCurrent && (
                     <svg
                       className="ml-1.5 flex-shrink-0"
-                      width="14" height="22"
-                      viewBox="0 0 14 22"
+                      width="12" height="20"
+                      viewBox="0 0 12 20"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
+                      style={{ filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.6))' }}
                     >
-                      {/* ETH 菱形 logo：上半渐变金色，下半渐变蓝色 */}
-                      <defs>
-                        <linearGradient id="eth-top" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#f5e27a" />
-                          <stop offset="100%" stopColor="#d4af37" />
-                        </linearGradient>
-                        <linearGradient id="eth-bot" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#60a5fa" />
-                          <stop offset="100%" stopColor="#3b82f6" />
-                        </linearGradient>
-                      </defs>
-                      {/* 上半部分 */}
-                      <polygon points="7,0 14,11 7,8" fill="url(#eth-top)" opacity="0.95" />
-                      <polygon points="7,0 0,11 7,8" fill="url(#eth-top)" opacity="0.7" />
-                      {/* 下半部分 */}
-                      <polygon points="7,22 14,13 7,16" fill="url(#eth-bot)" opacity="0.95" />
-                      <polygon points="7,22 0,13 7,16" fill="url(#eth-bot)" opacity="0.7" />
+                      {/* ETH 白色轮廓风格，黑色描边确保在任何背景上可见 */}
+                      {/* 上半：亮白 */}
+                      <polygon points="6,0 12,10 6,7" fill="rgba(255,255,255,0.95)" />
+                      <polygon points="6,0 0,10 6,7" fill="rgba(255,255,255,0.7)" />
+                      {/* 下半：稍暗 */}
+                      <polygon points="6,20 12,12 6,15" fill="rgba(255,255,255,0.9)" />
+                      <polygon points="6,20 0,12 6,15" fill="rgba(255,255,255,0.6)" />
                     </svg>
                   )}
                 </div>
