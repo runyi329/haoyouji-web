@@ -278,9 +278,8 @@ export default function PositionCalc() {
         {!editingRate ? (
           // 展示模式：财经质感卡片
           <div
-            className="relative overflow-hidden rounded-2xl cursor-pointer"
+            className="relative overflow-hidden rounded-2xl"
             style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
-            onClick={() => { setCnyRateInput(cnyRate.toFixed(4)); setEditingRate(true); }}
           >
             {/* 装饰光晕 */}
             <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #e2b96f 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
@@ -289,7 +288,13 @@ export default function PositionCalc() {
               {/* 标题行 */}
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium tracking-widest" style={{ color: '#e2b96f', letterSpacing: '0.15em' }}>目标止盈利润</span>
-                <Pencil className="w-3.5 h-3.5" style={{ color: 'rgba(226,185,111,0.5)' }} />
+                <button
+                  onClick={() => { setCnyRateInput(cnyRate.toFixed(4)); setEditingRate(true); }}
+                  className="p-1 rounded-md"
+                  style={{ background: 'rgba(226,185,111,0.12)' }}
+                >
+                  <Pencil className="w-3.5 h-3.5" style={{ color: 'rgba(226,185,111,0.8)' }} />
+                </button>
               </div>
               {/* 主数字区 */}
               <div className="mb-3">
