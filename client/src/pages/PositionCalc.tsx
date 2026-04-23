@@ -405,120 +405,141 @@ export default function PositionCalc() {
                   </span>
                 </div>
               </div>
-              {/* 目标持仓 vs 当前持仓 对比区 */}
-              <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                {/* 当前 ETH 价格行 */}
-                <div className="flex justify-end mb-2">
+              {/* 持仓进度区 - ETH 蓝色系 */}
+              <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(98,126,234,0.2)' }}>
+                {/* 标题行：当前 ETH 价 + 配置按钮 */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium" style={{ color: 'rgba(98,126,234,0.7)' }}>持仓进度</span>
+                    {targetEthQty && parseFloat(targetEthQty) > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          try {
+                            const saved = localStorage.getItem(`alloc_config_${ledgerId}`);
+                            if (saved) {
+                              const cfg = JSON.parse(saved);
+                              if (cfg.method) setAllocMethod(cfg.method);
+                              if (cfg.arithDiff) setAllocArithDiff(cfg.arithDiff);
+                              if (cfg.geomRatio) setAllocGeomRatio(cfg.geomRatio);
+                              if (typeof cfg.geomAsc === 'boolean') setAllocGeomAsc(cfg.geomAsc);
+                              if (typeof cfg.equalAsc === 'boolean') setAllocEqualAsc(cfg.equalAsc);
+                              if (cfg.normalSigma) setAllocNormalSigma(cfg.normalSigma);
+                              if (cfg.minPrice) setAllocMinPrice(cfg.minPrice);
+                              if (cfg.maxPrice) setAllocMaxPrice(cfg.maxPrice);
+                            }
+                          } catch {}
+                          const hasAlloc = PRICE_LEVELS.some(p => (planned[p] || 0) > 0);
+                          if (hasAlloc) {
+                            const allocedLevels = PRICE_LEVELS.filter(p => (planned[p] || 0) > 0);
+                            if (allocedLevels.length > 0) {
+                              const detectedMin = Math.min(...allocedLevels);
+                              const detectedMax = Math.max(...allocedLevels);
+                              setAllocMinPrice(String(detectedMin));
+                              setAllocMaxPrice(String(detectedMax));
+                              const preview: Record<number, number> = {};
+                              allocedLevels.forEach(p => { preview[p] = planned[p] || 0; });
+                              setAllocPreview(preview);
+                            }
+                            setAllocStep('preview');
+                          } else {
+                            setAllocStep('range');
+                          }
+                          setShowAutoAlloc(true);
+                        }}
+                        className="px-1.5 py-0 rounded font-semibold leading-4"
+                        style={{ background: 'rgba(98,126,234,0.18)', color: '#818cf8', border: '1px solid rgba(98,126,234,0.35)', fontSize: '10px' }}
+                      >配置</button>
+                    )}
+                  </div>
                   <div className="text-right">
-                    <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>当前 ETH 价</div>
-                    <span className="text-lg font-semibold" style={{ color: '#4fc3f7' }}>
-                      {currentPrice ? `$${currentPrice.toFixed(0)}` : <span style={{ color: 'rgba(79,195,247,0.3)' }}>--</span>}
+                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>ETH </span>
+                    <span className="text-sm font-semibold" style={{ color: '#93c5fd' }}>
+                      {currentPrice ? `$${currentPrice.toFixed(0)}` : '--'}
                     </span>
                   </div>
                 </div>
-                {/* 两列对比：左=目标持仓，右=当前持仓 */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* 左列：目标持仓 */}
-                  <div className="rounded-xl p-2.5" style={{ background: 'rgba(226,185,111,0.08)', border: '1px solid rgba(226,185,111,0.15)' }}>
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="text-xs" style={{ color: 'rgba(226,185,111,0.6)' }}>目标持仓</span>
-                      {targetEthQty && parseFloat(targetEthQty) > 0 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            try {
-                              const saved = localStorage.getItem(`alloc_config_${ledgerId}`);
-                              if (saved) {
-                                const cfg = JSON.parse(saved);
-                                if (cfg.method) setAllocMethod(cfg.method);
-                                if (cfg.arithDiff) setAllocArithDiff(cfg.arithDiff);
-                                if (cfg.geomRatio) setAllocGeomRatio(cfg.geomRatio);
-                                if (typeof cfg.geomAsc === 'boolean') setAllocGeomAsc(cfg.geomAsc);
-                                if (typeof cfg.equalAsc === 'boolean') setAllocEqualAsc(cfg.equalAsc);
-                                if (cfg.normalSigma) setAllocNormalSigma(cfg.normalSigma);
-                                if (cfg.minPrice) setAllocMinPrice(cfg.minPrice);
-                                if (cfg.maxPrice) setAllocMaxPrice(cfg.maxPrice);
-                              }
-                            } catch {}
-                            const hasAlloc = PRICE_LEVELS.some(p => (planned[p] || 0) > 0);
-                            if (hasAlloc) {
-                              const allocedLevels = PRICE_LEVELS.filter(p => (planned[p] || 0) > 0);
-                              if (allocedLevels.length > 0) {
-                                const detectedMin = Math.min(...allocedLevels);
-                                const detectedMax = Math.max(...allocedLevels);
-                                setAllocMinPrice(String(detectedMin));
-                                setAllocMaxPrice(String(detectedMax));
-                                const preview: Record<number, number> = {};
-                                allocedLevels.forEach(p => { preview[p] = planned[p] || 0; });
-                                setAllocPreview(preview);
-                              }
-                              setAllocStep('preview');
-                            } else {
-                              setAllocStep('range');
-                            }
-                            setShowAutoAlloc(true);
-                          }}
-                          className="px-1 py-0 rounded font-semibold leading-4"
-                          style={{ background: 'rgba(251,191,36,0.18)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.35)', fontSize: '10px' }}
-                        >配置</button>
-                      )}
-                    </div>
-                    <div className="text-xl font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
-                      {targetEthQty && parseFloat(targetEthQty) > 0
-                        ? `${parseFloat(targetEthQty).toFixed(2)} ETH`
-                        : <span style={{ color: 'rgba(226,185,111,0.3)' }}>-- ETH</span>
-                      }
-                    </div>
-                    {targetEthQty && parseFloat(targetEthQty) > 0 && targetProfitCny && parseFloat(targetProfitCny) > 0 && currentPrice && (() => {
-                      const profitUsdt = parseFloat(targetProfitCny) / cnyRate;
-                      const targetExitPrice = currentPrice + profitUsdt / parseFloat(targetEthQty);
-                      return (
-                        <div className="mt-1.5">
-                          <div className="flex items-center gap-1 mb-0.5">
-                            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>目标离场价</span>
-                            <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1 }}>
-                              <HelpCircle className="w-3 h-3" />
-                            </button>
-                          </div>
-                          <div className="text-base font-bold" style={{ color: '#f97316', fontVariantNumeric: 'tabular-nums' }}>
-                            ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                          </div>
-                          <div className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                            +{((targetExitPrice - currentPrice) / currentPrice * 100).toFixed(1)}%
-                          </div>
+
+                {/* 数量标注行 */}
+                {(() => {
+                  const targetQty = parseFloat(targetEthQty) || 0;
+                  const actualQty = summary.totalQty || 0;
+                  const pct = targetQty > 0 ? Math.min(actualQty / targetQty, 1) : 0;
+                  const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
+                  const targetExitPrice = currentPrice && targetQty > 0 ? currentPrice + profitUsdt / targetQty : 0;
+                  const actualExitPrice = currentPrice && actualQty > 0 ? currentPrice + profitUsdt / actualQty : 0;
+
+                  return (
+                    <div>
+                      {/* 数量对比行 */}
+                      <div className="flex items-end justify-between mb-1.5">
+                        <div>
+                          <div className="text-xs mb-0.5" style={{ color: 'rgba(129,140,248,0.6)' }}>实际持仓</div>
+                          <span className="text-2xl font-bold" style={{ color: '#a5b4fc', fontVariantNumeric: 'tabular-nums' }}>
+                            {actualQty > 0 ? actualQty.toFixed(0) : '--'}
+                          </span>
+                          <span className="text-xs ml-1" style={{ color: 'rgba(165,180,252,0.6)' }}>ETH</span>
                         </div>
-                      );
-                    })()}
-                  </div>
-                  {/* 右列：当前持仓 */}
-                  <div className="rounded-xl p-2.5" style={{ background: 'rgba(251,113,133,0.08)', border: '1px solid rgba(211,47,47,0.2)' }}>
-                    <div className="text-xs mb-1" style={{ color: 'rgba(251,113,133,0.6)' }}>当前持仓</div>
-                    <div className="text-xl font-bold" style={{ color: '#fca5a5', fontVariantNumeric: 'tabular-nums' }}>
-                      {summary.totalQty > 0
-                        ? `${summary.totalQty.toFixed(2)} ETH`
-                        : <span style={{ color: 'rgba(252,165,165,0.3)' }}>-- ETH</span>
-                      }
-                    </div>
-                    {targetProfitCny && parseFloat(targetProfitCny) > 0 && currentPrice && summary.totalQty > 0 && (() => {
-                      const profitUsdt = parseFloat(targetProfitCny) / cnyRate;
-                      const actualExitPrice = currentPrice + profitUsdt / summary.totalQty;
-                      return (
-                        <div className="mt-1.5">
-                          <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>实际离场价</div>
-                          <div className="text-base font-bold" style={{ color: '#fb923c', fontVariantNumeric: 'tabular-nums' }}>
-                            ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                          </div>
-                          <div className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                            +{((actualExitPrice - currentPrice) / currentPrice * 100).toFixed(1)}%
-                          </div>
+                        <div className="text-right">
+                          <div className="text-xs mb-0.5" style={{ color: 'rgba(98,126,234,0.5)' }}>目标持仓</div>
+                          <span className="text-lg font-semibold" style={{ color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
+                            {targetQty > 0 ? targetQty.toFixed(0) : '--'}
+                          </span>
+                          <span className="text-xs ml-1" style={{ color: 'rgba(99,102,241,0.5)' }}>ETH</span>
                         </div>
-                      );
-                    })()}
-                    {summary.totalQty === 0 && (
-                      <div className="mt-1.5 text-xs" style={{ color: 'rgba(252,165,165,0.3)' }}>暂无买入记录</div>
-                    )}
-                  </div>
-                </div>
+                      </div>
+
+                      {/* 进度条：目标=深蓝底，实际=亮蓝高光 */}
+                      <div className="relative rounded-full overflow-hidden" style={{ height: '10px', background: 'rgba(99,102,241,0.2)' }}>
+                        {/* 目标底条（满宽，深蓝低光） */}
+                        <div className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(90deg, rgba(99,102,241,0.35) 0%, rgba(99,102,241,0.15) 100%)' }} />
+                        {/* 实际填充（亮蓝高光） */}
+                        {pct > 0 && (
+                          <div
+                            className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${pct * 100}%`,
+                              background: pct >= 1
+                                ? 'linear-gradient(90deg, #6366f1 0%, #818cf8 60%, #a5b4fc 100%)'
+                                : 'linear-gradient(90deg, #4f46e5 0%, #6366f1 60%, #818cf8 100%)',
+                              boxShadow: '0 0 8px rgba(129,140,248,0.6)',
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      {/* 百分比 + 离场价行 */}
+                      <div className="flex items-center justify-between mt-1.5">
+                        <span className="text-xs font-bold" style={{ color: pct >= 1 ? '#a5b4fc' : '#818cf8' }}>
+                          {targetQty > 0 ? `${(pct * 100).toFixed(0)}%` : '--'}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          {actualExitPrice > 0 && (
+                            <div className="text-right">
+                              <div className="text-xs" style={{ color: 'rgba(165,180,252,0.5)' }}>实际离场</div>
+                              <span className="text-xs font-bold" style={{ color: '#a5b4fc' }}>
+                                ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                              </span>
+                            </div>
+                          )}
+                          {targetExitPrice > 0 && (
+                            <div className="text-right">
+                              <div className="flex items-center gap-0.5 justify-end">
+                                <span className="text-xs" style={{ color: 'rgba(99,102,241,0.5)' }}>目标离场</span>
+                                <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(99,102,241,0.5)', lineHeight: 1 }}>
+                                  <HelpCircle className="w-2.5 h-2.5" />
+                                </button>
+                              </div>
+                              <span className="text-xs font-bold" style={{ color: '#6366f1' }}>
+                                ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
                             {/* 汇率行 */}
               <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
