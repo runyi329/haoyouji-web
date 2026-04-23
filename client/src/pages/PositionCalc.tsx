@@ -619,21 +619,7 @@ export default function PositionCalc() {
                 />
               </div>
             </div>
-            {/* 目标 ETH 数量输入 */}
-            <div className="mb-3">
-              <div className="text-xs text-gray-400 mb-1">目标持仓 ETH 数量</div>
-              <div className="flex items-center gap-2 border-b-2 border-blue-300 pb-1">
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="输入 ETH 数量"
-                  value={targetEthQty}
-                  onChange={e => setTargetEthQty(e.target.value)}
-                  className="flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
-                />
-                <span className="text-sm font-medium text-gray-400">ETH</span>
-              </div>
-            </div>
+
             {/* 汇率输入 */}
             <div className="mb-4">
               <div className="text-xs text-gray-400 mb-1">USD/CNY 汇率</div>
@@ -955,6 +941,21 @@ export default function PositionCalc() {
                 {allocStep === 'range' && (
                   <div>
                     <div className="text-sm font-semibold text-gray-700 mb-4">设置买入价格区间</div>
+                    {/* 目标持仓数量输入（移入配置弹窗） */}
+                    <div className="mb-4">
+                      <div className="text-xs text-gray-400 mb-1">目标持仓 ETH 数量</div>
+                      <div className="flex items-center gap-2 border-b-2 pb-1" style={{ borderColor: '#3B82F6' }}>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="输入 ETH 数量"
+                          value={targetEthQty}
+                          onChange={e => setTargetEthQty(e.target.value)}
+                          className="flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                        />
+                        <span className="text-sm font-medium text-gray-400">ETH</span>
+                      </div>
+                    </div>
                     <div className="text-xs text-gray-400 mb-4">只在此区间内的档位进行分配，共 {allocLevels.length > 0 ? allocLevels.length : '--'} 个档位</div>
                     <div className="grid grid-cols-2 gap-4 mb-4">
                       <div>
