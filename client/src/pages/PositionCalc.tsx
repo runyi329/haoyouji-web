@@ -1563,8 +1563,8 @@ export default function PositionCalc() {
                     )}
                     <div className="flex gap-3">
                       <button
-                        onClick={() => setAllocStep('range')}
-                        className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-600 bg-gray-100"
+                        onClick={() => setAllocStep('setup')}
+                        className="flex-1 py-3 rounded-xl text-sm font-medium" style={{ color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.08)' }}
                       >返回</button>
                       <button
                         disabled={allocMethod === 'manual' && Math.abs(manualTotal - totalQty) > 0.001}
@@ -1621,8 +1621,8 @@ export default function PositionCalc() {
                     </div>
                     <div className="flex gap-3">
                       <button
-                        onClick={() => { setAllocStep('range'); }}
-                        className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-600 bg-gray-100"
+                        onClick={() => { setAllocStep('method'); }}
+                        className="flex-1 py-3 rounded-xl text-sm font-medium" style={{ color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.08)' }}
                       >重新分配</button>
                       <button
                         onClick={() => {
