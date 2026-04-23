@@ -369,23 +369,23 @@ export default function PositionCalc() {
               <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs mb-0.5" style={{ color: 'rgba(226,185,111,0.5)' }}>目标持仓</div>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs" style={{ color: 'rgba(226,185,111,0.5)' }}>目标持仓</span>
+                      {targetEthQty && parseFloat(targetEthQty) > 0 && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setAllocStep('range'); setShowAutoAlloc(true); }}
+                          className="px-1.5 py-0 rounded text-xs font-semibold leading-5"
+                          style={{ background: 'rgba(251,191,36,0.18)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.35)' }}
+                        >配置</button>
+                      )}
+                    </div>
                     <span className="text-2xl font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
                       {targetEthQty && parseFloat(targetEthQty) > 0
                         ? `${parseFloat(targetEthQty).toFixed(2)} ETH`
                         : <span style={{ color: 'rgba(226,185,111,0.3)' }}>-- ETH</span>
                       }
                     </span>
-                    {targetEthQty && parseFloat(targetEthQty) > 0 && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setAllocStep('range'); setShowAutoAlloc(true); }}
-                        className="mt-1 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
-                        style={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}
-                      >
-                        <span>↻</span>
-                        <span>自动分配档位</span>
-                      </button>
-                    )}
+
                   </div>
                   <div className="text-right">
                     <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>当前 ETH 价</div>
