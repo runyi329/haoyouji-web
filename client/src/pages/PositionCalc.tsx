@@ -525,13 +525,13 @@ export default function PositionCalc() {
                       </div>
 
                       {/* 进度条：目标=深蓝底，实际=亮蓝高光，百分比内嵌右端 */}
-                      <div className="relative rounded-full overflow-hidden" style={{ height: '18px', background: 'rgba(212,175,55,0.1)' }}>
+                      <div className="relative rounded overflow-hidden" style={{ height: '18px', background: 'rgba(212,175,55,0.1)' }}>
                         {/* 目标底条（满宽，深蓝低光） */}
-                        <div className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(90deg, rgba(212,175,55,0.2) 0%, rgba(212,175,55,0.08) 100%)' }} />
+                        <div className="absolute inset-0 rounded" style={{ background: 'linear-gradient(90deg, rgba(212,175,55,0.2) 0%, rgba(212,175,55,0.08) 100%)' }} />
                         {/* 实际填充（亮蓝高光），内含百分比数字 */}
                         {pct > 0 && (
                           <div
-                            className="absolute top-0 left-0 h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                            className="absolute top-0 left-0 h-full rounded transition-all duration-500 flex items-center justify-end pr-2"
                             style={{
                               width: `${pct * 100}%`,
                               background: pct >= 1
@@ -753,9 +753,9 @@ export default function PositionCalc() {
                 </div>
               </div>
               {/* 达成进度条 */}
-              <div className="mt-2 h-1.5 rounded-full bg-blue-100 overflow-hidden">
+              <div className="mt-2 h-1.5 rounded bg-blue-100 overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all duration-300"
+                  className="h-full rounded transition-all duration-300"
                   style={{
                     width: `${summary.totalPlanned > 0 ? Math.min((summary.totalQty / summary.totalPlanned) * 100, 100) : 0}%`,
                     background: 'linear-gradient(90deg, #1A56DB, #3B82F6)',
@@ -809,7 +809,7 @@ export default function PositionCalc() {
             >
               {/* 进度条容器 */}
               <div
-                className="relative h-8 rounded-lg overflow-hidden transition-all duration-200 active:scale-[0.98]"
+                className="relative h-8 rounded overflow-hidden transition-all duration-200 active:scale-[0.98]"
                 style={{
                   background: '#F3F4F6',
                   boxShadow: isNearCurrent ? '0 0 0 2px #3B82F6' : 'none',
@@ -1069,8 +1069,8 @@ export default function PositionCalc() {
                           </div>
                         </div>
                         {/* 进度条 */}
-                        <div className="relative rounded-full overflow-hidden mb-2" style={{ height: '14px', background: 'rgba(255,255,255,0.1)' }}>
-                          <div className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
+                        <div className="relative rounded overflow-hidden mb-2" style={{ height: '14px', background: 'rgba(255,255,255,0.1)' }}>
+                          <div className="absolute top-0 left-0 h-full rounded transition-all duration-500"
                             style={{ width: `${progressPct * 100}%`, background: 'linear-gradient(90deg, #3B82F6 0%, #60A5FA 100%)', boxShadow: '0 0 8px rgba(96,165,250,0.6)' }}
                           />
                           {progressPct > 0 && (
