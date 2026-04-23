@@ -947,20 +947,44 @@ export default function PositionCalc() {
                 {allocStep === 'setup' && (() => {
                   const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
                   const qty = parseFloat(targetEthQty) || 0;
-                  // 简单估算目标止盈价：当前价 + 利润/数量（粗略，不依赖均价）
                   const simpleTargetPrice = qty > 0 && profitUsdt > 0 ? (currentPrice || 0) + profitUsdt / qty : 0;
                   const simpleRisePct = currentPrice && simpleTargetPrice > currentPrice
-                    ? ((simpleTargetPrice - currentPrice) / currentPrice * 100)
-                    : 0;
-                  // 进度条：当前价距目标止盈价的进度（以当前价为0%，目标止盈价为100%）
-                  // 用 currentPrice / simpleTargetPrice 来表示已完成的涨幅比例
+                    ? ((simpleTargetPrice - currentPrice) / currentPrice * 100) : 0;
                   const progressPct = simpleTargetPrice > 0 && currentPrice ? Math.min(currentPrice / simpleTargetPrice, 1) : 0;
+                  const QTY_MIN = 100, QTY_MAX = 5000, QTY_STEP = 50;
+                  const qtyVal = parseFloat(targetEthQty) || QTY_MIN;
+                  const qtyPct = Math.min(Math.max((qtyVal - QTY_MIN) / (QTY_MAX - QTY_MIN) * 100, 0), 100);
+                  const SLIDER_MIN = 1000, SLIDER_MAX = 3500, SLIDER_STEP = 50;
+                  const minVal2 = parseFloat(allocMinPrice) || SLIDER_MIN;
+                  const maxVal2 = parseFloat(allocMaxPrice) || SLIDER_MAX;
+                  const minPct2 = ((minVal2 - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+                  const maxPct2 = ((maxVal2 - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
+                  const allocLevels2 = PRICE_LEVELS.filter(p => p >= minVal2 && p <= maxVal2);
+
+                  // 统一卡片样式
+                  const cardStyle: React.CSSProperties = {
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    marginBottom: '12px',
+                  };
+                  const labelStyle: React.CSSProperties = {
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#64748B',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase' as const,
+                    marginBottom: '10px',
+                    display: 'block',
+                  };
+
                   return (
                     <div>
-                      {/* 目标止盈利润 */}
-                      <div className="mb-5">
-                        <div className="text-sm font-semibold text-gray-700 mb-2">目标止盈利润</div>
-                        <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: '#F59E0B' }}>
+                      {/* 区块1：目标止盈利润 */}
+                      <div style={cardStyle}>
+                        <span style={labelStyle}>目标止盈利润</span>
+                        <div className="flex items-center gap-2 pb-2" style={{ borderBottom: '2px solid #F59E0B' }}>
                           <span className="text-xl font-bold text-amber-500">¥</span>
                           <input
                             type="number"
@@ -973,165 +997,121 @@ export default function PositionCalc() {
                           />
                         </div>
                         {profitUsdt > 0 && (
-                          <div className="text-xs text-blue-500 mt-1">≈ ${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</div>
+                          <div className="text-xs mt-2" style={{ color: '#3B82F6' }}>≈ ${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</div>
                         )}
                       </div>
-                      {/* 目标持仓数量：滑动条 + 数字输入联动 */}
-                      {(() => {
-                        const QTY_MIN = 100;
-                        const QTY_MAX = 5000;
-                        const QTY_STEP = 50;
-                        const qtyVal = parseFloat(targetEthQty) || QTY_MIN;
-                        const qtyPct = Math.min(Math.max((qtyVal - QTY_MIN) / (QTY_MAX - QTY_MIN) * 100, 0), 100);
-                        // 反向推算：持仓越多，止盈价越低
-                        const revPrice = profitUsdt > 0 && qtyVal > 0 ? (currentPrice || 0) + profitUsdt / qtyVal : 0;
-                        return (
-                          <div className="mb-5">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-sm font-semibold text-gray-700">目标持仓数量</div>
-                              {revPrice > 0 && (
-                                <div className="text-xs" style={{ color: '#6366f1' }}>
-                                  需涨至 <span className="font-bold">${revPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-                                </div>
-                              )}
-                            </div>
-                            {/* 数字输入 */}
-                            <div className="flex items-center gap-2 border-b-2 pb-2 mb-3" style={{ borderColor: '#3B82F6' }}>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                placeholder="输入 ETH 数量"
-                                value={targetEthQty}
-                                onChange={e => setTargetEthQty(e.target.value)}
-                                className="min-w-0 flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
-                              />
-                              <span className="text-sm font-medium text-gray-400 flex-shrink-0">ETH</span>
-                            </div>
-                            {/* 滑动条 */}
-                            <div className="relative" style={{ height: '36px' }}>
-                              {/* 轨道背景 */}
-                              <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', background: '#E5E7EB' }} />
-                              {/* 已选区间高亮 */}
-                              <div className="absolute top-1/2 left-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', width: `${qtyPct}%`, background: 'linear-gradient(90deg, #6366f1, #818cf8)' }} />
-                              <input
-                                type="range"
-                                min={QTY_MIN}
-                                max={QTY_MAX}
-                                step={QTY_STEP}
-                                value={Math.min(Math.max(qtyVal, QTY_MIN), QTY_MAX)}
-                                onChange={e => setTargetEthQty(e.target.value)}
-                                className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                                style={{ top: '50%', transform: 'translateY(-50%)', height: '36px', zIndex: 2 }}
-                              />
-                            </div>
-                            {/* 刻度 */}
-                            <div className="flex justify-between mt-1 px-0.5">
-                              <span className="text-xs text-gray-300">{QTY_MIN}</span>
-                              <span className="text-xs text-gray-300">{(QTY_MIN + QTY_MAX) / 2}</span>
-                              <span className="text-xs text-gray-300">{QTY_MAX}</span>
+
+                      {/* 区块2：当前价 → 需涨至（联动结果） */}
+                      <div style={{ ...cardStyle, background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)', border: 'none' }}>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>当前 ETH 价格</div>
+                            <div className="text-xl font-bold" style={{ color: '#93c5fd' }}>
+                              {currentPrice ? `$${currentPrice.toFixed(0)}` : '--'}
                             </div>
                           </div>
-                        );
-                      })()}
-                      {/* 联动计算结果 */}
-                      {profitUsdt > 0 && qty > 0 && currentPrice ? (
-                        <div className="rounded-2xl p-4 mb-5" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}>
-                          <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>当前 ETH 价格</div>
-                              <div className="text-lg font-bold" style={{ color: '#93c5fd' }}>${(currentPrice || 0).toFixed(0)}</div>
-                            </div>
-                            <div className="text-2xl" style={{ color: 'rgba(255,255,255,0.2)' }}>→</div>
-                            <div className="text-right">
-                              <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>需涨至（估算）</div>
-                              <div className="text-lg font-bold" style={{ color: '#fbbf24' }}>
-                                ${simpleTargetPrice > 0 ? simpleTargetPrice.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '--'}
-                              </div>
+                          <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: '20px' }}>→</div>
+                          <div className="text-right">
+                            <div className="text-xs mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>需涨至（估算）</div>
+                            <div className="text-xl font-bold" style={{ color: profitUsdt > 0 && qty > 0 ? '#fbbf24' : 'rgba(255,255,255,0.2)' }}>
+                              {simpleTargetPrice > 0 ? `$${simpleTargetPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}
                             </div>
                           </div>
-                          {/* 进度条 */}
-                          <div className="relative rounded-full overflow-hidden mb-2" style={{ height: '16px', background: 'rgba(255,255,255,0.1)' }}>
-                            <div
-                              className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
-                              style={{
-                                width: `${progressPct * 100}%`,
-                                background: 'linear-gradient(90deg, #3B82F6 0%, #60A5FA 100%)',
-                                boxShadow: '0 0 8px rgba(96,165,250,0.6)',
-                              }}
-                            />
+                        </div>
+                        {/* 进度条 */}
+                        <div className="relative rounded-full overflow-hidden mb-2" style={{ height: '14px', background: 'rgba(255,255,255,0.1)' }}>
+                          <div className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${progressPct * 100}%`, background: 'linear-gradient(90deg, #3B82F6 0%, #60A5FA 100%)', boxShadow: '0 0 8px rgba(96,165,250,0.6)' }}
+                          />
+                          {progressPct > 0 && (
                             <div className="absolute inset-0 flex items-center justify-end pr-2">
-                              <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>
-                                {(progressPct * 100).toFixed(0)}%
-                              </span>
+                              <span className="text-[10px] font-bold" style={{ color: 'rgba(255,255,255,0.8)' }}>{(progressPct * 100).toFixed(0)}%</span>
                             </div>
+                          )}
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>当前价</span>
+                          <span className="text-xs font-semibold" style={{ color: simpleRisePct > 0 ? '#fbbf24' : 'rgba(255,255,255,0.3)' }}>
+                            {simpleRisePct > 0 ? `还需涨 +${simpleRisePct.toFixed(1)}%` : '请先输入目标利润和持仓数'}
+                          </span>
+                          <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>止盈价</span>
+                        </div>
+                      </div>
+
+                      {/* 区块3：目标持仓数量 */}
+                      <div style={cardStyle}>
+                        <div className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
+                          <span style={labelStyle}>目标持仓数量</span>
+                        </div>
+                        <div className="flex items-center gap-2 pb-2 mb-3" style={{ borderBottom: '2px solid #6366F1' }}>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            placeholder="输入 ETH 数量"
+                            value={targetEthQty}
+                            onChange={e => setTargetEthQty(e.target.value)}
+                            className="min-w-0 flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                          />
+                          <span className="text-sm font-medium flex-shrink-0" style={{ color: '#94A3B8' }}>ETH</span>
+                        </div>
+                        {/* 滑动条 */}
+                        <div className="relative" style={{ height: '32px' }}>
+                          <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', background: '#E2E8F0' }} />
+                          <div className="absolute top-1/2 left-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', width: `${qtyPct}%`, background: 'linear-gradient(90deg, #6366f1, #818cf8)' }} />
+                          <input type="range" min={QTY_MIN} max={QTY_MAX} step={QTY_STEP}
+                            value={Math.min(Math.max(qtyVal, QTY_MIN), QTY_MAX)}
+                            onChange={e => setTargetEthQty(e.target.value)}
+                            className="absolute w-full appearance-none bg-transparent cursor-pointer"
+                            style={{ top: '50%', transform: 'translateY(-50%)', height: '32px', zIndex: 2 }}
+                          />
+                        </div>
+                        <div className="flex justify-between mt-1">
+                          <span className="text-xs" style={{ color: '#CBD5E1' }}>{QTY_MIN}</span>
+                          <span className="text-xs" style={{ color: '#CBD5E1' }}>{(QTY_MIN + QTY_MAX) / 2}</span>
+                          <span className="text-xs" style={{ color: '#CBD5E1' }}>{QTY_MAX}</span>
+                        </div>
+                      </div>
+
+                      {/* 区块4：买入价格区间 */}
+                      <div style={cardStyle}>
+                        <div className="flex items-center justify-between" style={{ marginBottom: '10px' }}>
+                          <span style={labelStyle}>买入价格区间</span>
+                          <span className="text-xs" style={{ color: '#3B82F6' }}>{allocLevels2.length > 0 ? `${allocLevels2.length} 个档位` : '--'}</span>
+                        </div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="text-xs mb-0.5" style={{ color: '#94A3B8' }}>最低价</div>
+                            <div className="text-lg font-bold" style={{ color: '#3B82F6' }}>${minVal2.toLocaleString()}</div>
                           </div>
-                          <div className="flex justify-between">
-                            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>当前价</span>
-                            <span className="text-xs font-semibold" style={{ color: '#fbbf24' }}>
-                              还需涨 {simpleRisePct > 0 ? `+${simpleRisePct.toFixed(1)}%` : '--'}
-                            </span>
-                            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>止盈价</span>
-                          </div>
-                          <div className="text-xs mt-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                            * 此为基于当前价的粗略估算，实际止盈价以建仓均价为准
+                          <div className="text-xs" style={{ color: '#CBD5E1' }}>~</div>
+                          <div className="text-right">
+                            <div className="text-xs mb-0.5" style={{ color: '#94A3B8' }}>最高价</div>
+                            <div className="text-lg font-bold" style={{ color: '#3B82F6' }}>${maxVal2.toLocaleString()}</div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="rounded-2xl p-4 mb-5 text-center" style={{ background: '#F9FAFB', border: '1px dashed #E5E7EB' }}>
-                          <div className="text-sm text-gray-400">输入目标利润和持仓数量</div>
-                          <div className="text-xs text-gray-300 mt-1">系统将实时计算需要涨到的价格</div>
+                        <div className="relative mx-1 dual-range" style={{ height: '40px' }}>
+                          <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', background: '#E2E8F0' }} />
+                          <div className="absolute top-1/2 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', left: `${minPct2}%`, right: `${100 - maxPct2}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
+                          <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={minVal2}
+                            onChange={e => setAllocMinPrice(String(Math.min(parseInt(e.target.value), maxVal2 - SLIDER_STEP)))}
+                            className="absolute w-full appearance-none bg-transparent cursor-pointer"
+                            style={{ top: '50%', transform: 'translateY(-50%)', height: '40px', zIndex: 3, clipPath: `inset(0 ${100 - (minPct2 + maxPct2) / 2}% 0 0)` }}
+                          />
+                          <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={maxVal2}
+                            onChange={e => setAllocMaxPrice(String(Math.max(parseInt(e.target.value), minVal2 + SLIDER_STEP)))}
+                            className="absolute w-full appearance-none bg-transparent cursor-pointer"
+                            style={{ top: '50%', transform: 'translateY(-50%)', height: '40px', zIndex: 4, clipPath: `inset(0 0 0 ${(minPct2 + maxPct2) / 2}%)` }}
+                          />
                         </div>
-                      )}
-                      {/* 保存并继续按钮 */}
-                      {/* 价格区间选择（合并进 setup 步骤） */}
-                      {(() => {
-                        const SLIDER_MIN = 1000;
-                        const SLIDER_MAX = 3500;
-                        const SLIDER_STEP = 50;
-                        const minVal2 = parseFloat(allocMinPrice) || SLIDER_MIN;
-                        const maxVal2 = parseFloat(allocMaxPrice) || SLIDER_MAX;
-                        const minPct2 = ((minVal2 - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
-                        const maxPct2 = ((maxVal2 - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
-                        const allocLevels2 = PRICE_LEVELS.filter(p => p >= minVal2 && p <= maxVal2);
-                        return (
-                          <div className="mb-5">
-                            <div className="text-sm font-semibold text-gray-700 mb-3">买入价格区间</div>
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="text-center">
-                                <div className="text-xs text-gray-400 mb-0.5">最低价</div>
-                                <div className="text-lg font-bold text-blue-600">${minVal2.toLocaleString()}</div>
-                              </div>
-                              <div className="flex-1 mx-3 text-center">
-                                <div className="text-xs text-gray-400">{allocLevels2.length > 0 ? allocLevels2.length : '--'} 个档位</div>
-                              </div>
-                              <div className="text-center">
-                                <div className="text-xs text-gray-400 mb-0.5">最高价</div>
-                                <div className="text-lg font-bold text-blue-600">${maxVal2.toLocaleString()}</div>
-                              </div>
-                            </div>
-                            <div className="relative mx-1 dual-range" style={{ height: '44px' }}>
-                              <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', background: '#E5E7EB' }} />
-                              <div className="absolute top-1/2 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', left: `${minPct2}%`, right: `${100 - maxPct2}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
-                              <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={minVal2}
-                                onChange={e => setAllocMinPrice(String(Math.min(parseInt(e.target.value), maxVal2 - SLIDER_STEP)))}
-                                className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                                style={{ top: '50%', transform: 'translateY(-50%)', height: '44px', zIndex: 3, clipPath: `inset(0 ${100 - (minPct2 + maxPct2) / 2}% 0 0)` }}
-                              />
-                              <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={maxVal2}
-                                onChange={e => setAllocMaxPrice(String(Math.max(parseInt(e.target.value), minVal2 + SLIDER_STEP)))}
-                                className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                                style={{ top: '50%', transform: 'translateY(-50%)', height: '44px', zIndex: 4, clipPath: `inset(0 0 0 ${(minPct2 + maxPct2) / 2}%)` }}
-                              />
-                            </div>
-                            <div className="flex justify-between mt-1 px-0.5">
-                              <span className="text-xs text-gray-300">$1000</span>
-                              <span className="text-xs text-gray-300">$1750</span>
-                              <span className="text-xs text-gray-300">$2500</span>
-                              <span className="text-xs text-gray-300">$3500</span>
-                            </div>
-                          </div>
-                        );
-                      })()}
+                        <div className="flex justify-between mt-1 px-0.5">
+                          <span className="text-xs" style={{ color: '#CBD5E1' }}>$1000</span>
+                          <span className="text-xs" style={{ color: '#CBD5E1' }}>$1750</span>
+                          <span className="text-xs" style={{ color: '#CBD5E1' }}>$2500</span>
+                          <span className="text-xs" style={{ color: '#CBD5E1' }}>$3500</span>
+                        </div>
+                      </div>
+
+                      {/* 操作按钮 */}
                       <button
                         onClick={() => {
                           if (ledgerId > 0) {
@@ -1159,7 +1139,6 @@ export default function PositionCalc() {
                     </div>
                   );
                 })()}
-                {/* 步骤 1：设置价格区间 */}
                 {allocStep === 'range' && (
                   <div>
                     <div className="text-sm font-semibold text-gray-700 mb-4">设置买入价格区间</div>
