@@ -531,10 +531,10 @@ export default function PositionCalc() {
                           {targetExitPrice > 0 && (
                             <>
                               <div className="flex items-center gap-0.5 justify-end">
-                                <span className="text-xs" style={{ color: 'rgba(99,102,241,0.5)' }}>目标止盈</span>
                                 <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(99,102,241,0.5)', lineHeight: 1 }}>
                                   <HelpCircle className="w-2.5 h-2.5" />
                                 </button>
+                                <span className="text-xs" style={{ color: 'rgba(99,102,241,0.5)' }}>目标止盈</span>
                               </div>
                               <span className="text-sm font-bold" style={{ color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
                                 ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
@@ -1365,7 +1365,8 @@ export default function PositionCalc() {
             onClick={() => setShowExitPriceInfo(false)}
           >
             <div
-              className="bg-white w-full max-w-md rounded-t-2xl px-5 pt-5 pb-10 shadow-2xl"
+              className="bg-white w-full max-w-md rounded-t-2xl px-5 pt-5 pb-10 shadow-2xl overflow-y-auto"
+              style={{ maxHeight: '85vh' }}
               onClick={e => e.stopPropagation()}
             >
               {/* 标题 */}
