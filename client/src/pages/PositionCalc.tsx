@@ -407,50 +407,10 @@ export default function PositionCalc() {
               </div>
               {/* 持仓进度区 - ETH 蓝色系 */}
               <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(98,126,234,0.2)' }}>
-                {/* 标题行：当前 ETH 价 + 配置按钮 */}
+                {/* 标题行：当前 ETH 价 */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium" style={{ color: 'rgba(98,126,234,0.7)' }}>持仓进度</span>
-                    {targetEthQty && parseFloat(targetEthQty) > 0 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          try {
-                            const saved = localStorage.getItem(`alloc_config_${ledgerId}`);
-                            if (saved) {
-                              const cfg = JSON.parse(saved);
-                              if (cfg.method) setAllocMethod(cfg.method);
-                              if (cfg.arithDiff) setAllocArithDiff(cfg.arithDiff);
-                              if (cfg.geomRatio) setAllocGeomRatio(cfg.geomRatio);
-                              if (typeof cfg.geomAsc === 'boolean') setAllocGeomAsc(cfg.geomAsc);
-                              if (typeof cfg.equalAsc === 'boolean') setAllocEqualAsc(cfg.equalAsc);
-                              if (cfg.normalSigma) setAllocNormalSigma(cfg.normalSigma);
-                              if (cfg.minPrice) setAllocMinPrice(cfg.minPrice);
-                              if (cfg.maxPrice) setAllocMaxPrice(cfg.maxPrice);
-                            }
-                          } catch {}
-                          const hasAlloc = PRICE_LEVELS.some(p => (planned[p] || 0) > 0);
-                          if (hasAlloc) {
-                            const allocedLevels = PRICE_LEVELS.filter(p => (planned[p] || 0) > 0);
-                            if (allocedLevels.length > 0) {
-                              const detectedMin = Math.min(...allocedLevels);
-                              const detectedMax = Math.max(...allocedLevels);
-                              setAllocMinPrice(String(detectedMin));
-                              setAllocMaxPrice(String(detectedMax));
-                              const preview: Record<number, number> = {};
-                              allocedLevels.forEach(p => { preview[p] = planned[p] || 0; });
-                              setAllocPreview(preview);
-                            }
-                            setAllocStep('preview');
-                          } else {
-                            setAllocStep('range');
-                          }
-                          setShowAutoAlloc(true);
-                        }}
-                        className="px-1.5 py-0 rounded font-semibold leading-4"
-                        style={{ background: 'rgba(98,126,234,0.18)', color: '#818cf8', border: '1px solid rgba(98,126,234,0.35)', fontSize: '10px' }}
-                      >配置</button>
-                    )}
                   </div>
                   <div className="text-right">
                     <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>ETH </span>
@@ -480,12 +440,55 @@ export default function PositionCalc() {
                           </span>
                           <span className="text-xs ml-1" style={{ color: 'rgba(165,180,252,0.6)' }}>ETH</span>
                         </div>
-                        <div className="text-right">
-                          <div className="text-xs mb-0.5" style={{ color: 'rgba(98,126,234,0.5)' }}>目标持仓</div>
-                          <span className="text-lg font-semibold" style={{ color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
-                            {targetQty > 0 ? targetQty.toFixed(0) : '--'}
-                          </span>
-                          <span className="text-xs ml-1" style={{ color: 'rgba(99,102,241,0.5)' }}>ETH</span>
+                        <div className="flex items-end gap-2">
+                          {/* 配置按钮：在目标持仓左边 */}
+                          {targetEthQty && parseFloat(targetEthQty) > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                try {
+                                  const saved = localStorage.getItem(`alloc_config_${ledgerId}`);
+                                  if (saved) {
+                                    const cfg = JSON.parse(saved);
+                                    if (cfg.method) setAllocMethod(cfg.method);
+                                    if (cfg.arithDiff) setAllocArithDiff(cfg.arithDiff);
+                                    if (cfg.geomRatio) setAllocGeomRatio(cfg.geomRatio);
+                                    if (typeof cfg.geomAsc === 'boolean') setAllocGeomAsc(cfg.geomAsc);
+                                    if (typeof cfg.equalAsc === 'boolean') setAllocEqualAsc(cfg.equalAsc);
+                                    if (cfg.normalSigma) setAllocNormalSigma(cfg.normalSigma);
+                                    if (cfg.minPrice) setAllocMinPrice(cfg.minPrice);
+                                    if (cfg.maxPrice) setAllocMaxPrice(cfg.maxPrice);
+                                  }
+                                } catch {}
+                                const hasAlloc = PRICE_LEVELS.some(p => (planned[p] || 0) > 0);
+                                if (hasAlloc) {
+                                  const allocedLevels = PRICE_LEVELS.filter(p => (planned[p] || 0) > 0);
+                                  if (allocedLevels.length > 0) {
+                                    const detectedMin = Math.min(...allocedLevels);
+                                    const detectedMax = Math.max(...allocedLevels);
+                                    setAllocMinPrice(String(detectedMin));
+                                    setAllocMaxPrice(String(detectedMax));
+                                    const preview: Record<number, number> = {};
+                                    allocedLevels.forEach(p => { preview[p] = planned[p] || 0; });
+                                    setAllocPreview(preview);
+                                  }
+                                  setAllocStep('preview');
+                                } else {
+                                  setAllocStep('range');
+                                }
+                                setShowAutoAlloc(true);
+                              }}
+                              className="px-1.5 py-0.5 rounded font-semibold self-end mb-0.5"
+                              style={{ background: 'rgba(98,126,234,0.18)', color: '#818cf8', border: '1px solid rgba(98,126,234,0.35)', fontSize: '10px' }}
+                            >配置</button>
+                          )}
+                          <div className="text-right">
+                            <div className="text-xs mb-0.5" style={{ color: 'rgba(98,126,234,0.5)' }}>目标持仓</div>
+                            <span className="text-lg font-semibold" style={{ color: '#6366f1', fontVariantNumeric: 'tabular-nums' }}>
+                              {targetQty > 0 ? targetQty.toFixed(0) : '--'}
+                            </span>
+                            <span className="text-xs ml-1" style={{ color: 'rgba(99,102,241,0.5)' }}>ETH</span>
+                          </div>
                         </div>
                       </div>
 
