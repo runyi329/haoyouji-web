@@ -36,7 +36,7 @@ import { ChevronLeft, TrendingUp, TrendingDown, X, Check, Pencil, HelpCircle } f
 import { trpc } from "@/lib/trpc";
 
 const MIN_PRICE = 1000;
-const MAX_PRICE = 2500;
+const MAX_PRICE = 3500;
 const STEP = 50;
 
 function generatePriceLevels(): number[] {
