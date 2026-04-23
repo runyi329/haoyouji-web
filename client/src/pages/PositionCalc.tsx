@@ -976,21 +976,63 @@ export default function PositionCalc() {
                           <div className="text-xs text-blue-500 mt-1">≈ ${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</div>
                         )}
                       </div>
-                      {/* 目标持仓数量 */}
-                      <div className="mb-5">
-                        <div className="text-sm font-semibold text-gray-700 mb-2">目标持仓数量</div>
-                        <div className="flex items-center gap-2 border-b-2 pb-2" style={{ borderColor: '#3B82F6' }}>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            placeholder="输入 ETH 数量"
-                            value={targetEthQty}
-                            onChange={e => setTargetEthQty(e.target.value)}
-                            className="min-w-0 flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
-                          />
-                          <span className="text-sm font-medium text-gray-400 flex-shrink-0">ETH</span>
-                        </div>
-                      </div>
+                      {/* 目标持仓数量：滑动条 + 数字输入联动 */}
+                      {(() => {
+                        const QTY_MIN = 100;
+                        const QTY_MAX = 5000;
+                        const QTY_STEP = 50;
+                        const qtyVal = parseFloat(targetEthQty) || QTY_MIN;
+                        const qtyPct = Math.min(Math.max((qtyVal - QTY_MIN) / (QTY_MAX - QTY_MIN) * 100, 0), 100);
+                        // 反向推算：持仓越多，止盈价越低
+                        const revPrice = profitUsdt > 0 && qtyVal > 0 ? (currentPrice || 0) + profitUsdt / qtyVal : 0;
+                        return (
+                          <div className="mb-5">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-sm font-semibold text-gray-700">目标持仓数量</div>
+                              {revPrice > 0 && (
+                                <div className="text-xs" style={{ color: '#6366f1' }}>
+                                  需涨至 <span className="font-bold">${revPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                                </div>
+                              )}
+                            </div>
+                            {/* 数字输入 */}
+                            <div className="flex items-center gap-2 border-b-2 pb-2 mb-3" style={{ borderColor: '#3B82F6' }}>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                placeholder="输入 ETH 数量"
+                                value={targetEthQty}
+                                onChange={e => setTargetEthQty(e.target.value)}
+                                className="min-w-0 flex-1 text-2xl font-bold text-gray-800 outline-none bg-transparent placeholder:text-gray-200 placeholder:font-normal placeholder:text-lg"
+                              />
+                              <span className="text-sm font-medium text-gray-400 flex-shrink-0">ETH</span>
+                            </div>
+                            {/* 滑动条 */}
+                            <div className="relative" style={{ height: '36px' }}>
+                              {/* 轨道背景 */}
+                              <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', background: '#E5E7EB' }} />
+                              {/* 已选区间高亮 */}
+                              <div className="absolute top-1/2 left-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', width: `${qtyPct}%`, background: 'linear-gradient(90deg, #6366f1, #818cf8)' }} />
+                              <input
+                                type="range"
+                                min={QTY_MIN}
+                                max={QTY_MAX}
+                                step={QTY_STEP}
+                                value={Math.min(Math.max(qtyVal, QTY_MIN), QTY_MAX)}
+                                onChange={e => setTargetEthQty(e.target.value)}
+                                className="absolute w-full appearance-none bg-transparent cursor-pointer"
+                                style={{ top: '50%', transform: 'translateY(-50%)', height: '36px', zIndex: 2 }}
+                              />
+                            </div>
+                            {/* 刻度 */}
+                            <div className="flex justify-between mt-1 px-0.5">
+                              <span className="text-xs text-gray-300">{QTY_MIN}</span>
+                              <span className="text-xs text-gray-300">{(QTY_MIN + QTY_MAX) / 2}</span>
+                              <span className="text-xs text-gray-300">{QTY_MAX}</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {/* 联动计算结果 */}
                       {profitUsdt > 0 && qty > 0 && currentPrice ? (
                         <div className="rounded-2xl p-4 mb-5" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}>
