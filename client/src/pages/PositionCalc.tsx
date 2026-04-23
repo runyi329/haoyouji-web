@@ -622,10 +622,10 @@ export default function PositionCalc() {
 
 
 
-      {/* 汇总卡片 */}
-      <div className="px-4 pt-4 pb-2">
-        <div className="bg-white rounded-2xl p-4 shadow-sm" style={{ border: '1px solid #E0E8FF' }}>
-          <div className="grid grid-cols-2 gap-3">
+      {/* 汇总卡片已删除 */}
+      <div style={{display:'none'}}>
+        <div>
+          <div>
             {/* 总持仓卡片：计划+实际+达成率，点击可编辑 */}
             <div
               className="bg-blue-50 rounded-xl p-3 col-span-2 cursor-pointer active:bg-blue-100 transition-colors"
