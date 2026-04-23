@@ -855,19 +855,18 @@ export default function PositionCalc() {
                   {isNearCurrent && (
                     <svg
                       className="ml-1.5 flex-shrink-0"
-                      width="12" height="20"
-                      viewBox="0 0 12 20"
+                      width="22" height="22"
+                      viewBox="0 0 22 22"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
-                      style={{ filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.6))' }}
                     >
-                      {/* ETH 白色轮廓风格，黑色描边确保在任何背景上可见 */}
-                      {/* 上半：亮白 */}
-                      <polygon points="6,0 12,10 6,7" fill="rgba(255,255,255,0.95)" />
-                      <polygon points="6,0 0,10 6,7" fill="rgba(255,255,255,0.7)" />
-                      {/* 下半：稍暗 */}
-                      <polygon points="6,20 12,12 6,15" fill="rgba(255,255,255,0.9)" />
-                      <polygon points="6,20 0,12 6,15" fill="rgba(255,255,255,0.6)" />
+                      {/* 深色不透明圆圈衬底 */}
+                      <circle cx="11" cy="11" r="11" fill="#1a1a2e" />
+                      {/* 白色实心 ETH 菱形，上半亮下半稍暗 */}
+                      <polygon points="11,3 17,11 11,9" fill="#ffffff" />
+                      <polygon points="11,3 5,11 11,9" fill="rgba(255,255,255,0.7)" />
+                      <polygon points="11,19 17,13 11,15" fill="rgba(255,255,255,0.9)" />
+                      <polygon points="11,19 5,13 11,15" fill="rgba(255,255,255,0.55)" />
                     </svg>
                   )}
                 </div>
