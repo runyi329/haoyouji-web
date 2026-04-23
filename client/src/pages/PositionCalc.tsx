@@ -495,6 +495,30 @@ export default function PositionCalc() {
                     </div>
                   );
                 })()}
+                {/* 当前实际持仓与实际离场价 */}
+                {targetProfitCny && parseFloat(targetProfitCny) > 0 && currentPrice && summary.totalQty > 0 && (() => {
+                  const profitUsdt = parseFloat(targetProfitCny) / cnyRate;
+                  const actualExitPrice = currentPrice + profitUsdt / summary.totalQty;
+                  return (
+                    <div className="mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-xs" style={{ color: 'rgba(226,185,111,0.5)' }}>当前持仓</span>
+                        <span className="text-base font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
+                          {summary.totalQty.toFixed(2)} ETH
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>实际离场价</span>
+                        <span className="text-base font-bold" style={{ color: '#fb923c', fontVariantNumeric: 'tabular-nums' }}>
+                          ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                        </span>
+                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                          (+{((actualExitPrice - currentPrice) / currentPrice * 100).toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               {/* 汇率行 */}
               <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
