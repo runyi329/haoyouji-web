@@ -19685,6 +19685,89 @@ export const adminFeatureRouter = router({
       );
       return { success: true };
     }),
+
+  // ========== AI 止盈可行性分析 ==========
+  ethPositionAnalyzeExit: protectedProcedure
+    .input(z.object({
+      currentPrice: z.number(),       // ETH 当前价（USDT）
+      targetExitPrice: z.number(),    // 目标止盈价（USDT）
+      actualExitPrice: z.number().optional(), // 实际止盈价（USDT，可选）
+      targetAvgPrice: z.number(),     // 目标均价（USDT）
+      actualAvgPrice: z.number().optional(), // 实际均价（USDT，可选）
+      targetQty: z.number(),          // 目标持仓数量（ETH）
+      actualQty: z.number().optional(), // 实际持仓数量（ETH，可选）
+      targetProfitCny: z.number(),    // 目标利润（CNY）
+      cnyRate: z.number(),            // 汇率
+    }))
+    .mutation(async ({ input }) => {
+      const { invokeLLM } = await import('./_core/llm');
+
+      const profitUsdt = input.cnyRate > 0 ? input.targetProfitCny / input.cnyRate : 0;
+      const targetRisePct = input.targetAvgPrice > 0
+        ? ((input.targetExitPrice - input.targetAvgPrice) / input.targetAvgPrice * 100).toFixed(1)
+        : '0';
+      const actualRisePct = input.actualAvgPrice && input.actualExitPrice
+        ? ((input.actualExitPrice - input.actualAvgPrice) / input.actualAvgPrice * 100).toFixed(1)
+        : null;
+      const currentVsTarget = ((input.targetExitPrice - input.currentPrice) / input.currentPrice * 100).toFixed(1);
+
+      const systemPrompt = `你是一位专业的加密货币量化分析师，擅长 ETH 技术面与基本面分析。
+用户给你提供了一个 ETH 持仓的止盈目标，请你基于当前市场状况，给出一个简洁、专业的可行性预判。
+回复必须是 JSON 格式，包含以下字段：
+- probability: 达到目标止盈价的概率（0-100 的整数）
+- timeframe: 预计达到的时间周期（如"1-3个月"、"3-6个月"、"6-12个月"、"12个月以上"、"短期内较难"）
+- signal: 信号强度（"强烈看涨"、"温和看涨"、"中性"、"温和看跌"、"强烈看跌"）
+- reason: 核心理由（2-3句话，简洁专业，中文）
+- risk: 主要风险点（1-2句话，中文）`;
+
+      const userPrompt = `ETH 持仓止盈分析请求：
+
+当前 ETH 价格：$${input.currentPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+目标止盈价：$${input.targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}（距当前价需涨 ${currentVsTarget}%）
+目标均价：$${input.targetAvgPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}（从均价到止盈需涨 ${targetRisePct}%）
+目标持仓：${input.targetQty} ETH
+目标利润：¥${input.targetProfitCny.toLocaleString('zh-CN')}（≈ ${profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT）
+${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ETH（均价 $${input.actualAvgPrice?.toLocaleString('en-US', { maximumFractionDigits: 0 }) || '--'}，实际止盈价 $${input.actualExitPrice?.toLocaleString('en-US', { maximumFractionDigits: 0 }) || '--'}，需涨 ${actualRisePct}%）` : '（尚无实际持仓）'}
+
+请综合考虑：ETH 当前价格位置、历史波动率、加密市场周期、宏观环境，给出可行性预判。`;
+
+      const response = await invokeLLM({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'exit_analysis',
+            strict: true,
+            schema: {
+              type: 'object',
+              properties: {
+                probability: { type: 'integer', description: '达到止盈价的概率 0-100' },
+                timeframe: { type: 'string', description: '预计时间周期' },
+                signal: { type: 'string', description: '信号强度' },
+                reason: { type: 'string', description: '核心理由' },
+                risk: { type: 'string', description: '主要风险点' },
+              },
+              required: ['probability', 'timeframe', 'signal', 'reason', 'risk'],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const raw = response.choices[0].message.content;
+      const rawStr = typeof raw === 'string' ? raw : JSON.stringify(raw);
+      const result = JSON.parse(rawStr || '{}');
+      return result as {
+        probability: number;
+        timeframe: string;
+        signal: string;
+        reason: string;
+        risk: string;
+      };
+    }),
 });
 export type AppRouter = typeof appRouter;
 

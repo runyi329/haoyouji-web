@@ -37,6 +37,180 @@ interface SummaryEditModal {
   inputValue: string;
 }
 
+// ===== AI 止盈可行性分析子组件 =====
+function AiExitAnalysis({
+  currentPrice,
+  targetExitPrice,
+  actualExitPrice,
+  targetAvgPrice,
+  actualAvgPrice,
+  targetQty,
+  actualQty,
+  targetProfitCny,
+  cnyRate,
+}: {
+  currentPrice: number;
+  targetExitPrice: number;
+  actualExitPrice?: number;
+  targetAvgPrice: number;
+  actualAvgPrice?: number;
+  targetQty: number;
+  actualQty?: number;
+  targetProfitCny: number;
+  cnyRate: number;
+}) {
+  const [result, setResult] = React.useState<{
+    probability: number;
+    timeframe: string;
+    signal: string;
+    reason: string;
+    risk: string;
+  } | null>(null);
+  const [analyzing, setAnalyzing] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const analyzeExitMutation = trpc.ethPositionAnalyzeExit.useMutation();
+
+  const handleAnalyze = async () => {
+    if (currentPrice <= 0 || targetExitPrice <= 0) return;
+    setAnalyzing(true);
+    setError(null);
+    try {
+      const res = await analyzeExitMutation.mutateAsync({
+        currentPrice,
+        targetExitPrice,
+        actualExitPrice,
+        targetAvgPrice,
+        actualAvgPrice,
+        targetQty,
+        actualQty,
+        targetProfitCny,
+        cnyRate,
+      });
+      setResult(res);
+    } catch (e) {
+      setError('AI 分析失败，请稍后重试');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  // 概率对应颜色
+  const getProbColor = (p: number) => {
+    if (p >= 70) return '#16a34a';
+    if (p >= 45) return '#f97316';
+    return '#dc2626';
+  };
+
+  // 信号对应 emoji
+  const getSignalEmoji = (s: string) => {
+    if (s.includes('强烈看涨')) return '🚀';
+    if (s.includes('温和看涨')) return '📈';
+    if (s.includes('中性')) return '➡️';
+    if (s.includes('温和看跌')) return '📉';
+    if (s.includes('强烈看跌')) return '⚠️';
+    return '🤖';
+  };
+
+  return (
+    <div className="rounded-xl p-4 mt-2" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', border: '1px solid rgba(139,92,246,0.3)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs" style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}>
+            🤖
+          </div>
+          <span className="text-xs font-semibold" style={{ color: '#c4b5fd' }}>AI 可行性预判</span>
+        </div>
+        {!result && (
+          <button
+            onClick={handleAnalyze}
+            disabled={analyzing || currentPrice <= 0}
+            className="px-3 py-1 rounded-full text-xs font-semibold transition-all"
+            style={{
+              background: analyzing ? 'rgba(139,92,246,0.3)' : 'linear-gradient(90deg, #7c3aed, #4f46e5)',
+              color: 'white',
+              opacity: analyzing ? 0.7 : 1,
+            }}
+          >
+            {analyzing ? '分析中...' : '立即分析'}
+          </button>
+        )}
+        {result && (
+          <button
+            onClick={() => { setResult(null); handleAnalyze(); }}
+            disabled={analyzing}
+            className="px-2 py-1 rounded-full text-xs"
+            style={{ color: 'rgba(196,181,253,0.6)', background: 'rgba(139,92,246,0.15)' }}
+          >
+            {analyzing ? '...' : '刷新'}
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="text-xs text-red-400 text-center py-2">{error}</div>
+      )}
+
+      {analyzing && !result && (
+        <div className="flex items-center justify-center gap-2 py-3">
+          <div className="w-4 h-4 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
+          <span className="text-xs" style={{ color: 'rgba(196,181,253,0.7)' }}>正在分析市场数据...</span>
+        </div>
+      )}
+
+      {result && (
+        <div className="space-y-2">
+          {/* 概率 + 信号 */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold" style={{ color: getProbColor(result.probability) }}>
+                {result.probability}%
+              </span>
+              <div>
+                <div className="text-xs" style={{ color: 'rgba(196,181,253,0.5)' }}>达到止盈概率</div>
+                <div className="text-xs font-semibold" style={{ color: getProbColor(result.probability) }}>
+                  {getSignalEmoji(result.signal)} {result.signal}
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs" style={{ color: 'rgba(196,181,253,0.5)' }}>预计周期</div>
+              <div className="text-xs font-semibold" style={{ color: '#a5b4fc' }}>{result.timeframe}</div>
+            </div>
+          </div>
+          {/* 概率条 */}
+          <div className="rounded-full overflow-hidden" style={{ height: '4px', background: 'rgba(255,255,255,0.1)' }}>
+            <div
+              className="h-full rounded-full transition-all duration-700"
+              style={{
+                width: `${result.probability}%`,
+                background: `linear-gradient(90deg, ${getProbColor(result.probability)}, ${getProbColor(result.probability)}88)`,
+              }}
+            />
+          </div>
+          {/* 核心理由 */}
+          <div className="rounded-lg p-2.5" style={{ background: 'rgba(255,255,255,0.05)' }}>
+            <div className="text-xs mb-1" style={{ color: 'rgba(196,181,253,0.5)' }}>核心判断</div>
+            <div className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.85)' }}>{result.reason}</div>
+          </div>
+          {/* 风险提示 */}
+          <div className="rounded-lg p-2.5" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)' }}>
+            <div className="text-xs mb-1" style={{ color: 'rgba(252,165,165,0.6)' }}>⚠️ 风险提示</div>
+            <div className="text-xs leading-relaxed" style={{ color: 'rgba(252,165,165,0.85)' }}>{result.risk}</div>
+          </div>
+          <div className="text-center text-xs" style={{ color: 'rgba(196,181,253,0.3)' }}>仅供参考，不构成投资建议</div>
+        </div>
+      )}
+
+      {!result && !analyzing && !error && (
+        <div className="text-center py-2">
+          <div className="text-xs" style={{ color: 'rgba(196,181,253,0.4)' }}>点击「立即分析」获取 AI 对当前止盈目标的可行性预判</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PositionCalc() {
   const [, params] = useRoute("/ledger/:id/position-calc");
   const [, setLocation] = useLocation();
@@ -56,6 +230,14 @@ export default function PositionCalc() {
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
   const [rateFromApi, setRateFromApi] = useState<number | null>(null); // 实时汇率（API 成功后设置）
   const [showExitPriceInfo, setShowExitPriceInfo] = useState(false); // 目标离场价说明弹窗
+  const [aiAnalysis, setAiAnalysis] = useState<{
+    probability: number;
+    timeframe: string;
+    signal: string;
+    reason: string;
+    risk: string;
+  } | null>(null); // AI 止盈可行性分析结果
+  const [aiAnalyzing, setAiAnalyzing] = useState(false); // AI 分析中
   // ===== 自动分配计划持仓 =====
   const [showAutoAlloc, setShowAutoAlloc] = useState(false); // 是否显示自动分配弹窗
   const [allocStep, setAllocStep] = useState<'range' | 'method' | 'preview'>('range'); // 分配步骤
@@ -1359,6 +1541,7 @@ export default function PositionCalc() {
           </div>
         );
       })()}
+      {/* AI 止盈可行性分析 mutation（内联使用） */}
       {/* 目标离场价说明弹窗 */}
       {showExitPriceInfo && (() => {
         const ethQty = parseFloat(targetEthQty) || 0;  // 计划持仓数量
@@ -1461,6 +1644,20 @@ export default function PositionCalc() {
                         </span>
                       </div>
                     </div>
+                  )}
+                  {/* AI 可行性预判区块 */}
+                  {exitPrice && profitCny > 0 && (
+                    <AiExitAnalysis
+                      currentPrice={currentPrice || 0}
+                      targetExitPrice={exitPrice}
+                      actualExitPrice={actualExitPrice || undefined}
+                      targetAvgPrice={targetAvgForModal}
+                      actualAvgPrice={actualAvgForModal > 0 ? actualAvgForModal : undefined}
+                      targetQty={ethQty}
+                      actualQty={actualEthQty > 0 ? actualEthQty : undefined}
+                      targetProfitCny={profitCny}
+                      cnyRate={cnyRate}
+                    />
                   )}
                   {/* 实际持仓 */}
                   {actualEthQty > 0 ? (
