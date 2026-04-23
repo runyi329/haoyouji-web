@@ -61,55 +61,65 @@ export default function PositionCalc() {
   const [allocStep, setAllocStep] = useState<'range' | 'method' | 'preview'>('range'); // 分配步骤
   const [allocMinPrice, setAllocMinPrice] = useState<string>(''); // 买入最低价
   const [allocMaxPrice, setAllocMaxPrice] = useState<string>(''); // 买入最高价
-  const [allocMethod, setAllocMethod] = useState<'equal' | 'geometric' | 'manual'>('equal'); // 分配方式
-  const [allocGeomRatio, setAllocGeomRatio] = useState<string>('1.2'); // 等比公比（越低价格越多）
-  const [allocArithDiff, setAllocArithDiff] = useState<string>('1'); // 等差公差（相邻档位数量差异）
+  const [allocMethod, setAllocMethod] = useState<'equal' | 'geometric' | 'normal' | 'manual'>('equal'); // 分配方式
+  const [allocGeomRatio, setAllocGeomRatio] = useState<string>('1.2'); // 等比公比
+  const [allocArithDiff, setAllocArithDiff] = useState<string>('1'); // 等差公差
+  const [allocEqualAsc, setAllocEqualAsc] = useState(false); // 等差：false=越低越多（默认），true=越高越多
+  const [allocGeomAsc, setAllocGeomAsc] = useState(false); // 等比：false=越低越多（默认），true=越高越多
   const [allocManualQtys, setAllocManualQtys] = useState<Record<number, string>>({}); // 手动分配数量
   const [allocPreview, setAllocPreview] = useState<Record<number, number>>({}); // 预览分配结果
 
   // 计算自动分配结果
-  const calcAutoAlloc = (method: 'equal' | 'geometric' | 'manual', minP: number, maxP: number): Record<number, number> => {
-    const totalQty = Math.round(parseFloat(targetEthQty) || 0); // 强制取整，确保整个分配链路都是整数运算
+  const calcAutoAlloc = (method: 'equal' | 'geometric' | 'normal' | 'manual', minP: number, maxP: number): Record<number, number> => {
+    const totalQty = Math.round(parseFloat(targetEthQty) || 0);
     if (totalQty <= 0) return {};
     const levels = PRICE_LEVELS.filter(p => p >= minP && p <= maxP);
     if (levels.length === 0) return {};
     const result: Record<number, number> = {};
+    const n = levels.length;
+
+    // 辅助：除最后一档外全部取整，最后一档吸收剩余（确保总量严格一致）
+    const applyWeights = (weights: number[], asc: boolean) => {
+      // asc=false: 越低价格越多（weights[0]对应最高价，weights[n-1]对应最低价，越大越多）
+      // asc=true: 越高价格越多（反转权重）
+      const w = asc ? [...weights].reverse() : weights;
+      const totalW = w.reduce((s, x) => s + x, 0);
+      let sum = 0;
+      levels.slice(0, -1).forEach((p, i) => {
+        result[p] = Math.max(1, Math.round(w[i] / totalW * totalQty));
+        sum += result[p];
+      });
+      result[levels[n - 1]] = Math.max(1, totalQty - sum);
+    };
+
     if (method === 'equal') {
-      // OKX 等差风格：越低价格买越多，相邻档位数量差异固定（公差 d）
-      // levels 从高到低排列，第 i 档（i=0最高价）数量 = a + i*d
-      // 总量约束： sum = n*a + d*(0+1+...+(n-1)) = n*a + d*n*(n-1)/2 = totalQty
-      // => a = (totalQty - d*n*(n-1)/2) / n
-      const n = levels.length;
-      let d = Math.round(parseFloat(allocArithDiff) || 1); // 公差强制取整
-      // 公差最大允许値：确保最高价档至少分配 1 ETH
+      // 等差：第 i 档数量 = a + i*d（levels从高到低，i=0最高价）
+      let d = Math.round(parseFloat(allocArithDiff) || 1);
       if (n > 1) {
         const maxD = Math.floor((totalQty - n) * 2 / (n * (n - 1)));
         if (d > maxD) d = Math.max(0, maxD);
       }
-      const a = (totalQty - d * n * (n - 1) / 2) / n;
-      // 先分配除最后一档以外的所有档位，全部取整
-      let allocatedSum = 0;
-      levels.slice(0, -1).forEach((p, i) => {
-        result[p] = Math.max(1, Math.round(a + i * d));
-        allocatedSum += result[p];
-      });
-      // 最后一档吸收剩余，确保总量不变
-      result[levels[levels.length - 1]] = Math.max(1, totalQty - allocatedSum);
+      // 生成权重数组：第 i 档权重 = 1 + i*d（i=0最高价，权重最小）
+      const weights = levels.map((_, i) => 1 + i * d);
+      applyWeights(weights, allocEqualAsc);
     } else if (method === 'geometric') {
-      const ratio = parseFloat(allocGeomRatio) || 1.2;
-      // 价格越低，权重越大：权重 = ratio^(index from bottom)
-      const weights = levels.map((_, i) => Math.pow(ratio, levels.length - 1 - i)); // levels 从高到低排列
-      const totalWeight = weights.reduce((s, w) => s + w, 0);
-      // 除最后一档外全部取整
-      let geomAllocated = 0;
+      const ratio = Math.round(parseFloat(allocGeomRatio) * 2) / 2 || 1.2;
+      // 权重 = ratio^i（i=0最高价，权重最小）
+      const weights = levels.map((_, i) => Math.pow(ratio, i));
+      applyWeights(weights, allocGeomAsc);
+    } else if (method === 'normal') {
+      // 正态分布：中间价格区间买最多，两端买最少
+      const mid = (n - 1) / 2;
+      const sigma = n / 4; // 标准差：覆盖整个区间
+      const weights = levels.map((_, i) => Math.exp(-0.5 * Math.pow((i - mid) / sigma, 2)));
+      const totalW = weights.reduce((s, w) => s + w, 0);
+      let sum = 0;
       levels.slice(0, -1).forEach((p, i) => {
-        result[p] = Math.max(1, Math.round(weights[i] / totalWeight * totalQty));
-        geomAllocated += result[p];
+        result[p] = Math.max(1, Math.round(weights[i] / totalW * totalQty));
+        sum += result[p];
       });
-      // 最后一档吸收剩余
-      result[levels[levels.length - 1]] = Math.max(1, totalQty - geomAllocated);
+      result[levels[n - 1]] = Math.max(1, totalQty - sum);
     } else {
-      // 手动模式：直接使用 allocManualQtys
       levels.forEach(p => { result[p] = parseFloat(allocManualQtys[p] || '0') || 0; });
     }
     return result;
@@ -891,8 +901,24 @@ export default function PositionCalc() {
                           {allocMethod === 'equal' && <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm font-semibold text-gray-800">等差分配</div>
-                          <div className="text-xs text-gray-400 mt-0.5">越低价格买越多，相邻档位数量差异固定</div>
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-gray-800">等差分配</div>
+                            {allocMethod === 'equal' && (
+                              <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                <button
+                                  onClick={() => setAllocEqualAsc(false)}
+                                  className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+                                  style={{ background: !allocEqualAsc ? '#3B82F6' : '#E5E7EB', color: !allocEqualAsc ? '#fff' : '#6B7280' }}
+                                >越低越多</button>
+                                <button
+                                  onClick={() => setAllocEqualAsc(true)}
+                                  className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+                                  style={{ background: allocEqualAsc ? '#3B82F6' : '#E5E7EB', color: allocEqualAsc ? '#fff' : '#6B7280' }}
+                                >越高越多</button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">{allocEqualAsc && allocMethod === 'equal' ? '越高价格买越多' : '越低价格买越多'}，相邻档位数量差异固定</div>
                           {allocMethod === 'equal' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
@@ -932,8 +958,24 @@ export default function PositionCalc() {
                           {allocMethod === 'geometric' && <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm font-semibold text-gray-800">等比分配（越低越多）</div>
-                          <div className="text-xs text-gray-400 mt-0.5">价格越低分配越多，按等比递增</div>
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-gray-800">等比分配</div>
+                            {allocMethod === 'geometric' && (
+                              <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                <button
+                                  onClick={() => setAllocGeomAsc(false)}
+                                  className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+                                  style={{ background: !allocGeomAsc ? '#F97316' : '#E5E7EB', color: !allocGeomAsc ? '#fff' : '#6B7280' }}
+                                >越低越多</button>
+                                <button
+                                  onClick={() => setAllocGeomAsc(true)}
+                                  className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
+                                  style={{ background: allocGeomAsc ? '#F97316' : '#E5E7EB', color: allocGeomAsc ? '#fff' : '#6B7280' }}
+                                >越高越多</button>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-400 mt-0.5">{allocGeomAsc && allocMethod === 'geometric' ? '越高价格分配越多' : '越低价格分配越多'}，按等比递增</div>
                           {allocMethod === 'geometric' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
@@ -954,6 +996,30 @@ export default function PositionCalc() {
                               <div className="flex justify-between text-[10px] text-gray-300 mt-0.5">
                                 <span>1.0</span><span>1.5</span><span>2.0</span><span>2.5</span><span>3.0</span>
                               </div>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                      {/* 正态分布 */}
+                      <button
+                        onClick={() => setAllocMethod('normal')}
+                        className="w-full flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
+                        style={{
+                          background: allocMethod === 'normal' ? '#F5F3FF' : '#F9FAFB',
+                          border: `1px solid ${allocMethod === 'normal' ? '#8B5CF6' : '#E5E7EB'}`
+                        }}
+                      >
+                        <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
+                          style={{ borderColor: allocMethod === 'normal' ? '#8B5CF6' : '#D1D5DB' }}
+                        >
+                          {allocMethod === 'normal' && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-semibold text-gray-800">正态分布</div>
+                          <div className="text-xs text-gray-400 mt-0.5">中间价格区间买最多，两端价格区间买最少</div>
+                          {allocMethod === 'normal' && (
+                            <div className="mt-2 text-xs text-purple-500">
+                              按高斯曲线分布，价格区间中心仙位分配最多，向两端递减
                             </div>
                           )}
                         </div>
@@ -987,8 +1053,8 @@ export default function PositionCalc() {
                         </div>
                       </button>
                     </div>
-                    {/* 等差/等比实时预览条形图 */}
-                    {(allocMethod === 'equal' || allocMethod === 'geometric') && allocLevels.length > 0 && (() => {
+                    {/* 等差/等比/正态分布实时预览条形图 */}
+                    {(allocMethod === 'equal' || allocMethod === 'geometric' || allocMethod === 'normal') && allocLevels.length > 0 && (() => {
                       const previewQtys = calcAutoAlloc(allocMethod, minP, maxP);
                       const maxQty = Math.max(...allocLevels.map(p => previewQtys[p] || 0));
                       return (
@@ -1001,7 +1067,7 @@ export default function PositionCalc() {
                             {allocLevels.map(p => {
                               const qty = previewQtys[p] || 0;
                               const pct = maxQty > 0 ? qty / maxQty * 100 : 0;
-                              const barColor = allocMethod === 'equal' ? '#3B82F6' : '#F97316';
+                              const barColor = allocMethod === 'equal' ? '#3B82F6' : allocMethod === 'geometric' ? '#F97316' : '#8B5CF6';
                               return (
                                 <div key={p} className="flex items-center gap-2">
                                   <span className="text-[10px] font-mono text-gray-400 w-12 flex-shrink-0 text-right">${p}</span>
@@ -1011,7 +1077,7 @@ export default function PositionCalc() {
                                       style={{ width: `${pct}%`, background: barColor }}
                                     />
                                   </div>
-                                  <span className="text-[10px] font-semibold text-gray-600 w-14 flex-shrink-0 text-right tabular-nums">{qty.toFixed(3)}</span>
+                                  <span className="text-[10px] font-semibold text-gray-600 w-14 flex-shrink-0 text-right tabular-nums">{qty} ETH</span>
                                 </div>
                               );
                             })}
