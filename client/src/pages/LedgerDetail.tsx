@@ -4899,6 +4899,16 @@ export default function LedgerDetail() {
         )}
       </div>}
 
+      {/* 🎂 52号账本生日祝福横幅（临时） */}
+      {ledgerId === 52 && !isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && (
+        <div className="mx-4 mb-4 rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #ff4444 0%, #ff8c00 100%)' }}>
+          <div className="px-4 py-4 text-center">
+            <div className="text-2xl mb-1">🎂🧧🎉</div>
+            <div className="text-white font-bold text-base mb-1">祝印总生日快乐！</div>
+            <div className="text-white/90 text-sm leading-relaxed">愿卢卡币节节攀升，天天涨停！<br/>财富自由，心想事成！🚀</div>
+          </div>
+        </div>
+      )}
       {/* 底部添加按鈕：非定制账本显示 */}
       {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
         <button
