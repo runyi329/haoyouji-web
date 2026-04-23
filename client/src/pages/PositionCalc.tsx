@@ -164,7 +164,11 @@ export default function PositionCalc() {
 
   // 保存单个档位
   const saveLevelMutation = trpc.ethPositionSaveLevel.useMutation();
-  const batchSaveMutation = trpc.ethPositionBatchSave.useMutation();
+  const batchSaveMutation = trpc.ethPositionBatchSave.useMutation({
+    onSuccess: () => {
+      utils.ethPositionGetLevels.invalidate({ ledgerId });
+    }
+  });
   // 从数据库读取目标止盈和汇率设置
   const { data: settingsData } = trpc.ethPositionGetSettings.useQuery(
     { ledgerId },
@@ -406,6 +410,21 @@ export default function PositionCalc() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
+                            // 尝试从 localStorage 恢复上次的配置
+                            try {
+                              const saved = localStorage.getItem(`alloc_config_${ledgerId}`);
+                              if (saved) {
+                                const cfg = JSON.parse(saved);
+                                if (cfg.method) setAllocMethod(cfg.method);
+                                if (cfg.arithDiff) setAllocArithDiff(cfg.arithDiff);
+                                if (cfg.geomRatio) setAllocGeomRatio(cfg.geomRatio);
+                                if (typeof cfg.geomAsc === 'boolean') setAllocGeomAsc(cfg.geomAsc);
+                                if (typeof cfg.equalAsc === 'boolean') setAllocEqualAsc(cfg.equalAsc);
+                                if (cfg.normalSigma) setAllocNormalSigma(cfg.normalSigma);
+                                if (cfg.minPrice) setAllocMinPrice(cfg.minPrice);
+                                if (cfg.maxPrice) setAllocMaxPrice(cfg.maxPrice);
+                              }
+                            } catch {}
                             // 如果已有分配数据，直接进入预览步骤
                             const hasAlloc = PRICE_LEVELS.some(p => (planned[p] || 0) > 0);
                             if (hasAlloc) {
@@ -1211,6 +1230,19 @@ export default function PositionCalc() {
                           // 保存到数据库
                           const levels = PRICE_LEVELS.map(p => ({ price: p, plannedQty: newPlanned[p] || 0, actualQty: actual[p] || 0 }));
                           batchSaveMutation.mutate({ ledgerId, levels });
+                          // 将分配方式和参数存入 localStorage，下次打开时恢复
+                          try {
+                            localStorage.setItem(`alloc_config_${ledgerId}`, JSON.stringify({
+                              method: allocMethod,
+                              arithDiff: allocArithDiff,
+                              geomRatio: allocGeomRatio,
+                              geomAsc: allocGeomAsc,
+                              equalAsc: allocEqualAsc,
+                              normalSigma: allocNormalSigma,
+                              minPrice: allocMinPrice,
+                              maxPrice: allocMaxPrice,
+                            }));
+                          } catch {}
                           setShowAutoAlloc(false);
                         }}
                         className="flex-1 py-3 rounded-xl text-sm font-bold text-white"
