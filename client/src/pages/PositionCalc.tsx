@@ -549,9 +549,16 @@ export default function PositionCalc() {
                           {actualExitPrice > 0 ? (
                             <>
                               <div className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>实际止盈</div>
-                              <span className="text-sm font-bold" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                              </span>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-sm font-bold" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                                  ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                </span>
+                                {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice && (
+                                  <span className="text-[10px] font-semibold px-1 py-0.5 rounded" style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>
+                                    +{((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100).toFixed(1)}%
+                                  </span>
+                                )}
+                              </div>
                             </>
                           ) : <span />}
                         </div>
@@ -564,9 +571,16 @@ export default function PositionCalc() {
                                 </button>
                                 <span className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>目标止盈</span>
                               </div>
-                              <span className="text-sm font-bold" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums' }}>
-                                ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                              </span>
+                              <div className="flex items-baseline gap-1 justify-end">
+                                {targetAvgPrice > 0 && targetExitPrice > targetAvgPrice && (
+                                  <span className="text-[10px] font-semibold px-1 py-0.5 rounded" style={{ background: 'rgba(212,175,55,0.15)', color: '#d4af37' }}>
+                                    +{((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%
+                                  </span>
+                                )}
+                                <span className="text-sm font-bold" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums' }}>
+                                  ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                </span>
+                              </div>
                             </>
                           )}
                         </div>
