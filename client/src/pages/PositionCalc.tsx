@@ -481,12 +481,12 @@ export default function PositionCalc() {
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH/USDT</div>
                     <div className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                      {currentPrice ? currentPrice.toFixed(0) : '--'}
+                      {currentPrice ? parseFloat(currentPrice.toPrecision(6)).toString() : '--'}
                     </div>
                   </div>
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>USDT/CNY</div>
-                    <div className="text-xl font-bold font-mono" style={{ color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>{cnyRate.toFixed(4)}</div>
+                    <div className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>{parseFloat(cnyRate.toPrecision(6)).toString()}</div>
                   </div>
                 </div>
               </div>
