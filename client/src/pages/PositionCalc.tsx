@@ -562,11 +562,6 @@ export default function PositionCalc() {
                                 <span className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
                                   {actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span>
                                 </span>
-                                {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice && (
-                                  <span className="text-[10px] font-semibold px-1 py-0.5 rounded" style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>
-                                    +{((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100).toFixed(1)}%
-                                  </span>
-                                )}
                               </div>
                             </>
                           ) : <span />}
@@ -581,11 +576,6 @@ export default function PositionCalc() {
                                 <span className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>目标止盈</span>
                               </div>
                               <div className="flex items-baseline gap-1 justify-end">
-                                {targetAvgPrice > 0 && targetExitPrice > targetAvgPrice && (
-                                  <span className="text-[10px] font-semibold px-1 py-0.5 rounded" style={{ background: 'rgba(212,175,55,0.15)', color: '#d4af37' }}>
-                                    +{((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%
-                                  </span>
-                                )}
                                 <span className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
                                   {targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span>
                                 </span>
@@ -594,6 +584,31 @@ export default function PositionCalc() {
                           )}
                         </div>
                       </div>
+                      {/* 涨幅行：实际需要涨幅（左）和目标需要涨幅（右） */}
+                      {(actualAvgPrice > 0 && actualExitPrice > actualAvgPrice) || (targetAvgPrice > 0 && targetExitPrice > targetAvgPrice) ? (
+                        <div className="flex items-center justify-between mt-1">
+                          <div>
+                            {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice ? (
+                              <>
+                                <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>实际需要涨幅</div>
+                                <span className="text-sm font-bold font-mono" style={{ color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
+                                  +{((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100).toFixed(1)}%
+                                </span>
+                              </>
+                            ) : <span />}
+                          </div>
+                          <div className="text-right">
+                            {targetAvgPrice > 0 && targetExitPrice > targetAvgPrice ? (
+                              <>
+                                <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>目标需要涨幅</div>
+                                <span className="text-sm font-bold font-mono" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums' }}>
+                                  +{((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%
+                                </span>
+                              </>
+                            ) : <span />}
+                          </div>
+                        </div>
+                      ) : null}
                       {/* 均价对照行 */}
                       {(() => {
                         // 目标均价：按计划数量加权均价
