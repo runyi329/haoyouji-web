@@ -63,6 +63,7 @@ export default function PositionCalc() {
   const [allocMaxPrice, setAllocMaxPrice] = useState<string>(''); // 买入最高价
   const [allocMethod, setAllocMethod] = useState<'equal' | 'geometric' | 'manual'>('equal'); // 分配方式
   const [allocGeomRatio, setAllocGeomRatio] = useState<string>('1.2'); // 等比公比（越低价格越多）
+  const [allocArithDiff, setAllocArithDiff] = useState<string>('1'); // 等差公差（相邻档位数量差异）
   const [allocManualQtys, setAllocManualQtys] = useState<Record<number, string>>({}); // 手动分配数量
   const [allocPreview, setAllocPreview] = useState<Record<number, number>>({}); // 预览分配结果
 
@@ -74,11 +75,27 @@ export default function PositionCalc() {
     if (levels.length === 0) return {};
     const result: Record<number, number> = {};
     if (method === 'equal') {
-      const each = totalQty / levels.length;
-      levels.forEach(p => { result[p] = Math.round(each * 10000) / 10000; });
-      // 修正最后一档的浮点误差
-      const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
-      result[levels[levels.length - 1]] = Math.round((totalQty - allocated) * 10000) / 10000;
+      // OKX 等差风格：越低价格买越多，相邻档位数量差异固定（公差 d）
+      // levels 从高到低排列，第 i 档（i=0最高价）数量 = a + i*d
+      // 总量约束： sum = n*a + d*(0+1+...+(n-1)) = n*a + d*n*(n-1)/2 = totalQty
+      // => a = (totalQty - d*n*(n-1)/2) / n
+      const n = levels.length;
+      const d = parseFloat(allocArithDiff) || 1;
+      const a = (totalQty - d * n * (n - 1) / 2) / n; // 最高价档的基础量
+      if (a > 0) {
+        levels.forEach((p, i) => {
+          result[p] = Math.max(0, Math.round((a + i * d) * 10000) / 10000);
+        });
+        // 修正浮点误差
+        const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
+        result[levels[levels.length - 1]] = Math.max(0, Math.round((totalQty - allocated) * 10000) / 10000);
+      } else {
+        // 公差过大导致最高价档为负，退化为均匀分配
+        const each = totalQty / n;
+        levels.forEach(p => { result[p] = Math.round(each * 10000) / 10000; });
+        const allocated = levels.slice(0, -1).reduce((s, p) => s + result[p], 0);
+        result[levels[levels.length - 1]] = Math.round((totalQty - allocated) * 10000) / 10000;
+      }
     } else if (method === 'geometric') {
       const ratio = parseFloat(allocGeomRatio) || 1.2;
       // 价格越低，权重越大：权重 = ratio^(index from bottom)
@@ -872,9 +889,26 @@ export default function PositionCalc() {
                         >
                           {allocMethod === 'equal' && <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
                         </div>
-                        <div>
+                        <div className="flex-1">
                           <div className="text-sm font-semibold text-gray-800">等差分配</div>
-                          <div className="text-xs text-gray-400 mt-0.5">每个档位分配相同数量，每档 {allocLevels.length > 0 ? (totalQty / allocLevels.length).toFixed(4) : '--'} ETH</div>
+                          <div className="text-xs text-gray-400 mt-0.5">越低价格买越多，相邻档位数量差异固定</div>
+                          {allocMethod === 'equal' && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="text-xs text-gray-500">公差</span>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={allocArithDiff}
+                                onChange={e => setAllocArithDiff(e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                                className="w-20 px-2 py-1 text-sm font-semibold text-gray-800 rounded-lg outline-none"
+                                style={{ border: '1px solid #BFDBFE', background: '#EFF6FF' }}
+                                step="0.1"
+                                min="0"
+                              />
+                              <span className="text-xs text-gray-400">ETH（0=均匀，越大差异越大）</span>
+                            </div>
+                          )}
                         </div>
                       </button>
                       {/* 等比 */}
