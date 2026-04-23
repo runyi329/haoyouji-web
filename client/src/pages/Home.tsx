@@ -458,6 +458,16 @@ export default function Home() {
         }
       `}</style>
 
+      {/* 🎂 印总生日祝福横幅（临时，只对 jiang 用户显示） */}
+      {isJiang && (
+        <div className="mx-4 mt-4 rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #ff4444 0%, #ff8c00 100%)' }}>
+          <div className="px-4 py-4 text-center">
+            <div className="text-2xl mb-1">🎂🧧🎉</div>
+            <div className="text-white font-bold text-base mb-1">祝印总生日快乐！</div>
+            <div className="text-white/90 text-sm leading-relaxed">愿卢卡币节节攀升，天天涨停！<br/>财富自由，心想事成！🚀</div>
+          </div>
+        </div>
+      )}
       {/* Header Banner Carousel */}
       {isYunting ? (
         /* yunting：算力中心商城入口 */
