@@ -444,18 +444,13 @@ export default function PositionCalc() {
             <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 0%, #d4af37 30%, #f5e27a 50%, #d4af37 70%, transparent 100%)' }} />
             <div className="relative px-5 py-4">
               {/* 标题行 */}
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center mb-3">
                 <span className="text-xs font-medium tracking-widest" style={{ color: '#d4af37', letterSpacing: '0.2em', textShadow: '0 0 8px rgba(212,175,55,0.4)' }}>目标止盈利润</span>
-                <div className="flex items-center gap-1">
-                  <div className="w-1 h-1 rounded-full" style={{ background: '#d4af37', opacity: 0.6 }} />
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#d4af37', opacity: 0.8 }} />
-                  <div className="w-1 h-1 rounded-full" style={{ background: '#d4af37', opacity: 0.6 }} />
-                </div>
               </div>
               {/* 主数字区：左右两栏 */}
-              <div className="flex items-stretch gap-0 mb-3">
+              <div className="flex items-start gap-0 mb-3">
                 {/* 左栏：目标止盈利润 */}
-                <div className="flex-1 pr-4">
+                <div className="flex-1 pr-4 pt-1">
                   <div className="flex items-baseline gap-2">
                     <span className="text-3xl font-bold" style={{ color: '#f5e27a', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 20px rgba(212,175,55,0.5)' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
@@ -477,7 +472,7 @@ export default function PositionCalc() {
                 {/* 竖分割线 */}
                 <div className="w-px self-stretch" style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(212,175,55,0.3) 20%, rgba(212,175,55,0.3) 80%, transparent 100%)' }} />
                 {/* 右栏：ETH/USDT + USDT/CNY */}
-                <div className="pl-4 flex flex-col justify-center gap-3">
+                <div className="pl-4 flex flex-col justify-start gap-3">
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH/USDT</div>
                     <div className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
