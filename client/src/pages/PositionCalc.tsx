@@ -872,8 +872,7 @@ export default function PositionCalc() {
                 </div>
 
                 {/* 右侧数量标注 */}
-                {(planQty > 0 || actualQty > 0) && (
-                  <div className="absolute right-3 top-0 h-full flex items-center pointer-events-none">
+                <div className="absolute right-3 top-0 h-full flex items-center pointer-events-none">
                     <span
                       className="text-[11px] font-medium tabular-nums"
                       style={{
@@ -883,12 +882,15 @@ export default function PositionCalc() {
                         textShadow: actualPct > 70 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
                       }}
                     >
-                      {actualQty > 0 ? actualQty.toFixed(2) : ''}
-                      {planQty > 0 && actualQty > 0 ? <span style={{ opacity: 0.6 }}>/</span> : ''}
-                      {planQty > 0 && <span style={{ opacity: actualQty > 0 ? 0.6 : 1 }}>{planQty.toFixed(2)}</span>}
+                      <span style={{ color: actualQty > 0 ? (isFullyBought ? '#059669' : '#D32F2F') : 'inherit' }}>
+                        {actualQty > 0 ? actualQty.toFixed(2) : '0'}
+                      </span>
+                      <span style={{ opacity: 0.5, margin: '0 2px' }}>-</span>
+                      <span style={{ opacity: 0.7 }}>
+                        {planQty > 0 ? planQty.toFixed(2) : '0'}
+                      </span>
                     </span>
                   </div>
-                )}
               </div>
             </button>
           );
