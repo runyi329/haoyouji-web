@@ -373,7 +373,29 @@ export default function PositionCalc() {
                       <span className="text-xs" style={{ color: 'rgba(226,185,111,0.5)' }}>目标持仓</span>
                       {targetEthQty && parseFloat(targetEthQty) > 0 && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); setAllocStep('range'); setShowAutoAlloc(true); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // 如果已有分配数据，直接进入预览步骤
+                            const hasAlloc = PRICE_LEVELS.some(p => (planned[p] || 0) > 0);
+                            if (hasAlloc) {
+                              // 自动推断已分配的价格区间
+                              const allocedLevels = PRICE_LEVELS.filter(p => (planned[p] || 0) > 0);
+                              if (allocedLevels.length > 0) {
+                                const detectedMin = Math.min(...allocedLevels);
+                                const detectedMax = Math.max(...allocedLevels);
+                                setAllocMinPrice(String(detectedMin));
+                                setAllocMaxPrice(String(detectedMax));
+                                // 将当前 planned 作为预览结果展示
+                                const preview: Record<number, number> = {};
+                                allocedLevels.forEach(p => { preview[p] = planned[p] || 0; });
+                                setAllocPreview(preview);
+                              }
+                              setAllocStep('preview');
+                            } else {
+                              setAllocStep('range');
+                            }
+                            setShowAutoAlloc(true);
+                          }}
                           className="px-1.5 py-0 rounded text-xs font-semibold leading-5"
                           style={{ background: 'rgba(251,191,36,0.18)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.35)' }}
                         >配置</button>
@@ -1001,9 +1023,9 @@ export default function PositionCalc() {
                     </div>
                     <div className="flex gap-3">
                       <button
-                        onClick={() => setAllocStep('method')}
+                        onClick={() => { setAllocStep('range'); }}
                         className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-600 bg-gray-100"
-                      >返回</button>
+                      >重新分配</button>
                       <button
                         onClick={() => {
                           // 将预览结果写入 planned
