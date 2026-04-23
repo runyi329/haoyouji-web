@@ -942,6 +942,38 @@ export default function PositionCalc() {
                         </div>
                       </button>
                     </div>
+                    {/* 等差/等比实时预览条形图 */}
+                    {(allocMethod === 'equal' || allocMethod === 'geometric') && allocLevels.length > 0 && (() => {
+                      const previewQtys = calcAutoAlloc(allocMethod, minP, maxP);
+                      const maxQty = Math.max(...allocLevels.map(p => previewQtys[p] || 0));
+                      return (
+                        <div className="mb-4 rounded-xl p-3" style={{ background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs font-semibold text-gray-500">实时分配预览</div>
+                            <div className="text-xs text-gray-400">{allocLevels.length} 个档位 · {totalQty.toFixed(2)} ETH</div>
+                          </div>
+                          <div className="space-y-1 max-h-44 overflow-y-auto">
+                            {allocLevels.map(p => {
+                              const qty = previewQtys[p] || 0;
+                              const pct = maxQty > 0 ? qty / maxQty * 100 : 0;
+                              const barColor = allocMethod === 'equal' ? '#3B82F6' : '#F97316';
+                              return (
+                                <div key={p} className="flex items-center gap-2">
+                                  <span className="text-[10px] font-mono text-gray-400 w-12 flex-shrink-0 text-right">${p}</span>
+                                  <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: '#E5E7EB' }}>
+                                    <div
+                                      className="h-full rounded-full transition-all duration-200"
+                                      style={{ width: `${pct}%`, background: barColor }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] font-semibold text-gray-600 w-14 flex-shrink-0 text-right tabular-nums">{qty.toFixed(3)}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {/* 手动模式输入表 */}
                     {allocMethod === 'manual' && (
                       <div className="mb-4">
