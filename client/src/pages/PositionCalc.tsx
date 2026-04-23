@@ -531,7 +531,7 @@ export default function PositionCalc() {
                         {/* 实际填充（亮蓝高光），内含百分比数字 */}
                         {pct > 0 && (
                           <div
-                            className="absolute top-0 left-0 h-full rounded transition-all duration-500 flex items-center justify-end pr-2"
+                            className="absolute top-0 left-0 h-full transition-all duration-500 flex items-center justify-end pr-2"
                             style={{
                               width: `${pct * 100}%`,
                               background: pct >= 1
@@ -539,6 +539,7 @@ export default function PositionCalc() {
                                 : 'linear-gradient(90deg, #92700a 0%, #b8860b 50%, #d4af37 100%)',
                               boxShadow: '0 0 10px rgba(212,175,55,0.5)',
                               minWidth: targetQty > 0 ? '2rem' : '0',
+                              borderRadius: '0 4px 4px 0',
                             }}
                           >
                             {targetQty > 0 && (
@@ -755,10 +756,11 @@ export default function PositionCalc() {
               {/* 达成进度条 */}
               <div className="mt-2 h-1.5 rounded bg-blue-100 overflow-hidden">
                 <div
-                  className="h-full rounded transition-all duration-300"
+                  className="h-full transition-all duration-300"
                   style={{
                     width: `${summary.totalPlanned > 0 ? Math.min((summary.totalQty / summary.totalPlanned) * 100, 100) : 0}%`,
                     background: 'linear-gradient(90deg, #1A56DB, #3B82F6)',
+                    borderRadius: '0 4px 4px 0',
                   }}
                 />
               </div>
@@ -819,10 +821,10 @@ export default function PositionCalc() {
                 {planQty > 0 && (
                   <div
                     className="absolute left-0 top-0 h-full transition-all duration-300"
-                    style={{ width: `${planPct}%`, background: 'linear-gradient(90deg, #CBA471, #E2B96F)' }}
+                    style={{ width: `${planPct}%`, background: 'linear-gradient(90deg, #CBA471, #E2B96F)', borderRadius: '0 4px 4px 0' }}
                   />
                 )}
-                {/* 已买填充（蓝色） */}
+                {/* 已买填充（红/绿） */}
                 {actualQty > 0 && (
                   <div
                     className="absolute left-0 top-0 h-full transition-all duration-300"
@@ -832,6 +834,7 @@ export default function PositionCalc() {
                         ? 'linear-gradient(90deg, #047857, #059669)'  // 满仓翠绿
                         : 'linear-gradient(90deg, #B71C1C, #D32F2F)',
                       minWidth: '4px',
+                      borderRadius: '0 4px 4px 0',
                     }}
                   />
                 )}
