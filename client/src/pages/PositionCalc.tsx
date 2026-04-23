@@ -405,17 +405,27 @@ export default function PositionCalc() {
                   </span>
                 </div>
               </div>
-              {/* 目标 ETH 数量 + 目标离场价 */}
+              {/* 目标持仓 vs 当前持仓 对比区 */}
               <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-xs" style={{ color: 'rgba(226,185,111,0.5)' }}>目标持仓</span>
+                {/* 当前 ETH 价格行 */}
+                <div className="flex justify-end mb-2">
+                  <div className="text-right">
+                    <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>当前 ETH 价</div>
+                    <span className="text-lg font-semibold" style={{ color: '#4fc3f7' }}>
+                      {currentPrice ? `$${currentPrice.toFixed(0)}` : <span style={{ color: 'rgba(79,195,247,0.3)' }}>--</span>}
+                    </span>
+                  </div>
+                </div>
+                {/* 两列对比：左=目标持仓，右=当前持仓 */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 左列：目标持仓 */}
+                  <div className="rounded-xl p-2.5" style={{ background: 'rgba(226,185,111,0.08)', border: '1px solid rgba(226,185,111,0.15)' }}>
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-xs" style={{ color: 'rgba(226,185,111,0.6)' }}>目标持仓</span>
                       {targetEthQty && parseFloat(targetEthQty) > 0 && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // 尝试从 localStorage 恢复上次的配置
                             try {
                               const saved = localStorage.getItem(`alloc_config_${ledgerId}`);
                               if (saved) {
@@ -430,17 +440,14 @@ export default function PositionCalc() {
                                 if (cfg.maxPrice) setAllocMaxPrice(cfg.maxPrice);
                               }
                             } catch {}
-                            // 如果已有分配数据，直接进入预览步骤
                             const hasAlloc = PRICE_LEVELS.some(p => (planned[p] || 0) > 0);
                             if (hasAlloc) {
-                              // 自动推断已分配的价格区间
                               const allocedLevels = PRICE_LEVELS.filter(p => (planned[p] || 0) > 0);
                               if (allocedLevels.length > 0) {
                                 const detectedMin = Math.min(...allocedLevels);
                                 const detectedMax = Math.max(...allocedLevels);
                                 setAllocMinPrice(String(detectedMin));
                                 setAllocMaxPrice(String(detectedMax));
-                                // 将当前 planned 作为预览结果展示
                                 const preview: Record<number, number> = {};
                                 allocedLevels.forEach(p => { preview[p] = planned[p] || 0; });
                                 setAllocPreview(preview);
@@ -451,76 +458,69 @@ export default function PositionCalc() {
                             }
                             setShowAutoAlloc(true);
                           }}
-                          className="px-1.5 py-0 rounded text-xs font-semibold leading-5"
-                          style={{ background: 'rgba(251,191,36,0.18)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.35)' }}
+                          className="px-1 py-0 rounded font-semibold leading-4"
+                          style={{ background: 'rgba(251,191,36,0.18)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.35)', fontSize: '10px' }}
                         >配置</button>
                       )}
                     </div>
-                    <span className="text-2xl font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="text-xl font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
                       {targetEthQty && parseFloat(targetEthQty) > 0
                         ? `${parseFloat(targetEthQty).toFixed(2)} ETH`
                         : <span style={{ color: 'rgba(226,185,111,0.3)' }}>-- ETH</span>
                       }
-                    </span>
-
+                    </div>
+                    {targetEthQty && parseFloat(targetEthQty) > 0 && targetProfitCny && parseFloat(targetProfitCny) > 0 && currentPrice && (() => {
+                      const profitUsdt = parseFloat(targetProfitCny) / cnyRate;
+                      const targetExitPrice = currentPrice + profitUsdt / parseFloat(targetEthQty);
+                      return (
+                        <div className="mt-1.5">
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>目标离场价</span>
+                            <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1 }}>
+                              <HelpCircle className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <div className="text-base font-bold" style={{ color: '#f97316', fontVariantNumeric: 'tabular-nums' }}>
+                            ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                          </div>
+                          <div className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                            +{((targetExitPrice - currentPrice) / currentPrice * 100).toFixed(1)}%
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>当前 ETH 价</div>
-                    <span className="text-lg font-semibold" style={{ color: '#4fc3f7' }}>
-                      {currentPrice ? `$${currentPrice.toFixed(0)}` : <span style={{ color: 'rgba(79,195,247,0.3)' }}>--</span>}
-                    </span>
+                  {/* 右列：当前持仓 */}
+                  <div className="rounded-xl p-2.5" style={{ background: 'rgba(251,113,133,0.08)', border: '1px solid rgba(211,47,47,0.2)' }}>
+                    <div className="text-xs mb-1" style={{ color: 'rgba(251,113,133,0.6)' }}>当前持仓</div>
+                    <div className="text-xl font-bold" style={{ color: '#fca5a5', fontVariantNumeric: 'tabular-nums' }}>
+                      {summary.totalQty > 0
+                        ? `${summary.totalQty.toFixed(2)} ETH`
+                        : <span style={{ color: 'rgba(252,165,165,0.3)' }}>-- ETH</span>
+                      }
+                    </div>
+                    {targetProfitCny && parseFloat(targetProfitCny) > 0 && currentPrice && summary.totalQty > 0 && (() => {
+                      const profitUsdt = parseFloat(targetProfitCny) / cnyRate;
+                      const actualExitPrice = currentPrice + profitUsdt / summary.totalQty;
+                      return (
+                        <div className="mt-1.5">
+                          <div className="text-xs mb-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>实际离场价</div>
+                          <div className="text-base font-bold" style={{ color: '#fb923c', fontVariantNumeric: 'tabular-nums' }}>
+                            ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                          </div>
+                          <div className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                            +{((actualExitPrice - currentPrice) / currentPrice * 100).toFixed(1)}%
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {summary.totalQty === 0 && (
+                      <div className="mt-1.5 text-xs" style={{ color: 'rgba(252,165,165,0.3)' }}>暂无买入记录</div>
+                    )}
                   </div>
                 </div>
-                {/* 目标离场价计算 */}
-                {targetEthQty && parseFloat(targetEthQty) > 0 && targetProfitCny && parseFloat(targetProfitCny) > 0 && currentPrice && (() => {
-                  const ethQty = parseFloat(targetEthQty);
-                  const profitUsdt = parseFloat(targetProfitCny) / cnyRate;
-                  const targetExitPrice = currentPrice + profitUsdt / ethQty;
-                  return (
-                    <div className="mt-2 flex items-center gap-2">
-                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>目标离场价</span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }}
-                        className="flex items-center justify-center flex-shrink-0"
-                        style={{ color: 'rgba(255,255,255,0.4)', lineHeight: 1 }}
-                      >
-                        <HelpCircle className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-base font-bold" style={{ color: '#f97316', fontVariantNumeric: 'tabular-nums' }}>
-                        ${targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                      </span>
-                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                        (+{((targetExitPrice - currentPrice) / currentPrice * 100).toFixed(1)}%)
-                      </span>
-                    </div>
-                  );
-                })()}
-                {/* 当前实际持仓与实际离场价 */}
-                {targetProfitCny && parseFloat(targetProfitCny) > 0 && currentPrice && summary.totalQty > 0 && (() => {
-                  const profitUsdt = parseFloat(targetProfitCny) / cnyRate;
-                  const actualExitPrice = currentPrice + profitUsdt / summary.totalQty;
-                  return (
-                    <div className="mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs" style={{ color: 'rgba(226,185,111,0.5)' }}>当前持仓</span>
-                        <span className="text-base font-bold" style={{ color: '#e2b96f', fontVariantNumeric: 'tabular-nums' }}>
-                          {summary.totalQty.toFixed(2)} ETH
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>实际离场价</span>
-                        <span className="text-base font-bold" style={{ color: '#fb923c', fontVariantNumeric: 'tabular-nums' }}>
-                          ${actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                        </span>
-                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>
-                          (+{((actualExitPrice - currentPrice) / currentPrice * 100).toFixed(1)}%)
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
-              {/* 汇率行 */}
+                            {/* 汇率行 */}
               <div className="flex items-center gap-1.5 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <span className="text-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>USD/CNY</span>
                 <span className="text-xs font-mono font-semibold" style={{ color: 'rgba(255,255,255,0.6)' }}>{cnyRate.toFixed(4)}</span>
