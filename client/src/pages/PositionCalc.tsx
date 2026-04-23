@@ -421,8 +421,17 @@ export default function PositionCalc() {
                   const actualQty = summary.totalQty || 0;
                   const pct = targetQty > 0 ? Math.min(actualQty / targetQty, 1) : 0;
                   const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
-                  const targetExitPrice = currentPrice && targetQty > 0 ? currentPrice + profitUsdt / targetQty : 0;
-                  const actualExitPrice = currentPrice && actualQty > 0 ? currentPrice + profitUsdt / actualQty : 0;
+                  // 目标均价：按计划档位数量加权均价
+                  let _planCost = 0, _planQty = 0;
+                  PRICE_LEVELS.forEach(p => { const q = planned[p] || 0; if (q > 0) { _planCost += q * p; _planQty += q; } });
+                  const targetAvgPrice = _planQty > 0 ? _planCost / _planQty : 0;
+                  // 实际均价：按实际买入数量加权均价
+                  let _actCost = 0, _actQty = 0;
+                  PRICE_LEVELS.forEach(p => { const q = actual[p] || 0; if (q > 0) { _actCost += q * p; _actQty += q; } });
+                  const actualAvgPrice = _actQty > 0 ? _actCost / _actQty : 0;
+                  // 止盈价 = 均价 + 目标利润(USDT) ÷ 持仓数量（从成本出发，不依赖当前价）
+                  const targetExitPrice = targetAvgPrice > 0 && targetQty > 0 ? targetAvgPrice + profitUsdt / targetQty : 0;
+                  const actualExitPrice = actualAvgPrice > 0 && actualQty > 0 ? actualAvgPrice + profitUsdt / actualQty : 0;
 
                   return (
                     <div>
@@ -1356,8 +1365,17 @@ export default function PositionCalc() {
         const actualEthQty = summary.totalQty;           // 实际持仓数量
         const profitCny = parseFloat(targetProfitCny) || 0;
         const profitUsdt = cnyRate > 0 ? profitCny / cnyRate : 0;
-        const exitPrice = currentPrice && ethQty > 0 ? currentPrice + profitUsdt / ethQty : null;
-        const actualExitPrice = currentPrice && actualEthQty > 0 ? currentPrice + profitUsdt / actualEthQty : null;
+        // 目标均价（按计划档位加权）
+        let _mPlanCost = 0, _mPlanQty = 0;
+        PRICE_LEVELS.forEach(p => { const q = planned[p] || 0; if (q > 0) { _mPlanCost += q * p; _mPlanQty += q; } });
+        const targetAvgForModal = _mPlanQty > 0 ? _mPlanCost / _mPlanQty : 0;
+        // 实际均价（按实际买入加权）
+        let _mActCost = 0, _mActQty = 0;
+        PRICE_LEVELS.forEach(p => { const q = actual[p] || 0; if (q > 0) { _mActCost += q * p; _mActQty += q; } });
+        const actualAvgForModal = _mActQty > 0 ? _mActCost / _mActQty : 0;
+        // 止盈价 = 均价 + 目标利润(USDT) ÷ 持仓数量
+        const exitPrice = targetAvgForModal > 0 && ethQty > 0 ? targetAvgForModal + profitUsdt / ethQty : null;
+        const actualExitPrice = actualAvgForModal > 0 && actualEthQty > 0 ? actualAvgForModal + profitUsdt / actualEthQty : null;
         return (
           <div
             className="fixed inset-0 z-50 flex items-end justify-center"
@@ -1386,29 +1404,35 @@ export default function PositionCalc() {
               <div className="rounded-xl p-4 mb-4" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
                 <div className="text-xs font-semibold text-orange-600 mb-2 tracking-wide">计算公式</div>
                 <div className="text-sm font-mono text-gray-700 leading-relaxed">
-                  目标离场价 = 当前价 + 目标利润(USDT) ÷ 持仓数量
+                  止盈价 = 持仓均价 + 目标利润(USDT) ÷ 持仓数量
                 </div>
                 <div className="text-xs text-gray-400 mt-1.5">
-                  其中：目标利润(USDT) = 目标利润(CNY) ÷ 汇率
+                  其中：持仓均价 = Σ(档位价×数量) ÷ 总数量；目标利润(USDT) = 目标利润(CNY) ÷ 汇率
                 </div>
               </div>
 
               {/* 逻辑说明 */}
               <div className="text-sm text-gray-600 leading-relaxed mb-4">
-                <p className="mb-2">当你持有一定数量的 ETH，并设定了目标利润后，系统会计算出：</p>
-                <p className="mb-2">ETH 价格需要从<span className="font-semibold text-gray-800">当前价</span>上涨多少，才能让你的持仓产生足够的浮盈，恰好达到目标利润。</p>
-                <p className="text-gray-400 text-xs">即：每涨 $1，持仓盈利 = 持仓数量 × $1。因此涨幅 = 目标利润 ÷ 持仓数量。</p>
+                <p className="mb-2">基于你在各档位的<span className="font-semibold text-gray-800">持仓均价</span>和目标利润，系统计算出：</p>
+                <p className="mb-2">ETH 价格需要从<span className="font-semibold text-gray-800">均价</span>上涨多少，才能让你的持仓产生足够的浮盈，恰好达到目标利润。</p>
+                <p className="text-gray-400 text-xs">即：每涨 $1，持仓盈利 = 持仓数量 × $1。因此需涨幅 = 目标利润 ÷ 持仓数量，止盈价 = 均价 + 需涨幅。</p>
               </div>
 
               {/* 基础参数 */}
-              {profitCny > 0 && currentPrice && (
+              {profitCny > 0 && (
                 <div className="rounded-xl p-4 mb-3" style={{ background: '#F0F9FF', border: '1px solid #BAE6FD' }}>
                   <div className="text-xs font-semibold text-blue-600 mb-3 tracking-wide">基础参数</div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-500">当前 ETH 价</span>
-                      <span className="font-semibold text-gray-800">${currentPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                      <span className="text-gray-500">目标均价</span>
+                      <span className="font-semibold text-gray-800">{targetAvgForModal > 0 ? `$${targetAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '--'}</span>
                     </div>
+                    {actualAvgForModal > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">实际均价</span>
+                      <span className="font-semibold text-gray-800">${actualAvgForModal.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    )}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500">目标利润</span>
                       <span className="font-semibold text-gray-800">¥{profitCny.toLocaleString('zh-CN')} ≈ {profitUsdt.toLocaleString('en-US', { maximumFractionDigits: 0 })} USDT</span>
@@ -1417,7 +1441,7 @@ export default function PositionCalc() {
                 </div>
               )}
               {/* 计划持仓 vs 实际持仓 对比 */}
-              {profitCny > 0 && currentPrice && (ethQty > 0 || actualEthQty > 0) && (
+              {profitCny > 0 && (ethQty > 0 || actualEthQty > 0) && (
                 <div className="space-y-2">
                   {/* 计划持仓 */}
                   {ethQty > 0 && (
