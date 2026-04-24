@@ -317,6 +317,13 @@ export default function PositionCalc() {
     return Math.max(...vals, 1);
   }, [planned]);
 
+  // 全局最大值：计划和实际中取最大，作为进度条等比例基准
+  const maxGlobalQty = useMemo(() => {
+    const planVals = PRICE_LEVELS.map(p => planned[p] || 0);
+    const actualVals = PRICE_LEVELS.map(p => actual[p] || 0);
+    return Math.max(...planVals, ...actualVals, 1);
+  }, [planned, actual]);
+
   // 汇总卡片编辑确认
   const confirmSummaryEdit = () => {
     if (!summaryEdit) return;
@@ -808,12 +815,15 @@ export default function PositionCalc() {
         {visibleLevels.map(price => {
           const planQty = planned[price] || 0;
           const actualQty = actual[price] || 0;
-          // 计划量占最大计划量的百分比（用于进度条背景宽度）
-          const planPct = planQty > 0 ? Math.max(Math.round(planQty / maxPlannedQty * 100), 8) : 100;
-          // 已买占计划的百分比；若无计划但有实际，显示满格
-          const actualPct = planQty > 0
+          // 计划条宽度：以全局最大值为基准等比例，最小显示8%（有数据时）
+          const planPct = planQty > 0 ? Math.max(Math.round(planQty / maxGlobalQty * 100), 8) : 0;
+          // 实际条宽度：以全局最大值为基准等比例（不再 cap 到计划量）
+          const actualPct = actualQty > 0 ? Math.max(Math.round(actualQty / maxGlobalQty * 100), 4) : 0;
+          // 文字颜色判断用：实际条是否覆盖到左侧/右侧
+          const actualPctForColor = planQty > 0
             ? Math.min((actualQty / planQty) * 100, 100)
             : (actualQty > 0 ? 100 : 0);
+          const planPctForColor = planQty > 0 ? Math.max(Math.round(planQty / maxPlannedQty * 100), 8) : 100;
           const isNearCurrent = currentPrice && Math.abs(price - currentPrice) <= 25;
           const isBelowCurrent = currentPrice ? price <= currentPrice : false;
           const isFullyBought = planQty > 0 && actualQty >= planQty;
@@ -862,10 +872,10 @@ export default function PositionCalc() {
                       // 左侧价格：实际进度条超过15%时文字已在有色背景上，用白色+强阴影
                       // 计划进度条超过15%时同理（金色背景）
                       // 否则用深色（灰色背景上）
-                      color: actualPct > 15 || planPct > 15
+                      color: actualPctForColor > 15 || planPctForColor > 15
                         ? '#ffffff'
                         : (isBelowCurrent ? '#374151' : '#9CA3AF'),
-                      textShadow: actualPct > 15 || planPct > 15
+                      textShadow: actualPctForColor > 15 || planPctForColor > 15
                         ? '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)'
                         : 'none',
                     }}
@@ -899,10 +909,10 @@ export default function PositionCalc() {
                         // 进度条（实际或计划）覆盖超过85%时右侧文字必然在有色背景上，用白色
                         // 50-85%之间用白色+强阴影保证可读性
                         // 低于50%时文字在灰色背景上，用深色
-                        color: actualPct > 50 || planPct > 85
+                        color: actualPctForColor > 50 || planPctForColor > 85
                           ? '#ffffff'
                           : '#374151',
-                        textShadow: actualPct > 50 || planPct > 85
+                        textShadow: actualPctForColor > 50 || planPctForColor > 85
                           ? '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)'
                           : 'none',
                       }}
