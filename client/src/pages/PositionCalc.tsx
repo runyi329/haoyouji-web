@@ -529,19 +529,19 @@ export default function PositionCalc() {
                       {/* 数量对比行 */}
                       <div className="flex items-end justify-between mb-1.5">
                         <div>
-                          <div className="text-[11px] mb-0.5 font-medium" style={{ color: '#8B6914' }}>实际持仓</div>
-                          <span className="text-2xl font-bold font-mono" style={{ color: '#3d2a00', fontVariantNumeric: 'tabular-nums' }}>
+                          <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.6)' }}>实际持仓</div>
+                          <span className="text-2xl font-bold font-mono" style={{ color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>
                             {actualQty > 0 ? actualQty.toFixed(0) : '--'}
                           </span>
-                          <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH</span>
+                          <span className="text-xs ml-1" style={{ color: 'rgba(255,255,255,0.25)' }}>ETH</span>
                         </div>
                         <div className="flex items-end gap-2">
                           <div className="text-right">
-                            <div className="text-[11px] mb-0.5 font-medium" style={{ color: '#8B6914' }}>目标持仓</div>
-                            <span className="text-2xl font-bold font-mono" style={{ color: '#3d2a00', fontVariantNumeric: 'tabular-nums' }}>
+                            <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.6)' }}>目标持仓</div>
+                            <span className="text-2xl font-bold font-mono" style={{ color: '#ffffff', fontVariantNumeric: 'tabular-nums' }}>
                               {targetQty > 0 ? targetQty.toFixed(0) : '--'}
                             </span>
-                            <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH</span>
+                            <span className="text-xs ml-1" style={{ color: 'rgba(255,255,255,0.25)' }}>ETH</span>
                           </div>
                         </div>
                       </div>
@@ -739,7 +739,7 @@ export default function PositionCalc() {
                 }
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
-              style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
+              style={{ background: 'linear-gradient(135deg, #b8860b 0%, #d4af37 50%, #b8860b 100%)', color: '#0a0a0f', fontWeight: 700 }}
             >
               保存
             </button>
@@ -1246,7 +1246,7 @@ export default function PositionCalc() {
                         }}
                         disabled={parseFloat(targetEthQty) <= 0 || !targetProfitCny}
                         className="w-full py-3 rounded-xl text-sm font-bold text-white mb-3 disabled:opacity-40"
-                        style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
+                        style={{ background: 'linear-gradient(135deg, #b8860b 0%, #d4af37 50%, #b8860b 100%)', color: '#0a0a0f', fontWeight: 700 }}
                       >
                         下一步：选择分配方式
                       </button>
@@ -1386,7 +1386,7 @@ export default function PositionCalc() {
                       disabled={allocLevels.length === 0 || totalQty <= 0}
                       onClick={() => setAllocStep('method')}
                       className="w-full py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40"
-                      style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
+                      style={{ background: 'linear-gradient(135deg, #b8860b 0%, #d4af37 50%, #b8860b 100%)', color: '#0a0a0f', fontWeight: 700 }}
                     >
                       下一步：选择分配方式
                     </button>
@@ -1691,7 +1691,7 @@ export default function PositionCalc() {
                           setAllocStep('preview');
                         }}
                         className="flex-2 flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40"
-                        style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%)' }}
+                        style={{ background: 'linear-gradient(135deg, #b8860b 0%, #d4af37 50%, #b8860b 100%)', color: '#0a0a0f', fontWeight: 700 }}
                       >
                         {allocMethod === 'manual' && Math.abs(manualTotal - totalQty) > 0.001
                           ? `差 ${(totalQty - manualTotal).toFixed(4)} ETH`
