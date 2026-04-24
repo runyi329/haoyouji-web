@@ -860,8 +860,10 @@ export default function PositionCalc() {
               <div
                 className="relative h-6 rounded overflow-hidden transition-all duration-200 active:scale-[0.98]"
                 style={{
-                  background: '#F3F4F6',
-                  boxShadow: isNearCurrent ? '0 0 0 2px #3B82F6' : 'none',
+                  background: isNearCurrent
+                    ? 'linear-gradient(90deg, #1a1408 0%, #221b0a 100%)'
+                    : (isBelowCurrent ? '#1a1408' : '#111111'),
+                  boxShadow: isNearCurrent ? '0 0 0 1.5px rgba(212,175,55,0.7), 0 0 8px rgba(212,175,55,0.2)' : 'none',
                 }}
               >
                 {/* 已买填充（红/绿）——超过计划时放在下层（zIndex 1），未超过时放在上层（zIndex 3） */}
