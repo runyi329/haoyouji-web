@@ -899,10 +899,12 @@ export default function PositionCalc() {
                       // 左侧价格：实际进度条超过15%时文字已在有色背景上，用白色+强阴影
                       // 计划进度条超过15%时同理（金色背景）
                       // 否则用深色（灰色背景上）
-                      color: actualPctForColor > 15 || planPctForColor > 15
+                      // 只要有进度条（计划或实际）覆盖左侧区域，就用白色+强阴影
+                      // planPct > 15 表示金色计划条已覆盖价格文字区域
+                      color: actualPctForColor > 15 || planPct > 15
                         ? '#ffffff'
                         : (isBelowCurrent ? '#374151' : '#9CA3AF'),
-                      textShadow: actualPctForColor > 15 || planPctForColor > 15
+                      textShadow: actualPctForColor > 15 || planPct > 15
                         ? '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)'
                         : 'none',
                     }}
