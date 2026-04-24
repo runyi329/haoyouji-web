@@ -482,7 +482,7 @@ export default function PositionCalc() {
                     </span>
                   </div>
                   <div className="flex items-baseline justify-end mt-1">
-                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>=</span>
+                    <span className="text-base font-light" style={{ color: 'rgba(212,175,55,0.45)', marginRight: '4px', lineHeight: 1, alignSelf: 'center' }}>≈</span>
                     <span className="text-3xl font-bold" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #d4af37 0%, #9a7a1a 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
                         ? (parseFloat(targetProfitCny) / cnyRate).toLocaleString('en-US', { maximumFractionDigits: 0 })
