@@ -883,11 +883,11 @@ export default function PositionCalc() {
                       }}
                     >
                       <span style={{ color: actualQty > 0 ? (isFullyBought ? '#059669' : '#D32F2F') : 'inherit' }}>
-                        {actualQty > 0 ? actualQty.toFixed(2) : '0'}
+                        {Math.round(actualQty)}
                       </span>
-                      <span style={{ opacity: 0.5, margin: '0 2px' }}>-</span>
+                      <span style={{ opacity: 0.5, margin: '0 1px' }}>/</span>
                       <span style={{ opacity: 0.7 }}>
-                        {planQty > 0 ? planQty.toFixed(2) : '0'}
+                        {Math.round(planQty)}
                       </span>
                     </span>
                   </div>
