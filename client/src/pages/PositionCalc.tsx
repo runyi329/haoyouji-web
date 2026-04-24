@@ -858,7 +858,7 @@ export default function PositionCalc() {
             >
               {/* 进度条容器 */}
               <div
-                className="relative h-8 rounded overflow-hidden transition-all duration-200 active:scale-[0.98]"
+                className="relative h-6 rounded overflow-hidden transition-all duration-200 active:scale-[0.98]"
                 style={{
                   background: '#F3F4F6',
                   boxShadow: isNearCurrent ? '0 0 0 2px #3B82F6' : 'none',
