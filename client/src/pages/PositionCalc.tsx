@@ -871,22 +871,27 @@ export default function PositionCalc() {
                   )}
                 </div>
 
-                {/* 右侧数量标注 */}
+                {/* 右侧数量标注：智能颜色——进度条覆盖到右侧时用白色+阴影，否则用深色 */}
                 <div className="absolute right-3 top-0 h-full flex items-center pointer-events-none">
                     <span
-                      className="text-[11px] font-medium tabular-nums"
+                      className="text-[11px] font-bold tabular-nums"
                       style={{
-                        color: actualPct > 70
-                          ? 'rgba(255,255,255,0.9)'
-                          : '#6B7280',
-                        textShadow: actualPct > 70 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
+                        // 进度条（实际或计划）覆盖超过85%时右侧文字必然在有色背景上，用白色
+                        // 50-85%之间用白色+强阴影保证可读性
+                        // 低于50%时文字在灰色背景上，用深色
+                        color: actualPct > 50 || planPct > 85
+                          ? '#ffffff'
+                          : '#374151',
+                        textShadow: actualPct > 50 || planPct > 85
+                          ? '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)'
+                          : 'none',
                       }}
                     >
-                      <span style={{ color: actualQty > 0 ? (isFullyBought ? '#059669' : '#D32F2F') : 'inherit' }}>
+                      <span>
                         {Math.round(actualQty)}
                       </span>
-                      <span style={{ opacity: 0.5, margin: '0 1px' }}>/</span>
-                      <span style={{ opacity: 0.7 }}>
+                      <span style={{ opacity: 0.6, margin: '0 1px' }}>/</span>
+                      <span style={{ opacity: 0.85 }}>
                         {Math.round(planQty)}
                       </span>
                     </span>
