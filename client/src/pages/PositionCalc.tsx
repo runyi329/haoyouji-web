@@ -495,7 +495,9 @@ export default function PositionCalc() {
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH/USDT</div>
                     <div className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                      {currentPrice ? parseFloat(currentPrice.toPrecision(6)).toString() : '--'}
+                      {currentPrice
+                        ? currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : '--'}
                     </div>
                   </div>
                   <div>
