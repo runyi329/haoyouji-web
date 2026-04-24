@@ -531,16 +531,16 @@ export default function PositionCalc() {
                       {/* 数量对比行 */}
                       <div className="flex items-end justify-between mb-1.5">
                         <div>
-                          <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.5)' }}>实际持仓</div>
-                          <span className="text-2xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                          <div className="text-[11px] mb-0.5 font-medium" style={{ color: 'rgba(212,175,55,0.65)' }}>实际持仓</div>
+                          <span className="text-2xl font-bold font-mono" style={{ color: '#f5edd5', fontVariantNumeric: 'tabular-nums' }}>
                             {actualQty > 0 ? actualQty.toFixed(0) : '--'}
                           </span>
                           <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH</span>
                         </div>
                         <div className="flex items-end gap-2">
                           <div className="text-right">
-                            <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>目标持仓</div>
-                            <span className="text-2xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                            <div className="text-[11px] mb-0.5 font-medium" style={{ color: 'rgba(212,175,55,0.65)' }}>目标持仓</div>
+                            <span className="text-2xl font-bold font-mono" style={{ color: '#f5edd5', fontVariantNumeric: 'tabular-nums' }}>
                               {targetQty > 0 ? targetQty.toFixed(0) : '--'}
                             </span>
                             <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH</span>
@@ -594,9 +594,9 @@ export default function PositionCalc() {
                         // 统一行样式
                         const rowCls = "grid mt-2 pt-2 items-center" as const;
                         const rowStyle = { borderTop: '1px solid rgba(212,175,55,0.15)', gridTemplateColumns: '1fr 28px 1fr' };
-                        const labelStyle2: React.CSSProperties = { color: 'rgba(212,175,55,0.5)', fontSize: '10px', letterSpacing: '0.05em', marginBottom: '2px' };
-                        const numStyle: React.CSSProperties = { color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' };
-                        const vsStyle: React.CSSProperties = { color: 'rgba(212,175,55,0.3)', fontSize: '10px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1 };
+                        const labelStyle2: React.CSSProperties = { color: 'rgba(212,175,55,0.65)', fontSize: '11px', letterSpacing: '0.05em', marginBottom: '3px', fontWeight: 500 };
+                        const numStyle: React.CSSProperties = { color: '#f5edd5', fontVariantNumeric: 'tabular-nums' };
+                        const vsStyle: React.CSSProperties = { color: 'rgba(212,175,55,0.45)', fontSize: '11px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1 };
 
                         return (
                           <>
