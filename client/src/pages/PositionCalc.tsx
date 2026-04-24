@@ -871,31 +871,31 @@ export default function PositionCalc() {
                     : 'none',
                 }}
               >
-                {/* 已买填充（红/绿）——超过计划时放在下层（zIndex 1），未超过时放在上层（zIndex 3） */}
+                {/* 计划量条：半透明金色描边，作为底层背景（zIndex 1） */}
+                {planQty > 0 && (
+                  <div
+                    className="absolute left-0 top-0 h-full transition-all duration-300"
+                    style={{
+                      width: `${planPct}%`,
+                      background: 'linear-gradient(90deg, rgba(212,175,55,0.18) 0%, rgba(212,175,55,0.12) 100%)',
+                      borderRight: '1px solid rgba(212,175,55,0.35)',
+                      borderRadius: '0 3px 3px 0',
+                      zIndex: 1,
+                    }}
+                  />
+                )}
+                {/* 实际已买：实心金色进度条（zIndex 2，叠在计划条上） */}
                 {actualQty > 0 && (
                   <div
                     className="absolute left-0 top-0 h-full transition-all duration-300"
                     style={{
                       width: `${actualPct}%`,
                       background: isFullyBought
-                        ? 'linear-gradient(90deg, #047857, #059669)'
-                        : 'linear-gradient(90deg, #B71C1C, #D32F2F)',
+                        ? 'linear-gradient(90deg, #9a7000 0%, #d4af37 45%, #f5e27a 80%, #fffbe8 100%)'
+                        : 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)',
+                      boxShadow: '0 0 8px rgba(212,175,55,0.4)',
                       minWidth: '4px',
-                      borderRadius: '0 4px 4px 0',
-                      zIndex: actualQty > planQty ? 1 : 3,
-                    }}
-                  />
-                )}
-                {/* 计划量条——超过计划时在上层（zIndex 2）保证可见，未超过时在下层（zIndex 2） */}
-                {planQty > 0 && (
-                  <div
-                    className="absolute left-0 top-0 h-full transition-all duration-300"
-                    style={{
-                      width: `${planPct}%`,
-                      background: actualQty > planQty
-                        ? 'linear-gradient(180deg, rgba(245,226,122,0.6) 0%, rgba(212,175,55,0.75) 40%, rgba(150,110,20,0.6) 100%)' // 超过计划：半透明金属渐变
-                        : 'linear-gradient(180deg, #f5e27a 0%, #d4af37 35%, #b8860b 65%, #c8a030 100%)', // 未超过：金属拉丝渐变
-                      borderRadius: '0 4px 4px 0',
+                      borderRadius: '0 3px 3px 0',
                       zIndex: 2,
                     }}
                   />
@@ -906,8 +906,8 @@ export default function PositionCalc() {
                   <span
                     className="text-xs font-bold tabular-nums"
                     style={{
-                      color: isBelowCurrent ? '#f0d060' : 'rgba(212,175,55,0.45)',
-                      textShadow: '0 1px 3px rgba(0,0,0,1)',
+                      color: isBelowCurrent ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)',
+                      textShadow: '0 1px 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)',
                     }}
                   >
                     {price}
@@ -921,7 +921,7 @@ export default function PositionCalc() {
                       xmlns="http://www.w3.org/2000/svg"
                     >
                       {/* 深色不透明圆圈衬底 */}
-                      <circle cx="11" cy="11" r="11" fill="#4a3a18" />
+                      <circle cx="11" cy="11" r="11" fill="rgba(0,0,0,0.6)" />
                       {/* 白色实心 ETH 菱形，上半亮下半稍暗 */}
                       <polygon points="11,3 17,11 11,9" fill="#ffffff" />
                       <polygon points="11,3 5,11 11,9" fill="rgba(255,255,255,0.7)" />
@@ -936,8 +936,8 @@ export default function PositionCalc() {
                     <span
                       className="text-[11px] font-bold tabular-nums"
                       style={{
-                        color: 'rgba(180,140,20,0.75)',
-                        textShadow: '0 1px 3px rgba(0,0,0,1)',
+                        color: 'rgba(255,255,255,0.75)',
+                        textShadow: '0 1px 4px rgba(0,0,0,1)',
                       }}
                     >
                       <span>
