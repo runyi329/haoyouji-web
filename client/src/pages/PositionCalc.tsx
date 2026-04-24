@@ -861,37 +861,32 @@ export default function PositionCalc() {
                   boxShadow: isNearCurrent ? '0 0 0 2px #3B82F6' : 'none',
                 }}
               >
-                {/* 计划量背景宽度（灰色，反映该档计划数量相对大小） */}
-                {planQty > 0 && (
-                  <div
-                    className="absolute left-0 top-0 h-full transition-all duration-300"
-                    style={{ width: `${planPct}%`, background: 'linear-gradient(90deg, #CBA471, #E2B96F)', borderRadius: '0 4px 4px 0' }}
-                  />
-                )}
-                {/* 已买填充（红/绿） */}
+                {/* 已买填充（红/绿）——超过计划时放在下层（zIndex 1），未超过时放在上层（zIndex 3） */}
                 {actualQty > 0 && (
                   <div
                     className="absolute left-0 top-0 h-full transition-all duration-300"
                     style={{
                       width: `${actualPct}%`,
                       background: isFullyBought
-                        ? 'linear-gradient(90deg, #047857, #059669)'  // 满仓翠绿
+                        ? 'linear-gradient(90deg, #047857, #059669)'
                         : 'linear-gradient(90deg, #B71C1C, #D32F2F)',
                       minWidth: '4px',
                       borderRadius: '0 4px 4px 0',
+                      zIndex: actualQty > planQty ? 1 : 3,
                     }}
                   />
                 )}
-                {/* 计划量竖线标记：当实际超过计划时，在计划位置画一条细白线 */}
-                {planQty > 0 && actualQty > planQty && (
+                {/* 计划量条——超过计划时在上层（zIndex 2）保证可见，未超过时在下层（zIndex 2） */}
+                {planQty > 0 && (
                   <div
-                    className="absolute top-0 h-full pointer-events-none"
+                    className="absolute left-0 top-0 h-full transition-all duration-300"
                     style={{
-                      left: `${planPct}%`,
-                      width: '2px',
-                      background: 'rgba(255,255,255,0.85)',
-                      boxShadow: '0 0 3px rgba(0,0,0,0.5)',
-                      zIndex: 10,
+                      width: `${planPct}%`,
+                      background: actualQty > planQty
+                        ? 'linear-gradient(90deg, rgba(203,164,113,0.75), rgba(226,185,111,0.75))' // 超过计划：半透明金色，能透出底层实际条
+                        : 'linear-gradient(90deg, #CBA471, #E2B96F)', // 未超过：不透明金色
+                      borderRadius: '0 4px 4px 0',
+                      zIndex: 2,
                     }}
                   />
                 )}
