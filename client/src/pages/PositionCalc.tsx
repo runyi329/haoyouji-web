@@ -892,7 +892,7 @@ export default function PositionCalc() {
                 )}
 
                 {/* 价格文字（叠加在进度条上，始终可见） */}
-                <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
+                <div className="absolute inset-0 flex items-center px-3 pointer-events-none" style={{ zIndex: 10 }}>
                   <span
                     className="text-xs font-bold tabular-nums"
                     style={{
@@ -929,7 +929,7 @@ export default function PositionCalc() {
                 </div>
 
                 {/* 右侧数量标注：智能颜色——进度条覆盖到右侧时用白色+阴影，否则用深色 */}
-                <div className="absolute right-3 top-0 h-full flex items-center pointer-events-none">
+                <div className="absolute right-3 top-0 h-full flex items-center pointer-events-none" style={{ zIndex: 10 }}>
                     <span
                       className="text-[11px] font-bold tabular-nums"
                       style={{
