@@ -491,18 +491,18 @@ export default function PositionCalc() {
                 {/* 竖分割线 */}
                 <div className="w-px self-stretch" style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(212,175,55,0.3) 20%, rgba(212,175,55,0.3) 80%, transparent 100%)' }} />
                 {/* 右栏：ETH/USDT + USDT/CNY */}
-                <div className="pl-4 flex flex-col justify-start gap-3">
-                  <div>
+                <div className="pl-3 flex flex-col justify-start gap-3" style={{ minWidth: 0, width: '90px', flexShrink: 0 }}>
+                  <div style={{ minWidth: 0 }}>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>ETH/USDT</div>
-                    <div className="text-xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 50%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>
+                    <div className="text-base font-bold font-mono truncate" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 50%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>
                       {currentPrice
                         ? currentPrice.toFixed(2)
                         : '--'}
                     </div>
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>USDT/CNY</div>
-                    <div className="text-xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #c8a030 0%, #8a6010 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{parseFloat(cnyRate.toPrecision(6)).toString()}</div>
+                    <div className="text-base font-bold font-mono truncate" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #c8a030 0%, #8a6010 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{parseFloat(cnyRate.toPrecision(6)).toString()}</div>
                   </div>
                 </div>
               </div>
