@@ -693,7 +693,7 @@ export default function PositionCalc() {
           </div>
         ) : (
           // 编辑模式
-          <div className="rounded-2xl border-2 border-blue-400 bg-white px-5 py-4 shadow-lg">
+          <div className="rounded-2xl px-5 py-4" style={{ background: 'linear-gradient(160deg, #0d0900 0%, #1a1200 100%)', border: '1px solid rgba(212,175,55,0.22)', boxShadow: '0 12px 40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(212,175,55,0.15)' }}>
             <div className="text-xs font-medium text-gray-500 mb-3 tracking-wide">目标止盈利润—编辑</div>
             {/* 人民币输入 */}
             <div className="mb-3">
@@ -804,17 +804,17 @@ export default function PositionCalc() {
                 />
               </div>
             </div>
-            <div className="bg-gray-50 rounded-xl p-3">
-              <div className="text-xs text-gray-500 mb-1">当前市值</div>
-              <div className="text-xl font-bold text-gray-800">
+            <div className="rounded-xl p-3" style={{ background: '#0d0900', border: '1px solid rgba(212,175,55,0.12)' }}>
+              <div className="text-xs mb-1 tracking-widest" style={{ color: 'rgba(212,175,55,0.4)' }}>当前市值</div>
+              <div className="text-xl font-bold" style={{ color: '#d4af37', textShadow: '0 0 12px rgba(212,175,55,0.35)' }}>
                 {summary.totalValue > 0 ? `$${summary.totalValue.toFixed(0)}` : '--'}
               </div>
-              <div className="text-xs text-gray-400 mt-0.5">
+              <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>
                 成本 ${summary.avgPrice > 0 ? (summary.avgPrice * summary.totalQty).toFixed(0) : '--'}
               </div>
             </div>
-            <div className={`rounded-xl p-3 ${isPnlPositive ? 'bg-red-50' : 'bg-green-50'}`}>
-              <div className="text-xs text-gray-500 mb-1">总浮盈亏</div>
+            <div className="rounded-xl p-3" style={{ background: '#0d0900', border: `1px solid ${isPnlPositive ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}` }}>
+              <div className="text-xs mb-1 tracking-widest" style={{ color: 'rgba(212,175,55,0.4)' }}>总浮盈亏</div>
               <div className={`text-xl font-bold flex items-center gap-1 ${isPnlPositive ? 'text-red-500' : 'text-green-600'}`}>
                 {isPnlPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                 {summary.totalPnl !== 0 ? `${isPnlPositive ? '+' : ''}$${summary.totalPnl.toFixed(0)}` : '--'}
@@ -1429,7 +1429,7 @@ export default function PositionCalc() {
                               </div>
                             )}
                           </div>
-                          <div className="text-xs text-gray-400 mt-0.5">{allocEqualAsc && allocMethod === 'equal' ? '越高价格买越多' : '越低价格买越多'}，相邻档位数量差异固定</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>{allocEqualAsc && allocMethod === 'equal' ? '越高价格买越多' : '越低价格买越多'}，相邻档位数量差异固定</div>
                           {allocMethod === 'equal' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
@@ -1486,7 +1486,7 @@ export default function PositionCalc() {
                               </div>
                             )}
                           </div>
-                          <div className="text-xs text-gray-400 mt-0.5">{allocGeomAsc && allocMethod === 'geometric' ? '越高价格分配越多' : '越低价格分配越多'}，按等比递增</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>{allocGeomAsc && allocMethod === 'geometric' ? '越高价格分配越多' : '越低价格分配越多'}，按等比递增</div>
                           {allocMethod === 'geometric' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
@@ -1527,7 +1527,7 @@ export default function PositionCalc() {
                         </div>
                         <div className="flex-1">
                           <div className="text-sm font-semibold text-gray-800">正态分布</div>
-                          <div className="text-xs text-gray-400 mt-0.5">中间价格区间买最多，两端价格区间买最少</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>中间价格区间买最多，两端价格区间买最少</div>
                           {allocMethod === 'normal' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
@@ -1577,7 +1577,7 @@ export default function PositionCalc() {
                         </div>
                         <div>
                           <div className="text-sm font-semibold text-gray-800">手动分配</div>
-                          <div className="text-xs text-gray-400 mt-0.5">自定义每档数量，总量必须等于目标持仓</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>自定义每档数量，总量必须等于目标持仓</div>
                         </div>
                       </button>
                     </div>
@@ -1952,7 +1952,7 @@ export default function PositionCalc() {
                 <div className="text-base font-semibold text-gray-800">
                   {modal.price} 档位
                 </div>
-                <div className="text-xs text-gray-400 mt-0.5">
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>
                   已买 {(actual[modal.price] || 0).toFixed(2)} ETH &nbsp;·&nbsp; 计划 {(planned[modal.price] || 0).toFixed(2)} ETH
                 </div>
               </div>
