@@ -882,6 +882,19 @@ export default function PositionCalc() {
                     }}
                   />
                 )}
+                {/* 计划量竖线标记：当实际超过计划时，在计划位置画一条细白线 */}
+                {planQty > 0 && actualQty > planQty && (
+                  <div
+                    className="absolute top-0 h-full pointer-events-none"
+                    style={{
+                      left: `${planPct}%`,
+                      width: '2px',
+                      background: 'rgba(255,255,255,0.85)',
+                      boxShadow: '0 0 3px rgba(0,0,0,0.5)',
+                      zIndex: 10,
+                    }}
+                  />
+                )}
 
                 {/* 价格文字（叠加在进度条上，始终可见） */}
                 <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
