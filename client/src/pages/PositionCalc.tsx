@@ -404,11 +404,11 @@ export default function PositionCalc() {
   const isPnlPositive = summary.totalPnl >= 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative">
+    <div className="min-h-screen pb-20 max-w-md mx-auto relative" style={{ background: '#f8f5ee' }}>
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"
-        style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
+        style={{ background: 'linear-gradient(135deg, #2c2410 0%, #4a3a18 50%, #2c2410 100%)', borderBottom: '1px solid rgba(212,175,55,0.3)' }}
       >
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}`)}
@@ -455,13 +455,11 @@ export default function PositionCalc() {
           // 展示模式：财经质感卡片
           <div
             className="relative overflow-hidden rounded-2xl"
-            style={{ background: 'linear-gradient(160deg, #0d0d0d 0%, #1a1208 40%, #0d0d0d 100%)', border: '1px solid rgba(212,175,55,0.25)', boxShadow: '0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(212,175,55,0.15)' }}
+            style={{ background: 'linear-gradient(160deg, #fffdf7 0%, #fdf6e3 40%, #fffdf7 100%)', border: '1px solid rgba(212,175,55,0.4)', boxShadow: '0 4px 20px rgba(212,175,55,0.15), inset 0 1px 0 rgba(255,255,255,0.9)' }}
           >
             {/* 装饰光晕 */}
-            <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #d4af37 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
-            <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full opacity-5" style={{ background: 'radial-gradient(circle, #b8860b 0%, transparent 70%)', transform: 'translate(-30%, 30%)' }} />
-            {/* 金色斜线纹理 */}
-            <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #d4af37 0px, #d4af37 1px, transparent 1px, transparent 12px)', pointerEvents: 'none' }} />
+            <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, #d4af37 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
+            <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #b8860b 0%, transparent 70%)', transform: 'translate(-30%, 30%)' }} />
             {/* 顶部金色细线 */}
             <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 0%, #d4af37 30%, #f5e27a 50%, #d4af37 70%, transparent 100%)' }} />
             <div className="relative px-5 py-4">
@@ -469,9 +467,9 @@ export default function PositionCalc() {
               <div className="flex items-start gap-0 mb-3">
                 {/* 左栏：目标止盈利润 */}
                 <div className="flex-1 pr-4">
-                  <div className="text-xs font-medium tracking-widest mb-2" style={{ color: '#d4af37', letterSpacing: '0.2em', textShadow: '0 0 8px rgba(212,175,55,0.4)' }}>目标止盈利润</div>
+                  <div className="text-xs font-medium tracking-widest mb-2" style={{ color: '#8B6914', letterSpacing: '0.2em' }}>目标止盈利润</div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold" style={{ color: '#f5e27a', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 20px rgba(212,175,55,0.5)' }}>
+                    <span className="text-3xl font-bold" style={{ color: '#5c4008', fontVariantNumeric: 'tabular-nums' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
                         ? `¥${Number(targetProfitCny).toLocaleString('zh-CN')}`
                         : <span style={{ color: 'rgba(212,175,55,0.2)' }}>¥ --</span>
@@ -480,7 +478,7 @@ export default function PositionCalc() {
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>=</span>
-                    <span className="text-lg font-semibold" style={{ color: 'rgba(212,175,55,0.7)', fontVariantNumeric: 'tabular-nums' }}>
+                    <span className="text-lg font-semibold" style={{ color: '#8B6914', fontVariantNumeric: 'tabular-nums' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
                         ? `$${(parseFloat(targetProfitCny) / cnyRate).toLocaleString('en-US', { maximumFractionDigits: 0 })} U`
                         : <span style={{ color: 'rgba(212,175,55,0.2)' }}>-- U</span>
@@ -493,16 +491,16 @@ export default function PositionCalc() {
                 {/* 右栏：ETH/USDT + USDT/CNY */}
                 <div className="pl-4 flex flex-col justify-start gap-3">
                   <div>
-                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH/USDT</div>
-                    <div className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
+                    <div className="text-[10px] mb-0.5" style={{ color: '#8B6914' }}>ETH/USDT</div>
+                    <div className="text-xl font-bold font-mono" style={{ color: '#3d2a00', fontVariantNumeric: 'tabular-nums' }}>
                       {currentPrice
                         ? currentPrice.toFixed(2)
                         : '--'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>USDT/CNY</div>
-                    <div className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>{parseFloat(cnyRate.toPrecision(6)).toString()}</div>
+                    <div className="text-[10px] mb-0.5" style={{ color: '#8B6914' }}>USDT/CNY</div>
+                    <div className="text-xl font-bold font-mono" style={{ color: '#3d2a00', fontVariantNumeric: 'tabular-nums' }}>{parseFloat(cnyRate.toPrecision(6)).toString()}</div>
                   </div>
                 </div>
               </div>
@@ -531,16 +529,16 @@ export default function PositionCalc() {
                       {/* 数量对比行 */}
                       <div className="flex items-end justify-between mb-1.5">
                         <div>
-                          <div className="text-[11px] mb-0.5 font-medium" style={{ color: 'rgba(212,175,55,0.65)' }}>实际持仓</div>
-                          <span className="text-2xl font-bold font-mono" style={{ color: '#f5edd5', fontVariantNumeric: 'tabular-nums' }}>
+                          <div className="text-[11px] mb-0.5 font-medium" style={{ color: '#8B6914' }}>实际持仓</div>
+                          <span className="text-2xl font-bold font-mono" style={{ color: '#3d2a00', fontVariantNumeric: 'tabular-nums' }}>
                             {actualQty > 0 ? actualQty.toFixed(0) : '--'}
                           </span>
                           <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH</span>
                         </div>
                         <div className="flex items-end gap-2">
                           <div className="text-right">
-                            <div className="text-[11px] mb-0.5 font-medium" style={{ color: 'rgba(212,175,55,0.65)' }}>目标持仓</div>
-                            <span className="text-2xl font-bold font-mono" style={{ color: '#f5edd5', fontVariantNumeric: 'tabular-nums' }}>
+                            <div className="text-[11px] mb-0.5 font-medium" style={{ color: '#8B6914' }}>目标持仓</div>
+                            <span className="text-2xl font-bold font-mono" style={{ color: '#3d2a00', fontVariantNumeric: 'tabular-nums' }}>
                               {targetQty > 0 ? targetQty.toFixed(0) : '--'}
                             </span>
                             <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH</span>
@@ -594,9 +592,9 @@ export default function PositionCalc() {
                         // 统一行样式
                         const rowCls = "grid mt-2 pt-2 items-center" as const;
                         const rowStyle = { borderTop: '1px solid rgba(212,175,55,0.15)', gridTemplateColumns: '1fr 28px 1fr' };
-                        const labelStyle2: React.CSSProperties = { color: 'rgba(212,175,55,0.65)', fontSize: '11px', letterSpacing: '0.05em', marginBottom: '3px', fontWeight: 500 };
-                        const numStyle: React.CSSProperties = { color: '#f5edd5', fontVariantNumeric: 'tabular-nums' };
-                        const vsStyle: React.CSSProperties = { color: 'rgba(212,175,55,0.45)', fontSize: '11px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1 };
+                        const labelStyle2: React.CSSProperties = { color: '#8B6914', fontSize: '11px', letterSpacing: '0.05em', marginBottom: '3px', fontWeight: 500 };
+                        const numStyle: React.CSSProperties = { color: '#3d2a00', fontVariantNumeric: 'tabular-nums' };
+                        const vsStyle: React.CSSProperties = { color: 'rgba(139,105,20,0.5)', fontSize: '11px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1 };
 
                         return (
                           <>
@@ -861,9 +859,9 @@ export default function PositionCalc() {
                 className="relative h-6 rounded overflow-hidden transition-all duration-200 active:scale-[0.98]"
                 style={{
                   background: isNearCurrent
-                    ? 'linear-gradient(90deg, #1a1408 0%, #221b0a 100%)'
-                    : (isBelowCurrent ? '#1a1408' : '#111111'),
-                  boxShadow: isNearCurrent ? '0 0 0 1.5px rgba(212,175,55,0.7), 0 0 8px rgba(212,175,55,0.2)' : 'none',
+                    ? 'linear-gradient(90deg, #fdf6e3 0%, #fef9ee 100%)'
+                    : (isBelowCurrent ? '#fdf6e3' : '#f5f0e8'),
+                  boxShadow: isNearCurrent ? '0 0 0 1.5px rgba(212,175,55,0.8), 0 0 8px rgba(212,175,55,0.25)' : 'none',
                 }}
               >
                 {/* 已买填充（红/绿）——超过计划时放在下层（zIndex 1），未超过时放在上层（zIndex 3） */}
@@ -901,8 +899,8 @@ export default function PositionCalc() {
                   <span
                     className="text-xs font-bold tabular-nums"
                     style={{
-                      color: '#ffffff',
-                      textShadow: '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)',
+                      color: '#3d2a00',
+                      textShadow: '0 1px 2px rgba(255,255,255,0.8)',
                     }}
                   >
                     {price}
@@ -916,7 +914,7 @@ export default function PositionCalc() {
                       xmlns="http://www.w3.org/2000/svg"
                     >
                       {/* 深色不透明圆圈衬底 */}
-                      <circle cx="11" cy="11" r="11" fill="#1a1a2e" />
+                      <circle cx="11" cy="11" r="11" fill="#4a3a18" />
                       {/* 白色实心 ETH 菱形，上半亮下半稍暗 */}
                       <polygon points="11,3 17,11 11,9" fill="#ffffff" />
                       <polygon points="11,3 5,11 11,9" fill="rgba(255,255,255,0.7)" />
@@ -931,8 +929,8 @@ export default function PositionCalc() {
                     <span
                       className="text-[11px] font-bold tabular-nums"
                       style={{
-                        color: '#ffffff',
-                        textShadow: '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)',
+                        color: '#3d2a00',
+                        textShadow: '0 1px 2px rgba(255,255,255,0.8)',
                       }}
                     >
                       <span>
