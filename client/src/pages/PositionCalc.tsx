@@ -496,7 +496,7 @@ export default function PositionCalc() {
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>ETH/USDT</div>
                     <div className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
                       {currentPrice
-                        ? currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        ? currentPrice.toFixed(2)
                         : '--'}
                     </div>
                   </div>
@@ -608,7 +608,7 @@ export default function PositionCalc() {
                                   <div style={labelStyle2}>实际止盈</div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {actualExitPrice > 0
-                                      ? <>{actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      ? <>{Math.round(actualExitPrice)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
                                       : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
                                   </span>
                                 </div>
@@ -624,7 +624,7 @@ export default function PositionCalc() {
                                   </div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {targetExitPrice > 0
-                                      ? <>{targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      ? <>{Math.round(targetExitPrice)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
                                       : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
                                   </span>
                                 </div>
@@ -665,7 +665,7 @@ export default function PositionCalc() {
                                   <div style={labelStyle2}>实际均价</div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {actualAvg2 > 0
-                                      ? <>{actualAvg2.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      ? <>{Math.round(actualAvg2)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
                                       : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
                                   </span>
                                 </div>
@@ -676,7 +676,7 @@ export default function PositionCalc() {
                                   <div style={labelStyle2}>目标均价</div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {targetAvg2 > 0
-                                      ? <>{targetAvg2.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      ? <>{Math.round(targetAvg2)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
                                       : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
                                   </span>
                                 </div>
@@ -899,7 +899,7 @@ export default function PositionCalc() {
                         : 'none',
                     }}
                   >
-                    {price.toLocaleString()}
+                    {price}
                   </span>
                   {isNearCurrent && (
                     <svg
@@ -1953,7 +1953,7 @@ export default function PositionCalc() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="text-base font-semibold text-gray-800">
-                  ${modal.price.toLocaleString()} 档位
+                  {modal.price} 档位
                 </div>
                 <div className="text-xs text-gray-400 mt-0.5">
                   已买 {(actual[modal.price] || 0).toFixed(2)} ETH &nbsp;·&nbsp; 计划 {(planned[modal.price] || 0).toFixed(2)} ETH
