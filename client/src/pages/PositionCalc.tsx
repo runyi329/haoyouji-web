@@ -843,7 +843,10 @@ export default function PositionCalc() {
             ? Math.min((actualQty / planQty) * 100, 100)
             : (actualQty > 0 ? 100 : 0);
           const planPctForColor = planQty > 0 ? Math.max(Math.round(planQty / maxPlannedQty * 100), 8) : 100;
-          const isNearCurrent = currentPrice && Math.abs(price - currentPrice) <= 25;
+          // ETH 图标规则：当前价格向下取整到最近档位（每50元一档）
+          // 如价格2347 → floor(2347/50)*50 = 2300，图标显示在2300档
+          const currentFloorPrice = currentPrice ? Math.floor(currentPrice / 50) * 50 : null;
+          const isNearCurrent = currentFloorPrice !== null && price === currentFloorPrice;
           const isBelowCurrent = currentPrice ? price <= currentPrice : false;
           const isFullyBought = planQty > 0 && actualQty >= planQty;
 
@@ -896,17 +899,8 @@ export default function PositionCalc() {
                   <span
                     className="text-xs font-bold tabular-nums"
                     style={{
-                      // 左侧价格：实际进度条超过15%时文字已在有色背景上，用白色+强阴影
-                      // 计划进度条超过15%时同理（金色背景）
-                      // 否则用深色（灰色背景上）
-                      // 只要有进度条（计划或实际）覆盖左侧区域，就用白色+强阴影
-                      // planPct > 15 表示金色计划条已覆盖价格文字区域
-                      color: actualPctForColor > 10 || planPct > 10
-                        ? '#ffffff'
-                        : (isBelowCurrent ? '#374151' : '#9CA3AF'),
-                      textShadow: actualPctForColor > 10 || planPct > 10
-                        ? '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)'
-                        : 'none',
+                      color: '#ffffff',
+                      textShadow: '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)',
                     }}
                   >
                     {price}
@@ -935,15 +929,8 @@ export default function PositionCalc() {
                     <span
                       className="text-[11px] font-bold tabular-nums"
                       style={{
-                        // 进度条（实际或计划）覆盖超过85%时右侧文字必然在有色背景上，用白色
-                        // 50-85%之间用白色+强阴影保证可读性
-                        // 低于50%时文字在灰色背景上，用深色
-                        color: actualPctForColor > 50 || planPctForColor > 85
-                          ? '#ffffff'
-                          : '#374151',
-                        textShadow: actualPctForColor > 50 || planPctForColor > 85
-                          ? '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)'
-                          : 'none',
+                        color: '#ffffff',
+                        textShadow: '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)',
                       }}
                     >
                       <span>
