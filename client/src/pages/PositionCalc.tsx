@@ -575,95 +575,112 @@ export default function PositionCalc() {
                           </div>
                         )}
                       </div>
-                      {/* 离场价对照行：实际离场（左）和目标离场（右） */}
-                      <div className="flex items-start justify-between mt-1.5">
-                        <div>
-                          {actualExitPrice > 0 ? (
-                            <>
-                              <div className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>实际止盈</div>
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                  {actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span>
-                                </span>
-                              </div>
-                            </>
-                          ) : <span />}
-                        </div>
-                        <div className="text-right">
-                          {targetExitPrice > 0 && (
-                            <>
-                              <div className="flex items-center gap-0.5 justify-end">
-                                <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(212,175,55,0.5)', lineHeight: 1 }}>
-                                  <HelpCircle className="w-2.5 h-2.5" />
-                                </button>
-                                <span className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>目标止盈</span>
-                              </div>
-                              <div className="flex items-baseline gap-1 justify-end">
-                                <span className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                  {targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span>
-                                </span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      {/* 涨幅行：实际需要涨幅（左）和目标需要涨幅（右） */}
-                      {(actualAvgPrice > 0 && actualExitPrice > actualAvgPrice) || (targetAvgPrice > 0 && targetExitPrice > targetAvgPrice) ? (
-                        <div className="flex items-center justify-between mt-1">
-                          <div>
-                            {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice ? (
-                              <>
-                                <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>实际需要涨幅</div>
-                                <span className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                  +{((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100).toFixed(1)}%
-                                </span>
-                              </>
-                            ) : <span />}
-                          </div>
-                          <div className="text-right">
-                            {targetAvgPrice > 0 && targetExitPrice > targetAvgPrice ? (
-                              <>
-                                <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>目标需要涨幅</div>
-                                <span className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                  +{((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%
-                                </span>
-                              </>
-                            ) : <span />}
-                          </div>
-                        </div>
-                      ) : null}
-                      {/* 均价对照行 */}
+                      {/* ===== 三行对比区域：止盈 / 涨幅 / 均价，每行左右 + VS 中轴 ===== */}
                       {(() => {
-                        // 目标均价：按计划数量加权均价
-                        let planCost = 0, planQtyTotal = 0;
-                        PRICE_LEVELS.forEach(p => {
-                          const q = planned[p] || 0;
-                          if (q > 0) { planCost += q * p; planQtyTotal += q; }
-                        });
-                        const targetAvg = planQtyTotal > 0 ? planCost / planQtyTotal : 0;
-                        // 实际均价：按实际买入数量加权均价
-                        let actCost = 0, actQtyTotal = 0;
-                        PRICE_LEVELS.forEach(p => {
-                          const q = actual[p] || 0;
-                          if (q > 0) { actCost += q * p; actQtyTotal += q; }
-                        });
-                        const actualAvg = actQtyTotal > 0 ? actCost / actQtyTotal : 0;
-                        if (targetAvg === 0 && actualAvg === 0) return null;
+                        // 均价计算
+                        let planCost2 = 0, planQtyTotal2 = 0;
+                        PRICE_LEVELS.forEach(p => { const q = planned[p] || 0; if (q > 0) { planCost2 += q * p; planQtyTotal2 += q; } });
+                        const targetAvg2 = planQtyTotal2 > 0 ? planCost2 / planQtyTotal2 : 0;
+                        let actCost2 = 0, actQtyTotal2 = 0;
+                        PRICE_LEVELS.forEach(p => { const q = actual[p] || 0; if (q > 0) { actCost2 += q * p; actQtyTotal2 += q; } });
+                        const actualAvg2 = actQtyTotal2 > 0 ? actCost2 / actQtyTotal2 : 0;
+
+                        const showExitRow = actualExitPrice > 0 || targetExitPrice > 0;
+                        const showRiseRow = (actualAvgPrice > 0 && actualExitPrice > actualAvgPrice) || (targetAvgPrice > 0 && targetExitPrice > targetAvgPrice);
+                        const showAvgRow = targetAvg2 > 0 || actualAvg2 > 0;
+
+                        // 统一行样式
+                        const rowCls = "grid mt-2 pt-2 items-center" as const;
+                        const rowStyle = { borderTop: '1px solid rgba(212,175,55,0.15)', gridTemplateColumns: '1fr 28px 1fr' };
+                        const labelStyle2: React.CSSProperties = { color: 'rgba(212,175,55,0.5)', fontSize: '10px', letterSpacing: '0.05em', marginBottom: '2px' };
+                        const numStyle: React.CSSProperties = { color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' };
+                        const vsStyle: React.CSSProperties = { color: 'rgba(212,175,55,0.3)', fontSize: '10px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1 };
+
                         return (
-                          <div className="flex items-center justify-between mt-2 pt-2" style={{ borderTop: '1px solid rgba(212,175,55,0.15)' }}>
-                            <div>
-                              <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.5)' }}>实际均价</div>
-                              <span className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                {actualAvg > 0 ? <>{actualAvg.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></> : '--'}
-                              </span>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs mb-0.5" style={{ color: 'rgba(212,175,55,0.4)' }}>目标均价</div>
-                              <span className="text-xl font-bold font-mono" style={{ color: '#f0e6c0', fontVariantNumeric: 'tabular-nums' }}>
-                                {targetAvg > 0 ? <>{targetAvg.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></> : '--'}
-                              </span>
-                            </div>
-                          </div>
+                          <>
+                            {/* 行1：止盈价 */}
+                            {showExitRow && (
+                              <div className={rowCls} style={rowStyle}>
+                                {/* 左：实际止盈 */}
+                                <div>
+                                  <div style={labelStyle2}>实际止盈</div>
+                                  <span className="text-xl font-bold font-mono" style={numStyle}>
+                                    {actualExitPrice > 0
+                                      ? <>{actualExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                  </span>
+                                </div>
+                                {/* 中：VS */}
+                                <div style={vsStyle}>VS</div>
+                                {/* 右：目标止盈 */}
+                                <div className="text-right">
+                                  <div className="flex items-center gap-0.5 justify-end">
+                                    <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(212,175,55,0.4)', lineHeight: 1 }}>
+                                      <HelpCircle className="w-2.5 h-2.5" />
+                                    </button>
+                                    <span style={labelStyle2}>目标止盈</span>
+                                  </div>
+                                  <span className="text-xl font-bold font-mono" style={numStyle}>
+                                    {targetExitPrice > 0
+                                      ? <>{targetExitPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 行2：需要涨幅 */}
+                            {showRiseRow && (
+                              <div className={rowCls} style={rowStyle}>
+                                {/* 左：实际需要涨幅 */}
+                                <div>
+                                  <div style={labelStyle2}>实际需要涨幅</div>
+                                  <span className="text-xl font-bold font-mono" style={numStyle}>
+                                    {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice
+                                      ? `+${((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100).toFixed(1)}%`
+                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                  </span>
+                                </div>
+                                {/* 中：VS */}
+                                <div style={vsStyle}>VS</div>
+                                {/* 右：目标需要涨幅 */}
+                                <div className="text-right">
+                                  <div style={labelStyle2}>目标需要涨幅</div>
+                                  <span className="text-xl font-bold font-mono" style={numStyle}>
+                                    {targetAvgPrice > 0 && targetExitPrice > targetAvgPrice
+                                      ? `+${((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%`
+                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 行3：均价 */}
+                            {showAvgRow && (
+                              <div className={rowCls} style={rowStyle}>
+                                {/* 左：实际均价 */}
+                                <div>
+                                  <div style={labelStyle2}>实际均价</div>
+                                  <span className="text-xl font-bold font-mono" style={numStyle}>
+                                    {actualAvg2 > 0
+                                      ? <>{actualAvg2.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                  </span>
+                                </div>
+                                {/* 中：VS */}
+                                <div style={vsStyle}>VS</div>
+                                {/* 右：目标均价 */}
+                                <div className="text-right">
+                                  <div style={labelStyle2}>目标均价</div>
+                                  <span className="text-xl font-bold font-mono" style={numStyle}>
+                                    {targetAvg2 > 0
+                                      ? <>{targetAvg2.toLocaleString('en-US', { maximumFractionDigits: 0 })}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </>
                         );
                       })()}
                     </div>
