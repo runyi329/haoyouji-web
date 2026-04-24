@@ -291,10 +291,25 @@ export default function PositionCalc() {
   const hasData = (p: number) => (planned[p] || 0) > 0 || (actual[p] || 0) > 0;
 
   const visibleLevels = useMemo(() => {
-    const nearPrice = currentPrice || 1800;
-    return PRICE_LEVELS.filter(p =>
-      hasData(p) || (p >= nearPrice - 500 && p <= nearPrice + 500)
-    );
+    // 找出所有有数据的档位索引
+    const dataIndices = PRICE_LEVELS.map((p, i) => hasData(p) ? i : -1).filter(i => i >= 0);
+    
+    if (dataIndices.length === 0) {
+      // 全部为空时：只显示当前价格附近的一行空白行
+      const nearPrice = currentPrice || 1800;
+      const nearIdx = PRICE_LEVELS.reduce((best, p, i) =>
+        Math.abs(p - nearPrice) < Math.abs(PRICE_LEVELS[best] - nearPrice) ? i : best, 0);
+      return [PRICE_LEVELS[nearIdx]];
+    }
+    
+    const minIdx = dataIndices[0];
+    const maxIdx = dataIndices[dataIndices.length - 1];
+    
+    // 显示所有有数据的行，上下各保留一行空白行
+    const startIdx = Math.max(0, minIdx - 1);
+    const endIdx = Math.min(PRICE_LEVELS.length - 1, maxIdx + 1);
+    
+    return PRICE_LEVELS.slice(startIdx, endIdx + 1);
   }, [planned, actual, currentPrice]);
   // 所有档位中最大的计划数量，用于进度条背景宽度比例
   const maxPlannedQty = useMemo(() => {
