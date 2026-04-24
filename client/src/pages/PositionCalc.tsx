@@ -455,13 +455,15 @@ export default function PositionCalc() {
           // 展示模式：财经质感卡片
           <div
             className="relative overflow-hidden rounded-2xl"
-            style={{ background: 'linear-gradient(160deg, #0a0800 0%, #110e00 40%, #0a0800 100%)', border: '1px solid rgba(212,175,55,0.25)', boxShadow: '0 4px 24px rgba(0,0,0,0.8), inset 0 1px 0 rgba(212,175,55,0.15)' }}
+            style={{ background: 'linear-gradient(160deg, #0c0a02 0%, #1a1500 40%, #0c0a02 100%)', border: '1px solid transparent', backgroundClip: 'padding-box', boxShadow: '0 0 0 1px rgba(212,175,55,0.15), 0 0 0 1px rgba(245,226,122,0.08) inset, 0 8px 32px rgba(0,0,0,0.9), 0 2px 8px rgba(212,175,55,0.08) inset' }}
           >
             {/* 装饰光晕 */}
             <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, #d4af37 0%, transparent 70%)', transform: 'translate(30%, -30%)' }} />
             <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #b8860b 0%, transparent 70%)', transform: 'translate(-30%, 30%)' }} />
-            {/* 顶部金色细线 */}
-            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 0%, #d4af37 30%, #f5e27a 50%, #d4af37 70%, transparent 100%)' }} />
+            {/* 顶部金属高光线 */}
+            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.3) 15%, #f5e27a 40%, #ffffff 50%, #f5e27a 60%, rgba(212,175,55,0.3) 85%, transparent 100%)' }} />
+            {/* 底部暗线 */}
+            <div className="absolute bottom-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(100,80,20,0.4) 30%, rgba(100,80,20,0.4) 70%, transparent 100%)' }} />
             <div className="relative px-5 py-4">
               {/* 主数字区：左右两栏 */}
               <div className="flex items-start gap-0 mb-3">
@@ -469,7 +471,7 @@ export default function PositionCalc() {
                 <div className="flex-1 pr-4">
                   <div className="text-xs font-medium tracking-widest mb-2" style={{ color: 'rgba(212,175,55,0.55)', letterSpacing: '0.2em' }}>目标止盈利润</div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-bold" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 20px rgba(212,175,55,0.4)' }}>
+                    <span className="text-3xl font-bold" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 40%, #b8860b 70%, #d4af37 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
                         ? `¥${Number(targetProfitCny).toLocaleString('zh-CN')}`
                         : <span style={{ color: 'rgba(212,175,55,0.2)' }}>¥ --</span>
@@ -478,7 +480,7 @@ export default function PositionCalc() {
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>=</span>
-                    <span className="text-lg font-semibold" style={{ color: 'rgba(212,175,55,0.65)', fontVariantNumeric: 'tabular-nums' }}>
+                    <span className="text-lg font-semibold" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #d4af37 0%, #9a7a1a 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
                         ? `$${(parseFloat(targetProfitCny) / cnyRate).toLocaleString('en-US', { maximumFractionDigits: 0 })} U`
                         : <span style={{ color: 'rgba(212,175,55,0.2)' }}>-- U</span>
@@ -492,7 +494,7 @@ export default function PositionCalc() {
                 <div className="pl-4 flex flex-col justify-start gap-3">
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>ETH/USDT</div>
-                    <div className="text-xl font-bold font-mono" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 10px rgba(212,175,55,0.35)' }}>
+                    <div className="text-xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 50%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>
                       {currentPrice
                         ? currentPrice.toFixed(2)
                         : '--'}
@@ -500,7 +502,7 @@ export default function PositionCalc() {
                   </div>
                   <div>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>USDT/CNY</div>
-                    <div className="text-xl font-bold font-mono" style={{ color: 'rgba(212,175,55,0.7)', fontVariantNumeric: 'tabular-nums' }}>{parseFloat(cnyRate.toPrecision(6)).toString()}</div>
+                    <div className="text-xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #c8a030 0%, #8a6010 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{parseFloat(cnyRate.toPrecision(6)).toString()}</div>
                   </div>
                 </div>
               </div>
@@ -530,7 +532,7 @@ export default function PositionCalc() {
                       <div className="flex items-end justify-between mb-1.5">
                         <div>
                           <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.6)' }}>实际持仓</div>
-                          <span className="text-2xl font-bold font-mono" style={{ color: '#d4af37', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 12px rgba(212,175,55,0.4)' }}>
+                          <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 45%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.9))' }}>
                             {actualQty > 0 ? actualQty.toFixed(0) : '--'}
                           </span>
                           <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.3)' }}>ETH</span>
@@ -538,7 +540,7 @@ export default function PositionCalc() {
                         <div className="flex items-end gap-2">
                           <div className="text-right">
                             <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.6)' }}>目标持仓</div>
-                            <span className="text-2xl font-bold font-mono" style={{ color: 'rgba(212,175,55,0.7)', fontVariantNumeric: 'tabular-nums' }}>
+                            <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #c8a030 0%, #7a5510 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                               {targetQty > 0 ? targetQty.toFixed(0) : '--'}
                             </span>
                             <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.25)' }}>ETH</span>
@@ -593,7 +595,7 @@ export default function PositionCalc() {
                         const rowCls = "grid mt-2 pt-2 items-center" as const;
                         const rowStyle = { borderTop: '1px solid rgba(212,175,55,0.15)', gridTemplateColumns: '1fr 28px 1fr' };
                         const labelStyle2: React.CSSProperties = { color: 'rgba(212,175,55,0.5)', fontSize: '11px', letterSpacing: '0.05em', marginBottom: '3px', fontWeight: 500 };
-                        const numStyle: React.CSSProperties = { color: '#d4af37', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 8px rgba(212,175,55,0.3)' };
+                        const numStyle: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #f0d060 0%, #d4af37 50%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))' };
                         const vsStyle: React.CSSProperties = { color: 'rgba(212,175,55,0.3)', fontSize: '11px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1 };
 
                         return (
@@ -859,9 +861,11 @@ export default function PositionCalc() {
                 className="relative h-6 rounded overflow-hidden transition-all duration-200 active:scale-[0.98]"
                 style={{
                   background: isNearCurrent
-                    ? 'linear-gradient(90deg, #1a1200 0%, #221800 100%)'
-                    : (isBelowCurrent ? '#0d0a00' : '#080600'),
-                  boxShadow: isNearCurrent ? '0 0 0 1.5px rgba(212,175,55,0.7), 0 0 10px rgba(212,175,55,0.2)' : 'none',
+                    ? 'linear-gradient(90deg, #1e1600 0%, #2a1e00 50%, #1e1600 100%)'
+                    : (isBelowCurrent ? '#0f0c00' : '#080600'),
+                  boxShadow: isNearCurrent
+                    ? '0 0 0 1px rgba(245,226,122,0.6), 0 0 0 2px rgba(212,175,55,0.2), 0 0 12px rgba(212,175,55,0.15)'
+                    : (isBelowCurrent ? '0 1px 0 rgba(212,175,55,0.05) inset' : 'none'),
                 }}
               >
                 {/* 已买填充（红/绿）——超过计划时放在下层（zIndex 1），未超过时放在上层（zIndex 3） */}
@@ -886,8 +890,8 @@ export default function PositionCalc() {
                     style={{
                       width: `${planPct}%`,
                       background: actualQty > planQty
-                        ? 'linear-gradient(90deg, rgba(203,164,113,0.75), rgba(226,185,111,0.75))' // 超过计划：半透明金色，能透出底层实际条
-                        : 'linear-gradient(90deg, #CBA471, #E2B96F)', // 未超过：不透明金色
+                        ? 'linear-gradient(180deg, rgba(245,226,122,0.6) 0%, rgba(212,175,55,0.75) 40%, rgba(150,110,20,0.6) 100%)' // 超过计划：半透明金属渐变
+                        : 'linear-gradient(180deg, #f5e27a 0%, #d4af37 35%, #b8860b 65%, #c8a030 100%)', // 未超过：金属拉丝渐变
                       borderRadius: '0 4px 4px 0',
                       zIndex: 2,
                     }}
@@ -899,8 +903,8 @@ export default function PositionCalc() {
                   <span
                     className="text-xs font-bold tabular-nums"
                     style={{
-                      color: '#d4af37',
-                      textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(212,175,55,0.3)',
+                      color: '#f5e27a',
+                      textShadow: '0 1px 4px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.8)',
                     }}
                   >
                     {price}
