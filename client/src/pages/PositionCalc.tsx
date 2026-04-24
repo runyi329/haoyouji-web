@@ -844,10 +844,15 @@ export default function PositionCalc() {
                   <span
                     className="text-xs font-bold tabular-nums"
                     style={{
-                      color: actualPct > 30
-                        ? 'rgba(255,255,255,0.95)'
+                      // 左侧价格：实际进度条超过15%时文字已在有色背景上，用白色+强阴影
+                      // 计划进度条超过15%时同理（金色背景）
+                      // 否则用深色（灰色背景上）
+                      color: actualPct > 15 || planPct > 15
+                        ? '#ffffff'
                         : (isBelowCurrent ? '#374151' : '#9CA3AF'),
-                      textShadow: actualPct > 30 ? '0 1px 2px rgba(0,0,0,0.3)' : 'none',
+                      textShadow: actualPct > 15 || planPct > 15
+                        ? '0 0 4px rgba(0,0,0,0.9), 0 1px 3px rgba(0,0,0,0.8)'
+                        : 'none',
                     }}
                   >
                     {price.toLocaleString()}
