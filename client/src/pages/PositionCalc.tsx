@@ -502,7 +502,7 @@ export default function PositionCalc() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>USDT/CNY</div>
-                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #c8a030 0%, #8a6010 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{cnyRate.toFixed(4)}</div>
+                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #c8a030 0%, #8a6010 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{cnyRate.toFixed(5)}</div>
                   </div>
                 </div>
               </div>
