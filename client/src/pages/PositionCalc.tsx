@@ -469,8 +469,8 @@ export default function PositionCalc() {
               <div className="flex items-start gap-0 mb-3">
                 {/* 左栏：目标止盈利润 */}
                 <div className="flex-1 pr-4">
-                  <div className="text-xs font-medium tracking-widest mb-2" style={{ color: 'rgba(212,175,55,0.55)', letterSpacing: '0.2em' }}>目标止盈利润</div>
-                  <div className="flex items-baseline gap-1">
+                  <div className="text-xs font-medium tracking-widest mb-2 text-right" style={{ color: 'rgba(212,175,55,0.55)', letterSpacing: '0.2em' }}>目标止盈利润</div>
+                  <div className="flex items-baseline justify-end gap-1">
                     <span className="text-3xl font-bold" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 40%, #b8860b 70%, #d4af37 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
                         ? Number(targetProfitCny).toLocaleString('zh-CN')
@@ -481,7 +481,7 @@ export default function PositionCalc() {
                       <span className="text-sm font-medium" style={{ color: 'rgba(212,175,55,0.6)' }}>元</span>
                     )}
                   </div>
-                  <div className="flex items-baseline gap-1 mt-1">
+                  <div className="flex items-baseline justify-end gap-1 mt-1">
                     <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>=</span>
                     <span className="text-3xl font-bold" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #d4af37 0%, #9a7a1a 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
