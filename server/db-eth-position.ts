@@ -86,6 +86,7 @@ export interface EthPositionSettingsData {
   targetProfitCny: number;
   cnyRate: number;
   targetEthQty: number;
+  strategyRatio: number; // 策略持仓占比 0-100，战略持仓 = 100 - strategyRatio
 }
 
 /**
@@ -98,11 +99,12 @@ export async function getEthPositionSettings(ledgerId: number): Promise<EthPosit
     .select()
     .from(ethPositionSettings)
     .where(eq(ethPositionSettings.ledgerId, ledgerId));
-  if (rows.length === 0) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0 };
+  if (rows.length === 0) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0, strategyRatio: 50 };
   return {
     targetProfitCny: parseFloat(rows[0].targetProfitCny as string),
     cnyRate: parseFloat(rows[0].cnyRate as string),
     targetEthQty: parseFloat((rows[0] as any).targetEthQty as string || '0'),
+    strategyRatio: (rows[0] as any).strategyRatio ?? 50,
   };
 }
 
@@ -113,7 +115,8 @@ export async function upsertEthPositionSettings(
   ledgerId: number,
   targetProfitCny: number,
   cnyRate: number,
-  targetEthQty: number = 0
+  targetEthQty: number = 0,
+  strategyRatio: number = 50
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) return;
@@ -124,12 +127,14 @@ export async function upsertEthPositionSettings(
       targetProfitCny: String(targetProfitCny),
       cnyRate: String(cnyRate),
       targetEthQty: String(targetEthQty),
+      strategyRatio,
     })
     .onDuplicateKeyUpdate({
       set: {
         targetProfitCny: String(targetProfitCny),
         cnyRate: String(cnyRate),
         targetEthQty: String(targetEthQty),
+        strategyRatio,
       },
     });
 }
