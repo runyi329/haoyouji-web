@@ -5,7 +5,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 
-const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock", "digitalB", "ledger59"] as const;
+const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock", "digitalB", "ledger59", "ethPosition"] as const;
 const SHORTCUT_LABELS: Record<string, string> = {
   gold: "黄金",
   qq: "QQ",
@@ -13,9 +13,10 @@ const SHORTCUT_LABELS: Record<string, string> = {
   stock: "股票",
   digitalB: "数字B",
   ledger59: "蓄水池",
+  ethPosition: "ETH持仓",
 };
-const DEFAULT_SHORTCUTS = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false };
-type ShortcutValues = { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean };
+const DEFAULT_SHORTCUTS = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
+type ShortcutValues = { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean; ethPosition: boolean };
 type ShortcutMap = Record<string, ShortcutValues>;
 
 export default function ShortcutButtonsManage() {
@@ -49,6 +50,7 @@ export default function ShortcutButtonsManage() {
           stock: !!(val as any)?.stock,
           digitalB: !!(val as any)?.digitalB,
           ledger59: !!(val as any)?.ledger59,
+          ethPosition: !!(val as any)?.ethPosition,
         };
       }
       setLocalMap(normalized);
@@ -70,7 +72,7 @@ export default function ShortcutButtonsManage() {
       setLocalMap(prev => ({
         ...prev,
         [uid]: serverVal
-          ? { gold: !!serverVal.gold, qq: !!serverVal.qq, oil: !!serverVal.oil, stock: !!serverVal.stock, digitalB: !!serverVal.digitalB, ledger59: !!serverVal.ledger59 }
+          ? { gold: !!serverVal.gold, qq: !!serverVal.qq, oil: !!serverVal.oil, stock: !!serverVal.stock, digitalB: !!serverVal.digitalB, ledger59: !!serverVal.ledger59, ethPosition: !!serverVal.ethPosition }
           : DEFAULT_SHORTCUTS,
       }));
       toast.error(err.message || "保存失败，请重试");
