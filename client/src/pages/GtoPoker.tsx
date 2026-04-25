@@ -919,7 +919,10 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
           )}
           {flopComplete && (
             <>
-              <div className="text-xs font-bold text-gray-600 mb-1.5">还剩几人</div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <span className="text-xs font-bold text-gray-600">还剩几人</span>
+                <span className="text-xs text-gray-400">（含自己）</span>
+              </div>
               <div className="flex gap-1.5 mb-2">
                 {[1,2,3,4,5].map(n => (
                   <button key={n} onClick={() => setFlopPlayersLeft(n)}
@@ -956,7 +959,10 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
           />
           {turnCard.rank && turnCard.suit && (
             <>
-              <div className="text-xs font-bold text-gray-600 mb-1.5 mt-2">还剩几人</div>
+              <div className="flex items-center gap-1.5 mb-1.5 mt-2">
+                <span className="text-xs font-bold text-gray-600">还剩几人</span>
+                <span className="text-xs text-gray-400">（含自己）</span>
+              </div>
               <div className="flex gap-1.5 mb-2">
                 {[1,2,3,4,5].map(n => (
                   <button key={n} onClick={() => setTurnPlayersLeft(n)}
@@ -994,7 +1000,10 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
           />
           {riverCard.rank && riverCard.suit && (
             <>
-              <div className="text-xs font-bold text-gray-600 mb-1.5 mt-2">还剩几人</div>
+              <div className="flex items-center gap-1.5 mb-1.5 mt-2">
+                <span className="text-xs font-bold text-gray-600">还剩几人</span>
+                <span className="text-xs text-gray-400">（含自己）</span>
+              </div>
               <div className="flex gap-1.5 mb-2">
                 {[1,2,3,4,5].map(n => (
                   <button key={n} onClick={() => setRiverPlayersLeft(n)}
