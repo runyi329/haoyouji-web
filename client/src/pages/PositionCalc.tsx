@@ -2030,14 +2030,11 @@ export default function PositionCalc() {
               const currentVal = parseFloat(modal.inputValue) || 0;
               // 参考值：目标持仓总量用于计算百分比快捷按钮
               const totalTarget = parseFloat(targetEthQty) || 0;
-              // 滑块范围：以当前值为中心，两侧各留300
-              const SLIDE_RANGE = 300;
-              // 开弹时记录初始值作为中心点（用modal初始化时的inputValue）
-              const initVal = parseFloat(isActual ? String(actual[modal.price] || 0) : String(planned[modal.price] || 0)) || 0;
-              const sliderMin = Math.max(0, initVal - SLIDE_RANGE);
-              const sliderMax = initVal + SLIDE_RANGE;
-              // 当前值在滑块范围内的百分比（用于显示进度条）
-              const sliderPct = sliderMax > sliderMin ? Math.min(Math.max((currentVal - sliderMin) / (sliderMax - sliderMin), 0), 1) : 0.5;
+              // 滑块范围：左辸0，右辸500
+              const sliderMin = 0;
+              const sliderMax = 500;
+              // 当前值在滑块范围内的百分比
+              const sliderPct = Math.min(Math.max(currentVal / sliderMax, 0), 1);
               // 快捷百分比按钮（基于目标总持仓量）
               const pctBtns = [5, 10, 20, 50];
               const adjust = (delta: number) => {
@@ -2056,11 +2053,6 @@ export default function PositionCalc() {
 
                   {/* 输入框 */}
                   <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl" style={{ background: 'rgba(212,175,55,0.08)', border: `1px solid ${isActual ? 'rgba(212,175,55,0.4)' : 'rgba(212,175,55,0.2)'}` }}>
-                    <button
-                      onClick={() => adjust(-stepBtns[0])}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-lg font-bold"
-                      style={{ background: 'rgba(212,175,55,0.12)', color: 'rgba(212,175,55,0.8)' }}
-                    >−</button>
                     <input
                       autoFocus
                       type="number"
@@ -2070,11 +2062,11 @@ export default function PositionCalc() {
                       placeholder="0"
                       className="flex-1 text-center text-2xl font-bold outline-none bg-transparent"
                       style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}
-                      step="0.5"
+                      step="1"
                       min="0"
                     />
                     <button
-                      onClick={() => adjust(stepBtns[0])}
+                      onClick={() => adjust(1)}
                       className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-lg font-bold"
                       style={{ background: 'rgba(212,175,55,0.12)', color: 'rgba(212,175,55,0.8)' }}
                     >+</button>
@@ -2100,47 +2092,32 @@ export default function PositionCalc() {
                     </div>
                   )}
 
-                  {/* 滑动进度条：以初始值为中心，两侧各300 */}
+                  {/* 滑动进度条：0 → 500 */}
                   <div className="mb-4">
                     <div className="flex justify-between text-[10px] mb-1" style={{ color: 'rgba(212,175,55,0.35)' }}>
-                      <span>{sliderMin.toFixed(0)}</span>
+                      <span>0</span>
                       <span style={{ color: 'rgba(212,175,55,0.6)' }}>{currentVal > 0 ? `${currentVal} ETH` : '--'}</span>
-                      <span>{sliderMax.toFixed(0)}</span>
+                      <span>500</span>
                     </div>
                     {/* 进度条轨道 */}
-                    <div className="relative h-5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                      {/* 中心点标记线 */}
-                      <div className="absolute top-0 bottom-0 w-px" style={{ left: '50%', background: 'rgba(212,175,55,0.25)' }} />
+                    <div className="relative h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                       <div
-                        className="absolute top-0 h-full rounded-full transition-all duration-150"
+                        className="absolute top-0 left-0 h-full rounded-full transition-all duration-150"
                         style={{
-                          left: `${sliderPct * 100}%`,
-                          width: '4px',
-                          marginLeft: '-2px',
-                          background: isActual ? '#f0d060' : 'rgba(212,175,55,0.8)',
-                          boxShadow: isActual ? '0 0 6px rgba(212,175,55,0.6)' : 'none',
+                          width: `${sliderPct * 100}%`,
+                          background: isActual
+                            ? 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)'
+                            : 'linear-gradient(90deg, rgba(212,175,55,0.3) 0%, rgba(212,175,55,0.6) 100%)',
+                          boxShadow: isActual ? '0 0 6px rgba(212,175,55,0.4)' : 'none',
                         }}
                       />
-                      {/* 已填充区域：从中心到当前位置 */}
-                      {sliderPct !== 0.5 && (
-                        <div
-                          className="absolute top-0 h-full transition-all duration-150"
-                          style={{
-                            left: sliderPct > 0.5 ? '50%' : `${sliderPct * 100}%`,
-                            width: `${Math.abs(sliderPct - 0.5) * 100}%`,
-                            background: isActual
-                              ? 'linear-gradient(90deg, rgba(212,175,55,0.4), rgba(212,175,55,0.7))'
-                              : 'linear-gradient(90deg, rgba(212,175,55,0.2), rgba(212,175,55,0.4))',
-                          }}
-                        />
-                      )}
                     </div>
                     <input
                       type="range"
-                      min={sliderMin}
-                      max={sliderMax}
+                      min={0}
+                      max={500}
                       step={1}
-                      value={Math.min(Math.max(currentVal, sliderMin), sliderMax)}
+                      value={Math.min(Math.max(currentVal, 0), 500)}
                       onChange={e => setModal(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
                       className="w-full mt-1"
                       style={{ accentColor: '#d4af37', height: '20px' }}
