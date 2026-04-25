@@ -1899,14 +1899,16 @@ export const funderOrderParticipants = mysqlTable("funder_order_participants", {
 export const ethPositionLevels = mysqlTable("eth_position_levels", {
   id: int().autoincrement().notNull(),
   ledgerId: int('ledger_id').notNull(),
+  userId: int('user_id').notNull().default(0),
   price: int('price').notNull(),
   plannedQty: decimal('planned_qty', { precision: 18, scale: 8 }).default('0').notNull(),
   actualQty: decimal('actual_qty', { precision: 18, scale: 8 }).default('0').notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 }, (table) => [
-  uniqueIndex("eth_pos_ledger_price_uniq").on(table.ledgerId, table.price),
+  uniqueIndex("eth_pos_ledger_user_price_uniq").on(table.ledgerId, table.userId, table.price),
   index("eth_pos_ledger_idx").on(table.ledgerId),
+  index("eth_pos_user_idx").on(table.userId),
 ]);
 
 // ========== ETH 持仓计算全局设置表 ==========
@@ -1914,6 +1916,7 @@ export const ethPositionLevels = mysqlTable("eth_position_levels", {
 export const ethPositionSettings = mysqlTable("eth_position_settings", {
   id: int().autoincrement().notNull(),
   ledgerId: int('ledger_id').notNull(),
+  userId: int('user_id').notNull().default(0),
   targetProfitCny: decimal('target_profit_cny', { precision: 18, scale: 2 }).default('0').notNull(),
   cnyRate: decimal('cny_rate', { precision: 10, scale: 4 }).default('7.2800').notNull(),
   targetEthQty: decimal('target_eth_qty', { precision: 18, scale: 8 }).default('0').notNull(),
@@ -1921,7 +1924,8 @@ export const ethPositionSettings = mysqlTable("eth_position_settings", {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 }, (table) => [
-  uniqueIndex("eth_settings_ledger_uniq").on(table.ledgerId),
+  uniqueIndex("eth_settings_ledger_user_uniq").on(table.ledgerId, table.userId),
+  index("eth_settings_user_idx").on(table.userId),
 ]);
 
 // ========== ETH 持仓修改日志表 ==========
@@ -1929,6 +1933,7 @@ export const ethPositionSettings = mysqlTable("eth_position_settings", {
 export const ethPositionChangeLogs = mysqlTable("eth_position_change_logs", {
   id: int().autoincrement().notNull(),
   ledgerId: int('ledger_id').notNull(),
+  userId: int('user_id').notNull().default(0),
   price: int('price').notNull(),                                          // 档位价格
   changeType: mysqlEnum('change_type', ['actual', 'planned']).notNull(),   // 修改类型：已买/计划
   oldValue: decimal('old_value', { precision: 18, scale: 8 }).notNull(), // 修改前的值
@@ -1938,7 +1943,8 @@ export const ethPositionChangeLogs = mysqlTable("eth_position_change_logs", {
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
   index("eth_log_ledger_idx").on(table.ledgerId),
-  index("eth_log_ledger_price_idx").on(table.ledgerId, table.price),
+  index("eth_log_user_idx").on(table.userId),
+  index("eth_log_ledger_user_price_idx").on(table.ledgerId, table.userId, table.price),
 ]);
 
 export type EthPositionChangeLog = typeof ethPositionChangeLogs.$inferSelect;
