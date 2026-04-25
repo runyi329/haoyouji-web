@@ -3963,15 +3963,7 @@ export default function LedgerDetail() {
                   {/* 标题行 */}
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
-                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1A2340 0%, #2D3A5C 100%)' }}>
-                        <svg width="11" height="14" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <polygon points="8,0 15,10 8,7" fill="#f5e27a" />
-                          <polygon points="8,0 1,10 8,7" fill="#d4af37" opacity="0.85" />
-                          <polygon points="1,10 8,13.5 15,10 8,7" fill="#b8860b" />
-                          <polygon points="8,20 15,12 8,13.5" fill="#9a7000" />
-                          <polygon points="8,20 1,12 8,13.5" fill="#d4af37" opacity="0.75" />
-                        </svg>
-                      </div>
+                      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-7 h-7 object-contain rounded-full flex-shrink-0" />
                       <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>持仓计算</span>
                     </div>
                     <ChevronRight className="w-4 h-4" style={{ color: '#3B5BDB' }} />
@@ -3979,8 +3971,8 @@ export default function LedgerDetail() {
                   {/* 预览数据 */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs" style={{ color: '#6B7280' }}>目标 {ethTargetQty > 0 ? `${Math.round(ethTargetQty)} ETH` : '--'}</span>
-                      <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>已买 <span style={{ color: '#b8860b' }}>{ethActualQty > 0 ? `${Math.round(ethActualQty)}` : '0'}</span> ETH</span>
+                      <span className="text-xs" style={{ color: '#6B7280' }}>目标 {ethTargetQty > 0 ? `${Math.round(ethTargetQty)}` : '--'}</span>
+                      <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>已买 <span style={{ color: '#b8860b' }}>{ethActualQty > 0 ? `${Math.round(ethActualQty)}` : '0'}</span></span>
                     </div>
                     {/* 进度条 + 百分比内嵌 */}
                     <div className="relative w-full rounded-full overflow-hidden" style={{ height: '14px', background: 'rgba(26,35,64,0.08)' }}>
