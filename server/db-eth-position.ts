@@ -160,15 +160,24 @@ export async function addEthPositionChangeLog(
   note: string = ''
 ): Promise<void> {
   const db = await getLedgerDb();
-  if (!db) return;
-  await db.insert(ethPositionChangeLogs).values({
-    ledgerId,
-    price,
-    changeType,
-    oldValue: String(oldValue),
-    newValue: String(newValue),
-    note,
-  });
+  if (!db) {
+    console.error('[ETH Log] getLedgerDb() returned null, cannot insert log');
+    return;
+  }
+  try {
+    await db.insert(ethPositionChangeLogs).values({
+      ledgerId,
+      price,
+      changeType,
+      oldValue: String(oldValue),
+      newValue: String(newValue),
+      note,
+    });
+    console.log(`[ETH Log] 写入日志成功: ledgerId=${ledgerId}, price=${price}, type=${changeType}, ${oldValue}->${newValue}`);
+  } catch (e: any) {
+    console.error('[ETH Log] 写入日志失败:', e.message, '| SQL:', e.sql ?? '');
+    throw e;
+  }
 }
 
 /**
