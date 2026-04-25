@@ -4056,6 +4056,24 @@ export default function LedgerDetail() {
                   <ChevronRight className="w-4 h-4 text-white" />
                 </div>
               </button>
+
+              {/* GTO 德州扑克入口 */}
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/gto`)}
+                className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #0a3d1f 0%, #1a5c2e 50%, #0d4a25 100%)', border: '1px solid #2d7a3a', boxShadow: '0 2px 12px rgba(0,80,20,0.18)' }}
+              >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-2xl" style={{ background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+                  🃏
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-semibold text-base text-white">GTO 策略</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>起手牌范围 · 赔率计算 · 策略笔记</div>
+                </div>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }}>
+                  <ChevronRight className="w-4 h-4 text-white" />
+                </div>
+              </button>
             </div>
         </div>
       )}

@@ -19152,6 +19152,55 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       await dbEthPosition.deleteEthPositionChangeLog(input.id, input.ledgerId, ctx.user.id);
       return { success: true };
     }),
+
+  // ─── GTO 德州扑克笔记 ───────────────────────────────────────────────────────
+  "gto.getNotes": protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return [];
+      const [rows] = await dbConn.execute(
+        `SELECT id, content, created_at as createdAt FROM gto_notes WHERE ledger_id = ? AND user_id = ? ORDER BY created_at DESC`,
+        [input.ledgerId, ctx.user.id]
+      );
+      return rows as any[];
+    }),
+
+  "gto.addNote": protectedProcedure
+    .input(z.object({ ledgerId: z.number(), content: z.string().min(1).max(2000) }))
+    .mutation(async ({ input, ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await dbConn.execute(
+        `INSERT INTO gto_notes (ledger_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())`,
+        [input.ledgerId, ctx.user.id, input.content]
+      );
+      return { success: true };
+    }),
+
+  "gto.updateNote": protectedProcedure
+    .input(z.object({ id: z.number(), content: z.string().min(1).max(2000) }))
+    .mutation(async ({ input, ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await dbConn.execute(
+        `UPDATE gto_notes SET content = ? WHERE id = ? AND user_id = ?`,
+        [input.content, input.id, ctx.user.id]
+      );
+      return { success: true };
+    }),
+
+  "gto.deleteNote": protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await dbConn.execute(
+        `DELETE FROM gto_notes WHERE id = ? AND user_id = ?`,
+        [input.id, ctx.user.id]
+      );
+      return { success: true };
+    }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
