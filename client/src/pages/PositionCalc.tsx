@@ -389,7 +389,14 @@ export default function PositionCalc() {
   };
 
   // 弹窗确认
-  const addChangeLogMutation = trpc.ethPositionAddLog.useMutation();
+  const addChangeLogMutation = trpc.ethPositionAddLog.useMutation({
+    onError: (err) => {
+      console.error('[ETH Log] 日志写入失败:', err.message, err);
+    },
+    onSuccess: () => {
+      utils.ethPositionGetLogs.invalidate({ ledgerId });
+    },
+  });
   const confirmModal = () => {
     if (!modal) return;
     const num = parseFloat(modal.inputValue);
