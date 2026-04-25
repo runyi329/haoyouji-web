@@ -29,6 +29,20 @@ const POSITION_RANGES: Record<string, HandRange> = {
     KQo: ["raise"],
     T9s: ["raise"], "98s": ["raise"],
   },
+  HJ: {
+    AA: ["raise"], KK: ["raise"], QQ: ["raise"], JJ: ["raise"], TT: ["raise"], "99": ["raise"], "88": ["raise"], "77": ["raise"],
+    AKs: ["raise"], AQs: ["raise"], AJs: ["raise"], ATs: ["raise"], A9s: ["raise"], A8s: ["raise"], A7s: ["raise"], A6s: ["raise"], A5s: ["raise"],
+    AKo: ["raise"], AQo: ["raise"], AJo: ["raise"], ATo: ["raise"],
+    KQs: ["raise"], KJs: ["raise"], KTs: ["raise"], K9s: ["raise"],
+    KQo: ["raise"], KJo: ["raise"],
+    QJs: ["raise"], QTs: ["raise"], Q9s: ["raise"],
+    QJo: ["raise"],
+    JTs: ["raise"], J9s: ["raise"],
+    T9s: ["raise"], T8s: ["raise"],
+    "98s": ["raise"], "97s": ["raise"],
+    "87s": ["raise"], "76s": ["raise"],
+    "66": ["raise"], "55": ["raise"],
+  },
   CO: {
     AA: ["raise"], KK: ["raise"], QQ: ["raise"], JJ: ["raise"], TT: ["raise"], "99": ["raise"], "88": ["raise"], "77": ["raise"],
     AKs: ["raise"], AQs: ["raise"], AJs: ["raise"], ATs: ["raise"], A9s: ["raise"], A8s: ["raise"], A7s: ["raise"], A6s: ["raise"], A5s: ["raise"],
@@ -147,7 +161,7 @@ function HandRangeMatrix() {
     }
   };
 
-  const positions = ["UTG", "CO", "BTN", "SB", "BB"];
+  const positions = ["UTG", "HJ", "CO", "BTN", "SB", "BB"];
 
   // 统计各动作数量
   const stats = useMemo(() => {
