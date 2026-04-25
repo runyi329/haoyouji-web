@@ -19082,13 +19082,15 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       targetProfitCny: z.number().min(0),
       cnyRate: z.number().min(0),
       targetEthQty: z.number().min(0).optional().default(0),
+      strategyRatio: z.number().min(0).max(100).optional().default(50),
     }))
     .mutation(async ({ input }) => {
       await dbEthPosition.upsertEthPositionSettings(
         input.ledgerId,
         input.targetProfitCny,
         input.cnyRate,
-        input.targetEthQty ?? 0
+        input.targetEthQty ?? 0,
+        input.strategyRatio ?? 50
       );
       return { success: true };
     }),
@@ -19728,13 +19730,15 @@ export const adminFeatureRouter = router({
       targetProfitCny: z.number().min(0),
       cnyRate: z.number().min(0),
       targetEthQty: z.number().min(0).optional().default(0),
+      strategyRatio: z.number().min(0).max(100).optional().default(50),
     }))
     .mutation(async ({ input }) => {
       await dbEthPosition.upsertEthPositionSettings(
         input.ledgerId,
         input.targetProfitCny,
         input.cnyRate,
-        input.targetEthQty ?? 0
+        input.targetEthQty ?? 0,
+        input.strategyRatio ?? 50
       );
       return { success: true };
     }),

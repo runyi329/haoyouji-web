@@ -89,6 +89,7 @@ export default function PositionCalc() {
   const [saving, setSaving] = useState(false);
   const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标止盈利润（人民币）
   const [targetEthQty, setTargetEthQty] = useState<string>('');  // 目标持仓 ETH 数量
+  const [strategyRatio, setStrategyRatio] = useState<number>(50); // 策略持仓占比 0-100（战略=100-strategyRatio）
   const [cnyRate, setCnyRate] = useState<number>(7.28); // 人民币/USDT 汇率（初始占位，会被实时值覆盖）
   const [cnyRateInput, setCnyRateInput] = useState<string>(''); // 手动修改汇率的输入内容
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
@@ -246,6 +247,9 @@ export default function PositionCalc() {
       // 汇率不从数据库读取，始终使用实时 API 值（方案A）
       if (settingsData.targetEthQty > 0) {
         setTargetEthQty(String(settingsData.targetEthQty));
+      }
+      if (settingsData.strategyRatio !== undefined) {
+        setStrategyRatio(settingsData.strategyRatio);
       }
     }
   }, [settingsData]);
@@ -645,6 +649,103 @@ export default function PositionCalc() {
                           </div>
                         )}
                       </div>
+                      {/* ===== 战略/策略持仓细分 ===== */}
+                      {actualQty > 0 && (
+                        <div className="mt-3 mb-1">
+                          {/* 标题行 */}
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.5)' }}>战略</span>
+                              <span className="text-[10px] font-bold" style={{ color: '#d4af37' }}>{100 - strategyRatio}%</span>
+                              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.3)' }}>·</span>
+                              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.4)' }}>{(actualQty * (100 - strategyRatio) / 100).toFixed(1)} ETH</span>
+                            </div>
+                            <div className="text-[9px] italic tracking-wide" style={{ color: 'rgba(212,175,55,0.3)' }}>战略如山·策略如水</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.4)' }}>{(actualQty * strategyRatio / 100).toFixed(1)} ETH</span>
+                              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.3)' }}>·</span>
+                              <span className="text-[10px] font-bold" style={{ color: '#b8860b' }}>{strategyRatio}%</span>
+                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.5)' }}>策略</span>
+                            </div>
+                          </div>
+                          {/* 细分进度条：左=战略(亮金)，右=策略(暗金) */}
+                          <div className="relative rounded overflow-hidden" style={{ height: '10px', background: 'rgba(255,255,255,0.04)' }}>
+                            {/* 战略持仓段（左侧，亮金） */}
+                            <div
+                              className="absolute top-0 left-0 h-full"
+                              style={{
+                                width: `${100 - strategyRatio}%`,
+                                background: 'linear-gradient(90deg, #9a7000 0%, #d4af37 60%, #f5e27a 100%)',
+                                boxShadow: '2px 0 8px rgba(212,175,55,0.4)',
+                                borderRadius: '4px 0 0 4px',
+                              }}
+                            />
+                            {/* 策略持仓段（右侧，暗金半透明） */}
+                            <div
+                              className="absolute top-0 h-full"
+                              style={{
+                                left: `${100 - strategyRatio}%`,
+                                width: `${strategyRatio}%`,
+                                background: 'linear-gradient(90deg, rgba(139,100,0,0.7) 0%, rgba(90,60,0,0.5) 100%)',
+                                borderRadius: '0 4px 4px 0',
+                                borderLeft: '1px solid rgba(212,175,55,0.3)',
+                              }}
+                            />
+                            {/* 分界线 */}
+                            <div
+                              className="absolute top-0 h-full"
+                              style={{
+                                left: `calc(${100 - strategyRatio}% - 0.5px)`,
+                                width: '1px',
+                                background: 'rgba(255,245,192,0.6)',
+                                boxShadow: '0 0 4px rgba(255,245,192,0.4)',
+                              }}
+                            />
+                          </div>
+                          {/* 比例滑块 */}
+                          <div className="mt-2 px-0.5">
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={strategyRatio}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setStrategyRatio(val);
+                              }}
+                              onMouseUp={(e) => {
+                                const val = parseInt((e.target as HTMLInputElement).value);
+                                // 保存到数据库
+                                saveSettingsMutation.mutate({
+                                  ledgerId,
+                                  targetProfitCny: parseFloat(targetProfitCny) || 0,
+                                  cnyRate: 0,
+                                  targetEthQty: parseFloat(targetEthQty) || 0,
+                                  strategyRatio: val,
+                                });
+                              }}
+                              onTouchEnd={(e) => {
+                                const val = parseInt((e.target as HTMLInputElement).value);
+                                saveSettingsMutation.mutate({
+                                  ledgerId,
+                                  targetProfitCny: parseFloat(targetProfitCny) || 0,
+                                  cnyRate: 0,
+                                  targetEthQty: parseFloat(targetEthQty) || 0,
+                                  strategyRatio: val,
+                                });
+                              }}
+                              className="w-full"
+                              style={{
+                                appearance: 'none',
+                                height: '3px',
+                                background: `linear-gradient(90deg, rgba(212,175,55,0.6) ${100 - strategyRatio}%, rgba(139,100,0,0.4) ${100 - strategyRatio}%)`,
+                                outline: 'none',
+                                cursor: 'pointer',
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
                       {/* ===== 三行对比区域：止盈 / 涨幅 / 均价，每行左右 + VS 中轴 ===== */}
                       {(() => {
                         // 均价计算
