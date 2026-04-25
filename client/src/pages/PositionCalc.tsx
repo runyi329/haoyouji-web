@@ -1973,11 +1973,11 @@ export default function PositionCalc() {
       {/* 编辑弹窗 */}
       {modal && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center"
-          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          className="fixed inset-0 z-50 flex items-start justify-center pt-12"
+          style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
           onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}
         >
-          <div className="w-full max-w-md rounded-t-2xl px-5 pt-5 pb-8 shadow-2xl" style={{ background: 'linear-gradient(160deg, #0d0900 0%, #1a1200 100%)', border: '1px solid rgba(212,175,55,0.2)', borderBottom: 'none' }}>
+          <div className="w-full max-w-md rounded-2xl px-5 pt-5 pb-8 shadow-2xl mx-4" style={{ background: 'linear-gradient(160deg, #0d0900 0%, #1a1200 100%)', border: '1px solid rgba(212,175,55,0.2)' }}>
             {/* 弹窗标题 */}
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -2069,18 +2069,18 @@ export default function PositionCalc() {
 
                   {/* 滑动进度条：0 → 500，实时显示占总计划仓位百分比 */}
                   <div className="mb-4">
-                    <div className="flex justify-between text-[10px] mb-1" style={{ color: 'rgba(212,175,55,0.35)' }}>
+                    <div className="flex justify-between text-xs mb-2" style={{ color: 'rgba(212,175,55,0.4)' }}>
                       <span>0</span>
-                      <span style={{ color: 'rgba(212,175,55,0.7)', fontWeight: 600 }}>
+                      <span className="text-sm font-bold" style={{ color: '#f0d060', letterSpacing: '0.02em' }}>
                         {currentVal > 0 && totalTarget > 0
-                          ? `${(currentVal / totalTarget * 100).toFixed(1)}% 占总计划仓`
+                          ? `${(currentVal / totalTarget * 100).toFixed(1)}%  占总计划仓`
                           : currentVal > 0 ? `${currentVal} ETH` : '--'
                         }
                       </span>
                       <span>500</span>
                     </div>
                     {/* 进度条轨道 */}
-                    <div className="relative h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <div className="relative h-5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                       <div
                         className="absolute top-0 left-0 h-full rounded-full transition-all duration-150"
                         style={{
