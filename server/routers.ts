@@ -19201,6 +19201,48 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       );
       return { success: true };
     }),
+
+  "gto.saveHand": protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      tableSize: z.number(),
+      position: z.string(),
+      holeCards: z.string(),
+      preflopAction: z.string(),
+      flopCards: z.string().optional(),
+      flopAction: z.string().optional(),
+      turnCard: z.string().optional(),
+      turnAction: z.string().optional(),
+      riverCard: z.string().optional(),
+      riverAction: z.string().optional(),
+      result: z.enum(["win", "lose", "tie"]),
+      opponentCards: z.string().optional(),
+      isBluff: z.boolean(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await dbConn.execute(
+        `INSERT INTO gto_hand_logs (user_id, ledger_id, table_size, position, hole_cards, preflop_action, flop_cards, flop_action, turn_card, turn_action, river_card, river_action, result, opponent_cards, is_bluff, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [ctx.user.id, input.ledgerId, input.tableSize, input.position, input.holeCards, input.preflopAction,
+         input.flopCards || '', input.flopAction || '', input.turnCard || '', input.turnAction || '',
+         input.riverCard || '', input.riverAction || '', input.result, input.opponentCards || '', input.isBluff ? 1 : 0]
+      );
+      return { success: true };
+    }),
+
+  "gto.getHandLogs": protectedProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const [rows] = await dbConn.execute(
+        `SELECT * FROM gto_hand_logs WHERE user_id = ? AND ledger_id = ? ORDER BY created_at DESC LIMIT 100`,
+        [ctx.user.id, input.ledgerId]
+      );
+      return rows as any[];
+    }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
