@@ -531,6 +531,100 @@ export async function initDatabase() {
       console.warn('[DB Init] ⚠️ eth_position_change_logs table skipped:', e instanceof Error ? e.message : e);
     }
 
+    // ===== 迁移 eth_position_levels：加 user_id 字段，更新唯一键 =====
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_levels\` ADD COLUMN \`user_id\` INT NOT NULL DEFAULT 0 COMMENT '用户ID' AFTER \`ledger_id\``);
+      console.log('[DB Init] ✅ eth_position_levels: user_id column added');
+    } catch (e: any) {
+      if (e.message?.includes('Duplicate column')) {
+        console.log('[DB Init] eth_position_levels: user_id already exists, skip');
+      } else {
+        console.warn('[DB Init] ⚠️ eth_position_levels alter skipped:', e.message);
+      }
+    }
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_levels\` DROP INDEX \`eth_pos_ledger_price_uniq\``);
+    } catch (e: any) { /* ignore if already dropped */ }
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_levels\` ADD UNIQUE KEY \`eth_pos_ledger_user_price_uniq\` (\`ledger_id\`, \`user_id\`, \`price\`)`);
+      console.log('[DB Init] ✅ eth_position_levels: unique key updated');
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate key name')) {
+        console.warn('[DB Init] ⚠️ eth_position_levels unique key skipped:', e.message);
+      }
+    }
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_levels\` ADD INDEX \`eth_pos_user_idx\` (\`user_id\`)`);
+    } catch (e: any) { /* ignore if already exists */ }
+
+    // ===== 迁移 eth_position_settings：加 user_id 字段，更新唯一键 =====
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_settings\` ADD COLUMN \`user_id\` INT NOT NULL DEFAULT 0 COMMENT '用户ID' AFTER \`ledger_id\``);
+      console.log('[DB Init] ✅ eth_position_settings: user_id column added');
+    } catch (e: any) {
+      if (e.message?.includes('Duplicate column')) {
+        console.log('[DB Init] eth_position_settings: user_id already exists, skip');
+      } else {
+        console.warn('[DB Init] ⚠️ eth_position_settings alter skipped:', e.message);
+      }
+    }
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_settings\` DROP INDEX \`eth_settings_ledger_uniq\``);
+    } catch (e: any) { /* ignore if already dropped */ }
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_settings\` ADD UNIQUE KEY \`eth_settings_ledger_user_uniq\` (\`ledger_id\`, \`user_id\`)`);
+      console.log('[DB Init] ✅ eth_position_settings: unique key updated');
+    } catch (e: any) {
+      if (!e.message?.includes('Duplicate key name')) {
+        console.warn('[DB Init] ⚠️ eth_position_settings unique key skipped:', e.message);
+      }
+    }
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_settings\` ADD INDEX \`eth_settings_user_idx\` (\`user_id\`)`);
+    } catch (e: any) { /* ignore if already exists */ }
+
+    // ===== 迁移 eth_position_change_logs：加 user_id 字段 =====
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_change_logs\` ADD COLUMN \`user_id\` INT NOT NULL DEFAULT 0 COMMENT '用户ID' AFTER \`ledger_id\``);
+      console.log('[DB Init] ✅ eth_position_change_logs: user_id column added');
+    } catch (e: any) {
+      if (e.message?.includes('Duplicate column')) {
+        console.log('[DB Init] eth_position_change_logs: user_id already exists, skip');
+      } else {
+        console.warn('[DB Init] ⚠️ eth_position_change_logs alter skipped:', e.message);
+      }
+    }
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_change_logs\` ADD INDEX \`eth_log_user_idx\` (\`user_id\`)`);
+    } catch (e: any) { /* ignore if already exists */ }
+    try {
+      await db.execute(`ALTER TABLE \`eth_position_change_logs\` ADD INDEX \`eth_log_ledger_user_price_idx\` (\`ledger_id\`, \`user_id\`, \`price\`)`);
+    } catch (e: any) { /* ignore if already exists */ }
+
+    // ===== 把现有数据（user_id=0）迁移到 OWNER 的真实 user_id =====
+    try {
+      const ownerOpenId = process.env.OWNER_OPEN_ID;
+      if (ownerOpenId) {
+        const [ownerRows]: any = await db.execute(
+          `SELECT id FROM \`users\` WHERE open_id = ? LIMIT 1`,
+          [ownerOpenId]
+        );
+        if (ownerRows && ownerRows.length > 0) {
+          const ownerId = ownerRows[0].id;
+          await db.execute(`UPDATE \`eth_position_levels\` SET \`user_id\` = ? WHERE \`user_id\` = 0`, [ownerId]);
+          await db.execute(`UPDATE \`eth_position_settings\` SET \`user_id\` = ? WHERE \`user_id\` = 0`, [ownerId]);
+          await db.execute(`UPDATE \`eth_position_change_logs\` SET \`user_id\` = ? WHERE \`user_id\` = 0`, [ownerId]);
+          console.log(`[DB Init] ✅ ETH持仓历史数据已迁移到 owner userId=${ownerId}`);
+        } else {
+          console.warn('[DB Init] ⚠️ OWNER_OPEN_ID 对应用户未找到，跳过历史数据迁移');
+        }
+      } else {
+        console.warn('[DB Init] ⚠️ OWNER_OPEN_ID 未设置，跳过历史数据迁移');
+      }
+    } catch (e: any) {
+      console.warn('[DB Init] ⚠️ ETH持仓历史数据迁移失败:', e.message);
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);

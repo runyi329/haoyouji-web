@@ -9,15 +9,15 @@ export interface EthPositionLevel {
 }
 
 /**
- * 获取某账本的所有 ETH 持仓档位数据
+ * 获取某账本某用户的所有 ETH 持仓档位数据
  */
-export async function getEthPositionLevels(ledgerId: number): Promise<EthPositionLevel[]> {
+export async function getEthPositionLevels(ledgerId: number, userId: number): Promise<EthPositionLevel[]> {
   const db = await getLedgerDb();
   if (!db) return [];
   const rows = await db
     .select()
     .from(ethPositionLevels)
-    .where(eq(ethPositionLevels.ledgerId, ledgerId));
+    .where(and(eq(ethPositionLevels.ledgerId, ledgerId), eq(ethPositionLevels.userId, userId)));
   return rows.map(r => ({
     price: r.price,
     plannedQty: parseFloat(r.plannedQty as string),
@@ -30,6 +30,7 @@ export async function getEthPositionLevels(ledgerId: number): Promise<EthPositio
  */
 export async function upsertEthPositionLevel(
   ledgerId: number,
+  userId: number,
   price: number,
   plannedQty: number,
   actualQty: number
@@ -40,6 +41,7 @@ export async function upsertEthPositionLevel(
     .insert(ethPositionLevels)
     .values({
       ledgerId,
+      userId,
       price,
       plannedQty: String(plannedQty),
       actualQty: String(actualQty),
@@ -57,6 +59,7 @@ export async function upsertEthPositionLevel(
  */
 export async function batchUpsertEthPositionLevels(
   ledgerId: number,
+  userId: number,
   levels: EthPositionLevel[]
 ): Promise<void> {
   const db = await getLedgerDb();
@@ -67,6 +70,7 @@ export async function batchUpsertEthPositionLevels(
       .insert(ethPositionLevels)
       .values({
         ledgerId,
+        userId,
         price: level.price,
         plannedQty: String(level.plannedQty),
         actualQty: String(level.actualQty),
@@ -90,15 +94,15 @@ export interface EthPositionSettingsData {
 }
 
 /**
- * 获取某账本的 ETH 持仓全局设置
+ * 获取某账本某用户的 ETH 持仓全局设置
  */
-export async function getEthPositionSettings(ledgerId: number): Promise<EthPositionSettingsData> {
+export async function getEthPositionSettings(ledgerId: number, userId: number): Promise<EthPositionSettingsData> {
   const db = await getLedgerDb();
-  if (!db) return { targetProfitCny: 0, cnyRate: 7.28 };
+  if (!db) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0, strategyRatio: 50 };
   const rows = await db
     .select()
     .from(ethPositionSettings)
-    .where(eq(ethPositionSettings.ledgerId, ledgerId));
+    .where(and(eq(ethPositionSettings.ledgerId, ledgerId), eq(ethPositionSettings.userId, userId)));
   if (rows.length === 0) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0, strategyRatio: 50 };
   return {
     targetProfitCny: parseFloat(rows[0].targetProfitCny as string),
@@ -109,10 +113,11 @@ export async function getEthPositionSettings(ledgerId: number): Promise<EthPosit
 }
 
 /**
- * 保存某账本的 ETH 持仓全局设置（upsert）
+ * 保存某账本某用户的 ETH 持仓全局设置（upsert）
  */
 export async function upsertEthPositionSettings(
   ledgerId: number,
+  userId: number,
   targetProfitCny: number,
   cnyRate: number,
   targetEthQty: number = 0,
@@ -124,6 +129,7 @@ export async function upsertEthPositionSettings(
     .insert(ethPositionSettings)
     .values({
       ledgerId,
+      userId,
       targetProfitCny: String(targetProfitCny),
       cnyRate: String(cnyRate),
       targetEthQty: String(targetEthQty),
@@ -144,6 +150,7 @@ export async function upsertEthPositionSettings(
 export interface EthPositionChangeLogEntry {
   id: number;
   ledgerId: number;
+  userId: number;
   price: number;
   changeType: 'actual' | 'planned';
   oldValue: number;
@@ -158,6 +165,7 @@ export interface EthPositionChangeLogEntry {
  */
 export async function addEthPositionChangeLog(
   ledgerId: number,
+  userId: number,
   price: number,
   changeType: 'actual' | 'planned',
   oldValue: number,
@@ -172,13 +180,14 @@ export async function addEthPositionChangeLog(
   try {
     await db.insert(ethPositionChangeLogs).values({
       ledgerId,
+      userId,
       price,
       changeType,
       oldValue: String(oldValue),
       newValue: String(newValue),
       note,
     });
-    console.log(`[ETH Log] 写入日志成功: ledgerId=${ledgerId}, price=${price}, type=${changeType}, ${oldValue}->${newValue}`);
+    console.log(`[ETH Log] 写入日志成功: ledgerId=${ledgerId}, userId=${userId}, price=${price}, type=${changeType}, ${oldValue}->${newValue}`);
   } catch (e: any) {
     console.error('[ETH Log] 写入日志失败:', e.message, '| SQL:', e.sql ?? '');
     throw e;
@@ -186,17 +195,18 @@ export async function addEthPositionChangeLog(
 }
 
 /**
- * 获取某账本某档位的修改日志（按时间倒序）
+ * 获取某账本某用户某档位的修改日志（按时间倒序）
  */
 export async function getEthPositionChangeLogs(
   ledgerId: number,
+  userId: number,
   price?: number
 ): Promise<EthPositionChangeLogEntry[]> {
   const db = await getLedgerDb();
   if (!db) return [];
   const conditions = price !== undefined
-    ? and(eq(ethPositionChangeLogs.ledgerId, ledgerId), eq(ethPositionChangeLogs.price, price))
-    : eq(ethPositionChangeLogs.ledgerId, ledgerId);
+    ? and(eq(ethPositionChangeLogs.ledgerId, ledgerId), eq(ethPositionChangeLogs.userId, userId), eq(ethPositionChangeLogs.price, price))
+    : and(eq(ethPositionChangeLogs.ledgerId, ledgerId), eq(ethPositionChangeLogs.userId, userId));
   const rows = await db
     .select()
     .from(ethPositionChangeLogs)
@@ -206,6 +216,7 @@ export async function getEthPositionChangeLogs(
   return rows.map(r => ({
     id: r.id,
     ledgerId: r.ledgerId,
+    userId: r.userId,
     price: r.price,
     changeType: r.changeType as 'actual' | 'planned',
     oldValue: parseFloat(r.oldValue as string),
@@ -222,6 +233,7 @@ export async function getEthPositionChangeLogs(
 export async function updateEthPositionChangeLogNote(
   id: number,
   ledgerId: number,
+  userId: number,
   note: string
 ): Promise<void> {
   const db = await getLedgerDb();
@@ -229,7 +241,7 @@ export async function updateEthPositionChangeLogNote(
   await db
     .update(ethPositionChangeLogs)
     .set({ note })
-    .where(and(eq(ethPositionChangeLogs.id, id), eq(ethPositionChangeLogs.ledgerId, ledgerId)));
+    .where(and(eq(ethPositionChangeLogs.id, id), eq(ethPositionChangeLogs.ledgerId, ledgerId), eq(ethPositionChangeLogs.userId, userId)));
 }
 
 /**
@@ -237,11 +249,12 @@ export async function updateEthPositionChangeLogNote(
  */
 export async function deleteEthPositionChangeLog(
   id: number,
-  ledgerId: number
+  ledgerId: number,
+  userId: number
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) return;
   await db
     .delete(ethPositionChangeLogs)
-    .where(and(eq(ethPositionChangeLogs.id, id), eq(ethPositionChangeLogs.ledgerId, ledgerId)));
+    .where(and(eq(ethPositionChangeLogs.id, id), eq(ethPositionChangeLogs.ledgerId, ledgerId), eq(ethPositionChangeLogs.userId, userId)));
 }

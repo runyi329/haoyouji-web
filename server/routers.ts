@@ -19037,8 +19037,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
   // ========== ETH 持仓计算 (已从 adminFeatureRouter 移入 appRouter) ==========
   ethPositionGetLevels: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
-    .query(async ({ input }) => {
-      const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId);
+    .query(async ({ input, ctx }) => {
+      const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId, ctx.user.id);
       return { levels };
     }),
   ethPositionSaveLevel: protectedProcedure
@@ -19048,9 +19048,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       plannedQty: z.number().min(0),
       actualQty: z.number().min(0),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       await dbEthPosition.upsertEthPositionLevel(
         input.ledgerId,
+        ctx.user.id,
         input.price,
         input.plannedQty,
         input.actualQty
@@ -19066,14 +19067,14 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         actualQty: z.number().min(0),
       })),
     }))
-    .mutation(async ({ input }) => {
-      await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, input.levels);
+    .mutation(async ({ input, ctx }) => {
+      await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, ctx.user.id, input.levels);
       return { success: true };
     }),
   ethPositionGetSettings: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
-    .query(async ({ input }) => {
-      const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId);
+    .query(async ({ input, ctx }) => {
+      const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId, ctx.user.id);
       return settings;
     }),
   ethPositionSaveSettings: protectedProcedure
@@ -19084,9 +19085,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       targetEthQty: z.number().min(0).optional().default(0),
       strategyRatio: z.number().min(0).max(100).optional().default(50),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       await dbEthPosition.upsertEthPositionSettings(
         input.ledgerId,
+        ctx.user.id,
         input.targetProfitCny,
         input.cnyRate,
         input.targetEthQty ?? 0,
@@ -19106,9 +19108,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       newValue: z.number(),
       note: z.string().max(500).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       await dbEthPosition.addEthPositionChangeLog(
         input.ledgerId,
+        ctx.user.id,
         input.price,
         input.changeType,
         input.oldValue,
@@ -19123,8 +19126,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       ledgerId: z.number(),
       price: z.number().optional(),
     }))
-    .query(async ({ input }) => {
-      return await dbEthPosition.getEthPositionChangeLogs(input.ledgerId, input.price);
+    .query(async ({ input, ctx }) => {
+      return await dbEthPosition.getEthPositionChangeLogs(input.ledgerId, ctx.user.id, input.price);
     }),
 
   ethPositionUpdateLogNote: protectedProcedure
@@ -19133,8 +19136,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       ledgerId: z.number(),
       note: z.string().max(500),
     }))
-    .mutation(async ({ input }) => {
-      await dbEthPosition.updateEthPositionChangeLogNote(input.id, input.ledgerId, input.note);
+    .mutation(async ({ input, ctx }) => {
+      await dbEthPosition.updateEthPositionChangeLogNote(input.id, input.ledgerId, ctx.user.id, input.note);
       return { success: true };
     }),
 
@@ -19143,8 +19146,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       id: z.number(),
       ledgerId: z.number(),
     }))
-    .mutation(async ({ input }) => {
-      await dbEthPosition.deleteEthPositionChangeLog(input.id, input.ledgerId);
+    .mutation(async ({ input, ctx }) => {
+      await dbEthPosition.deleteEthPositionChangeLog(input.id, input.ledgerId, ctx.user.id);
       return { success: true };
     }),
 });
