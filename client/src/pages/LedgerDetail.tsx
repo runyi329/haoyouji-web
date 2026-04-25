@@ -2113,6 +2113,20 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF, refetchInterval: 60000 }
   );
+  // ETH 持仓计算预览数据（仅 isCustomAF 时加载）
+  const { data: ethPositionSettings } = trpc.ethPositionGetSettings.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF }
+  );
+  const { data: ethPositionLevels } = trpc.ethPositionGetLevels.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF }
+  );
+  // 计算实际持仓总量
+  const ethActualQty = (ethPositionLevels?.levels ?? []).reduce((sum: number, l: any) => sum + (l.actualQty || 0), 0);
+  const ethTargetQty = ethPositionSettings?.targetEthQty ?? 0;
+  const ethPositionPct = ethTargetQty > 0 ? Math.min(1, ethActualQty / ethTargetQty) : 0;
+
   // 资方专属：资产汇总（仅 funder 角色查询，管理员视角切换时传目标用户ID）
   const { data: funderAssetSummary } = trpc.ledger.funderGetAssetSummary.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { userId: viewAsUserId } : {}) },
@@ -3925,19 +3939,67 @@ export default function LedgerDetail() {
                   <ChevronRight className="w-4 h-4 text-white" />
                 </div>
               </button>
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=ETH${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
-                style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
-              >
-                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-12 h-12 object-contain rounded-full" />
-                <div className="text-left flex-1">
-                  <div className="font-semibold text-base" style={{ color: '#1A2340' }}>以太坊 (ETH)</div>
-                </div>
-                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#3B5BDB' }}>
-                  <ChevronRight className="w-4 h-4 text-white" />
-                </div>
-              </button>
+              {/* 以太坊行：左半=行情预测，右半=持仓计算预览 */}
+              <div className="flex gap-2">
+                {/* 左半：以太坊行情预测入口 */}
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=ETH${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                  className="flex-1 rounded-2xl p-4 flex items-center gap-3 shadow-sm active:opacity-90"
+                  style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
+                >
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-10 h-10 object-contain rounded-full flex-shrink-0" />
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="font-semibold text-sm" style={{ color: '#1A2340' }}>以太坊</div>
+                    <div className="text-xs" style={{ color: '#6B7280' }}>行情预测</div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: '#3B5BDB' }} />
+                </button>
+                {/* 右半：ETH 持仓计算器快捷入口 + 预览 */}
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+                  className="flex-1 rounded-2xl p-3 flex flex-col justify-between shadow-sm active:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #1A2340 0%, #2D3A5C 100%)', border: 'none', minHeight: '72px' }}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <svg width="14" height="18" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="8,0 15,10 8,7" fill="#f5e27a" />
+                        <polygon points="8,0 1,10 8,7" fill="#d4af37" opacity="0.85" />
+                        <polygon points="1,10 8,13.5 15,10 8,7" fill="#b8860b" />
+                        <polygon points="8,20 15,12 8,13.5" fill="#9a7000" />
+                        <polygon points="8,20 1,12 8,13.5" fill="#d4af37" opacity="0.75" />
+                      </svg>
+                      <span className="text-xs font-semibold" style={{ color: '#f5e27a' }}>持仓计算</span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.4)' }} />
+                  </div>
+                  {/* 预览数据 */}
+                  <div className="mt-1.5">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>目标</span>
+                      <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.7)' }}>{ethTargetQty > 0 ? `${Math.round(ethTargetQty)} ETH` : '--'}</span>
+                    </div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>已买</span>
+                      <span className="text-[10px] font-mono font-bold" style={{ color: '#d4af37' }}>{ethActualQty > 0 ? `${Math.round(ethActualQty)} ETH` : '--'}</span>
+                    </div>
+                    {/* 进度条 */}
+                    <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'rgba(255,255,255,0.1)' }}>
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.round(ethPositionPct * 100)}%`,
+                          background: 'linear-gradient(90deg, #9a7000, #d4af37, #f5e27a)',
+                          transition: 'width 0.4s ease',
+                        }}
+                      />
+                    </div>
+                    <div className="text-right mt-0.5">
+                      <span className="text-[9px]" style={{ color: 'rgba(212,175,55,0.7)' }}>{Math.round(ethPositionPct * 100)}%</span>
+                    </div>
+                  </div>
+                </button>
+              </div>
               <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?coin=SOL${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
                 className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
@@ -3960,27 +4022,7 @@ export default function LedgerDetail() {
         <EthLeverageProduct />
       )}
 
-      {/* 持仓计算入口 - 仅账本创建者可见，非代看模式 */}
-      {isCustomAF && isOwner && !viewAsUserId && (
-        <div className="px-4 mt-3">
-          <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
-            className="w-full flex items-center justify-between px-4 py-3 rounded-xl"
-            style={{ background: 'linear-gradient(135deg, #1A2340 0%, #2D3A5C 100%)', border: 'none' }}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.15)' }}>
-                <Calculator className="w-4 h-4 text-white" />
-              </div>
-              <div className="text-left">
-                <div className="text-sm font-semibold text-white">ETH 持仓计算</div>
-                <div className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>分档建仓 · 盈亏分析</div>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} />
-          </button>
-        </div>
-      )}
+      {/* 持仓计算入口已合并到以太坊行右半 */}
       {/* 资金方专属：资产订单列表 */}
       {isCustomAF && effectiveIsFunder && (
         <div className="flex-1 px-4 pb-20">
