@@ -19219,6 +19219,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       opponentCards: z.string().optional(),
       isBluff: z.boolean(),
       // GTO 建议与我的实际行动
+      preflopGtoAdvice: z.string().optional(),
+      preflopMyAction: z.string().optional(),
       flopGtoAdvice: z.string().optional(),
       flopMyAction: z.string().optional(),
       turnGtoAdvice: z.string().optional(),
@@ -19231,7 +19233,13 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       // 尝试添加新列（如果表中还没有）
       try {
-        await dbConn.execute(`ALTER TABLE gto_hand_logs ADD COLUMN flop_gto_advice VARCHAR(100) DEFAULT '' AFTER is_bluff`);
+        await dbConn.execute(`ALTER TABLE gto_hand_logs ADD COLUMN preflop_gto_advice VARCHAR(100) DEFAULT '' AFTER is_bluff`);
+      } catch (_) {}
+      try {
+        await dbConn.execute(`ALTER TABLE gto_hand_logs ADD COLUMN preflop_my_action VARCHAR(50) DEFAULT '' AFTER preflop_gto_advice`);
+      } catch (_) {}
+      try {
+        await dbConn.execute(`ALTER TABLE gto_hand_logs ADD COLUMN flop_gto_advice VARCHAR(100) DEFAULT '' AFTER preflop_my_action`);
       } catch (_) {}
       try {
         await dbConn.execute(`ALTER TABLE gto_hand_logs ADD COLUMN flop_my_action VARCHAR(50) DEFAULT '' AFTER flop_gto_advice`);
@@ -19249,11 +19257,12 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         await dbConn.execute(`ALTER TABLE gto_hand_logs ADD COLUMN river_my_action VARCHAR(50) DEFAULT '' AFTER river_gto_advice`);
       } catch (_) {}
       await dbConn.execute(
-        `INSERT INTO gto_hand_logs (user_id, ledger_id, table_size, position, hole_cards, preflop_action, flop_cards, flop_action, turn_card, turn_action, river_card, river_action, result, opponent_cards, is_bluff, flop_gto_advice, flop_my_action, turn_gto_advice, turn_my_action, river_gto_advice, river_my_action, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        `INSERT INTO gto_hand_logs (user_id, ledger_id, table_size, position, hole_cards, preflop_action, flop_cards, flop_action, turn_card, turn_action, river_card, river_action, result, opponent_cards, is_bluff, preflop_gto_advice, preflop_my_action, flop_gto_advice, flop_my_action, turn_gto_advice, turn_my_action, river_gto_advice, river_my_action, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
         [ctx.user.id, input.ledgerId, input.tableSize, input.position, input.holeCards, input.preflopAction,
          input.flopCards || '', input.flopAction || '', input.turnCard || '', input.turnAction || '',
          input.riverCard || '', input.riverAction || '', input.result, input.opponentCards || '', input.isBluff ? 1 : 0,
+         input.preflopGtoAdvice || '', input.preflopMyAction || '',
          input.flopGtoAdvice || '', input.flopMyAction || '', input.turnGtoAdvice || '', input.turnMyAction || '',
          input.riverGtoAdvice || '', input.riverMyAction || '']
       );
