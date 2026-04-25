@@ -94,6 +94,10 @@ export default function PositionCalc() {
   const isDraggingStrategy = useRef(false); // 是否正在拖动
   const strategyRatioRef = useRef(strategyRatio); // 实时值 ref，避免闭包问题
   useEffect(() => { strategyRatioRef.current = strategyRatio; }, [strategyRatio]);
+  const [strategyUnlocked, setStrategyUnlocked] = useState(false); // 双击解锁后才能拖动
+  const strategyUnlockedRef = useRef(false); // ref 版本，供事件回调使用
+  useEffect(() => { strategyUnlockedRef.current = strategyUnlocked; }, [strategyUnlocked]);
+  const strategyLockTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // 自动重新锁定计时器
   const [cnyRate, setCnyRate] = useState<number>(7.28); // 人民币/USDT 汇率（初始占位，会被实时值覆盖）
   const [cnyRateInput, setCnyRateInput] = useState<string>(''); // 手动修改汇率的输入内容
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
@@ -277,6 +281,9 @@ export default function PositionCalc() {
       const val = calcStrategyRatioFromX(e.clientX);
       setStrategyRatio(val);
       handleStrategyDragSave(val);
+      // 拖动完成后自动锁定
+      setStrategyUnlocked(false);
+      if (strategyLockTimer.current) clearTimeout(strategyLockTimer.current);
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!isDraggingStrategy.current) return;
@@ -291,6 +298,9 @@ export default function PositionCalc() {
       const val = calcStrategyRatioFromX(touch.clientX);
       setStrategyRatio(val);
       handleStrategyDragSave(val);
+      // 拖动完成后自动锁定
+      setStrategyUnlocked(false);
+      if (strategyLockTimer.current) clearTimeout(strategyLockTimer.current);
     };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
@@ -722,13 +732,39 @@ export default function PositionCalc() {
                           <div
                             ref={strategyBarRef}
                             className="relative"
-                            style={{ height: '32px', cursor: 'ew-resize', touchAction: 'none' }}
+                            style={{
+                              height: '32px',
+                              cursor: strategyUnlocked ? 'ew-resize' : 'default',
+                              touchAction: 'none',
+                            }}
+                            onDoubleClick={() => {
+                              // 双击解锁
+                              setStrategyUnlocked(true);
+                              if (strategyLockTimer.current) clearTimeout(strategyLockTimer.current);
+                              // 8秒无操作后自动重新锁定
+                              strategyLockTimer.current = setTimeout(() => {
+                                setStrategyUnlocked(false);
+                              }, 8000);
+                            }}
                             onMouseDown={(e) => {
+                              if (!strategyUnlockedRef.current) return;
                               isDraggingStrategy.current = true;
                               const val = calcStrategyRatioFromX(e.clientX);
                               setStrategyRatio(val);
                             }}
+                            onTouchEnd={(e) => {
+                              // 单指双击检测（移动端没有 dblclick）
+                              const now = Date.now();
+                              const last = (strategyBarRef.current as any)?._lastTap || 0;
+                              if (now - last < 350) {
+                                setStrategyUnlocked(true);
+                                if (strategyLockTimer.current) clearTimeout(strategyLockTimer.current);
+                                strategyLockTimer.current = setTimeout(() => setStrategyUnlocked(false), 8000);
+                              }
+                              if (strategyBarRef.current) (strategyBarRef.current as any)._lastTap = now;
+                            }}
                             onTouchStart={(e) => {
+                              if (!strategyUnlockedRef.current) return;
                               isDraggingStrategy.current = true;
                               const val = calcStrategyRatioFromX(e.touches[0].clientX);
                               setStrategyRatio(val);
@@ -758,7 +794,7 @@ export default function PositionCalc() {
                                 }}
                               />
                             </div>
-                            {/* 圆形手柄，垂直居中于分界点 */}
+                            {/* 圆形手柄：金色圆底 + 立体 ETH 图标 */}
                             <div
                               className="absolute"
                               style={{
@@ -778,16 +814,49 @@ export default function PositionCalc() {
                                 width: '32px',
                                 height: '32px',
                                 borderRadius: '50%',
-                                background: 'linear-gradient(135deg, #fff5c0 0%, #f5e27a 40%, #d4af37 70%, #b8860b 100%)',
-                                boxShadow: '0 0 12px rgba(212,175,55,0.9), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 2px rgba(255,255,255,0.4)',
-                                border: '1.5px solid rgba(255,245,192,0.7)',
+                                background: strategyUnlocked
+                                  ? 'linear-gradient(135deg, #fff5c0 0%, #f5e27a 30%, #d4af37 65%, #b8860b 100%)'
+                                  : 'linear-gradient(135deg, #3a2800 0%, #7a5500 50%, #4a3200 100%)',
+                                boxShadow: strategyUnlocked
+                                  ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
+                                  : '0 0 6px rgba(212,175,55,0.4), 0 2px 6px rgba(0,0,0,0.8)',
+                                border: strategyUnlocked
+                                  ? '1.5px solid rgba(255,245,192,0.9)'
+                                  : '1.5px solid rgba(212,175,55,0.4)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: '3px',
+                                transition: 'all 0.3s ease',
                               }}>
-                                <div style={{ width: '2px', height: '10px', background: 'rgba(0,0,0,0.45)', borderRadius: '1px' }} />
-                                <div style={{ width: '2px', height: '10px', background: 'rgba(0,0,0,0.45)', borderRadius: '1px' }} />
+                                {/* ETH 菱形 SVG 图标 */}
+                                <svg width="16" height="20" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <defs>
+                                    <linearGradient id="ethTop" x1="0" y1="0" x2="1" y2="1">
+                                      <stop offset="0%" stopColor={strategyUnlocked ? '#fffbe8' : '#d4af37'} />
+                                      <stop offset="100%" stopColor={strategyUnlocked ? '#f5e27a' : '#9a7000'} />
+                                    </linearGradient>
+                                    <linearGradient id="ethMidL" x1="0" y1="0" x2="1" y2="0">
+                                      <stop offset="0%" stopColor={strategyUnlocked ? '#fff5c0' : '#b8860b'} />
+                                      <stop offset="100%" stopColor={strategyUnlocked ? '#d4af37' : '#7a5500'} />
+                                    </linearGradient>
+                                    <linearGradient id="ethMidR" x1="0" y1="0" x2="1" y2="0">
+                                      <stop offset="0%" stopColor={strategyUnlocked ? '#f5e27a' : '#9a7000'} />
+                                      <stop offset="100%" stopColor={strategyUnlocked ? '#b8860b' : '#5a3800'} />
+                                    </linearGradient>
+                                    <linearGradient id="ethBot" x1="0" y1="0" x2="1" y2="1">
+                                      <stop offset="0%" stopColor={strategyUnlocked ? '#d4af37' : '#7a5500'} />
+                                      <stop offset="100%" stopColor={strategyUnlocked ? '#9a7000' : '#4a3000'} />
+                                    </linearGradient>
+                                  </defs>
+                                  {/* 上半菱形 */}
+                                  <polygon points="8,0 15,10 8,7" fill="url(#ethTop)" />
+                                  <polygon points="8,0 1,10 8,7" fill="url(#ethMidL)" opacity="0.85" />
+                                  {/* 中间带 */}
+                                  <polygon points="1,10 8,13.5 15,10 8,7" fill="url(#ethMidR)" />
+                                  {/* 下半菱形 */}
+                                  <polygon points="8,20 15,12 8,13.5" fill="url(#ethBot)" />
+                                  <polygon points="8,20 1,12 8,13.5" fill="url(#ethMidL)" opacity="0.75" />
+                                </svg>
                               </div>
                             </div>
                           </div>
