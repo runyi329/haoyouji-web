@@ -474,6 +474,286 @@ function OddsCalculator() {
   );
 }
 
+// ─── GTO 参考顾问 ────────────────────────────────────────────────────────────────
+const SUITS = [
+  { key: "s", label: "♠", color: "text-gray-800" },
+  { key: "h", label: "♥", color: "text-red-500" },
+  { key: "d", label: "♦", color: "text-red-500" },
+  { key: "c", label: "♣", color: "text-gray-800" },
+];
+
+const CARD_RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
+
+const OPPONENT_ACTIONS = [
+  { key: "none", label: "无人开牌", desc: "所有人弃牌到我" },
+  { key: "limp", label: "有人跛入", desc: "有人只跟大盲" },
+  { key: "open", label: "有人开牌", desc: "有人标准加注" },
+  { key: "3bet", label: "有人3-Bet", desc: "有人再加注" },
+  { key: "4bet", label: "有人4-Bet", desc: "有人四次加注" },
+  { key: "allin", label: "有人全押", desc: "有人All-in" },
+];
+
+function getGtoAdvice(params: {
+  tableSize: number;
+  position: string;
+  card1Rank: string;
+  card1Suit: string;
+  card2Rank: string;
+  card2Suit: string;
+  opponentAction: string;
+}): { action: string; color: string; reason: string; frequency?: string } {
+  const { position, card1Rank, card2Rank, card1Suit, card2Suit, opponentAction, tableSize } = params;
+  if (!card1Rank || !card2Rank) return { action: "请选择手牌", color: "text-gray-400", reason: "" };
+
+  const r1 = RANKS.indexOf(card1Rank);
+  const r2 = RANKS.indexOf(card2Rank);
+  const isPair = card1Rank === card2Rank;
+  const isSuited = !isPair && card1Suit === card2Suit;
+  const highRank = Math.min(r1, r2);
+  const lowRank = Math.max(r1, r2);
+  const gap = lowRank - highRank; // 0=连牌, 1=一个间隔
+
+  // 强度评分 (越低越强)
+  let strength = 0;
+  if (isPair) strength = highRank * 2;
+  else if (isSuited) strength = highRank * 3 + lowRank + (gap > 2 ? 10 : 0);
+  else strength = highRank * 3 + lowRank + (gap > 2 ? 15 : 5);
+
+  // 位置加成（越靠后越宽松）
+  const posBonus: Record<string, number> = {
+    UTG: 0, "UTG+1": 3, "UTG+2": 5, LJ: 7, HJ: 10, CO: 15, BTN: 22, SB: 18, BB: 12
+  };
+  const bonus = posBonus[position] || 0;
+  const tableBonus = (10 - tableSize) * 2; // 人数越少越宽松
+  const effectiveStrength = strength - bonus - tableBonus;
+
+  // 对手行动影响
+  if (opponentAction === "none") {
+    // 无人开牌，主动开牌决策
+    if (effectiveStrength <= 8) return { action: "开牌加注", color: "text-red-600", reason: `${position}位置强牌，主动开牌建立底池`, frequency: "100%" };
+    if (effectiveStrength <= 18) return { action: "开牌加注", color: "text-red-500", reason: `${position}位置中等强牌，标准开牌`, frequency: "80-100%" };
+    if (effectiveStrength <= 28) return { action: "开牌加注", color: "text-orange-500", reason: `${position}位置边缘牌，可以开牌但需谨慎`, frequency: "40-70%" };
+    return { action: "弃牌", color: "text-gray-500", reason: `${position}位置牌力不足，GTO建议弃牌`, frequency: "0%" };
+  }
+
+  if (opponentAction === "limp") {
+    if (effectiveStrength <= 6) return { action: "加注隔离", color: "text-red-600", reason: "强牌面对跛入，加注隔离建立底池", frequency: "100%" };
+    if (effectiveStrength <= 16) return { action: "加注隔离", color: "text-red-500", reason: "中等强牌，加注隔离跛入者", frequency: "70-100%" };
+    if (effectiveStrength <= 24) return { action: "跟注", color: "text-green-600", reason: "边缘牌，跟注看翻牌", frequency: "50%" };
+    return { action: "弃牌", color: "text-gray-500", reason: "牌力不足，弃牌", frequency: "0%" };
+  }
+
+  if (opponentAction === "open") {
+    // 面对开牌，跟注/3-bet/弃牌
+    if (effectiveStrength <= 4) return { action: "3-Bet", color: "text-purple-600", reason: "顶级强牌，3-Bet价值下注", frequency: "100%" };
+    if (effectiveStrength <= 10) return { action: "3-Bet / 跟注", color: "text-purple-500", reason: "强牌，可3-Bet或跟注，取决于对手风格", frequency: "3bet 60% / call 40%" };
+    if (effectiveStrength <= 20) return { action: "跟注", color: "text-green-600", reason: "中等牌力，跟注看翻牌", frequency: "70-100%" };
+    if (effectiveStrength <= 28) return { action: "弃牌 / 跟注", color: "text-yellow-600", reason: "边缘牌，位置好可跟注，位置差建议弃牌", frequency: "call 30%" };
+    return { action: "弃牌", color: "text-gray-500", reason: "牌力不足以面对开牌，弃牌", frequency: "0%" };
+  }
+
+  if (opponentAction === "3bet") {
+    if (effectiveStrength <= 3) return { action: "4-Bet", color: "text-red-700", reason: "顶级强牌，4-Bet价值", frequency: "100%" };
+    if (effectiveStrength <= 8) return { action: "4-Bet / 跟注", color: "text-purple-600", reason: "强牌，可4-Bet或跟注", frequency: "4bet 40% / call 60%" };
+    if (effectiveStrength <= 15) return { action: "跟注", color: "text-green-600", reason: "中等强牌，跟注面对3-Bet", frequency: "50-70%" };
+    return { action: "弃牌", color: "text-gray-500", reason: "面对3-Bet牌力不足，弃牌", frequency: "0%" };
+  }
+
+  if (opponentAction === "4bet") {
+    if (effectiveStrength <= 2) return { action: "全押", color: "text-red-700", reason: "AA/KK面对4-Bet，全押", frequency: "100%" };
+    if (effectiveStrength <= 6) return { action: "跟注 / 全押", color: "text-red-600", reason: "强牌面对4-Bet，可跟注或全押", frequency: "call 50% / allin 50%" };
+    return { action: "弃牌", color: "text-gray-500", reason: "面对4-Bet牌力不足，弃牌", frequency: "0%" };
+  }
+
+  if (opponentAction === "allin") {
+    if (effectiveStrength <= 2) return { action: "跟注", color: "text-red-700", reason: "AA/KK面对全押，必须跟注", frequency: "100%" };
+    if (effectiveStrength <= 5) return { action: "跟注", color: "text-red-600", reason: "强牌面对全押，跟注", frequency: "80-100%" };
+    if (effectiveStrength <= 10) return { action: "跟注 / 弃牌", color: "text-yellow-600", reason: "中等强牌，取决于筹码深度和对手范围", frequency: "call 40%" };
+    return { action: "弃牌", color: "text-gray-500", reason: "面对全押牌力不足，弃牌", frequency: "0%" };
+  }
+
+  return { action: "弃牌", color: "text-gray-500", reason: "" };
+}
+
+function CardPicker({ label, rank, suit, onRankChange, onSuitChange }: {
+  label: string;
+  rank: string;
+  suit: string;
+  onRankChange: (r: string) => void;
+  onSuitChange: (s: string) => void;
+}) {
+  return (
+    <div>
+      <div className="text-xs text-gray-500 mb-1.5 font-medium">{label}</div>
+      <div className="grid grid-cols-7 gap-1 mb-1.5">
+        {CARD_RANKS.map(r => (
+          <button
+            key={r}
+            onClick={() => onRankChange(r)}
+            className={`py-1.5 rounded text-xs font-bold border transition-all ${
+              rank === r ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-700 border-gray-200"
+            }`}
+          >{r}</button>
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-1">
+        {SUITS.map(s => (
+          <button
+            key={s.key}
+            onClick={() => onSuitChange(s.key)}
+            className={`py-1.5 rounded text-sm font-bold border transition-all ${
+              suit === s.key ? "bg-green-700 text-white border-green-700" : "bg-white border-gray-200"
+            } ${suit !== s.key ? s.color : ""}`}
+          >{s.label}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GtoAdvisor() {
+  const [tableSize, setTableSize] = useState(6);
+  const [position, setPosition] = useState("");
+  const [card1Rank, setCard1Rank] = useState("");
+  const [card1Suit, setCard1Suit] = useState("");
+  const [card2Rank, setCard2Rank] = useState("");
+  const [card2Suit, setCard2Suit] = useState("");
+  const [opponentAction, setOpponentAction] = useState("");
+
+  const positions = TABLE_POSITIONS[tableSize];
+
+  const advice = (position && card1Rank && card1Suit && card2Rank && card2Suit && opponentAction)
+    ? getGtoAdvice({ tableSize, position, card1Rank, card1Suit, card2Rank, card2Suit, opponentAction })
+    : null;
+
+  const card1Display = card1Rank && card1Suit
+    ? { rank: card1Rank, suit: SUITS.find(s => s.key === card1Suit)! }
+    : null;
+  const card2Display = card2Rank && card2Suit
+    ? { rank: card2Rank, suit: SUITS.find(s => s.key === card2Suit)! }
+    : null;
+
+  return (
+    <div className="px-3 py-3 space-y-4">
+      {/* 步骤1：桌型 */}
+      <div>
+        <div className="text-xs font-bold text-gray-600 mb-1.5">① 几人桌</div>
+        <div className="flex gap-1.5">
+          {[6, 7, 8, 9, 10].map(n => (
+            <button
+              key={n}
+              onClick={() => { setTableSize(n); setPosition(""); }}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${
+                tableSize === n ? "bg-green-800 text-white border-green-800" : "bg-white text-gray-600 border-gray-200"
+              }`}
+            >{n}人</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 步骤2：位置 */}
+      <div>
+        <div className="text-xs font-bold text-gray-600 mb-1.5">② 我的位置</div>
+        <div className="flex flex-wrap gap-1.5">
+          {positions.map(p => (
+            <button
+              key={p}
+              onClick={() => setPosition(p)}
+              className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
+                position === p ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-600 border-gray-200"
+              }`}
+            >{p}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 步骤3：手牌 */}
+      <div className="space-y-3">
+        <div className="text-xs font-bold text-gray-600">③ 我的手牌</div>
+        {/* 已选手牌预览 */}
+        {(card1Display || card2Display) && (
+          <div className="flex gap-2 mb-1">
+            <div className={`w-10 h-14 rounded-lg border-2 flex flex-col items-center justify-center font-bold text-lg shadow ${
+              card1Display ? "bg-white border-green-400" : "bg-gray-100 border-dashed border-gray-300"
+            }`}>
+              {card1Display ? (
+                <><span className="text-sm font-bold leading-none">{card1Display.rank}</span><span className={`text-base leading-none ${card1Display.suit.color}`}>{card1Display.suit.label}</span></>
+              ) : <span className="text-gray-300 text-lg">?</span>}
+            </div>
+            <div className={`w-10 h-14 rounded-lg border-2 flex flex-col items-center justify-center font-bold text-lg shadow ${
+              card2Display ? "bg-white border-green-400" : "bg-gray-100 border-dashed border-gray-300"
+            }`}>
+              {card2Display ? (
+                <><span className="text-sm font-bold leading-none">{card2Display.rank}</span><span className={`text-base leading-none ${card2Display.suit.color}`}>{card2Display.suit.label}</span></>
+              ) : <span className="text-gray-300 text-lg">?</span>}
+            </div>
+            {(card1Rank || card2Rank) && (
+              <button
+                onClick={() => { setCard1Rank(""); setCard1Suit(""); setCard2Rank(""); setCard2Suit(""); }}
+                className="ml-auto self-center text-xs text-red-400 border border-red-200 rounded px-2 py-1"
+              >清除</button>
+            )}
+          </div>
+        )}
+        <CardPicker
+          label="第一张牌"
+          rank={card1Rank}
+          suit={card1Suit}
+          onRankChange={setCard1Rank}
+          onSuitChange={setCard1Suit}
+        />
+        <CardPicker
+          label="第二张牌"
+          rank={card2Rank}
+          suit={card2Suit}
+          onRankChange={setCard2Rank}
+          onSuitChange={setCard2Suit}
+        />
+      </div>
+
+      {/* 步骤4：对手行动 */}
+      <div>
+        <div className="text-xs font-bold text-gray-600 mb-1.5">④ 对手行动</div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {OPPONENT_ACTIONS.map(a => (
+            <button
+              key={a.key}
+              onClick={() => setOpponentAction(a.key)}
+              className={`py-2.5 px-2 rounded-lg border transition-all text-left ${
+                opponentAction === a.key ? "bg-green-700 text-white border-green-700" : "bg-white border-gray-200"
+              }`}
+            >
+              <div className="text-xs font-bold">{a.label}</div>
+              <div className={`text-[10px] mt-0.5 ${opponentAction === a.key ? "text-green-100" : "text-gray-400"}`}>{a.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* GTO 建议结果 */}
+      {advice && (
+        <div className="bg-green-900 rounded-2xl p-4 text-white shadow-lg">
+          <div className="text-xs text-green-300 mb-1 font-medium">GTO 建议</div>
+          <div className={`text-2xl font-black mb-2 ${advice.color.replace("text-", "text-")}`} style={{ color: advice.color.includes("red") ? "#fca5a5" : advice.color.includes("purple") ? "#c4b5fd" : advice.color.includes("green") ? "#86efac" : advice.color.includes("yellow") ? "#fde68a" : advice.color.includes("orange") ? "#fdba74" : "#d1d5db" }}>
+            {advice.action}
+          </div>
+          {advice.frequency && (
+            <div className="text-xs text-green-300 mb-1">执行频率：<span className="text-white font-bold">{advice.frequency}</span></div>
+          )}
+          <div className="text-sm text-green-100 leading-relaxed">{advice.reason}</div>
+          <div className="mt-3 pt-3 border-t border-green-700 text-[10px] text-green-400">
+            基于 {tableSize}人桌 · {position} 位置 · {card1Rank}{SUITS.find(s=>s.key===card1Suit)?.label}{card2Rank}{SUITS.find(s=>s.key===card2Suit)?.label} · {OPPONENT_ACTIONS.find(a=>a.key===opponentAction)?.label}
+          </div>
+        </div>
+      )}
+
+      {!advice && (
+        <div className="text-center text-gray-400 text-sm py-4">完成以上4步选择，即可获得 GTO 策略建议</div>
+      )}
+    </div>
+  );
+}
+
 // ─── GTO 笔记 ─────────────────────────────────────────────────────────────────
 function GtoNotes({ ledgerId }: { ledgerId: number }) {
   const [content, setContent] = useState("");
@@ -560,12 +840,13 @@ export default function GtoPoker() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const ledgerId = Number(id);
-  const [tab, setTab] = useState<"range" | "odds" | "notes">("range");
+  const [tab, setTab] = useState<"range" | "odds" | "notes" | "advisor">("range");
 
   const tabs = [
-    { key: "range" as const, label: "起手牌范围", icon: "🃏" },
-    { key: "odds" as const, label: "赔率计算", icon: "🧮" },
-    { key: "notes" as const, label: "GTO 笔记", icon: "📝" },
+    { key: "range" as const, label: "起手牌", icon: "🃏" },
+    { key: "odds" as const, label: "赔率", icon: "🧮" },
+    { key: "advisor" as const, label: "参考", icon: "🎯" },
+    { key: "notes" as const, label: "笔记", icon: "📝" },
   ];
 
   return (
@@ -599,6 +880,7 @@ export default function GtoPoker() {
       <div className="pb-8">
         {tab === "range" && <HandRangeMatrix />}
         {tab === "odds" && <OddsCalculator />}
+        {tab === "advisor" && <GtoAdvisor />}
         {tab === "notes" && <GtoNotes ledgerId={ledgerId} />}
       </div>
     </div>
