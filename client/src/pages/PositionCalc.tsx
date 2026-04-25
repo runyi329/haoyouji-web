@@ -5,7 +5,7 @@
  * - 每档是一条进度条，价格文字融入条内
  * - 点击档位弹出 modal，选择修改计划量或已买量
  */
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 // 注入双端滑块样式
 const RANGE_SLIDER_STYLE = `
   .dual-range input[type=range] { pointer-events: none; }
@@ -90,6 +90,10 @@ export default function PositionCalc() {
   const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标止盈利润（人民币）
   const [targetEthQty, setTargetEthQty] = useState<string>('');  // 目标持仓 ETH 数量
   const [strategyRatio, setStrategyRatio] = useState<number>(50); // 策略持仓占比 0-100（战略=100-strategyRatio）
+  const strategyBarRef = useRef<HTMLDivElement>(null); // 进度条容器 ref
+  const isDraggingStrategy = useRef(false); // 是否正在拖动
+  const strategyRatioRef = useRef(strategyRatio); // 实时值 ref，避免闭包问题
+  useEffect(() => { strategyRatioRef.current = strategyRatio; }, [strategyRatio]);
   const [cnyRate, setCnyRate] = useState<number>(7.28); // 人民币/USDT 汇率（初始占位，会被实时值覆盖）
   const [cnyRateInput, setCnyRateInput] = useState<string>(''); // 手动修改汇率的输入内容
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
@@ -237,6 +241,68 @@ export default function PositionCalc() {
     { enabled: ledgerId > 0 }
   );
   const saveSettingsMutation = trpc.ethPositionSaveSettings.useMutation();
+
+  // 战略/策略拖动交互：纯 touch/mouse 事件，不依赖 range input
+  const calcStrategyRatioFromX = useCallback((clientX: number): number => {
+    const bar = strategyBarRef.current;
+    if (!bar) return strategyRatioRef.current;
+    const rect = bar.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const pct = Math.max(0, Math.min(1, x / rect.width));
+    // pct 是左側战略占比，策略 = 100 - 战略
+    const newStrategyRatio = Math.round((1 - pct) * 100);
+    return Math.max(0, Math.min(100, newStrategyRatio));
+  }, []);
+
+  const handleStrategyDragSave = useCallback((val: number) => {
+    saveSettingsMutation.mutate({
+      ledgerId,
+      targetProfitCny: parseFloat(targetProfitCny) || 0,
+      cnyRate: 0,
+      targetEthQty: parseFloat(targetEthQty) || 0,
+      strategyRatio: val,
+    });
+  }, [ledgerId, targetProfitCny, targetEthQty, saveSettingsMutation]);
+
+  // 监听全局 touchmove/touchend/mousemove/mouseup
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDraggingStrategy.current) return;
+      const val = calcStrategyRatioFromX(e.clientX);
+      setStrategyRatio(val);
+    };
+    const onMouseUp = (e: MouseEvent) => {
+      if (!isDraggingStrategy.current) return;
+      isDraggingStrategy.current = false;
+      const val = calcStrategyRatioFromX(e.clientX);
+      setStrategyRatio(val);
+      handleStrategyDragSave(val);
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isDraggingStrategy.current) return;
+      e.preventDefault();
+      const val = calcStrategyRatioFromX(e.touches[0].clientX);
+      setStrategyRatio(val);
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!isDraggingStrategy.current) return;
+      isDraggingStrategy.current = false;
+      const touch = e.changedTouches[0];
+      const val = calcStrategyRatioFromX(touch.clientX);
+      setStrategyRatio(val);
+      handleStrategyDragSave(val);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [calcStrategyRatioFromX, handleStrategyDragSave]);
 
   // 从数据库加载目标止盈和 ETH 数量（不加载汇率，汇率始终用实时 API 值）
   useEffect(() => {
@@ -652,8 +718,22 @@ export default function PositionCalc() {
                       {/* ===== 战略/策略持仓细分 ===== */}
                       {actualQty > 0 && (
                         <div className="mt-3 mb-1">
-                          {/* 一体化细分进度条+滑块：直接拖动分界点 */}
-                          <div className="relative" style={{ height: '32px', cursor: 'ew-resize' }}>
+                          {/* 一体化细分进度条+圆形手柄：纯 touch/mouse 事件拖动 */}
+                          <div
+                            ref={strategyBarRef}
+                            className="relative"
+                            style={{ height: '32px', cursor: 'ew-resize', touchAction: 'none' }}
+                            onMouseDown={(e) => {
+                              isDraggingStrategy.current = true;
+                              const val = calcStrategyRatioFromX(e.clientX);
+                              setStrategyRatio(val);
+                            }}
+                            onTouchStart={(e) => {
+                              isDraggingStrategy.current = true;
+                              const val = calcStrategyRatioFromX(e.touches[0].clientX);
+                              setStrategyRatio(val);
+                            }}
+                          >
                             {/* 进度条容器，垂直居中 18px */}
                             <div className="absolute rounded overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '18px' }}>
                               {/* 战略持仓段（左侧，亮金） */}
@@ -664,7 +744,6 @@ export default function PositionCalc() {
                                   background: 'linear-gradient(90deg, #9a7000 0%, #d4af37 60%, #f5e27a 100%)',
                                   boxShadow: '2px 0 8px rgba(212,175,55,0.4)',
                                   borderRadius: '4px 0 0 4px',
-                                  transition: 'width 0.05s',
                                 }}
                               />
                               {/* 策略持仓段（右侧，暗金半透明） */}
@@ -676,13 +755,12 @@ export default function PositionCalc() {
                                   background: 'linear-gradient(90deg, rgba(139,100,0,0.7) 0%, rgba(90,60,0,0.5) 100%)',
                                   borderRadius: '0 4px 4px 0',
                                   borderLeft: '1px solid rgba(212,175,55,0.3)',
-                                  transition: 'left 0.05s, width 0.05s',
                                 }}
                               />
                             </div>
-                            {/* 分界拖动手柄：圆形大按钮 */}
+                            {/* 圆形手柄，垂直居中于分界点 */}
                             <div
-                              className="absolute flex items-center justify-center"
+                              className="absolute"
                               style={{
                                 left: `calc(${100 - strategyRatio}% - 16px)`,
                                 top: '50%',
@@ -691,6 +769,9 @@ export default function PositionCalc() {
                                 height: '32px',
                                 zIndex: 10,
                                 pointerEvents: 'none',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
                               }}
                             >
                               <div style={{
@@ -709,39 +790,6 @@ export default function PositionCalc() {
                                 <div style={{ width: '2px', height: '10px', background: 'rgba(0,0,0,0.45)', borderRadius: '1px' }} />
                               </div>
                             </div>
-                            {/* 透明覆盖的 range input，实现拖动交互 */}
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              value={strategyRatio}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value);
-                                setStrategyRatio(val);
-                              }}
-                              onMouseUp={(e) => {
-                                const val = parseInt((e.target as HTMLInputElement).value);
-                                saveSettingsMutation.mutate({
-                                  ledgerId,
-                                  targetProfitCny: parseFloat(targetProfitCny) || 0,
-                                  cnyRate: 0,
-                                  targetEthQty: parseFloat(targetEthQty) || 0,
-                                  strategyRatio: val,
-                                });
-                              }}
-                              onTouchEnd={(e) => {
-                                const val = parseInt((e.target as HTMLInputElement).value);
-                                saveSettingsMutation.mutate({
-                                  ledgerId,
-                                  targetProfitCny: parseFloat(targetProfitCny) || 0,
-                                  cnyRate: 0,
-                                  targetEthQty: parseFloat(targetEthQty) || 0,
-                                  strategyRatio: val,
-                                });
-                              }}
-                              className="absolute inset-0 w-full h-full opacity-0"
-                              style={{ cursor: 'ew-resize', margin: 0 }}
-                            />
                           </div>
                           {/* 进度条下方标注行 */}
                           <div className="flex items-center justify-between mt-1.5">
