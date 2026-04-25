@@ -470,16 +470,26 @@ export default function PositionCalc() {
               <div className="flex items-start gap-0 mb-3">
                 {/* 左栏：目标止盈利润 */}
                 <div className="flex-1 pr-4">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-end mb-2" style={{ gap: 0 }}>
+                    {user?.name && (
+                      <>
+                        <span
+                          className="text-xs font-medium tracking-widest"
+                          style={{ color: 'rgba(212,175,55,0.5)', letterSpacing: '0.2em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80px' }}
+                        >
+                          {user.name}
+                        </span>
+                        <span
+                          className="text-xs font-medium"
+                          style={{ color: 'rgba(212,175,55,0.3)', margin: '0 0.3em', letterSpacing: 0 }}
+                        >
+                          ·
+                        </span>
+                      </>
+                    )}
                     <span
                       className="text-xs font-medium tracking-widest"
-                      style={{ color: 'rgba(212,175,55,0.5)', letterSpacing: '0.2em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '45%' }}
-                    >
-                      {user?.name || ''}
-                    </span>
-                    <span
-                      className="text-xs font-medium tracking-widest"
-                      style={{ color: 'rgba(212,175,55,0.4)', letterSpacing: '0.2em' }}
+                      style={{ color: 'rgba(212,175,55,0.4)', letterSpacing: '0.2em', whiteSpace: 'nowrap' }}
                     >
                       目标止盈利润
                     </span>
