@@ -107,3 +107,4 @@ temp/
 *.sqlite3
 ecosystem.config.cjs
 ecosystem.config.js
+scripts/upload-kiskis.mjs

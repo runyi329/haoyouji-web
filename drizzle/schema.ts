@@ -1922,3 +1922,23 @@ export const ethPositionSettings = mysqlTable("eth_position_settings", {
 }, (table) => [
   uniqueIndex("eth_settings_ledger_uniq").on(table.ledgerId),
 ]);
+
+// ========== ETH 持仓修改日志表 ==========
+// 记录每次修改已买量或计划量的详细日志，支持用户编辑备注和删除
+export const ethPositionChangeLogs = mysqlTable("eth_position_change_logs", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  price: int('price').notNull(),                                          // 档位价格
+  changeType: mysqlEnum(['actual', 'planned']).notNull(),                 // 修改类型：已买/计划
+  oldValue: decimal('old_value', { precision: 18, scale: 8 }).notNull(), // 修改前的值
+  newValue: decimal('new_value', { precision: 18, scale: 8 }).notNull(), // 修改后的值
+  note: varchar('note', { length: 500 }).default('').notNull(),           // 用户可编辑的备注
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("eth_log_ledger_idx").on(table.ledgerId),
+  index("eth_log_ledger_price_idx").on(table.ledgerId, table.price),
+]);
+
+export type EthPositionChangeLog = typeof ethPositionChangeLogs.$inferSelect;
+export type InsertEthPositionChangeLog = typeof ethPositionChangeLogs.$inferInsert;

@@ -209,6 +209,20 @@ export default function PositionCalc() {
     { enabled: ledgerId > 0 }
   );
 
+  // 修改日志
+  const getLogsQuery = trpc.ethPositionGetLogs.useQuery(
+    { ledgerId, price: modal?.mode !== 'choose' ? modal?.price : undefined },
+    { enabled: !!modal && modal.mode !== 'choose' && ledgerId > 0 }
+  );
+  const updateLogNoteMutation = trpc.ethPositionUpdateLogNote.useMutation({
+    onSuccess: () => utils.ethPositionGetLogs.invalidate({ ledgerId }),
+  });
+  const deleteLogMutation = trpc.ethPositionDeleteLog.useMutation({
+    onSuccess: () => utils.ethPositionGetLogs.invalidate({ ledgerId }),
+  });
+  const [editingLogId, setEditingLogId] = useState<number | null>(null);
+  const [editingLogNote, setEditingLogNote] = useState<string>('');
+
   // 保存单个档位
   const saveLevelMutation = trpc.ethPositionSaveLevel.useMutation();
   const batchSaveMutation = trpc.ethPositionBatchSave.useMutation({
@@ -375,11 +389,13 @@ export default function PositionCalc() {
   };
 
   // 弹窗确认
+  const addChangeLogMutation = trpc.ethPositionAddLog.useMutation();
   const confirmModal = () => {
     if (!modal) return;
     const num = parseFloat(modal.inputValue);
     const val = isNaN(num) || num < 0 ? 0 : num;
     if (modal.mode === 'editPlanned') {
+      const oldVal = planned[modal.price] || 0;
       const newPlanned = { ...planned, [modal.price]: val };
       setPlanned(newPlanned);
       // 保存到数据库
@@ -389,7 +405,16 @@ export default function PositionCalc() {
         plannedQty: val,
         actualQty: actual[modal.price] || 0,
       });
+      // 记录修改日志
+      addChangeLogMutation.mutate({
+        ledgerId,
+        price: modal.price,
+        changeType: 'planned',
+        oldValue: oldVal,
+        newValue: val,
+      });
     } else if (modal.mode === 'editActual') {
+      const oldVal = actual[modal.price] || 0;
       const newActual = { ...actual, [modal.price]: val };
       setActual(newActual);
       // 保存到数据库
@@ -398,6 +423,14 @@ export default function PositionCalc() {
         price: modal.price,
         plannedQty: planned[modal.price] || 0,
         actualQty: val,
+      });
+      // 记录修改日志
+      addChangeLogMutation.mutate({
+        ledgerId,
+        price: modal.price,
+        changeType: 'actual',
+        oldValue: oldVal,
+        newValue: val,
       });
     }
     setModal(null);
@@ -2104,7 +2137,7 @@ export default function PositionCalc() {
                     />
                   </div>
 
-                  {/* 操作按钮 */}
+                  {/* 操作按鈕 */}
                   <div className="flex gap-2">
                     <button
                       onClick={() => setModal({ ...modal, mode: 'choose', inputValue: '' })}
@@ -2120,6 +2153,90 @@ export default function PositionCalc() {
                     >
                       确认保存
                     </button>
+                  </div>
+
+                  {/* 修改日志 */}
+                  <div className="mt-3" style={{ borderTop: '1px solid rgba(212,175,55,0.15)', paddingTop: '12px' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium tracking-widest" style={{ color: 'rgba(212,175,55,0.6)' }}>修改日志</span>
+                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>自动记录 · 可编辑/删除</span>
+                    </div>
+                    <div className="space-y-1.5" style={{ maxHeight: '160px', overflowY: 'auto' }}>
+                      {getLogsQuery.isLoading && (
+                        <div className="text-center py-3 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>加载中…</div>
+                      )}
+                      {!getLogsQuery.isLoading && (!getLogsQuery.data || getLogsQuery.data.length === 0) && (
+                        <div className="text-center py-3 text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>暂无修改记录</div>
+                      )}
+                      {getLogsQuery.data?.map(log => (
+                        <div key={log.id} className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.1)' }}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: log.changeType === 'actual' ? 'rgba(212,175,55,0.2)' : 'rgba(212,175,55,0.1)', color: log.changeType === 'actual' ? '#f0d060' : 'rgba(212,175,55,0.7)', fontSize: '10px' }}>
+                                  {log.changeType === 'actual' ? '已买' : '计划'}
+                                </span>
+                                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                                  {Number(log.oldValue).toFixed(2)} → <span style={{ color: '#f0d060', fontWeight: 600 }}>{Number(log.newValue).toFixed(2)}</span> ETH
+                                </span>
+                              </div>
+                              {editingLogId === log.id ? (
+                                <div className="flex items-center gap-1 mt-1.5">
+                                  <input
+                                    value={editingLogNote}
+                                    onChange={e => setEditingLogNote(e.target.value)}
+                                    placeholder="添加备注…"
+                                    className="flex-1 text-xs px-2 py-1 rounded"
+                                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(212,175,55,0.3)', color: 'rgba(255,255,255,0.85)', outline: 'none' }}
+                                    autoFocus
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        updateLogNoteMutation.mutate({ id: log.id, ledgerId, note: editingLogNote });
+                                        setEditingLogId(null);
+                                      }
+                                      if (e.key === 'Escape') setEditingLogId(null);
+                                    }}
+                                  />
+                                  <button onClick={() => { updateLogNoteMutation.mutate({ id: log.id, ledgerId, note: editingLogNote }); setEditingLogId(null); }} style={{ color: '#f0d060' }}>
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => setEditingLogId(null)} style={{ color: 'rgba(255,255,255,0.3)' }}>
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                log.note ? (
+                                  <div className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.45)' }}>{log.note}</div>
+                                ) : null
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.25)', fontSize: '10px' }}>
+                                {new Date(log.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => { setEditingLogId(log.id); setEditingLogNote(log.note || ''); }}
+                                  className="p-0.5 rounded"
+                                  style={{ color: 'rgba(212,175,55,0.5)' }}
+                                  title="编辑备注"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => deleteLogMutation.mutate({ id: log.id, ledgerId })}
+                                  className="p-0.5 rounded"
+                                  style={{ color: 'rgba(255,80,80,0.5)' }}
+                                  title="删除"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               );
