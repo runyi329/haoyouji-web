@@ -509,6 +509,28 @@ export async function initDatabase() {
       console.warn('[DB Init] ⚠️ eth_position_settings table skipped:', e instanceof Error ? e.message : e);
     }
 
+    // ===== 建立 eth_position_change_logs ETH持仓修改日志表 =====
+    try {
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS \`eth_position_change_logs\` (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL COMMENT '账本ID',
+          price INT NOT NULL COMMENT '档位价格',
+          change_type ENUM('actual','planned') NOT NULL COMMENT '修改类型：已买/计划',
+          old_value DECIMAL(18,8) NOT NULL COMMENT '修改前的值',
+          new_value DECIMAL(18,8) NOT NULL COMMENT '修改后的值',
+          note VARCHAR(500) NOT NULL DEFAULT '' COMMENT '用户备注',
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX eth_log_ledger_idx (ledger_id),
+          INDEX eth_log_ledger_price_idx (ledger_id, price)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ETH持仓修改日志表'
+      `);
+      console.log('[DB Init] ✅ eth_position_change_logs table ready');
+    } catch (e) {
+      console.warn('[DB Init] ⚠️ eth_position_change_logs table skipped:', e instanceof Error ? e.message : e);
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
