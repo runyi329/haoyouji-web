@@ -625,6 +625,20 @@ export async function initDatabase() {
       console.warn('[DB Init] ⚠️ ETH持仓历史数据迁移失败:', e.message);
     }
 
+    // GTO 德州扑克笔记表
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS \`gto_notes\` (
+        \`id\` INT NOT NULL AUTO_INCREMENT,
+        \`ledger_id\` INT NOT NULL,
+        \`user_id\` INT NOT NULL,
+        \`content\` TEXT NOT NULL,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        INDEX \`gto_notes_ledger_user_idx\` (\`ledger_id\`, \`user_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('[DB Init] gto_notes table ready');
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
