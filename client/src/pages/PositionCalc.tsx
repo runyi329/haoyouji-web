@@ -2024,40 +2024,146 @@ export default function PositionCalc() {
               </div>
             )}
 
-            {(modal.mode === 'editActual' || modal.mode === 'editPlanned') && (
-              <div>
-                <div className="mb-3 text-sm font-medium text-gray-700">
-                  {modal.mode === 'editActual' ? '输入已买数量（ETH）' : '输入计划数量（ETH）'}
+            {(modal.mode === 'editActual' || modal.mode === 'editPlanned') && (() => {
+              const isActual = modal.mode === 'editActual';
+              const accentColor = isActual ? '#d4af37' : 'rgba(212,175,55,0.6)';
+              const currentVal = parseFloat(modal.inputValue) || 0;
+              // 参考值：目标持仓总量用于计算百分比快捷按钮
+              const totalTarget = parseFloat(targetEthQty) || 0;
+              // 滑块最大值：取计划总量或已有值的2倍，至少10
+              const sliderMax = Math.max(totalTarget > 0 ? totalTarget : 20, currentVal * 2, 20);
+              const sliderPct = sliderMax > 0 ? Math.min(currentVal / sliderMax, 1) : 0;
+              // 快捷百分比按钮（基于目标总持仓量）
+              const pctBtns = [5, 10, 20, 50];
+              // 快捷加减按钮
+              const stepBtns = [0.5, 1, 2, 5];
+              const adjust = (delta: number) => {
+                const next = Math.max(0, (parseFloat(modal.inputValue) || 0) + delta);
+                setModal(prev => prev ? { ...prev, inputValue: String(next) } : null);
+              };
+              return (
+                <div>
+                  {/* 标题行 */}
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-semibold" style={{ color: isActual ? '#d4af37' : 'rgba(212,175,55,0.7)' }}>
+                      {isActual ? '修改已买数量' : '修改计划数量'}
+                    </span>
+                    <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>ETH</span>
+                  </div>
+
+                  {/* 输入框 */}
+                  <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl" style={{ background: 'rgba(212,175,55,0.08)', border: `1px solid ${isActual ? 'rgba(212,175,55,0.4)' : 'rgba(212,175,55,0.2)'}` }}>
+                    <button
+                      onClick={() => adjust(-stepBtns[0])}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-lg font-bold"
+                      style={{ background: 'rgba(212,175,55,0.12)', color: 'rgba(212,175,55,0.8)' }}
+                    >−</button>
+                    <input
+                      autoFocus
+                      type="number"
+                      value={modal.inputValue}
+                      onChange={e => setModal(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
+                      onKeyDown={e => { if (e.key === 'Enter') confirmModal(); if (e.key === 'Escape') setModal(null); }}
+                      placeholder="0"
+                      className="flex-1 text-center text-2xl font-bold outline-none bg-transparent"
+                      style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}
+                      step="0.5"
+                      min="0"
+                    />
+                    <button
+                      onClick={() => adjust(stepBtns[0])}
+                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-lg font-bold"
+                      style={{ background: 'rgba(212,175,55,0.12)', color: 'rgba(212,175,55,0.8)' }}
+                    >+</button>
+                  </div>
+
+                  {/* 快捷步进按钮 */}
+                  <div className="mb-3">
+                    <div className="text-[10px] mb-1.5 tracking-widest" style={{ color: 'rgba(212,175,55,0.35)' }}>快捷步进</div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {stepBtns.map(s => (
+                        <button
+                          key={s}
+                          onClick={() => adjust(s)}
+                          className="py-1.5 rounded-lg text-xs font-semibold"
+                          style={{ background: 'rgba(212,175,55,0.1)', color: 'rgba(212,175,55,0.8)', border: '1px solid rgba(212,175,55,0.15)' }}
+                        >+{s}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 百分比快捷按钮（基于目标总持仓） */}
+                  {totalTarget > 0 && (
+                    <div className="mb-4">
+                      <div className="text-[10px] mb-1.5 tracking-widest" style={{ color: 'rgba(212,175,55,0.35)' }}>占目标总仓 {totalTarget.toFixed(0)} ETH 的</div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {pctBtns.map(p => {
+                          const pctVal = parseFloat((totalTarget * p / 100).toFixed(2));
+                          return (
+                            <button
+                              key={p}
+                              onClick={() => setModal(prev => prev ? { ...prev, inputValue: String(pctVal) } : null)}
+                              className="py-1.5 rounded-lg text-xs font-semibold"
+                              style={{ background: 'rgba(212,175,55,0.08)', color: 'rgba(212,175,55,0.7)', border: '1px solid rgba(212,175,55,0.12)' }}
+                            >{p}%<br /><span style={{ fontSize: '9px', opacity: 0.7 }}>{pctVal}</span></button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 滑动进度条 */}
+                  <div className="mb-4">
+                    <div className="flex justify-between text-[10px] mb-1" style={{ color: 'rgba(212,175,55,0.35)' }}>
+                      <span>0</span>
+                      <span style={{ color: 'rgba(212,175,55,0.6)' }}>{currentVal > 0 ? `${currentVal} ETH` : '--'}</span>
+                      <span>{sliderMax.toFixed(0)}</span>
+                    </div>
+                    {/* 进度条轨道 */}
+                    <div className="relative h-5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      <div
+                        className="absolute top-0 left-0 h-full rounded-full transition-all duration-150"
+                        style={{
+                          width: `${sliderPct * 100}%`,
+                          background: isActual
+                            ? 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)'
+                            : 'linear-gradient(90deg, rgba(212,175,55,0.3) 0%, rgba(212,175,55,0.6) 100%)',
+                          boxShadow: isActual ? '0 0 8px rgba(212,175,55,0.4)' : 'none',
+                        }}
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={sliderMax}
+                      step={0.5}
+                      value={currentVal}
+                      onChange={e => setModal(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
+                      className="w-full mt-1"
+                      style={{ accentColor: '#d4af37', height: '20px' }}
+                    />
+                  </div>
+
+                  {/* 操作按钮 */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setModal({ ...modal, mode: 'choose', inputValue: '' })}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+                      style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.1)' }}
+                    >
+                      返回
+                    </button>
+                    <button
+                      onClick={confirmModal}
+                      className="flex-2 py-2.5 rounded-xl text-sm font-bold"
+                      style={{ flex: 2, background: isActual ? 'linear-gradient(135deg, #9a7000 0%, #d4af37 40%, #f5e27a 55%, #d4af37 70%, #9a7000 100%)' : 'linear-gradient(135deg, rgba(212,175,55,0.5) 0%, rgba(212,175,55,0.8) 50%, rgba(212,175,55,0.5) 100%)', color: '#0a0800', fontWeight: 700 }}
+                    >
+                      确认保存
+                    </button>
+                  </div>
                 </div>
-                <input
-                  autoFocus
-                  type="number"
-                  value={modal.inputValue}
-                  onChange={e => setModal(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
-                  onKeyDown={e => { if (e.key === 'Enter') confirmModal(); if (e.key === 'Escape') setModal(null); }}
-                  placeholder="输入 ETH 数量，如 0.5"
-                  className="w-full px-4 py-3 rounded-xl text-base border outline-none"
-                  style={{ borderColor: modal.mode === 'editActual' ? '#3B82F6' : '#D1D5DB' }}
-                  step="0.01"
-                  min="0"
-                />
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={() => setModal({ ...modal, mode: 'choose', inputValue: '' })}
-                    className="flex-1 py-3 rounded-xl text-sm font-medium text-gray-600 bg-gray-100"
-                  >
-                    返回
-                  </button>
-                  <button
-                    onClick={confirmModal}
-                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
-                    style={{ background: modal.mode === 'editActual' ? '#1A56DB' : '#6B7280' }}
-                  >
-                    确认
-                  </button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
       )}
