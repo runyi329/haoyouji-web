@@ -1929,7 +1929,7 @@ export const ethPositionChangeLogs = mysqlTable("eth_position_change_logs", {
   id: int().autoincrement().notNull(),
   ledgerId: int('ledger_id').notNull(),
   price: int('price').notNull(),                                          // 档位价格
-  changeType: mysqlEnum(['actual', 'planned']).notNull(),                 // 修改类型：已买/计划
+  changeType: mysqlEnum('change_type', ['actual', 'planned']).notNull(),   // 修改类型：已买/计划
   oldValue: decimal('old_value', { precision: 18, scale: 8 }).notNull(), // 修改前的值
   newValue: decimal('new_value', { precision: 18, scale: 8 }).notNull(), // 修改后的值
   note: varchar('note', { length: 500 }).default('').notNull(),           // 用户可编辑的备注
