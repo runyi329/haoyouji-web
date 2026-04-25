@@ -2637,7 +2637,7 @@ export default function LedgerDetail() {
               <div className="flex items-center gap-2">
                 {/* 快捷按钮：根据数据库配置动态显示（37/52/59号账本） */}
                 {isShortcutLedger && myShortcuts && (() => {
-                  const _sc = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59].filter(Boolean).length;
+                  const _sc = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59, (myShortcuts as any).ethPosition].filter(Boolean).length;
                   if (_sc >= 4) return null;
                   return (<>
                     {/* 黄金（MT5）*/}
@@ -2730,6 +2730,24 @@ export default function LedgerDetail() {
                         />
                       </div>
                     )}
+                    {/* ETH持仓计算器快捷按钮 */}
+                    {(myShortcuts as any).ethPosition && (
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
+                        style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.15)' }}
+                        onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+                        title="ETH持仓计算器"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#FFFFFF"/>
+                          <path d="M127.962 0L0 212.32L127.962 287.958V154.158V0Z" fill="rgba(255,255,255,0.6)"/>
+                          <path d="M127.961 312.187L126.386 314.107V412.301L127.961 416.962L255.931 236.551L127.961 312.187Z" fill="#FFFFFF"/>
+                          <path d="M127.962 416.962V312.187L0 236.551L127.962 416.962Z" fill="rgba(255,255,255,0.6)"/>
+                          <path d="M127.961 287.957L255.923 212.319L127.961 154.158V287.957Z" fill="rgba(255,255,255,0.8)"/>
+                          <path d="M0 212.319L127.962 287.957V154.158L0 212.319Z" fill="rgba(255,255,255,0.4)"/>
+                        </svg>
+                      </div>
+                    )}
                   </>);
                 })()}
 
@@ -2749,7 +2767,7 @@ export default function LedgerDetail() {
             <div className="flex flex-col gap-1.5 mt-2">
               {/* AI账本：圆圈多时（>=4个）移到第二行，与头像左对齐 */}
               {isCustomAI && isShortcutLedger && myShortcuts && (() => {
-                const _sc2 = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59].filter(Boolean).length;
+                const _sc2 = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59, (myShortcuts as any).ethPosition].filter(Boolean).length;
                 if (_sc2 < 4) return null;
                 return (
                   <div className="flex items-center gap-1.5 w-full mb-1.5">
@@ -2781,6 +2799,18 @@ export default function LedgerDetail() {
                     {myShortcuts.ledger59 && (
                       <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/59'); }} title="蓄水池股东">
                         <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/gZMsAzlHHuDFuUTJ.png" alt="蓄水池" className="w-full h-full object-cover rounded-full" />
+                      </div>
+                    )}
+                    {(myShortcuts as any).ethPosition && (
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.15)' }} onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)} title="ETH持仓计算器">
+                        <svg width="18" height="18" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#FFFFFF"/>
+                          <path d="M127.962 0L0 212.32L127.962 287.958V154.158V0Z" fill="rgba(255,255,255,0.6)"/>
+                          <path d="M127.961 312.187L126.386 314.107V412.301L127.961 416.962L255.931 236.551L127.961 312.187Z" fill="#FFFFFF"/>
+                          <path d="M127.962 416.962V312.187L0 236.551L127.962 416.962Z" fill="rgba(255,255,255,0.6)"/>
+                          <path d="M127.961 287.957L255.923 212.319L127.961 154.158V287.957Z" fill="rgba(255,255,255,0.8)"/>
+                          <path d="M0 212.319L127.962 287.957V154.158L0 212.319Z" fill="rgba(255,255,255,0.4)"/>
+                        </svg>
                       </div>
                     )}
                   </div>
@@ -2977,6 +3007,24 @@ export default function LedgerDetail() {
                     onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
                   >
                     <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                  </div>
+                )}
+                {/* 资金方：ETH持仓计算器快捷按钮 */}
+                {isCustomAF && effectiveIsFunder && (
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
+                    style={{ backgroundColor: '#FFFFFF' }}
+                    onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+                    title="ETH持仓计算器"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#343434"/>
+                      <path d="M127.962 0L0 212.32L127.962 287.958V154.158V0Z" fill="#8C8C8C"/>
+                      <path d="M127.961 312.187L126.386 314.107V412.301L127.961 416.962L255.931 236.551L127.961 312.187Z" fill="#3C3C3B"/>
+                      <path d="M127.962 416.962V312.187L0 236.551L127.962 416.962Z" fill="#8C8C8C"/>
+                      <path d="M127.961 287.957L255.923 212.319L127.961 154.158V287.957Z" fill="#141414"/>
+                      <path d="M0 212.319L127.962 287.957V154.158L0 212.319Z" fill="#393939"/>
+                    </svg>
                   </div>
                 )}
                 {/* 管理员或创建者：设置按鈕（视角切换时按目标角色显示） */}
