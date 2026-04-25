@@ -34,6 +34,7 @@ const RANGE_SLIDER_STYLE = `
 import { useRoute, useLocation } from "wouter";
 import { ChevronLeft, TrendingUp, TrendingDown, X, Check, Pencil, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const MIN_PRICE = 1000;
 const MAX_PRICE = 3500;
@@ -66,6 +67,7 @@ export default function PositionCalc() {
   const [, params] = useRoute("/ledger/:id/position-calc");
   const [, setLocation] = useLocation();
   const ledgerId = params ? parseInt(params.id) : 0;
+  const { user } = useAuth();
 
   // 注入双端滑块 CSS
   useEffect(() => {
@@ -468,7 +470,12 @@ export default function PositionCalc() {
               <div className="flex items-start gap-0 mb-3">
                 {/* 左栏：目标止盈利润 */}
                 <div className="flex-1 pr-4">
-                  <div className="text-xs font-medium tracking-widest mb-2 text-right" style={{ color: 'rgba(212,175,55,0.4)', letterSpacing: '0.2em' }}>目标止盈利润</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium" style={{ color: 'rgba(212,175,55,0.5)', maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {user?.name || ''}
+                    </span>
+                    <span className="text-xs font-medium tracking-widest" style={{ color: 'rgba(212,175,55,0.4)', letterSpacing: '0.2em' }}>目标止盈利润</span>
+                  </div>
                   <div className="flex items-baseline justify-end">
                     <span className="text-3xl font-bold" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 40%, #b8860b 70%, #d4af37 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}>
                       {targetProfitCny && !isNaN(parseFloat(targetProfitCny)) && parseFloat(targetProfitCny) > 0
