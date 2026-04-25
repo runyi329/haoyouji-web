@@ -704,6 +704,33 @@ const OPP_RESPONSES = [
   { key: "allin", label: "全押", emoji: "🔥" },
 ];
 
+// 我的实际行动选项
+const MY_ACTIONS = [
+  { key: "check", label: "过牌", emoji: "✋" },
+  { key: "call", label: "跟注", emoji: "✅" },
+  { key: "bet_small", label: "小注", emoji: "💰", desc: "1/3底池" },
+  { key: "bet_big", label: "大注", emoji: "💰💰", desc: "2/3+底池" },
+  { key: "raise", label: "加注", emoji: "⬆️" },
+  { key: "allin", label: "全押", emoji: "🔥" },
+  { key: "fold", label: "弃牌", emoji: "🏳️" },
+];
+
+// 从 GTO 建议文本中提取对应的 MY_ACTIONS key
+function extractGtoActionKey(adviceAction: string): string {
+  if (/全押/.test(adviceAction)) return "allin";
+  if (/加注|4-Bet|3-Bet|Bet/.test(adviceAction)) return "raise";
+  if (/大注/.test(adviceAction)) return "bet_big";
+  if (/小注|1\/3/.test(adviceAction)) return "bet_small";
+  if (/下注/.test(adviceAction)) {
+    if (/2\/3|大/.test(adviceAction)) return "bet_big";
+    return "bet_small";
+  }
+  if (/跟注/.test(adviceAction)) return "call";
+  if (/弃牌/.test(adviceAction)) return "fold";
+  if (/过牌|收锅/.test(adviceAction)) return "check";
+  return "";
+}
+
 // 判断我方行动是否为主动进攻（下注/加注）
 function isAggressiveAction(action: string): boolean {
   return /下注|加注|全押/.test(action);
@@ -818,6 +845,10 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
   const [flopOppResp, setFlopOppResp] = useState("");
   const [turnOppResp, setTurnOppResp] = useState("");
   const [riverOppResp, setRiverOppResp] = useState("");
+  // 我的实际行动（可能与GTO建议不同）
+  const [flopMyAction, setFlopMyAction] = useState("");
+  const [turnMyAction, setTurnMyAction] = useState("");
+  const [riverMyAction, setRiverMyAction] = useState("");
   // legacy compat
   const card1Rank = hand.rank1; const card1Suit = hand.suit1; const card2Rank = hand.rank2; const card2Suit = hand.suit2;
   const opponentAction = preflopAction;
@@ -871,6 +902,7 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
     setRiverCard({ rank: "", suit: "" }); setRiverPlayersLeft(0); setRiverAction("");
     setResult(""); setOpponentCards(""); setIsBluffHand(false);
     setFlopOppResp(""); setTurnOppResp(""); setRiverOppResp("");
+    setFlopMyAction(""); setTurnMyAction(""); setRiverMyAction("");
   }
 
   const canSave = result !== "" && hand.rank1 && position;
@@ -988,6 +1020,31 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
               </div>
               {flopHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">我的牌力：{flopHandEval.strength} · {flopHandEval.detail}</div>}
               {flopAdvice && <AdviceCard action={flopAdvice.action} reason={flopAdvice.reason} isBluff={flopAdvice.isBluff} />}
+              {flopAdvice && (
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-xs font-bold text-gray-700">我的实际行动</span>
+                    <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">⭐ GTO推荐：{flopAdvice.action}</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1 mb-1">
+                    {MY_ACTIONS.map(a => {
+                      const isGto = extractGtoActionKey(flopAdvice.action) === a.key;
+                      return (
+                        <button key={a.key} onClick={() => setFlopMyAction(a.key)}
+                          className={`py-2 rounded-lg border text-xs font-bold transition-all relative ${
+                            flopMyAction === a.key ? "bg-green-700 text-white border-green-700" :
+                            isGto ? "bg-amber-50 border-amber-400 text-amber-800" :
+                            "bg-white border-gray-200 text-gray-700"
+                          }`}
+                        >
+                          {isGto && flopMyAction !== a.key && <span className="absolute -top-1.5 -right-1 text-[9px] bg-amber-400 text-white px-0.5 rounded">GTO</span>}
+                          {a.emoji} {a.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {flopAdvice && isAggressiveAction(flopAdvice.action) && (
                 <div className="mt-2 border-t border-green-100 pt-2">
                   <div className="flex items-center gap-1.5 mb-1.5">
@@ -1044,6 +1101,31 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
               </div>
               {turnHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">我的牌力：{turnHandEval.strength} · {turnHandEval.detail}</div>}
               {turnAdvice && <AdviceCard action={turnAdvice.action} reason={turnAdvice.reason} isBluff={turnAdvice.isBluff} />}
+              {turnAdvice && (
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-xs font-bold text-gray-700">我的实际行动</span>
+                    <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">⭐ GTO推荐：{turnAdvice.action}</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1 mb-1">
+                    {MY_ACTIONS.map(a => {
+                      const isGto = extractGtoActionKey(turnAdvice.action) === a.key;
+                      return (
+                        <button key={a.key} onClick={() => setTurnMyAction(a.key)}
+                          className={`py-2 rounded-lg border text-xs font-bold transition-all relative ${
+                            turnMyAction === a.key ? "bg-blue-700 text-white border-blue-700" :
+                            isGto ? "bg-amber-50 border-amber-400 text-amber-800" :
+                            "bg-white border-gray-200 text-gray-700"
+                          }`}
+                        >
+                          {isGto && turnMyAction !== a.key && <span className="absolute -top-1.5 -right-1 text-[9px] bg-amber-400 text-white px-0.5 rounded">GTO</span>}
+                          {a.emoji} {a.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {turnAdvice && isAggressiveAction(turnAdvice.action) && (
                 <div className="mt-2 border-t border-blue-100 pt-2">
                   <div className="flex items-center gap-1.5 mb-1.5">
@@ -1101,6 +1183,31 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
               </div>
               {riverHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">最终牌力：{riverHandEval.strength} · {riverHandEval.detail}</div>}
               {riverAdvice && <AdviceCard action={riverAdvice.action} reason={riverAdvice.reason} isBluff={riverAdvice.isBluff} />}
+              {riverAdvice && (
+                <div className="mt-2 border-t border-gray-100 pt-2">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-xs font-bold text-gray-700">我的实际行动</span>
+                    <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">⭐ GTO推荐：{riverAdvice.action}</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1 mb-1">
+                    {MY_ACTIONS.map(a => {
+                      const isGto = extractGtoActionKey(riverAdvice.action) === a.key;
+                      return (
+                        <button key={a.key} onClick={() => setRiverMyAction(a.key)}
+                          className={`py-2 rounded-lg border text-xs font-bold transition-all relative ${
+                            riverMyAction === a.key ? "bg-orange-700 text-white border-orange-700" :
+                            isGto ? "bg-amber-50 border-amber-400 text-amber-800" :
+                            "bg-white border-gray-200 text-gray-700"
+                          }`}
+                        >
+                          {isGto && riverMyAction !== a.key && <span className="absolute -top-1.5 -right-1 text-[9px] bg-amber-400 text-white px-0.5 rounded">GTO</span>}
+                          {a.emoji} {a.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {riverAdvice && isAggressiveAction(riverAdvice.action) && (
                 <div className="mt-2 border-t border-orange-100 pt-2">
                   <div className="flex items-center gap-1.5 mb-1.5">
@@ -1145,7 +1252,7 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:border-green-500"
           />
           <button
-            onClick={() => canSave && saveHand.mutate({ ledgerId, tableSize, position, holeCards: `${hand.rank1}${hand.suit1}${hand.rank2}${hand.suit2}`, preflopAction, flopCards: flopCards.map(c => `${c.rank}${c.suit}`).join(""), flopAction, turnCard: `${turnCard.rank}${turnCard.suit}`, turnAction, riverCard: `${riverCard.rank}${riverCard.suit}`, riverAction, result, opponentCards, isBluff: isBluffHand })}
+            onClick={() => canSave && saveHand.mutate({ ledgerId, tableSize, position, holeCards: `${hand.rank1}${hand.suit1}${hand.rank2}${hand.suit2}`, preflopAction, flopCards: flopCards.map(c => `${c.rank}${c.suit}`).join(""), flopAction, turnCard: `${turnCard.rank}${turnCard.suit}`, turnAction, riverCard: `${riverCard.rank}${riverCard.suit}`, riverAction, result, opponentCards, isBluff: isBluffHand, flopGtoAdvice: flopAdvice?.action ?? "", flopMyAction, turnGtoAdvice: turnAdvice?.action ?? "", turnMyAction, riverGtoAdvice: riverAdvice?.action ?? "", riverMyAction })}
             disabled={!canSave || saveHand.isPending}
             className="w-full py-3 bg-green-800 text-white rounded-xl text-sm font-black disabled:opacity-40 flex items-center justify-center gap-2"
           >
