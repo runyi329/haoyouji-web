@@ -846,6 +846,7 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
   const [turnOppResp, setTurnOppResp] = useState("");
   const [riverOppResp, setRiverOppResp] = useState("");
   // 我的实际行动（可能与GTO建议不同）
+  const [preflopMyAction, setPreflopMyAction] = useState("");
   const [flopMyAction, setFlopMyAction] = useState("");
   const [turnMyAction, setTurnMyAction] = useState("");
   const [riverMyAction, setRiverMyAction] = useState("");
@@ -902,7 +903,7 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
     setRiverCard({ rank: "", suit: "" }); setRiverPlayersLeft(0); setRiverAction("");
     setResult(""); setOpponentCards(""); setIsBluffHand(false);
     setFlopOppResp(""); setTurnOppResp(""); setRiverOppResp("");
-    setFlopMyAction(""); setTurnMyAction(""); setRiverMyAction("");
+    setPreflopMyAction(""); setFlopMyAction(""); setTurnMyAction(""); setRiverMyAction("");
   }
 
   const canSave = result !== "" && hand.rank1 && position;
@@ -977,6 +978,31 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
 
       {preflopAdvice && (
         <AdviceCard action={preflopAdvice.action} reason={preflopAdvice.reason} detail={preflopAdvice.frequency ? `执行频率 ${preflopAdvice.frequency}` : undefined} />
+      )}
+      {preflopAdvice && (
+        <div className="mt-2 border-t border-gray-100 pt-2">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <span className="text-xs font-bold text-gray-700">我的实际行动</span>
+            <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">⭐ GTO推荐：{preflopAdvice.action}</span>
+          </div>
+          <div className="grid grid-cols-4 gap-1 mb-1">
+            {MY_ACTIONS.map(a => {
+              const isGto = extractGtoActionKey(preflopAdvice.action) === a.key;
+              return (
+                <button key={a.key} onClick={() => setPreflopMyAction(a.key)}
+                  className={`py-2 rounded-lg border text-xs font-bold transition-all relative ${
+                    preflopMyAction === a.key ? "bg-gray-700 text-white border-gray-700" :
+                    isGto ? "bg-amber-50 border-amber-400 text-amber-800" :
+                    "bg-white border-gray-200 text-gray-700"
+                  }`}
+                >
+                  {isGto && preflopMyAction !== a.key && <span className="absolute -top-1.5 -right-1 text-[9px] bg-amber-400 text-white px-0.5 rounded">GTO</span>}
+                  {a.emoji} {a.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {/* ─── FLOP ─── */}
@@ -1252,7 +1278,7 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
             className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:border-green-500"
           />
           <button
-            onClick={() => canSave && saveHand.mutate({ ledgerId, tableSize, position, holeCards: `${hand.rank1}${hand.suit1}${hand.rank2}${hand.suit2}`, preflopAction, flopCards: flopCards.map(c => `${c.rank}${c.suit}`).join(""), flopAction, turnCard: `${turnCard.rank}${turnCard.suit}`, turnAction, riverCard: `${riverCard.rank}${riverCard.suit}`, riverAction, result, opponentCards, isBluff: isBluffHand, flopGtoAdvice: flopAdvice?.action ?? "", flopMyAction, turnGtoAdvice: turnAdvice?.action ?? "", turnMyAction, riverGtoAdvice: riverAdvice?.action ?? "", riverMyAction })}
+            onClick={() => canSave && saveHand.mutate({ ledgerId, tableSize, position, holeCards: `${hand.rank1}${hand.suit1}${hand.rank2}${hand.suit2}`, preflopAction, flopCards: flopCards.map(c => `${c.rank}${c.suit}`).join(""), flopAction, turnCard: `${turnCard.rank}${turnCard.suit}`, turnAction, riverCard: `${riverCard.rank}${riverCard.suit}`, riverAction, result, opponentCards, isBluff: isBluffHand, preflopGtoAdvice: preflopAdvice?.action ?? "", preflopMyAction, flopGtoAdvice: flopAdvice?.action ?? "", flopMyAction, turnGtoAdvice: turnAdvice?.action ?? "", turnMyAction, riverGtoAdvice: riverAdvice?.action ?? "", riverMyAction })}
             disabled={!canSave || saveHand.isPending}
             className="w-full py-3 bg-green-800 text-white rounded-xl text-sm font-black disabled:opacity-40 flex items-center justify-center gap-2"
           >
