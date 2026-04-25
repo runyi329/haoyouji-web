@@ -2052,7 +2052,7 @@ export default function PositionCalc() {
                   </div>
 
                   {/* 输入框 */}
-                  <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-xl" style={{ background: 'rgba(212,175,55,0.08)', border: `1px solid ${isActual ? 'rgba(212,175,55,0.4)' : 'rgba(212,175,55,0.2)'}` }}>
+                  <div className="mb-4 px-3 py-2 rounded-xl" style={{ background: 'rgba(212,175,55,0.08)', border: `1px solid ${isActual ? 'rgba(212,175,55,0.4)' : 'rgba(212,175,55,0.2)'}` }}>
                     <input
                       autoFocus
                       type="number"
@@ -2060,16 +2060,11 @@ export default function PositionCalc() {
                       onChange={e => setModal(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
                       onKeyDown={e => { if (e.key === 'Enter') confirmModal(); if (e.key === 'Escape') setModal(null); }}
                       placeholder="0"
-                      className="flex-1 text-center text-2xl font-bold outline-none bg-transparent"
+                      className="w-full text-center text-2xl font-bold outline-none bg-transparent"
                       style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}
                       step="1"
                       min="0"
                     />
-                    <button
-                      onClick={() => adjust(1)}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-lg font-bold"
-                      style={{ background: 'rgba(212,175,55,0.12)', color: 'rgba(212,175,55,0.8)' }}
-                    >+</button>
                   </div>
 
                   {/* 百分比快捷按钮（基于目标总持仓） */}
