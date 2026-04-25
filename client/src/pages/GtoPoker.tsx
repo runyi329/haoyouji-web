@@ -696,6 +696,45 @@ const STREET_ACTIONS = [
   { key: "allin", label: "全押", emoji: "🔥" },
 ];
 
+// 对手对我方加注/下注的回应选项
+const OPP_RESPONSES = [
+  { key: "fold", label: "弃牌", emoji: "🏳️" },
+  { key: "call", label: "跟注", emoji: "✅" },
+  { key: "reraise", label: "反加注", emoji: "⬆️" },
+  { key: "allin", label: "全押", emoji: "🔥" },
+];
+
+// 判断我方行动是否为主动进攻（下注/加注）
+function isAggressiveAction(action: string): boolean {
+  return /下注|加注|全押/.test(action);
+}
+
+// 对手回应后的第二轮 GTO 建议
+function getOppRespAdvice(params: { handStrength: number; oppResp: string; street: string; myAction: string }): { action: string; reason: string; isBluff: boolean } {
+  const { handStrength, oppResp, myAction } = params;
+  const isAllin = /全押/.test(myAction);
+  if (oppResp === "fold") {
+    return { action: "收锅 ✓", reason: "对手弃牌，本轮获得底池。记录为成功施压。", isBluff: false };
+  }
+  if (oppResp === "call") {
+    if (handStrength >= 70) return { action: "继续价值", reason: "对手跟注，我方强牌，下一街继续下注建立底池", isBluff: false };
+    if (handStrength >= 45) return { action: "谨慎控池", reason: "对手跟注，中等牌力，下一街倾向过牌/小注控制底池", isBluff: false };
+    return { action: "过牌/放弃", reason: "对手跟注，我方牌力弱，下一街过牌，若对手下注考虑弃牌", isBluff: false };
+  }
+  if (oppResp === "reraise") {
+    if (handStrength >= 85) return { action: "4-Bet / 全押", reason: "超强牌面对反加注，继续加注或全押价值最大化", isBluff: false };
+    if (handStrength >= 65) return { action: "跟注", reason: "强牌面对反加注，跟注控制底池，避免过度膨胀", isBluff: false };
+    if (handStrength >= 40 && !isAllin) return { action: "跟注（谨慎）", reason: "中等牌力面对反加注，赔率合适可跟注，但需警惕", isBluff: false };
+    return { action: "弃牌", reason: "面对反加注牌力不足，弃牌止损", isBluff: false };
+  }
+  if (oppResp === "allin") {
+    if (handStrength >= 85) return { action: "跟注全押", reason: "超强牌面对全押，必须跟注", isBluff: false };
+    if (handStrength >= 70) return { action: "跟注（接近底线）", reason: "强牌面对全押，胜率支撑跟注，但需评估赔率", isBluff: false };
+    return { action: "弃牌", reason: "面对全押牌力不足，弃牌止损", isBluff: false };
+  }
+  return { action: "等待", reason: "等待对手行动", isBluff: false };
+}
+
 function QuickCardPicker({ label, rank, suit, onSelect, usedCards = [] }: { label: string; rank: string; suit: string; onSelect: (rank: string, suit: string) => void; usedCards?: string[]; }) {
   const [pendingRank, setPendingRank] = useState(rank);
   return (
@@ -775,6 +814,10 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
   const [result, setResult] = useState<"win"|"lose"|"tie"|"">("");
   const [opponentCards, setOpponentCards] = useState("");
   const [isBluffHand, setIsBluffHand] = useState(false);
+  // 对手回应（我方下注/加注后，对手的行动）
+  const [flopOppResp, setFlopOppResp] = useState("");
+  const [turnOppResp, setTurnOppResp] = useState("");
+  const [riverOppResp, setRiverOppResp] = useState("");
   // legacy compat
   const card1Rank = hand.rank1; const card1Suit = hand.suit1; const card2Rank = hand.rank2; const card2Suit = hand.suit2;
   const opponentAction = preflopAction;
@@ -800,16 +843,20 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
   const flopTexture = useMemo(() => analyzeBoardTexture(flopBoard), [flopBoard]);
   const flopHandEval = useMemo(() => { if (!flopComplete || !hand.rank1) return null; return evaluateHandWithBoard(hand, flopBoard); }, [flopComplete, hand, flopBoard]);
   const flopAdvice = useMemo(() => { if (!flopHandEval || !flopAction || flopPlayersLeft === 0) return null; return getPostFlopAdvice({ handStrength: flopHandEval.score, boardTexture: flopTexture, playersLeft: flopPlayersLeft, opponentAction: flopAction, street: "flop", position }); }, [flopHandEval, flopTexture, flopPlayersLeft, flopAction, position]);
+  // 我方下注/加注后，对手回应的第二轮建议
+  const flopAdvice2 = useMemo(() => { if (!flopAdvice || !isAggressiveAction(flopAdvice.action) || !flopOppResp || !flopHandEval) return null; return getOppRespAdvice({ handStrength: flopHandEval.score, oppResp: flopOppResp, street: "flop", myAction: flopAdvice.action }); }, [flopAdvice, flopOppResp, flopHandEval]);
 
   const turnBoard = [...flopBoard, ...(turnCard.rank && turnCard.suit ? [turnCard] : [])];
   const turnTexture = useMemo(() => analyzeBoardTexture(turnBoard), [turnBoard]);
   const turnHandEval = useMemo(() => { if (!turnCard.rank || !hand.rank1) return null; return evaluateHandWithBoard(hand, turnBoard); }, [turnCard, hand, turnBoard]);
   const turnAdvice = useMemo(() => { if (!turnHandEval || !turnAction || turnPlayersLeft === 0) return null; return getPostFlopAdvice({ handStrength: turnHandEval.score, boardTexture: turnTexture, playersLeft: turnPlayersLeft, opponentAction: turnAction, street: "turn", position }); }, [turnHandEval, turnTexture, turnPlayersLeft, turnAction, position]);
+  const turnAdvice2 = useMemo(() => { if (!turnAdvice || !isAggressiveAction(turnAdvice.action) || !turnOppResp || !turnHandEval) return null; return getOppRespAdvice({ handStrength: turnHandEval.score, oppResp: turnOppResp, street: "turn", myAction: turnAdvice.action }); }, [turnAdvice, turnOppResp, turnHandEval]);
 
   const riverBoard = [...turnBoard, ...(riverCard.rank && riverCard.suit ? [riverCard] : [])];
   const riverTexture = useMemo(() => analyzeBoardTexture(riverBoard), [riverBoard]);
   const riverHandEval = useMemo(() => { if (!riverCard.rank || !hand.rank1) return null; return evaluateHandWithBoard(hand, riverBoard); }, [riverCard, hand, riverBoard]);
   const riverAdvice = useMemo(() => { if (!riverHandEval || !riverAction || riverPlayersLeft === 0) return null; return getPostFlopAdvice({ handStrength: riverHandEval.score, boardTexture: riverTexture, playersLeft: riverPlayersLeft, opponentAction: riverAction, street: "river", position }); }, [riverHandEval, riverTexture, riverPlayersLeft, riverAction, position]);
+  const riverAdvice2 = useMemo(() => { if (!riverAdvice || !isAggressiveAction(riverAdvice.action) || !riverOppResp || !riverHandEval) return null; return getOppRespAdvice({ handStrength: riverHandEval.score, oppResp: riverOppResp, street: "river", myAction: riverAdvice.action }); }, [riverAdvice, riverOppResp, riverHandEval]);
 
   const saveHand = trpc["gto.saveHand"].useMutation({
     onSuccess: () => { toast.success("牌局已保存"); resetAll(); },
@@ -823,6 +870,7 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
     setTurnCard({ rank: "", suit: "" }); setTurnPlayersLeft(0); setTurnAction("");
     setRiverCard({ rank: "", suit: "" }); setRiverPlayersLeft(0); setRiverAction("");
     setResult(""); setOpponentCards(""); setIsBluffHand(false);
+    setFlopOppResp(""); setTurnOppResp(""); setRiverOppResp("");
   }
 
   const canSave = result !== "" && hand.rank1 && position;
@@ -940,6 +988,22 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
               </div>
               {flopHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">我的牌力：{flopHandEval.strength} · {flopHandEval.detail}</div>}
               {flopAdvice && <AdviceCard action={flopAdvice.action} reason={flopAdvice.reason} isBluff={flopAdvice.isBluff} />}
+              {flopAdvice && isAggressiveAction(flopAdvice.action) && (
+                <div className="mt-2 border-t border-green-100 pt-2">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-xs font-bold text-gray-600">对手回应</span>
+                    <span className="text-xs text-gray-400">（我方下注后）</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 mb-2">
+                    {OPP_RESPONSES.map(r => (
+                      <button key={r.key} onClick={() => setFlopOppResp(r.key)}
+                        className={`py-2 rounded-lg border text-xs font-bold transition-all ${flopOppResp === r.key ? "bg-red-700 text-white border-red-700" : "bg-white border-gray-200 text-gray-700"}`}
+                      >{r.emoji} {r.label}</button>
+                    ))}
+                  </div>
+                  {flopAdvice2 && <AdviceCard action={flopAdvice2.action} reason={flopAdvice2.reason} isBluff={flopAdvice2.isBluff} />}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -980,6 +1044,22 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
               </div>
               {turnHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">我的牌力：{turnHandEval.strength} · {turnHandEval.detail}</div>}
               {turnAdvice && <AdviceCard action={turnAdvice.action} reason={turnAdvice.reason} isBluff={turnAdvice.isBluff} />}
+              {turnAdvice && isAggressiveAction(turnAdvice.action) && (
+                <div className="mt-2 border-t border-blue-100 pt-2">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-xs font-bold text-gray-600">对手回应</span>
+                    <span className="text-xs text-gray-400">（我方下注后）</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 mb-2">
+                    {OPP_RESPONSES.map(r => (
+                      <button key={r.key} onClick={() => setTurnOppResp(r.key)}
+                        className={`py-2 rounded-lg border text-xs font-bold transition-all ${turnOppResp === r.key ? "bg-red-700 text-white border-red-700" : "bg-white border-gray-200 text-gray-700"}`}
+                      >{r.emoji} {r.label}</button>
+                    ))}
+                  </div>
+                  {turnAdvice2 && <AdviceCard action={turnAdvice2.action} reason={turnAdvice2.reason} isBluff={turnAdvice2.isBluff} />}
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1021,6 +1101,22 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
               </div>
               {riverHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">最终牌力：{riverHandEval.strength} · {riverHandEval.detail}</div>}
               {riverAdvice && <AdviceCard action={riverAdvice.action} reason={riverAdvice.reason} isBluff={riverAdvice.isBluff} />}
+              {riverAdvice && isAggressiveAction(riverAdvice.action) && (
+                <div className="mt-2 border-t border-orange-100 pt-2">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <span className="text-xs font-bold text-gray-600">对手回应</span>
+                    <span className="text-xs text-gray-400">（我方下注后）</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5 mb-2">
+                    {OPP_RESPONSES.map(r => (
+                      <button key={r.key} onClick={() => setRiverOppResp(r.key)}
+                        className={`py-2 rounded-lg border text-xs font-bold transition-all ${riverOppResp === r.key ? "bg-red-700 text-white border-red-700" : "bg-white border-gray-200 text-gray-700"}`}
+                      >{r.emoji} {r.label}</button>
+                    ))}
+                  </div>
+                  {riverAdvice2 && <AdviceCard action={riverAdvice2.action} reason={riverAdvice2.reason} isBluff={riverAdvice2.isBluff} />}
+                </div>
+              )}
             </>
           )}
         </div>
