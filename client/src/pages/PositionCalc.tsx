@@ -2030,13 +2030,16 @@ export default function PositionCalc() {
               const currentVal = parseFloat(modal.inputValue) || 0;
               // 参考值：目标持仓总量用于计算百分比快捷按钮
               const totalTarget = parseFloat(targetEthQty) || 0;
-              // 滑块最大值：取计划总量或已有值的2倍，至少10
-              const sliderMax = Math.max(totalTarget > 0 ? totalTarget : 20, currentVal * 2, 20);
-              const sliderPct = sliderMax > 0 ? Math.min(currentVal / sliderMax, 1) : 0;
+              // 滑块范围：以当前值为中心，两侧各留300
+              const SLIDE_RANGE = 300;
+              // 开弹时记录初始值作为中心点（用modal初始化时的inputValue）
+              const initVal = parseFloat(isActual ? String(actual[modal.price] || 0) : String(planned[modal.price] || 0)) || 0;
+              const sliderMin = Math.max(0, initVal - SLIDE_RANGE);
+              const sliderMax = initVal + SLIDE_RANGE;
+              // 当前值在滑块范围内的百分比（用于显示进度条）
+              const sliderPct = sliderMax > sliderMin ? Math.min(Math.max((currentVal - sliderMin) / (sliderMax - sliderMin), 0), 1) : 0.5;
               // 快捷百分比按钮（基于目标总持仓量）
               const pctBtns = [5, 10, 20, 50];
-              // 快捷加减按钮
-              const stepBtns = [0.5, 1, 2, 5];
               const adjust = (delta: number) => {
                 const next = Math.max(0, (parseFloat(modal.inputValue) || 0) + delta);
                 setModal(prev => prev ? { ...prev, inputValue: String(next) } : null);
@@ -2077,21 +2080,6 @@ export default function PositionCalc() {
                     >+</button>
                   </div>
 
-                  {/* 快捷步进按钮 */}
-                  <div className="mb-3">
-                    <div className="text-[10px] mb-1.5 tracking-widest" style={{ color: 'rgba(212,175,55,0.35)' }}>快捷步进</div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {stepBtns.map(s => (
-                        <button
-                          key={s}
-                          onClick={() => adjust(s)}
-                          className="py-1.5 rounded-lg text-xs font-semibold"
-                          style={{ background: 'rgba(212,175,55,0.1)', color: 'rgba(212,175,55,0.8)', border: '1px solid rgba(212,175,55,0.15)' }}
-                        >+{s}</button>
-                      ))}
-                    </div>
-                  </div>
-
                   {/* 百分比快捷按钮（基于目标总持仓） */}
                   {totalTarget > 0 && (
                     <div className="mb-4">
@@ -2112,32 +2100,47 @@ export default function PositionCalc() {
                     </div>
                   )}
 
-                  {/* 滑动进度条 */}
+                  {/* 滑动进度条：以初始值为中心，两侧各300 */}
                   <div className="mb-4">
                     <div className="flex justify-between text-[10px] mb-1" style={{ color: 'rgba(212,175,55,0.35)' }}>
-                      <span>0</span>
+                      <span>{sliderMin.toFixed(0)}</span>
                       <span style={{ color: 'rgba(212,175,55,0.6)' }}>{currentVal > 0 ? `${currentVal} ETH` : '--'}</span>
                       <span>{sliderMax.toFixed(0)}</span>
                     </div>
                     {/* 进度条轨道 */}
                     <div className="relative h-5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      {/* 中心点标记线 */}
+                      <div className="absolute top-0 bottom-0 w-px" style={{ left: '50%', background: 'rgba(212,175,55,0.25)' }} />
                       <div
-                        className="absolute top-0 left-0 h-full rounded-full transition-all duration-150"
+                        className="absolute top-0 h-full rounded-full transition-all duration-150"
                         style={{
-                          width: `${sliderPct * 100}%`,
-                          background: isActual
-                            ? 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)'
-                            : 'linear-gradient(90deg, rgba(212,175,55,0.3) 0%, rgba(212,175,55,0.6) 100%)',
-                          boxShadow: isActual ? '0 0 8px rgba(212,175,55,0.4)' : 'none',
+                          left: `${sliderPct * 100}%`,
+                          width: '4px',
+                          marginLeft: '-2px',
+                          background: isActual ? '#f0d060' : 'rgba(212,175,55,0.8)',
+                          boxShadow: isActual ? '0 0 6px rgba(212,175,55,0.6)' : 'none',
                         }}
                       />
+                      {/* 已填充区域：从中心到当前位置 */}
+                      {sliderPct !== 0.5 && (
+                        <div
+                          className="absolute top-0 h-full transition-all duration-150"
+                          style={{
+                            left: sliderPct > 0.5 ? '50%' : `${sliderPct * 100}%`,
+                            width: `${Math.abs(sliderPct - 0.5) * 100}%`,
+                            background: isActual
+                              ? 'linear-gradient(90deg, rgba(212,175,55,0.4), rgba(212,175,55,0.7))'
+                              : 'linear-gradient(90deg, rgba(212,175,55,0.2), rgba(212,175,55,0.4))',
+                          }}
+                        />
+                      )}
                     </div>
                     <input
                       type="range"
-                      min={0}
+                      min={sliderMin}
                       max={sliderMax}
-                      step={0.5}
-                      value={currentVal}
+                      step={1}
+                      value={Math.min(Math.max(currentVal, sliderMin), sliderMax)}
                       onChange={e => setModal(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
                       className="w-full mt-1"
                       style={{ accentColor: '#d4af37', height: '20px' }}
