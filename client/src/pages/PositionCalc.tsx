@@ -792,19 +792,26 @@ export default function PositionCalc() {
                             </div>
                           </div>
                           {/* 进度条下方标注行 */}
-                          <div className="flex items-center justify-between mt-1.5">
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.5)' }}>战略</span>
-                              <span className="text-[10px] font-bold" style={{ color: '#d4af37' }}>{100 - strategyRatio}%</span>
-                              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.3)' }}>·</span>
-                              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.4)' }}>{(actualQty * (100 - strategyRatio) / 100).toFixed(1)} ETH</span>
+                          <div className="flex items-start justify-between mt-2">
+                            {/* 左：战略筹码 */}
+                            <div className="flex flex-col items-start gap-0.5">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-bold" style={{ color: '#d4af37' }}>{100 - strategyRatio}%</span>
+                                <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.3)' }}>·</span>
+                                <span className="text-[10px] font-mono" style={{ color: 'rgba(212,175,55,0.5)' }}>{Math.round(actualQty * (100 - strategyRatio) / 100)} ETH</span>
+                              </div>
+                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.6)' }}>战略筹码</span>
+                              <span className="text-[9px] italic" style={{ color: 'rgba(212,175,55,0.3)' }}>要像山一样坚定</span>
                             </div>
-                            <div className="text-[9px] italic tracking-wide" style={{ color: 'rgba(212,175,55,0.3)' }}>战略如山·策略如水</div>
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.4)' }}>{(actualQty * strategyRatio / 100).toFixed(1)} ETH</span>
-                              <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.3)' }}>·</span>
-                              <span className="text-[10px] font-bold" style={{ color: '#b8860b' }}>{strategyRatio}%</span>
-                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.5)' }}>策略</span>
+                            {/* 右：策略筹码 */}
+                            <div className="flex flex-col items-end gap-0.5">
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-mono" style={{ color: 'rgba(212,175,55,0.5)' }}>{Math.round(actualQty * strategyRatio / 100)} ETH</span>
+                                <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.3)' }}>·</span>
+                                <span className="text-[10px] font-bold" style={{ color: '#b8860b' }}>{strategyRatio}%</span>
+                              </div>
+                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.6)' }}>策略筹码</span>
+                              <span className="text-[9px] italic" style={{ color: 'rgba(212,175,55,0.3)' }}>要像水一样灵活</span>
                             </div>
                           </div>
                         </div>
