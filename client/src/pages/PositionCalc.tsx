@@ -2067,31 +2067,16 @@ export default function PositionCalc() {
                     />
                   </div>
 
-                  {/* 百分比快捷按钮（基于目标总持仓） */}
-                  {totalTarget > 0 && (
-                    <div className="mb-4">
-                      <div className="text-[10px] mb-1.5 tracking-widest" style={{ color: 'rgba(212,175,55,0.35)' }}>占目标总仓 {totalTarget.toFixed(0)} ETH 的</div>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {pctBtns.map(p => {
-                          const pctVal = parseFloat((totalTarget * p / 100).toFixed(2));
-                          return (
-                            <button
-                              key={p}
-                              onClick={() => setModal(prev => prev ? { ...prev, inputValue: String(pctVal) } : null)}
-                              className="py-1.5 rounded-lg text-xs font-semibold"
-                              style={{ background: 'rgba(212,175,55,0.08)', color: 'rgba(212,175,55,0.7)', border: '1px solid rgba(212,175,55,0.12)' }}
-                            >{p}%<br /><span style={{ fontSize: '9px', opacity: 0.7 }}>{pctVal}</span></button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 滑动进度条：0 → 500 */}
+                  {/* 滑动进度条：0 → 500，实时显示占总计划仓位百分比 */}
                   <div className="mb-4">
                     <div className="flex justify-between text-[10px] mb-1" style={{ color: 'rgba(212,175,55,0.35)' }}>
                       <span>0</span>
-                      <span style={{ color: 'rgba(212,175,55,0.6)' }}>{currentVal > 0 ? `${currentVal} ETH` : '--'}</span>
+                      <span style={{ color: 'rgba(212,175,55,0.7)', fontWeight: 600 }}>
+                        {currentVal > 0 && totalTarget > 0
+                          ? `${(currentVal / totalTarget * 100).toFixed(1)}% 占总计划仓`
+                          : currentVal > 0 ? `${currentVal} ETH` : '--'
+                        }
+                      </span>
                       <span>500</span>
                     </div>
                     {/* 进度条轨道 */}
