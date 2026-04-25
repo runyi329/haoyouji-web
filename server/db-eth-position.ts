@@ -1,6 +1,6 @@
 import { getLedgerDb } from "./db";
-import { ethPositionLevels, ethPositionSettings } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { ethPositionLevels, ethPositionSettings, ethPositionChangeLogs } from "../drizzle/schema";
+import { eq, desc, and } from "drizzle-orm";
 
 export interface EthPositionLevel {
   price: number;
@@ -132,4 +132,102 @@ export async function upsertEthPositionSettings(
         targetEthQty: String(targetEthQty),
       },
     });
+}
+
+// ========== ETH 持仓修改日志 ==========
+
+export interface EthPositionChangeLogEntry {
+  id: number;
+  ledgerId: number;
+  price: number;
+  changeType: 'actual' | 'planned';
+  oldValue: number;
+  newValue: number;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * 新增一条修改日志
+ */
+export async function addEthPositionChangeLog(
+  ledgerId: number,
+  price: number,
+  changeType: 'actual' | 'planned',
+  oldValue: number,
+  newValue: number,
+  note: string = ''
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) return;
+  await db.insert(ethPositionChangeLogs).values({
+    ledgerId,
+    price,
+    changeType,
+    oldValue: String(oldValue),
+    newValue: String(newValue),
+    note,
+  });
+}
+
+/**
+ * 获取某账本某档位的修改日志（按时间倒序）
+ */
+export async function getEthPositionChangeLogs(
+  ledgerId: number,
+  price?: number
+): Promise<EthPositionChangeLogEntry[]> {
+  const db = await getLedgerDb();
+  if (!db) return [];
+  const conditions = price !== undefined
+    ? and(eq(ethPositionChangeLogs.ledgerId, ledgerId), eq(ethPositionChangeLogs.price, price))
+    : eq(ethPositionChangeLogs.ledgerId, ledgerId);
+  const rows = await db
+    .select()
+    .from(ethPositionChangeLogs)
+    .where(conditions)
+    .orderBy(desc(ethPositionChangeLogs.createdAt))
+    .limit(100);
+  return rows.map(r => ({
+    id: r.id,
+    ledgerId: r.ledgerId,
+    price: r.price,
+    changeType: r.changeType as 'actual' | 'planned',
+    oldValue: parseFloat(r.oldValue as string),
+    newValue: parseFloat(r.newValue as string),
+    note: r.note ?? '',
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }));
+}
+
+/**
+ * 更新日志备注
+ */
+export async function updateEthPositionChangeLogNote(
+  id: number,
+  ledgerId: number,
+  note: string
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) return;
+  await db
+    .update(ethPositionChangeLogs)
+    .set({ note })
+    .where(and(eq(ethPositionChangeLogs.id, id), eq(ethPositionChangeLogs.ledgerId, ledgerId)));
+}
+
+/**
+ * 删除一条日志
+ */
+export async function deleteEthPositionChangeLog(
+  id: number,
+  ledgerId: number
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) return;
+  await db
+    .delete(ethPositionChangeLogs)
+    .where(and(eq(ethPositionChangeLogs.id, id), eq(ethPositionChangeLogs.ledgerId, ledgerId)));
 }
