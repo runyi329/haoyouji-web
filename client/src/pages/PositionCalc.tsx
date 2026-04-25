@@ -383,9 +383,9 @@ export default function PositionCalc() {
     setSummaryEdit(null);
   };
 
-  // 打开弹窗
+  // 打开弹窗 - 直接进入编辑实际已买模式（计划数量只在配置里修改）
   const openModal = (price: number) => {
-    setModal({ price, mode: 'choose', inputValue: '' });
+    setModal({ price, mode: 'editActual', inputValue: String(actual[price] || '') });
   };
 
   // 弹窗确认
@@ -2033,40 +2033,11 @@ export default function PositionCalc() {
               </button>
             </div>
 
-            {modal.mode === 'choose' && (
-              <div className="space-y-3">
-                <button
-                  onClick={() => setModal({ ...modal, mode: 'editActual', inputValue: String(actual[modal.price] || '') })}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
-                  style={{ background: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)' }}
-                >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #9a7000, #d4af37)' }}>
-                    <span className="text-xs font-bold" style={{ color: '#0a0800' }}>买</span>
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold" style={{ color: '#d4af37' }}>修改已买数量</div>
-                    <div className="text-xs" style={{ color: 'rgba(212,175,55,0.5)' }}>当前：{(actual[modal.price] || 0).toFixed(2)} ETH</div>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setModal({ ...modal, mode: 'editPlanned', inputValue: String(planned[modal.price] || '') })}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.15)' }}
-                >
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(212,175,55,0.2)' }}>
-                    <span className="text-xs font-bold" style={{ color: 'rgba(212,175,55,0.9)' }}>划</span>
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold" style={{ color: 'rgba(212,175,55,0.8)' }}>修改计划数量</div>
-                    <div className="text-xs" style={{ color: 'rgba(212,175,55,0.4)' }}>当前：{(planned[modal.price] || 0).toFixed(2)} ETH</div>
-                  </div>
-                </button>
-              </div>
-            )}
 
-            {(modal.mode === 'editActual' || modal.mode === 'editPlanned') && (() => {
-              const isActual = modal.mode === 'editActual';
-              const accentColor = isActual ? '#d4af37' : 'rgba(212,175,55,0.6)';
+
+            {modal.mode === 'editActual' && (() => {
+              const isActual = true;
+              const accentColor = '#d4af37';
               const currentVal = parseFloat(modal.inputValue) || 0;
               // 参考值：目标持仓总量用于计算百分比快捷按钮
               const totalTarget = parseFloat(targetEthQty) || 0;
