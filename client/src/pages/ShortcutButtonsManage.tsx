@@ -124,7 +124,7 @@ export default function ShortcutButtonsManage() {
           {/* 表头 */}
           <div
             className="border-b border-gray-300 text-sm text-gray-700 font-medium bg-white sticky top-[44px] z-10 shadow-sm"
-            style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(6, 1fr)" }}
+            style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(7, 1fr)" }}
           >
             <div className="py-3 px-2 text-center">成员</div>
             {SHORTCUT_KEYS.map((key) => (
@@ -138,6 +138,18 @@ export default function ShortcutButtonsManage() {
                   <div className="flex flex-col items-center gap-0.5">
                     <img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/gZMsAzlHHuDFuUTJ.png" alt="蓄水池" className="w-5 h-5 rounded-full object-cover" />
                     <span className="text-[10px] leading-none">蓄水池</span>
+                  </div>
+                ) : key === 'ethPosition' ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <svg width="18" height="18" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#343434"/>
+                      <path d="M127.962 0L0 212.32L127.962 287.958V154.158V0Z" fill="#8C8C8C"/>
+                      <path d="M127.961 312.187L126.386 314.107V412.301L127.961 416.962L255.931 236.551L127.961 312.187Z" fill="#3C3C3B"/>
+                      <path d="M127.962 416.962V312.187L0 236.551L127.962 416.962Z" fill="#8C8C8C"/>
+                      <path d="M127.961 287.957L255.923 212.319L127.961 154.158V287.957Z" fill="#141414"/>
+                      <path d="M0 212.319L127.962 287.957V154.158L0 212.319Z" fill="#393939"/>
+                    </svg>
+                    <span className="text-[10px] leading-none">ETH持仓</span>
                   </div>
                 ) : SHORTCUT_LABELS[key]}
               </div>
@@ -153,7 +165,7 @@ export default function ShortcutButtonsManage() {
                 <div
                   key={member.id}
                   className="border-b border-gray-100"
-                  style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(6, 1fr)" }}
+                  style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(7, 1fr)" }}
                 >
                   {/* 成员头像+名字 */}
                   <div className="py-3 px-2 flex flex-col items-center justify-center gap-1">

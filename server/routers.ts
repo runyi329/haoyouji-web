@@ -14489,19 +14489,20 @@ export const appRouter = router({
           .select({ userId: ledgerMembers.userId, shortcutButtons: ledgerMembers.shortcutButtons })
           .from(ledgerMembers)
           .where(eq(ledgerMembers.ledgerId, input.ledgerId));
-        const shortcutMap: Record<number, { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean }> = {};
+        const shortcutMap: Record<number, { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean; ethPosition: boolean }> = {};
         for (const row of rows) {
           try {
             const raw = row.shortcutButtons;
             if (raw && typeof raw === 'object') {
-              shortcutMap[row.userId] = raw as any;
+              shortcutMap[row.userId] = { ethPosition: false, ...(raw as any) };
             } else if (raw && typeof raw === 'string') {
-              shortcutMap[row.userId] = JSON.parse(raw);
+              const parsed = JSON.parse(raw);
+              shortcutMap[row.userId] = { ethPosition: false, ...parsed };
             } else {
-              shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false };
+              shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
             }
           } catch {
-            shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false };
+            shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
           }
         }
         return shortcutMap;
@@ -14517,6 +14518,7 @@ export const appRouter = router({
           stock: z.boolean(),
           digitalB: z.boolean().optional().default(false),
           ledger59: z.boolean().optional().default(false),
+          ethPosition: z.boolean().optional().default(false),
         }),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -14560,14 +14562,14 @@ export const appRouter = router({
             )
           )
           .limit(1);
-        if (!row || !row.shortcutButtons) return { gold: false, qq: false, oil: false, stock: false, digitalB: false };
+        if (!row || !row.shortcutButtons) return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
         try {
           const raw = row.shortcutButtons;
-          if (typeof raw === 'object') return raw as { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean };
-          if (typeof raw === 'string') return JSON.parse(raw);
-          return { gold: false, qq: false, oil: false, stock: false, digitalB: false };
+          if (typeof raw === 'object') return { ethPosition: false, ledger59: false, ...(raw as any) };
+          if (typeof raw === 'string') { const p = JSON.parse(raw); return { ethPosition: false, ledger59: false, ...p }; }
+          return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
         } catch {
-          return { gold: false, qq: false, oil: false, stock: false, digitalB: false };
+          return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
         }
       }),
 
