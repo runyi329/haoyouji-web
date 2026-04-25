@@ -19092,6 +19092,59 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       );
       return { success: true };
     }),
+
+  // ========== ETH 持仓修改日志 ==========
+
+  ethPositionAddLog: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      price: z.number(),
+      changeType: z.enum(['actual', 'planned']),
+      oldValue: z.number(),
+      newValue: z.number(),
+      note: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.addEthPositionChangeLog(
+        input.ledgerId,
+        input.price,
+        input.changeType,
+        input.oldValue,
+        input.newValue,
+        input.note ?? ''
+      );
+      return { success: true };
+    }),
+
+  ethPositionGetLogs: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      price: z.number().optional(),
+    }))
+    .query(async ({ input }) => {
+      return await dbEthPosition.getEthPositionChangeLogs(input.ledgerId, input.price);
+    }),
+
+  ethPositionUpdateLogNote: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      ledgerId: z.number(),
+      note: z.string().max(500),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.updateEthPositionChangeLogNote(input.id, input.ledgerId, input.note);
+      return { success: true };
+    }),
+
+  ethPositionDeleteLog: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      ledgerId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.deleteEthPositionChangeLog(input.id, input.ledgerId);
+      return { success: true };
+    }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
@@ -19767,59 +19820,6 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         reason: string;
         risk: string;
       };
-    }),
-
-  // ========== ETH 持仓修改日志 ==========
-
-  ethPositionAddLog: protectedProcedure
-    .input(z.object({
-      ledgerId: z.number(),
-      price: z.number(),
-      changeType: z.enum(['actual', 'planned']),
-      oldValue: z.number(),
-      newValue: z.number(),
-      note: z.string().max(500).optional(),
-    }))
-    .mutation(async ({ input }) => {
-      await dbEthPosition.addEthPositionChangeLog(
-        input.ledgerId,
-        input.price,
-        input.changeType,
-        input.oldValue,
-        input.newValue,
-        input.note ?? ''
-      );
-      return { success: true };
-    }),
-
-  ethPositionGetLogs: protectedProcedure
-    .input(z.object({
-      ledgerId: z.number(),
-      price: z.number().optional(),
-    }))
-    .query(async ({ input }) => {
-      return await dbEthPosition.getEthPositionChangeLogs(input.ledgerId, input.price);
-    }),
-
-  ethPositionUpdateLogNote: protectedProcedure
-    .input(z.object({
-      id: z.number(),
-      ledgerId: z.number(),
-      note: z.string().max(500),
-    }))
-    .mutation(async ({ input }) => {
-      await dbEthPosition.updateEthPositionChangeLogNote(input.id, input.ledgerId, input.note);
-      return { success: true };
-    }),
-
-  ethPositionDeleteLog: protectedProcedure
-    .input(z.object({
-      id: z.number(),
-      ledgerId: z.number(),
-    }))
-    .mutation(async ({ input }) => {
-      await dbEthPosition.deleteEthPositionChangeLog(input.id, input.ledgerId);
-      return { success: true };
     }),
 });
 export type AppRouter = typeof appRouter;
