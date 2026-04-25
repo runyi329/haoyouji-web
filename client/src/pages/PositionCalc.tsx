@@ -653,9 +653,9 @@ export default function PositionCalc() {
                       {actualQty > 0 && (
                         <div className="mt-3 mb-1">
                           {/* 一体化细分进度条+滑块：直接拖动分界点 */}
-                          <div className="relative" style={{ height: '28px', cursor: 'ew-resize' }}>
-                            {/* 进度条容器 */}
-                            <div className="absolute inset-0 rounded overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)' }}>
+                          <div className="relative" style={{ height: '32px', cursor: 'ew-resize' }}>
+                            {/* 进度条容器，垂直居中 18px */}
+                            <div className="absolute rounded overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '18px' }}>
                               {/* 战略持仓段（左侧，亮金） */}
                               <div
                                 className="absolute top-0 left-0 h-full"
@@ -680,25 +680,34 @@ export default function PositionCalc() {
                                 }}
                               />
                             </div>
-                            {/* 分界拖动手柄（突出条上下） */}
+                            {/* 分界拖动手柄：圆形大按钮 */}
                             <div
                               className="absolute flex items-center justify-center"
                               style={{
-                                left: `calc(${100 - strategyRatio}% - 10px)`,
-                                top: '-4px',
-                                width: '20px',
-                                height: '36px',
+                                left: `calc(${100 - strategyRatio}% - 16px)`,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                width: '32px',
+                                height: '32px',
                                 zIndex: 10,
                                 pointerEvents: 'none',
                               }}
                             >
                               <div style={{
-                                width: '4px',
-                                height: '36px',
-                                background: 'linear-gradient(180deg, rgba(255,245,192,0.5) 0%, rgba(255,245,192,0.95) 30%, rgba(255,245,192,0.95) 70%, rgba(255,245,192,0.5) 100%)',
-                                borderRadius: '2px',
-                                boxShadow: '0 0 8px rgba(255,245,192,0.7), 0 0 2px rgba(255,255,255,0.5)',
-                              }} />
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #fff5c0 0%, #f5e27a 40%, #d4af37 70%, #b8860b 100%)',
+                                boxShadow: '0 0 12px rgba(212,175,55,0.9), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 2px rgba(255,255,255,0.4)',
+                                border: '1.5px solid rgba(255,245,192,0.7)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '3px',
+                              }}>
+                                <div style={{ width: '2px', height: '10px', background: 'rgba(0,0,0,0.45)', borderRadius: '1px' }} />
+                                <div style={{ width: '2px', height: '10px', background: 'rgba(0,0,0,0.45)', borderRadius: '1px' }} />
+                              </div>
                             </div>
                             {/* 透明覆盖的 range input，实现拖动交互 */}
                             <input
