@@ -668,8 +668,8 @@ export default function PositionCalc() {
                               <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.5)' }}>策略</span>
                             </div>
                           </div>
-                          {/* 细分进度条：左=战略(亮金)，右=策略(暗金) */}
-                          <div className="relative rounded overflow-hidden" style={{ height: '10px', background: 'rgba(255,255,255,0.04)' }}>
+                          {/* 一体化细分进度条+滑块：直接拖动分界点 */}
+                          <div className="relative rounded overflow-hidden" style={{ height: '18px', background: 'rgba(255,255,255,0.04)', cursor: 'ew-resize' }}>
                             {/* 战略持仓段（左侧，亮金） */}
                             <div
                               className="absolute top-0 left-0 h-full"
@@ -678,6 +678,7 @@ export default function PositionCalc() {
                                 background: 'linear-gradient(90deg, #9a7000 0%, #d4af37 60%, #f5e27a 100%)',
                                 boxShadow: '2px 0 8px rgba(212,175,55,0.4)',
                                 borderRadius: '4px 0 0 4px',
+                                transition: 'width 0.05s',
                               }}
                             />
                             {/* 策略持仓段（右侧，暗金半透明） */}
@@ -689,21 +690,28 @@ export default function PositionCalc() {
                                 background: 'linear-gradient(90deg, rgba(139,100,0,0.7) 0%, rgba(90,60,0,0.5) 100%)',
                                 borderRadius: '0 4px 4px 0',
                                 borderLeft: '1px solid rgba(212,175,55,0.3)',
+                                transition: 'left 0.05s, width 0.05s',
                               }}
                             />
-                            {/* 分界线 */}
+                            {/* 分界拖动手柄 */}
                             <div
-                              className="absolute top-0 h-full"
+                              className="absolute top-0 h-full flex items-center justify-center"
                               style={{
-                                left: `calc(${100 - strategyRatio}% - 0.5px)`,
-                                width: '1px',
-                                background: 'rgba(255,245,192,0.6)',
-                                boxShadow: '0 0 4px rgba(255,245,192,0.4)',
+                                left: `calc(${100 - strategyRatio}% - 6px)`,
+                                width: '12px',
+                                zIndex: 10,
+                                cursor: 'ew-resize',
                               }}
-                            />
-                          </div>
-                          {/* 比例滑块 */}
-                          <div className="mt-2 px-0.5">
+                            >
+                              <div style={{
+                                width: '3px',
+                                height: '14px',
+                                background: 'rgba(255,245,192,0.9)',
+                                borderRadius: '2px',
+                                boxShadow: '0 0 6px rgba(255,245,192,0.6)',
+                              }} />
+                            </div>
+                            {/* 透明覆盖的 range input，实现拖动交互 */}
                             <input
                               type="range"
                               min={0}
@@ -715,7 +723,6 @@ export default function PositionCalc() {
                               }}
                               onMouseUp={(e) => {
                                 const val = parseInt((e.target as HTMLInputElement).value);
-                                // 保存到数据库
                                 saveSettingsMutation.mutate({
                                   ledgerId,
                                   targetProfitCny: parseFloat(targetProfitCny) || 0,
@@ -734,14 +741,8 @@ export default function PositionCalc() {
                                   strategyRatio: val,
                                 });
                               }}
-                              className="w-full"
-                              style={{
-                                appearance: 'none',
-                                height: '3px',
-                                background: `linear-gradient(90deg, rgba(212,175,55,0.6) ${100 - strategyRatio}%, rgba(139,100,0,0.4) ${100 - strategyRatio}%)`,
-                                outline: 'none',
-                                cursor: 'pointer',
-                              }}
+                              className="absolute inset-0 w-full h-full opacity-0"
+                              style={{ cursor: 'ew-resize', margin: 0 }}
                             />
                           </div>
                         </div>
