@@ -3957,45 +3957,48 @@ export default function LedgerDetail() {
                 {/* 右半：ETH 持仓计算器快捷入口 + 预览 */}
                 <button
                   onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
-                  className="flex-1 rounded-2xl p-3 flex flex-col justify-between shadow-sm active:opacity-90"
-                  style={{ background: 'linear-gradient(135deg, #1A2340 0%, #2D3A5C 100%)', border: 'none', minHeight: '72px' }}
+                  className="flex-1 rounded-2xl p-4 flex flex-col justify-between shadow-sm active:opacity-90"
+                  style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', minHeight: '72px' }}
                 >
-                  <div className="flex items-center justify-between">
+                  {/* 标题行 */}
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
-                      <svg width="14" height="18" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <polygon points="8,0 15,10 8,7" fill="#f5e27a" />
-                        <polygon points="8,0 1,10 8,7" fill="#d4af37" opacity="0.85" />
-                        <polygon points="1,10 8,13.5 15,10 8,7" fill="#b8860b" />
-                        <polygon points="8,20 15,12 8,13.5" fill="#9a7000" />
-                        <polygon points="8,20 1,12 8,13.5" fill="#d4af37" opacity="0.75" />
-                      </svg>
-                      <span className="text-xs font-semibold" style={{ color: '#f5e27a' }}>持仓计算</span>
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'linear-gradient(135deg, #1A2340 0%, #2D3A5C 100%)' }}>
+                        <svg width="11" height="14" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <polygon points="8,0 15,10 8,7" fill="#f5e27a" />
+                          <polygon points="8,0 1,10 8,7" fill="#d4af37" opacity="0.85" />
+                          <polygon points="1,10 8,13.5 15,10 8,7" fill="#b8860b" />
+                          <polygon points="8,20 15,12 8,13.5" fill="#9a7000" />
+                          <polygon points="8,20 1,12 8,13.5" fill="#d4af37" opacity="0.75" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>持仓计算</span>
                     </div>
-                    <ChevronRight className="w-3.5 h-3.5" style={{ color: 'rgba(255,255,255,0.4)' }} />
+                    <ChevronRight className="w-4 h-4" style={{ color: '#3B5BDB' }} />
                   </div>
                   {/* 预览数据 */}
-                  <div className="mt-1.5">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>目标</span>
-                      <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.7)' }}>{ethTargetQty > 0 ? `${Math.round(ethTargetQty)} ETH` : '--'}</span>
-                    </div>
+                  <div>
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>已买</span>
-                      <span className="text-[10px] font-mono font-bold" style={{ color: '#d4af37' }}>{ethActualQty > 0 ? `${Math.round(ethActualQty)} ETH` : '--'}</span>
+                      <span className="text-xs" style={{ color: '#6B7280' }}>目标 {ethTargetQty > 0 ? `${Math.round(ethTargetQty)} ETH` : '--'}</span>
+                      <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>已买 <span style={{ color: '#b8860b' }}>{ethActualQty > 0 ? `${Math.round(ethActualQty)}` : '0'}</span> ETH</span>
                     </div>
-                    {/* 进度条 */}
-                    <div className="w-full rounded-full overflow-hidden" style={{ height: '4px', background: 'rgba(255,255,255,0.1)' }}>
+                    {/* 进度条 + 百分比内嵌 */}
+                    <div className="relative w-full rounded-full overflow-hidden" style={{ height: '14px', background: 'rgba(26,35,64,0.08)' }}>
                       <div
                         className="h-full rounded-full"
                         style={{
                           width: `${Math.round(ethPositionPct * 100)}%`,
                           background: 'linear-gradient(90deg, #9a7000, #d4af37, #f5e27a)',
                           transition: 'width 0.4s ease',
+                          minWidth: ethPositionPct > 0 ? '28px' : '0',
                         }}
                       />
-                    </div>
-                    <div className="text-right mt-0.5">
-                      <span className="text-[9px]" style={{ color: 'rgba(212,175,55,0.7)' }}>{Math.round(ethPositionPct * 100)}%</span>
+                      <span
+                        className="absolute inset-0 flex items-center justify-end pr-1.5 text-[10px] font-bold"
+                        style={{ color: ethPositionPct > 0.15 ? '#1A2340' : '#b8860b' }}
+                      >
+                        {Math.round(ethPositionPct * 100)}%
+                      </span>
                     </div>
                   </div>
                 </button>
