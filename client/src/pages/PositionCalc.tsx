@@ -1977,7 +1977,7 @@ export default function PositionCalc() {
           style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
           onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}
         >
-          <div className="w-full max-w-md rounded-2xl px-5 pt-5 pb-8 shadow-2xl mx-4" style={{ background: 'linear-gradient(160deg, #0d0900 0%, #1a1200 100%)', border: '1px solid rgba(212,175,55,0.2)' }}>
+          <div className="w-full max-w-md rounded-2xl px-5 pt-5 pb-8 mx-4" style={{ background: 'linear-gradient(160deg, #2a1f00 0%, #1e1500 50%, #2a1f00 100%)', border: '1px solid rgba(212,175,55,0.45)', boxShadow: '0 0 40px rgba(0,0,0,0.8), 0 0 20px rgba(212,175,55,0.12), inset 0 1px 0 rgba(212,175,55,0.15)' }}>
             {/* 弹窗标题 */}
             <div className="flex items-center justify-between mb-4">
               <div>
