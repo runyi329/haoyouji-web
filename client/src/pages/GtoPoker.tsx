@@ -1029,10 +1029,10 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
                 <span className="text-xs font-bold text-gray-600">还剩几人</span>
                 <span className="text-xs text-gray-400">（含自己）</span>
               </div>
-              <div className="flex gap-1.5 mb-2">
-                {[1,2,3,4,5].map(n => (
+              <div className="flex gap-1.5 flex-wrap mb-2">
+                {Array.from({ length: tableSize }, (_, i) => i + 1).map(n => (
                   <button key={n} onClick={() => setFlopPlayersLeft(n)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${flopPlayersLeft === n ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-600 border-gray-200"}`}
+                    className={`flex-1 min-w-[2.5rem] py-2 rounded-lg text-sm font-bold border transition-all ${flopPlayersLeft === n ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-600 border-gray-200"}`}
                   >{n}人</button>
                 ))}
               </div>
@@ -1110,10 +1110,10 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
                 <span className="text-xs font-bold text-gray-600">还剩几人</span>
                 <span className="text-xs text-gray-400">（含自己）</span>
               </div>
-              <div className="flex gap-1.5 mb-2">
-                {[1,2,3,4,5].map(n => (
+              <div className="flex gap-1.5 flex-wrap mb-2">
+                {Array.from({ length: flopPlayersLeft > 0 ? flopPlayersLeft : tableSize }, (_, i) => i + 1).map(n => (
                   <button key={n} onClick={() => setTurnPlayersLeft(n)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${turnPlayersLeft === n ? "bg-blue-700 text-white border-blue-700" : "bg-white text-gray-600 border-gray-200"}`}
+                    className={`flex-1 min-w-[2.5rem] py-2 rounded-lg text-sm font-bold border transition-all ${turnPlayersLeft === n ? "bg-blue-700 text-white border-blue-700" : "bg-white text-gray-600 border-gray-200"}`}
                   >{n}人</button>
                 ))}
               </div>
@@ -1192,10 +1192,10 @@ function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
                 <span className="text-xs font-bold text-gray-600">还剩几人</span>
                 <span className="text-xs text-gray-400">（含自己）</span>
               </div>
-              <div className="flex gap-1.5 mb-2">
-                {[1,2,3,4,5].map(n => (
+              <div className="flex gap-1.5 flex-wrap mb-2">
+                {Array.from({ length: turnPlayersLeft > 0 ? turnPlayersLeft : (flopPlayersLeft > 0 ? flopPlayersLeft : tableSize) }, (_, i) => i + 1).map(n => (
                   <button key={n} onClick={() => setRiverPlayersLeft(n)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${riverPlayersLeft === n ? "bg-orange-700 text-white border-orange-700" : "bg-white text-gray-600 border-gray-200"}`}
+                    className={`flex-1 min-w-[2.5rem] py-2 rounded-lg text-sm font-bold border transition-all ${riverPlayersLeft === n ? "bg-orange-700 text-white border-orange-700" : "bg-white text-gray-600 border-gray-200"}`}
                   >{n}人</button>
                 ))}
               </div>
