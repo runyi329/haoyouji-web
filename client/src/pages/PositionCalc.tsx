@@ -530,7 +530,7 @@ export default function PositionCalc() {
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>USDT/CNY</div>
-                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #c8a030 0%, #8a6010 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>{cnyRate.toFixed(5)}</div>
+                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 50%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>{cnyRate.toFixed(5)}</div>
                   </div>
                 </div>
               </div>
@@ -568,7 +568,7 @@ export default function PositionCalc() {
                         <div className="flex items-end gap-2">
                           <div className="text-right">
                             <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.45)' }}>目标持仓</div>
-                            <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #d4af37 0%, #8a6800 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                            <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #f5e27a 30%, #d4af37 65%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1))' }}>
                               {targetQty > 0 ? targetQty.toFixed(0) : '--'}
                             </span>
                             <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.25)' }}>ETH</span>
