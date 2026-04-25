@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "wouter";
-import { ArrowLeft, BookOpen, Calculator, StickyNote } from "lucide-react";
+import { ArrowLeft, BookOpen, Calculator, StickyNote, Save, RotateCcw } from "lucide-react";
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -611,143 +611,446 @@ function CardPicker({ label, rank, suit, onRankChange, onSuitChange }: {
   );
 }
 
-function GtoAdvisor() {
+// ─── 翻牌后分析工具函数 ────────────────────────────────────────────────────────
+function analyzeBoardTexture(cards: Array<{rank: string; suit: string}>) {
+  if (cards.length === 0) return { isMonotone: false, isTwoTone: false, isDry: true, hasHighCard: false, hasPair: false, isPossibleStraight: false, label: "" };
+  const suits = cards.map(c => c.suit);
+  const ranks = cards.map(c => c.rank);
+  const uniqueSuits = new Set(suits).size;
+  const isMonotone = uniqueSuits === 1;
+  const isTwoTone = uniqueSuits === 2;
+  const hasHighCard = ranks.some(r => ["A","K","Q"].includes(r));
+  const rankCounts = ranks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {} as Record<string, number>);
+  const hasPair = Object.values(rankCounts).some(v => v >= 2);
+  const order = ["A","2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+  const indices = ranks.map(r => order.indexOf(r)).filter(i => i >= 0).sort((a,b)=>a-b);
+  let isPossibleStraight = false;
+  for (let i = 0; i < indices.length - 1; i++) { if (indices[i+1] - indices[i] <= 2) { isPossibleStraight = true; break; } }
+  const isDry = uniqueSuits === cards.length && !isPossibleStraight;
+  let label = isMonotone ? "同花面" : isTwoTone ? "两花面" : "彩虹面";
+  if (hasPair) label += "/对子面";
+  if (isPossibleStraight) label += "/顺子面";
+  if (hasHighCard) label += "/高牌面";
+  return { isMonotone, isTwoTone, isDry, hasHighCard, hasPair, isPossibleStraight, label };
+}
+
+function evaluateHandWithBoard(hand: { rank1: string; suit1: string; rank2: string; suit2: string }, board: Array<{ rank: string; suit: string }>) {
+  const allRanks = [hand.rank1, hand.rank2, ...board.map(c => c.rank)];
+  const allSuits = [hand.suit1, hand.suit2, ...board.map(c => c.suit)];
+  const RANK_ORDER = ["2","3","4","5","6","7","8","9","T","J","Q","K","A"];
+  const suitCounts = allSuits.reduce((acc, s) => { acc[s] = (acc[s] || 0) + 1; return acc; }, {} as Record<string, number>);
+  const hasFlushDraw = Object.values(suitCounts).some(v => v === 4);
+  const hasFlush = Object.values(suitCounts).some(v => v >= 5);
+  const rankCounts = allRanks.reduce((acc, r) => { acc[r] = (acc[r] || 0) + 1; return acc; }, {} as Record<string, number>);
+  const pairs = Object.entries(rankCounts).filter(([,v]) => v === 2).length;
+  const trips = Object.entries(rankCounts).filter(([,v]) => v === 3).length;
+  const quads = Object.entries(rankCounts).filter(([,v]) => v === 4).length;
+  const hitBoard = board.some(c => c.rank === hand.rank1 || c.rank === hand.rank2);
+  const isPocketPair = hand.rank1 === hand.rank2;
+  const myHighRank = Math.max(RANK_ORDER.indexOf(hand.rank1), RANK_ORDER.indexOf(hand.rank2));
+  if (quads > 0) return { strength: "四条", score: 95, detail: "超强牌，慢玩或全押" };
+  if (trips > 0 && pairs > 0) return { strength: "葫芦", score: 90, detail: "超强牌，价值下注" };
+  if (hasFlush) return { strength: "同花", score: 85, detail: "强牌，积极下注" };
+  if (trips > 0) return { strength: "三条", score: 75, detail: "强牌，积极下注" };
+  if (pairs >= 2) return { strength: "两对", score: 65, detail: "中强牌，注意公共牌威胁" };
+  if (pairs === 1 && hitBoard) { if (myHighRank >= 10) return { strength: "顶对", score: 60, detail: "中强牌，可下注" }; return { strength: "中对/底对", score: 45, detail: "中等牌力，谨慎下注" }; }
+  if (isPocketPair) return { strength: "口袋对", score: 50, detail: "中等牌力" };
+  if (hasFlushDraw) return { strength: "同花听牌", score: 40, detail: "有9张出路，可半诈唬" };
+  return { strength: "空气/听牌", score: 20, detail: "牌力弱，考虑诈唬或弃牌" };
+}
+
+function getPostFlopAdvice(params: { handStrength: number; boardTexture: ReturnType<typeof analyzeBoardTexture>; playersLeft: number; opponentAction: string; street: "flop"|"turn"|"river"; position: string; }): { action: string; reason: string; isBluff: boolean } {
+  const { handStrength, boardTexture, playersLeft, opponentAction, street, position } = params;
+  const isLatePos = ["BTN","CO","HJ"].includes(position);
+  if (opponentAction === "check") {
+    if (handStrength >= 75) return { action: "下注 2/3 底池", reason: "强牌价值下注，建立底池", isBluff: false };
+    if (handStrength >= 50) return { action: "下注 1/2 底池", reason: "中等牌力，薄价值下注", isBluff: false };
+    if (handStrength >= 35 && boardTexture.isTwoTone) return { action: "下注 1/3 底池（半诈唬）", reason: "有听牌权益，半诈唬施压", isBluff: true };
+    if (handStrength < 25 && isLatePos && playersLeft === 1) return { action: "下注 2/3 底池（诈唬）", reason: "位置好，对手过牌示弱，可诈唬", isBluff: true };
+    return { action: "过牌", reason: "牌力不足以下注，过牌控制底池", isBluff: false };
+  }
+  if (opponentAction === "bet_small") {
+    if (handStrength >= 75) return { action: "加注 2.5-3x", reason: "强牌，加注价值", isBluff: false };
+    if (handStrength >= 50) return { action: "跟注", reason: "中等牌力，跟注看下一张", isBluff: false };
+    if (handStrength >= 35 && boardTexture.isTwoTone) return { action: "跟注", reason: "有听牌权益，赔率合适", isBluff: false };
+    return { action: "弃牌", reason: "牌力不足，弃牌", isBluff: false };
+  }
+  if (opponentAction === "bet_big") {
+    if (handStrength >= 80) return { action: "加注 / 全押", reason: "强牌面对大注，加注价值", isBluff: false };
+    if (handStrength >= 60) return { action: "跟注", reason: "强牌跟注，控制底池", isBluff: false };
+    if (handStrength >= 40 && street !== "river") return { action: "跟注", reason: "有权益，赔率可接受", isBluff: false };
+    return { action: "弃牌", reason: "面对大注牌力不足，弃牌", isBluff: false };
+  }
+  if (opponentAction === "allin") {
+    if (handStrength >= 85) return { action: "跟注", reason: "超强牌，必须跟注", isBluff: false };
+    if (handStrength >= 65 && street !== "river") return { action: "跟注", reason: "强牌+权益，跟注合算", isBluff: false };
+    return { action: "弃牌", reason: "面对全押牌力不足，弃牌", isBluff: false };
+  }
+  return { action: "过牌", reason: "等待更多信息", isBluff: false };
+}
+
+const STREET_ACTIONS = [
+  { key: "check", label: "过牌", emoji: "✋" },
+  { key: "bet_small", label: "小注", emoji: "💰", desc: "1/3底池" },
+  { key: "bet_big", label: "大注", emoji: "💰💰", desc: "2/3+底池" },
+  { key: "allin", label: "全押", emoji: "🔥" },
+];
+
+function QuickCardPicker({ label, rank, suit, onSelect, usedCards = [] }: { label: string; rank: string; suit: string; onSelect: (rank: string, suit: string) => void; usedCards?: string[]; }) {
+  const [pendingRank, setPendingRank] = useState(rank);
+  return (
+    <div className="space-y-1">
+      <div className="text-[10px] text-gray-400 font-medium">{label}</div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {CARD_RANKS.map(r => (
+          <button key={r} onClick={() => { setPendingRank(r); if (suit) onSelect(r, suit); }}
+            className={`py-1.5 rounded text-xs font-bold border transition-all ${
+              (rank === r || pendingRank === r) ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-700 border-gray-200"
+            }`}
+          >{r}</button>
+        ))}
+      </div>
+      <div className="grid grid-cols-4 gap-0.5">
+        {SUITS.map(s => {
+          const used = usedCards.includes(`${pendingRank || rank}${s.key}`);
+          return (
+            <button key={s.key} onClick={() => { if (!used && (pendingRank || rank)) onSelect(pendingRank || rank, s.key); }}
+              disabled={used || !(pendingRank || rank)}
+              className={`py-1.5 rounded text-sm font-bold border transition-all ${
+                suit === s.key && rank === (pendingRank || rank) ? "bg-green-700 text-white border-green-700" :
+                used ? "bg-gray-100 text-gray-300 border-gray-100" :
+                `bg-white border-gray-200 ${s.color}`
+              }`}
+            >{s.label}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CardDisplay({ rank, suit, size = "sm" }: { rank: string; suit: string; size?: "sm"|"md" }) {
+  const suitObj = SUITS.find(s => s.key === suit);
+  if (!rank || !suit) return (
+    <div className={`${size === "md" ? "w-10 h-14" : "w-8 h-11"} rounded border-dashed border-2 border-gray-300 bg-gray-50 flex items-center justify-center`}>
+      <span className="text-gray-300 text-xs">?</span>
+    </div>
+  );
+  return (
+    <div className={`${size === "md" ? "w-10 h-14" : "w-8 h-11"} rounded border-2 border-green-400 bg-white shadow flex flex-col items-center justify-center`}>
+      <span className="text-xs font-bold leading-none">{rank}</span>
+      <span className={`text-sm leading-none ${suitObj?.color}`}>{suitObj?.label}</span>
+    </div>
+  );
+}
+
+function AdviceCard({ action, reason, isBluff, detail }: { action: string; reason: string; isBluff?: boolean; detail?: string }) {
+  return (
+    <div className={`rounded-xl p-3 ${isBluff ? "bg-purple-900" : "bg-green-900"} text-white`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-base">{isBluff ? "🎭" : "🎯"}</span>
+        <span className="text-lg font-black">{action}</span>
+        {isBluff && <span className="text-xs bg-purple-700 px-1.5 py-0.5 rounded-full">诈唬</span>}
+      </div>
+      {detail && <div className="text-xs text-green-300 mb-0.5">{detail}</div>}
+      <div className="text-xs text-green-100 leading-relaxed">{reason}</div>
+    </div>
+  );
+}
+
+function GtoAdvisor({ ledgerId }: { ledgerId: number }) {
   const [tableSize, setTableSize] = useState(6);
   const [position, setPosition] = useState("");
-  const [card1Rank, setCard1Rank] = useState("");
-  const [card1Suit, setCard1Suit] = useState("");
-  const [card2Rank, setCard2Rank] = useState("");
-  const [card2Suit, setCard2Suit] = useState("");
-  const [opponentAction, setOpponentAction] = useState("");
+  const [hand, setHand] = useState({ rank1: "", suit1: "", rank2: "", suit2: "" });
+  const [preflopAction, setPreflopAction] = useState("");
+  const [flopCards, setFlopCards] = useState([{ rank: "", suit: "" }, { rank: "", suit: "" }, { rank: "", suit: "" }]);
+  const [flopPlayersLeft, setFlopPlayersLeft] = useState(0);
+  const [flopAction, setFlopAction] = useState("");
+  const [turnCard, setTurnCard] = useState({ rank: "", suit: "" });
+  const [turnPlayersLeft, setTurnPlayersLeft] = useState(0);
+  const [turnAction, setTurnAction] = useState("");
+  const [riverCard, setRiverCard] = useState({ rank: "", suit: "" });
+  const [riverPlayersLeft, setRiverPlayersLeft] = useState(0);
+  const [riverAction, setRiverAction] = useState("");
+  const [result, setResult] = useState<"win"|"lose"|"tie"|"">("");
+  const [opponentCards, setOpponentCards] = useState("");
+  const [isBluffHand, setIsBluffHand] = useState(false);
+  // legacy compat
+  const card1Rank = hand.rank1; const card1Suit = hand.suit1; const card2Rank = hand.rank2; const card2Suit = hand.suit2;
+  const opponentAction = preflopAction;
 
   const positions = TABLE_POSITIONS[tableSize];
+  const usedCards = useMemo(() => {
+    const cards: string[] = [];
+    if (hand.rank1 && hand.suit1) cards.push(`${hand.rank1}${hand.suit1}`);
+    if (hand.rank2 && hand.suit2) cards.push(`${hand.rank2}${hand.suit2}`);
+    flopCards.forEach(c => { if (c.rank && c.suit) cards.push(`${c.rank}${c.suit}`); });
+    if (turnCard.rank && turnCard.suit) cards.push(`${turnCard.rank}${turnCard.suit}`);
+    if (riverCard.rank && riverCard.suit) cards.push(`${riverCard.rank}${riverCard.suit}`);
+    return cards;
+  }, [hand, flopCards, turnCard, riverCard]);
 
-  const advice = (position && card1Rank && card1Suit && card2Rank && card2Suit && opponentAction)
-    ? getGtoAdvice({ tableSize, position, card1Rank, card1Suit, card2Rank, card2Suit, opponentAction })
-    : null;
+  const preflopAdvice = useMemo(() => {
+    if (!position || !hand.rank1 || !hand.suit1 || !hand.rank2 || !hand.suit2 || !preflopAction) return null;
+    return getGtoAdvice({ tableSize, position, card1Rank: hand.rank1, card1Suit: hand.suit1, card2Rank: hand.rank2, card2Suit: hand.suit2, opponentAction: preflopAction });
+  }, [tableSize, position, hand, preflopAction]);
 
-  const card1Display = card1Rank && card1Suit
-    ? { rank: card1Rank, suit: SUITS.find(s => s.key === card1Suit)! }
-    : null;
-  const card2Display = card2Rank && card2Suit
-    ? { rank: card2Rank, suit: SUITS.find(s => s.key === card2Suit)! }
-    : null;
+  const flopComplete = flopCards.every(c => c.rank && c.suit);
+  const flopBoard = flopComplete ? flopCards : [];
+  const flopTexture = useMemo(() => analyzeBoardTexture(flopBoard), [flopBoard]);
+  const flopHandEval = useMemo(() => { if (!flopComplete || !hand.rank1) return null; return evaluateHandWithBoard(hand, flopBoard); }, [flopComplete, hand, flopBoard]);
+  const flopAdvice = useMemo(() => { if (!flopHandEval || !flopAction || flopPlayersLeft === 0) return null; return getPostFlopAdvice({ handStrength: flopHandEval.score, boardTexture: flopTexture, playersLeft: flopPlayersLeft, opponentAction: flopAction, street: "flop", position }); }, [flopHandEval, flopTexture, flopPlayersLeft, flopAction, position]);
+
+  const turnBoard = [...flopBoard, ...(turnCard.rank && turnCard.suit ? [turnCard] : [])];
+  const turnTexture = useMemo(() => analyzeBoardTexture(turnBoard), [turnBoard]);
+  const turnHandEval = useMemo(() => { if (!turnCard.rank || !hand.rank1) return null; return evaluateHandWithBoard(hand, turnBoard); }, [turnCard, hand, turnBoard]);
+  const turnAdvice = useMemo(() => { if (!turnHandEval || !turnAction || turnPlayersLeft === 0) return null; return getPostFlopAdvice({ handStrength: turnHandEval.score, boardTexture: turnTexture, playersLeft: turnPlayersLeft, opponentAction: turnAction, street: "turn", position }); }, [turnHandEval, turnTexture, turnPlayersLeft, turnAction, position]);
+
+  const riverBoard = [...turnBoard, ...(riverCard.rank && riverCard.suit ? [riverCard] : [])];
+  const riverTexture = useMemo(() => analyzeBoardTexture(riverBoard), [riverBoard]);
+  const riverHandEval = useMemo(() => { if (!riverCard.rank || !hand.rank1) return null; return evaluateHandWithBoard(hand, riverBoard); }, [riverCard, hand, riverBoard]);
+  const riverAdvice = useMemo(() => { if (!riverHandEval || !riverAction || riverPlayersLeft === 0) return null; return getPostFlopAdvice({ handStrength: riverHandEval.score, boardTexture: riverTexture, playersLeft: riverPlayersLeft, opponentAction: riverAction, street: "river", position }); }, [riverHandEval, riverTexture, riverPlayersLeft, riverAction, position]);
+
+  const saveHand = trpc["gto.saveHand"].useMutation({
+    onSuccess: () => { toast.success("牌局已保存"); resetAll(); },
+    onError: () => toast.error("保存失败"),
+  });
+
+  function resetAll() {
+    setPosition(""); setHand({ rank1: "", suit1: "", rank2: "", suit2: "" }); setPreflopAction("");
+    setFlopCards([{ rank: "", suit: "" }, { rank: "", suit: "" }, { rank: "", suit: "" }]);
+    setFlopPlayersLeft(0); setFlopAction("");
+    setTurnCard({ rank: "", suit: "" }); setTurnPlayersLeft(0); setTurnAction("");
+    setRiverCard({ rank: "", suit: "" }); setRiverPlayersLeft(0); setRiverAction("");
+    setResult(""); setOpponentCards(""); setIsBluffHand(false);
+  }
+
+  const canSave = result !== "" && hand.rank1 && position;
 
   return (
     <div className="px-3 py-3 space-y-4">
-      {/* 步骤1：桌型 */}
+      <div className="flex justify-end">
+        <button onClick={resetAll} className="flex items-center gap-1 text-xs text-gray-400 border border-gray-200 rounded-lg px-2.5 py-1.5">
+          <RotateCcw className="w-3 h-3" /> 新局
+        </button>
+      </div>
+
+      {/* ① 桌型 */}
       <div>
         <div className="text-xs font-bold text-gray-600 mb-1.5">① 几人桌</div>
         <div className="flex gap-1.5">
           {[6, 7, 8, 9, 10].map(n => (
-            <button
-              key={n}
-              onClick={() => { setTableSize(n); setPosition(""); }}
-              className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${
-                tableSize === n ? "bg-green-800 text-white border-green-800" : "bg-white text-gray-600 border-gray-200"
-              }`}
+            <button key={n} onClick={() => { setTableSize(n); setPosition(""); }}
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold border transition-all ${tableSize === n ? "bg-green-800 text-white border-green-800" : "bg-white text-gray-600 border-gray-200"}`}
             >{n}人</button>
           ))}
         </div>
       </div>
 
-      {/* 步骤2：位置 */}
+      {/* ② 位置 */}
       <div>
         <div className="text-xs font-bold text-gray-600 mb-1.5">② 我的位置</div>
         <div className="flex flex-wrap gap-1.5">
           {positions.map(p => (
-            <button
-              key={p}
-              onClick={() => setPosition(p)}
-              className={`px-3 py-2 rounded-lg text-xs font-bold border transition-all ${
-                position === p ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-600 border-gray-200"
-              }`}
+            <button key={p} onClick={() => setPosition(p)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-bold border transition-all ${position === p ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-600 border-gray-200"}`}
             >{p}</button>
           ))}
         </div>
       </div>
 
-      {/* 步骤3：手牌 */}
-      <div className="space-y-3">
-        <div className="text-xs font-bold text-gray-600">③ 我的手牌</div>
-        {/* 已选手牌预览 */}
-        {(card1Display || card2Display) && (
-          <div className="flex gap-2 mb-1">
-            <div className={`w-10 h-14 rounded-lg border-2 flex flex-col items-center justify-center font-bold text-lg shadow ${
-              card1Display ? "bg-white border-green-400" : "bg-gray-100 border-dashed border-gray-300"
-            }`}>
-              {card1Display ? (
-                <><span className="text-sm font-bold leading-none">{card1Display.rank}</span><span className={`text-base leading-none ${card1Display.suit.color}`}>{card1Display.suit.label}</span></>
-              ) : <span className="text-gray-300 text-lg">?</span>}
-            </div>
-            <div className={`w-10 h-14 rounded-lg border-2 flex flex-col items-center justify-center font-bold text-lg shadow ${
-              card2Display ? "bg-white border-green-400" : "bg-gray-100 border-dashed border-gray-300"
-            }`}>
-              {card2Display ? (
-                <><span className="text-sm font-bold leading-none">{card2Display.rank}</span><span className={`text-base leading-none ${card2Display.suit.color}`}>{card2Display.suit.label}</span></>
-              ) : <span className="text-gray-300 text-lg">?</span>}
-            </div>
-            {(card1Rank || card2Rank) && (
-              <button
-                onClick={() => { setCard1Rank(""); setCard1Suit(""); setCard2Rank(""); setCard2Suit(""); }}
-                className="ml-auto self-center text-xs text-red-400 border border-red-200 rounded px-2 py-1"
-              >清除</button>
-            )}
+      {/* ③ 手牌 */}
+      <div>
+        <div className="text-xs font-bold text-gray-600 mb-2">③ 我的手牌</div>
+        {(hand.rank1 || hand.rank2) && (
+          <div className="flex gap-2 mb-2">
+            <CardDisplay rank={hand.rank1} suit={hand.suit1} size="md" />
+            <CardDisplay rank={hand.rank2} suit={hand.suit2} size="md" />
           </div>
         )}
-        <CardPicker
-          label="第一张牌"
-          rank={card1Rank}
-          suit={card1Suit}
-          onRankChange={setCard1Rank}
-          onSuitChange={setCard1Suit}
-        />
-        <CardPicker
-          label="第二张牌"
-          rank={card2Rank}
-          suit={card2Suit}
-          onRankChange={setCard2Rank}
-          onSuitChange={setCard2Suit}
-        />
+        <div className="space-y-2">
+          <QuickCardPicker label="第一张" rank={hand.rank1} suit={hand.suit1}
+            onSelect={(r, s) => setHand(h => ({ ...h, rank1: r, suit1: s }))}
+            usedCards={usedCards.filter(c => c !== `${hand.rank1}${hand.suit1}`)}
+          />
+          <QuickCardPicker label="第二张" rank={hand.rank2} suit={hand.suit2}
+            onSelect={(r, s) => setHand(h => ({ ...h, rank2: r, suit2: s }))}
+            usedCards={usedCards.filter(c => c !== `${hand.rank2}${hand.suit2}`)}
+          />
+        </div>
       </div>
 
-      {/* 步骤4：对手行动 */}
+      {/* ④ 翻牌前对手行动 */}
       <div>
-        <div className="text-xs font-bold text-gray-600 mb-1.5">④ 对手行动</div>
+        <div className="text-xs font-bold text-gray-600 mb-1.5">④ 翻牌前对手行动</div>
         <div className="grid grid-cols-2 gap-1.5">
           {OPPONENT_ACTIONS.map(a => (
-            <button
-              key={a.key}
-              onClick={() => setOpponentAction(a.key)}
-              className={`py-2.5 px-2 rounded-lg border transition-all text-left ${
-                opponentAction === a.key ? "bg-green-700 text-white border-green-700" : "bg-white border-gray-200"
-              }`}
+            <button key={a.key} onClick={() => setPreflopAction(a.key)}
+              className={`py-2.5 px-2 rounded-lg border transition-all text-left ${preflopAction === a.key ? "bg-green-700 text-white border-green-700" : "bg-white border-gray-200"}`}
             >
               <div className="text-xs font-bold">{a.label}</div>
-              <div className={`text-[10px] mt-0.5 ${opponentAction === a.key ? "text-green-100" : "text-gray-400"}`}>{a.desc}</div>
+              <div className={`text-[10px] mt-0.5 ${preflopAction === a.key ? "text-green-100" : "text-gray-400"}`}>{a.desc}</div>
             </button>
           ))}
         </div>
       </div>
 
-      {/* GTO 建议结果 */}
-      {advice && (
-        <div className="bg-green-900 rounded-2xl p-4 text-white shadow-lg">
-          <div className="text-xs text-green-300 mb-1 font-medium">GTO 建议</div>
-          <div className={`text-2xl font-black mb-2 ${advice.color.replace("text-", "text-")}`} style={{ color: advice.color.includes("red") ? "#fca5a5" : advice.color.includes("purple") ? "#c4b5fd" : advice.color.includes("green") ? "#86efac" : advice.color.includes("yellow") ? "#fde68a" : advice.color.includes("orange") ? "#fdba74" : "#d1d5db" }}>
-            {advice.action}
+      {preflopAdvice && (
+        <AdviceCard action={preflopAdvice.action} reason={preflopAdvice.reason} detail={preflopAdvice.frequency ? `执行频率 ${preflopAdvice.frequency}` : undefined} />
+      )}
+
+      {/* ─── FLOP ─── */}
+      {preflopAdvice && (
+        <div className="border-t-2 border-green-200 pt-3">
+          <div className="text-xs font-bold text-green-700 mb-2">🃏 FLOP（翻牌）</div>
+          <div className="flex gap-2 mb-2">
+            {flopCards.map((c, i) => <CardDisplay key={i} rank={c.rank} suit={c.suit} size="md" />)}
           </div>
-          {advice.frequency && (
-            <div className="text-xs text-green-300 mb-1">执行频率：<span className="text-white font-bold">{advice.frequency}</span></div>
+          <div className="space-y-2 mb-2">
+            {flopCards.map((c, i) => (
+              <QuickCardPicker key={i} label={`公共牌 ${i + 1}`} rank={c.rank} suit={c.suit}
+                onSelect={(r, s) => setFlopCards(prev => prev.map((card, idx) => idx === i ? { rank: r, suit: s } : card))}
+                usedCards={usedCards.filter(u => u !== `${c.rank}${c.suit}`)}
+              />
+            ))}
+          </div>
+          {flopComplete && (
+            <div className="text-xs text-green-700 bg-green-50 rounded-lg px-2 py-1 mb-2">牌面：{flopTexture.label}</div>
           )}
-          <div className="text-sm text-green-100 leading-relaxed">{advice.reason}</div>
-          <div className="mt-3 pt-3 border-t border-green-700 text-[10px] text-green-400">
-            基于 {tableSize}人桌 · {position} 位置 · {card1Rank}{SUITS.find(s=>s.key===card1Suit)?.label}{card2Rank}{SUITS.find(s=>s.key===card2Suit)?.label} · {OPPONENT_ACTIONS.find(a=>a.key===opponentAction)?.label}
-          </div>
+          {flopComplete && (
+            <>
+              <div className="text-xs font-bold text-gray-600 mb-1.5">还剩几人</div>
+              <div className="flex gap-1.5 mb-2">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} onClick={() => setFlopPlayersLeft(n)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${flopPlayersLeft === n ? "bg-green-700 text-white border-green-700" : "bg-white text-gray-600 border-gray-200"}`}
+                  >{n}人</button>
+                ))}
+              </div>
+              <div className="text-xs font-bold text-gray-600 mb-1.5">对手行动</div>
+              <div className="grid grid-cols-2 gap-1.5 mb-2">
+                {STREET_ACTIONS.map(a => (
+                  <button key={a.key} onClick={() => setFlopAction(a.key)}
+                    className={`py-2.5 rounded-lg border text-xs font-bold transition-all ${flopAction === a.key ? "bg-green-700 text-white border-green-700" : "bg-white border-gray-200 text-gray-700"}`}
+                  >{a.emoji} {a.label}{(a as any).desc ? ` (${(a as any).desc})` : ""}</button>
+                ))}
+              </div>
+              {flopHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">我的牌力：{flopHandEval.strength} · {flopHandEval.detail}</div>}
+              {flopAdvice && <AdviceCard action={flopAdvice.action} reason={flopAdvice.reason} isBluff={flopAdvice.isBluff} />}
+            </>
+          )}
         </div>
       )}
 
-      {!advice && (
+      {/* ─── TURN ─── */}
+      {flopAdvice && (
+        <div className="border-t-2 border-blue-200 pt-3">
+          <div className="text-xs font-bold text-blue-700 mb-2">🃏 TURN（转牌）</div>
+          <div className="flex gap-1.5 mb-2">
+            {flopCards.map((c, i) => <CardDisplay key={i} rank={c.rank} suit={c.suit} />)}
+            <CardDisplay rank={turnCard.rank} suit={turnCard.suit} />
+          </div>
+          <QuickCardPicker label="转牌" rank={turnCard.rank} suit={turnCard.suit}
+            onSelect={(r, s) => setTurnCard({ rank: r, suit: s })}
+            usedCards={usedCards.filter(u => u !== `${turnCard.rank}${turnCard.suit}`)}
+          />
+          {turnCard.rank && turnCard.suit && (
+            <>
+              <div className="text-xs font-bold text-gray-600 mb-1.5 mt-2">还剩几人</div>
+              <div className="flex gap-1.5 mb-2">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} onClick={() => setTurnPlayersLeft(n)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${turnPlayersLeft === n ? "bg-blue-700 text-white border-blue-700" : "bg-white text-gray-600 border-gray-200"}`}
+                  >{n}人</button>
+                ))}
+              </div>
+              <div className="text-xs font-bold text-gray-600 mb-1.5">对手行动</div>
+              <div className="grid grid-cols-2 gap-1.5 mb-2">
+                {STREET_ACTIONS.map(a => (
+                  <button key={a.key} onClick={() => setTurnAction(a.key)}
+                    className={`py-2.5 rounded-lg border text-xs font-bold transition-all ${turnAction === a.key ? "bg-blue-700 text-white border-blue-700" : "bg-white border-gray-200 text-gray-700"}`}
+                  >{a.emoji} {a.label}{(a as any).desc ? ` (${(a as any).desc})` : ""}</button>
+                ))}
+              </div>
+              {turnHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">我的牌力：{turnHandEval.strength} · {turnHandEval.detail}</div>}
+              {turnAdvice && <AdviceCard action={turnAdvice.action} reason={turnAdvice.reason} isBluff={turnAdvice.isBluff} />}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ─── RIVER ─── */}
+      {turnAdvice && (
+        <div className="border-t-2 border-orange-200 pt-3">
+          <div className="text-xs font-bold text-orange-700 mb-2">🃏 RIVER（河牌）</div>
+          <div className="flex gap-1.5 mb-2">
+            {flopCards.map((c, i) => <CardDisplay key={i} rank={c.rank} suit={c.suit} />)}
+            <CardDisplay rank={turnCard.rank} suit={turnCard.suit} />
+            <CardDisplay rank={riverCard.rank} suit={riverCard.suit} />
+          </div>
+          <QuickCardPicker label="河牌" rank={riverCard.rank} suit={riverCard.suit}
+            onSelect={(r, s) => setRiverCard({ rank: r, suit: s })}
+            usedCards={usedCards.filter(u => u !== `${riverCard.rank}${riverCard.suit}`)}
+          />
+          {riverCard.rank && riverCard.suit && (
+            <>
+              <div className="text-xs font-bold text-gray-600 mb-1.5 mt-2">还剩几人</div>
+              <div className="flex gap-1.5 mb-2">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} onClick={() => setRiverPlayersLeft(n)}
+                    className={`flex-1 py-2 rounded-lg text-sm font-bold border transition-all ${riverPlayersLeft === n ? "bg-orange-700 text-white border-orange-700" : "bg-white text-gray-600 border-gray-200"}`}
+                  >{n}人</button>
+                ))}
+              </div>
+              <div className="text-xs font-bold text-gray-600 mb-1.5">对手行动</div>
+              <div className="grid grid-cols-2 gap-1.5 mb-2">
+                {STREET_ACTIONS.map(a => (
+                  <button key={a.key} onClick={() => setRiverAction(a.key)}
+                    className={`py-2.5 rounded-lg border text-xs font-bold transition-all ${riverAction === a.key ? "bg-orange-700 text-white border-orange-700" : "bg-white border-gray-200 text-gray-700"}`}
+                  >{a.emoji} {a.label}{(a as any).desc ? ` (${(a as any).desc})` : ""}</button>
+                ))}
+              </div>
+              {riverHandEval && <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-2 py-1 mb-2">最终牌力：{riverHandEval.strength} · {riverHandEval.detail}</div>}
+              {riverAdvice && <AdviceCard action={riverAdvice.action} reason={riverAdvice.reason} isBluff={riverAdvice.isBluff} />}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ─── 结果 ─── */}
+      {(riverAdvice || (flopAdvice && !turnCard.rank) || (turnAdvice && !riverCard.rank)) && (
+        <div className="border-t-2 border-gray-200 pt-3">
+          <div className="text-xs font-bold text-gray-600 mb-2">🏆 结果</div>
+          <div className="flex gap-2 mb-3">
+            {(["win","lose","tie"] as const).map(key => (
+              <button key={key} onClick={() => setResult(key)}
+                className={`flex-1 py-3 rounded-xl text-sm font-black border-2 transition-all ${
+                  result === key ?
+                    (key === "win" ? "bg-red-600 text-white border-red-600" : key === "lose" ? "bg-gray-600 text-white border-gray-600" : "bg-yellow-600 text-white border-yellow-600") :
+                    "bg-white text-gray-600 border-gray-200"
+                }`}
+              >{key === "win" ? "赢了" : key === "lose" ? "输了" : "平局"}</button>
+            ))}
+          </div>
+          <button onClick={() => setIsBluffHand(!isBluffHand)}
+            className={`w-full py-2.5 rounded-xl text-xs font-bold border-2 transition-all mb-3 ${isBluffHand ? "bg-purple-700 text-white border-purple-700" : "bg-white text-gray-600 border-gray-200"}`}
+          >🎭 {isBluffHand ? "已标记为诈唬" : "标记为诈唬"}</button>
+          <input value={opponentCards} onChange={e => setOpponentCards(e.target.value)}
+            placeholder="对手亮牌（可选，如 AhKd）"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm mb-3 focus:outline-none focus:border-green-500"
+          />
+          <button
+            onClick={() => canSave && saveHand.mutate({ ledgerId, tableSize, position, holeCards: `${hand.rank1}${hand.suit1}${hand.rank2}${hand.suit2}`, preflopAction, flopCards: flopCards.map(c => `${c.rank}${c.suit}`).join(""), flopAction, turnCard: `${turnCard.rank}${turnCard.suit}`, turnAction, riverCard: `${riverCard.rank}${riverCard.suit}`, riverAction, result, opponentCards, isBluff: isBluffHand })}
+            disabled={!canSave || saveHand.isPending}
+            className="w-full py-3 bg-green-800 text-white rounded-xl text-sm font-black disabled:opacity-40 flex items-center justify-center gap-2"
+          >
+            <Save className="w-4 h-4" />
+            {saveHand.isPending ? "保存中..." : "保存牌局"}
+          </button>
+        </div>
+      )}
+
+      {!preflopAdvice && (
         <div className="text-center text-gray-400 text-sm py-4">完成以上4步选择，即可获得 GTO 策略建议</div>
       )}
     </div>
@@ -759,20 +1062,19 @@ function GtoNotes({ ledgerId }: { ledgerId: number }) {
   const [content, setContent] = useState("");
   const [editId, setEditId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
+  const { data: notes = [], refetch } = trpc["gto.getNotes"].useQuery({ ledgerId });
 
-  const { data: notes = [], refetch } = trpc.gtoGetNotes.useQuery({ ledgerId });
-
-  const addNote = trpc.gtoAddNote.useMutation({
+  const addNote = trpc["gto.addNote"].useMutation({
     onSuccess: () => { setContent(""); refetch(); toast.success("笔记已保存"); },
     onError: () => toast.error("保存失败"),
   });
 
-  const updateNote = trpc.gtoUpdateNote.useMutation({
+  const updateNote = trpc["gto.updateNote"].useMutation({
     onSuccess: () => { setEditId(null); refetch(); toast.success("已更新"); },
     onError: () => toast.error("更新失败"),
   });
 
-  const deleteNote = trpc.gtoDeleteNote.useMutation({
+  const deleteNote = trpc["gto.deleteNote"].useMutation({
     onSuccess: () => { refetch(); toast.success("已删除"); },
     onError: () => toast.error("删除失败"),
   });
@@ -880,7 +1182,7 @@ export default function GtoPoker() {
       <div className="pb-8">
         {tab === "range" && <HandRangeMatrix />}
         {tab === "odds" && <OddsCalculator />}
-        {tab === "advisor" && <GtoAdvisor />}
+        {tab === "advisor" && <GtoAdvisor ledgerId={ledgerId} />}
         {tab === "notes" && <GtoNotes ledgerId={ledgerId} />}
       </div>
     </div>

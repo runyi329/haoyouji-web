@@ -639,6 +639,32 @@ export async function initDatabase() {
     `);
     console.log('[DB Init] gto_notes table ready');
 
+    // gto_hand_logs 牌局日志表
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS \`gto_hand_logs\` (
+        \`id\` INT NOT NULL AUTO_INCREMENT,
+        \`user_id\` INT NOT NULL,
+        \`ledger_id\` INT NOT NULL,
+        \`table_size\` INT NOT NULL DEFAULT 6,
+        \`position\` VARCHAR(16) NOT NULL,
+        \`hole_cards\` VARCHAR(8) NOT NULL,
+        \`preflop_action\` VARCHAR(32) NOT NULL,
+        \`flop_cards\` VARCHAR(16) NOT NULL DEFAULT '',
+        \`flop_action\` VARCHAR(32) NOT NULL DEFAULT '',
+        \`turn_card\` VARCHAR(4) NOT NULL DEFAULT '',
+        \`turn_action\` VARCHAR(32) NOT NULL DEFAULT '',
+        \`river_card\` VARCHAR(4) NOT NULL DEFAULT '',
+        \`river_action\` VARCHAR(32) NOT NULL DEFAULT '',
+        \`result\` ENUM('win','lose','tie') NOT NULL,
+        \`opponent_cards\` VARCHAR(16) NOT NULL DEFAULT '',
+        \`is_bluff\` TINYINT(1) NOT NULL DEFAULT 0,
+        \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        INDEX \`gto_hand_logs_user_ledger_idx\` (\`user_id\`, \`ledger_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('[DB Init] gto_hand_logs table ready');
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
