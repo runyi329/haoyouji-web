@@ -264,17 +264,31 @@ export default function DepositManage() {
     return { byCoin, byMember, totalCount, totalCNY };
   }, [members, editState, categories, cryptoPrices]);
 
-  // 过滤后的成员列表
+  // 过滤后的成员列表（按总保证金折算人民币从高到低排序）
   const filteredMembers = useMemo(() => {
-    if (!filterHasDeposit) return members;
-    return members.filter((m: any) => {
-      const userEdit = editState[m.userId] ?? {};
-      return categories.some((cat: any) => {
-        const e = userEdit[cat.name];
-        return e && parseFloat(e.margin) > 0;
+    let list = members;
+    if (filterHasDeposit) {
+      list = members.filter((m: any) => {
+        const userEdit = editState[m.userId] ?? {};
+        return categories.some((cat: any) => {
+          const e = userEdit[cat.name];
+          return e && parseFloat(e.margin) > 0;
+        });
       });
+    }
+    // 按总保证金（折算人民币）从高到低排序
+    return [...list].sort((a: any, b: any) => {
+      const totalA = categories.reduce((sum: number, cat: any) => {
+        const e = editState[a.userId]?.[cat.name];
+        return sum + (e ? toCNY(e.margin, e.marginCoin, cryptoPrices) : 0);
+      }, 0);
+      const totalB = categories.reduce((sum: number, cat: any) => {
+        const e = editState[b.userId]?.[cat.name];
+        return sum + (e ? toCNY(e.margin, e.marginCoin, cryptoPrices) : 0);
+      }, 0);
+      return totalB - totalA;
     });
-  }, [members, editState, categories, filterHasDeposit]);
+  }, [members, editState, categories, filterHasDeposit, cryptoPrices]);
 
   return (
     <div
