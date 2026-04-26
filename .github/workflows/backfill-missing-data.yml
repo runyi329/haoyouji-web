@@ -1,0 +1,134 @@
+name: 补拉缺失日线数据
+
+on:
+  push:
+    paths:
+      - '.github/workflows/backfill-missing-data.yml'
+      - 'scripts/backfill-april-2025.py'
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 复制脚本到服务器并后台运行
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: 300s
+          script: |
+            set -e
+            echo "=== 开始补拉缺失数据 ==="
+            
+            # 安装依赖
+            pip3 install pymysql requests -q 2>/dev/null || true
+            
+            # 写入脚本
+            cat > /tmp/backfill-missing-data.py << 'PYEOF'
+            #!/usr/bin/env python3
+            import pymysql, requests, time
+            from datetime import datetime, timedelta
+
+            TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79'
+            TUSHARE_URL = 'http://api.tushare.pro'
+            DB_CONFIG = {
+                'host': '127.0.0.1', 'port': 3306,
+                'user': 'root', 'password': 'Miao@20190603',
+                'database': 'crm_db', 'charset': 'utf8mb4',
+            }
+            MARKETS = {
+                'all':  lambda c: True,
+                'SH':   lambda c: c.startswith('6') and not c.startswith('688'),
+                'SZ':   lambda c: c.startswith('0'),
+                'GEM':  lambda c: c.startswith('3'),
+                'STAR': lambda c: c.startswith('688'),
+            }
+
+            def ts_call(api, params, fields):
+                for _ in range(3):
+                    try:
+                        r = requests.post(TUSHARE_URL, json={'api_name':api,'token':TUSHARE_TOKEN,'params':params,'fields':fields}, timeout=30)
+                        d = r.json()
+                        if d.get('code') == 0: return d['data']
+                        print(f"  API error: {d.get('msg')}")
+                    except Exception as e:
+                        print(f"  Request error: {e}")
+                    time.sleep(2)
+                return None
+
+            def main():
+                conn = pymysql.connect(**DB_CONFIG)
+                cur = conn.cursor()
+                cur.execute("SELECT MAX(trade_date) FROM ts_trend_cache WHERE market='all'")
+                latest = cur.fetchone()[0] or '20250331'
+                cur.execute("SELECT ts_code, first_open FROM ts_first_open_cache")
+                fo_cache = {r[0]: r[1] for r in cur.fetchall()}
+                cur.close()
+
+                today = datetime.now().strftime('%Y%m%d')
+                print(f"最新数据: {latest}, 今天: {today}, 首日开盘价缓存: {len(fo_cache)} 只")
+
+                if latest >= today:
+                    print("数据已最新"); conn.close(); return
+
+                # 获取交易日历
+                next_d = (datetime.strptime(latest, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')
+                cal = ts_call('trade_cal', {'exchange':'SSE','start_date':next_d,'end_date':today,'is_open':'1'}, 'cal_date')
+                if not cal: print("获取交易日历失败"); conn.close(); return
+                fi = cal['fields'].index('cal_date')
+                dates = sorted([r[fi] for r in cal['items'] if r[fi] < today])
+                print(f"需补拉 {len(dates)} 个交易日: {dates}")
+
+                for td in dates:
+                    print(f"\n--- {td} ---")
+                    # 日线
+                    d = ts_call('daily', {'trade_date':td}, 'ts_code,trade_date,open,high,low,close,vol,amount,pct_chg,pre_close,change')
+                    if not d or not d['items']:
+                        print("  无数据，跳过"); continue
+                    fi2 = {f:i for i,f in enumerate(d['fields'])}
+                    rows = [(r[fi2['ts_code']],r[fi2['trade_date']],r[fi2.get('open')],r[fi2.get('high')],r[fi2.get('low')],r[fi2.get('close')],r[fi2.get('vol')],r[fi2.get('amount')],r[fi2.get('pct_chg',0)],r[fi2.get('pre_close')],r[fi2.get('change',0)]) for r in d['items']]
+                    cur = conn.cursor()
+                    cur.executemany("INSERT INTO ts_daily (ts_code,trade_date,open,high,low,close,vol,amount,pct_chg,pre_close,`change`) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE close=VALUES(close),pct_chg=VALUES(pct_chg),vol=VALUES(vol)", rows)
+                    conn.commit(); cur.close()
+                    print(f"  ts_daily: {len(rows)} 条")
+                    time.sleep(0.4)
+
+                    # daily_basic
+                    b = ts_call('daily_basic', {'trade_date':td}, 'ts_code,trade_date,pe_ttm,pb,total_mv,close,turnover_rate,volume_ratio')
+                    if b and b['items']:
+                        bf = {f:i for i,f in enumerate(b['fields'])}
+                        brows = [(r[bf['ts_code']],r[bf['trade_date']],r[bf.get('pe_ttm')],r[bf.get('pb')],r[bf.get('total_mv')],r[bf.get('close')],r[bf.get('turnover_rate')],r[bf.get('volume_ratio')]) for r in b['items']]
+                        cur = conn.cursor()
+                        cur.executemany("INSERT INTO ts_daily_basic (ts_code,trade_date,pe_ttm,pb,total_mv,close,turnover_rate,volume_ratio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE pe_ttm=VALUES(pe_ttm),pb=VALUES(pb),total_mv=VALUES(total_mv),close=VALUES(close)", brows)
+                        conn.commit(); cur.close()
+                        print(f"  ts_daily_basic: {len(brows)} 条")
+                    time.sleep(0.4)
+
+                    # trend_cache
+                    cur = conn.cursor()
+                    for mkt, fn in MARKETS.items():
+                        mitems = [r for r in d['items'] if fn(r[fi2['ts_code']].split('.')[0])]
+                        above=below=equal=0
+                        for r in mitems:
+                            code=r[fi2['ts_code']]; cl=r[fi2.get('close')]; fo=fo_cache.get(code)
+                            if cl is None or fo is None or fo<=0: below+=1; continue
+                            rat=cl/fo
+                            if rat>1.001: above+=1
+                            elif rat<0.999: below+=1
+                            else: equal+=1
+                        cur.execute("INSERT INTO ts_trend_cache (trade_date,market,above,below,equal) VALUES (%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE above=VALUES(above),below=VALUES(below),equal=VALUES(equal)", (td,mkt,above,below,equal))
+                    conn.commit(); cur.close()
+                    print(f"  ts_trend_cache: 5个板块写入")
+                    time.sleep(0.3)
+
+                conn.close()
+                print("\n=== 补拉完成 ===")
+
+            main()
+            PYEOF
+            
+            python3 /tmp/backfill-missing-data.py
+            echo "=== 脚本执行完毕 ==="
