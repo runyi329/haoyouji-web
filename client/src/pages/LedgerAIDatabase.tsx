@@ -10,7 +10,7 @@ import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, ReferenceLine, Cell
+  LineChart, Line, ReferenceLine, Cell, Area, AreaChart, Legend
 } from "recharts";
 
 // ─── 配色（与首页一致） ────────────────────────────────────
@@ -380,6 +380,10 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 
   // 全部从后端 ts_daily 实时计算，无静态备用数据
   const { data: liveData, isLoading: survivalLoading } = trpc.aiDashboardSurvival.useQuery({ market });
+
+  // 趋势折线图
+  const [trendGranularity, setTrendGranularity] = useState<'day' | 'week' | 'month'>('day');
+  const { data: trendData, isLoading: trendLoading } = trpc.aiDashboardTrend.useQuery({ granularity: trendGranularity, market });
   const displayData = liveData ?? { total: 0, above: 0, below: 0, equal: 0, byEra: {}, byYear: {} };
 
   // 年份数据：直接使用接口返回的 byYear
@@ -543,6 +547,103 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
 
         {/* 分隔线 */}
         <div className="mx-3" style={{ height: '1px', background: BORDER }} />
+
+        {/* 趋势折线图 */}
+        <div className="px-3 pt-3 pb-1">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-semibold" style={{ color: TEXT }}>高于/低于首日开盘价趋势</p>
+            <div className="flex gap-1">
+              {(['day', 'week', 'month'] as const).map(g => (
+                <button
+                  key={g}
+                  onClick={() => setTrendGranularity(g)}
+                  className="px-2 py-0.5 rounded text-[12px] transition-colors"
+                  style={{
+                    background: trendGranularity === g ? RED : 'transparent',
+                    color: trendGranularity === g ? '#fff' : MUTED,
+                    border: `1px solid ${trendGranularity === g ? RED : BORDER}`,
+                  }}
+                >
+                  {g === 'day' ? '日' : g === 'week' ? '周' : '月'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {trendLoading ? (
+            <div className="flex items-center justify-center" style={{ height: 120 }}>
+              <span className="text-[12px]" style={{ color: MUTED }}>加载中...</span>
+            </div>
+          ) : !trendData?.points?.length ? (
+            <div className="flex items-center justify-center" style={{ height: 120 }}>
+              <span className="text-[12px]" style={{ color: MUTED }}>暂无数据</span>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={140}>
+              <AreaChart data={trendData.points} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradAbove" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={CHART_UP} stopOpacity={0.18} />
+                    <stop offset="95%" stopColor={CHART_UP} stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradBelow" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={CHART_DOWN} stopOpacity={0.18} />
+                    <stop offset="95%" stopColor={CHART_DOWN} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 9, fill: MUTED }}
+                  tickLine={false}
+                  axisLine={{ stroke: BORDER }}
+                  interval="preserveStartEnd"
+                  tickFormatter={(v: string) => {
+                    if (trendGranularity === 'day') return v.slice(5); // MM-DD
+                    if (trendGranularity === 'week') return v.slice(5); // W##
+                    return v.slice(2); // YY-MM
+                  }}
+                />
+                <YAxis
+                  tick={{ fontSize: 9, fill: MUTED }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : String(v)}
+                />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 6, padding: '4px 8px' }}
+                  labelStyle={{ color: TEXT, fontWeight: 600, marginBottom: 2 }}
+                  formatter={(value: number, name: string) => [
+                    value.toLocaleString(),
+                    name === 'above' ? '高于首日开盘价' : name === 'below' ? '低于首日开盘价' : '持平'
+                  ]}
+                />
+                <Area type="monotone" dataKey="above" stroke={CHART_UP} strokeWidth={1.5} fill="url(#gradAbove)" dot={false} />
+                <Area type="monotone" dataKey="equal" stroke="#9E9E9E" strokeWidth={1} fill="none" dot={false} strokeDasharray="3 3" />
+                <Area type="monotone" dataKey="below" stroke={CHART_DOWN} strokeWidth={1.5} fill="url(#gradBelow)" dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+          {/* 图例 */}
+          <div className="flex items-center justify-center gap-4 pt-1">
+            {[
+              { color: CHART_UP, label: '高于首日开盘价', dash: false },
+              { color: '#9E9E9E', label: '持平', dash: true },
+              { color: CHART_DOWN, label: '低于首日开盘价', dash: false },
+            ].map(item => (
+              <div key={item.label} className="flex items-center gap-1">
+                <svg width="16" height="8">
+                  {item.dash
+                    ? <line x1="0" y1="4" x2="16" y2="4" stroke={item.color} strokeWidth="1.5" strokeDasharray="3 3" />
+                    : <line x1="0" y1="4" x2="16" y2="4" stroke={item.color} strokeWidth="2" />}
+                </svg>
+                <span className="text-[11px]" style={{ color: MUTED }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 分隔线2 */}
+        <div className="mx-3 mb-1" style={{ height: '1px', background: BORDER }} />
 
         {/* 按年份横向柱状图（自定义CSS动效版） */}
         <div className="px-3 pt-3 pb-3">
