@@ -736,8 +736,8 @@ function UpRateDistSection() {
                 X轴：涨天率区间（30%~70%，每格2%）· Y轴：股票数量 · 红线：正态曲线拟合
               </p>
               {/* 柱状图 + 正态曲线 */}
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={chartData} margin={{ top: 10, right: 4, left: -20, bottom: 0 }} barCategoryGap="8%">
+              <ResponsiveContainer width="100%" height={190}>
+                <BarChart data={chartData} margin={{ top: 24, right: 4, left: -20, bottom: 0 }} barCategoryGap="8%">
                   <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
                   <XAxis
                     dataKey="min"
@@ -788,7 +788,7 @@ function UpRateDistSection() {
                     stroke={RED}
                     strokeDasharray="4 3"
                     strokeWidth={1.5}
-                    label={{ value: `均值${data.mean}%`, position: 'top', fill: RED, fontSize: 9 }}
+                    label={{ value: `均值${data.mean}%`, position: 'insideTopLeft', offset: 4, fill: RED, fontSize: 10, fontWeight: 'bold' }}
                   />
                   <ReferenceLine
                     x={50}
