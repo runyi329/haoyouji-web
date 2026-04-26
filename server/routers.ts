@@ -18871,6 +18871,13 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         `;
         const [rows] = await (dbConn as any).query(sql) as any[];
         const stocks = rows as any[];
+        // 获取最新数据日期
+        let latestDate = '';
+        try {
+          const [ldRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
+          const raw = (ldRows as any[])[0]?.latest ?? '';
+          latestDate = raw.length === 8 ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}` : raw;
+        } catch {}
         // 聚焦区间：30%~70%，共 20 个桶，每桶 2%
         const RANGE_MIN = 30;
         const RANGE_MAX = 70;
@@ -18913,6 +18920,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           stdDev: parseFloat(stdDev.toFixed(2)),
           delistedCount,
           newStockCount,
+          latestDate,
         };
       } finally {
         // 不调用 dbConn.end()，连接池是共享的，关闭后后续请求会失败
