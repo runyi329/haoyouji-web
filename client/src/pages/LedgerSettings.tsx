@@ -463,7 +463,7 @@ export default function LedgerSettings() {
 
 
 
- {ledgerData?.type !== 'opinion_book' && (
+ {ledgerData?.type !== 'opinion_book' && ledgerId !== 37 && (
  <SettingItem 
  label="AI 分身" 
  showIcon 
@@ -480,7 +480,7 @@ export default function LedgerSettings() {
 
 
  {/* (owner)(admin)opinion_book */}
- {ledgerData?.type !== 'opinion_book' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ {ledgerData?.type !== 'opinion_book' && ledgerId !== 37 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem 
  label={ledgerData?.type === 'diet' ? '成员信息设置' : '成员记账审批'} 
  showIcon 
