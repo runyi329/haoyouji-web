@@ -14,7 +14,7 @@ import tushare as ts
 from datetime import datetime, timedelta
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
-TUSHARE_TOKEN = "5762b219b5e6d5b4b7f9f8b4b2b4b2b4b2b4b2b4b2b4b2b4b2b4b2b4b2b4b2"
+TUSHARE_TOKEN = "5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79"
 DB_HOST = "124.223.54.69"
 DB_PORT = 3306
 DB_USER = "root"
