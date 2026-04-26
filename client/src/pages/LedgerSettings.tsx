@@ -625,11 +625,11 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/admin-transactions`)}
  />
  )}
- {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && <SettingItem label="账本预算&目标" showIcon hasHelp />}
+ {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && ledgerId !== 37 && <SettingItem label="账本预算&目标" showIcon hasHelp />}
  </div>
 
  {/* */}
- {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && (
+ {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && ledgerId !== 37 && (
  <div className="bg-white mt-3">
  <SettingItem 
  label="账本结算币种"
@@ -658,7 +658,7 @@ export default function LedgerSettings() {
 
 
 
- {ledgerData?.type !== 'opinion_book' && (
+ {ledgerData?.type !== 'opinion_book' && ledgerId !== 37 && (
  <SettingItem label="功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
  )}
  <SettingItem label={ledgerData?.type === 'opinion_book' ? '分店管理' : '分类管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
@@ -670,7 +670,7 @@ export default function LedgerSettings() {
  )}
  <SettingItem label="删除找回" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/deleted-records`)} />
 
- <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />
+ {ledgerId !== 37 && <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />}
  <SettingItem label={ledgerData?.type === 'diet' ? '减肥教练管理' : '账本管理员管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
  {ledgerData?.type === 'custom_af' && (
    <SettingItem label="资方管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/funder-management`)} />
@@ -688,7 +688,7 @@ export default function LedgerSettings() {
  if (!isAdminOrOwner) return null;
  return <SecretKeyItem ledgerId={ledgerId} showSecretKey={showSecretKey} setShowSecretKey={setShowSecretKey} />;
  })()}
- <SettingItem label="创建人转移" showIcon onClick={() => {
+ {ledgerId !== 37 && <SettingItem label="创建人转移" showIcon onClick={() => {
  // owner
  const currentMember = members?.find(m => m.userId === user?.id);
  if (currentMember?.role !== 'owner') {
@@ -696,11 +696,11 @@ export default function LedgerSettings() {
  return;
  }
  setShowTransferDialog(true);
- }} />
+ }} />}
  </div>
 
  {/* - */}
- {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && (
+ {ledgerData?.type !== 'diet' && ledgerData?.type !== 'opinion_book' && ledgerId !== 37 && (
  <div className="bg-white mt-3">
  <SettingItem 
  label="表格导入账单"
