@@ -7,6 +7,7 @@
  *   写入：ledger.adminSetMemberInitialBalances（保留所有其他字段，只更新 margin/marginCoin）
  */
 import { useState, useMemo, useEffect } from "react";
+import React from "react";
 import { useParams, useLocation } from "wouter";
 import {
   ChevronLeft,
@@ -169,19 +170,37 @@ export default function DepositManage() {
     setEditingCell(null);
   };
 
-  const clearCell = (userId: number, tagName: string) => {
-    setEditState((prev) => ({
-      ...prev,
-      [userId]: {
-        ...(prev[userId] ?? {}),
-        [tagName]: { margin: "", marginCoin: "" },
-      },
-    }));
-    const full = { ...(fullBalancesMap[userId] ?? {}) };
-    delete full[`${tagName}__margin`];
-    full[`${tagName}__marginCoin`] = "";
-    setMutation.mutate({ ledgerId, targetUserId: userId, balances: full });
-    setEditingCell(null);
+  // 二次确认弹窗 state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    desc: string;
+    onConfirm: () => void;
+  }>({ open: false, title: "", desc: "", onConfirm: () => {} });
+
+  const showConfirm = (title: string, desc: string, onConfirm: () => void) => {
+    setConfirmDialog({ open: true, title, desc, onConfirm });
+  };
+
+  const clearCell = (userId: number, tagName: string, memberName?: string) => {
+    showConfirm(
+      "确认删除保证金",
+      `确定要删除 ${memberName || userId} 在 [${tagName}] 标签下的保证金吗？此操作不可撤销。`,
+      () => {
+        setEditState((prev) => ({
+          ...prev,
+          [userId]: {
+            ...(prev[userId] ?? {}),
+            [tagName]: { margin: "", marginCoin: "" },
+          },
+        }));
+        const full = { ...(fullBalancesMap[userId] ?? {}) };
+        delete full[`${tagName}__margin`];
+        full[`${tagName}__marginCoin`] = "";
+        setMutation.mutate({ ledgerId, targetUserId: userId, balances: full });
+        setEditingCell(null);
+      }
+    );
   };
 
   const calcCNYStr = (margin: string, coin: string): string | null => {
@@ -620,7 +639,7 @@ export default function DepositManage() {
                                 {hasValue && (
                                   <button
                                     onClick={() =>
-                                      clearCell(member.userId, cat.name)
+                                      clearCell(member.userId, cat.name, member.nickname || member.name || String(member.userId))
                                     }
                                     className="w-7 h-7 flex items-center justify-center rounded-full"
                                     style={{ backgroundColor: "#FFF5F5" }}
@@ -641,6 +660,33 @@ export default function DepositManage() {
           })
         )}
       </div>
+
+      {/* 二次确认弹窗 */}
+      {confirmDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+            <h3 className="text-base font-bold text-gray-900 mb-2">{confirmDialog.title}</h3>
+            <p className="text-sm text-gray-600 mb-6">{confirmDialog.desc}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDialog((d) => ({ ...d, open: false }))}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 font-medium"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  setConfirmDialog((d) => ({ ...d, open: false }));
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
