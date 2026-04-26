@@ -217,8 +217,12 @@ def build_first_open_from_tushare(all_dates):
 def main():
     start_date = sys.argv[1] if len(sys.argv) > 1 else "19960101"
     end_date = sys.argv[2] if len(sys.argv) > 2 else datetime.now().strftime("%Y%m%d")
+    # 可选第3个参数：指定板块，如 SZ,GEM,STAR
+    target_markets = None
+    if len(sys.argv) > 3:
+        target_markets = set(sys.argv[3].split(','))
 
-    print(f"=== 趋势缓存重建 {start_date} ~ {end_date} ===")
+    print(f"=== 趋势缓存重建 {start_date} ~ {end_date} 板块={target_markets or 'all'} ===")
 
     # 确保表存在
     conn = get_db()
@@ -239,16 +243,19 @@ def main():
         save_first_open_cache(first_open)
     print(f"首日开盘价已加载 {len(first_open)} 只股票")
 
-    # 获取已缓存的日期（以 all 板块为准）
-    cached = get_cached_dates("all")
+    # 获取已缓存的日期（以指定板块第一个或 all 为参考）
+    ref_market = list(target_markets)[0] if target_markets else "all"
+    cached = get_cached_dates(ref_market)
     missing = [d for d in all_dates if d not in cached]
-    print(f"需补充 {len(missing)} 个交易日（已有 {len(cached)} 个）")
+    print(f"需补充 {len(missing)} 个交易日（已有 {len(cached)} 个，参考板块: {ref_market}）")
 
     # 逐日处理
     total = len(missing)
     for i, trade_date in enumerate(missing):
         results = process_day(trade_date, first_open)
         if results:
+            if target_markets:
+                results = [r for r in results if r[1] in target_markets]
             save_trend_result(results)
         if (i + 1) % 50 == 0 or (i + 1) == total:
             print(f"进度: {i+1}/{total} ({trade_date})")
