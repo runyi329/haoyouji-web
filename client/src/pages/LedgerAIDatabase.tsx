@@ -938,26 +938,26 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-4 gap-1 pt-3 border-t" style={{ borderColor: BORDER }}>
-                    <div className="text-center">
-                      <p className="text-base font-bold" style={{ color: CHART_UP }}>{fmt(limitUp)}</p>
-                      <p className="text-[12px]" style={{ color: DIM }}>涨停</p>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-3 pt-3 border-t" style={{ borderColor: BORDER }}>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(200,0,0,0.05)' }}>
+                      <span className="text-[12px]" style={{ color: DIM }}>涨停</span>
+                      <span className="text-sm font-bold" style={{ color: CHART_UP }}>{fmt(limitUp)}</span>
                     </div>
-                    <div className="text-center">
-                      <p className="text-base font-bold" style={{ color: CHART_UP }}>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(200,0,0,0.05)' }}>
+                      <span className="text-[12px]" style={{ color: DIM }}>最大涨幅</span>
+                      <span className="text-sm font-bold" style={{ color: CHART_UP }}>
                         {t?.max_rise != null ? `+${Number(t.max_rise).toFixed(2)}%` : "—"}
-                      </p>
-                      <p className="text-[12px]" style={{ color: DIM }}>最大涨幅</p>
+                      </span>
                     </div>
-                    <div className="text-center">
-                      <p className="text-base font-bold" style={{ color: CHART_DOWN }}>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(0,150,0,0.05)' }}>
+                      <span className="text-[12px]" style={{ color: DIM }}>跌停</span>
+                      <span className="text-sm font-bold" style={{ color: CHART_DOWN }}>{fmt(limitDown)}</span>
+                    </div>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(0,150,0,0.05)' }}>
+                      <span className="text-[12px]" style={{ color: DIM }}>最大跌幅</span>
+                      <span className="text-sm font-bold" style={{ color: CHART_DOWN }}>
                         {t?.max_fall != null ? `${Number(t.max_fall).toFixed(2)}%` : "—"}
-                      </p>
-                      <p className="text-[12px]" style={{ color: DIM }}>最大跌幅</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-base font-bold" style={{ color: CHART_DOWN }}>{fmt(limitDown)}</p>
-                      <p className="text-[12px]" style={{ color: DIM }}>跌停</p>
+                      </span>
                     </div>
                   </div>
                 </>
