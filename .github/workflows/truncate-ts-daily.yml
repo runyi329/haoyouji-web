@@ -1,0 +1,31 @@
+name: 清理 ts_daily 历史数据
+
+on:
+  push:
+    paths:
+      - '.github/workflows/truncate-ts-daily.yml'
+
+jobs:
+  truncate-ts-daily:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 通过 SSH 清理 ts_daily 历史数据（保留表结构）
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            echo "=== 清理前 ts_daily 行数 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "SELECT COUNT(*) as before_count FROM ts_daily;" 2>/dev/null || echo "ts_daily 不存在"
+            echo "=== 执行 TRUNCATE ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "TRUNCATE TABLE ts_daily;" 2>/dev/null && echo "TRUNCATE 成功" || echo "TRUNCATE 失败（表可能不存在）"
+            echo "=== 清理后 ts_daily 行数 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "SELECT COUNT(*) as after_count FROM ts_daily;" 2>/dev/null || echo "ts_daily 不存在"
+            echo "=== 当前 crm_db 所有 ts_ 开头的表 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SELECT table_name, table_rows, ROUND(data_length/1024/1024, 1) AS data_mb
+              FROM information_schema.tables
+              WHERE table_schema = 'crm_db' AND table_name LIKE 'ts_%'
+              ORDER BY table_name;
+            "
