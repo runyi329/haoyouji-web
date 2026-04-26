@@ -386,14 +386,16 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const { data: trendData, isLoading: trendLoading } = trpc.aiDashboardTrend.useQuery({ granularity: trendGranularity, market });
   const displayData = liveData ?? { total: 0, above: 0, below: 0, equal: 0, byEra: {}, byYear: {} };
 
-  // 年份数据：直接使用接口返回的 byYear
+  // 年份数据：补全 1990 年到当前年份所有年份，没有数据的显示为 0
   const byYearSrc = (liveData as any)?.byYear ?? {};
-  const years = Object.keys(byYearSrc).sort();
+  const currentYear = new Date().getFullYear();
+  const allYears: string[] = [];
+  for (let y = 1990; y <= currentYear; y++) allYears.push(String(y));
   // 按年份降序排列（最新年在上方）
-  const eraData = [...years].reverse().map(y => ({
+  const eraData = [...allYears].reverse().map(y => ({
     name: y,
-    低于首日: parseFloat(pct(byYearSrc[y].below, byYearSrc[y].total)),
-    total: byYearSrc[y].total,
+    低于首日: byYearSrc[y] ? parseFloat(pct(byYearSrc[y].below, byYearSrc[y].total)) : 0,
+    total: byYearSrc[y]?.total ?? 0,
   }));
 
   const abovePct = parseFloat(pct(displayData.above, displayData.total));
