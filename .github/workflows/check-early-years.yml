@@ -1,0 +1,25 @@
+name: Check Early Years Stock Data
+on:
+  push:
+    paths:
+      - '.github/workflows/check-early-years.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query early years distribution
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SELECT SUBSTRING(list_date,1,4) AS year, COUNT(*) AS cnt
+              FROM ts_stock_basic
+              WHERE list_date IS NOT NULL AND list_date != ''
+              GROUP BY year
+              ORDER BY year
+              LIMIT 20;
+            "
