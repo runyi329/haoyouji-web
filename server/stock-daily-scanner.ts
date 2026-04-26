@@ -4,8 +4,10 @@
  * 功能：每个交易日北京时间 15:30 精确触发一次，从 Tushare 拉取当天全量日线数据，
  * 增量写入 ts_daily 表（已存在则跳过，避免重复）。
  *
- * 实现方式：用 setTimeout 精确计算距离下次 BJT 15:30 的毫秒数，到点触发后
- * 再递归设置下一个 24 小时定时器，全天只触发一次，不做无效轮询。
+ * 修复（v2）：
+ * 1. PM2 cluster 模式下只在 worker id=0（或非 cluster 模式）运行，避免多实例竞争
+ * 2. 启动时检查最近 3 个工作日是否有缺失，自动补拉（解决重启导致漏拉问题）
+ * 3. 增加重试机制：扫描失败后最多重试 2 次，每次间隔 5 分钟
  */
 
 import mysql from 'mysql2/promise';
@@ -17,9 +19,7 @@ const DB_URL = process.env.ORIGINAL_DATABASE_URL ?? 'mysql://root:Miao@20190603@
 /** 计算距离下一次 BJT HH:MM 的毫秒数 */
 function msUntilBjt(hour: number, minute: number): number {
   const now = new Date();
-  // 当前 BJT 时间
   const bjtNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-  // 今天 BJT 目标时刻（UTC 表示）
   const target = new Date(Date.UTC(
     bjtNow.getUTCFullYear(),
     bjtNow.getUTCMonth(),
@@ -28,7 +28,6 @@ function msUntilBjt(hour: number, minute: number): number {
     minute,
     0, 0
   ));
-  // 如果今天的目标时刻已过，则等到明天同一时刻
   if (target.getTime() <= now.getTime()) {
     target.setUTCDate(target.getUTCDate() + 1);
   }
@@ -46,6 +45,26 @@ function getBjtTradeDate(): string {
   return `${y}${m}${d}`;
 }
 
+/** 获取北京时间 N 天前的日期字符串，格式 YYYYMMDD */
+function getBjtDateOffset(offsetDays: number): string {
+  const now = new Date();
+  const bjtMs = now.getTime() + 8 * 60 * 60 * 1000 - offsetDays * 24 * 60 * 60 * 1000;
+  const bjtDate = new Date(bjtMs);
+  const y = bjtDate.getUTCFullYear();
+  const m = String(bjtDate.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(bjtDate.getUTCDate()).padStart(2, '0');
+  return `${y}${m}${d}`;
+}
+
+/** 判断某天是否是周末（传入 YYYYMMDD 格式） */
+function isWeekend(dateStr: string): boolean {
+  const y = parseInt(dateStr.slice(0, 4));
+  const m = parseInt(dateStr.slice(4, 6)) - 1;
+  const d = parseInt(dateStr.slice(6, 8));
+  const dow = new Date(Date.UTC(y, m, d)).getUTCDay();
+  return dow === 0 || dow === 6;
+}
+
 /** 判断今天是否是周末（北京时间） */
 function isBjtWeekend(): boolean {
   const now = new Date();
@@ -60,7 +79,6 @@ function isBjtWeekend(): boolean {
 export async function runDailyScan(tradeDate: string): Promise<void> {
   console.log(`[股票扫描] 开始扫描 ${tradeDate} 日线数据...`);
 
-  // 从 Tushare 按 trade_date 拉取全市场日线（A股约 5500 只，单次上限 8000）
   let allItems: any[] = [];
   let fields: string[] = [];
   const PAGE_SIZE = 8000;
@@ -108,7 +126,6 @@ export async function runDailyScan(tradeDate: string): Promise<void> {
 
   const conn = await mysql.createConnection(DB_URL);
   try {
-    // 查询当天已有哪些股票，避免重复
     const [existRows] = await conn.execute(
       'SELECT ts_code FROM ts_daily WHERE trade_date = ?', [tradeDate]
     ) as any[];
@@ -121,7 +138,6 @@ export async function runDailyScan(tradeDate: string): Promise<void> {
       return;
     }
 
-    // 分批 500 条插入
     const BATCH = 500;
     let inserted = 0;
     for (let i = 0; i < newItems.length; i += BATCH) {
@@ -155,7 +171,55 @@ export async function runDailyScan(tradeDate: string): Promise<void> {
   }
 }
 
-/** 递归精确定时：每次触发后自动设置下一个 24 小时定时器 */
+/**
+ * 启动时检查最近 5 个工作日是否有缺失数据，自动补拉
+ * 解决 PM2 重启导致漏拉的问题
+ */
+async function checkAndBackfill(): Promise<void> {
+  try {
+    const conn = await mysql.createConnection(DB_URL);
+    let latestDate = '';
+    try {
+      const [rows] = await conn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
+      latestDate = rows[0]?.latest ?? '';
+    } finally {
+      await conn.end();
+    }
+
+    if (!latestDate) return;
+
+    // 检查最近 7 天（覆盖周末）中有哪些工作日缺失
+    const today = getBjtTradeDate();
+    const missingDates: string[] = [];
+    for (let i = 1; i <= 7; i++) {
+      const d = getBjtDateOffset(i);
+      if (d <= latestDate) break; // 已有数据，不需要再往前查
+      if (!isWeekend(d) && d < today) {
+        missingDates.push(d);
+      }
+    }
+
+    if (missingDates.length === 0) {
+      console.log(`[股票扫描] 启动检查：数据已是最新（${latestDate}），无需补拉`);
+      return;
+    }
+
+    console.log(`[股票扫描] 启动检查：发现 ${missingDates.length} 个缺失工作日，开始补拉: ${missingDates.join(', ')}`);
+    for (const d of missingDates.reverse()) { // 从早到晚补拉
+      try {
+        await runDailyScan(d);
+        await new Promise(r => setTimeout(r, 500));
+      } catch (err) {
+        console.error(`[股票扫描] 补拉 ${d} 失败:`, err);
+      }
+    }
+    console.log(`[股票扫描] 启动补拉完成`);
+  } catch (err) {
+    console.error('[股票扫描] 启动检查失败:', err);
+  }
+}
+
+/** 递归精确定时：每次触发后自动设置下一个 24 小时定时器，失败时重试 */
 function scheduleNext(): void {
   const ms = msUntilBjt(15, 30);
   const nextTime = new Date(Date.now() + ms);
@@ -166,7 +230,25 @@ function scheduleNext(): void {
       if (!isBjtWeekend()) {
         const tradeDate = getBjtTradeDate();
         console.log(`[股票扫描] 精确触发 BJT 15:30 - ${tradeDate}`);
-        await runDailyScan(tradeDate);
+        // 最多重试 2 次
+        let lastErr: any;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            await runDailyScan(tradeDate);
+            lastErr = null;
+            break;
+          } catch (err) {
+            lastErr = err;
+            console.error(`[股票扫描] 第 ${attempt} 次执行失败:`, err);
+            if (attempt < 3) {
+              console.log(`[股票扫描] 5 分钟后重试...`);
+              await new Promise(r => setTimeout(r, 5 * 60 * 1000));
+            }
+          }
+        }
+        if (lastErr) {
+          console.error('[股票扫描] 3 次重试均失败，本次扫描放弃');
+        }
       } else {
         console.log(`[股票扫描] 今天是周末，跳过扫描`);
       }
@@ -180,6 +262,19 @@ function scheduleNext(): void {
 
 /** 启动定时扫描器 */
 export function startStockDailyScanner(): void {
+  // PM2 cluster 模式下，只让 worker id=0 运行（避免多实例竞争）
+  // process.env.NODE_APP_INSTANCE 由 PM2 注入，fork 模式下为 undefined
+  const instanceId = process.env.NODE_APP_INSTANCE;
+  if (instanceId !== undefined && instanceId !== '0') {
+    console.log(`[股票扫描] cluster worker ${instanceId}，跳过（只由 worker 0 运行）`);
+    return;
+  }
+
+  // 启动时检查并补拉缺失数据（延迟 30 秒，等服务完全启动）
+  setTimeout(() => {
+    checkAndBackfill().catch(err => console.error('[股票扫描] 启动补拉异常:', err));
+  }, 30 * 1000);
+
   scheduleNext();
-  console.log('[股票扫描] 已注册，每个交易日北京时间 15:30 精确触发一次');
+  console.log('[股票扫描] 已注册，每个交易日北京时间 15:30 精确触发一次（含启动自动补拉）');
 }
