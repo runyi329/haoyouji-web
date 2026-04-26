@@ -18418,6 +18418,86 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
    } finally { /* pool auto-manages connections */ }
     }),
 
+  /**
+   * 涨停聚集效应：统计全历史涨幅分布，检验 +10%/-10% 聚集现象
+   * 每个区间宽度 0.5%，范围 -11% ~ +11%，重点展示 ±10% 附近的聚集
+   */
+  aiDashboardBunchingEffect: publicProcedure
+    .input(z.object({
+      market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all'),
+    }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        const marketCond: Record<string, string> = {
+          all: '',
+          SH: "AND ts_code LIKE '6%' AND ts_code NOT LIKE '688%'",
+          SZ: "AND ts_code LIKE '0%'",
+          GEM: "AND ts_code LIKE '3%'",
+          STAR: "AND ts_code LIKE '688%'",
+        };
+        const mf = marketCond[input.market] || '';
+
+        // 获取最新数据日期
+        let latestDate = '';
+        try {
+          const [ldRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
+          const raw = (ldRows as any[])[0]?.latest ?? '';
+          latestDate = raw.length === 8 ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}` : raw;
+        } catch {}
+
+        // 统计全历史涨幅分布（区间 0.5%，范围 -11% ~ +11%）
+        // 使用 ROUND 将涨幅归入最近的 0.5% 区间
+        const sql = `
+          SELECT
+            ROUND(pct_chg * 2) / 2 AS bucket,
+            COUNT(*) AS cnt
+          FROM ts_daily
+          WHERE pct_chg IS NOT NULL
+            AND pct_chg BETWEEN -11 AND 11
+            ${mf}
+          GROUP BY bucket
+          ORDER BY bucket
+        `;
+        const [rows] = await (dbConn as any).query(sql) as any[];
+        const buckets = (rows as any[]).map(r => ({
+          bucket: parseFloat(r.bucket),
+          count: Number(r.cnt),
+        }));
+
+        // 计算总量和各关键区间数量
+        const totalCount = buckets.reduce((s, b) => s + b.count, 0);
+
+        // 涨停聚集：+10% 附近 (9.5~10) vs 相邻区间 (9.0~9.5) 的比值
+        const at10 = buckets.find(b => b.bucket === 10)?.count ?? 0;
+        const near10 = buckets.find(b => b.bucket === 9.5)?.count ?? 1;
+        const atMinus10 = buckets.find(b => b.bucket === -10)?.count ?? 0;
+        const nearMinus10 = buckets.find(b => b.bucket === -9.5)?.count ?? 1;
+
+        // 聚集倍数：涨停/跌停区间 vs 相邻区间的比值
+        const upBunchRatio = near10 > 0 ? parseFloat((at10 / near10).toFixed(2)) : 0;
+        const downBunchRatio = nearMinus10 > 0 ? parseFloat((atMinus10 / nearMinus10).toFixed(2)) : 0;
+
+        // 统计各区间占比
+        const bucketsWithPct = buckets.map(b => ({
+          ...b,
+          pct: totalCount > 0 ? parseFloat((b.count / totalCount * 100).toFixed(3)) : 0,
+        }));
+
+        return {
+          latestDate,
+          totalCount,
+          buckets: bucketsWithPct,
+          upBunchRatio,
+          downBunchRatio,
+          at10,
+          atMinus10,
+          near10,
+          nearMinus10,
+        };
+      } finally { /* pool auto-manages connections */ }
+    }),
   /** 宏观经济指标据：M2/CPI/LPR/北向资金/指数趋势 */
   aiDashboardMacro: publicProcedure
     .query(async () => {
