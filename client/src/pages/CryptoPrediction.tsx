@@ -1350,7 +1350,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: order.side === 'buy', staleTime: 120000, refetchOnWindowFocus: false, refetchOnMount: false } // 委托中和已成交的买单都查询，2分钟缓存避免重复加载
+    { enabled: order.side === 'buy', staleTime: 8000, refetchInterval: 10000, refetchOnWindowFocus: false } // 每10秒刷新，与 crypto-price-unified 规范一致
   );
   // 实时价格（用于计算当前市値）- 使用统一价格接口
   const { data: cryptoPricesForOrder } = trpc.getCryptoPrices.useQuery(undefined, {
