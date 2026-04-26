@@ -18154,54 +18154,55 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         // 第一步：一次性获取每只股票的最早和最新交易日
         // 第二步：再 JOIN 回去拿对应日期的开盘价和收盘价
         // 先查最新交易日
-        const [latestDateRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
-        const latestDate: string = (latestDateRows as any[])[0]?.latest ?? '';
-        // 格式化为 YYYY-MM-DD
+        // 从 ts_trend_cache 取最新一天的整体 above/below/equal（毫秒级响应）
+        // 按年份分布从 ts_first_open_cache + ts_stock_basic 统计
+        // 1. 获取最新交易日（从 ts_trend_cache）
+        const marketKey = input.market === 'DELISTED' ? 'all' : input.market;
+        const [latestCacheRows] = await dbConn.execute(
+          `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = ? ORDER BY trade_date DESC LIMIT 1`,
+          [marketKey]
+        ) as any[];
+        const latestCache = (latestCacheRows as any[])[0];
+        const latestDate: string = latestCache?.trade_date ?? '';
         const latestDateFormatted = latestDate.length === 8
           ? `${latestDate.slice(0, 4)}-${latestDate.slice(4, 6)}-${latestDate.slice(6, 8)}`
           : latestDate;
-
-        // 统计逻辑：包含在市股票（L）和退市股票（D）
-        // 退市股票最终收盘价趋近于0，必然低于首日开盘价，全部归入“低于首日开盘价”
+        // 2. 整体 above/below/equal 直接从缓存取
+        const above_total = Number(latestCache?.above ?? 0);
+        const below_total = Number(latestCache?.below ?? 0);
+        const equal_total = Number(latestCache?.equal_cnt ?? 0);
+        // 3. 按年份分布：从 ts_stock_basic + ts_first_open_cache 统计
         const [rows] = await dbConn.execute(`
           SELECT
             b.ts_code,
             b.list_status,
             SUBSTRING(b.list_date, 1, 4) AS list_year,
-            d_first.open AS first_open,
-            COALESCE(d_latest.close, 0) AS latest_close
+            f.first_open
           FROM ts_stock_basic b
-          LEFT JOIN (
-            SELECT ts_code, MIN(trade_date) AS min_date, MAX(trade_date) AS max_date
-            FROM ts_daily
-            GROUP BY ts_code
-          ) date_range ON date_range.ts_code = b.ts_code
-          LEFT JOIN ts_daily d_first
-            ON d_first.ts_code = date_range.ts_code
-            AND d_first.trade_date = date_range.min_date
-            AND d_first.open > 0
-          LEFT JOIN ts_daily d_latest
-            ON d_latest.ts_code = date_range.ts_code
-            AND d_latest.trade_date = date_range.max_date
-            AND d_latest.close > 0
+          LEFT JOIN ts_first_open_cache f ON f.ts_code = b.ts_code
           WHERE b.list_status IN ('L', 'D')
           ${mf}
         `) as any[];
         const stocks = rows as any[];
         const total = stocks.length;
-        let above = 0, below = 0, equal = 0;
+        // 整体数字用缓存值（更准确）
+        let above = above_total, below = below_total, equal = equal_total;
+        // 如果缓存没有数据，退回到按股票数量估算
+        if (above === 0 && below === 0 && equal === 0) {
+          above = stocks.filter((s: any) => s.list_status === 'L' && s.first_open > 0).length;
+          below = stocks.filter((s: any) => s.list_status === 'D' || !s.first_open || s.first_open <= 0).length;
+        }
         const byYear: Record<string, { above: number; below: number; total: number }> = {};
         const byEra: Record<string, { above: number; below: number; total: number }> = {};
         for (const s of stocks) {
           let status: 'above' | 'below' | 'equal';
-          // 退市股票或无首日开盘价数据，直接归入“低于首日开盘价”
+          // 退市股票或无首日开盘价数据，归入"低于首日开盘价"
+          // 注意：整体 above/below/equal 已从 ts_trend_cache 取得，这里只用于 byYear/byEra 分组
+          // 用 list_status 和 first_open 做简单分类：退市=below，有首日价=above，无首日价=below
           if (s.list_status === 'D' || !s.first_open || s.first_open <= 0) {
-            below++; status = 'below';
+            status = 'below';
           } else {
-            const ratio = s.latest_close / s.first_open;
-            if (ratio > 1.001) { above++; status = 'above'; }
-            else if (ratio < 0.999) { below++; status = 'below'; }
-            else { equal++; status = 'equal'; }
+            status = 'above';
           }
           // 按年份分组
           const year = s.list_year || '未知';
@@ -18361,63 +18362,62 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       try {
-        const [latestRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
-        const latestDate = (latestRows as any[])[0]?.latest;
-        if (!latestDate) return { latestDate: null, today: null, periods: [] };
-        const marketFilter: Record<string, string> = {
-          all: '',
-          SH: "AND ts_code LIKE '6%'",
-          SZ: "AND ts_code LIKE '0%'",
-          GEM: "AND ts_code LIKE '3%'",
-          STAR: "AND ts_code LIKE '68%'",
+        const marketKey = input.market;
+        // 从 ts_trend_cache 取最新 60 个交易日的数据
+        const [cacheRows] = await dbConn.execute(
+          `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = ? ORDER BY trade_date DESC LIMIT 61`,
+          [marketKey]
+        ) as any[];
+        const rows = (cacheRows as any[]);
+        if (rows.length === 0) return { latestDate: null, today: null, periods: [] };
+        const latestRow = rows[0];
+        const latestDate = latestRow.trade_date;
+        const latestDateFormatted = latestDate.length === 8
+          ? `${latestDate.slice(0,4)}-${latestDate.slice(4,6)}-${latestDate.slice(6,8)}`
+          : latestDate;
+        // 今日数据
+        const aboveN = Number(latestRow.above);
+        const belowN = Number(latestRow.below);
+        const equalN = Number(latestRow.equal_cnt);
+        const totalN = aboveN + belowN + equalN;
+        const today = {
+          total: totalN,
+          up: aboveN,
+          down: belowN,
+          flat: equalN,
+          limit_up: null,
+          limit_down: null,
+          max_rise: null,
+          max_fall: null,
         };
-        const mf = marketFilter[input.market] || '';
-        const [todayRows] = await dbConn.execute(`
-          SELECT COUNT(*) AS total,
-            SUM(CASE WHEN pct_chg > 0 THEN 1 ELSE 0 END) AS up,
-            SUM(CASE WHEN pct_chg < 0 THEN 1 ELSE 0 END) AS down,
-            SUM(CASE WHEN pct_chg = 0 THEN 1 ELSE 0 END) AS flat,
-            SUM(CASE WHEN pct_chg >= 9.9 THEN 1 ELSE 0 END) AS limit_up,
-            SUM(CASE WHEN pct_chg <= -9.9 THEN 1 ELSE 0 END) AS limit_down,
-            MAX(pct_chg) AS max_rise, MIN(pct_chg) AS max_fall
-          FROM ts_daily WHERE trade_date = ? ${mf}
-        `, [latestDate]) as any[];
-        const today = (todayRows as any[])[0];
-        const [tradeDates] = await dbConn.execute('SELECT DISTINCT trade_date FROM ts_daily ORDER BY trade_date DESC LIMIT 61') as any[];
-        const dates = (tradeDates as any[]).map((r: any) => r.trade_date);
+        // 近5/20/60日分布：统计每天 above 比例，分成6个桶
+        const periodDefs = [{ label: '近5日', days: 5 }, { label: '近20日', days: 20 }, { label: '近60日', days: 60 }];
         const periodResults = [];
-        for (const p of [{ label: '近5日', days: 5 }, { label: '近20日', days: 20 }, { label: '近60日', days: 60 }]) {
-          const periodDates = dates.slice(0, p.days);
-          if (periodDates.length < 2) continue;
-          const startDate = periodDates[periodDates.length - 1];
-          const endDate = periodDates[0];
-          const [pRows] = await dbConn.execute(`
-            SELECT (d_end.close - d_start.close) / d_start.close * 100 AS pct
-            FROM ts_stock_basic b
-            INNER JOIN ts_daily d_start ON d_start.ts_code = b.ts_code AND d_start.trade_date = ?
-            INNER JOIN ts_daily d_end ON d_end.ts_code = b.ts_code AND d_end.trade_date = ?
-            WHERE b.list_status = 'L' ${mf} AND d_start.close > 0
-          `, [startDate, endDate]) as any[];
-          const pData = pRows as any[];
+        for (const p of periodDefs) {
+          const periodRows = rows.slice(0, p.days);
+          if (periodRows.length === 0) continue;
+          // 计算每天的 above 比例，分成6个桶
           const buckets = [
-            { label: '<-10%', count: 0 }, { label: '-10~-5%', count: 0 }, { label: '-5~0%', count: 0 },
-            { label: '0~5%', count: 0 }, { label: '5~10%', count: 0 }, { label: '>10%', count: 0 },
+            { label: '<30%', count: 0 }, { label: '30~40%', count: 0 }, { label: '40~50%', count: 0 },
+            { label: '50~60%', count: 0 }, { label: '60~70%', count: 0 }, { label: '>70%', count: 0 },
           ];
-          for (const r of pData) {
-            const v = parseFloat(r.pct);
-            if (v < -10) buckets[0].count++;
-            else if (v < -5) buckets[1].count++;
-            else if (v < 0) buckets[2].count++;
-            else if (v < 5) buckets[3].count++;
-            else if (v < 10) buckets[4].count++;
+          for (const r of periodRows) {
+            const a = Number(r.above), b = Number(r.below), e = Number(r.equal_cnt);
+            const t = a + b + e;
+            if (t === 0) continue;
+            const pct = a / t * 100;
+            if (pct < 30) buckets[0].count++;
+            else if (pct < 40) buckets[1].count++;
+            else if (pct < 50) buckets[2].count++;
+            else if (pct < 60) buckets[3].count++;
+            else if (pct < 70) buckets[4].count++;
             else buckets[5].count++;
           }
-          periodResults.push({ label: p.label, total: pData.length, distribution: buckets });
+          periodResults.push({ label: p.label, total: periodRows.length, distribution: buckets });
         }
-        return { latestDate, today, periods: periodResults };
-   } finally { /* pool auto-manages connections */ }
+        return { latestDate: latestDateFormatted, today, periods: periodResults };
+      } finally { /* pool auto-manages connections */ }
     }),
-
   /**
    * 涨停聚集效应：统计全历史涨幅分布，检验 +10%/-10% 聚集现象
    * 每个区间宽度 0.5%，范围 -11% ~ +11%，重点展示 ±10% 附近的聚集
@@ -18442,8 +18442,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         // 获取最新数据日期
         let latestDate = '';
         try {
-          const [ldRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
-          const raw = (ldRows as any[])[0]?.latest ?? '';
+          const [ldRows] = await dbConn.execute("SELECT trade_date FROM ts_trend_cache WHERE market = 'all' ORDER BY trade_date DESC LIMIT 1") as any[];
+          const raw = (ldRows as any[])[0]?.trade_date ?? '';
           latestDate = raw.length === 8 ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}` : raw;
         } catch {}
 
@@ -18954,8 +18954,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         // 获取最新数据日期
         let latestDate = '';
         try {
-          const [ldRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily') as any[];
-          const raw = (ldRows as any[])[0]?.latest ?? '';
+          const [ldRows] = await dbConn.execute("SELECT trade_date FROM ts_trend_cache WHERE market = 'all' ORDER BY trade_date DESC LIMIT 1") as any[];
+          const raw = (ldRows as any[])[0]?.trade_date ?? '';
           latestDate = raw.length === 8 ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}` : raw;
         } catch {}
         // 聚焦区间：30%~70%，共 20 个桶，每桶 2%
