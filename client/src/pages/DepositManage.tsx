@@ -24,7 +24,9 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 
-const CRYPTO_COINS = ["BTC", "ETH", "SOL", "LDO", "USDT", "人民币"];
+const CRYPTO_COINS = ["BTC", "ETH", "SOL", "LDO", "USDT", "元"];
+// 归一化币种：「人民币」「」都统一为「元」
+const normalizeCoin = (coin: string) => (!coin || coin === "人民币") ? "元" : coin;
 const CNY_RATE = 7.0;
 
 interface DepositEntry {
@@ -36,7 +38,7 @@ interface DepositEntry {
 function toCNY(margin: string, coin: string, prices: Record<string, number>): number {
   const num = parseFloat(margin);
   if (isNaN(num) || num <= 0) return 0;
-  if (!coin) return num; // 人民币
+  if (!coin || coin === "人民币" || coin === "元") return num; // 元/人民币
   if (coin === "USDT") return num * CNY_RATE;
   const price = prices[coin];
   if (!price) return 0;
@@ -238,7 +240,7 @@ export default function DepositManage() {
         const entry = userEdit[cat.name] ?? { margin: "", marginCoin: "" };
         const num = parseFloat(entry.margin);
         if (!isNaN(num) && num > 0) {
-          const coinKey = entry.marginCoin || "人民币";
+          const coinKey = normalizeCoin(entry.marginCoin || "");
           if (!byCoin[coinKey]) byCoin[coinKey] = { count: 0, total: 0 };
           byCoin[coinKey].count += 1;
           byCoin[coinKey].total += num;
@@ -374,9 +376,9 @@ export default function DepositManage() {
                           maximumFractionDigits: 4,
                         })}
                       </div>
-                      {coin !== "人民币" && (
+                      {coin !== "元" && (
                         <div className="text-xs text-gray-400">
-                          {calcCNYStr(String(data.total), coin === "人民币" ? "" : coin)}
+                          {calcCNYStr(String(data.total), coin === "元" ? "" : coin)}
                         </div>
                       )}
                     </div>
@@ -566,14 +568,14 @@ export default function DepositManage() {
                               />
                               <select
                                 value={
-                                  draft.marginCoin === "" ? "人民币" : draft.marginCoin
+                                  draft.marginCoin === "" || draft.marginCoin === "人民币" ? "元" : draft.marginCoin
                                 }
                                 onChange={(e) =>
                                   setDraft((d) => ({
                                     ...d,
                                     marginCoin:
-                                      e.target.value === "人民币"
-                                        ? ""
+                                      e.target.value === "元"
+                                        ? "元"
                                         : e.target.value,
                                   }))
                                 }
