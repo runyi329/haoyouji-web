@@ -159,6 +159,66 @@ async function updateTrendCache(
 }
 
 /**
+ * 拉取并写入 ts_daily_basic（全生命周期板块 latestDate 来源）
+ */
+async function updateDailyBasic(
+  conn: mysql.Connection,
+  tradeDate: string
+): Promise<void> {
+  try {
+    const resp = await fetch(TUSHARE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_name: 'daily_basic',
+        token: TUSHARE_TOKEN,
+        params: { trade_date: tradeDate },
+        fields: 'ts_code,trade_date,pe_ttm,pb,total_mv,close,turnover_rate,volume_ratio',
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const json = await resp.json() as any;
+    if (json.code !== 0 || !json.data?.items?.length) {
+      console.warn(`[\u80a1\u7968\u626b\u63cf] ts_daily_basic ${tradeDate} \u65e0\u6570\u636e\uff0c\u8df3\u8fc7`);
+      return;
+    }
+    const fields: string[] = json.data.fields;
+    const items: any[][] = json.data.items;
+    const fi = (name: string) => fields.indexOf(name);
+    const BATCH = 500;
+    let inserted = 0;
+    for (let i = 0; i < items.length; i += BATCH) {
+      const batch = items.slice(i, i + BATCH);
+      const placeholders = batch.map(() => '(?,?,?,?,?,?,?,?)').join(',');
+      const values: any[] = [];
+      for (const row of batch) {
+        values.push(
+          row[fi('ts_code')], row[fi('trade_date')],
+          row[fi('pe_ttm')] != null ? Number(row[fi('pe_ttm')]) : null,
+          row[fi('pb')] != null ? Number(row[fi('pb')]) : null,
+          row[fi('total_mv')] != null ? Number(row[fi('total_mv')]) : null,
+          row[fi('close')] != null ? Number(row[fi('close')]) : null,
+          row[fi('turnover_rate')] != null ? Number(row[fi('turnover_rate')]) : null,
+          row[fi('volume_ratio')] != null ? Number(row[fi('volume_ratio')]) : null,
+        );
+      }
+      await conn.execute(
+        `INSERT INTO ts_daily_basic (ts_code, trade_date, pe_ttm, pb, total_mv, close, turnover_rate, volume_ratio)
+         VALUES ${placeholders}
+         ON DUPLICATE KEY UPDATE
+           pe_ttm=VALUES(pe_ttm), pb=VALUES(pb), total_mv=VALUES(total_mv),
+           close=VALUES(close), turnover_rate=VALUES(turnover_rate), volume_ratio=VALUES(volume_ratio)`,
+        values
+      );
+      inserted += batch.length;
+    }
+    console.log(`[\u80a1\u7968\u626b\u63cf] ts_daily_basic \u5df2\u66f4\u65b0 ${tradeDate}\uff0c\u5171 ${inserted} \u6761`);
+  } catch (err) {
+    console.error('[\u80a1\u7968\u626b\u63cf] ts_daily_basic \u66f4\u65b0\u5931\u8d25:', err);
+  }
+}
+
+/**
  * 根据当天行情数据计算并写入 ts_bunching_stats（涨停聚集效应统计）
  */
 async function updateBunchingStats(
@@ -341,6 +401,9 @@ export async function runDailyScan(tradeDate: string): Promise<void> {
 
     // 更新 ts_bunching_stats（AA页面涨停聚集效应）
     await updateBunchingStats(conn, tradeDate, allItems, fields);
+
+    // 更新 ts_daily_basic（全生命周期板块的 latestDate 来源）
+    await updateDailyBasic(conn, tradeDate);
 
   } finally {
     await conn.end();
