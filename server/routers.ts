@@ -18233,7 +18233,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
    */
   aiDashboardTrend: publicProcedure
     .input(z.object({
-      granularity: z.enum(['day', 'week', 'month']).default('day'),
+      granularity: z.enum(['day', 'week', 'month', 'year']).default('day'),
       market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all'),
     }))
     .query(async ({ input }) => {
@@ -18241,7 +18241,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       try {
         // 根据颗粒度决定取多少个交易日
-        const limitDays: number = input.granularity === 'day' ? 60 : input.granularity === 'week' ? 260 : 1200;
+        const limitDays: number = input.granularity === 'day' ? 60 : input.granularity === 'week' ? 260 : input.granularity === 'month' ? 1200 : 9999;
 
         // market='all' 时直接读预计算缓存表（毫秒级响应）
         if (input.market === 'all') {
@@ -18270,6 +18270,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
               let key: string;
               if (input.granularity === 'month') {
                 key = `${y}-${String(m).padStart(2, '0')}`;
+              } else if (input.granularity === 'year') {
+                key = `${y}`;
               } else {
                 const date = new Date(y, m - 1, day);
                 const startOfYear = new Date(y, 0, 1);

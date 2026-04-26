@@ -382,7 +382,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   const { data: liveData, isLoading: survivalLoading } = trpc.aiDashboardSurvival.useQuery({ market });
 
   // 趋势折线图
-  const [trendGranularity, setTrendGranularity] = useState<'day' | 'week' | 'month'>('day');
+  const [trendGranularity, setTrendGranularity] = useState<'day' | 'week' | 'month' | 'year'>('day');
   const { data: trendData, isLoading: trendLoading } = trpc.aiDashboardTrend.useQuery({ granularity: trendGranularity, market });
   const displayData = liveData ?? { total: 0, above: 0, below: 0, equal: 0, byEra: {}, byYear: {} };
 
@@ -553,7 +553,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-semibold" style={{ color: TEXT }}>高于/低于首日开盘价趋势</p>
             <div className="flex gap-1">
-              {(['day', 'week', 'month'] as const).map(g => (
+              {(['day', 'week', 'month', 'year'] as const).map(g => (
                 <button
                   key={g}
                   onClick={() => setTrendGranularity(g)}
@@ -564,7 +564,7 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
                     border: `1px solid ${trendGranularity === g ? RED : BORDER}`,
                   }}
                 >
-                  {g === 'day' ? '日' : g === 'week' ? '周' : '月'}
+                  {g === 'day' ? '日' : g === 'week' ? '周' : g === 'month' ? '月' : '年'}
                 </button>
               ))}
             </div>
@@ -600,7 +600,8 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
                   tickFormatter={(v: string) => {
                     if (trendGranularity === 'day') return v.slice(5); // MM-DD
                     if (trendGranularity === 'week') return v.slice(5); // W##
-                    return v.slice(2); // YY-MM
+                    if (trendGranularity === 'month') return v.slice(2); // YY-MM
+                    return v; // YYYY
                   }}
                 />
                 <YAxis
