@@ -679,7 +679,7 @@ function BunchingEffectSection() {
 
   return (
     <div>
-      <SectionTitle title="涨停聚集效应" sub="全历史涨幅分布 · 市场操纵程度检验"
+      <SectionTitle title="涨停聚集效应" sub="全历史涨幅分布 · 涨跌停制度截断效应分析"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
             {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
@@ -711,8 +711,8 @@ function BunchingEffectSection() {
             <><Skeleton /><Skeleton /></>
           ) : error ? (
             <EmptyState label={`加载失败: ${error.message.slice(0, 40)}`} />
-          ) : !data ? (
-            <EmptyState label="暂无数据" />
+          ) : !data || data.totalCount === 0 ? (
+            <EmptyState label="历史数据建设中，首次运行需等待历史数据回填完成" />
           ) : (
             <>
               <div className="flex items-center gap-3 mb-3">
@@ -727,7 +727,7 @@ function BunchingEffectSection() {
                   <p className="text-[10px]" style={{ color: DIM }}>-10% vs -9.5%</p>
                 </div>
                 <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
-                  <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>操纵程度</p>
+                  <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>聚集强度</p>
                   <p className="text-lg font-bold" style={{ color: manipulationColor }}>{manipulationLevel}</p>
                   <p className="text-[10px]" style={{ color: DIM }}>综合评估</p>
                 </div>
@@ -790,11 +790,11 @@ function BunchingEffectSection() {
                 <p className="text-[11px] leading-relaxed" style={{ color: DIM }}>
                   {`涨停聚集倍数 ${upRatio}x：+10%涨停出现次数是相邻区间(+9.5%)的 ${upRatio} 倍。`}
                   {upRatio >= 5
-                    ? `这一显著聚集说明大量资金刻意将股票推至涨停板，是主动操控的典型特征。`
+                    ? `这一显著聚集主要反映涨停板制度的截断效应：价格在接近涨停时被制度强制停止，导致大量交易堆积在 +10% 边界。`
                     : upRatio >= 3
-                    ? `存在一定聚集效应，反映涨停板制度对资金行为有明显引导。`
+                    ? `存在一定聚集效应，反映涨停板制度对价格分布有明显截断作用。`
                     : `聚集效应较弱，价格分布相对自然。`}
-                  {` 跌停聚集倍数 ${downRatio}x，综合操纵程度评估为「${manipulationLevel}」。`}
+                  {` 跌停聚集倍数 ${downRatio}x，综合聚集强度评估为「${manipulationLevel}」。`}
                 </p>
               </div>
               <div className="mt-2 px-2 py-1.5 rounded-lg" style={{ background: "#F5F5F5", border: `1px solid ${BORDER}` }}>

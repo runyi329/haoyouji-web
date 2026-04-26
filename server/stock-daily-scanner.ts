@@ -159,6 +159,84 @@ async function updateTrendCache(
 }
 
 /**
+ * 根据当天行情数据计算并写入 ts_bunching_stats（涨停聚集效应统计）
+ */
+async function updateBunchingStats(
+  conn: mysql.Connection,
+  tradeDate: string,
+  items: any[],
+  fields: string[]
+): Promise<void> {
+  const pctChgIdx = fields.indexOf('pct_chg');
+  const tsCodeIdx = fields.indexOf('ts_code');
+  if (pctChgIdx < 0) return;
+
+  // 确保表存在
+  try {
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS ts_bunching_stats (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        trade_date VARCHAR(8) NOT NULL,
+        market VARCHAR(10) NOT NULL,
+        total_count INT NOT NULL DEFAULT 0,
+        buckets_json TEXT NOT NULL,
+        at10 INT NOT NULL DEFAULT 0,
+        near10 INT NOT NULL DEFAULT 0,
+        at_minus10 INT NOT NULL DEFAULT 0,
+        near_minus10 INT NOT NULL DEFAULT 0,
+        up_bunch_ratio FLOAT NOT NULL DEFAULT 0,
+        down_bunch_ratio FLOAT NOT NULL DEFAULT 0,
+        UNIQUE KEY uk_date_market (trade_date, market)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+  } catch {}
+
+  for (const [market, filterFn] of Object.entries(MARKETS)) {
+    const bucketMap = new Map<number, number>();
+    let total = 0;
+
+    for (const row of items) {
+      const code = String(row[tsCodeIdx]).split('.')[0];
+      if (!filterFn(code)) continue;
+      const pct = row[pctChgIdx];
+      if (pct == null) continue;
+      const pctNum = parseFloat(pct);
+      if (pctNum < -11 || pctNum > 11) continue;
+      const bucket = Math.round(pctNum * 2) / 2;
+      bucketMap.set(bucket, (bucketMap.get(bucket) ?? 0) + 1);
+      total++;
+    }
+
+    // 生成完整区间列表
+    const buckets: { bucket: number; count: number }[] = [];
+    for (let v = -11; v <= 11.01; v += 0.5) {
+      const bv = Math.round(v * 2) / 2;
+      buckets.push({ bucket: bv, count: bucketMap.get(bv) ?? 0 });
+    }
+
+    const at10 = bucketMap.get(10) ?? 0;
+    const near10 = bucketMap.get(9.5) ?? 0;
+    const atMinus10 = bucketMap.get(-10) ?? 0;
+    const nearMinus10 = bucketMap.get(-9.5) ?? 0;
+    const upBunchRatio = near10 > 0 ? parseFloat((at10 / near10).toFixed(2)) : 0;
+    const downBunchRatio = nearMinus10 > 0 ? parseFloat((atMinus10 / nearMinus10).toFixed(2)) : 0;
+
+    await conn.execute(`
+      INSERT INTO ts_bunching_stats
+        (trade_date, market, total_count, buckets_json, at10, near10, at_minus10, near_minus10, up_bunch_ratio, down_bunch_ratio)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        total_count=VALUES(total_count), buckets_json=VALUES(buckets_json),
+        at10=VALUES(at10), near10=VALUES(near10),
+        at_minus10=VALUES(at_minus10), near_minus10=VALUES(near_minus10),
+        up_bunch_ratio=VALUES(up_bunch_ratio), down_bunch_ratio=VALUES(down_bunch_ratio)
+    `, [tradeDate, market, total, JSON.stringify(buckets), at10, near10, atMinus10, nearMinus10, upBunchRatio, downBunchRatio]);
+  }
+
+  console.log(`[股票扫描] ts_bunching_stats 已更新 ${tradeDate}`);
+}
+
+/**
  * 执行一次日线扫描：拉取指定交易日全量数据写入 ts_daily，并更新 ts_trend_cache
  */
 export async function runDailyScan(tradeDate: string): Promise<void> {
@@ -260,6 +338,9 @@ export async function runDailyScan(tradeDate: string): Promise<void> {
 
     // 更新 ts_trend_cache（AA页面趋势折线图）
     await updateTrendCache(conn, tradeDate, allItems, fields);
+
+    // 更新 ts_bunching_stats（AA页面涨停聚集效应）
+    await updateBunchingStats(conn, tradeDate, allItems, fields);
 
   } finally {
     await conn.end();
