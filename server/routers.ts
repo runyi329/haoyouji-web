@@ -18135,74 +18135,58 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
 
   /** 生存分析：股价高于/低于上市首日的比例（直接从 ts_daily 实时计算） */
   aiDashboardSurvival: publicProcedure
-    .input(z.object({ market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR', 'DELISTED']).default('all') }))
+    .input(z.object({
+      market: z.enum(['all', 'SH', 'SZ', 'GEM', 'STAR']).default('all'),
+    }))
     .query(async ({ input }) => {
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       try {
-        // 板块过滤条件（基于股票代码前缀）
-        const marketCond: Record<string, string> = {
+        const marketFilter: Record<string, string> = {
           all: '',
           SH: "AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
           SZ: "AND b.ts_code LIKE '0%'",
           GEM: "AND b.ts_code LIKE '3%'",
           STAR: "AND b.ts_code LIKE '688%'",
-          DELISTED: "AND b.list_status = 'D'",
         };
-        const mf = marketCond[input.market] || '';
-        // 优化SQL：用GROUP BY预聚合替代相关子查询，只扫描一遍 ts_daily
-        // 第一步：一次性获取每只股票的最早和最新交易日
-        // 第二步：再 JOIN 回去拿对应日期的开盘价和收盘价
-        // 先查最新交易日
-        // 从 ts_trend_cache 取最新一天的整体 above/below/equal（毫秒级响应）
-        // 按年份分布从 ts_first_open_cache + ts_stock_basic 统计
-        // 1. 获取最新交易日（从 ts_trend_cache）
-        const marketKey = input.market === 'DELISTED' ? 'all' : input.market;
-        const [latestCacheRows] = await dbConn.execute(
-          `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = ? ORDER BY trade_date DESC LIMIT 1`,
-          [marketKey]
-        ) as any[];
-        const latestCache = (latestCacheRows as any[])[0];
-        const latestDate: string = latestCache?.trade_date ?? '';
+        const mf = marketFilter[input.market] || '';
+        // 1. 获取 ts_daily_basic 最新交易日
+        const [latestRows] = await dbConn.execute('SELECT MAX(trade_date) AS latest FROM ts_daily_basic') as any[];
+        const latestDate: string = (latestRows as any[])[0]?.latest ?? '';
         const latestDateFormatted = latestDate.length === 8
-          ? `${latestDate.slice(0, 4)}-${latestDate.slice(4, 6)}-${latestDate.slice(6, 8)}`
+          ? `${latestDate.slice(0,4)}-${latestDate.slice(4,6)}-${latestDate.slice(6,8)}`
           : latestDate;
-        // 2. 整体 above/below/equal 直接从缓存取
-        const above_total = Number(latestCache?.above ?? 0);
-        const below_total = Number(latestCache?.below ?? 0);
-        const equal_total = Number(latestCache?.equal_cnt ?? 0);
-        // 3. 按年份分布：从 ts_stock_basic + ts_first_open_cache 统计
+        // 2. 联合查询：股票基本信息 + 首日开盘价 + 最新收盘价
         const [rows] = await dbConn.execute(`
           SELECT
             b.ts_code,
             b.list_status,
             SUBSTRING(b.list_date, 1, 4) AS list_year,
-            f.first_open
+            f.first_open,
+            d.close AS latest_close
           FROM ts_stock_basic b
           LEFT JOIN ts_first_open_cache f ON f.ts_code = b.ts_code
+          LEFT JOIN ts_daily_basic d ON d.ts_code = b.ts_code AND d.trade_date = '${latestDate}'
           WHERE b.list_status IN ('L', 'D')
           ${mf}
         `) as any[];
         const stocks = rows as any[];
         const total = stocks.length;
-        // 整体数字用缓存值（更准确）
-        let above = above_total, below = below_total, equal = equal_total;
-        // 如果缓存没有数据，退回到按股票数量估算
-        if (above === 0 && below === 0 && equal === 0) {
-          above = stocks.filter((s: any) => s.list_status === 'L' && s.first_open > 0).length;
-          below = stocks.filter((s: any) => s.list_status === 'D' || !s.first_open || s.first_open <= 0).length;
-        }
+        let above = 0, below = 0, equal = 0;
         const byYear: Record<string, { above: number; below: number; total: number }> = {};
         const byEra: Record<string, { above: number; below: number; total: number }> = {};
         for (const s of stocks) {
           let status: 'above' | 'below' | 'equal';
-          // 退市股票或无首日开盘价数据，归入"低于首日开盘价"
-          // 注意：整体 above/below/equal 已从 ts_trend_cache 取得，这里只用于 byYear/byEra 分组
-          // 用 list_status 和 first_open 做简单分类：退市=below，有首日价=above，无首日价=below
-          if (s.list_status === 'D' || !s.first_open || s.first_open <= 0) {
-            status = 'below';
+          const firstOpen = parseFloat(s.first_open ?? 0);
+          const latestClose = parseFloat(s.latest_close ?? 0);
+          // 退市股票或无收盘价/首日价，归入 below
+          if (s.list_status === 'D' || !firstOpen || firstOpen <= 0 || !latestClose || latestClose <= 0) {
+            status = 'below'; below++;
           } else {
-            status = 'above';
+            const ratio = latestClose / firstOpen;
+            if (ratio > 1.001) { status = 'above'; above++; }
+            else if (ratio < 0.999) { status = 'below'; below++; }
+            else { status = 'equal'; equal++; }
           }
           // 按年份分组
           const year = s.list_year || '未知';
