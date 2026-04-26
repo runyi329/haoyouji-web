@@ -18423,15 +18423,17 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           latestDate = raw.length === 8 ? `${raw.slice(0,4)}-${raw.slice(4,6)}-${raw.slice(6,8)}` : raw;
         } catch {}
 
-        // 检查 ts_bunching_stats 表是否存在且有数据
-        let tableExists = false;
+        // 从 ts_bunching_agg 读取汇总数据（1%区间，-20%~+20%，共41行）
+        let aggRows: any[] = [];
         try {
-          const [chk] = await dbConn.execute("SELECT COUNT(*) as cnt FROM ts_bunching_stats WHERE market = ?", [input.market]) as any[];
-          tableExists = Number((chk as any[])[0]?.cnt ?? 0) > 0;
+          const [rows] = await dbConn.execute(
+            'SELECT bucket, cnt FROM ts_bunching_agg WHERE market = ? ORDER BY bucket',
+            [input.market]
+          ) as any[];
+          aggRows = rows as any[];
         } catch {}
 
-        if (!tableExists) {
-          // 表不存在或无数据，返回空结果
+        if (aggRows.length === 0) {
           return {
             latestDate,
             totalCount: 0,
@@ -18446,48 +18448,39 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           };
         }
 
-        // 从 ts_bunching_stats 聚合全历史数据（按 bucket 累加各日 count）
-        // 每行的 buckets_json 是当天的分布，需要将所有日期的数据累加
-        const [allRows] = await dbConn.execute(
-          "SELECT buckets_json, total_count, at10, near10, at_minus10, near_minus10 FROM ts_bunching_stats WHERE market = ? ORDER BY trade_date",
-          [input.market]
-        ) as any[];
-
-        // 累加所有日期的分布
-        const bucketAgg = new Map<number, number>();
+        // 构建 bucket map
+        const bucketMap = new Map<number, number>();
         let totalCount = 0;
-        let aggAt10 = 0, aggNear10 = 0, aggAtMinus10 = 0, aggNearMinus10 = 0;
-
-        for (const row of (allRows as any[])) {
-          totalCount += Number(row.total_count ?? 0);
-          aggAt10 += Number(row.at10 ?? 0);
-          aggNear10 += Number(row.near10 ?? 0);
-          aggAtMinus10 += Number(row.at_minus10 ?? 0);
-          aggNearMinus10 += Number(row.near_minus10 ?? 0);
-
-          try {
-            const buckets = JSON.parse(row.buckets_json ?? '[]');
-            for (const b of buckets) {
-              const bv = parseFloat(b.bucket);
-              bucketAgg.set(bv, (bucketAgg.get(bv) ?? 0) + Number(b.count ?? 0));
-            }
-          } catch {}
+        for (const row of aggRows) {
+          const b = Number(row.bucket);
+          const c = Number(row.cnt ?? 0);
+          bucketMap.set(b, c);
+          totalCount += c;
         }
 
-        // 生成完整区间列表（-11 到 +11，步长 0.5）
+        // 生成完整区间列表（-20 到 +20，步长 1%）
         const bucketsWithPct: { bucket: number; count: number; pct: number }[] = [];
-        for (let v = -11; v <= 11.01; v += 0.5) {
-          const bv = Math.round(v * 2) / 2;
-          const cnt = bucketAgg.get(bv) ?? 0;
+        for (let v = -20; v <= 20; v++) {
+          const cnt = bucketMap.get(v) ?? 0;
           bucketsWithPct.push({
-            bucket: bv,
+            bucket: v,
             count: cnt,
             pct: totalCount > 0 ? parseFloat((cnt / totalCount * 100).toFixed(3)) : 0,
           });
         }
 
-        const upBunchRatio = aggNear10 > 0 ? parseFloat((aggAt10 / aggNear10).toFixed(2)) : 0;
-        const downBunchRatio = aggNearMinus10 > 0 ? parseFloat((aggAtMinus10 / aggNearMinus10).toFixed(2)) : 0;
+        // 涨停/跌停聚集倍数（主板±10%，科创板/创业板±20%）
+        const at10 = bucketMap.get(10) ?? 0;
+        const near10 = bucketMap.get(9) ?? 0;
+        const atMinus10 = bucketMap.get(-10) ?? 0;
+        const nearMinus10 = bucketMap.get(-9) ?? 0;
+        const at20 = bucketMap.get(20) ?? 0;
+        const near20 = bucketMap.get(19) ?? 0;
+        const atMinus20 = bucketMap.get(-20) ?? 0;
+        const nearMinus20 = bucketMap.get(-19) ?? 0;
+
+        const upBunchRatio = near10 > 0 ? parseFloat((at10 / near10).toFixed(2)) : 0;
+        const downBunchRatio = nearMinus10 > 0 ? parseFloat((atMinus10 / nearMinus10).toFixed(2)) : 0;
 
         return {
           latestDate,
@@ -18495,10 +18488,16 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           buckets: bucketsWithPct,
           upBunchRatio,
           downBunchRatio,
-          at10: aggAt10,
-          atMinus10: aggAtMinus10,
-          near10: aggNear10,
-          nearMinus10: aggNearMinus10,
+          at10,
+          atMinus10,
+          near10,
+          nearMinus10,
+          at20,
+          near20,
+          atMinus20,
+          nearMinus20,
+          upBunchRatio20: near20 > 0 ? parseFloat((at20 / near20).toFixed(2)) : 0,
+          downBunchRatio20: nearMinus20 > 0 ? parseFloat((atMinus20 / nearMinus20).toFixed(2)) : 0,
           dataReady: true,
         };
       } finally { /* pool auto-manages connections */ }
