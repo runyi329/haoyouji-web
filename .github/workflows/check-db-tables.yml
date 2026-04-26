@@ -9,16 +9,22 @@ jobs:
   check-tables:
     runs-on: ubuntu-latest
     steps:
-      - name: 检查 ts_ 开头的所有表及行数
+      - name: 通过 SSH 在服务器上查询数据库表
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 124.223.54.69
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
+            echo "=== 所有表及估算行数 ==="
             mysql -u root -p'Miao@20190603' haoyouji -e "
-              SELECT table_name, table_rows
+              SELECT table_name, table_rows, ROUND(data_length/1024/1024, 1) AS data_mb
               FROM information_schema.tables
               WHERE table_schema = 'haoyouji'
               ORDER BY table_name;
+            "
+            echo "=== ts_trend_cache 各板块数据量 ==="
+            mysql -u root -p'Miao@20190603' haoyouji -e "
+              SELECT market, COUNT(*) as cnt, MIN(trade_date) as min_date, MAX(trade_date) as max_date
+              FROM ts_trend_cache GROUP BY market ORDER BY market;
             "
