@@ -1,60 +1,50 @@
-name: 重建趋势缓存（临时）
+name: 重建趋势缓存（从 Tushare 直接计算）
 
 on:
+  push:
+    paths:
+      - '.github/workflows/rebuild-trend-cache.yml'
+      - 'scripts/rebuild-trend-from-tushare.py'
   workflow_dispatch:
-    inputs:
-      start_date:
-        description: '开始日期 (YYYYMMDD)'
-        required: false
-        default: '19960101'
-      end_date:
-        description: '结束日期 (YYYYMMDD)'
-        required: false
-        default: '20260424'
-      drop_ts_daily:
-        description: '是否删除 ts_daily 原始数据表 (yes/no)'
-        required: false
-        default: 'no'
 
 jobs:
-  rebuild:
+  rebuild-trend-cache:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install tushare pymysql
-
-      - name: Copy script to server and run
+      - name: Run rebuild script on production server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 124.223.54.69
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          timeout: 350m
+          command_timeout: 350m
           script: |
             cd /root/haoyouji-web
             git pull origin main
 
-            # 安装依赖
+            echo "=== 安装依赖 ==="
             pip3 install tushare pymysql -q
 
-            # 可选：删除 ts_daily 原始数据
-            if [ "${{ github.event.inputs.drop_ts_daily }}" = "yes" ]; then
-              echo "删除 ts_daily 表..."
-              mysql -h 127.0.0.1 -u root -p'Miao@20190603' crm_db -e "DROP TABLE IF EXISTS ts_daily; DROP TABLE IF EXISTS ts_sync_log;"
-              echo "ts_daily 已删除"
-            fi
+            echo "=== 后台运行重建脚本（1996-2026全量）==="
+            nohup python3 scripts/rebuild-trend-from-tushare.py 19960101 20260430 \
+              > /tmp/rebuild-trend.log 2>&1 &
+            PID=$!
+            echo "PID=$PID，脚本已在后台运行"
 
-            # 运行重建脚本
-            echo "开始重建趋势缓存..."
-            python3 scripts/rebuild-trend-from-tushare.py ${{ github.event.inputs.start_date }} ${{ github.event.inputs.end_date }} 2>&1 | tee /tmp/rebuild-trend.log
-            echo "完成！最后10行日志："
-            tail -10 /tmp/rebuild-trend.log
+            # 等待 5 分钟，确认脚本正常启动
+            for i in $(seq 1 30); do
+              sleep 10
+              if ! kill -0 $PID 2>/dev/null; then
+                echo "脚本已结束，日志："
+                tail -30 /tmp/rebuild-trend.log
+                break
+              fi
+              echo "运行中... $((i*10))s"
+              tail -3 /tmp/rebuild-trend.log
+            done
+
+            echo "=== 脚本在后台持续运行中 PID=$PID ==="
