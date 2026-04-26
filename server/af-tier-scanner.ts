@@ -281,41 +281,16 @@ export function triggerImmediateScan(orderId: number) {
 }
 
 /**
- * 启动定时扫描（对齐北京时间 0/4/8/12/16/20 点整点触发）
+ * 启动定时扫描（每10秒一次，规范：crypto-price-unified）
  */
 export function startTierScanner() {
-  // 计算下一个4小时整点（北京时间 0/4/8/12/16/20）
-  function getNextAlignedMs(): number {
-    const now = new Date();
-    // 北京时间 = UTC+8
-    const bjMs = now.getTime() + 8 * 3600 * 1000;
-    const bjDate = new Date(bjMs);
-    const bjHour = bjDate.getUTCHours();
-    // 下一个4小时对齐点（如当前6点，下一个是8点）
-    const nextBjHour = (Math.floor(bjHour / 4) + 1) * 4;
-    const nextBjDate = new Date(bjMs);
-    nextBjDate.setUTCHours(nextBjHour % 24, 0, 30, 0); // 整点后30秒触发，避免正好在K线切换时
-    if (nextBjHour >= 24) {
-      // 跨天
-      nextBjDate.setUTCDate(nextBjDate.getUTCDate() + 1);
-      nextBjDate.setUTCHours(0, 0, 30, 0);
-    }
-    // 转回实际UTC时间
-    const nextUtcMs = nextBjDate.getTime() - 8 * 3600 * 1000;
-    return Math.max(nextUtcMs - now.getTime(), 60 * 1000); // 最少等彔1分钟
-  }
+  // 先立即执行一次
+  runTierScan().catch(e => console.error('[AF扫描] 初始扫描失败:', e));
 
-  function scheduleNext() {
-    const delay = getNextAlignedMs();
-    const nextTime = new Date(Date.now() + delay);
-    const bjNext = new Date(nextTime.getTime() + 8 * 3600 * 1000);
-    console.log(`[AF扫描] 下次扫描计划在北京时间 ${bjNext.getUTCHours().toString().padStart(2,'0')}:00（${Math.round(delay/60000)}分钟后）`);
-    setTimeout(async () => {
-      await runTierScan();
-      scheduleNext(); // 扫描完成后安排下一次
-    }, delay);
-  }
+  // 每10秒扫描一次（与 price-scanner.ts 保持一致）
+  setInterval(() => {
+    runTierScan().catch(e => console.error('[AF扫描] 定时扫描失败:', e));
+  }, 10 * 1000);
 
-  console.log("[AF扫描] 收益权档位监控已启动，对齐北京时间 0/4/8/12/16/20 点整点扫描");
-  scheduleNext();
+  console.log('[AF扫描] 收益权档位监控已启动，每10秒扫描一次（规范：crypto-price-unified）');
 }
