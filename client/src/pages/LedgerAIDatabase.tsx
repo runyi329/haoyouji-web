@@ -684,7 +684,13 @@ function UpRateDistSection() {
 
   return (
     <div>
-      <SectionTitle title="涨天率分布" sub="全市场在市股票历史涨天率正态分布" />
+      <SectionTitle title="涨天率分布" sub="全市场在市股票历史涨天率正态分布"
+        extra={
+          <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
+            {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
+          </p>
+        }
+      />
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
         {/* Tab */}
         <div className="flex border-b" style={{ borderColor: BORDER }}>
@@ -861,7 +867,13 @@ function ValuationSection({ counts }: { counts: Record<Market, number> }) {
 
   return (
     <div>
-      <SectionTitle title="估值分布" sub="PE / PB / 市值结构" />
+      <SectionTitle title="估值分布" sub="PE / PB / 市值结构"
+        extra={
+          <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
+            {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
+          </p>
+        }
+      />
       {/* 合并卡片：Tab + 内容 */}
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
         {/* 顶部内嵌 Tab */}
@@ -971,7 +983,13 @@ function RisefallSection({ counts }: { counts: Record<Market, number> }) {
 
   return (
     <div>
-      <SectionTitle title="涨跌统计" sub="今日及近期涨跌分布" />
+      <SectionTitle title="涨跌统计" sub="今日及近期涨跌分布"
+        extra={
+          <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
+            {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
+          </p>
+        }
+      />
       {/* 合并卡片：Tab + 内容 */}
       <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
         {/* 顶部内嵌 Tab */}
@@ -1131,7 +1149,13 @@ function MacroSection() {
 
   return (
     <div>
-      <SectionTitle title="宏观数据" sub="M2 / CPI / LPR / 北向" />
+      <SectionTitle title="宏观数据" sub="M2 / CPI / LPR / 北向"
+        extra={
+          <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
+            {isLoading ? '数据加载中...' : latestNorth?.trade_date ? `数据截至 ${latestNorth.trade_date}` : ''}
+          </p>
+        }
+      />
       <div className="px-4 space-y-3">
         {isLoading ? (
           <><Skeleton /><Skeleton /></>
