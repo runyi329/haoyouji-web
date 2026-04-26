@@ -263,8 +263,8 @@ function EraBarChart({
 
   if (data.length === 0) return null;
 
-  const ROW_H = 17; // 每行高度px（缩小间距）
-  const ROW_GAP = 1; // 行间距缩小2/3
+  const ROW_H = 14; // 每行高度px（再缩小一半）
+  const ROW_GAP = 0; // 行间距再缩小一半（去除）
   const BAR_H = 11;  // 柱子高度px（增加约5%）
   const LABEL_W = 32; // 左侧年份标签宽度
   const PCT_W = 36;  // 右侧百分比宽度
