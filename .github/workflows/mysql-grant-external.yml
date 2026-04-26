@@ -17,7 +17,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             echo "=== 检查 MySQL bind-address ==="
-            mysql -u root -pMiao@20190603 -e "SHOW VARIABLES LIKE 'bind_address';" 2>/dev/null || echo "查询失败"
+            mysql -u root -pMiao@20190603 -e "SHOW VARIABLES LIKE 'bind_address';" 2>/dev/null
             
             echo "=== 授权 root 用户从任意 IP 连接 ==="
             mysql -u root -pMiao@20190603 -e "
@@ -27,18 +27,46 @@ jobs:
             " 2>/dev/null && echo "授权成功" || echo "授权失败"
             
             echo "=== 检查 MySQL 监听端口 ==="
-            netstat -tlnp | grep 3306 || ss -tlnp | grep 3306
+            netstat -tlnp 2>/dev/null | grep 3306 || ss -tlnp | grep 3306
             
-            echo "=== 检查 MySQL 配置文件 bind-address ==="
-            grep -r "bind-address" /etc/mysql/ 2>/dev/null || echo "未找到 bind-address 配置"
+            echo "=== 查找并修改 MySQL 配置文件 bind-address ==="
+            # 查找所有可能的配置文件
+            for f in /etc/mysql/mysql.conf.d/mysqld.cnf /etc/mysql/my.cnf /etc/my.cnf /etc/mysql/conf.d/*.cnf; do
+              if [ -f "$f" ]; then
+                echo "检查文件: $f"
+                cat "$f" | grep -i bind
+              fi
+            done
             
-            echo "=== 如果 bind-address=127.0.0.1，修改为 0.0.0.0 ==="
-            if grep -r "bind-address\s*=\s*127.0.0.1" /etc/mysql/ 2>/dev/null; then
-              sudo sed -i 's/bind-address\s*=\s*127.0.0.1/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf 2>/dev/null || \
-              sudo sed -i 's/bind-address\s*=\s*127.0.0.1/bind-address = 0.0.0.0/' /etc/mysql/my.cnf 2>/dev/null
-              sudo systemctl restart mysql && echo "MySQL 已重启，bind-address 已改为 0.0.0.0"
-            else
-              echo "bind-address 不是 127.0.0.1，无需修改"
+            # 强制修改 bind-address
+            CONF_FILE=""
+            if [ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]; then
+              CONF_FILE=/etc/mysql/mysql.conf.d/mysqld.cnf
+            elif [ -f /etc/mysql/my.cnf ]; then
+              CONF_FILE=/etc/mysql/my.cnf
+            elif [ -f /etc/my.cnf ]; then
+              CONF_FILE=/etc/my.cnf
             fi
+            
+            if [ -n "$CONF_FILE" ]; then
+              echo "修改配置文件: $CONF_FILE"
+              # 修改 bind-address
+              sed -i 's/^bind-address\s*=.*/bind-address = 0.0.0.0/' "$CONF_FILE"
+              # 如果没有 bind-address 行，在 [mysqld] 下添加
+              if ! grep -q "bind-address" "$CONF_FILE"; then
+                sed -i '/\[mysqld\]/a bind-address = 0.0.0.0' "$CONF_FILE"
+              fi
+              echo "修改后的 bind-address 配置:"
+              grep -i bind "$CONF_FILE"
+              
+              echo "重启 MySQL..."
+              systemctl restart mysql && echo "MySQL 重启成功" || service mysql restart && echo "MySQL 重启成功"
+            else
+              echo "未找到 MySQL 配置文件，尝试直接重启"
+            fi
+            
+            echo "=== 重启后检查监听端口 ==="
+            sleep 3
+            netstat -tlnp 2>/dev/null | grep 3306 || ss -tlnp | grep 3306
             
             echo "=== 完成 ==="
