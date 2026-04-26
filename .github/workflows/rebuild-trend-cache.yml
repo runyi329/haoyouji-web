@@ -1,0 +1,60 @@
+name: 重建趋势缓存（临时）
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: '开始日期 (YYYYMMDD)'
+        required: false
+        default: '19960101'
+      end_date:
+        description: '结束日期 (YYYYMMDD)'
+        required: false
+        default: '20260424'
+      drop_ts_daily:
+        description: '是否删除 ts_daily 原始数据表 (yes/no)'
+        required: false
+        default: 'no'
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install tushare pymysql
+
+      - name: Copy script to server and run
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: 350m
+          script: |
+            cd /root/haoyouji-web
+            git pull origin main
+
+            # 安装依赖
+            pip3 install tushare pymysql -q
+
+            # 可选：删除 ts_daily 原始数据
+            if [ "${{ github.event.inputs.drop_ts_daily }}" = "yes" ]; then
+              echo "删除 ts_daily 表..."
+              mysql -h 127.0.0.1 -u root -p'Miao@20190603' crm_db -e "DROP TABLE IF EXISTS ts_daily; DROP TABLE IF EXISTS ts_sync_log;"
+              echo "ts_daily 已删除"
+            fi
+
+            # 运行重建脚本
+            echo "开始重建趋势缓存..."
+            python3 scripts/rebuild-trend-from-tushare.py ${{ github.event.inputs.start_date }} ${{ github.event.inputs.end_date }} 2>&1 | tee /tmp/rebuild-trend.log
+            echo "完成！最后10行日志："
+            tail -10 /tmp/rebuild-trend.log
