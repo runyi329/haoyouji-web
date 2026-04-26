@@ -719,12 +719,12 @@ function BunchingEffectSection() {
                 <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FFF5F5", border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>涨停聚集倍数</p>
                   <p className="text-lg font-bold" style={{ color: RED }}>{upRatio}x</p>
-                  <p className="text-[10px]" style={{ color: DIM }}>+10% vs +9.5%</p>
+                  <p className="text-[10px]" style={{ color: DIM }}>+10% vs +9%</p>
                 </div>
                 <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#F5FFF5", border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>跌停聚集倍数</p>
                   <p className="text-lg font-bold" style={{ color: GREEN }}>{downRatio}x</p>
-                  <p className="text-[10px]" style={{ color: DIM }}>-10% vs -9.5%</p>
+                  <p className="text-[10px]" style={{ color: DIM }}>-10% vs -9%</p>
                 </div>
                 <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
                   <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>聚集强度</p>
@@ -733,7 +733,7 @@ function BunchingEffectSection() {
                 </div>
               </div>
               <p className="text-[11px] mb-2" style={{ color: DIM }}>
-                X轴：日涨幅区间（每格0.5%）· Y轴：历史出现次数 · 竖线：±10%涨跌停边界
+                X轴：日涨幅区间（每格1%）· Y轴：历史出现次数 · 竖线：±10%/±20%涨跌停边界
               </p>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={data.buckets} margin={{ top: 10, right: 4, left: -20, bottom: 0 }} barCategoryGap="2%">
@@ -757,14 +757,21 @@ function BunchingEffectSection() {
                     {data.buckets.map((entry, i) => {
                       const isAt10 = entry.bucket === 10;
                       const isAtMinus10 = entry.bucket === -10;
-                      const color = isAt10 ? RED : isAtMinus10 ? GREEN : entry.bucket > 0 ? "#EF9A9A" : entry.bucket < 0 ? "#A5D6A7" : "#BDBDBD";
-                      return <Cell key={i} fill={color} opacity={isAt10 || isAtMinus10 ? 1 : 0.75} />;
+                      const isAt20 = entry.bucket === 20;
+                      const isAtMinus20 = entry.bucket === -20;
+                      const isHighlight = isAt10 || isAtMinus10 || isAt20 || isAtMinus20;
+                      const color = isAt10 || isAt20 ? RED : isAtMinus10 || isAtMinus20 ? GREEN : entry.bucket > 0 ? "#EF9A9A" : entry.bucket < 0 ? "#A5D6A7" : "#BDBDBD";
+                      return <Cell key={i} fill={color} opacity={isHighlight ? 1 : 0.75} />;
                     })}
                   </Bar>
                   <ReferenceLine x={10} stroke={RED} strokeDasharray="4 3" strokeWidth={1.5}
                     label={{ value: '+10%', position: 'insideTopLeft', fill: RED, fontSize: 9, fontWeight: 'bold' }} />
                   <ReferenceLine x={-10} stroke={GREEN} strokeDasharray="4 3" strokeWidth={1.5}
                     label={{ value: '-10%', position: 'insideTopRight', fill: GREEN, fontSize: 9, fontWeight: 'bold' }} />
+                  <ReferenceLine x={20} stroke={RED} strokeDasharray="4 3" strokeWidth={1}
+                    label={{ value: '+20%', position: 'insideTopLeft', fill: RED, fontSize: 8 }} />
+                  <ReferenceLine x={-20} stroke={GREEN} strokeDasharray="4 3" strokeWidth={1}
+                    label={{ value: '-20%', position: 'insideTopRight', fill: GREEN, fontSize: 8 }} />
                   <ReferenceLine x={0} stroke="#9E9E9E" strokeDasharray="3 3" strokeWidth={1} />
                 </BarChart>
               </ResponsiveContainer>
@@ -788,7 +795,7 @@ function BunchingEffectSection() {
               </div>
               <div className="mt-2 px-2 py-2 rounded-lg" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
                 <p className="text-[11px] leading-relaxed" style={{ color: DIM }}>
-                  {`涨停聚集倍数 ${upRatio}x：+10%涨停出现次数是相邻区间(+9.5%)的 ${upRatio} 倍。`}
+                  {`涨停聚集倍数 ${upRatio}x：+10%涨停出现次数是相邻区间(+9%)的 ${upRatio} 倍。`}
                   {upRatio >= 5
                     ? `这一显著聚集主要反映涨停板制度的截断效应：价格在接近涨停时被制度强制停止，导致大量交易堆积在 +10% 边界。`
                     : upRatio >= 3
@@ -798,7 +805,7 @@ function BunchingEffectSection() {
                 </p>
               </div>
               <div className="mt-2 px-2 py-1.5 rounded-lg" style={{ background: "#F5F5F5", border: `1px solid ${BORDER}` }}>
-                <span className="text-[10px]" style={{ color: MUTED }}>样本：全历史 {fmt(data.totalCount)} 条日涨跌幅记录（涨幅 -11%~+11%）</span>
+                <span className="text-[10px]" style={{ color: MUTED }}>样本：全历史 {fmt(data.totalCount)} 条日涨跌幅记录（涨幅 -20%~+20%）</span>
               </div>
             </>
           )}
