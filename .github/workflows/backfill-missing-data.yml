@@ -18,7 +18,7 @@ jobs:
           host: 124.223.54.69
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          timeout: 300s
+          timeout: 600s
           script: |
             set -e
             echo "=== 开始补拉缺失数据 ==="
@@ -63,13 +63,18 @@ jobs:
                 conn = pymysql.connect(**DB_CONFIG)
                 cur = conn.cursor()
                 cur.execute("SELECT MAX(trade_date) FROM ts_trend_cache WHERE market='all'")
-                latest = cur.fetchone()[0] or '20250331'
+                latest_trend = cur.fetchone()[0] or '20250331'
+                cur.execute("SELECT MAX(trade_date) FROM ts_daily_basic")
+                latest_basic = cur.fetchone()[0] or '20250331'
                 cur.execute("SELECT ts_code, first_open FROM ts_first_open_cache")
                 fo_cache = {r[0]: r[1] for r in cur.fetchall()}
                 cur.close()
 
                 today = datetime.now().strftime('%Y%m%d')
-                print(f"最新数据: {latest}, 今天: {today}, 首日开盘价缓存: {len(fo_cache)} 只")
+                print(f"ts_trend_cache最新: {latest_trend}, ts_daily_basic最新: {latest_basic}, 今天: {today}, 首日开盘价缓存: {len(fo_cache)} 只")
+
+                # 确定需要补拉的起始日期（取两个表中较早的那个）
+                latest = min(latest_trend, latest_basic)
 
                 if latest >= today:
                     print("数据已最新"); conn.close(); return
@@ -84,45 +89,51 @@ jobs:
 
                 for td in dates:
                     print(f"\n--- {td} ---")
-                    # 日线
-                    d = ts_call('daily', {'trade_date':td}, 'ts_code,trade_date,open,high,low,close,vol,amount,pct_chg,pre_close,change')
-                    if not d or not d['items']:
-                        print("  无数据，跳过"); continue
-                    fi2 = {f:i for i,f in enumerate(d['fields'])}
-                    rows = [(r[fi2['ts_code']],r[fi2['trade_date']],r[fi2.get('open')],r[fi2.get('high')],r[fi2.get('low')],r[fi2.get('close')],r[fi2.get('vol')],r[fi2.get('amount')],r[fi2.get('pct_chg',0)],r[fi2.get('pre_close')],r[fi2.get('change',0)]) for r in d['items']]
-                    cur = conn.cursor()
-                    cur.executemany("INSERT INTO ts_daily (ts_code,trade_date,open,high,low,close,vol,amount,pct_chg,pre_close,`change`) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE close=VALUES(close),pct_chg=VALUES(pct_chg),vol=VALUES(vol)", rows)
-                    conn.commit(); cur.close()
-                    print(f"  ts_daily: {len(rows)} 条")
-                    time.sleep(0.4)
-
-                    # daily_basic
-                    b = ts_call('daily_basic', {'trade_date':td}, 'ts_code,trade_date,pe_ttm,pb,total_mv,close,turnover_rate,volume_ratio')
-                    if b and b['items']:
-                        bf = {f:i for i,f in enumerate(b['fields'])}
-                        brows = [(r[bf['ts_code']],r[bf['trade_date']],r[bf.get('pe_ttm')],r[bf.get('pb')],r[bf.get('total_mv')],r[bf.get('close')],r[bf.get('turnover_rate')],r[bf.get('volume_ratio')]) for r in b['items']]
+                    # 日线（仅在 ts_trend_cache 缺失时补拉）
+                    if td > latest_trend:
+                        d = ts_call('daily', {'trade_date':td}, 'ts_code,trade_date,open,high,low,close,vol,amount,pct_chg,pre_close,change')
+                        if not d or not d['items']:
+                            print("  无日线数据，跳过"); continue
+                        fi2 = {f:i for i,f in enumerate(d['fields'])}
+                        rows = [(r[fi2['ts_code']],r[fi2['trade_date']],r[fi2.get('open')],r[fi2.get('high')],r[fi2.get('low')],r[fi2.get('close')],r[fi2.get('vol')],r[fi2.get('amount')],r[fi2.get('pct_chg',0)],r[fi2.get('pre_close')],r[fi2.get('change',0)]) for r in d['items']]
                         cur = conn.cursor()
-                        cur.executemany("INSERT INTO ts_daily_basic (ts_code,trade_date,pe_ttm,pb,total_mv,close,turnover_rate,volume_ratio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE pe_ttm=VALUES(pe_ttm),pb=VALUES(pb),total_mv=VALUES(total_mv),close=VALUES(close)", brows)
+                        cur.executemany("INSERT INTO ts_daily (ts_code,trade_date,open,high,low,close,vol,amount,pct_chg,pre_close,`change`) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE close=VALUES(close),pct_chg=VALUES(pct_chg),vol=VALUES(vol)", rows)
                         conn.commit(); cur.close()
-                        print(f"  ts_daily_basic: {len(brows)} 条")
-                    time.sleep(0.4)
+                        print(f"  ts_daily: {len(rows)} 条")
+                        time.sleep(0.4)
 
-                    # trend_cache
-                    cur = conn.cursor()
-                    for mkt, fn in MARKETS.items():
-                        mitems = [r for r in d['items'] if fn(r[fi2['ts_code']].split('.')[0])]
-                        above=below=equal=0
-                        for r in mitems:
-                            code=r[fi2['ts_code']]; cl=r[fi2.get('close')]; fo=fo_cache.get(code)
-                            if cl is None or fo is None or fo<=0: below+=1; continue
-                            rat=cl/fo
-                            if rat>1.001: above+=1
-                            elif rat<0.999: below+=1
-                            else: equal+=1
-                        cur.execute("INSERT INTO ts_trend_cache (trade_date,market,above,below,equal) VALUES (%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE above=VALUES(above),below=VALUES(below),equal=VALUES(equal)", (td,mkt,above,below,equal))
-                    conn.commit(); cur.close()
-                    print(f"  ts_trend_cache: 5个板块写入")
-                    time.sleep(0.3)
+                        # trend_cache
+                        cur = conn.cursor()
+                        for mkt, fn in MARKETS.items():
+                            mitems = [r for r in d['items'] if fn(r[fi2['ts_code']].split('.')[0])]
+                            above=below=equal=0
+                            for r in mitems:
+                                code=r[fi2['ts_code']]; cl=r[fi2.get('close')]; fo=fo_cache.get(code)
+                                if cl is None or fo is None or fo<=0: below+=1; continue
+                                rat=cl/fo
+                                if rat>1.001: above+=1
+                                elif rat<0.999: below+=1
+                                else: equal+=1
+                            cur.execute("INSERT INTO ts_trend_cache (trade_date,market,above,below,equal) VALUES (%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE above=VALUES(above),below=VALUES(below),equal=VALUES(equal)", (td,mkt,above,below,equal))
+                        conn.commit(); cur.close()
+                        print(f"  ts_trend_cache: 5个板块写入")
+                        time.sleep(0.3)
+                    else:
+                        print(f"  ts_trend_cache 已有 {td}，跳过日线和趋势缓存")
+
+                    # daily_basic（仅在缺失时补拉）
+                    if td > latest_basic:
+                        b = ts_call('daily_basic', {'trade_date':td}, 'ts_code,trade_date,pe_ttm,pb,total_mv,close,turnover_rate,volume_ratio')
+                        if b and b['items']:
+                            bf = {f:i for i,f in enumerate(b['fields'])}
+                            brows = [(r[bf['ts_code']],r[bf['trade_date']],r[bf.get('pe_ttm')],r[bf.get('pb')],r[bf.get('total_mv')],r[bf.get('close')],r[bf.get('turnover_rate')],r[bf.get('volume_ratio')]) for r in b['items']]
+                            cur = conn.cursor()
+                            cur.executemany("INSERT INTO ts_daily_basic (ts_code,trade_date,pe_ttm,pb,total_mv,close,turnover_rate,volume_ratio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE pe_ttm=VALUES(pe_ttm),pb=VALUES(pb),total_mv=VALUES(total_mv),close=VALUES(close)", brows)
+                            conn.commit(); cur.close()
+                            print(f"  ts_daily_basic: {len(brows)} 条")
+                        time.sleep(0.4)
+                    else:
+                        print(f"  ts_daily_basic 已有 {td}，跳过")
 
                 conn.close()
                 print("\n=== 补拉完成 ===")
