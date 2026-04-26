@@ -63,6 +63,21 @@ jobs:
             def main():
                 conn = pymysql.connect(**DB_CONFIG)
                 cur = conn.cursor()
+                # 确保 ts_daily_basic 表存在
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS ts_daily_basic (
+                        ts_code VARCHAR(20) NOT NULL,
+                        trade_date VARCHAR(10) NOT NULL,
+                        pe_ttm DOUBLE,
+                        pb DOUBLE,
+                        total_mv DOUBLE,
+                        close DOUBLE,
+                        turnover_rate DOUBLE,
+                        volume_ratio DOUBLE,
+                        PRIMARY KEY (ts_code, trade_date)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+                """)
+                conn.commit()
                 cur.execute("SELECT MAX(trade_date) FROM ts_trend_cache WHERE market='all'")
                 latest_trend = cur.fetchone()[0] or '20250331'
                 cur.execute("SELECT MAX(trade_date) FROM ts_daily_basic")
