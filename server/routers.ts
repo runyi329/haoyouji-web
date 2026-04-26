@@ -18240,9 +18240,56 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       try {
-        // 板块过滤
+        // 根据颗粒度决定取多少个交易日
+        const limitDays = input.granularity === 'day' ? 60 : input.granularity === 'week' ? 260 : 1200;
+
+        // market='all' 时直接读预计算缓存表（毫秒级响应）
+        if (input.market === 'all') {
+          // 取最近 limitDays 个有缓存的交易日
+          const [cacheRows] = await dbConn.execute(
+            `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = 'all' ORDER BY trade_date DESC LIMIT ?`,
+            [limitDays]
+          ) as any[];
+          const rows = (cacheRows as any[]).reverse();
+          if (rows.length === 0) return { points: [], cacheReady: false };
+
+          let points: { date: string; above: number; below: number; equal: number }[] = [];
+          if (input.granularity === 'day') {
+            points = rows.map((r: any) => ({
+              date: `${r.trade_date.slice(0,4)}-${r.trade_date.slice(4,6)}-${r.trade_date.slice(6,8)}`,
+              above: Number(r.above),
+              below: Number(r.below),
+              equal: Number(r.equal_cnt),
+            }));
+          } else {
+            const groupMap: Record<string, any[]> = {};
+            for (const r of rows) {
+              const td: string = r.trade_date;
+              const y = parseInt(td.slice(0, 4));
+              const m = parseInt(td.slice(4, 6));
+              const day = parseInt(td.slice(6, 8));
+              let key: string;
+              if (input.granularity === 'month') {
+                key = `${y}-${String(m).padStart(2, '0')}`;
+              } else {
+                const date = new Date(y, m - 1, day);
+                const startOfYear = new Date(y, 0, 1);
+                const weekNum = Math.ceil(((date.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+                key = `${y}-W${String(weekNum).padStart(2, '0')}`;
+              }
+              if (!groupMap[key]) groupMap[key] = [];
+              groupMap[key].push(r);
+            }
+            for (const [key, dayRows] of Object.entries(groupMap).sort()) {
+              const last = dayRows[dayRows.length - 1];
+              points.push({ date: key, above: Number(last.above), below: Number(last.below), equal: Number(last.equal_cnt) });
+            }
+          }
+          return { points, cacheReady: true };
+        }
+
+        // 其他板块：仍用实时计算（数据量较小，速度可接受）
         const marketCond: Record<string, string> = {
-          all: '',
           SH: "AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
           SZ: "AND b.ts_code LIKE '0%'",
           GEM: "AND b.ts_code LIKE '3%'",
@@ -18250,21 +18297,15 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         };
         const mf = marketCond[input.market] || '';
 
-        // 根据颗粒度决定取多少个交易日
-        const limitDays = input.granularity === 'day' ? 60 : input.granularity === 'week' ? 260 : 1200;
-
-        // 第一步：取最近 limitDays 个交易日列表
         const [tradeDayRows] = await dbConn.execute(
           `SELECT DISTINCT trade_date FROM ts_daily ORDER BY trade_date DESC LIMIT ?`,
           [limitDays]
         ) as any[];
         const tradeDays: string[] = (tradeDayRows as any[]).map((r: any) => r.trade_date).reverse();
         if (tradeDays.length === 0) return { points: [] };
-
         const minDay = tradeDays[0];
         const maxDay = tradeDays[tradeDays.length - 1];
 
-        // 第二步：获取每只股票的首日开盘价（只需计算一次）
         const [firstOpenRows] = await dbConn.execute(`
           SELECT d.ts_code, d.open AS first_open
           FROM ts_daily d
@@ -18281,7 +18322,6 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           firstOpenMap[r.ts_code] = parseFloat(r.first_open);
         }
 
-        // 第三步：取这段时间内所有股票的每日收盘价
         const [dailyRows] = await dbConn.execute(`
           SELECT d.ts_code, d.trade_date, d.close
           FROM ts_daily d
@@ -18289,7 +18329,6 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           ${mf ? 'AND EXISTS (SELECT 1 FROM ts_stock_basic b WHERE b.ts_code = d.ts_code ' + mf + ')' : ''}
         `, [minDay, maxDay]) as any[];
 
-        // 第四步：按交易日聚合
         const dayMap: Record<string, { above: number; below: number; equal: number }> = {};
         for (const d of dailyRows as any[]) {
           const td: string = d.trade_date;
@@ -18302,9 +18341,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           else dayMap[td].equal++;
         }
 
-        // 第五步：按颗粒度聚合（周/月取最后一个交易日的数据）
         let points: { date: string; above: number; below: number; equal: number }[] = [];
-
         if (input.granularity === 'day') {
           points = tradeDays.map(td => ({
             date: `${td.slice(0, 4)}-${td.slice(4, 6)}-${td.slice(6, 8)}`,
@@ -18313,7 +18350,6 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             equal: dayMap[td]?.equal ?? 0,
           })).filter(p => p.above + p.below + p.equal > 0);
         } else {
-          // 周/月：按 ISO 周或年月分组，取组内最后一个交易日
           const groupMap: Record<string, string[]> = {};
           for (const td of tradeDays) {
             const y = parseInt(td.slice(0, 4));
@@ -18323,7 +18359,6 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             if (input.granularity === 'month') {
               key = `${y}-${String(m).padStart(2, '0')}`;
             } else {
-              // ISO 周：简单用「年-第几周」
               const date = new Date(y, m - 1, day);
               const startOfYear = new Date(y, 0, 1);
               const weekNum = Math.ceil(((date.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
@@ -18339,7 +18374,6 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             points.push({ date: key, above: d.above, below: d.below, equal: d.equal });
           }
         }
-
         return { points };
       } finally { /* pool auto-manages connections */ }
     }),
