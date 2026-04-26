@@ -142,6 +142,7 @@ const CryptoFundingHistoryPage = lazy(() => import("./pages/CryptoFundingHistory
 const OilPricesPage = lazy(() => import("./pages/OilPricesPage"));
 const OilTradesPage = lazy(() => import("./pages/OilTradesPage"));
 const LedgerAAInitialBalance = lazy(() => import("./pages/LedgerAAInitialBalance"));
+const DepositManage = lazy(() => import("./pages/DepositManage"));
 const LedgerAADividendManage = lazy(() => import("./pages/LedgerAADividendManage"));
 const LedgerAIDatabase = lazy(() => import("./pages/LedgerAIDatabase"));
 const RetailInvestor = lazy(() => import("./pages/RetailInvestor"));
@@ -447,6 +448,7 @@ function Router() {
         <Route path="/ledger/:id/market-eval-settings" component={MarketEvalSettings} />
         <Route path="/ledger/:id/be-data" component={BeDataPage} />
         <Route path="/ledger/:id/aa-initial-balance" component={LedgerAAInitialBalance} />
+        <Route path="/ledger/:id/deposit-manage" component={DepositManage} />
         <Route path="/ledger/:id/aa-dividend-manage" component={LedgerAADividendManage} />
         <Route path="/ledger/:id/ai-database" component={LedgerAIDatabase} />
         <Route path="/ledger/:id/retail-investor" component={RetailInvestor} />

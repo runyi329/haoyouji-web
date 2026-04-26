@@ -494,14 +494,23 @@ export default function LedgerSettings() {
    const isOwnerOrAdmin = myMemberRole === 'owner' || myMemberRole === 'admin'
      || ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
    if (!isOwnerOrAdmin) return null;
-   return (
-     <SettingItem
-       label="初始金额管理"
-       showIcon
-       onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
-     />
-   );
- })()}
+    return (
+      <SettingItem
+        label="初始金额管理"
+        showIcon
+        onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
+      />
+    );
+  })()}
+
+{/* 保证金管理：仅 37 号账本 */}
+{ledgerId === 37 && (
+  <SettingItem
+    label="保证金管理"
+    showIcon
+    onClick={() => setLocation(`/ledger/${ledgerId}/deposit-manage`)}
+  />
+)}
  {/* (AA)分红管理：owner/admin可进入 */}
  {ledgerData?.type === 'custom_aa' && (() => {
    const myMemberRole = members?.find((m: any) => m.userId === user?.id)?.role;
