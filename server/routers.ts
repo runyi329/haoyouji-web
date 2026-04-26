@@ -18241,14 +18241,13 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       try {
         // 根据颗粒度决定取多少个交易日
-        const limitDays = input.granularity === 'day' ? 60 : input.granularity === 'week' ? 260 : 1200;
+        const limitDays: number = input.granularity === 'day' ? 60 : input.granularity === 'week' ? 260 : 1200;
 
         // market='all' 时直接读预计算缓存表（毫秒级响应）
         if (input.market === 'all') {
-          // 取最近 limitDays 个有缓存的交易日
+          // 取最近 limitDays 个有缓存的交易日（LIMIT 必须用字符串拼接，避免 mysql2 参数绑定类型错误）
           const [cacheRows] = await dbConn.execute(
-            `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = 'all' ORDER BY trade_date DESC LIMIT ?`,
-            [limitDays]
+            `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = 'all' ORDER BY trade_date DESC LIMIT ${limitDays}`
           ) as any[];
           const rows = (cacheRows as any[]).reverse();
           if (rows.length === 0) return { points: [], cacheReady: false };
