@@ -18244,10 +18244,11 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const limitDays: number = input.granularity === 'day' ? 60 : input.granularity === 'week' ? 260 : input.granularity === 'month' ? 1200 : 9999;
 
         // market='all' 时直接读预计算缓存表（毫秒级响应）
-        if (input.market === 'all') {
-          // 取最近 limitDays 个有缓存的交易日（LIMIT 必须用字符串拼接，避免 mysql2 参数绑定类型错误）
+        // 所有板块统一走缓存路径（毫秒级响应）
+        {
+          const marketKey = input.market; // 'all' | 'SH' | 'SZ' | 'GEM' | 'STAR'
           const [cacheRows] = await dbConn.execute(
-            `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = 'all' ORDER BY trade_date DESC LIMIT ${limitDays}`
+            `SELECT trade_date, above, below, equal_cnt FROM ts_trend_cache WHERE market = '${marketKey}' ORDER BY trade_date DESC LIMIT ${limitDays}`
           ) as any[];
           const rows = (cacheRows as any[]).reverse();
           if (rows.length === 0) return { points: [], cacheReady: false };
@@ -18289,93 +18290,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           return { points, cacheReady: true };
         }
 
-        // 其他板块：仍用实时计算（数据量较小，速度可接受）
-        const marketCond: Record<string, string> = {
-          SH: "AND b.ts_code LIKE '6%' AND b.ts_code NOT LIKE '688%'",
-          SZ: "AND b.ts_code LIKE '0%'",
-          GEM: "AND b.ts_code LIKE '3%'",
-          STAR: "AND b.ts_code LIKE '688%'",
-        };
-        const mf = marketCond[input.market] || '';
-
-        const [tradeDayRows] = await dbConn.execute(
-          `SELECT DISTINCT trade_date FROM ts_daily ORDER BY trade_date DESC LIMIT ?`,
-          [limitDays]
-        ) as any[];
-        const tradeDays: string[] = (tradeDayRows as any[]).map((r: any) => r.trade_date).reverse();
-        if (tradeDays.length === 0) return { points: [] };
-        const minDay = tradeDays[0];
-        const maxDay = tradeDays[tradeDays.length - 1];
-
-        const [firstOpenRows] = await dbConn.execute(`
-          SELECT d.ts_code, d.open AS first_open
-          FROM ts_daily d
-          INNER JOIN (
-            SELECT ts_code, MIN(trade_date) AS min_date
-            FROM ts_daily
-            GROUP BY ts_code
-          ) fm ON fm.ts_code = d.ts_code AND fm.min_date = d.trade_date
-          WHERE d.open > 0
-          ${mf ? 'AND EXISTS (SELECT 1 FROM ts_stock_basic b WHERE b.ts_code = d.ts_code ' + mf + ')' : ''}
-        `) as any[];
-        const firstOpenMap: Record<string, number> = {};
-        for (const r of firstOpenRows as any[]) {
-          firstOpenMap[r.ts_code] = parseFloat(r.first_open);
-        }
-
-        const [dailyRows] = await dbConn.execute(`
-          SELECT d.ts_code, d.trade_date, d.close
-          FROM ts_daily d
-          WHERE d.trade_date >= ? AND d.trade_date <= ? AND d.close > 0
-          ${mf ? 'AND EXISTS (SELECT 1 FROM ts_stock_basic b WHERE b.ts_code = d.ts_code ' + mf + ')' : ''}
-        `, [minDay, maxDay]) as any[];
-
-        const dayMap: Record<string, { above: number; below: number; equal: number }> = {};
-        for (const d of dailyRows as any[]) {
-          const td: string = d.trade_date;
-          const firstOpen = firstOpenMap[d.ts_code];
-          if (!firstOpen) continue;
-          if (!dayMap[td]) dayMap[td] = { above: 0, below: 0, equal: 0 };
-          const ratio = parseFloat(d.close) / firstOpen;
-          if (ratio > 1.001) dayMap[td].above++;
-          else if (ratio < 0.999) dayMap[td].below++;
-          else dayMap[td].equal++;
-        }
-
-        let points: { date: string; above: number; below: number; equal: number }[] = [];
-        if (input.granularity === 'day') {
-          points = tradeDays.map(td => ({
-            date: `${td.slice(0, 4)}-${td.slice(4, 6)}-${td.slice(6, 8)}`,
-            above: dayMap[td]?.above ?? 0,
-            below: dayMap[td]?.below ?? 0,
-            equal: dayMap[td]?.equal ?? 0,
-          })).filter(p => p.above + p.below + p.equal > 0);
-        } else {
-          const groupMap: Record<string, string[]> = {};
-          for (const td of tradeDays) {
-            const y = parseInt(td.slice(0, 4));
-            const m = parseInt(td.slice(4, 6));
-            const day = parseInt(td.slice(6, 8));
-            let key: string;
-            if (input.granularity === 'month') {
-              key = `${y}-${String(m).padStart(2, '0')}`;
-            } else {
-              const date = new Date(y, m - 1, day);
-              const startOfYear = new Date(y, 0, 1);
-              const weekNum = Math.ceil(((date.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
-              key = `${y}-W${String(weekNum).padStart(2, '0')}`;
-            }
-            if (!groupMap[key]) groupMap[key] = [];
-            groupMap[key].push(td);
-          }
-          for (const [key, days] of Object.entries(groupMap).sort()) {
-            const lastDay = days[days.length - 1];
-            const d = dayMap[lastDay];
-            if (!d) continue;
-            points.push({ date: key, above: d.above, below: d.below, equal: d.equal });
-          }
-        }
-        return { points };
+        return { points: [], cacheReady: false };
       } finally { /* pool auto-manages connections */ }
     }),
 
