@@ -1,0 +1,26 @@
+name: 删除 ts_daily 原始数据表
+
+on:
+  workflow_dispatch:
+
+jobs:
+  drop-ts-daily:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 删除 ts_daily 和 ts_sync_log 表
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            mysql -u root -p'${{ secrets.DB_PASSWORD }}' haoyouji << 'SQL'
+            -- 先查一下 ts_trend_cache 数据量，确认数据已写入
+            SELECT market, COUNT(*) as cnt FROM ts_trend_cache GROUP BY market;
+            -- 删除原始数据表
+            DROP TABLE IF EXISTS ts_daily;
+            DROP TABLE IF EXISTS ts_sync_log;
+            -- 确认删除
+            SHOW TABLES LIKE 'ts_%';
+            SQL
+            echo "✅ 删除完成"
