@@ -656,6 +656,156 @@ function SurvivalSection({ counts }: { counts: Record<Market, number> }) {
   );
 }
 
+// ─── 涨停聚集效应 ─────────────────────────────────────────────
+function BunchingEffectSection() {
+  const [market, setMarket] = useState<"all" | "SH" | "SZ" | "GEM" | "STAR">("all");
+  const { data, isLoading, error } = trpc.aiDashboardBunchingEffect.useQuery({ market });
+
+  const MARKET_TABS = [
+    { key: "all" as const, label: "全市场" },
+    { key: "SH" as const, label: "沪市" },
+    { key: "SZ" as const, label: "深市" },
+    { key: "GEM" as const, label: "创业板" },
+    { key: "STAR" as const, label: "科创板" },
+  ];
+
+  const upRatio = data?.upBunchRatio ?? 0;
+  const downRatio = data?.downBunchRatio ?? 0;
+  const avgRatio = (upRatio + downRatio) / 2;
+  const manipulationLevel = avgRatio >= 8 ? "极高" : avgRatio >= 5 ? "高" : avgRatio >= 3 ? "中等" : "较低";
+  const manipulationColor = avgRatio >= 8 ? RED : avgRatio >= 5 ? "#F57C00" : avgRatio >= 3 ? "#FBC02D" : GREEN;
+
+  return (
+    <div>
+      <SectionTitle title="涨停聚集效应" sub="全历史涨幅分布 · 市场操纵程度检验"
+        extra={
+          <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
+            {isLoading ? '数据加载中...' : data?.latestDate ? `数据截至 ${data.latestDate}` : ''}
+          </p>
+        }
+      />
+      <div className="mx-4 rounded-xl overflow-hidden" style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}` }}>
+        <div className="flex border-b" style={{ borderColor: BORDER }}>
+          {MARKET_TABS.map((m, idx) => {
+            const active = market === m.key;
+            return (
+              <button
+                key={m.key}
+                onClick={() => setMarket(m.key)}
+                className="flex-1 flex flex-col items-center justify-center py-2.5 transition-colors duration-150 relative"
+                style={{
+                  background: active ? "#F5EDED" : "transparent",
+                  borderRight: idx < MARKET_TABS.length - 1 ? `1px solid ${BORDER}` : "none",
+                }}
+              >
+                {active && <span className="absolute bottom-0 left-0 right-0" style={{ height: '2px', background: RED }} />}
+                <span className="text-[13px] font-semibold" style={{ color: active ? RED : "#555" }}>{m.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="p-3">
+          {isLoading ? (
+            <><Skeleton /><Skeleton /></>
+          ) : error ? (
+            <EmptyState label={`加载失败: ${error.message.slice(0, 40)}`} />
+          ) : !data ? (
+            <EmptyState label="暂无数据" />
+          ) : (
+            <>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FFF5F5", border: `1px solid ${BORDER}` }}>
+                  <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>涨停聚集倍数</p>
+                  <p className="text-lg font-bold" style={{ color: RED }}>{upRatio}x</p>
+                  <p className="text-[10px]" style={{ color: DIM }}>+10% vs +9.5%</p>
+                </div>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#F5FFF5", border: `1px solid ${BORDER}` }}>
+                  <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>跌停聚集倍数</p>
+                  <p className="text-lg font-bold" style={{ color: GREEN }}>{downRatio}x</p>
+                  <p className="text-[10px]" style={{ color: DIM }}>-10% vs -9.5%</p>
+                </div>
+                <div className="flex-1 rounded-lg p-2.5 text-center" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
+                  <p className="text-[11px] mb-0.5" style={{ color: MUTED }}>操纵程度</p>
+                  <p className="text-lg font-bold" style={{ color: manipulationColor }}>{manipulationLevel}</p>
+                  <p className="text-[10px]" style={{ color: DIM }}>综合评估</p>
+                </div>
+              </div>
+              <p className="text-[11px] mb-2" style={{ color: DIM }}>
+                X轴：日涨幅区间（每格0.5%）· Y轴：历史出现次数 · 竖线：±10%涨跌停边界
+              </p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={data.buckets} margin={{ top: 10, right: 4, left: -20, bottom: 0 }} barCategoryGap="2%">
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                  <XAxis
+                    dataKey="bucket"
+                    tick={{ fill: MUTED, fontSize: 8 }}
+                    axisLine={{ stroke: BORDER }}
+                    tickLine={false}
+                    tickFormatter={(v) => v % 2 === 0 ? `${v}%` : ''}
+                    interval={0}
+                  />
+                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false}
+                    tickFormatter={(v) => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}K` : String(v)} />
+                  <Tooltip
+                    formatter={(value: any) => [`${Number(value).toLocaleString('zh-CN')} 次`, '出现次数']}
+                    labelFormatter={(label) => `涨幅 ${label}%`}
+                    contentStyle={{ fontSize: 11, background: CARD, border: `1px solid ${BORDER}` }}
+                  />
+                  <Bar dataKey="count" name="count" radius={[1, 1, 0, 0]}>
+                    {data.buckets.map((entry, i) => {
+                      const isAt10 = entry.bucket === 10;
+                      const isAtMinus10 = entry.bucket === -10;
+                      const color = isAt10 ? RED : isAtMinus10 ? GREEN : entry.bucket > 0 ? "#EF9A9A" : entry.bucket < 0 ? "#A5D6A7" : "#BDBDBD";
+                      return <Cell key={i} fill={color} opacity={isAt10 || isAtMinus10 ? 1 : 0.75} />;
+                    })}
+                  </Bar>
+                  <ReferenceLine x={10} stroke={RED} strokeDasharray="4 3" strokeWidth={1.5}
+                    label={{ value: '+10%', position: 'insideTopLeft', fill: RED, fontSize: 9, fontWeight: 'bold' }} />
+                  <ReferenceLine x={-10} stroke={GREEN} strokeDasharray="4 3" strokeWidth={1.5}
+                    label={{ value: '-10%', position: 'insideTopRight', fill: GREEN, fontSize: 9, fontWeight: 'bold' }} />
+                  <ReferenceLine x={0} stroke="#9E9E9E" strokeDasharray="3 3" strokeWidth={1} />
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap items-center gap-3 mt-2 mb-1 px-1">
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#EF9A9A" }} />
+                  <span className="text-[10px]" style={{ color: DIM }}>上涨</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: "#A5D6A7" }} />
+                  <span className="text-[10px]" style={{ color: DIM }}>下跌</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: RED }} />
+                  <span className="text-[10px]" style={{ color: DIM }}>+10%涨停峰</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ background: GREEN }} />
+                  <span className="text-[10px]" style={{ color: DIM }}>-10%跌停峰</span>
+                </div>
+              </div>
+              <div className="mt-2 px-2 py-2 rounded-lg" style={{ background: "#FAFAFA", border: `1px solid ${BORDER}` }}>
+                <p className="text-[11px] leading-relaxed" style={{ color: DIM }}>
+                  {`涨停聚集倍数 ${upRatio}x：+10%涨停出现次数是相邻区间(+9.5%)的 ${upRatio} 倍。`}
+                  {upRatio >= 5
+                    ? `这一显著聚集说明大量资金刻意将股票推至涨停板，是主动操控的典型特征。`
+                    : upRatio >= 3
+                    ? `存在一定聚集效应，反映涨停板制度对资金行为有明显引导。`
+                    : `聚集效应较弱，价格分布相对自然。`}
+                  {` 跌停聚集倍数 ${downRatio}x，综合操纵程度评估为「${manipulationLevel}」。`}
+                </p>
+              </div>
+              <div className="mt-2 px-2 py-1.5 rounded-lg" style={{ background: "#F5F5F5", border: `1px solid ${BORDER}` }}>
+                <span className="text-[10px]" style={{ color: MUTED }}>样本：全历史 {fmt(data.totalCount)} 条日涨跌幅记录（涨幅 -11%~+11%）</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── 涨天率正态分布 ──────────────────────────────────────────
 function UpRateDistSection() {
   const [market, setMarket] = useState<"all" | "SH" | "SZ" | "GEM" | "STAR">("all");
@@ -1404,6 +1554,8 @@ export default function LedgerAIDatabase() {
       {/* 全部内容单页展开，上下滚动 */}
       <div className="flex-1 overflow-y-auto pb-8">
         <SurvivalSection counts={counts} />
+        <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
+        <BunchingEffectSection />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <UpRateDistSection />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
