@@ -16,15 +16,19 @@ jobs:
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            echo "=== 所有表及估算行数 ==="
-            mysql -u root -p'Miao@20190603' haoyouji -e "
+            echo "=== crm_db 所有表及估算行数 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
               SELECT table_name, table_rows, ROUND(data_length/1024/1024, 1) AS data_mb
               FROM information_schema.tables
-              WHERE table_schema = 'haoyouji'
+              WHERE table_schema = 'crm_db'
               ORDER BY table_name;
             "
             echo "=== ts_trend_cache 各板块数据量 ==="
-            mysql -u root -p'Miao@20190603' haoyouji -e "
+            mysql -u root -p'Miao@20190603' crm_db -e "
               SELECT market, COUNT(*) as cnt, MIN(trade_date) as min_date, MAX(trade_date) as max_date
               FROM ts_trend_cache GROUP BY market ORDER BY market;
-            "
+            " 2>/dev/null || echo "ts_trend_cache 不存在或为空"
+            echo "=== ts_daily 行数 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SELECT COUNT(*) as total_rows FROM ts_daily;
+            " 2>/dev/null || echo "ts_daily 不存在"
