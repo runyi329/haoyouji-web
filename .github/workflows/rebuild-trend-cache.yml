@@ -48,3 +48,25 @@ jobs:
             done
 
             echo "=== 脚本在后台持续运行中 PID=$PID ==="
+
+  drop-ts-daily:
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - name: 删除 ts_daily 和 ts_sync_log 原始数据表
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            echo "=== 查看 ts_trend_cache 数据量 ==="
+            mysql -u root -p'Miao@20190603' haoyouji -e "SELECT market, COUNT(*) as cnt FROM ts_trend_cache GROUP BY market ORDER BY market;"
+
+            echo "=== 删除 ts_daily 和 ts_sync_log ==="
+            mysql -u root -p'Miao@20190603' haoyouji -e "DROP TABLE IF EXISTS ts_daily; DROP TABLE IF EXISTS ts_sync_log;"
+
+            echo "=== 确认剩余 ts_ 开头的表 ==="
+            mysql -u root -p'Miao@20190603' haoyouji -e "SHOW TABLES LIKE 'ts_%';"
+
+            echo "✅ 删除完成"
