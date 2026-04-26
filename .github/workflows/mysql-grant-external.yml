@@ -1,0 +1,44 @@
+name: MySQL Grant External Access (One-time)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/mysql-grant-external.yml'
+
+jobs:
+  grant-mysql-access:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Grant MySQL external access via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            echo "=== 检查 MySQL bind-address ==="
+            mysql -u root -pMiao@20190603 -e "SHOW VARIABLES LIKE 'bind_address';" 2>/dev/null || echo "查询失败"
+            
+            echo "=== 授权 root 用户从任意 IP 连接 ==="
+            mysql -u root -pMiao@20190603 -e "
+              CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED BY 'Miao@20190603';
+              GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
+              FLUSH PRIVILEGES;
+            " 2>/dev/null && echo "授权成功" || echo "授权失败"
+            
+            echo "=== 检查 MySQL 监听端口 ==="
+            netstat -tlnp | grep 3306 || ss -tlnp | grep 3306
+            
+            echo "=== 检查 MySQL 配置文件 bind-address ==="
+            grep -r "bind-address" /etc/mysql/ 2>/dev/null || echo "未找到 bind-address 配置"
+            
+            echo "=== 如果 bind-address=127.0.0.1，修改为 0.0.0.0 ==="
+            if grep -r "bind-address\s*=\s*127.0.0.1" /etc/mysql/ 2>/dev/null; then
+              sudo sed -i 's/bind-address\s*=\s*127.0.0.1/bind-address = 0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf 2>/dev/null || \
+              sudo sed -i 's/bind-address\s*=\s*127.0.0.1/bind-address = 0.0.0.0/' /etc/mysql/my.cnf 2>/dev/null
+              sudo systemctl restart mysql && echo "MySQL 已重启，bind-address 已改为 0.0.0.0"
+            else
+              echo "bind-address 不是 127.0.0.1，无需修改"
+            fi
+            
+            echo "=== 完成 ==="
