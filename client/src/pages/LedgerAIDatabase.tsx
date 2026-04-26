@@ -1383,9 +1383,9 @@ export default function LedgerAIDatabase() {
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <UpRateDistSection />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
-        <ValuationSection counts={counts} />
-        <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <RisefallSection counts={counts} />
+        <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
+        <ValuationSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <MacroSection />
       </div>
