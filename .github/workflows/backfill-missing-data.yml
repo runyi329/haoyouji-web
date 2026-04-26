@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/backfill-missing-data.yml'
       - 'scripts/backfill-april-2025.py'
+  workflow_dispatch:
 
 jobs:
   backfill:
