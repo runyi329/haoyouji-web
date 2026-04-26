@@ -1,0 +1,137 @@
+name: 补拉缺失 ts_daily_basic 数据
+
+on:
+  push:
+    paths:
+      - '.github/workflows/backfill-daily-basic.yml'
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 补拉 ts_daily_basic 缺失数据
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          timeout: 600s
+          script: |
+            set -e
+            echo "=== 开始补拉 ts_daily_basic 缺失数据 ==="
+            
+            pip3 install pymysql requests -q 2>/dev/null || true
+            
+            cat > /tmp/backfill-daily-basic.py << 'PYEOF'
+            #!/usr/bin/env python3
+            import pymysql, requests, time
+            from datetime import datetime, timedelta
+
+            TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79'
+            TUSHARE_URL = 'http://api.tushare.pro'
+            DB_CONFIG = {
+                'host': '127.0.0.1', 'port': 3306,
+                'user': 'root', 'password': 'Miao@20190603',
+                'database': 'crm_db', 'charset': 'utf8mb4',
+            }
+
+            def ts_call(api, params, fields):
+                for _ in range(3):
+                    try:
+                        r = requests.post(TUSHARE_URL, json={
+                            'api_name': api, 'token': TUSHARE_TOKEN,
+                            'params': params, 'fields': fields
+                        }, timeout=30)
+                        d = r.json()
+                        if d.get('code') == 0: return d['data']
+                        print(f"  API error: {d.get('msg')}")
+                    except Exception as e:
+                        print(f"  Request error: {e}")
+                    time.sleep(2)
+                return None
+
+            def main():
+                conn = pymysql.connect(**DB_CONFIG)
+                cur = conn.cursor()
+
+                # 查 ts_daily_basic 最新日期
+                cur.execute("SELECT MAX(trade_date) FROM ts_daily_basic")
+                latest_basic = cur.fetchone()[0] or '20250331'
+
+                # 查 ts_trend_cache 最新日期（作为目标终止日）
+                cur.execute("SELECT MAX(trade_date) FROM ts_trend_cache WHERE market='all'")
+                latest_trend = cur.fetchone()[0] or '20250331'
+
+                cur.close()
+                today = datetime.now().strftime('%Y%m%d')
+
+                print(f"ts_daily_basic 最新: {latest_basic}")
+                print(f"ts_trend_cache 最新: {latest_trend}")
+                print(f"今天: {today}")
+
+                if latest_basic >= latest_trend:
+                    print("ts_daily_basic 已是最新，无需补拉")
+                    conn.close()
+                    return
+
+                # 获取需要补拉的交易日
+                next_d = (datetime.strptime(latest_basic, '%Y%m%d') + timedelta(days=1)).strftime('%Y%m%d')
+                cal = ts_call('trade_cal', {
+                    'exchange': 'SSE',
+                    'start_date': next_d,
+                    'end_date': latest_trend,
+                    'is_open': '1'
+                }, 'cal_date')
+                if not cal:
+                    print("获取交易日历失败")
+                    conn.close()
+                    return
+
+                fi = cal['fields'].index('cal_date')
+                dates = sorted([r[fi] for r in cal['items']])
+                print(f"需补拉 {len(dates)} 个交易日: {dates}")
+
+                success = 0
+                for td in dates:
+                    print(f"\n--- {td} ---")
+                    b = ts_call('daily_basic', {'trade_date': td},
+                                'ts_code,trade_date,pe_ttm,pb,total_mv,close,turnover_rate,volume_ratio')
+                    if not b or not b.get('items'):
+                        print("  无数据，跳过")
+                        continue
+                    bf = {f: i for i, f in enumerate(b['fields'])}
+                    brows = []
+                    for r in b['items']:
+                        brows.append((
+                            r[bf['ts_code']], r[bf['trade_date']],
+                            r[bf.get('pe_ttm', -1)], r[bf.get('pb', -1)],
+                            r[bf.get('total_mv', -1)], r[bf.get('close', -1)],
+                            r[bf.get('turnover_rate', -1)], r[bf.get('volume_ratio', -1)],
+                        ))
+                    cur = conn.cursor()
+                    cur.executemany("""
+                        INSERT INTO ts_daily_basic
+                            (ts_code, trade_date, pe_ttm, pb, total_mv, close, turnover_rate, volume_ratio)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE
+                            pe_ttm=VALUES(pe_ttm), pb=VALUES(pb), total_mv=VALUES(total_mv),
+                            close=VALUES(close), turnover_rate=VALUES(turnover_rate),
+                            volume_ratio=VALUES(volume_ratio)
+                    """, brows)
+                    conn.commit()
+                    cur.close()
+                    print(f"  ts_daily_basic: {len(brows)} 条写入成功")
+                    success += 1
+                    time.sleep(0.5)
+
+                conn.close()
+                print(f"\n=== 补拉完成：成功 {success}/{len(dates)} 个交易日 ===")
+
+            main()
+            PYEOF
+            
+            python3 /tmp/backfill-daily-basic.py
+            echo "=== 脚本执行完毕 ==="
