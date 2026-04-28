@@ -198,7 +198,7 @@ function MiniFlipCounter({ total }: { total: number }) {
 
   return (
     <div className="flex flex-col items-center cursor-default" style={{ minWidth: 0, flex: 1, paddingLeft: '6px', paddingRight: '6px' }}>
-      <div className="text-gray-400 text-center w-full" style={{ fontSize: '0.5rem', marginBottom: '2px' }}>全网人脉</div>
+      {/* 全网人脉文字已移至外层容器，此处不显示 */}
       <div className="flex items-center justify-center" style={{ gap: '1px' }}>
         {cur.map((digit, i) => (
           digit === ',' || digit === '\u002c' || digit === '\uff0c' ? (
@@ -685,13 +685,15 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 全网人脉 - 反色容器（白底红字翻牌） */}
-          <div className="mx-3 mt-1.5 rounded-xl border border-red-100 bg-white px-3 py-1.5 flex items-center justify-between">
-            <div className="flex items-center space-x-1">
+          {/* 全网人脉 - 白底红边容器，格式与我的人脉一致 */}
+          <div className="mx-3 mt-1.5 rounded-xl border border-red-200 bg-white px-3 py-2">
+            <div className="flex items-center space-x-1 opacity-70 mb-0.5">
               <Globe className="w-3.5 h-3.5 text-[#A80000]" />
-              <span className="text-[#A80000] text-xs font-medium">全网人脉</span>
+              <span className="text-[#A80000] text-xs">全网人脉</span>
             </div>
-            <MiniFlipCounter total={networkTotal?.total ?? 0} />
+            <div className="flex items-baseline">
+              <RedFlipCounter total={networkTotal?.total ?? 0} />
+            </div>
           </div>
 
           {/* 四格小数据：公司数 / 标签数 / 累计联络 / 使用天数 */}
