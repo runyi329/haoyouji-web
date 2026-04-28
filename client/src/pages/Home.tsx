@@ -552,7 +552,7 @@ export default function Home() {
 
       {/* Feature Icons */}
       <div className="px-4 mt-2">
-        <div className="bg-white rounded-2xl p-2 shadow-sm grid grid-cols-6 gap-1">
+        <div className="bg-white rounded-2xl p-2 shadow-sm flex justify-around items-start">
           {/* Avatar Button with Dropdown Menu */}
           <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
             <DropdownMenuTrigger asChild>
