@@ -293,22 +293,13 @@ function RedFlipCounter({ total, unitColor }: { total: number; unitColor?: strin
   const [flipKey, setFlipKey] = useState(0);
   const [digitSize, setDigitSize] = useState(32);
   const containerRef = useRef<HTMLDivElement>(null);
-  const isFirstLoad = useRef(true);
 
   useEffect(() => {
     if (total > 0 && total !== displayTotal) {
-      if (isFirstLoad.current) {
-        // 初始加载时直接显示，不触发翻牌动画
-        // 注意：不设置 prevTotal（保持为 0），但 flipKey 也不增加
-        // 这样 flip={digit !== prev[i] && flipKey > 0} 中 flipKey>0 为 false，不触发动画
-        setDisplayTotal(total);
-        isFirstLoad.current = false;
-      } else {
-        // 后续更新才触发翻牌
-        setPrevTotal(displayTotal);
-        setDisplayTotal(total);
-        setFlipKey(k => k + 1);
-      }
+      // 每次数据变化（包括初始加载 0→实际值）都触发翻牌动画
+      setPrevTotal(displayTotal);
+      setDisplayTotal(total);
+      setFlipKey(k => k + 1);
     }
   }, [total]);
 
