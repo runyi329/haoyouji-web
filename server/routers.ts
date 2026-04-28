@@ -11929,6 +11929,22 @@ export const appRouter = router({
       }),
 
     // ===== AF 资金费率功能 =====
+    // 临时调试接口：返回数据库原始数据
+    afDebugFundingRate: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return { error: 'no db' };
+        const [settings] = await dbConn.execute(
+          `SELECT ledger_id, user_id, enabled, open_at, settled_hours FROM af_funding_rate_settings WHERE ledger_id = ?`,
+          [input.ledgerId]
+        ) as any[];
+        const [logs] = await dbConn.execute(
+          `SELECT id, user_id, amount, total_accumulated, created_at FROM af_funding_rate_logs WHERE ledger_id = ? ORDER BY id DESC LIMIT 5`,
+          [input.ledgerId]
+        ) as any[];
+        return { currentUserId: ctx.user.id, settings, logs };
+      }),
     // 获取当前用户的资金费率开关状态 + 累计金额
     afGetFundingRateStatus: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
