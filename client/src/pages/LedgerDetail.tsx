@@ -2119,7 +2119,7 @@ export default function LedgerDetail() {
   // AF 账本：资金费率开关状态 + 累计金额
   const { data: fundingRateStatus } = trpc.ledger.afGetFundingRateStatus.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: isCustomAF && !effectiveIsFunder }
+    { enabled: isCustomAF && !effectiveIsFunder, refetchInterval: 30000 }
   );
   // 独立本地 state，初始值为 undefined（未初始化），useEffect 在服务器数据到达后初始化一次
   const [localFundingRateEnabled, setLocalFundingRateEnabled] = useState<boolean | undefined>(undefined);
@@ -5204,6 +5204,22 @@ export default function LedgerDetail() {
               </div>
               <button onClick={() => setShowFundingRateLogs(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
             </div>
+            {/* 预估区域 */}
+            {(() => {
+              const balance = afTotalAsset ? Number(afTotalAsset.total) : 0;
+              const perDay = balance * 0.12 / 365;
+              const perHour = balance * 0.12 / 8760;
+              if (balance <= 0) return null;
+              return (
+                <div className="flex-shrink-0 px-5 py-3 bg-green-50 border-b border-green-100">
+                  <div className="text-xs text-gray-500 mb-1">当前余额 <span className="font-semibold text-gray-700">{balance.toFixed(2)} USDT</span></div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-xs text-gray-500">≈ 每天可得 <span className="font-bold text-green-600">{perDay.toFixed(4)} USDT</span></div>
+                    <div className="text-xs text-gray-400">≈ 每小时 <span className="font-semibold text-green-500">{perHour.toFixed(6)} USDT</span></div>
+                  </div>
+                </div>
+              );
+            })()}
             {/* 日志列表（无限滚动） */}
             <div
               className="overflow-y-auto"
