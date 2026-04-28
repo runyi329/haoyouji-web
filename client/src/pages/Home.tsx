@@ -364,12 +364,6 @@ export default function Home() {
       return () => clearTimeout(timer);
     }
   }, [isLiulifan, needsAttentionCount]);
-  // 所有导航都使用SPA路由路径（不使用绝对URL），避免Safari PWA创建新视图层
-  const features = [
-    { name: "地域", icon: MapPin, color: "bg-[#D32F2F]-light text-[#D32F2F]", path: "/parent/contacts/map" },
-    { name: "共享", icon: Handshake, color: "bg-[#D32F2F]-light text-[#D32F2F]", path: "/parent/contacts/sharing" },
-    { name: "资产", icon: Coins, color: "bg-[#D32F2F]-light text-[#D32F2F]", path: "/parent/asset-report" },
-  ];
 
 
   const handleLogout = async () => {
@@ -413,7 +407,7 @@ export default function Home() {
       `}</style>
 
       {/* ═══════════════════════════════════════════ */}
-      {/* 上半区：AI 社交（占位） */}
+      {/* 上半区：AI 社交（占位）+ 刷新/资产工具栏 */}
       {/* ═══════════════════════════════════════════ */}
       <div className="px-4 pt-4">
         <div
@@ -424,6 +418,28 @@ export default function Home() {
           <div className="absolute top-3 left-6 w-20 h-20 rounded-full bg-[#D32F2F]/15 blur-2xl" />
           <div className="absolute bottom-3 right-8 w-28 h-28 rounded-full bg-blue-400/10 blur-3xl" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-purple-500/8 blur-3xl" />
+
+          {/* 右上角工具栏：刷新 + 资产 */}
+          <div className="absolute top-3 right-3 z-20 flex items-center space-x-2">
+            <div
+              onClick={() => navigate("/parent/asset-report")}
+              className="flex flex-col items-center cursor-pointer"
+            >
+              <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors">
+                <Coins className="w-4 h-4 text-white/70" />
+              </div>
+              <span className="text-white/50 mt-0.5" style={{ fontSize: '0.55rem' }}>资产</span>
+            </div>
+            <div
+              onClick={handleRefresh}
+              className="flex flex-col items-center cursor-pointer"
+            >
+              <div className={`w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
+                <RefreshCw className="w-4 h-4 text-white/70" />
+              </div>
+              <span className="text-white/50 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
+            </div>
+          </div>
 
           <div className="relative z-10 flex flex-col items-center justify-center py-8 px-6 text-center">
             <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3">
@@ -543,38 +559,57 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 功能快捷入口：地域 / 共享 / 资产 / 刷新 */}
-          <div className="flex justify-around items-center px-2 pb-3 border-t border-gray-50 pt-2">
-            {features.map((feature) => {
-              const Icon = feature.icon;
-              const isSharing = feature.name === '共享';
-              const showBadge = isSharing && hasUnreadSharing;
-              return (
-                <div
-                  key={feature.name}
-                  onClick={() => navigate(feature.path)}
-                  className="flex flex-col items-center space-y-1 cursor-pointer relative"
-                >
-                  <div className="w-8 h-8 rounded-full bg-red-50 text-[#D32F2F] flex items-center justify-center">
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  {showBadge && (
-                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#D32F2F] rounded-full flex items-center justify-center border border-white">
-                      <Bell className="w-2 h-2 text-white" />
-                    </span>
-                  )}
-                  <span className="text-xs text-[#757575]" style={{ fontSize: '0.6rem' }}>{feature.name}</span>
-                </div>
-              );
-            })}
+          {/* 共享按钮 - 突出显示，AI共享是核心入口 */}
+          <div
+            onClick={() => navigate("/parent/contacts/sharing")}
+            className="mx-3 mb-2 flex items-center justify-between bg-gradient-to-r from-[#A80000]/10 to-[#d44]/10 border border-[#A80000]/20 rounded-xl px-3 py-2.5 cursor-pointer hover:from-[#A80000]/20 hover:to-[#d44]/20 transition-colors relative"
+          >
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-full bg-[#A80000] flex items-center justify-center shadow-sm flex-shrink-0">
+                <Handshake className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-[#A80000]">AI 共享人脉</div>
+                <div className="text-gray-400" style={{ fontSize: '0.6rem' }}>去中心化共享网络</div>
+              </div>
+            </div>
+            <div className="flex items-center space-x-1">
+              {hasUnreadSharing && (
+                <span className="w-5 h-5 bg-[#D32F2F] rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
+                  <Bell className="w-2.5 h-2.5 text-white" />
+                </span>
+              )}
+              <span className="text-gray-300 text-sm">›</span>
+            </div>
+          </div>
+
+          {/* 次级快捷入口：地域（仅保留地域） */}
+          <div className="flex justify-around items-center px-3 pb-3 border-t border-gray-50 pt-2">
             <div
-              onClick={handleRefresh}
+              onClick={() => navigate("/parent/contacts/map")}
               className="flex flex-col items-center space-y-1 cursor-pointer"
             >
-              <div className={`w-8 h-8 rounded-full bg-red-50 text-[#D32F2F] flex items-center justify-center ${isFetching ? 'animate-spin' : ''}`}>
-                <RefreshCw className="w-4 h-4" />
+              <div className="w-8 h-8 rounded-full bg-red-50 text-[#D32F2F] flex items-center justify-center">
+                <MapPin className="w-4 h-4" />
               </div>
-              <span className="text-[#757575]" style={{ fontSize: '0.6rem' }}>刷新</span>
+              <span className="text-[#757575]" style={{ fontSize: '0.6rem' }}>地域</span>
+            </div>
+            {/* 全网人脉翻牌 - 嵌入底部 */}
+            <div
+              className="flex flex-col items-center cursor-default"
+              style={{ minWidth: 0, flex: 1, paddingLeft: '8px', paddingRight: '8px' }}
+            >
+              <div className="text-gray-400 text-center w-full" style={{ fontSize: '0.55rem', marginBottom: '2px' }}>全网人脉</div>
+              <div className="flex items-center justify-center" style={{ gap: '1px' }}>
+                {(networkTotal?.total ?? 0).toLocaleString('zh-CN').split('').map((ch, i) => (
+                  ch === ',' || ch === '\uFF0C' ? (
+                    <span key={i} className="text-[#D32F2F] font-bold" style={{ fontSize: '0.7rem' }}>,</span>
+                  ) : (
+                    <span key={i} className="font-black text-[#D32F2F]" style={{ fontSize: '0.85rem', lineHeight: 1 }}>{ch}</span>
+                  )
+                ))}
+                <span className="text-gray-400 ml-0.5" style={{ fontSize: '0.55rem' }}>人</span>
+              </div>
             </div>
           </div>
         </div>
@@ -597,9 +632,6 @@ export default function Home() {
         </div>
 
       </div>
-
-      {/* 全网人脉总数 - 翻牌特效卡片 */}
-      <FlipCounterCard total={networkTotal?.total ?? 0} />
 
       {/* Bottom Navigation */}
       <BottomNav />
