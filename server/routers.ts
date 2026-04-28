@@ -11928,6 +11928,80 @@ export const appRouter = router({
         return { coins, total, prices, updatedAt: latestUpdatedAt };
       }),
 
+    // ===== AF 资金费率功能 =====
+    // 获取当前用户的资金费率开关状态 + 累计金额
+    afGetFundingRateStatus: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return { enabled: false, totalAccumulated: '0', lastLog: null };
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          const [rows] = await dbConn.execute(
+            `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+            [input.ledgerId, ctx.user.id]
+          ) as any[];
+          const myRole = (rows as any[])[0]?.role;
+          if (myRole === 'owner' || myRole === 'admin') targetUserId = input.viewAsUserId;
+        }
+        const [settingRows] = await dbConn.execute(
+          `SELECT enabled FROM af_funding_rate_settings WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          [input.ledgerId, targetUserId]
+        ) as any[];
+        const enabled = (settingRows as any[])[0]?.enabled === 1;
+        const [logRows] = await dbConn.execute(
+          `SELECT total_accumulated, created_at FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1`,
+          [input.ledgerId, targetUserId]
+        ) as any[];
+        const lastLog = (logRows as any[])[0] || null;
+        const totalAccumulated = lastLog?.total_accumulated ?? '0';
+        return { enabled, totalAccumulated, lastLog };
+      }),
+
+    // 切换资金费率开关
+    afToggleFundingRate: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await dbConn.execute(
+          `INSERT INTO af_funding_rate_settings (ledger_id, user_id, enabled) VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = NOW()`,
+          [input.ledgerId, ctx.user.id, input.enabled ? 1 : 0]
+        );
+        return { success: true };
+      }),
+
+    // 查询资金费率日志（分页）
+    afGetFundingRateLogs: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional(), page: z.number().default(1), pageSize: z.number().default(20) }))
+      .query(async ({ ctx, input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return { logs: [], total: 0 };
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          const [rows] = await dbConn.execute(
+            `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+            [input.ledgerId, ctx.user.id]
+          ) as any[];
+          const myRole = (rows as any[])[0]?.role;
+          if (myRole === 'owner' || myRole === 'admin') targetUserId = input.viewAsUserId;
+        }
+        const offset = (input.page - 1) * input.pageSize;
+        const [logRows] = await dbConn.execute(
+          `SELECT id, balance_snapshot, amount, total_accumulated, annual_rate, created_at
+           FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ?
+           ORDER BY id DESC LIMIT ? OFFSET ?`,
+          [input.ledgerId, targetUserId, input.pageSize, offset]
+        ) as any[];
+        const [countRows] = await dbConn.execute(
+          `SELECT COUNT(*) as cnt FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ?`,
+          [input.ledgerId, targetUserId]
+        ) as any[];
+        const total = (countRows as any[])[0]?.cnt ?? 0;
+        return { logs: logRows as any[], total };
+      }),
+
     // ===== AH 型定制账本（公司财务记账管理）=====
     createCustomAH: protectedProcedure
       .input(z.object({
@@ -20180,3 +20254,64 @@ setTimeout(() => {
   refreshCryptoPricesServer();
   setInterval(refreshCryptoPricesServer, 5 * 60 * 1000);
 }, 15_000);
+
+// ===== AF 资金费率每小时自动结算 =====
+async function runAfFundingRateSettlement() {
+  try {
+    const dbConn = await getDbConnection();
+    if (!dbConn) return;
+    // 查询所有已开启资金费率的用户（按账本分组）
+    const [settingRows] = await dbConn.execute(
+      `SELECT ledger_id, user_id FROM af_funding_rate_settings WHERE enabled = 1`
+    ) as any[];
+    const settings = settingRows as any[];
+    if (!settings || settings.length === 0) return;
+
+    const ANNUAL_RATE = 0.12; // 年化12%
+    const HOURS_PER_YEAR = 8760;
+    const HOURLY_RATE = ANNUAL_RATE / HOURS_PER_YEAR;
+
+    for (const setting of settings) {
+      try {
+        const { ledger_id: ledgerId, user_id: userId } = setting;
+        // 查询该用户在该账本的余额（充值 + 手动调账）
+        const [balRows] = await dbConn.execute(
+          `SELECT
+            (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ? AND ledger_id = ? AND status = 'completed') +
+            (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ? AND user_id = ?) as balance`,
+          [userId, ledgerId, ledgerId, userId]
+        ) as any[];
+        const balance = parseFloat((balRows as any[])[0]?.balance ?? '0');
+        if (balance <= 0) continue;
+
+        // 计算本次费率金额
+        const amount = balance * HOURLY_RATE;
+        if (amount <= 0) continue;
+
+        // 查询当前累计总额
+        const [lastRows] = await dbConn.execute(
+          `SELECT total_accumulated FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1`,
+          [ledgerId, userId]
+        ) as any[];
+        const prevTotal = parseFloat((lastRows as any[])[0]?.total_accumulated ?? '0');
+        const newTotal = prevTotal + amount;
+
+        // 插入日志
+        await dbConn.execute(
+          `INSERT INTO af_funding_rate_logs (ledger_id, user_id, balance_snapshot, amount, total_accumulated, annual_rate) VALUES (?, ?, ?, ?, ?, ?)`,
+          [ledgerId, userId, balance.toFixed(8), amount.toFixed(8), newTotal.toFixed(8), ANNUAL_RATE.toFixed(4)]
+        );
+      } catch (e) {
+        console.error(`[AF资金费率] 用户 ${setting.user_id} 结算失败:`, e);
+      }
+    }
+    console.log(`[AF资金费率] 结算完成，处理 ${settings.length} 条记录`);
+  } catch (e) {
+    console.error('[AF资金费率] 定时任务失败:', e);
+  }
+}
+// 延迟60秒后首次执行，之后每小时执行一次
+setTimeout(() => {
+  runAfFundingRateSettlement();
+  setInterval(runAfFundingRateSettlement, 60 * 60 * 1000);
+}, 60_000);
