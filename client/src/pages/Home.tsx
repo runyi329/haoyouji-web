@@ -2,7 +2,6 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { 
   Users, 
-  MapPin, 
   Handshake, 
   RefreshCw, 
   Plus,
@@ -732,18 +731,6 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 次级快捷入口：地域 */}
-          <div className="flex justify-center items-center px-3 pb-1.5 border-t border-gray-50 pt-1.5 flex-shrink-0">
-            <div
-              onClick={() => navigate("/parent/contacts/map")}
-              className="flex flex-col items-center space-y-1 cursor-pointer"
-            >
-              <div className="w-8 h-8 rounded-full bg-red-50 text-[#D32F2F] flex items-center justify-center">
-                <MapPin className="w-4 h-4" />
-              </div>
-              <span className="text-[#757575]" style={{ fontSize: '0.6rem' }}>地域</span>
-            </div>
-          </div>
         </div>
 
         {/* ── 右：AI 钱脉（占位） ── */}
