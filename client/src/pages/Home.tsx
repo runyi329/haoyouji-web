@@ -1,4 +1,3 @@
-import { Card } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { 
@@ -15,12 +14,6 @@ import {
   UserCircle,
   Bell,
 } from "lucide-react";
-import Autoplay from "embla-carousel-autoplay";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-} from "@/components/ui/carousel";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -240,8 +233,6 @@ export default function Home() {
   const [, navigate] = useLocation();
   const isLiulifan = user?.username === 'liulifan';
   const isJiang = user?.username === 'jiang';
-  const isYunting = user?.id === 540801;
-  
 
 
   // 获取基础统计数据
@@ -373,29 +364,6 @@ export default function Home() {
       return () => clearTimeout(timer);
     }
   }, [isLiulifan, needsAttentionCount]);
-  const banners = [
-    {
-      id: 1,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/friend-share.webp",
-      title: "好友共享"
-    },
-    {
-      id: 2,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/decentral.webp",
-      title: "去中心化人脉管理"
-    },
-    {
-      id: 3,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/carousel/ai.webp",
-      title: "AI社交"
-    },
-    {
-      id: 4,
-      image: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/maidong_poster_1280x720_876d1051.webp",
-      title: "脉动周周赢"
-    }
-  ];
-
   // 所有导航都使用SPA路由路径（不使用绝对URL），避免Safari PWA创建新视图层
   const features = [
     { name: "地域", icon: MapPin, color: "bg-[#D32F2F]-light text-[#D32F2F]", path: "/parent/contacts/map" },
@@ -403,19 +371,6 @@ export default function Home() {
     { name: "资产", icon: Coins, color: "bg-[#D32F2F]-light text-[#D32F2F]", path: "/parent/asset-report" },
   ];
 
-  const metricsLeft = [
-    { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", path: "/parent/contacts/interaction-stats" },
-    { name: "累计使用", value: totalUsageDays ?? 0, unit: "天", path: "/parent/contacts" },
-    { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", path: "/parent/contacts/list?view=company" },
-    { name: "今日活跃", value: stats?.todayActive ?? 0, unit: "人", path: "/parent/contacts/list?filter=todayActive" },
-  ];
-
-  const metricsRight = [
-    { name: "本周新增", value: stats?.newThisWeek ?? 0, unit: "人", path: "/parent/contacts/list?filter=thisWeek" },
-    { name: "共享总数", value: stats?.sharingToMeCount ?? 0, unit: "人", path: "/parent/contacts/list?filter=shared" },
-    { name: "我的积分", value: user?.points ?? 0, unit: "分", path: "/parent/points" },
-    { name: "邀请好友", value: inviteInfo?.inviteCount ?? 0, unit: "人", path: "/parent/profile/invite" },
-  ];
 
   const handleLogout = async () => {
     // 清除三层存储（localStorage + Cookie + IndexedDB）
@@ -457,202 +412,191 @@ export default function Home() {
         }
       `}</style>
 
-      {/* Header Banner Carousel */}
-      {isYunting ? (
-        /* yunting：算力中心商城入口 */
+      {/* ═══════════════════════════════════════════ */}
+      {/* 上半区：AI 社交（占位） */}
+      {/* ═══════════════════════════════════════════ */}
+      <div className="px-4 pt-4">
         <div
-          className="relative w-full cursor-pointer overflow-hidden"
-          style={{ aspectRatio: '16/9' }}
-          onClick={() => navigate('/jiang/shop')}
+          className="w-full rounded-2xl overflow-hidden relative"
+          style={{ minHeight: '45vw', background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
         >
-          <div className="w-full h-full bg-gradient-to-br from-[#1a1a2e] via-[#16213e] to-[#0f3460] flex flex-col items-center justify-center relative">
-            <div className="absolute inset-0 overflow-hidden">
-              <div className="absolute top-2 left-4 w-16 h-16 rounded-full bg-[#D32F2F]/10 blur-xl" />
-              <div className="absolute bottom-4 right-6 w-24 h-24 rounded-full bg-blue-500/10 blur-2xl" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-[#D32F2F]/5 blur-3xl" />
-            </div>
-            <div className="relative z-10 flex flex-col items-center space-y-2 px-6 text-center">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-8 h-8 rounded-full bg-[#D32F2F] flex items-center justify-center shadow-lg">
-                  <span className="text-white text-xs font-bold">R1</span>
-                </div>
-                <span className="text-white/90 text-sm font-semibold tracking-wide">润仪算力研发中心</span>
-              </div>
-              <h2 className="text-white text-xl font-bold leading-tight">算力中心商城</h2>
-              <p className="text-white/60 text-xs">AI算力包 · 智能服务 · 一键购买</p>
-              <div className="mt-2 px-5 py-1.5 bg-[#D32F2F] rounded-full text-white text-xs font-medium shadow-lg">
-                立即进入 →
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="relative">
-          <Carousel
-            className="w-full"
-            opts={{ loop: true, align: "start" }}
-            plugins={[Autoplay({ delay: 5000, stopOnInteraction: false })]}
-          >
-            <CarouselContent>
-              {banners.map((banner) => (
-                <CarouselItem key={banner.id}>
-                  <div className="relative w-full aspect-[16/9] overflow-hidden">
-                    <img src={banner.image} alt={banner.title} className="w-full h-full object-cover" />
-                  </div>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-          </Carousel>
-        </div>
-      )}
+          {/* 背景装饰光晕 */}
+          <div className="absolute top-3 left-6 w-20 h-20 rounded-full bg-[#D32F2F]/15 blur-2xl" />
+          <div className="absolute bottom-3 right-8 w-28 h-28 rounded-full bg-blue-400/10 blur-3xl" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-purple-500/8 blur-3xl" />
 
-      {/* Stats Cards - 使用SPA导航 */}
-      <div className="px-4 mt-2 grid grid-cols-2 gap-2">
-        <div className="block cursor-pointer" onClick={() => {
-          // 每次点击都带上时间戳，确保 ContactsList 的 searchParams 发生变化，触发刷新
-          navigate('/parent/contacts/list?_t=' + Date.now());
-        }}>
-        <Card className="bg-gradient-to-br from-[#A80000] to-[#d44] text-white p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
-          <div className="flex items-center space-x-2 opacity-90">
-            <Users className="w-5 h-5" />
-            <span className="text-sm font-medium">人脉总数</span>
+          <div className="relative z-10 flex flex-col items-center justify-center py-8 px-6 text-center">
+            <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3">
+              <span className="text-white text-lg">✦</span>
+            </div>
+            <h2 className="text-white font-bold text-base tracking-wide mb-1">AI 社交</h2>
+            <p className="text-white/40 text-xs">智能社交功能即将上线</p>
           </div>
-          <div className="flex items-baseline space-x-1">
-            {isLoading ? (
-              <Loader2 className="w-8 h-8 animate-spin opacity-60" />
-            ) : (
-              <>
-                <span className="text-2xl font-bold">{stats ? formatNumber(stats.totalContacts) : "—"}</span>
-                <span className="text-sm opacity-80">人</span>
-              </>
-            )}
-          </div>
-        </Card>
-        </div>
-        
-        <div className="block cursor-pointer" onClick={() => navigate("/parent/contacts/tag-stats")}>
-          <Card className="bg-white text-[#222222] p-3 rounded-2xl shadow-lg border-none flex flex-col items-center justify-center space-y-0.5 cursor-pointer hover:shadow-xl transition-shadow">
-          <div className="flex items-center space-x-2 text-gray-500">
-            <Coins className="w-5 h-5" />
-            <span className="text-sm font-medium">标签总数</span>
-          </div>
-          <div className="flex items-baseline space-x-1">
-            {isLoading ? (
-              <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-            ) : (
-              <>
-                <span className="text-2xl font-bold text-[#D32F2F]">{totalTagCount ? formatNumber(totalTagCount) : "—"}</span>
-                <span className="text-sm text-gray-400">个</span>
-              </>
-            )}
-          </div>
-        </Card>
         </div>
       </div>
 
-      {/* Feature Icons */}
-      <div className="px-4 mt-2">
-        <div className="bg-white rounded-2xl p-2 shadow-sm flex justify-around items-start">
-          {/* Avatar Button with Dropdown Menu */}
-          <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <div className="flex flex-col items-center space-y-2 cursor-pointer">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100">
+      {/* ═══════════════════════════════════════════ */}
+      {/* 下半区：左 AI 人脉 + 右 AI 钱脉 */}
+      {/* ═══════════════════════════════════════════ */}
+      <div className="px-4 mt-3 grid grid-cols-2 gap-3">
+
+        {/* ── 左：AI 人脉 ── */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col">
+          {/* 卡片头部：标题 + 头像 */}
+          <div className="flex items-center justify-between px-3 pt-3 pb-2">
+            <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 人脉</span>
+            <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100 cursor-pointer flex-shrink-0">
                   {user?.avatar ? (
                     <img src={user.avatar} alt="用户头像" className="w-full h-full object-cover" />
                   ) : (
-                    <User className="w-5 h-5 text-white" />
+                    <User className="w-4 h-4 text-white" />
                   )}
                 </div>
-                <span className={`text-xs font-medium ${getLevelClassName(promotionStats?.currentLevel)}`}>
-                  {getLevelText(promotionStats?.currentLevel)}
-                </span>
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-48">
-              <DropdownMenuItem 
-                onClick={() => { setProfileMenuOpen(false); navigate("/parent/profile"); }}
-                className="flex items-center cursor-pointer"
-              >
-                <UserCircle className="w-4 h-4 mr-2" />
-                <span>个人中心</span>
-              </DropdownMenuItem>
-
-              {isJiang && (
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem
-                  onClick={() => { setProfileMenuOpen(false); navigate("/admin/super-view"); }}
+                  onClick={() => { setProfileMenuOpen(false); navigate("/parent/profile"); }}
                   className="flex items-center cursor-pointer"
                 >
-                  <span className="w-4 h-4 mr-2 flex items-center justify-center text-xs font-bold text-[#D32F2F] bg-red-50 rounded-sm">润</span>
-                  <span>全局视角</span>
+                  <UserCircle className="w-4 h-4 mr-2" />
+                  <span>个人中心</span>
                 </DropdownMenuItem>
-              )}
-
-              <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-[#D32F2F]">
-                <LogOut className="w-4 h-4 mr-2" />
-                <span>退出登录</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {features.map((feature) => {
-            const Icon = feature.icon;
-            const isSharing = feature.name === '共享';
-            const showBadge = isSharing && hasUnreadSharing;
-            return (
-              <div
-                key={feature.name}
-                onClick={() => navigate(feature.path)}
-                className="flex flex-col items-center space-y-2 cursor-pointer relative"
-              >
-                <div className={`w-10 h-10 rounded-full ${feature.color} flex items-center justify-center shadow-sm`}>
-                  <Icon className="w-5 h-5" />
-                </div>
-                {showBadge && (
-                  <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-[#D32F2F] rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
-                    <Bell className="w-2.5 h-2.5 text-white" />
-                  </span>
+                {isJiang && (
+                  <DropdownMenuItem
+                    onClick={() => { setProfileMenuOpen(false); navigate("/admin/super-view"); }}
+                    className="flex items-center cursor-pointer"
+                  >
+                    <span className="w-4 h-4 mr-2 flex items-center justify-center text-xs font-bold text-[#D32F2F] bg-red-50 rounded-sm">润</span>
+                    <span>全局视角</span>
+                  </DropdownMenuItem>
                 )}
-                <span className="text-xs font-medium text-[#757575]">{feature.name}</span>
-              </div>
-            );
-          })}
-
-          {/* 第5个按钮：所有用户统一显示刷新按钮 */}
-          <div
-            onClick={handleRefresh}
-            className="flex flex-col items-center space-y-2 cursor-pointer"
-          >
-            <div className={`w-10 h-10 rounded-full bg-[#D32F2F]-light text-[#D32F2F] flex items-center justify-center shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
-              <RefreshCw className="w-5 h-5" />
-            </div>
-            <span className="text-xs font-medium text-[#757575]">刷新</span>
+                <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-[#D32F2F]">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  <span>退出登录</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
-        </div>
-      </div>
-
-      {/* Business Metrics Grid - 使用SPA导航 */}
-      <div className="px-4 mt-3">
-        <div className="grid grid-cols-4 gap-3">
-          {[...metricsLeft, ...metricsRight].map((stat, index) => (
-            <div key={index} onClick={() => navigate(stat.path)} className="cursor-pointer">
-              <div className="bg-white p-3 rounded-xl shadow-sm flex flex-col items-center justify-center cursor-pointer hover:bg-[#FAF3ED] transition-colors aspect-square">
-                <span className="text-xs text-gray-400 text-center mb-1">{stat.name}</span>
-                <div className="flex items-baseline justify-center space-x-0.5">
-                  <span className={`font-bold leading-none ${stat.name === '邀请好友' ? 'text-[#D32F2F]' : 'text-[#222222]'} text-xl sm:text-2xl`} style={{ fontSize: 'clamp(1.125rem, 5vw, 1.5rem)' }}>
-                    {formatNumber(stat.value)}
+          {/* 人脉总数 - 核心大数字 */}
+          <div
+            className="mx-3 rounded-xl bg-gradient-to-br from-[#A80000] to-[#d44] px-3 py-3 cursor-pointer"
+            onClick={() => navigate('/parent/contacts/list?_t=' + Date.now())}
+          >
+            <div className="flex items-center space-x-1 opacity-80 mb-0.5">
+              <Users className="w-3.5 h-3.5 text-white" />
+              <span className="text-white text-xs">人脉总数</span>
+            </div>
+            <div className="flex items-baseline space-x-1">
+              {isLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin text-white/60" />
+              ) : (
+                <>
+                  <span className="text-white font-bold" style={{ fontSize: 'clamp(1.4rem, 7vw, 2rem)' }}>
+                    {stats ? formatNumber(stats.totalContacts) : "—"}
                   </span>
-                  <span className="text-xs text-gray-400 leading-none">{stat.unit}</span>
+                  <span className="text-white/70 text-xs">人</span>
+                </>
+              )}
+            </div>
+            <div className="text-white/60 text-xs mt-0.5">
+              {stats ? `${stats.companyCount} 家公司` : ''}
+              {totalTagCount ? ` · ${formatNumber(totalTagCount)} 个标签` : ''}
+            </div>
+          </div>
+
+          {/* 三格小数据：累计联络 / 使用天数 / 共享总数 */}
+          <div className="grid grid-cols-3 gap-1.5 px-3 mt-2">
+            {[
+              { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", path: "/parent/contacts/interaction-stats" },
+              { name: "使用天数", value: totalUsageDays ?? 0, unit: "天", path: "/parent/contacts" },
+              { name: "共享人脉", value: stats?.sharingToMeCount ?? 0, unit: "人", path: "/parent/contacts/list?filter=shared" },
+            ].map((item) => (
+              <div
+                key={item.name}
+                onClick={() => navigate(item.path)}
+                className="bg-[#FAF3ED] rounded-lg py-2 flex flex-col items-center cursor-pointer hover:bg-red-50 transition-colors"
+              >
+                <span className="text-gray-400 text-center leading-tight" style={{ fontSize: '0.6rem' }}>{item.name}</span>
+                <div className="flex items-baseline space-x-0.5 mt-0.5">
+                  <span className="font-bold text-[#222222]" style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1.1rem)' }}>
+                    {formatNumber(item.value)}
+                  </span>
+                  <span className="text-gray-400" style={{ fontSize: '0.6rem' }}>{item.unit}</span>
                 </div>
               </div>
+            ))}
+          </div>
+
+          {/* 邀请好友 */}
+          <div
+            className="mx-3 mt-2 mb-3 flex items-center justify-between bg-[#FAF3ED] rounded-lg px-3 py-2 cursor-pointer hover:bg-red-50 transition-colors"
+            onClick={() => navigate("/parent/profile/invite")}
+          >
+            <span className="text-xs text-gray-500">已邀请好友</span>
+            <div className="flex items-center space-x-1">
+              <span className="font-bold text-[#D32F2F] text-sm">{inviteInfo?.inviteCount ?? 0}</span>
+              <span className="text-xs text-gray-400">人</span>
+              <span className="text-gray-300 text-xs ml-1">›</span>
             </div>
-          ))}
+          </div>
+
+          {/* 功能快捷入口：地域 / 共享 / 资产 / 刷新 */}
+          <div className="flex justify-around items-center px-2 pb-3 border-t border-gray-50 pt-2">
+            {features.map((feature) => {
+              const Icon = feature.icon;
+              const isSharing = feature.name === '共享';
+              const showBadge = isSharing && hasUnreadSharing;
+              return (
+                <div
+                  key={feature.name}
+                  onClick={() => navigate(feature.path)}
+                  className="flex flex-col items-center space-y-1 cursor-pointer relative"
+                >
+                  <div className="w-8 h-8 rounded-full bg-red-50 text-[#D32F2F] flex items-center justify-center">
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  {showBadge && (
+                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#D32F2F] rounded-full flex items-center justify-center border border-white">
+                      <Bell className="w-2 h-2 text-white" />
+                    </span>
+                  )}
+                  <span className="text-xs text-[#757575]" style={{ fontSize: '0.6rem' }}>{feature.name}</span>
+                </div>
+              );
+            })}
+            <div
+              onClick={handleRefresh}
+              className="flex flex-col items-center space-y-1 cursor-pointer"
+            >
+              <div className={`w-8 h-8 rounded-full bg-red-50 text-[#D32F2F] flex items-center justify-center ${isFetching ? 'animate-spin' : ''}`}>
+                <RefreshCw className="w-4 h-4" />
+              </div>
+              <span className="text-[#757575]" style={{ fontSize: '0.6rem' }}>刷新</span>
+            </div>
+          </div>
         </div>
+
+        {/* ── 右：AI 钱脉（占位） ── */}
+        <div
+          className="rounded-2xl overflow-hidden relative flex flex-col items-center justify-center"
+          style={{ minHeight: '100%', background: 'linear-gradient(135deg, #0d2137 0%, #1a3a5c 50%, #0d2137 100%)' }}
+        >
+          <div className="absolute top-2 right-4 w-16 h-16 rounded-full bg-blue-400/10 blur-2xl" />
+          <div className="absolute bottom-4 left-3 w-20 h-20 rounded-full bg-cyan-400/8 blur-3xl" />
+          <div className="relative z-10 flex flex-col items-center justify-center py-8 px-4 text-center">
+            <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3">
+              <Wallet className="w-5 h-5 text-white/70" />
+            </div>
+            <h2 className="text-white font-bold text-sm tracking-wide mb-1">AI 钱脉</h2>
+            <p className="text-white/40 text-xs">智能财务功能</p>
+            <p className="text-white/30 text-xs">即将上线</p>
+          </div>
+        </div>
+
       </div>
-
-
-
 
       {/* 全网人脉总数 - 翻牌特效卡片 */}
       <FlipCounterCard total={networkTotal?.total ?? 0} />
