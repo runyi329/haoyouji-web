@@ -378,7 +378,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen bg-[#FAF3ED] max-w-md mx-auto relative shadow-2xl flex flex-col overflow-hidden">
+    <div className="bg-[#FAF3ED] max-w-md mx-auto relative shadow-2xl flex flex-col overflow-hidden" style={{ height: "calc(100dvh - 80px)" }}>
       {/* 跳动动画的CSS */}
       <style>{`
         @keyframes bellShake {
@@ -633,10 +633,8 @@ export default function Home() {
 
       </div>
 
-      {/* Bottom Navigation - 固定底部 */}
-      <div className="flex-shrink-0">
-        <BottomNav />
-      </div>
+      {/* Bottom Navigation - fixed定位，不在flex流里 */}
+      <BottomNav />
     </div>
   );
 }
