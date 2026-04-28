@@ -617,8 +617,7 @@ export default function Home() {
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center mb-2 shadow-sm">
               <span className="text-white text-base">✦</span>
             </div>
-            <p className="text-gray-400 text-xs text-center">智能社交功能</p>
-            <p className="text-gray-300 text-xs text-center">即将上线</p>
+            <p className="text-gray-300 text-xs text-center">升级装修</p>
           </div>
         </div>
       </div>
@@ -759,7 +758,7 @@ export default function Home() {
               <Wallet className="w-5 h-5 text-white" />
             </div>
             <p className="text-gray-400 text-xs text-center">智能财务功能</p>
-            <p className="text-gray-300 text-xs text-center">即将上线</p>
+            <p className="text-gray-300 text-xs text-center">升级装修</p>
           </div>
         </div>
 
