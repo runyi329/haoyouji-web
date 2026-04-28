@@ -3182,7 +3182,7 @@ export default function LedgerDetail() {
                 <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   {/* 右上角：自动转资金费率开关 */}
                   <div className="absolute top-2 right-3 flex items-center gap-1.5">
-                    <span className="text-[10px] text-white/60">费率</span>
+                    <span className="text-[10px] text-white/60">自动赚费</span>
                     <button
                       onClick={() => {
                         if (!viewAsUserId) {
@@ -3214,13 +3214,13 @@ export default function LedgerDetail() {
                   {/* 资金费率累计显示 */}
                   {(localFundingRateEnabled ?? false) && (
                     <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[10px] text-white/60">资金费率</span>
+                      <span className="text-[10px] text-white/60">自动赚费</span>
                       <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
                       <span className="text-[10px] text-white/50">USDT</span>
                       <button
                         onClick={() => setShowFundingRateLogs(true)}
                         className="ml-0.5 flex items-center"
-                        title="查看资金费率详情"
+                        title="查看自动赚费详情"
                       >
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
                           <circle cx="12" cy="12" r="10"/>
@@ -3267,7 +3267,7 @@ export default function LedgerDetail() {
                     <button
                       onClick={() => setLocation(`/ledger/${ledgerId}/crypto/funding-history`)}
                       style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
-                      title="查看资金费率历史"
+                      title="查看自动赚费历史"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
                         <circle cx="12" cy="12" r="10"/>
@@ -5131,7 +5131,7 @@ export default function LedgerDetail() {
             {/* 弹窗标题栏 */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
-                <div className="text-base font-bold text-gray-900">资金费率详情</div>
+                <div className="text-base font-bold text-gray-900">自动赚费详情</div>
                 <div className="text-xs text-gray-400 mt-0.5">年化 12% · 每小时结算一次</div>
               </div>
               <button onClick={() => setShowFundingRateLogs(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
@@ -5139,7 +5139,7 @@ export default function LedgerDetail() {
             {/* 累计总额 */}
             <div className="px-5 py-3 bg-green-50 border-b border-gray-100">
               <div className="flex items-baseline gap-2">
-                <span className="text-sm text-gray-500">累计费率</span>
+                <span className="text-sm text-gray-500">累计自动赚费</span>
                 <span className="text-xl font-bold text-green-700">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
                 <span className="text-xs text-gray-400">USDT</span>
               </div>
@@ -5152,7 +5152,7 @@ export default function LedgerDetail() {
                     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                   </svg>
                   <div className="text-sm">暂无记录</div>
-                  <div className="text-xs mt-1">开启费率开关后每小时自动结算</div>
+                  <div className="text-xs mt-1">开启自动赚费后每小时自动结算</div>
                 </div>
               ) : (
                 <div>
