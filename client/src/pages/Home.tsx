@@ -218,6 +218,104 @@ function MiniFlipCounter({ total }: { total: number }) {
   );
 }
 
+// 红色背景翻牌组件：白色格子 + 红色数字，用于红色大卡片内
+function RedFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDigit: string; flip: boolean; size: number }) {
+  const w = Math.round(size * 0.72);
+  const h = size;
+  const fs = Math.round(size * 0.82);
+
+  const numStyle = (top: number): React.CSSProperties => ({
+    position: 'absolute',
+    top: top + 'px',
+    left: 0,
+    right: 0,
+    height: h + 'px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: fs + 'px',
+    fontWeight: 900,
+    color: '#A80000',
+    lineHeight: 1,
+    userSelect: 'none',
+  });
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block', width: w + 'px', height: h + 'px', perspective: '600px' }}>
+      {/* 静态上半：白色背景 */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
+        background: '#fff', borderRadius: '4px 4px 0 0', overflow: 'hidden',
+        boxShadow: 'inset 0 -1px 0 rgba(168,0,0,0.15)' }}>
+        <div style={numStyle(0)}>{digit}</div>
+      </div>
+      {/* 静态下半：浅红色背景 */}
+      <div style={{ position: 'absolute', top: h / 2 + 'px', left: 0, right: 0, height: h / 2 + 'px',
+        background: '#ffe0e0', borderRadius: '0 0 4px 4px', overflow: 'hidden' }}>
+        <div style={numStyle(-(h / 2))}>{digit}</div>
+      </div>
+      {/* 动画上半：旧数字翻走 */}
+      {flip && (
+        <div className="fd-anim-top" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
+          background: '#fff', borderRadius: '4px 4px 0 0', overflow: 'hidden',
+          transformOrigin: 'bottom center', zIndex: 10,
+          boxShadow: 'inset 0 -1px 0 rgba(168,0,0,0.15)' }}>
+          <div style={numStyle(0)}>{prevDigit}</div>
+        </div>
+      )}
+      {/* 动画下半：新数字翻入 */}
+      {flip && (
+        <div className="fd-anim-bottom" style={{ position: 'absolute', top: h / 2 + 'px', left: 0, right: 0, height: h / 2 + 'px',
+          background: '#ffe0e0', borderRadius: '0 0 4px 4px', overflow: 'hidden',
+          transformOrigin: 'top center', zIndex: 10 }}>
+          <div style={numStyle(-(h / 2))}>{digit}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RedFlipCounter({ total }: { total: number }) {
+  const [displayTotal, setDisplayTotal] = useState(0);
+  const [prevTotal, setPrevTotal] = useState(0);
+  const [flipKey, setFlipKey] = useState(0);
+  const DIGIT_SIZE = 32;
+
+  useEffect(() => {
+    if (total > 0 && total !== displayTotal) {
+      setPrevTotal(displayTotal);
+      setDisplayTotal(total);
+      setFlipKey(k => k + 1);
+    }
+  }, [total]);
+
+  const toDigits = (num: number) => num.toLocaleString('zh-CN').split('');
+  const curDigits = toDigits(displayTotal);
+  const prevDigits = toDigits(prevTotal);
+  const maxLen = Math.max(curDigits.length, prevDigits.length);
+  const pad = (arr: string[]) => Array(maxLen - arr.length).fill('\u00a0').concat(arr);
+  const cur = pad(curDigits);
+  const prev = pad(prevDigits);
+
+  return (
+    <div className="flex items-end" style={{ gap: '2px' }}>
+      {cur.map((digit, i) => (
+        digit === ',' || digit === '\u002c' || digit === '\uff0c' ? (
+          <span key={i} className="font-bold" style={{ fontSize: DIGIT_SIZE * 0.5 + 'px', alignSelf: 'center', color: 'rgba(255,255,255,0.7)', lineHeight: DIGIT_SIZE + 'px', width: DIGIT_SIZE * 0.3 + 'px', textAlign: 'center' }}>,</span>
+        ) : (
+          <RedFlipDigit
+            key={`red-${i}-${flipKey}`}
+            digit={digit === '\u00a0' ? '' : digit}
+            prevDigit={prev[i] === '\u00a0' ? '' : (prev[i] ?? '')}
+            flip={digit !== prev[i] && flipKey > 0}
+            size={DIGIT_SIZE}
+          />
+        )
+      ))}
+      <span className="font-medium" style={{ fontSize: DIGIT_SIZE * 0.38 + 'px', color: 'rgba(255,255,255,0.7)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '3px' }}>人</span>
+    </div>
+  );
+}
+
 function formatNumber(num: number): string {
   if (num >= 10000) {
     return (num / 10000).toFixed(1) + "万";
@@ -558,18 +656,13 @@ export default function Home() {
               <Users className="w-3.5 h-3.5 text-white" />
               <span className="text-white text-xs">人脉总数</span>
             </div>
-            <div className="flex items-baseline space-x-1">
-              {isLoading ? (
-                <Loader2 className="w-6 h-6 animate-spin text-white/60" />
-              ) : (
-                <>
-                  <span className="text-white font-bold" style={{ fontSize: 'clamp(1.4rem, 7vw, 2rem)' }}>
-                    {stats ? formatNumber(stats.totalContacts) : "—"}
-                  </span>
-                  <span className="text-white/70 text-xs">人</span>
-                </>
-              )}
-            </div>
+          <div className="flex items-baseline">
+            {isLoading ? (
+              <Loader2 className="w-6 h-6 animate-spin text-white/60" />
+            ) : (
+              <RedFlipCounter total={stats?.totalContacts ?? 0} />
+            )}
+          </div>
           </div>
 
           {/* 四格小数据：公司数 / 标签数 / 累计联络 / 使用天数 */}
