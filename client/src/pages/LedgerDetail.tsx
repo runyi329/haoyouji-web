@@ -2113,6 +2113,9 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF, refetchInterval: 60000 }
   );
+  // AF 账本：资金费率日志弹窗状态（必须在 trpc 查询之前声明，避免 TDZ）
+  const [showFundingRateLogs2, setShowFundingRateLogs2] = useState(false);
+  const [fundingRateLogsPage2, setFundingRateLogsPage2] = useState(1);
   // AF 账本：资金费率开关状态 + 累计金额
   const { data: fundingRateStatus, refetch: refetchFundingRateStatus } = trpc.ledger.afGetFundingRateStatus.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -2123,8 +2126,8 @@ export default function LedgerDetail() {
   });
   // AF 账本：资金费率日志
   const { data: fundingRateLogsData } = trpc.ledger.afGetFundingRateLogs.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage, pageSize: 20 },
-    { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs }
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage2, pageSize: 20 },
+    { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs2 }
   );
   // ETH 持仓计算预览数据（仅 isCustomAF 时加载）
   const { data: ethPositionSettings } = trpc.ethPositionGetSettings.useQuery(
@@ -2272,9 +2275,11 @@ export default function LedgerDetail() {
   const ahCreateCompanyMutation = trpc.ledger.ahCreateCompany.useMutation({
     onSuccess: () => { refetchAhCompanies(); refetchAhTaxAuths(); },
   });
-  // AF 账本：资金费率日志弹窗状态
-  const [showFundingRateLogs, setShowFundingRateLogs] = useState(false);
-  const [fundingRateLogsPage, setFundingRateLogsPage] = useState(1);
+  // AF 账本：资金费率日志弹窗状态（已在上方 trpc 查询前声明）
+  const showFundingRateLogs = showFundingRateLogs2;
+  const setShowFundingRateLogs = setShowFundingRateLogs2;
+  const fundingRateLogsPage = fundingRateLogsPage2;
+  const setFundingRateLogsPage = setFundingRateLogsPage2;
 
   // AH 账本：新建公司弹窗状态
   const [showAhCreateCompany, setShowAhCreateCompany] = useState(false);
