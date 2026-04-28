@@ -2116,22 +2116,34 @@ export default function LedgerDetail() {
   // AF 账本：资金费率日志弹窗状态（必须在 trpc 查询之前声明，避免 TDZ）
   const [showFundingRateLogs2, setShowFundingRateLogs2] = useState(false);
   const [fundingRateLogsPage2, setFundingRateLogsPage2] = useState(1);
-  const [localFundingRateEnabled, setLocalFundingRateEnabled] = useState<boolean | null>(null);
   // AF 账本：资金费率开关状态 + 累计金额
-  const { data: fundingRateStatus, refetch: refetchFundingRateStatus } = trpc.ledger.afGetFundingRateStatus.useQuery(
+  const { data: fundingRateStatus } = trpc.ledger.afGetFundingRateStatus.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF && !effectiveIsFunder }
   );
+  // 独立本地 state，初始值为 undefined（未初始化），useEffect 在服务器数据到达后初始化一次
+  const [localFundingRateEnabled, setLocalFundingRateEnabled] = useState<boolean | undefined>(undefined);
+  const fundingRateInitialized = useRef(false);
+  useEffect(() => {
+    if (!fundingRateInitialized.current && fundingRateStatus !== undefined) {
+      setLocalFundingRateEnabled(fundingRateStatus.enabled);
+      fundingRateInitialized.current = true;
+    }
+  }, [fundingRateStatus]);
   const toggleFundingRateMutation = trpc.ledger.afToggleFundingRate.useMutation({
-    onSuccess: () => {
-      // 先 invalidate，等查询刷新完后再清除本地状态
-      trpcUtils.ledger.afGetFundingRateStatus.invalidate({ ledgerId: Number(ledgerId) }).then(() => {
-        setLocalFundingRateEnabled(null);
-      });
+    onSuccess: (_data, variables) => {
+      // mutation 成功后，以服务器实际保存的值为准
+      setLocalFundingRateEnabled(variables.enabled);
     },
-    onError: () => {
-      // 回滚乐观更新
-      setLocalFundingRateEnabled(null);
+    onError: (_err, _variables, context: any) => {
+      // 回滚到 mutation 前的值
+      if (context?.previousEnabled !== undefined) {
+        setLocalFundingRateEnabled(context.previousEnabled);
+      }
+    },
+    onMutate: (variables) => {
+      // 返回 context 供 onError 回滚
+      return { previousEnabled: localFundingRateEnabled };
     },
   });
   // AF 账本：资金费率日志
@@ -3174,21 +3186,20 @@ export default function LedgerDetail() {
                     <button
                       onClick={() => {
                         if (!viewAsUserId) {
-                          const currentEnabled = localFundingRateEnabled !== null ? localFundingRateEnabled : (fundingRateStatus?.enabled ?? false);
-                          const newEnabled = !currentEnabled;
+                          const newEnabled = !(localFundingRateEnabled ?? false);
                           setLocalFundingRateEnabled(newEnabled);
                           toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: newEnabled });
                         }
                       }}
                       disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
                       className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
-                      style={{ backgroundColor: (localFundingRateEnabled !== null ? localFundingRateEnabled : fundingRateStatus?.enabled) ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)' }}
+                      style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)' }}
                     >
                       <span
                         className="inline-block h-3 w-3 rounded-full bg-white shadow transition-transform"
                         style={{
-                          backgroundColor: (localFundingRateEnabled !== null ? localFundingRateEnabled : fundingRateStatus?.enabled) ? '#16a34a' : 'rgba(255,255,255,0.6)',
-                          transform: (localFundingRateEnabled !== null ? localFundingRateEnabled : fundingRateStatus?.enabled) ? 'translateX(14px)' : 'translateX(2px)',
+                          backgroundColor: (localFundingRateEnabled ?? false) ? '#16a34a' : 'rgba(255,255,255,0.6)',
+                          transform: (localFundingRateEnabled ?? false) ? 'translateX(14px)' : 'translateX(2px)',
                         }}
                       />
                     </button>
@@ -3201,7 +3212,7 @@ export default function LedgerDetail() {
                     <span className="text-xs text-white/60">USDT</span>
                   </div>
                   {/* 资金费率累计显示 */}
-                  {(localFundingRateEnabled !== null ? localFundingRateEnabled : fundingRateStatus?.enabled) && (
+                  {(localFundingRateEnabled ?? false) && (
                     <div className="flex items-center gap-1 mt-1">
                       <span className="text-[10px] text-white/60">资金费率</span>
                       <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
