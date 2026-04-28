@@ -3201,7 +3201,7 @@ export default function LedgerDetail() {
                   {(localFundingRateEnabled !== null ? localFundingRateEnabled : fundingRateStatus?.enabled) && (
                     <div className="flex items-center gap-1 mt-1">
                       <span className="text-[10px] text-white/60">资金费率</span>
-                      <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus.totalAccumulated || '0').toFixed(4)}</span>
+                      <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
                       <span className="text-[10px] text-white/50">USDT</span>
                       <button
                         onClick={() => setShowFundingRateLogs(true)}
