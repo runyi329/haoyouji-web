@@ -410,43 +410,38 @@ export default function Home() {
       {/* 上半区：AI 社交（占位）+ 刷新/资产工具栏 */}
       {/* ═══════════════════════════════════════════ */}
       <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
-        <div
-          className="w-full h-full rounded-2xl overflow-hidden relative"
-          style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
-        >
-          {/* 背景装饰光晕 */}
-          <div className="absolute top-3 left-6 w-20 h-20 rounded-full bg-[#D32F2F]/15 blur-2xl" />
-          <div className="absolute bottom-3 right-8 w-28 h-28 rounded-full bg-blue-400/10 blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-purple-500/8 blur-3xl" />
-
-          {/* 右上角工具栏：刷新 + 资产 */}
-          <div className="absolute top-3 right-3 z-20 flex items-center space-x-2">
-            <div
-              onClick={() => navigate("/parent/asset-report")}
-              className="flex flex-col items-center cursor-pointer"
-            >
-              <div className="w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors">
-                <Coins className="w-4 h-4 text-white/70" />
+        <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
+          {/* 卡片头部：标题 + 工具栏 */}
+          <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
+            <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
+            <div className="flex items-center space-x-2">
+              <div
+                onClick={() => navigate("/parent/asset-report")}
+                className="flex flex-col items-center cursor-pointer"
+              >
+                <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors">
+                  <Coins className="w-3.5 h-3.5 text-[#A80000]" />
+                </div>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>资产</span>
               </div>
-              <span className="text-white/50 mt-0.5" style={{ fontSize: '0.55rem' }}>资产</span>
-            </div>
-            <div
-              onClick={handleRefresh}
-              className="flex flex-col items-center cursor-pointer"
-            >
-              <div className={`w-8 h-8 rounded-full bg-white/10 border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
-                <RefreshCw className="w-4 h-4 text-white/70" />
+              <div
+                onClick={handleRefresh}
+                className="flex flex-col items-center cursor-pointer"
+              >
+                <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
+                  <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
+                </div>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
               </div>
-              <span className="text-white/50 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
             </div>
           </div>
-
-          <div className="relative z-10 flex flex-col items-center justify-center py-8 px-6 text-center">
-            <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3">
-              <span className="text-white text-lg">✦</span>
+          {/* 占位内容 */}
+          <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center mb-2 shadow-sm">
+              <span className="text-white text-base">✦</span>
             </div>
-            <h2 className="text-white font-bold text-base tracking-wide mb-1">AI 社交</h2>
-            <p className="text-white/40 text-xs">智能社交功能即将上线</p>
+            <p className="text-gray-400 text-xs text-center">智能社交功能</p>
+            <p className="text-gray-300 text-xs text-center">即将上线</p>
           </div>
         </div>
       </div>
@@ -602,19 +597,18 @@ export default function Home() {
         </div>
 
         {/* ── 右：AI 钱脉（占位） ── */}
-        <div
-          className="rounded-2xl overflow-hidden relative flex flex-col items-center justify-center"
-          style={{ height: '100%', background: 'linear-gradient(135deg, #0d2137 0%, #1a3a5c 50%, #0d2137 100%)' }}
-        >
-          <div className="absolute top-2 right-4 w-16 h-16 rounded-full bg-blue-400/10 blur-2xl" />
-          <div className="absolute bottom-4 left-3 w-20 h-20 rounded-full bg-cyan-400/8 blur-3xl" />
-          <div className="relative z-10 flex flex-col items-center justify-center py-8 px-4 text-center">
-            <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3">
-              <Wallet className="w-5 h-5 text-white/70" />
+        <div className="bg-white rounded-2xl shadow-sm flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
+          {/* 卡片头部：标题 */}
+          <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
+            <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 钱脉</span>
+          </div>
+          {/* 占位内容 */}
+          <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center mb-2 shadow-sm">
+              <Wallet className="w-5 h-5 text-white" />
             </div>
-            <h2 className="text-white font-bold text-sm tracking-wide mb-1">AI 钱脉</h2>
-            <p className="text-white/40 text-xs">智能财务功能</p>
-            <p className="text-white/30 text-xs">即将上线</p>
+            <p className="text-gray-400 text-xs text-center">智能财务功能</p>
+            <p className="text-gray-300 text-xs text-center">即将上线</p>
           </div>
         </div>
 
