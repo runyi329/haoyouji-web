@@ -2132,20 +2132,57 @@ export default function LedgerDetail() {
   }, [fundingRateStatus]);
   const toggleFundingRateMutation = trpc.ledger.afToggleFundingRate.useMutation({
     onSuccess: (_data, variables) => {
-      // mutation 成功后，以服务器实际保存的值为准
       setLocalFundingRateEnabled(variables.enabled);
+      if (variables.enabled) {
+        // 打开时重置秒表
+        setStopwatchStartMs(Date.now());
+        setStopwatchElapsedMs(0);
+      } else {
+        // 关闭时清空秒表
+        setStopwatchStartMs(null);
+        setStopwatchElapsedMs(0);
+      }
     },
     onError: (_err, _variables, context: any) => {
-      // 回滚到 mutation 前的值
       if (context?.previousEnabled !== undefined) {
         setLocalFundingRateEnabled(context.previousEnabled);
       }
     },
     onMutate: (variables) => {
-      // 返回 context 供 onError 回滚
       return { previousEnabled: localFundingRateEnabled };
     },
   });
+  // 秒表状态
+  const [stopwatchStartMs, setStopwatchStartMs] = useState<number | null>(null);
+  const [stopwatchElapsedMs, setStopwatchElapsedMs] = useState(0);
+  // 用服务器返回的 openAt 初始化秒表
+  useEffect(() => {
+    if (fundingRateStatus?.enabled && fundingRateStatus?.openAt) {
+      setStopwatchStartMs(fundingRateStatus.openAt);
+      setStopwatchElapsedMs(Date.now() - fundingRateStatus.openAt);
+    } else if (!fundingRateStatus?.enabled) {
+      setStopwatchStartMs(null);
+      setStopwatchElapsedMs(0);
+    }
+  }, [fundingRateStatus?.enabled, fundingRateStatus?.openAt]);
+  // 秒表实时跳动
+  useEffect(() => {
+    if (!stopwatchStartMs) return;
+    const timer = setInterval(() => {
+      setStopwatchElapsedMs(Date.now() - stopwatchStartMs);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [stopwatchStartMs]);
+  // 秒表格式化函数
+  const formatStopwatch = (ms: number) => {
+    const totalSec = Math.floor(ms / 1000);
+    const d = Math.floor(totalSec / 86400);
+    const h = Math.floor((totalSec % 86400) / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (d > 0) return `${d}天${String(h).padStart(2,'0')}时${String(m).padStart(2,'0')}分${String(s).padStart(2,'0')}秒`;
+    return `${String(h).padStart(2,'0')}时${String(m).padStart(2,'0')}分${String(s).padStart(2,'0')}秒`;
+  };
   // AF 账本：资金费率日志
   const { data: fundingRateLogsData } = trpc.ledger.afGetFundingRateLogs.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage2, pageSize: 20 },
@@ -3188,7 +3225,8 @@ export default function LedgerDetail() {
                         if (!viewAsUserId) {
                           const newEnabled = !(localFundingRateEnabled ?? false);
                           setLocalFundingRateEnabled(newEnabled);
-                          toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: newEnabled });
+                          const currentBalance = afTotalAsset ? Number(afTotalAsset.total) : 0;
+                          toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: newEnabled, currentBalance: String(currentBalance) });
                         }
                       }}
                       disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
@@ -3211,22 +3249,30 @@ export default function LedgerDetail() {
                     </span>
                     <span className="text-xs text-white/60">USDT</span>
                   </div>
-                  {/* 资金费率累计显示 */}
+                  {/* 赚费累计显示 + 秒表 */}
                   {(localFundingRateEnabled ?? false) && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[10px] text-white/60">赚费</span>
-                      <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
-                      <span className="text-[10px] text-white/50">USDT</span>
-                      <button
-                        onClick={() => setShowFundingRateLogs(true)}
-                        className="ml-0.5 flex items-center"
-                        title="查看自动赚费详情"
-                      >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
-                          <circle cx="12" cy="12" r="10"/>
-                          <polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                      </button>
+                    <div className="flex flex-col gap-0.5 mt-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-white/60">赚费</span>
+                        <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
+                        <span className="text-[10px] text-white/50">USDT</span>
+                        <button
+                          onClick={() => setShowFundingRateLogs(true)}
+                          className="ml-0.5 flex items-center"
+                          title="查看自动赚费详情"
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                          </svg>
+                        </button>
+                      </div>
+                      {stopwatchElapsedMs > 0 && (
+                        <div className="flex items-center gap-1">
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                          <span className="text-[10px] text-white/50 font-mono">{formatStopwatch(stopwatchElapsedMs)}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -5132,7 +5178,12 @@ export default function LedgerDetail() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
                 <div className="text-base font-bold text-gray-900">自动赚费详情</div>
-                <div className="text-xs text-gray-400 mt-0.5">年化 12% · 每小时结算一次</div>
+                {stopwatchElapsedMs > 0 && (
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span className="text-xs text-gray-400 font-mono">{formatStopwatch(stopwatchElapsedMs)}</span>
+                  </div>
+                )}
               </div>
               <button onClick={() => setShowFundingRateLogs(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
             </div>
