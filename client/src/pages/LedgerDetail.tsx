@@ -3182,7 +3182,7 @@ export default function LedgerDetail() {
                 <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   {/* 右上角：自动转资金费率开关 */}
                   <div className="absolute top-2 right-3 flex items-center gap-1.5">
-                    <span className="text-[10px] text-white/60">自动赚费</span>
+                    <span className="text-[10px] text-white/60">赚费</span>
                     <button
                       onClick={() => {
                         if (!viewAsUserId) {
@@ -3214,7 +3214,7 @@ export default function LedgerDetail() {
                   {/* 资金费率累计显示 */}
                   {(localFundingRateEnabled ?? false) && (
                     <div className="flex items-center gap-1 mt-1">
-                      <span className="text-[10px] text-white/60">自动赚费</span>
+                      <span className="text-[10px] text-white/60">赚费</span>
                       <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
                       <span className="text-[10px] text-white/50">USDT</span>
                       <button
