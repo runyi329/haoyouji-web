@@ -2184,7 +2184,7 @@ export default function LedgerDetail() {
     return `${String(h).padStart(2,'0')}时${String(m).padStart(2,'0')}分${String(s).padStart(2,'0')}秒`;
   };
   // AF 账本：资金费率日志
-  const { data: fundingRateLogsData } = trpc.ledger.afGetFundingRateLogs.useQuery(
+  const { data: fundingRateLogsData, isLoading: fundingRateLogsLoading } = trpc.ledger.afGetFundingRateLogs.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage2, pageSize: 20 },
     { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs2, staleTime: 0, refetchOnMount: 'always' }
   );
@@ -5184,7 +5184,12 @@ export default function LedgerDetail() {
             </div>
             {/* 日志列表 */}
             <div className="flex-1 overflow-y-auto">
-              {!fundingRateLogsData || fundingRateLogsData.logs.length === 0 ? (
+              {fundingRateLogsLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                  <svg className="animate-spin mb-3 opacity-60" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/></svg>
+                  <div className="text-sm">加载中...</div>
+                </div>
+              ) : !fundingRateLogsData || fundingRateLogsData.logs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-3 opacity-40">
                     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
