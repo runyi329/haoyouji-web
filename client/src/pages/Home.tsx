@@ -243,6 +243,18 @@ function RedFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDig
 
   return (
     <div style={{ position: 'relative', display: 'inline-block', width: w + 'px', height: h + 'px', perspective: '600px' }}>
+      <style>{`
+        @keyframes rfd-flipTop {
+          0%   { transform: rotateX(0deg); }
+          100% { transform: rotateX(-90deg); }
+        }
+        @keyframes rfd-flipBottom {
+          0%   { transform: rotateX(90deg); }
+          100% { transform: rotateX(0deg); }
+        }
+        .rfd-anim-top    { animation: rfd-flipTop    0.22s ease-in  forwards; transform-style: preserve-3d; backface-visibility: hidden; }
+        .rfd-anim-bottom { animation: rfd-flipBottom 0.22s ease-out 0.22s forwards; transform-style: preserve-3d; backface-visibility: hidden; }
+      `}</style>
       {/* 静态上半：白色背景 */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
         background: '#fff', borderRadius: '4px 4px 0 0', overflow: 'hidden',
@@ -256,7 +268,7 @@ function RedFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDig
       </div>
       {/* 动画上半：旧数字翻走 */}
       {flip && (
-        <div className="fd-anim-top" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
+        <div className="rfd-anim-top" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
           background: '#fff', borderRadius: '4px 4px 0 0', overflow: 'hidden',
           transformOrigin: 'bottom center', zIndex: 10,
           boxShadow: 'inset 0 -1px 0 rgba(168,0,0,0.15)' }}>
@@ -265,7 +277,7 @@ function RedFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDig
       )}
       {/* 动画下半：新数字翻入 */}
       {flip && (
-        <div className="fd-anim-bottom" style={{ position: 'absolute', top: h / 2 + 'px', left: 0, right: 0, height: h / 2 + 'px',
+        <div className="rfd-anim-bottom" style={{ position: 'absolute', top: h / 2 + 'px', left: 0, right: 0, height: h / 2 + 'px',
           background: '#ffe0e0', borderRadius: '0 0 4px 4px', overflow: 'hidden',
           transformOrigin: 'top center', zIndex: 10 }}>
           <div style={numStyle(-(h / 2))}>{digit}</div>
@@ -281,12 +293,21 @@ function RedFlipCounter({ total }: { total: number }) {
   const [flipKey, setFlipKey] = useState(0);
   const [digitSize, setDigitSize] = useState(32);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isFirstLoad = useRef(true);
 
   useEffect(() => {
     if (total > 0 && total !== displayTotal) {
-      setPrevTotal(displayTotal);
-      setDisplayTotal(total);
-      setFlipKey(k => k + 1);
+      if (isFirstLoad.current) {
+        // 初始加载时直接显示，不触发翻牌动画
+        setDisplayTotal(total);
+        setPrevTotal(total);
+        isFirstLoad.current = false;
+      } else {
+        // 后续更新才触发翻牌
+        setPrevTotal(displayTotal);
+        setDisplayTotal(total);
+        setFlipKey(k => k + 1);
+      }
     }
   }, [total]);
 
