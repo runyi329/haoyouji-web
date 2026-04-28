@@ -11943,7 +11943,15 @@ export const appRouter = router({
           `SELECT id, user_id, amount, total_accumulated, created_at FROM af_funding_rate_logs WHERE ledger_id = ? ORDER BY id DESC LIMIT 5`,
           [input.ledgerId]
         ) as any[];
-        return { currentUserId: ctx.user.id, settings, logs };
+        const [ledgerRows] = await dbConn.execute(
+          `SELECT id, type, name FROM ledgers WHERE id = ? LIMIT 1`,
+          [input.ledgerId]
+        ) as any[];
+        const [memberRows] = await dbConn.execute(
+          `SELECT userId, role FROM ledger_members WHERE ledgerId = ? LIMIT 10`,
+          [input.ledgerId]
+        ) as any[];
+        return { currentUserId: ctx.user.id, settings, logs, ledger: (ledgerRows as any[])[0], members: memberRows };
       }),
     // 获取当前用户的资金费率开关状态 + 累计金额
     afGetFundingRateStatus: protectedProcedure
