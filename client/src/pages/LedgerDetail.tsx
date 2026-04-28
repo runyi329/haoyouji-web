@@ -2124,7 +2124,10 @@ export default function LedgerDetail() {
   );
   const toggleFundingRateMutation = trpc.ledger.afToggleFundingRate.useMutation({
     onSuccess: () => {
-      trpcUtils.ledger.afGetFundingRateStatus.invalidate({ ledgerId: Number(ledgerId) });
+      // 先 invalidate，等查询刷新完后再清除本地状态
+      trpcUtils.ledger.afGetFundingRateStatus.invalidate({ ledgerId: Number(ledgerId) }).then(() => {
+        setLocalFundingRateEnabled(null);
+      });
     },
     onError: () => {
       // 回滚乐观更新
