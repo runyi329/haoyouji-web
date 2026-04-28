@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, ArrowLeft, X, Tag, Settings, Pencil, Trash2, MoreVertical, MessageCircle, UserCheck, UserX, Smile, Layers2, Layers3, Undo, Handshake, ArrowUpDown, Check, ChevronsUpDown } from "lucide-react";
+import { Search, Plus, ArrowLeft, X, Tag, Settings, Pencil, Trash2, MoreVertical, MessageCircle, UserCheck, UserX, Smile, Layers2, Layers3, Undo, Handshake, ArrowUpDown, Check, ChevronsUpDown, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
@@ -1208,6 +1208,15 @@ export default function ContactsList() {
             {selectedTagId && allTags && `标签: ${allTags.find(t => t.id === selectedTagId)?.name || ''}`}
             {!filterType && !selectedTagId && !viewMode && '所有人脉'}
           </h1>
+          {!filterType && !selectedTagId && !viewMode && (
+            <button
+              onClick={() => setLocation('/parent/contacts/map')}
+              className="flex items-center gap-1 px-2 py-1 rounded-full bg-white/20 hover:bg-white/30 transition-all shrink-0"
+            >
+              <MapPin className="w-3.5 h-3.5 text-white" />
+              <span className="text-white text-xs font-medium">地域</span>
+            </button>
+          )}
         </div>
         {/* 第二行：全部 / 我的 / 共享 Tab */}
         <div className="flex items-center gap-2">
