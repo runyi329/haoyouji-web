@@ -172,6 +172,52 @@ function FlipCounterCard({ total }: { total: number }) {
   );
 }
 
+// 小尺寸翻牌组件，用于 AI 人脉卡片底部
+function MiniFlipCounter({ total }: { total: number }) {
+  const [displayTotal, setDisplayTotal] = useState(0);
+  const [prevTotal, setPrevTotal] = useState(0);
+  const [flipKey, setFlipKey] = useState(0);
+  const DIGIT_SIZE = 22; // 固定小尺寸
+
+  useEffect(() => {
+    if (total > 0 && total !== displayTotal) {
+      setPrevTotal(displayTotal);
+      setDisplayTotal(total);
+      setFlipKey(k => k + 1);
+    }
+  }, [total]);
+
+  const toDigits = (num: number) => num.toLocaleString('zh-CN').split('');
+  const curDigits = toDigits(displayTotal);
+  const prevDigits = toDigits(prevTotal);
+  const maxLen = Math.max(curDigits.length, prevDigits.length);
+  const pad = (arr: string[]) => Array(maxLen - arr.length).fill('\u00a0').concat(arr);
+  const cur = pad(curDigits);
+  const prev = pad(prevDigits);
+
+  return (
+    <div className="flex flex-col items-center cursor-default" style={{ minWidth: 0, flex: 1, paddingLeft: '6px', paddingRight: '6px' }}>
+      <div className="text-gray-400 text-center w-full" style={{ fontSize: '0.5rem', marginBottom: '2px' }}>全网人脉</div>
+      <div className="flex items-center justify-center" style={{ gap: '1px' }}>
+        {cur.map((digit, i) => (
+          digit === ',' || digit === '\u002c' || digit === '\uff0c' ? (
+            <span key={i} className="text-gray-300 font-bold" style={{ fontSize: DIGIT_SIZE * 0.5 + 'px', alignSelf: 'center', lineHeight: DIGIT_SIZE + 'px', width: DIGIT_SIZE * 0.3 + 'px', textAlign: 'center' }}>,</span>
+          ) : (
+            <FlipDigit
+              key={`mini-${i}-${flipKey}`}
+              digit={digit === '\u00a0' ? '' : digit}
+              prevDigit={prev[i] === '\u00a0' ? '' : (prev[i] ?? '')}
+              flip={digit !== prev[i] && flipKey > 0}
+              size={DIGIT_SIZE}
+            />
+          )
+        ))}
+        <span className="font-medium text-gray-400 ml-0.5" style={{ fontSize: DIGIT_SIZE * 0.45 + 'px' }}>人</span>
+      </div>
+    </div>
+  );
+}
+
 function formatNumber(num: number): string {
   if (num >= 10000) {
     return (num / 10000).toFixed(1) + "万";
@@ -561,23 +607,8 @@ export default function Home() {
               </div>
               <span className="text-[#757575]" style={{ fontSize: '0.6rem' }}>地域</span>
             </div>
-            {/* 全网人脉翻牌 - 嵌入底部 */}
-            <div
-              className="flex flex-col items-center cursor-default"
-              style={{ minWidth: 0, flex: 1, paddingLeft: '8px', paddingRight: '8px' }}
-            >
-              <div className="text-gray-400 text-center w-full" style={{ fontSize: '0.55rem', marginBottom: '2px' }}>全网人脉</div>
-              <div className="flex items-center justify-center" style={{ gap: '1px' }}>
-                {(networkTotal?.total ?? 0).toLocaleString('zh-CN').split('').map((ch, i) => (
-                  ch === ',' || ch === '\uFF0C' ? (
-                    <span key={i} className="text-[#D32F2F] font-bold" style={{ fontSize: '0.7rem' }}>,</span>
-                  ) : (
-                    <span key={i} className="font-black text-[#D32F2F]" style={{ fontSize: '0.85rem', lineHeight: 1 }}>{ch}</span>
-                  )
-                ))}
-                <span className="text-gray-400 ml-0.5" style={{ fontSize: '0.55rem' }}>人</span>
-              </div>
-            </div>
+            {/* 全网人脉翻牌 - 小尺寸翻牌形式 */}
+            <MiniFlipCounter total={networkTotal?.total ?? 0} />
           </div>
         </div>
 
