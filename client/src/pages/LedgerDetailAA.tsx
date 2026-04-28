@@ -906,11 +906,11 @@ export default function LedgerDetailAA({
                 )}
               </div>
               <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-xs opacity-75 mb-0.5">盈亏总计</div>
+                <div className="text-xs opacity-75 mb-0.5">数据总计</div>
                 <div className="text-base font-bold">
                   {allTagsStats.totalPnl > 0 ? '+' : ''}¥{allTagsStats.totalPnl.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div className="text-xs opacity-60 mt-0.5">全部盈亏之和</div>
+                <div className="text-xs opacity-60 mt-0.5">全部统计之和</div>
               </div>
               <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
                 {(() => {
