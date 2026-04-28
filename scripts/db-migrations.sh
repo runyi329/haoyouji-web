@@ -112,3 +112,9 @@ $DB_CMD -e "CREATE TABLE IF NOT EXISTS eth_position_settings (
   INDEX eth_settings_ledger_idx (ledger_id)
 )" || true
 echo "✅ ETH持仓计算表确认完成"
+
+echo "📊 确保 AF 赚费表新字段存在..."
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_funding_rate_settings' AND COLUMN_NAME='open_at'; SET @s = IF(@c=0, 'ALTER TABLE af_funding_rate_settings ADD COLUMN open_at BIGINT NULL COMMENT \\'本次开启时间戳(ms)\\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_funding_rate_settings' AND COLUMN_NAME='open_balance_snapshot'; SET @s = IF(@c=0, 'ALTER TABLE af_funding_rate_settings ADD COLUMN open_balance_snapshot DECIMAL(20,8) NULL COMMENT \\'开启时余额快照\\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_funding_rate_settings' AND COLUMN_NAME='settled_hours'; SET @s = IF(@c=0, 'ALTER TABLE af_funding_rate_settings ADD COLUMN settled_hours INT NOT NULL DEFAULT 0 COMMENT \\'本次开启已结算小时数\\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ AF 赚费表新字段确认完成"
