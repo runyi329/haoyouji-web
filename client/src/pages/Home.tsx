@@ -378,7 +378,7 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-[#FAF3ED] max-w-md mx-auto relative shadow-2xl flex flex-col overflow-hidden" style={{ height: "calc(100dvh - 80px)" }}>
+    <div className="bg-[#FAF3ED] max-w-md mx-auto relative shadow-2xl flex flex-col" style={{ height: "calc(100dvh - 80px)", overflow: 'hidden' }}>
       {/* 跳动动画的CSS */}
       <style>{`
         @keyframes bellShake {
@@ -409,7 +409,7 @@ export default function Home() {
       {/* ═══════════════════════════════════════════ */}
       {/* 上半区：AI 社交（占位）+ 刷新/资产工具栏 */}
       {/* ═══════════════════════════════════════════ */}
-      <div className="px-4 pt-4 flex-shrink-0" style={{ height: "45%" }}>
+      <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
         <div
           className="w-full h-full rounded-2xl overflow-hidden relative"
           style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
@@ -454,10 +454,10 @@ export default function Home() {
       {/* ═══════════════════════════════════════════ */}
       {/* 下半区：左 AI 人脉 + 右 AI 錢脉 */}
       {/* ═══════════════════════════════════════════ */}
-      <div className="px-4 mt-3 mb-3 grid grid-cols-2 gap-3" style={{ flex: '0 0 auto' }}>
+      <div className="px-4 mt-2 mb-2 grid grid-cols-2 gap-2 flex-1 min-h-0">
 
         {/* ── 左：AI 人脉 ── */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
+        <div className="bg-white rounded-2xl shadow-sm flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
           {/* 卡片头部：标题 + 头像 */}
           <div className="flex items-center justify-between px-3 pt-3 pb-2">
             <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 人脉</span>
@@ -498,7 +498,7 @@ export default function Home() {
 
           {/* 人脉总数 - 核心大数字 */}
           <div
-            className="mx-3 rounded-xl bg-gradient-to-br from-[#A80000] to-[#d44] px-3 py-3 cursor-pointer"
+            className="mx-3 rounded-xl bg-gradient-to-br from-[#A80000] to-[#d44] px-3 py-2 cursor-pointer"
             onClick={() => navigate('/parent/contacts/list?_t=' + Date.now())}
           >
             <div className="flex items-center space-x-1 opacity-80 mb-0.5">
@@ -524,7 +524,7 @@ export default function Home() {
           </div>
 
           {/* 三格小数据：累计联络 / 使用天数 / 共享总数 */}
-          <div className="grid grid-cols-3 gap-1.5 px-3 mt-2">
+          <div className="grid grid-cols-3 gap-1 px-3 mt-1.5">
             {[
               { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", path: "/parent/contacts/interaction-stats" },
               { name: "使用天数", value: totalUsageDays ?? 0, unit: "天", path: "/parent/contacts" },
@@ -533,7 +533,7 @@ export default function Home() {
               <div
                 key={item.name}
                 onClick={() => navigate(item.path)}
-                className="bg-[#FAF3ED] rounded-lg py-2 flex flex-col items-center cursor-pointer hover:bg-red-50 transition-colors"
+                className="bg-[#FAF3ED] rounded-lg py-1.5 flex flex-col items-center cursor-pointer hover:bg-red-50 transition-colors"
               >
                 <span className="text-gray-400 text-center leading-tight" style={{ fontSize: '0.6rem' }}>{item.name}</span>
                 <div className="flex items-baseline space-x-0.5 mt-0.5">
@@ -546,23 +546,10 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 邀请好友 */}
-          <div
-            className="mx-3 mt-2 mb-3 flex items-center justify-between bg-[#FAF3ED] rounded-lg px-3 py-2 cursor-pointer hover:bg-red-50 transition-colors"
-            onClick={() => navigate("/parent/profile/invite")}
-          >
-            <span className="text-xs text-gray-500">已邀请好友</span>
-            <div className="flex items-center space-x-1">
-              <span className="font-bold text-[#D32F2F] text-sm">{inviteInfo?.inviteCount ?? 0}</span>
-              <span className="text-xs text-gray-400">人</span>
-              <span className="text-gray-300 text-xs ml-1">›</span>
-            </div>
-          </div>
-
           {/* 共享按钮 - 突出显示，AI共享是核心入口 */}
           <div
             onClick={() => navigate("/parent/contacts/sharing")}
-            className="mx-3 mb-2 flex items-center justify-between bg-gradient-to-r from-[#A80000]/10 to-[#d44]/10 border border-[#A80000]/20 rounded-xl px-3 py-2.5 cursor-pointer hover:from-[#A80000]/20 hover:to-[#d44]/20 transition-colors relative"
+            className="mx-3 mt-1.5 mb-1.5 flex items-center justify-between bg-gradient-to-r from-[#A80000]/10 to-[#d44]/10 border border-[#A80000]/20 rounded-xl px-3 py-2 cursor-pointer hover:from-[#A80000]/20 hover:to-[#d44]/20 transition-colors relative"
           >
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-full bg-[#A80000] flex items-center justify-center shadow-sm flex-shrink-0">
@@ -584,7 +571,7 @@ export default function Home() {
           </div>
 
           {/* 次级快捷入口：地域（仅保留地域） */}
-          <div className="flex justify-around items-center px-3 pb-3 border-t border-gray-50 pt-2">
+          <div className="flex justify-around items-center px-3 pb-1.5 border-t border-gray-50 pt-1.5 flex-shrink-0">
             <div
               onClick={() => navigate("/parent/contacts/map")}
               className="flex flex-col items-center space-y-1 cursor-pointer"
@@ -617,7 +604,7 @@ export default function Home() {
         {/* ── 右：AI 钱脉（占位） ── */}
         <div
           className="rounded-2xl overflow-hidden relative flex flex-col items-center justify-center"
-          style={{ minHeight: '100%', background: 'linear-gradient(135deg, #0d2137 0%, #1a3a5c 50%, #0d2137 100%)' }}
+          style={{ height: '100%', background: 'linear-gradient(135deg, #0d2137 0%, #1a3a5c 50%, #0d2137 100%)' }}
         >
           <div className="absolute top-2 right-4 w-16 h-16 rounded-full bg-blue-400/10 blur-2xl" />
           <div className="absolute bottom-4 left-3 w-20 h-20 rounded-full bg-cyan-400/8 blur-3xl" />
