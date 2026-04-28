@@ -287,7 +287,7 @@ function RedFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDig
   );
 }
 
-function RedFlipCounter({ total }: { total: number }) {
+function RedFlipCounter({ total, unitColor }: { total: number; unitColor?: string }) {
   const [displayTotal, setDisplayTotal] = useState(0);
   const [prevTotal, setPrevTotal] = useState(0);
   const [flipKey, setFlipKey] = useState(0);
@@ -299,8 +299,9 @@ function RedFlipCounter({ total }: { total: number }) {
     if (total > 0 && total !== displayTotal) {
       if (isFirstLoad.current) {
         // 初始加载时直接显示，不触发翻牌动画
+        // 注意：不设置 prevTotal（保持为 0），但 flipKey 也不增加
+        // 这样 flip={digit !== prev[i] && flipKey > 0} 中 flipKey>0 为 false，不触发动画
         setDisplayTotal(total);
-        setPrevTotal(total);
         isFirstLoad.current = false;
       } else {
         // 后续更新才触发翻牌
@@ -341,7 +342,7 @@ function RedFlipCounter({ total }: { total: number }) {
     <div ref={containerRef} className="flex items-end w-full" style={{ gap: '2px' }}>
       {cur.map((digit, i) => (
         digit === ',' || digit === '\u002c' || digit === '\uff0c' ? (
-          <span key={i} className="font-bold" style={{ fontSize: digitSize * 0.5 + 'px', alignSelf: 'center', color: 'rgba(255,255,255,0.7)', lineHeight: digitSize + 'px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>,</span>
+          <span key={i} className="font-bold" style={{ fontSize: digitSize * 0.5 + 'px', alignSelf: 'center', color: unitColor ?? 'rgba(255,255,255,0.7)', lineHeight: digitSize + 'px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>,</span>
         ) : (
           <RedFlipDigit
             key={`red-${i}-${flipKey}`}
@@ -352,7 +353,7 @@ function RedFlipCounter({ total }: { total: number }) {
           />
         )
       ))}
-      <span className="font-medium" style={{ fontSize: digitSize * 0.38 + 'px', color: 'rgba(255,255,255,0.7)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '2px' }}>人</span>
+      <span className="font-medium" style={{ fontSize: digitSize * 0.38 + 'px', color: unitColor ?? 'rgba(255,255,255,0.7)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '2px' }}>人</span>
     </div>
   );
 }
@@ -713,7 +714,7 @@ export default function Home() {
               <span className="text-[#A80000] text-xs">全网人脉</span>
             </div>
             <div className="flex items-baseline">
-              <RedFlipCounter total={networkTotal?.total ?? 0} />
+              <RedFlipCounter total={networkTotal?.total ?? 0} unitColor="#A80000" />
             </div>
           </div>
 
