@@ -713,12 +713,12 @@ export default function Home() {
               { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", path: "/parent/contacts/list" },
               { name: "标签总数", value: totalTagCount ?? 0, unit: "个", path: "/parent/contacts/tags" },
               { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", path: "/parent/contacts/interaction-stats" },
-              { name: "使用天数", value: totalUsageDays ?? 0, unit: "天", path: "/parent/contacts" },
+              { name: "使用天数", value: totalUsageDays ?? 0, unit: "天", path: "" },
             ].map((item) => (
               <div
                 key={item.name}
-                onClick={() => navigate(item.path)}
-                className="bg-[#FAF3ED] rounded-lg py-1.5 flex flex-col items-center cursor-pointer hover:bg-red-50 transition-colors"
+                onClick={() => item.path && navigate(item.path)}
+                className={`bg-[#FAF3ED] rounded-lg py-1.5 flex flex-col items-center transition-colors ${item.path ? 'cursor-pointer hover:bg-red-50' : ''}`}
               >
                 <span className="text-gray-400 text-center leading-tight" style={{ fontSize: '0.6rem' }}>{item.name}</span>
                 <div className="flex items-baseline space-x-0.5 mt-0.5">
