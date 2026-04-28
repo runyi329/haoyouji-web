@@ -378,7 +378,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF3ED] pb-20 max-w-md mx-auto relative shadow-2xl">
+    <div className="h-screen bg-[#FAF3ED] max-w-md mx-auto relative shadow-2xl flex flex-col overflow-hidden">
       {/* 跳动动画的CSS */}
       <style>{`
         @keyframes bellShake {
@@ -409,10 +409,10 @@ export default function Home() {
       {/* ═══════════════════════════════════════════ */}
       {/* 上半区：AI 社交（占位）+ 刷新/资产工具栏 */}
       {/* ═══════════════════════════════════════════ */}
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-4 flex-1 flex flex-col" style={{ minHeight: 0 }}>
         <div
-          className="w-full rounded-2xl overflow-hidden relative"
-          style={{ minHeight: '45vw', background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
+          className="w-full rounded-2xl overflow-hidden relative flex-1"
+          style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
         >
           {/* 背景装饰光晕 */}
           <div className="absolute top-3 left-6 w-20 h-20 rounded-full bg-[#D32F2F]/15 blur-2xl" />
@@ -452,9 +452,9 @@ export default function Home() {
       </div>
 
       {/* ═══════════════════════════════════════════ */}
-      {/* 下半区：左 AI 人脉 + 右 AI 钱脉 */}
+      {/* 下半区：左 AI 人脉 + 右 AI 錢脉 */}
       {/* ═══════════════════════════════════════════ */}
-      <div className="px-4 mt-3 grid grid-cols-2 gap-3">
+      <div className="px-4 mt-3 mb-3 grid grid-cols-2 gap-3" style={{ flex: '0 0 auto' }}>
 
         {/* ── 左：AI 人脉 ── */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col">
@@ -633,8 +633,10 @@ export default function Home() {
 
       </div>
 
-      {/* Bottom Navigation */}
-      <BottomNav />
+      {/* Bottom Navigation - 固定底部 */}
+      <div className="flex-shrink-0">
+        <BottomNav />
+      </div>
     </div>
   );
 }
