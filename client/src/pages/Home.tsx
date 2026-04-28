@@ -409,9 +409,9 @@ export default function Home() {
       {/* ═══════════════════════════════════════════ */}
       {/* 上半区：AI 社交（占位）+ 刷新/资产工具栏 */}
       {/* ═══════════════════════════════════════════ */}
-      <div className="px-4 pt-4 flex-1 flex flex-col" style={{ minHeight: 0 }}>
+      <div className="px-4 pt-4 flex-shrink-0" style={{ height: "45%" }}>
         <div
-          className="w-full rounded-2xl overflow-hidden relative flex-1"
+          className="w-full h-full rounded-2xl overflow-hidden relative"
           style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)' }}
         >
           {/* 背景装饰光晕 */}
@@ -457,7 +457,7 @@ export default function Home() {
       <div className="px-4 mt-3 mb-3 grid grid-cols-2 gap-3" style={{ flex: '0 0 auto' }}>
 
         {/* ── 左：AI 人脉 ── */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden flex flex-col h-full">
           {/* 卡片头部：标题 + 头像 */}
           <div className="flex items-center justify-between px-3 pt-3 pb-2">
             <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 人脉</span>
