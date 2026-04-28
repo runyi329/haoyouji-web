@@ -329,7 +329,7 @@ function RedFlipCounter({ total, unitColor }: { total: number; unitColor?: strin
   const prev = pad(prevDigits);
 
   return (
-    <div ref={containerRef} className="flex items-end w-full" style={{ gap: '2px' }}>
+    <div ref={containerRef} className="flex items-end w-full justify-end" style={{ gap: '2px' }}>
       {cur.map((digit, i) => (
         digit === ',' || digit === '\u002c' || digit === '\uff0c' ? (
           <span key={i} className="font-bold" style={{ fontSize: digitSize * 0.5 + 'px', alignSelf: 'center', color: unitColor ?? 'rgba(255,255,255,0.7)', lineHeight: digitSize + 'px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>,</span>
