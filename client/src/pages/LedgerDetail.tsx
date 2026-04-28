@@ -5187,14 +5187,6 @@ export default function LedgerDetail() {
               </div>
               <button onClick={() => setShowFundingRateLogs(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
             </div>
-            {/* 累计总额 */}
-            <div className="px-5 py-3 bg-green-50 border-b border-gray-100">
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm text-gray-500">累计自动赚费</span>
-                <span className="text-xl font-bold text-green-700">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
-                <span className="text-xs text-gray-400">USDT</span>
-              </div>
-            </div>
             {/* 日志列表 */}
             <div className="flex-1 overflow-y-auto">
               {!fundingRateLogsData || fundingRateLogsData.logs.length === 0 ? (
@@ -5207,18 +5199,22 @@ export default function LedgerDetail() {
                 </div>
               ) : (
                 <div>
-                  {fundingRateLogsData.logs.map((log: any, idx: number) => (
+                  {fundingRateLogsData.logs.map((log: any, idx: number) => {
+                    const hourNum = fundingRateLogsData.total - (fundingRateLogsPage - 1) * 20 - idx;
+                    const bjTime = new Date(log.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    return (
                     <div key={log.id ?? idx} className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
                       <div>
-                        <div className="text-xs text-gray-400">{new Date(log.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
-                        <div className="text-[10px] text-gray-300 mt-0.5">余额 {parseFloat(log.balance_snapshot).toFixed(2)} USDT</div>
+                        <div className="text-xs font-medium text-gray-600">第 {hourNum} 小时</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{bjTime} · 余额 {parseFloat(log.balance_snapshot).toFixed(2)} USDT</div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-semibold text-green-600">+{parseFloat(log.amount).toFixed(6)}</div>
-                        <div className="text-[10px] text-gray-400">累计 {parseFloat(log.total_accumulated).toFixed(4)}</div>
+                        <div className="text-[10px] text-gray-400">USDT</div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {/* 分页 */}
                   {fundingRateLogsData.total > 20 && (
                     <div className="flex items-center justify-center gap-4 py-4">
