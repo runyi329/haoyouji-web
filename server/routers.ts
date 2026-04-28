@@ -18060,6 +18060,32 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       return { success: true, url };
     }),
 
+  // 临时：AF 赚费表字段迁移（执行一次后可删除）
+  afMigrateAddFields: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (ctx.user.openId !== process.env.OWNER_OPEN_ID) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+      const results: string[] = [];
+      const [cols] = await dbConn.execute("SHOW COLUMNS FROM af_funding_rate_settings") as any[];
+      const existingCols = (cols as any[]).map((c: any) => c.Field);
+      results.push('current cols: ' + existingCols.join(','));
+      if (!existingCols.includes('open_at')) {
+        await dbConn.execute(`ALTER TABLE af_funding_rate_settings ADD COLUMN open_at BIGINT NULL COMMENT '本次开启时间戳(ms)'`);
+        results.push('Added open_at');
+      } else { results.push('open_at already exists'); }
+      if (!existingCols.includes('open_balance_snapshot')) {
+        await dbConn.execute(`ALTER TABLE af_funding_rate_settings ADD COLUMN open_balance_snapshot DECIMAL(20,8) NULL COMMENT '开启时余额快照'`);
+        results.push('Added open_balance_snapshot');
+      } else { results.push('open_balance_snapshot already exists'); }
+      if (!existingCols.includes('settled_hours')) {
+        await dbConn.execute(`ALTER TABLE af_funding_rate_settings ADD COLUMN settled_hours INT NOT NULL DEFAULT 0 COMMENT '本次开启已结算小时数'`);
+        results.push('Added settled_hours');
+      } else { results.push('settled_hours already exists'); }
+      return { success: true, results };
+    }),
   // 删除图库图片（仅管理员）
   idealightGalleryDelete: protectedProcedure
     .input(z.object({ id: z.number() }))
