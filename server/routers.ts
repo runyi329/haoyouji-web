@@ -11943,15 +11943,16 @@ export const appRouter = router({
           `SELECT id, user_id, amount, total_accumulated, created_at FROM af_funding_rate_logs WHERE ledger_id = ? ORDER BY id DESC LIMIT 5`,
           [input.ledgerId]
         ) as any[];
-        const [ledgerRows] = await dbConn.execute(
-          `SELECT id, type, name FROM ledgers WHERE id = ? LIMIT 1`,
+        // 查询表结构，确认字段是否存在
+        const [colRows] = await dbConn.execute(
+          `SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='af_funding_rate_logs' ORDER BY ORDINAL_POSITION`
+        ) as any[];
+        // 不带 balance_snapshot/annual_rate 的安全查询
+        const [safeLogs] = await dbConn.execute(
+          `SELECT id, user_id, amount, total_accumulated, created_at FROM af_funding_rate_logs WHERE ledger_id = ? ORDER BY id DESC LIMIT 5`,
           [input.ledgerId]
         ) as any[];
-        const [memberRows] = await dbConn.execute(
-          `SELECT userId, role FROM ledger_members WHERE ledgerId = ? LIMIT 10`,
-          [input.ledgerId]
-        ) as any[];
-        return { currentUserId: ctx.user.id, settings, logs, ledger: (ledgerRows as any[])[0], members: memberRows };
+        return { currentUserId: ctx.user.id, settings, logs, columns: (colRows as any[]).map((r: any) => r.COLUMN_NAME), safeLogs };
       }),
     // 获取当前用户的资金费率开关状态 + 累计金额
     afGetFundingRateStatus: protectedProcedure
