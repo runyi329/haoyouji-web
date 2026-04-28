@@ -12017,30 +12017,34 @@ export const appRouter = router({
     afGetFundingRateLogs: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional(), page: z.number().default(1), pageSize: z.number().default(20) }))
       .query(async ({ ctx, input }) => {
-        const dbConn = await getDbConnection();
-        if (!dbConn) return { logs: [], total: 0 };
-        let targetUserId = ctx.user.id;
-        if (input.viewAsUserId) {
-          const [rows] = await dbConn.execute(
-            `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
-            [input.ledgerId, ctx.user.id]
+        try {
+          const dbConn = await getDbConnection();
+          if (!dbConn) return { logs: [], total: 0, _debug: 'no_db_conn' };
+          let targetUserId = ctx.user.id;
+          if (input.viewAsUserId) {
+            const [rows] = await dbConn.execute(
+              `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+              [input.ledgerId, ctx.user.id]
+            ) as any[];
+            const myRole = (rows as any[])[0]?.role;
+            if (myRole === 'owner' || myRole === 'admin') targetUserId = input.viewAsUserId;
+          }
+          const offset = (input.page - 1) * input.pageSize;
+          const [logRows] = await dbConn.execute(
+            `SELECT id, amount, total_accumulated, created_at
+             FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ?
+             ORDER BY id DESC LIMIT ? OFFSET ?`,
+            [input.ledgerId, targetUserId, input.pageSize, offset]
           ) as any[];
-          const myRole = (rows as any[])[0]?.role;
-          if (myRole === 'owner' || myRole === 'admin') targetUserId = input.viewAsUserId;
+          const [countRows] = await dbConn.execute(
+            `SELECT COUNT(*) as cnt FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ?`,
+            [input.ledgerId, targetUserId]
+          ) as any[];
+          const total = (countRows as any[])[0]?.cnt ?? 0;
+          return { logs: logRows as any[], total, _debug: `ok_uid_${targetUserId}_count_${total}` };
+        } catch (err: any) {
+          return { logs: [], total: 0, _debug: `error: ${err?.message}` };
         }
-        const offset = (input.page - 1) * input.pageSize;
-        const [logRows] = await dbConn.execute(
-          `SELECT id, balance_snapshot, amount, total_accumulated, annual_rate, created_at
-           FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ?
-           ORDER BY id DESC LIMIT ? OFFSET ?`,
-          [input.ledgerId, targetUserId, input.pageSize, offset]
-        ) as any[];
-        const [countRows] = await dbConn.execute(
-          `SELECT COUNT(*) as cnt FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ?`,
-          [input.ledgerId, targetUserId]
-        ) as any[];
-        const total = (countRows as any[])[0]?.cnt ?? 0;
-        return { logs: logRows as any[], total };
       }),
 
     // ===== AH 型定制账本（公司财务记账管理）=====
