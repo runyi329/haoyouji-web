@@ -378,7 +378,7 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-white max-w-md mx-auto relative shadow-2xl flex flex-col" style={{ height: "calc(100dvh - 80px)", overflow: 'hidden' }}>
+    <div className="bg-[#FAF3ED] max-w-md mx-auto relative shadow-2xl flex flex-col" style={{ height: '100dvh', overflow: 'hidden' }}>
       {/* 跳动动画的CSS */}
       <style>{`
         @keyframes bellShake {
@@ -449,7 +449,7 @@ export default function Home() {
       {/* ═══════════════════════════════════════════ */}
       {/* 下半区：左 AI 人脉 + 右 AI 錢脉 */}
       {/* ═══════════════════════════════════════════ */}
-      <div className="px-4 mt-2 mb-0 grid grid-cols-2 gap-2 flex-1 min-h-0">
+      <div className="px-4 mt-2 pb-20 grid grid-cols-2 gap-2 flex-1 min-h-0">
 
         {/* ── 左：AI 人脉 ── */}
         <div className="bg-white rounded-2xl shadow-sm flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
