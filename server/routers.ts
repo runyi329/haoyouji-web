@@ -12029,12 +12029,13 @@ export const appRouter = router({
             const myRole = (rows as any[])[0]?.role;
             if (myRole === 'owner' || myRole === 'admin') targetUserId = input.viewAsUserId;
           }
-          const offset = (input.page - 1) * input.pageSize;
+          const pageSize = Math.floor(Number(input.pageSize));
+          const offset = Math.floor((Number(input.page) - 1) * pageSize);
           const [logRows] = await dbConn.execute(
             `SELECT id, amount, total_accumulated, created_at
              FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ?
-             ORDER BY id DESC LIMIT ? OFFSET ?`,
-            [input.ledgerId, targetUserId, input.pageSize, offset]
+             ORDER BY id DESC LIMIT ${pageSize} OFFSET ${offset}`,
+            [input.ledgerId, targetUserId]
           ) as any[];
           const [countRows] = await dbConn.execute(
             `SELECT COUNT(*) as cnt FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ?`,
