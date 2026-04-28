@@ -278,7 +278,8 @@ function RedFlipCounter({ total }: { total: number }) {
   const [displayTotal, setDisplayTotal] = useState(0);
   const [prevTotal, setPrevTotal] = useState(0);
   const [flipKey, setFlipKey] = useState(0);
-  const DIGIT_SIZE = 32;
+  const [digitSize, setDigitSize] = useState(32);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (total > 0 && total !== displayTotal) {
@@ -287,6 +288,24 @@ function RedFlipCounter({ total }: { total: number }) {
       setFlipKey(k => k + 1);
     }
   }, [total]);
+
+  // 动态计算单个翻牌尺寸，根据容器宽度和数字位数自动缩放
+  useEffect(() => {
+    const calcSize = () => {
+      if (!containerRef.current) return;
+      const containerW = containerRef.current.clientWidth - 8; // 减去少量padding
+      const digits = (displayTotal || total).toLocaleString('zh-CN').split('');
+      const numDigits = digits.filter(d => d !== ',' && d !== '\uff0c').length;
+      const numCommas = digits.length - numDigits;
+      // 每个数字占 0.72 * size，逗号占 0.3 * size，单位占 0.5 * size，间距 2px
+      const totalUnits = numDigits * 0.72 + numCommas * 0.3 + 0.5;
+      const s = Math.floor((containerW - digits.length * 2) / totalUnits);
+      setDigitSize(Math.max(20, Math.min(36, s)));
+    };
+    calcSize();
+    window.addEventListener('resize', calcSize);
+    return () => window.removeEventListener('resize', calcSize);
+  }, [displayTotal, total]);
 
   const toDigits = (num: number) => num.toLocaleString('zh-CN').split('');
   const curDigits = toDigits(displayTotal);
@@ -297,21 +316,21 @@ function RedFlipCounter({ total }: { total: number }) {
   const prev = pad(prevDigits);
 
   return (
-    <div className="flex items-end" style={{ gap: '2px' }}>
+    <div ref={containerRef} className="flex items-end w-full" style={{ gap: '2px' }}>
       {cur.map((digit, i) => (
         digit === ',' || digit === '\u002c' || digit === '\uff0c' ? (
-          <span key={i} className="font-bold" style={{ fontSize: DIGIT_SIZE * 0.5 + 'px', alignSelf: 'center', color: 'rgba(255,255,255,0.7)', lineHeight: DIGIT_SIZE + 'px', width: DIGIT_SIZE * 0.3 + 'px', textAlign: 'center' }}>,</span>
+          <span key={i} className="font-bold" style={{ fontSize: digitSize * 0.5 + 'px', alignSelf: 'center', color: 'rgba(255,255,255,0.7)', lineHeight: digitSize + 'px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>,</span>
         ) : (
           <RedFlipDigit
             key={`red-${i}-${flipKey}`}
             digit={digit === '\u00a0' ? '' : digit}
             prevDigit={prev[i] === '\u00a0' ? '' : (prev[i] ?? '')}
             flip={digit !== prev[i] && flipKey > 0}
-            size={DIGIT_SIZE}
+            size={digitSize}
           />
         )
       ))}
-      <span className="font-medium" style={{ fontSize: DIGIT_SIZE * 0.38 + 'px', color: 'rgba(255,255,255,0.7)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '3px' }}>人</span>
+      <span className="font-medium" style={{ fontSize: digitSize * 0.38 + 'px', color: 'rgba(255,255,255,0.7)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '2px' }}>人</span>
     </div>
   );
 }
