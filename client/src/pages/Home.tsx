@@ -13,6 +13,7 @@ import {
   LogOut,
   UserCircle,
   Bell,
+  Globe,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -666,22 +667,31 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 人脉总数 - 核心大数字 */}
+          {/* 我的人脉 - 红色容器 */}
           <div
             className="mx-3 rounded-xl bg-gradient-to-br from-[#A80000] to-[#d44] px-3 py-2 cursor-pointer"
             onClick={() => navigate('/parent/contacts/list?_t=' + Date.now())}
           >
             <div className="flex items-center space-x-1 opacity-80 mb-0.5">
               <Users className="w-3.5 h-3.5 text-white" />
-              <span className="text-white text-xs">人脉总数</span>
+              <span className="text-white text-xs">我的人脉</span>
             </div>
-          <div className="flex items-baseline">
-            {isLoading ? (
-              <Loader2 className="w-6 h-6 animate-spin text-white/60" />
-            ) : (
-              <RedFlipCounter total={stats?.totalContacts ?? 0} />
-            )}
+            <div className="flex items-baseline">
+              {isLoading ? (
+                <Loader2 className="w-6 h-6 animate-spin text-white/60" />
+              ) : (
+                <RedFlipCounter total={stats?.totalContacts ?? 0} />
+              )}
+            </div>
           </div>
+
+          {/* 全网人脉 - 反色容器（白底红字翻牌） */}
+          <div className="mx-3 mt-1.5 rounded-xl border border-red-100 bg-white px-3 py-1.5 flex items-center justify-between">
+            <div className="flex items-center space-x-1">
+              <Globe className="w-3.5 h-3.5 text-[#A80000]" />
+              <span className="text-[#A80000] text-xs font-medium">全网人脉</span>
+            </div>
+            <MiniFlipCounter total={networkTotal?.total ?? 0} />
           </div>
 
           {/* 四格小数据：公司数 / 标签数 / 累计联络 / 使用天数 */}
@@ -708,8 +718,8 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 次级快捷入口：地域（仅保留地域） */}
-          <div className="flex justify-around items-center px-3 pb-1.5 border-t border-gray-50 pt-1.5 flex-shrink-0">
+          {/* 次级快捷入口：地域 */}
+          <div className="flex justify-center items-center px-3 pb-1.5 border-t border-gray-50 pt-1.5 flex-shrink-0">
             <div
               onClick={() => navigate("/parent/contacts/map")}
               className="flex flex-col items-center space-y-1 cursor-pointer"
@@ -719,8 +729,6 @@ export default function Home() {
               </div>
               <span className="text-[#757575]" style={{ fontSize: '0.6rem' }}>地域</span>
             </div>
-            {/* 全网人脉翻牌 - 小尺寸翻牌形式 */}
-            <MiniFlipCounter total={networkTotal?.total ?? 0} />
           </div>
         </div>
 
