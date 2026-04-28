@@ -2183,9 +2183,12 @@ export default function LedgerDetail() {
     if (d > 0) return `${d}天${String(h).padStart(2,'0')}时${String(m).padStart(2,'0')}分${String(s).padStart(2,'0')}秒`;
     return `${String(h).padStart(2,'0')}时${String(m).padStart(2,'0')}分${String(s).padStart(2,'0')}秒`;
   };
-  // AF 账本：资金费率日志
+  // AF 账本：资金费率日志（无限滚动，每次50条）
+  const [fundingRateAllLogs, setFundingRateAllLogs] = useState<any[]>([]);
+  const [fundingRateHasMore, setFundingRateHasMore] = useState(true);
+  const [fundingRateLoadingMore, setFundingRateLoadingMore] = useState(false);
   const { data: fundingRateLogsData, isLoading: fundingRateLogsLoading } = trpc.ledger.afGetFundingRateLogs.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage2, pageSize: 20 },
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage2, pageSize: 50 },
     { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs2, staleTime: 0, refetchOnMount: 'always' }
   );
   // ETH 持仓计算预览数据（仅 isCustomAF 时加载）
@@ -2339,6 +2342,25 @@ export default function LedgerDetail() {
   const setShowFundingRateLogs = setShowFundingRateLogs2;
   const fundingRateLogsPage = fundingRateLogsPage2;
   const setFundingRateLogsPage = setFundingRateLogsPage2;
+  // 当新一页数据到来时，追加到 allLogs
+  useEffect(() => {
+    if (!fundingRateLogsData) return;
+    if (fundingRateLogsPage2 === 1) {
+      setFundingRateAllLogs(fundingRateLogsData.logs);
+    } else {
+      setFundingRateAllLogs(prev => [...prev, ...fundingRateLogsData.logs]);
+    }
+    setFundingRateHasMore(fundingRateLogsData.logs.length === 50);
+    setFundingRateLoadingMore(false);
+  }, [fundingRateLogsData]);
+  // 弹窗关闭时重置
+  useEffect(() => {
+    if (!showFundingRateLogs2) {
+      setFundingRateLogsPage2(1);
+      setFundingRateAllLogs([]);
+      setFundingRateHasMore(true);
+    }
+  }, [showFundingRateLogs2]);
 
   // AH 账本：新建公司弹窗状态
   const [showAhCreateCompany, setShowAhCreateCompany] = useState(false);
@@ -5168,9 +5190,9 @@ export default function LedgerDetail() {
       {/* AF 账本：资金费率日志弹窗 */}
       {showFundingRateLogs && (
         <div className="fixed inset-0 z-[100] flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={() => setShowFundingRateLogs(false)}>
-          <div className="mt-auto mx-0 rounded-t-3xl overflow-hidden flex flex-col" style={{ backgroundColor: '#fff', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+          <div className="mt-auto mx-0 rounded-t-3xl flex flex-col" style={{ backgroundColor: '#fff', maxHeight: '80vh', minHeight: 0 }} onClick={e => e.stopPropagation()}>
             {/* 弹窗标题栏 */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
                 <div className="text-base font-bold text-gray-900">自动赚费详情</div>
                 {stopwatchElapsedMs > 0 && (
@@ -5182,14 +5204,24 @@ export default function LedgerDetail() {
               </div>
               <button onClick={() => setShowFundingRateLogs(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
             </div>
-            {/* 日志列表 */}
-            <div className="flex-1 overflow-y-auto">
-              {fundingRateLogsLoading ? (
+            {/* 日志列表（无限滚动） */}
+            <div
+              className="overflow-y-auto"
+              style={{ flex: '1 1 0', minHeight: 0 }}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (el.scrollHeight - el.scrollTop - el.clientHeight < 80 && fundingRateHasMore && !fundingRateLoadingMore && !fundingRateLogsLoading) {
+                  setFundingRateLoadingMore(true);
+                  setFundingRateLogsPage(p => p + 1);
+                }
+              }}
+            >
+              {fundingRateLogsLoading && fundingRateAllLogs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                   <svg className="animate-spin mb-3 opacity-60" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/></svg>
                   <div className="text-sm">加载中...</div>
                 </div>
-              ) : !fundingRateLogsData || fundingRateLogsData.logs.length === 0 ? (
+              ) : fundingRateAllLogs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-400">
                   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-3 opacity-40">
                     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -5199,7 +5231,7 @@ export default function LedgerDetail() {
                 </div>
               ) : (
                 <div>
-                  {fundingRateLogsData.logs.map((log: any, idx: number) => {
+                  {fundingRateAllLogs.map((log: any, idx: number) => {
                     const bjTime = new Date(log.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
                     return (
                     <div key={log.id ?? idx} className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
@@ -5208,21 +5240,13 @@ export default function LedgerDetail() {
                     </div>
                     );
                   })}
-                  {/* 分页 */}
-                  {fundingRateLogsData.total > 20 && (
-                    <div className="flex items-center justify-center gap-4 py-4">
-                      <button
-                        onClick={() => setFundingRateLogsPage(p => Math.max(1, p - 1))}
-                        disabled={fundingRateLogsPage <= 1}
-                        className="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 disabled:opacity-40"
-                      >上一页</button>
-                      <span className="text-xs text-gray-400">{fundingRateLogsPage} / {Math.ceil(fundingRateLogsData.total / 20)}</span>
-                      <button
-                        onClick={() => setFundingRateLogsPage(p => p + 1)}
-                        disabled={fundingRateLogsPage >= Math.ceil(fundingRateLogsData.total / 20)}
-                        className="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 disabled:opacity-40"
-                      >下一页</button>
+                  {fundingRateLoadingMore && (
+                    <div className="flex justify-center py-4">
+                      <svg className="animate-spin opacity-40" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/></svg>
                     </div>
+                  )}
+                  {!fundingRateHasMore && fundingRateAllLogs.length > 0 && (
+                    <div className="text-center text-xs text-gray-300 py-4">已加载全部记录</div>
                   )}
                 </div>
               )}
