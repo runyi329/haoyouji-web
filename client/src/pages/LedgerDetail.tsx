@@ -3267,12 +3267,7 @@ export default function LedgerDetail() {
                           </svg>
                         </button>
                       </div>
-                      {stopwatchElapsedMs > 0 && (
-                        <div className="flex items-center gap-1">
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                          <span className="text-[10px] text-white/50 font-mono">{formatStopwatch(stopwatchElapsedMs)}</span>
-                        </div>
-                      )}
+
                     </div>
                   )}
                 </div>
@@ -5200,18 +5195,11 @@ export default function LedgerDetail() {
               ) : (
                 <div>
                   {fundingRateLogsData.logs.map((log: any, idx: number) => {
-                    const hourNum = fundingRateLogsData.total - (fundingRateLogsPage - 1) * 20 - idx;
-                    const bjTime = new Date(log.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    const bjTime = new Date(log.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
                     return (
                     <div key={log.id ?? idx} className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
-                      <div>
-                        <div className="text-xs font-medium text-gray-600">第 {hourNum} 小时</div>
-                        <div className="text-[10px] text-gray-400 mt-0.5">{bjTime} · 余额 {parseFloat(log.balance_snapshot).toFixed(2)} USDT</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold text-green-600">+{parseFloat(log.amount).toFixed(6)}</div>
-                        <div className="text-[10px] text-gray-400">USDT</div>
-                      </div>
+                      <div className="text-xs text-gray-500">{bjTime}</div>
+                      <div className="text-sm font-semibold text-green-600">+{parseFloat(log.amount).toFixed(6)} USDT</div>
                     </div>
                     );
                   })}
