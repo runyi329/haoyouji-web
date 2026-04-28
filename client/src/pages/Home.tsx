@@ -541,27 +541,16 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 共享按钮 - 突出显示，AI共享是核心入口 */}
-          <div
-            onClick={() => navigate("/parent/contacts/sharing")}
-            className="mx-3 mt-1.5 mb-1.5 flex items-center justify-between bg-gradient-to-r from-[#A80000]/10 to-[#d44]/10 border border-[#A80000]/20 rounded-xl px-3 py-2 cursor-pointer hover:from-[#A80000]/20 hover:to-[#d44]/20 transition-colors relative"
-          >
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-full bg-[#A80000] flex items-center justify-center shadow-sm flex-shrink-0">
-                <Handshake className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-[#A80000]">AI 共享人脉</div>
-                <div className="text-gray-400" style={{ fontSize: '0.6rem' }}>去中心化共享网络</div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-1">
+          {/* 共享按钮 - 纯图标，无文字 */}
+          <div className="flex justify-center items-center py-1.5">
+            <div
+              onClick={() => navigate("/parent/contacts/sharing")}
+              className="relative w-10 h-10 rounded-full bg-[#A80000] flex items-center justify-center shadow-sm cursor-pointer hover:bg-[#8a0000] transition-colors"
+            >
+              <Handshake className="w-5 h-5 text-white" />
               {hasUnreadSharing && (
-                <span className="w-5 h-5 bg-[#D32F2F] rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
-                  <Bell className="w-2.5 h-2.5 text-white" />
-                </span>
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-[#D32F2F] rounded-full border-2 border-white animate-pulse" />
               )}
-              <span className="text-gray-300 text-sm">›</span>
             </div>
           </div>
 
