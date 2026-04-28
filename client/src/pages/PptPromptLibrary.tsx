@@ -246,7 +246,7 @@ export default function PptPromptLibrary() {
       {/* 顶部导航 */}
       <div className="shrink-0 bg-white border-b border-gray-100 px-3 py-2.5 flex items-center gap-2 z-20">
         <button
-          onClick={() => setLocation(ledgerId ? `/ledger/${ledgerId}/ppt-guide` : '/ppt-guide')}
+          onClick={() => setLocation(ledgerId ? `/ledger/${ledgerId}/ppt-guide` : '/')}
           className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 shrink-0"
         >
           <ChevronLeft className="w-5 h-5 text-gray-600" />
