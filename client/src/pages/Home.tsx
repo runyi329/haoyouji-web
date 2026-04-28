@@ -453,9 +453,20 @@ export default function Home() {
 
         {/* ── 左：AI 人脉 ── */}
         <div className="bg-white rounded-2xl shadow-sm flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
-          {/* 卡片头部：标题 + 头像 */}
+          {/* 卡片头部：标题 + 共享按钮 + 头像 */}
           <div className="flex items-center justify-between px-3 pt-3 pb-2">
             <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 人脉</span>
+            <div className="flex items-center space-x-2">
+              {/* 共享按钮 - 与头像同尺寸 */}
+              <div
+                onClick={() => navigate("/parent/contacts/sharing")}
+                className="relative w-8 h-8 rounded-full bg-[#A80000] flex items-center justify-center shadow-sm cursor-pointer hover:bg-[#8a0000] transition-colors flex-shrink-0"
+              >
+                <Handshake className="w-4 h-4 text-white" />
+                {hasUnreadSharing && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#D32F2F] rounded-full border border-white animate-pulse" />
+                )}
+              </div>
             <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100 cursor-pointer flex-shrink-0">
@@ -489,6 +500,7 @@ export default function Home() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
 
           {/* 人脉总数 - 核心大数字 */}
@@ -512,18 +524,15 @@ export default function Home() {
                 </>
               )}
             </div>
-            <div className="text-white/60 text-xs mt-0.5">
-              {stats ? `${stats.companyCount} 家公司` : ''}
-              {totalTagCount ? ` · ${formatNumber(totalTagCount)} 个标签` : ''}
-            </div>
           </div>
 
-          {/* 三格小数据：累计联络 / 使用天数 / 共享总数 */}
-          <div className="grid grid-cols-3 gap-1 px-3 mt-1.5">
+          {/* 四格小数据：公司数 / 标签数 / 累计联络 / 使用天数 */}
+          <div className="grid grid-cols-2 gap-1 px-3 mt-1.5">
             {[
+              { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", path: "/parent/contacts/list" },
+              { name: "标签总数", value: totalTagCount ?? 0, unit: "个", path: "/parent/contacts/tags" },
               { name: "累计联络", value: totalInteractionCount ?? 0, unit: "次", path: "/parent/contacts/interaction-stats" },
               { name: "使用天数", value: totalUsageDays ?? 0, unit: "天", path: "/parent/contacts" },
-              { name: "共享人脉", value: stats?.sharingToMeCount ?? 0, unit: "人", path: "/parent/contacts/list?filter=shared" },
             ].map((item) => (
               <div
                 key={item.name}
@@ -539,19 +548,6 @@ export default function Home() {
                 </div>
               </div>
             ))}
-          </div>
-
-          {/* 共享按钮 - 纯图标，无文字 */}
-          <div className="flex justify-center items-center py-1.5">
-            <div
-              onClick={() => navigate("/parent/contacts/sharing")}
-              className="relative w-10 h-10 rounded-full bg-[#A80000] flex items-center justify-center shadow-sm cursor-pointer hover:bg-[#8a0000] transition-colors"
-            >
-              <Handshake className="w-5 h-5 text-white" />
-              {hasUnreadSharing && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-[#D32F2F] rounded-full border-2 border-white animate-pulse" />
-              )}
-            </div>
           </div>
 
           {/* 次级快捷入口：地域（仅保留地域） */}
