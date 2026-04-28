@@ -11945,30 +11945,46 @@ export const appRouter = router({
           if (myRole === 'owner' || myRole === 'admin') targetUserId = input.viewAsUserId;
         }
         const [settingRows] = await dbConn.execute(
-          `SELECT enabled FROM af_funding_rate_settings WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          `SELECT enabled, open_at, settled_hours FROM af_funding_rate_settings WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
           [input.ledgerId, targetUserId]
         ) as any[];
-        const enabled = (settingRows as any[])[0]?.enabled === 1;
+        const row = (settingRows as any[])[0];
+        const enabled = row?.enabled === 1;
+        const openAt = row?.open_at ? Number(row.open_at) : null;
+        const settledHours = row?.settled_hours ?? 0;
         const [logRows] = await dbConn.execute(
           `SELECT total_accumulated, created_at FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1`,
           [input.ledgerId, targetUserId]
         ) as any[];
         const lastLog = (logRows as any[])[0] || null;
         const totalAccumulated = lastLog?.total_accumulated ?? '0';
-        return { enabled, totalAccumulated, lastLog };
+        return { enabled, totalAccumulated, lastLog, openAt, settledHours };
       }),
 
-    // 切换资金费率开关
+    // 切换赚费开关（打开时记录 open_at 和余额快照，关闭时清空并丢弃不足1小时部分）
     afToggleFundingRate: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), enabled: z.boolean() }))
+      .input(z.object({ ledgerId: z.number(), enabled: z.boolean(), currentBalance: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        await dbConn.execute(
-          `INSERT INTO af_funding_rate_settings (ledger_id, user_id, enabled) VALUES (?, ?, ?)
-           ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = NOW()`,
-          [input.ledgerId, ctx.user.id, input.enabled ? 1 : 0]
-        );
+        const nowMs = Date.now();
+        if (input.enabled) {
+          // 打开：记录开启时间戳和余额快照，重置 settled_hours
+          const balanceSnapshot = input.currentBalance ?? '0';
+          await dbConn.execute(
+            `INSERT INTO af_funding_rate_settings (ledger_id, user_id, enabled, open_at, open_balance_snapshot, settled_hours)
+             VALUES (?, ?, 1, ?, ?, 0)
+             ON DUPLICATE KEY UPDATE enabled = 1, open_at = VALUES(open_at), open_balance_snapshot = VALUES(open_balance_snapshot), settled_hours = 0, updated_at = NOW()`,
+            [input.ledgerId, ctx.user.id, nowMs, balanceSnapshot]
+          );
+        } else {
+          // 关闭：清空 open_at，不足1小时部分直接丢弃
+          await dbConn.execute(
+            `UPDATE af_funding_rate_settings SET enabled = 0, open_at = NULL, open_balance_snapshot = NULL, settled_hours = 0, updated_at = NOW()
+             WHERE ledger_id = ? AND user_id = ?`,
+            [input.ledgerId, ctx.user.id]
+          );
+        }
         return { success: true };
       }),
 
@@ -20255,63 +20271,75 @@ setTimeout(() => {
   setInterval(refreshCryptoPricesServer, 5 * 60 * 1000);
 }, 15_000);
 
-// ===== AF 资金费率每小时自动结算 =====
+// ===== AF 赚费每分钟检查，满整小时结算一次 =====
 async function runAfFundingRateSettlement() {
   try {
     const dbConn = await getDbConnection();
     if (!dbConn) return;
-    // 查询所有已开启资金费率的用户（按账本分组）
+    const nowMs = Date.now();
+    // 查询所有已开启且有 open_at 的记录
     const [settingRows] = await dbConn.execute(
-      `SELECT ledger_id, user_id FROM af_funding_rate_settings WHERE enabled = 1`
+      `SELECT ledger_id, user_id, open_at, open_balance_snapshot, settled_hours FROM af_funding_rate_settings WHERE enabled = 1 AND open_at IS NOT NULL`
     ) as any[];
     const settings = settingRows as any[];
     if (!settings || settings.length === 0) return;
-
-    const ANNUAL_RATE = 0.12; // 年化12%
+    const ANNUAL_RATE = 0.12;
     const HOURS_PER_YEAR = 8760;
     const HOURLY_RATE = ANNUAL_RATE / HOURS_PER_YEAR;
-
     for (const setting of settings) {
       try {
         const { ledger_id: ledgerId, user_id: userId } = setting;
-        // 查询该用户在该账本的余额（充值 + 手动调账）
+        const openAt = Number(setting.open_at);
+        const openBalance = parseFloat(setting.open_balance_snapshot ?? '0');
+        const settledHours = parseInt(setting.settled_hours ?? '0');
+        // 计算本次开启已经过了多少整小时
+        const elapsedMs = nowMs - openAt;
+        const elapsedHours = Math.floor(elapsedMs / (60 * 60 * 1000));
+        // 没有新的整小时需要结算，跳过
+        if (elapsedHours <= 0 || elapsedHours <= settledHours) continue;
+        const hoursToSettle = elapsedHours - settledHours;
+        // 查询当前余额（充值 + 手动调账）
         const [balRows] = await dbConn.execute(
           `SELECT
             (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ? AND ledger_id = ? AND status = 'completed') +
             (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ? AND user_id = ?) as balance`,
           [userId, ledgerId, ledgerId, userId]
         ) as any[];
-        const balance = parseFloat((balRows as any[])[0]?.balance ?? '0');
-        if (balance <= 0) continue;
-
-        // 计算本次费率金额
-        const amount = balance * HOURLY_RATE;
-        if (amount <= 0) continue;
-
+        const currentBalance = parseFloat((balRows as any[])[0]?.balance ?? '0');
+        // 取开启时余额和当前余额的最小值作为结算基数
+        const baseBalance = Math.min(openBalance, currentBalance);
+        if (baseBalance <= 0) continue;
         // 查询当前累计总额
         const [lastRows] = await dbConn.execute(
           `SELECT total_accumulated FROM af_funding_rate_logs WHERE ledger_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1`,
           [ledgerId, userId]
         ) as any[];
-        const prevTotal = parseFloat((lastRows as any[])[0]?.total_accumulated ?? '0');
-        const newTotal = prevTotal + amount;
-
-        // 插入日志
+        let prevTotal = parseFloat((lastRows as any[])[0]?.total_accumulated ?? '0');
+        // 每个新整小时插入一条日志
+        for (let h = 0; h < hoursToSettle; h++) {
+          const amount = baseBalance * HOURLY_RATE;
+          prevTotal += amount;
+          await dbConn.execute(
+            `INSERT INTO af_funding_rate_logs (ledger_id, user_id, balance_snapshot, amount, total_accumulated, annual_rate) VALUES (?, ?, ?, ?, ?, ?)`,
+            [ledgerId, userId, baseBalance.toFixed(8), amount.toFixed(8), prevTotal.toFixed(8), ANNUAL_RATE.toFixed(4)]
+          );
+        }
+        // 更新已结算小时数
         await dbConn.execute(
-          `INSERT INTO af_funding_rate_logs (ledger_id, user_id, balance_snapshot, amount, total_accumulated, annual_rate) VALUES (?, ?, ?, ?, ?, ?)`,
-          [ledgerId, userId, balance.toFixed(8), amount.toFixed(8), newTotal.toFixed(8), ANNUAL_RATE.toFixed(4)]
+          `UPDATE af_funding_rate_settings SET settled_hours = ?, updated_at = NOW() WHERE ledger_id = ? AND user_id = ?`,
+          [elapsedHours, ledgerId, userId]
         );
+        console.log(`[AF赚费] 用户${userId} 账本${ledgerId} 结算${hoursToSettle}小时，基数${baseBalance}`);
       } catch (e) {
-        console.error(`[AF资金费率] 用户 ${setting.user_id} 结算失败:`, e);
+        console.error(`[AF赚费] 用户 ${setting.user_id} 结算失败:`, e);
       }
     }
-    console.log(`[AF资金费率] 结算完成，处理 ${settings.length} 条记录`);
   } catch (e) {
-    console.error('[AF资金费率] 定时任务失败:', e);
+    console.error('[AF赚费] 定时任务失败:', e);
   }
 }
-// 延迟60秒后首次执行，之后每小时执行一次
+// 延迟60秒后首次执行，之后每分钟检查一次
 setTimeout(() => {
   runAfFundingRateSettlement();
-  setInterval(runAfFundingRateSettlement, 60 * 60 * 1000);
+  setInterval(runAfFundingRateSettlement, 60 * 1000);
 }, 60_000);
