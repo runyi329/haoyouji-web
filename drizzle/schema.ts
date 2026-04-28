@@ -1949,3 +1949,36 @@ export const ethPositionChangeLogs = mysqlTable("eth_position_change_logs", {
 
 export type EthPositionChangeLog = typeof ethPositionChangeLogs.$inferSelect;
 export type InsertEthPositionChangeLog = typeof ethPositionChangeLogs.$inferInsert;
+
+// ========== AF 资金费率设置表 ==========
+// 每个用户在每个账本的「自动转资金费率」开关状态
+export const afFundingRateSettings = mysqlTable("af_funding_rate_settings", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  userId: int('user_id').notNull(),
+  enabled: tinyint('enabled').default(0).notNull(),  // 0=关闭, 1=开启
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("af_fr_settings_ledger_user_uniq").on(table.ledgerId, table.userId),
+  index("af_fr_settings_ledger_idx").on(table.ledgerId),
+  index("af_fr_settings_user_idx").on(table.userId),
+]);
+export type AfFundingRateSetting = typeof afFundingRateSettings.$inferSelect;
+
+// ========== AF 资金费率日志表 ==========
+// 每小时结算一次，记录每次产生的资金费率金额
+export const afFundingRateLogs = mysqlTable("af_funding_rate_logs", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  userId: int('user_id').notNull(),
+  balanceSnapshot: decimal('balance_snapshot', { precision: 20, scale: 8 }).notNull(),
+  amount: decimal('amount', { precision: 20, scale: 8 }).notNull(),
+  totalAccumulated: decimal('total_accumulated', { precision: 20, scale: 8 }).notNull(),
+  annualRate: decimal('annual_rate', { precision: 8, scale: 4 }).default('0.1200').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  index("af_fr_logs_ledger_user_idx").on(table.ledgerId, table.userId),
+  index("af_fr_logs_created_idx").on(table.createdAt),
+]);
+export type AfFundingRateLog = typeof afFundingRateLogs.$inferSelect;

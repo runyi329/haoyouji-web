@@ -2113,6 +2113,19 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF, refetchInterval: 60000 }
   );
+  // AF 账本：资金费率开关状态 + 累计金额
+  const { data: fundingRateStatus, refetch: refetchFundingRateStatus } = trpc.ledger.afGetFundingRateStatus.useQuery(
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { enabled: isCustomAF && !effectiveIsFunder }
+  );
+  const toggleFundingRateMutation = trpc.ledger.afToggleFundingRate.useMutation({
+    onSuccess: () => refetchFundingRateStatus(),
+  });
+  // AF 账本：资金费率日志
+  const { data: fundingRateLogsData } = trpc.ledger.afGetFundingRateLogs.useQuery(
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage, pageSize: 20 },
+    { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs }
+  );
   // ETH 持仓计算预览数据（仅 isCustomAF 时加载）
   const { data: ethPositionSettings } = trpc.ethPositionGetSettings.useQuery(
     { ledgerId: Number(ledgerId) },
@@ -2259,6 +2272,10 @@ export default function LedgerDetail() {
   const ahCreateCompanyMutation = trpc.ledger.ahCreateCompany.useMutation({
     onSuccess: () => { refetchAhCompanies(); refetchAhTaxAuths(); },
   });
+  // AF 账本：资金费率日志弹窗状态
+  const [showFundingRateLogs, setShowFundingRateLogs] = useState(false);
+  const [fundingRateLogsPage, setFundingRateLogsPage] = useState(1);
+
   // AH 账本：新建公司弹窗状态
   const [showAhCreateCompany, setShowAhCreateCompany] = useState(false);
   const [ahNewCompanyName, setAhNewCompanyName] = useState('');
@@ -3135,7 +3152,29 @@ export default function LedgerDetail() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                  {/* 右上角：自动转资金费率开关 */}
+                  <div className="absolute top-2 right-3 flex items-center gap-1.5">
+                    <span className="text-[10px] text-white/60">费率</span>
+                    <button
+                      onClick={() => {
+                        if (!viewAsUserId) {
+                          toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: !(fundingRateStatus?.enabled ?? false) });
+                        }
+                      }}
+                      disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
+                      className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                      style={{ backgroundColor: (fundingRateStatus?.enabled) ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)' }}
+                    >
+                      <span
+                        className="inline-block h-3 w-3 rounded-full bg-white shadow transition-transform"
+                        style={{
+                          backgroundColor: (fundingRateStatus?.enabled) ? '#16a34a' : 'rgba(255,255,255,0.6)',
+                          transform: (fundingRateStatus?.enabled) ? 'translateX(14px)' : 'translateX(2px)',
+                        }}
+                      />
+                    </button>
+                  </div>
                   <div className="text-xs text-white/70 mb-1">余额</div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-lg font-bold text-white">
@@ -3143,6 +3182,24 @@ export default function LedgerDetail() {
                     </span>
                     <span className="text-xs text-white/60">USDT</span>
                   </div>
+                  {/* 资金费率累计显示 */}
+                  {fundingRateStatus?.enabled && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span className="text-[10px] text-white/60">资金费率</span>
+                      <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus.totalAccumulated || '0').toFixed(4)}</span>
+                      <span className="text-[10px] text-white/50">USDT</span>
+                      <button
+                        onClick={() => setShowFundingRateLogs(true)}
+                        className="ml-0.5 flex items-center"
+                        title="查看资金费率详情"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {/* 卡片 2：推荐人数（资金方不显示） */}
@@ -5036,6 +5093,73 @@ export default function LedgerDetail() {
           onOpenChange={setShowMembersDialog}
           members={membersData}
         />
+      )}
+
+      {/* AF 账本：资金费率日志弹窗 */}
+      {showFundingRateLogs && (
+        <div className="fixed inset-0 z-[100] flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={() => setShowFundingRateLogs(false)}>
+          <div className="mt-auto mx-0 rounded-t-3xl overflow-hidden flex flex-col" style={{ backgroundColor: '#fff', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+            {/* 弹窗标题栏 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div>
+                <div className="text-base font-bold text-gray-900">资金费率详情</div>
+                <div className="text-xs text-gray-400 mt-0.5">年化 12% · 每小时结算一次</div>
+              </div>
+              <button onClick={() => setShowFundingRateLogs(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-lg font-bold">×</button>
+            </div>
+            {/* 累计总额 */}
+            <div className="px-5 py-3 bg-green-50 border-b border-gray-100">
+              <div className="flex items-baseline gap-2">
+                <span className="text-sm text-gray-500">累计费率</span>
+                <span className="text-xl font-bold text-green-700">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
+                <span className="text-xs text-gray-400">USDT</span>
+              </div>
+            </div>
+            {/* 日志列表 */}
+            <div className="flex-1 overflow-y-auto">
+              {!fundingRateLogsData || fundingRateLogsData.logs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mb-3 opacity-40">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  <div className="text-sm">暂无记录</div>
+                  <div className="text-xs mt-1">开启费率开关后每小时自动结算</div>
+                </div>
+              ) : (
+                <div>
+                  {fundingRateLogsData.logs.map((log: any, idx: number) => (
+                    <div key={log.id ?? idx} className="flex items-center justify-between px-5 py-3 border-b border-gray-50">
+                      <div>
+                        <div className="text-xs text-gray-400">{new Date(log.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+                        <div className="text-[10px] text-gray-300 mt-0.5">余额 {parseFloat(log.balance_snapshot).toFixed(2)} USDT</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-semibold text-green-600">+{parseFloat(log.amount).toFixed(6)}</div>
+                        <div className="text-[10px] text-gray-400">累计 {parseFloat(log.total_accumulated).toFixed(4)}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {/* 分页 */}
+                  {fundingRateLogsData.total > 20 && (
+                    <div className="flex items-center justify-center gap-4 py-4">
+                      <button
+                        onClick={() => setFundingRateLogsPage(p => Math.max(1, p - 1))}
+                        disabled={fundingRateLogsPage <= 1}
+                        className="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 disabled:opacity-40"
+                      >上一页</button>
+                      <span className="text-xs text-gray-400">{fundingRateLogsPage} / {Math.ceil(fundingRateLogsData.total / 20)}</span>
+                      <button
+                        onClick={() => setFundingRateLogsPage(p => p + 1)}
+                        disabled={fundingRateLogsPage >= Math.ceil(fundingRateLogsData.total / 20)}
+                        className="text-xs px-3 py-1 rounded bg-gray-100 text-gray-600 disabled:opacity-40"
+                      >下一页</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* AF 账本：YJH邀请树弹窗 */}
