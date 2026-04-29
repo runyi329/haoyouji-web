@@ -418,7 +418,7 @@ function GoldFlipCounter({ total, unit, decimals }: { total: number; unit?: stri
           />
         )
       ))}
-      <span className="font-medium" style={{ fontSize: digitSize * 0.38 + 'px', color: 'rgba(203,164,113,0.85)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '2px' }}>{unit ?? '点'}</span>
+      <span className="font-medium" style={{ fontSize: digitSize * 0.38 + 'px', color: 'rgba(203,164,113,0.85)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '2px', whiteSpace: 'nowrap' }}>{unit ?? '点'}</span>
     </div>
   );
 }
