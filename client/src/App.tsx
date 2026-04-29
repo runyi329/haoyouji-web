@@ -150,6 +150,9 @@ const RetailInvestor = lazy(() => import("./pages/RetailInvestor"));
 const StockLifecycle = lazy(() => import("./pages/StockLifecycle"));
 const StockTrackerLifecycle = lazy(() => import("./pages/StockLifecycle").then(m => ({ default: m.StockTrackerLifecycle })));
 const HKStockTracker = lazy(() => import("./pages/HKStockTracker"));
+const USStockTracker = lazy(() => import("./pages/USStockTracker"));
+const USStockLifecycle = lazy(() => import("./pages/USStockLifecycle"));
+const USStockDetail = lazy(() => import("./pages/USStockDetail"));
 const StockDetail = lazy(() => import("./pages/StockDetail"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
@@ -457,6 +460,9 @@ function Router() {
         <Route path="/stock-tracker" component={StockTrackerHome} />
         <Route path="/stock-tracker/stock-lifecycle" component={StockTrackerLifecycle} />
         <Route path="/hk-stock-tracker" component={HKStockTracker} />
+        <Route path="/us-stock-tracker" component={USStockTracker} />
+        <Route path="/us-stock-tracker/stock-lifecycle" component={USStockLifecycle} />
+        <Route path="/us-stock/:tsCode" component={USStockDetail} />
         <Route path="/ledger/:id/retail-investor" component={RetailInvestor} />
         <Route path="/ledger/:id/admin-transactions" component={AdminTransactionList} />
         <Route path="/ledger/:id/import" component={LedgerImport} />
