@@ -19738,39 +19738,44 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        const res = await fetch(
-          'https://query2.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=1d',
-          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
-        );
+        const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+        const today = new Date();
+        const startDate = new Date(today.getTime() - 7 * 24 * 3600 * 1000);
+        const fmt = (d: Date) => d.toISOString().slice(0,10).replace(/-/g,'');
+        const body = JSON.stringify({ api_name: 'fx_daily', token: TUSHARE_TOKEN, params: { ts_code: 'XAUUSD.FXCM', start_date: fmt(startDate), end_date: fmt(today) }, fields: 'trade_date,bid_close,bid_open' });
+        const res = await fetch('https://api.tushare.pro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
         const json = await res.json() as any;
-        const meta = json?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('解析失败');
-        const price = meta.regularMarketPrice ?? 0;
-        const prev = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const items = json?.data?.items ?? [];
+        if (!items.length) throw new Error('无数据');
+        const price = items[0][1] ?? 0;
+        const prev = items[1]?.[1] ?? items[0][2] ?? 0;
         const change = price - prev;
         const changePercent = prev > 0 ? (change / prev * 100) : 0;
         const result = { price, prevClose: prev, change, changePercent, success: true };
-        setCache(cacheKey, result); // 5分钟缓存
+        setCache(cacheKey, result);
         return result;
       } catch (e) {
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
-    /** 原油实时行情 (Yahoo Finance CL=F) */
+    /** 原油实时行情 (新浪财经 上海原油期货连续) */
     getOilPrice: publicProcedure.query(async () => {
       const cacheKey = 'global_oil';
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
         const res = await fetch(
-          'https://query2.finance.yahoo.com/v8/finance/chart/CL%3DF?interval=1d&range=1d',
-          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+          'https://hq.sinajs.cn/list=nf_SC0',
+          { headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
         );
-        const json = await res.json() as any;
-        const meta = json?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('解析失败');
-        const price = meta.regularMarketPrice ?? 0;
-        const prev = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const buf = await res.arrayBuffer();
+        const text = new TextDecoder('gbk').decode(buf);
+        const match = text.match(/"([^"]+)"/);
+        if (!match) throw new Error('解析失败');
+        const parts = match[1].split(',');
+        // 格式: 名称,时间,昨收,今开,最高,最低,最新价,...
+        const price = parseFloat(parts[6]) || parseFloat(parts[3]) || 0;
+        const prev = parseFloat(parts[2]) || 0;
         const change = price - prev;
         const changePercent = prev > 0 ? (change / prev * 100) : 0;
         const result = { price, prevClose: prev, change, changePercent, success: true };
@@ -19780,21 +19785,24 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
-    /** 美元指数实时行情 (Yahoo Finance DX-Y.NYB) */
+    /** 美元指数实时行情 (Tushare fx_daily USDOLLAR) */
     getDollarIndex: publicProcedure.query(async () => {
       const cacheKey = 'global_dxy';
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        const res = await fetch(
-          'https://query2.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=1d',
-          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
-        );
+        const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+        const today = new Date();
+        const startDate = new Date(today.getTime() - 7 * 24 * 3600 * 1000);
+        const fmt = (d: Date) => d.toISOString().slice(0,10).replace(/-/g,'');
+        const body = JSON.stringify({ api_name: 'fx_daily', token: TUSHARE_TOKEN, params: { ts_code: 'USDOLLAR', start_date: fmt(startDate), end_date: fmt(today) }, fields: 'trade_date,bid_close,bid_open' });
+        const res = await fetch('https://api.tushare.pro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
         const json = await res.json() as any;
-        const meta = json?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('解析失败');
-        const price = meta.regularMarketPrice ?? 0;
-        const prev = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const items = json?.data?.items ?? [];
+        if (!items.length) throw new Error('无数据');
+        // USDOLLAR是放大100倍的指数，需要除以100
+        const price = (items[0][1] ?? 0) / 100;
+        const prev = (items[1]?.[1] ?? items[0][2] ?? 0) / 100;
         const change = price - prev;
         const changePercent = prev > 0 ? (change / prev * 100) : 0;
         const result = { price, prevClose: prev, change, changePercent, success: true };
@@ -19804,21 +19812,23 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
-    /** 美元/人民币实时汇率 (Yahoo Finance USDCNH=X) */
+    /** 美元/人民币实时汇率 (Tushare fx_daily USDCNH.FXCM) */
     getUsdCnh: publicProcedure.query(async () => {
       const cacheKey = 'global_usdcnh';
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        const res = await fetch(
-          'https://query2.finance.yahoo.com/v8/finance/chart/USDCNH%3DX?interval=1d&range=1d',
-          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
-        );
+        const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+        const today = new Date();
+        const startDate = new Date(today.getTime() - 7 * 24 * 3600 * 1000);
+        const fmt = (d: Date) => d.toISOString().slice(0,10).replace(/-/g,'');
+        const body = JSON.stringify({ api_name: 'fx_daily', token: TUSHARE_TOKEN, params: { ts_code: 'USDCNH.FXCM', start_date: fmt(startDate), end_date: fmt(today) }, fields: 'trade_date,bid_close,bid_open' });
+        const res = await fetch('https://api.tushare.pro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
         const json = await res.json() as any;
-        const meta = json?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('解析失败');
-        const price = meta.regularMarketPrice ?? 0;
-        const prev = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const items = json?.data?.items ?? [];
+        if (!items.length) throw new Error('无数据');
+        const price = items[0][1] ?? 0;
+        const prev = items[1]?.[1] ?? items[0][2] ?? 0;
         const change = price - prev;
         const changePercent = prev > 0 ? (change / prev * 100) : 0;
         const result = { price, prevClose: prev, change, changePercent, success: true };
