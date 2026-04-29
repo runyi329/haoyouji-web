@@ -19588,6 +19588,53 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       );
       return rows as any[];
     }),
+
+  // ========== A股上证指数实时行情 ==========
+  stock: router({
+    getShanghaiIndex: publicProcedure.query(async () => {
+      const cacheKey = 'sh000001';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        const res = await fetch('https://qt.gtimg.cn/q=sh000001', {
+          headers: { 'Referer': 'https://finance.qq.com', 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(5000),
+        });
+        const text = await res.text();
+        const match = text.match(/v_sh000001="([^"]+)"/);
+        if (!match) throw new Error('解析失败');
+        const parts = match[1].split('~');
+        // parts[3]=当前价, parts[4]=昨收, parts[30]=更新时间, parts[31]=涨跌额, parts[32]=涨跌幅
+        const price = parseFloat(parts[3]);
+        const prevClose = parseFloat(parts[4]);
+        const change = parseFloat(parts[31]);
+        const changePercent = parseFloat(parts[32]);
+        const updateTime = parts[30] || '';
+        const result = { price, prevClose, change, changePercent, updateTime, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        try {
+          const res2 = await fetch('https://hq.sinajs.cn/list=s_sh000001', {
+            headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(5000),
+          });
+          const text2 = await res2.text();
+          const m2 = text2.match(/hq_str_s_sh000001="([^"]+)"/);
+          if (!m2) throw new Error('备用API解析失败');
+          const p2 = m2[1].split(',');
+          const price2 = parseFloat(p2[1]);
+          const change2 = parseFloat(p2[2]);
+          const changePercent2 = parseFloat(p2[3]);
+          const result2 = { price: price2, prevClose: price2 - change2, change: change2, changePercent: changePercent2, updateTime: '', success: true };
+          setCache(cacheKey, result2);
+          return result2;
+        } catch (e2) {
+          return { price: 0, prevClose: 0, change: 0, changePercent: 0, updateTime: '', success: false };
+        }
+      }
+    }),
+  }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
@@ -20266,57 +20313,6 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         risk: string;
       };
     }),
-
-  // ========== A股上证指数实时行情 ==========
-  stock: router({
-    // 获取上证指数实时数据（腾讯财经API，30秒缓存）
-    getShanghaiIndex: publicProcedure.query(async () => {
-      const cacheKey = 'sh000001';
-      const cached = getCache(cacheKey);
-      if (cached) return cached;
-      try {
-        const res = await fetch('https://qt.gtimg.cn/q=sh000001', {
-          headers: { 'Referer': 'https://finance.qq.com', 'User-Agent': 'Mozilla/5.0' },
-          signal: AbortSignal.timeout(5000),
-        });
-        const text = await res.text();
-        // 格式: v_sh000001="1~上证指数~000001~4102.85~4078.64~...~20260429134612~24.21~0.59~..."
-        const match = text.match(/v_sh000001="([^"]+)"/);
-        if (!match) throw new Error('解析失败');
-        const parts = match[1].split('~');
-        // parts[3]=当前价, parts[4]=昨收, parts[30]=更新时间, parts[31]=涨跌额, parts[32]=涨跌幅
-        const price = parseFloat(parts[3]);
-        const prevClose = parseFloat(parts[4]);
-        const change = parseFloat(parts[31]);
-        const changePercent = parseFloat(parts[32]);
-        const updateTime = parts[30] || '';
-        const result = { price, prevClose, change, changePercent, updateTime, success: true };
-        setCache(cacheKey, result);
-        return result;
-      } catch (e) {
-        // 备用：新浪财经API
-        try {
-          const res2 = await fetch('https://hq.sinajs.cn/list=s_sh000001', {
-            headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(5000),
-          });
-          const text2 = await res2.text();
-          // 格式: var hq_str_s_sh000001="上证指数,4102.52,23.89,0.59,4682332,86380241";
-          const m2 = text2.match(/hq_str_s_sh000001="([^"]+)"/);
-          if (!m2) throw new Error('备用API解析失败');
-          const p2 = m2[1].split(',');
-          const price2 = parseFloat(p2[1]);
-          const change2 = parseFloat(p2[2]);
-          const changePercent2 = parseFloat(p2[3]);
-          const result2 = { price: price2, prevClose: price2 - change2, change: change2, changePercent: changePercent2, updateTime: '', success: true };
-          setCache(cacheKey, result2);
-          return result2;
-        } catch (e2) {
-          return { price: 0, prevClose: 0, change: 0, changePercent: 0, updateTime: '', success: false };
-        }
-      }
-    }),
-  }),
 });
 export type AppRouter = typeof appRouter;
 
