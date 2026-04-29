@@ -938,11 +938,15 @@ export default function Home() {
           </div>
 
           {/* 我的股票 - 上证指数，白色卡片内嵌 */}
-          <div className="mx-3 rounded-xl px-3 py-2" style={{
-            background: 'rgba(255,255,255,0.82)',
-            border: '1px solid rgba(203,164,113,0.35)',
-            boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)'
-          }}>
+          <div
+            className="mx-3 rounded-xl px-3 py-2 cursor-pointer"
+            style={{
+              background: 'rgba(255,255,255,0.82)',
+              border: '1px solid rgba(203,164,113,0.35)',
+              boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)'
+            }}
+            onClick={() => navigate('/stock-tracker')}
+          >
             {/* 标题行：我的股票（不换行） */}
             <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
               <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
