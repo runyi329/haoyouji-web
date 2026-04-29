@@ -655,47 +655,53 @@ export default function Home() {
   const isMarketOpen = () => getMarketStatus(new Date()) === 'open';
 
   // 计算下一个开市时间点（返回 UTC ms）
+  // 注意：全程基于真实 UTC 时间戳计算，避免 BJ 偏移混用导致少 8 小时
   const getNextOpenTime = (now: Date): number => {
-    const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-    const h = bj.getUTCHours();
-    const m = bj.getUTCMinutes();
-    const s = bj.getUTCSeconds();
+    const BJ_OFFSET = 8 * 60 * 60 * 1000;
+    const nowMs = now.getTime();
+    // 用 UTC 方法读取北京时间字段（bj 仅用于读取小时/分钟/星期，不用于计算 ms）
+    const bjDate = new Date(nowMs + BJ_OFFSET);
+    const h = bjDate.getUTCHours();
+    const m = bjDate.getUTCMinutes();
     const mins = h * 60 + m;
     const status = getMarketStatus(now);
-    // 如果是午休，下一个开市时间是当天 13:00
+
+    // 当天 BJ 日期的 UTC midnight（即 BJ 当天 00:00 对应的 UTC 时间戳）
+    const todayBjUtcMidnight = Date.UTC(
+      bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate()
+    ) - BJ_OFFSET; // BJ midnight = UTC midnight - 8h
+
+    // 如果是午休，下一个开市时间是当天 BJ 13:00
     if (status === 'lunch') {
-      const todayOpen13 = new Date(bj);
-      todayOpen13.setUTCHours(5, 0, 0, 0); // UTC 5:00 = BJ 13:00
-      return todayOpen13.getTime() - 8 * 60 * 60 * 1000;
+      return todayBjUtcMidnight + (13 * 60) * 60 * 1000; // BJ 13:00
     }
-    // 当天未开市（早于 9:30）
+
+    // 当天未开市（早于 BJ 9:30）
     const dateStr = getBjDateStr(now);
-    const day = bj.getUTCDay();
+    const day = bjDate.getUTCDay();
     const isWeekend = day === 0 || day === 6;
     const isHoliday = A_SHARE_HOLIDAYS.has(dateStr);
     const isExtraOpen = A_SHARE_EXTRA_OPEN.has(dateStr);
     const todayIsOpen = (!isWeekend && !isHoliday) || isExtraOpen;
     if (todayIsOpen && mins < 9 * 60 + 30) {
-      const todayOpen = new Date(bj);
-      todayOpen.setUTCHours(1, 30, 0, 0); // UTC 1:30 = BJ 9:30
-      return todayOpen.getTime() - 8 * 60 * 60 * 1000;
+      return todayBjUtcMidnight + (9 * 60 + 30) * 60 * 1000; // BJ 9:30
     }
+
     // 否则找下一个开市日
-    let candidate = new Date(bj);
-    candidate.setUTCDate(candidate.getUTCDate() + 1);
-    for (let i = 0; i < 10; i++) {
-      const ds = getBjDateStr(new Date(candidate.getTime() - 8 * 60 * 60 * 1000));
-      const cd = candidate.getUTCDay();
+    for (let i = 1; i <= 10; i++) {
+      // 候选日期：BJ 当天 + i 天的 UTC midnight
+      const candidateBjUtcMidnight = todayBjUtcMidnight + i * 24 * 60 * 60 * 1000;
+      const candidateBjDate = new Date(candidateBjUtcMidnight + BJ_OFFSET);
+      const ds = `${candidateBjDate.getUTCFullYear()}${String(candidateBjDate.getUTCMonth()+1).padStart(2,'0')}${String(candidateBjDate.getUTCDate()).padStart(2,'0')}`;
+      const cd = candidateBjDate.getUTCDay();
       const cIsWeekend = cd === 0 || cd === 6;
       const cIsHoliday = A_SHARE_HOLIDAYS.has(ds);
       const cIsExtra = A_SHARE_EXTRA_OPEN.has(ds);
       if ((!cIsWeekend && !cIsHoliday) || cIsExtra) {
-        candidate.setUTCHours(1, 30, 0, 0); // BJ 9:30
-        return candidate.getTime() - 8 * 60 * 60 * 1000;
+        return candidateBjUtcMidnight + (9 * 60 + 30) * 60 * 1000; // BJ 9:30
       }
-      candidate.setUTCDate(candidate.getUTCDate() + 1);
     }
-    return now.getTime() + 24 * 60 * 60 * 1000;
+    return nowMs + 24 * 60 * 60 * 1000;
   };
 
   // 市场状态和倒计时 state
