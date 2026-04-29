@@ -58,7 +58,7 @@ import { sendAlertEmail, sendBackupTestEmail } from "./email-service";
 
 // ===== 行情数据内存缓存（30秒TTL，避免重复请求外部API）=====
 const _marketCache = new Map<string, { data: any; ts: number }>();
-const MARKET_CACHE_TTL = 3_000; // 3秒
+const MARKET_CACHE_TTL = 1_000; // 1秒
 function getCache(key: string): any | null {
   const entry = _marketCache.get(key);
   if (!entry) return null;
@@ -19732,23 +19732,24 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
     }),
 
     // ========== 全球市场实时行情接口 ==========
-    /** 黄金实时行情 (Yahoo Finance GC=F) */
+    /** 黄金实时行情 (新浪财经 hf_XAU 现货黄金) */
     getGoldPrice: publicProcedure.query(async () => {
       const cacheKey = 'global_gold';
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
-        const today = new Date();
-        const startDate = new Date(today.getTime() - 7 * 24 * 3600 * 1000);
-        const fmt = (d: Date) => d.toISOString().slice(0,10).replace(/-/g,'');
-        const body = JSON.stringify({ api_name: 'fx_daily', token: TUSHARE_TOKEN, params: { ts_code: 'XAUUSD.FXCM', start_date: fmt(startDate), end_date: fmt(today) }, fields: 'trade_date,bid_close,bid_open' });
-        const res = await fetch('https://api.tushare.pro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
-        const json = await res.json() as any;
-        const items = json?.data?.items ?? [];
-        if (!items.length) throw new Error('无数据');
-        const price = items[0][1] ?? 0;
-        const prev = items[1]?.[1] ?? items[0][2] ?? 0;
+        const res = await fetch(
+          'https://hq.sinajs.cn/list=hf_XAU',
+          { headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+        );
+        const buf = await res.arrayBuffer();
+        const text = new TextDecoder('gbk').decode(buf);
+        const match = text.match(/"([^"]+)"/);
+        if (!match) throw new Error('解析失败');
+        const parts = match[1].split(',');
+        // 格式: 最新价,涨跌,最新价,买价,最高,最低,时间,昨收,开盘,...
+        const price = parseFloat(parts[0]) || 0;
+        const prev = parseFloat(parts[7]) || 0; // 昨收价
         const change = price - prev;
         const changePercent = prev > 0 ? (change / prev * 100) : 0;
         const result = { price, prevClose: prev, change, changePercent, success: true };
@@ -19785,24 +19786,24 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
-    /** 美元指数实时行情 (Tushare fx_daily USDOLLAR) */
+    /** 美元人民币实时汇率 (新浪财经 USDCNY 在岸人民币) */
     getDollarIndex: publicProcedure.query(async () => {
       const cacheKey = 'global_dxy';
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
-        const today = new Date();
-        const startDate = new Date(today.getTime() - 7 * 24 * 3600 * 1000);
-        const fmt = (d: Date) => d.toISOString().slice(0,10).replace(/-/g,'');
-        const body = JSON.stringify({ api_name: 'fx_daily', token: TUSHARE_TOKEN, params: { ts_code: 'USDOLLAR', start_date: fmt(startDate), end_date: fmt(today) }, fields: 'trade_date,bid_close,bid_open' });
-        const res = await fetch('https://api.tushare.pro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
-        const json = await res.json() as any;
-        const items = json?.data?.items ?? [];
-        if (!items.length) throw new Error('无数据');
-        // USDOLLAR是放大100倍的指数，需要除以100
-        const price = (items[0][1] ?? 0) / 100;
-        const prev = (items[1]?.[1] ?? items[0][2] ?? 0) / 100;
+        const res = await fetch(
+          'https://hq.sinajs.cn/list=USDCNY',
+          { headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+        );
+        const buf = await res.arrayBuffer();
+        const text = new TextDecoder('gbk').decode(buf);
+        const match = text.match(/"([^"]+)"/);
+        if (!match) throw new Error('解析失败');
+        const parts = match[1].split(',');
+        // 格式: 时间,最新价,买价,卖价,成交量,昨收,今开,...
+        const price = parseFloat(parts[1]) || 0;
+        const prev = parseFloat(parts[5]) || 0; // 昨收
         const change = price - prev;
         const changePercent = prev > 0 ? (change / prev * 100) : 0;
         const result = { price, prevClose: prev, change, changePercent, success: true };
@@ -19812,23 +19813,27 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
-    /** 美元/人民币实时汇率 (Tushare fx_daily USDCNH.FXCM) */
+    /** 美元/人民币离岸实时汇率 (新浪财经 USDCNH 离岸人民币) */
     getUsdCnh: publicProcedure.query(async () => {
       const cacheKey = 'global_usdcnh';
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
-        const today = new Date();
-        const startDate = new Date(today.getTime() - 7 * 24 * 3600 * 1000);
-        const fmt = (d: Date) => d.toISOString().slice(0,10).replace(/-/g,'');
-        const body = JSON.stringify({ api_name: 'fx_daily', token: TUSHARE_TOKEN, params: { ts_code: 'USDCNH.FXCM', start_date: fmt(startDate), end_date: fmt(today) }, fields: 'trade_date,bid_close,bid_open' });
-        const res = await fetch('https://api.tushare.pro', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(10000) });
-        const json = await res.json() as any;
-        const items = json?.data?.items ?? [];
-        if (!items.length) throw new Error('无数据');
-        const price = items[0][1] ?? 0;
-        const prev = items[1]?.[1] ?? items[0][2] ?? 0;
+        // 新浪 USDCNH 离岸人民币，如果无数据则回落到 USDCNY 在岸
+        const res = await fetch(
+          'https://hq.sinajs.cn/list=USDCNH,USDCNY',
+          { headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+        );
+        const buf = await res.arrayBuffer();
+        const text = new TextDecoder('gbk').decode(buf);
+        // 先尝试 USDCNH
+        const matchCNH = text.match(/hq_str_USDCNH="([^"]+)"/);
+        const matchCNY = text.match(/hq_str_USDCNY="([^"]+)"/);
+        const raw = matchCNH?.[1] || matchCNY?.[1];
+        if (!raw) throw new Error('解析失败');
+        const parts = raw.split(',');
+        const price = parseFloat(parts[1]) || 0;
+        const prev = parseFloat(parts[5]) || 0;
         const change = price - prev;
         const changePercent = prev > 0 ? (change / prev * 100) : 0;
         const result = { price, prevClose: prev, change, changePercent, success: true };
