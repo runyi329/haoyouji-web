@@ -738,6 +738,18 @@ export default function Home() {
     staleTime: 3000,
   });
 
+  // 获取恒生指数实时数据（港股市场时间：9:30-12:00, 13:00-16:00 HKT）
+  const { data: hangSengIndex } = trpc.stock.getHangSengIndex.useQuery(undefined, {
+    refetchInterval: 5000, // 港股市场状态判断复杂，简化为定时刷新
+    staleTime: 5000,
+  });
+
+  // 港股卡片滑动状态
+  const [stockCardIndex, setStockCardIndex] = useState(0);
+  const stockSwipeRef = useRef<HTMLDivElement>(null);
+  const stockTouchStartX = useRef(0);
+  const stockTouchStartY = useRef(0);
+
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   
@@ -1053,53 +1065,135 @@ export default function Home() {
             <span className="text-xs font-semibold tracking-wide" style={{ color: '#6B1A1A' }}>AI 錢脉</span>
           </div>
 
-          {/* 我的股票 - 上证指数，白色卡片内嵌 */}
+          {/* 可左右滑动的股票卡片区域：A股 + 港股 */}
           <div
-            className="mx-3 rounded-xl px-3 py-2 cursor-pointer"
-            style={{
-              background: 'rgba(255,255,255,0.82)',
-              border: '1px solid rgba(203,164,113,0.35)',
-              boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)'
+            ref={stockSwipeRef}
+            className="mx-3 overflow-hidden rounded-xl flex-shrink-0"
+            style={{ touchAction: 'pan-y' }}
+            onTouchStart={(e) => {
+              stockTouchStartX.current = e.touches[0].clientX;
+              stockTouchStartY.current = e.touches[0].clientY;
             }}
-            onClick={() => navigate('/stock-tracker')}
+            onTouchEnd={(e) => {
+              const dx = e.changedTouches[0].clientX - stockTouchStartX.current;
+              const dy = e.changedTouches[0].clientY - stockTouchStartY.current;
+              if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+                if (dx < 0 && stockCardIndex === 0) setStockCardIndex(1);
+                if (dx > 0 && stockCardIndex === 1) setStockCardIndex(0);
+              }
+            }}
           >
-            {/* 标题行：我的股票（不换行） */}
-            <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-              <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
-              <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的股票</span>
-            </div>
-            {/* 指数数字：金色翻牌 */}
-            <div className="flex items-baseline">
-              {!shanghaiIndex?.success ? (
-                <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
-              ) : (
-                <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
-              )}
-            </div>
-            {/* 开市状态行：开市时显示涨跌，休市/午休时显示「休市中，离开市 HH:MM:SS」 */}
-            <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
-              {marketStatus === 'open' ? (
-                <>
-                  <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
-                  {shanghaiIndex?.success && (
-                    <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
-                      color: (shanghaiIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
-                      {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
-                      ({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
-                    </span>
-                  )}
-                </>
-              ) : (
-                <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
-                  {marketStatus === 'lunch' ? '午休中' : '休市中'}，离开市
-                  {countdown && (
-                    <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                      {countdown}
-                    </span>
+            <div
+              className="flex"
+              style={{
+                transform: `translateX(${stockCardIndex * -100}%)`,
+                transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
+                willChange: 'transform',
+              }}
+            >
+              {/* 卡片1：我的A股 */}
+              <div
+                className="w-full flex-shrink-0 px-0 py-2 cursor-pointer"
+                style={{
+                  background: 'rgba(255,255,255,0.82)',
+                  border: '1px solid rgba(203,164,113,0.35)',
+                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
+                  borderRadius: '12px',
+                  padding: '8px 12px',
+                }}
+                onClick={() => navigate('/stock-tracker')}
+              >
+                <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的A股</span>
+                </div>
+                <div className="flex items-baseline">
+                  {!shanghaiIndex?.success ? (
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
+                  ) : (
+                    <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
                   )}
                 </div>
-              )}
+                <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
+                  {marketStatus === 'open' ? (
+                    <>
+                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                      {shanghaiIndex?.success && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                          color: (shanghaiIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
+                          {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
+                          ({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                      {marketStatus === 'lunch' ? '午休中' : '休市中'}，离开市
+                      {countdown && (
+                        <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                          {countdown}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 卡片2：我的港股 */}
+              <div
+                className="w-full flex-shrink-0 cursor-pointer"
+                style={{
+                  background: 'rgba(255,255,255,0.82)',
+                  border: '1px solid rgba(203,164,113,0.35)',
+                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
+                  borderRadius: '12px',
+                  padding: '8px 12px',
+                  marginLeft: '0',
+                }}
+                onClick={() => navigate('/hk-stock-tracker')}
+              >
+                <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的港股</span>
+                </div>
+                <div className="flex items-baseline">
+                  {!hangSengIndex?.success ? (
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
+                  ) : (
+                    <GoldFlipCounter total={Math.round((hangSengIndex.price ?? 0) * 100)} unit="点" decimals={2} />
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
+                  {hangSengIndex?.success ? (
+                    <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                      color: (hangSengIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
+                      {(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.change ?? 0).toFixed(2)}
+                      ({(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.changePercent ?? 0).toFixed(2)}%)
+                    </span>
+                  ) : (
+                    <div style={{ fontSize: '0.6rem', color: '#888' }}>恒生指数</div>
+                  )}
+                </div>
+              </div>
             </div>
+          </div>
+
+          {/* 圆点指示器 */}
+          <div className="flex items-center justify-center mt-1.5 mb-1" style={{ gap: '5px' }}>
+            {[0, 1].map((i) => (
+              <div
+                key={i}
+                onClick={() => setStockCardIndex(i)}
+                style={{
+                  width: stockCardIndex === i ? '14px' : '5px',
+                  height: '5px',
+                  borderRadius: '3px',
+                  background: stockCardIndex === i ? 'rgba(168,0,0,0.7)' : 'rgba(168,0,0,0.25)',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer',
+                }}
+              />
+            ))}
           </div>
 
           {/* 占位内容 */}

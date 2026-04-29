@@ -19634,6 +19634,53 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         }
       }
     }),
+    // 恒生指数实时行情
+    getHangSengIndex: publicProcedure.query(async () => {
+      const cacheKey = 'hkhsi';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        // 腐讯 API: hk800000 = 恒生指数
+        const res = await fetch('https://qt.gtimg.cn/q=hk800000', {
+          headers: { 'Referer': 'https://finance.qq.com', 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(5000),
+        });
+        const text = await res.text();
+        const match = text.match(/v_hk800000="([^"]+)"/);
+        if (!match) throw new Error('解析失败');
+        const parts = match[1].split('~');
+        const price = parseFloat(parts[3]);
+        const prevClose = parseFloat(parts[4]);
+        const change = parseFloat(parts[31]);
+        const changePercent = parseFloat(parts[32]);
+        const updateTime = parts[30] || '';
+        const result = { price, prevClose, change, changePercent, updateTime, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        try {
+          // 新浪备用 API: hkHSI
+          const res2 = await fetch('https://hq.sinajs.cn/list=hkHSI', {
+            headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(5000),
+          });
+          const text2 = await res2.text();
+          const m2 = text2.match(/hq_str_hkHSI="([^"]+)"/);
+          if (!m2) throw new Error('备用API解析失败');
+          const p2 = m2[1].split(',');
+          // 新浪港股格式: 名称,开盘,收盘价,最高,最低,成交量,最新价,...
+          const price2 = parseFloat(p2[6]);
+          const prevClose2 = parseFloat(p2[2]);
+          const change2 = price2 - prevClose2;
+          const changePercent2 = prevClose2 > 0 ? (change2 / prevClose2 * 100) : 0;
+          const result2 = { price: price2, prevClose: prevClose2, change: change2, changePercent: changePercent2, updateTime: '', success: true };
+          setCache(cacheKey, result2);
+          return result2;
+        } catch (e2) {
+          return { price: 0, prevClose: 0, change: 0, changePercent: 0, updateTime: '', success: false };
+        }
+      }
+    }),
   }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
