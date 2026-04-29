@@ -19792,18 +19792,16 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
+        // Yahoo Finance DX-Y.NYB 美元指数实时数据
         const res = await fetch(
-          'https://hq.sinajs.cn/list=USDCNY',
-          { headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+          'https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1m&range=1d',
+          { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
         );
-        const buf = await res.arrayBuffer();
-        const text = new TextDecoder('gbk').decode(buf);
-        const match = text.match(/"([^"]+)"/);
-        if (!match) throw new Error('解析失败');
-        const parts = match[1].split(',');
-        // 格式: 时间,最新价,买价,卖价,成交量,昨收,今开,...
-        const price = parseFloat(parts[1]) || 0;
-        const prev = parseFloat(parts[5]) || 0; // 昨收
+        const data = await res.json() as any;
+        const meta = data?.chart?.result?.[0]?.meta;
+        if (!meta) throw new Error('解析失败');
+        const price = meta.regularMarketPrice || 0;
+        const prev = meta.previousClose || meta.chartPreviousClose || 0;
         const change = price - prev;
         const changePercent = prev > 0 ? (change / prev * 100) : 0;
         const result = { price, prevClose: prev, change, changePercent, success: true };

@@ -1587,7 +1587,7 @@ export default function Home() {
                 }, {
                   key: 'oil', label: '原油 WTI', data: oilPrice, unit: '/桶', decimals: 2,
                 }, {
-                  key: 'dxy', label: 'USD/CNY', data: dollarIndex, unit: '', decimals: 4,
+                  key: 'dxy', label: '美元指数 DXY', data: dollarIndex, unit: '', decimals: 3,
                 }, {
                   key: 'cnh', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4,
                 }].map((item) => (
