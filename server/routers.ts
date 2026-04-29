@@ -58,7 +58,7 @@ import { sendAlertEmail, sendBackupTestEmail } from "./email-service";
 
 // ===== 行情数据内存缓存（30秒TTL，避免重复请求外部API）=====
 const _marketCache = new Map<string, { data: any; ts: number }>();
-const MARKET_CACHE_TTL = 30_000; // 30秒
+const MARKET_CACHE_TTL = 3_000; // 3秒
 function getCache(key: string): any | null {
   const entry = _marketCache.get(key);
   if (!entry) return null;
