@@ -1,14 +1,14 @@
 /**
  * 股票日线数据定时扫描器
  *
- * 功能：每个交易日北京时间 15:01 精确触发一次，从 Tushare 拉取当天全量日线数据，
+ * 功能：每个交易日北京时间 16:00 首次触发，若 Tushare 无数据则每小时重试至 20:00，从 Tushare 拉取当天全量日线数据，
  * 增量写入 ts_daily 表（已存在则跳过），并自动计算五个板块的趋势统计写入 ts_trend_cache。
  *
  * 修复（v3）：
  * 1. PM2 cluster 模式下只在 worker id=0（或非 cluster 模式）运行，避免多实例竞争
  * 2. 启动时检查最近 5 个工作日是否有缺失，自动补拉（解决重启导致漏拉问题）
  * 3. 增加重试机制：扫描失败后最多重试 2 次，每次间隔 5 分钟
- * 4. 触发时间统一为 15:01（A股收盘后数据已到位）
+ * 4. 触发时间 16:00 首触，无数据则 17:00/18:00/19:00/20:00 逐小时重试
  * 5. 拉完数据后自动更新 ts_trend_cache（AA页面趋势折线图）
  */
 
@@ -299,7 +299,7 @@ async function updateBunchingStats(
 /**
  * 执行一次日线扫描：拉取指定交易日全量数据写入 ts_daily，并更新 ts_trend_cache
  */
-export async function runDailyScan(tradeDate: string): Promise<void> {
+export async function runDailyScan(tradeDate: string): Promise<boolean> {
   console.log(`[股票扫描] 开始扫描 ${tradeDate} 日线数据...`);
 
   let allItems: any[] = [];
@@ -328,8 +328,8 @@ export async function runDailyScan(tradeDate: string): Promise<void> {
   }
 
   if (allItems.length === 0) {
-    console.log(`[股票扫描] ${tradeDate} 无数据（可能是非交易日），跳过`);
-    return;
+    console.log(`[股票扫描] ${tradeDate} 无数据（Tushare 尚未入库或非交易日），跳过`);
+    return false;
   }
 
   console.log(`[股票扫描] 拉取到 ${allItems.length} 条记录，开始写库...`);
@@ -408,6 +408,7 @@ export async function runDailyScan(tradeDate: string): Promise<void> {
   } finally {
     await conn.end();
   }
+  return true; // 有数据写入
 }
 
 /**
@@ -442,6 +443,17 @@ async function checkAndBackfill(): Promise<void> {
       }
     }
 
+
+    // 额外检查：若当前北京时间已过 15:01，且今天是工作日，且今天数据还没有，立即补拉今天
+    // 这解决了“服务器在 15:01 之后重启导致今天数据漏拉”的问题
+    const nowBjt = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const bjHour = nowBjt.getUTCHours();
+    const bjMin = nowBjt.getUTCMinutes();
+    const pastCloseTime = bjHour > 15 || (bjHour === 15 && bjMin >= 1);
+    if (pastCloseTime && !isBjtWeekend() && latestDate < today) {
+      missingDates.push(today);
+    }
+
     if (missingDates.length === 0) {
       console.log(`[股票扫描] 启动检查：数据已是最新（${latestDate}），无需补拉`);
       return;
@@ -462,21 +474,41 @@ async function checkAndBackfill(): Promise<void> {
   }
 }
 
-/** 递归精确定时：每次触发后自动设置下一个 24 小时定时器，失败时重试 */
-function scheduleNext(): void {
-  const ms = msUntilBjt(15, 1); // 统一 15:01 触发
+/**
+ * 每日定时扫描：16:00 首次触发。
+ * 若 Tushare 当天数据尚未入库（返回空），则每隔 1 小时自动重试，最多重试到 20:00。
+ * 一旦成功写入数据，停止当天重试，并安排下一个交易日 16:00 的定时器。
+ */
+function scheduleNext(retryHour?: number): void {
+  // retryHour: 当天重试时指定触发小时（17/18/19/20），首次为 undefined 则用 16:00
+  let ms: number;
+  let label: string;
+  if (retryHour !== undefined) {
+    ms = msUntilBjt(retryHour, 0);
+    label = `BJT ${retryHour}:00（重试）`;
+  } else {
+    ms = msUntilBjt(16, 0);
+    label = 'BJT 16:00';
+  }
   const nextTime = new Date(Date.now() + ms);
-  console.log(`[股票扫描] 下次触发时间: ${nextTime.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })} (BJT 15:01)`);
+  console.log(`[股票扫描] 下次触发时间: ${nextTime.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })} (${label})`);
 
   setTimeout(async () => {
+    // 标志位：是否已安排当天重试（若是，则不再安排明天的定时器）
+    let scheduledRetry = false;
     try {
       if (!isBjtWeekend()) {
         const tradeDate = getBjtTradeDate();
-        console.log(`[股票扫描] 精确触发 BJT 15:01 - ${tradeDate}`);
+        const triggerLabel = retryHour !== undefined ? `${retryHour}:00 重试` : '16:00 首触';
+        console.log(`[股票扫描] 触发 ${triggerLabel} - ${tradeDate}`);
+
+        let gotData = false;
         let lastErr: any;
+        // 最多3次网络重试（针对超时/网络错误，非数据为空）
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
-            await runDailyScan(tradeDate);
+            const result = await runDailyScan(tradeDate);
+            gotData = result === true; // runDailyScan 返回 true 表示有数据写入
             lastErr = null;
             break;
           } catch (err) {
@@ -491,13 +523,31 @@ function scheduleNext(): void {
         if (lastErr) {
           console.error('[股票扫描] 3 次重试均失败，本次扫描放弃');
         }
+
+        if (!gotData) {
+          // Tushare 无数据，判断是否还有重试机会（最多到 20:00）
+          const currentHour = retryHour ?? 16;
+          if (currentHour < 20) {
+            const nextRetry = currentHour + 1;
+            console.log(`[股票扫描] ${tradeDate} Tushare 暂无数据，将在 ${nextRetry}:00 重试`);
+            scheduleNext(nextRetry); // 安排当天下一小时重试
+            scheduledRetry = true;   // 标记已安排重试，不再安排明天
+          } else {
+            console.log(`[股票扫描] ${tradeDate} 已重试至 20:00 仍无数据，放弃，等待明天`);
+          }
+        } else {
+          console.log(`[股票扫描] ${tradeDate} 数据写入成功，停止重试`);
+        }
       } else {
         console.log(`[股票扫描] 今天是周末，跳过扫描`);
       }
     } catch (err) {
       console.error('[股票扫描] 执行失败:', err);
     } finally {
-      scheduleNext();
+      // 只有未安排当天重试时，才安排明天 16:00 的定时器
+      if (!scheduledRetry) {
+        scheduleNext(); // 无 retryHour 参数 → 安排明天 16:00
+      }
     }
   }, ms);
 }
@@ -516,5 +566,5 @@ export function startStockDailyScanner(): void {
   }, 30 * 1000);
 
   scheduleNext();
-  console.log('[股票扫描] 已注册，每个交易日北京时间 15:01 精确触发一次（含启动自动补拉 + ts_trend_cache 自动更新）');
+  console.log('[股票扫描] 已注册，每个交易日北京时间 16:00 首触，无数据则每小时重试至 20:00（含启动自动补拉）');
 }
