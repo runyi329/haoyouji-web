@@ -704,9 +704,57 @@ export default function Home() {
     return nowMs + 24 * 60 * 60 * 1000;
   };
 
+  // 港股市场状态判断（HKT = 北京时间，开市时间 9:30-12:00, 13:00-16:00）
+  const getHKMarketStatus = (now: Date): 'open' | 'lunch' | 'closed' => {
+    const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const day = bj.getUTCDay();
+    if (day === 0 || day === 6) return 'closed'; // 港股周末不开市
+    const h = bj.getUTCHours();
+    const m = bj.getUTCMinutes();
+    const mins = h * 60 + m;
+    if (mins >= 9 * 60 + 30 && mins < 12 * 60) return 'open';
+    if (mins >= 12 * 60 && mins < 13 * 60) return 'lunch';
+    if (mins >= 13 * 60 && mins < 16 * 60) return 'open';
+    return 'closed';
+  };
+
+  // 港股下一个开市时间（返回 UTC ms）
+  const getHKNextOpenTime = (now: Date): number => {
+    const BJ_OFFSET = 8 * 60 * 60 * 1000;
+    const nowMs = now.getTime();
+    const bjDate = new Date(nowMs + BJ_OFFSET);
+    const h = bjDate.getUTCHours();
+    const m = bjDate.getUTCMinutes();
+    const mins = h * 60 + m;
+    const status = getHKMarketStatus(now);
+    const todayBjUtcMidnight = Date.UTC(
+      bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate()
+    ) - BJ_OFFSET;
+    if (status === 'lunch') {
+      return todayBjUtcMidnight + (13 * 60) * 60 * 1000; // BJ 13:00
+    }
+    const day = bjDate.getUTCDay();
+    const todayIsOpen = day !== 0 && day !== 6;
+    if (todayIsOpen && mins < 9 * 60 + 30) {
+      return todayBjUtcMidnight + (9 * 60 + 30) * 60 * 1000; // BJ 9:30
+    }
+    // 找下一个工作日
+    for (let i = 1; i <= 7; i++) {
+      const candidateBjUtcMidnight = todayBjUtcMidnight + i * 24 * 60 * 60 * 1000;
+      const candidateBjDate = new Date(candidateBjUtcMidnight + BJ_OFFSET);
+      const cd = candidateBjDate.getUTCDay();
+      if (cd !== 0 && cd !== 6) {
+        return candidateBjUtcMidnight + (9 * 60 + 30) * 60 * 1000;
+      }
+    }
+    return nowMs + 24 * 60 * 60 * 1000;
+  };
+
   // 市场状态和倒计时 state
   const [marketStatus, setMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getMarketStatus(new Date()));
+  const [hkMarketStatus, setHkMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getHKMarketStatus(new Date()));
   const [countdown, setCountdown] = useState('');
+  const [hkCountdown, setHkCountdown] = useState('');
 
   useEffect(() => {
     const tick = () => {
@@ -723,6 +771,20 @@ export default function Home() {
         setCountdown(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`);
       } else {
         setCountdown('');
+      }
+      // 港股市场状态
+      const hkStatus = getHKMarketStatus(now);
+      setHkMarketStatus(hkStatus);
+      if (hkStatus !== 'open') {
+        const hkNextMs = getHKNextOpenTime(now);
+        const hkDiff = Math.max(0, hkNextMs - now.getTime());
+        const hkTotalSec = Math.floor(hkDiff / 1000);
+        const hkHH = Math.floor(hkTotalSec / 3600);
+        const hkMM = Math.floor((hkTotalSec % 3600) / 60);
+        const hkSS = hkTotalSec % 60;
+        setHkCountdown(`${String(hkHH).padStart(2,'0')}:${String(hkMM).padStart(2,'0')}:${String(hkSS).padStart(2,'0')}`);
+      } else {
+        setHkCountdown('');
       }
     };
     tick();
@@ -1164,14 +1226,26 @@ export default function Home() {
                   )}
                 </div>
                 <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
-                  {hangSengIndex?.success ? (
-                    <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
-                      color: (hangSengIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
-                      {(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.change ?? 0).toFixed(2)}
-                      ({(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.changePercent ?? 0).toFixed(2)}%)
-                    </span>
+                  {hkMarketStatus === 'open' ? (
+                    <>
+                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                      {hangSengIndex?.success && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                          color: (hangSengIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
+                          {(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.change ?? 0).toFixed(2)}
+                          ({(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.changePercent ?? 0).toFixed(2)}%)
+                        </span>
+                      )}
+                    </>
                   ) : (
-                    <div style={{ fontSize: '0.6rem', color: '#888' }}>恒生指数</div>
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                      {hkMarketStatus === 'lunch' ? '午休中' : '休市中'}，离开市
+                      {hkCountdown && (
+                        <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                          {hkCountdown}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
