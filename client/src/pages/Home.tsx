@@ -1513,23 +1513,20 @@ export default function Home() {
               const dx = e.changedTouches[0].clientX - globalTouchStartX.current;
               const dy = e.changedTouches[0].clientY - globalTouchStartY.current;
               if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-                if (dx < 0) globalGoNext();
-                if (dx > 0) globalGoPrev();
+                setGlobalCardIndex(prev => (prev + 1) % 4);
               }
-              globalAutoPlayRef.current = setInterval(globalGoNext, 3000);
+              globalAutoPlayRef.current = setInterval(() => setGlobalCardIndex(prev => (prev + 1) % 4), 3000);
             }}
           >
             <div
               style={{
                 display: 'flex',
-                transition: globalTransition ? 'transform 0.35s cubic-bezier(0.4,0,0.2,1)' : 'none',
-                transform: `translateX(${globalSlideIndex * -(globalContainerWidth || 0)}px)`,
+                transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
+                transform: `translateX(${globalCardIndex * -(globalContainerWidth || 0)}px)`,
               }}
             >
-              {/* 无缝循环：克隆末(USD/CNH) + 4张真实卡片 + 克隆首(黄金)，共6张 */}
+              {/* 4张卡片，永远正向循环 1→2→3→4→1→... */}
               {[{
-                key: 'clone-last', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4, icon: '🎴',
-              }, {
                 key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1, icon: '✨',
               }, {
                 key: 'oil', label: '原油 WTI', data: oilPrice, unit: '/桶', decimals: 2, icon: '⛽',
@@ -1537,8 +1534,6 @@ export default function Home() {
                 key: 'dxy', label: '美元指数 DXY', data: dollarIndex, unit: '', decimals: 3, icon: '💵',
               }, {
                 key: 'cnh', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4, icon: '🎴',
-              }, {
-                key: 'clone-first', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1, icon: '✨',
               }].map((item) => (
                 <div
                   key={item.key}
@@ -1583,12 +1578,12 @@ export default function Home() {
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
-                onClick={() => { if (globalAutoPlayRef.current) clearInterval(globalAutoPlayRef.current); globalGoTo(i); globalAutoPlayRef.current = setInterval(globalGoNext, 3000); }}
+                onClick={() => { if (globalAutoPlayRef.current) clearInterval(globalAutoPlayRef.current); setGlobalCardIndex(i); globalAutoPlayRef.current = setInterval(() => setGlobalCardIndex(prev => (prev + 1) % 4), 3000); }}
                 style={{
-                  width: globalRealIndex === i ? '14px' : '5px',
+                  width: globalCardIndex === i ? '14px' : '5px',
                   height: '5px',
                   borderRadius: '3px',
-                  background: globalRealIndex === i ? 'rgba(168,0,0,0.7)' : 'rgba(168,0,0,0.25)',
+                  background: globalCardIndex === i ? 'rgba(168,0,0,0.7)' : 'rgba(168,0,0,0.25)',
                   transition: 'all 0.3s ease',
                   cursor: 'pointer',
                 }}
