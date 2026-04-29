@@ -1069,22 +1069,23 @@ export default function Home() {
                 <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
               )}
             </div>
-            {/* 涌跌信息 + 开市状态 */}
+            {/* 开市状态行：开市时显示涨跌，休市/午休时显示倒计时 */}
             <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
               <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap',
                 color: marketStatus === 'open' ? '#A80000' : '#888' }}>
                 {marketStatus === 'open' ? '开市中' : marketStatus === 'lunch' ? '午休中' : '休市中'}
-                {marketStatus !== 'open' && countdown && (
-                  <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                    {countdown}
-                  </span>
-                )}
               </div>
-              {shanghaiIndex?.success && (
+              {marketStatus === 'open' && shanghaiIndex?.success && (
                 <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
                   color: (shanghaiIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
                   {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
                   ({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
+                </span>
+              )}
+              {marketStatus !== 'open' && countdown && (
+                <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                  color: '#B8860B', fontVariantNumeric: 'tabular-nums' }}>
+                  {countdown}
                 </span>
               )}
             </div>
