@@ -1303,7 +1303,7 @@ export default function Home() {
 
               {/* 卡片2：我的港股 */}
               <div
-                className="flex-shrink-0 cursor-pointer"
+                className="flex-shrink-0"
                 style={{
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
@@ -1314,7 +1314,7 @@ export default function Home() {
                   borderRadius: '12px',
                   padding: '8px 12px',
                 }}
-                onClick={() => navigate('/hk-stock-tracker')}
+
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
@@ -1354,7 +1354,7 @@ export default function Home() {
 
               {/* 卡片3：我的美股 */}
               <div
-                className="flex-shrink-0 cursor-pointer"
+                className="flex-shrink-0"
                 style={{
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
@@ -1365,7 +1365,7 @@ export default function Home() {
                   borderRadius: '12px',
                   padding: '8px 12px',
                 }}
-                onClick={() => navigate('/us-stock-tracker')}
+
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
