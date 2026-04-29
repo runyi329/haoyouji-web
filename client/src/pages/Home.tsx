@@ -620,6 +620,107 @@ export default function Home() {
     '2026-06-19',
     '2026-10-01','2026-10-02','2026-10-05','2026-10-06','2026-10-07','2026-10-08',
   ]);
+  // 全球市场（黄金/原油/外汇）美国联邦节假日 + 耶稣受难日（2025-2026年）
+  // 这些日子全球大宗商品和外汇市场休市
+  const GLOBAL_MARKET_HOLIDAYS = new Set([
+    // 2025年
+    '2025-01-01', // 元旦
+    '2025-01-20', // 马丁路德金日
+    '2025-02-17', // 总统日
+    '2025-04-18', // 耶稣受难日（Good Friday，黄金/外汇特有）
+    '2025-05-26', // 阵亡将士纪念日
+    '2025-06-19', // 六月节（Juneteenth）
+    '2025-07-04', // 独立日
+    '2025-09-01', // 劳动节
+    '2025-11-27', // 感恩节
+    '2025-12-25', // 圣诞节
+    // 2026年
+    '2026-01-01', // 元旦
+    '2026-01-19', // 马丁路德金日
+    '2026-02-16', // 总统日
+    '2026-04-03', // 耶稣受难日
+    '2026-05-25', // 阵亡将士纪念日
+    '2026-06-19', // 六月节
+    '2026-07-04', // 独立日（周六，补休7月3日）
+    '2026-09-07', // 劳动节
+    '2026-11-26', // 感恩节
+    '2026-12-25', // 圣诞节
+  ]);
+
+  // 全球市场开市状态：周一至周五非节假日 = 开市（几乎24小时）
+  // 黄金/原油/外汇：周五 23:00 BJ 收盘，周一 06:00 BJ 开盘（近似）
+  // 实际上外汇市场：周一 06:00 BJ - 周六 06:00 BJ，几乎不间断
+  const getGlobalMarketStatus = (now: Date): 'open' | 'closed' => {
+    const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const day = bj.getUTCDay(); // 0=周日, 6=周六
+    const dateStr = getBjDateStr(now);
+    // 周六全天休市
+    if (day === 6) return 'closed';
+    // 周日：06:00 BJ 后开市（外汇市场周一亚洲开盘）
+    if (day === 0) {
+      const h = bj.getUTCHours();
+      const m = bj.getUTCMinutes();
+      return (h * 60 + m) >= 6 * 60 ? 'open' : 'closed';
+    }
+    // 周一至周五：检查节假日
+    if (GLOBAL_MARKET_HOLIDAYS.has(dateStr)) return 'closed';
+    // 周五：23:00 BJ 后收盘
+    if (day === 5) {
+      const h = bj.getUTCHours();
+      const m = bj.getUTCMinutes();
+      return (h * 60 + m) < 23 * 60 ? 'open' : 'closed';
+    }
+    // 周一至周四：全天开市
+    return 'open';
+  };
+
+  // 全球市场下一个开市时间（返回 UTC ms）
+  const getGlobalNextOpenTime = (now: Date): number => {
+    const BJ_OFFSET = 8 * 60 * 60 * 1000;
+    const nowMs = now.getTime();
+    const bjDate = new Date(nowMs + BJ_OFFSET);
+    const day = bjDate.getUTCDay();
+    // 周六：等到周日 06:00 BJ
+    if (day === 6) {
+      const todayBjMidnight = Date.UTC(bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate()) - BJ_OFFSET;
+      return todayBjMidnight + 24 * 3600 * 1000 + 6 * 3600 * 1000; // 周日 06:00 BJ
+    }
+    // 周日 06:00 BJ 前：等到周日 06:00 BJ
+    if (day === 0) {
+      const todayBjMidnight = Date.UTC(bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate()) - BJ_OFFSET;
+      return todayBjMidnight + 6 * 3600 * 1000;
+    }
+    // 周五 23:00 BJ 后：等到下周一 00:00 BJ（实际是周日 06:00 BJ）
+    if (day === 5) {
+      const h = bjDate.getUTCHours();
+      const m = bjDate.getUTCMinutes();
+      if (h * 60 + m >= 23 * 60) {
+        // 找下周一（跳过节假日）
+        for (let i = 1; i <= 7; i++) {
+          const cMs = nowMs + i * 24 * 3600 * 1000;
+          const cBj = new Date(cMs + BJ_OFFSET);
+          const cDay = cBj.getUTCDay();
+          const cStr = `${cBj.getUTCFullYear()}-${String(cBj.getUTCMonth()+1).padStart(2,'0')}-${String(cBj.getUTCDate()).padStart(2,'0')}`;
+          if (cDay === 0) return Date.UTC(cBj.getUTCFullYear(), cBj.getUTCMonth(), cBj.getUTCDate()) - BJ_OFFSET + 6 * 3600 * 1000;
+          if (cDay !== 6 && !GLOBAL_MARKET_HOLIDAYS.has(cStr)) return Date.UTC(cBj.getUTCFullYear(), cBj.getUTCMonth(), cBj.getUTCDate()) - BJ_OFFSET;
+        }
+      }
+    }
+    // 节假日：找下一个工作日
+    if (GLOBAL_MARKET_HOLIDAYS.has(getBjDateStr(now))) {
+      for (let i = 1; i <= 7; i++) {
+        const cMs = nowMs + i * 24 * 3600 * 1000;
+        const cBj = new Date(cMs + BJ_OFFSET);
+        const cDay = cBj.getUTCDay();
+        const cStr = `${cBj.getUTCFullYear()}-${String(cBj.getUTCMonth()+1).padStart(2,'0')}-${String(cBj.getUTCDate()).padStart(2,'0')}`;
+        if (cDay !== 0 && cDay !== 6 && !GLOBAL_MARKET_HOLIDAYS.has(cStr)) {
+          return Date.UTC(cBj.getUTCFullYear(), cBj.getUTCMonth(), cBj.getUTCDate()) - BJ_OFFSET;
+        }
+      }
+    }
+    return nowMs + 3600 * 1000;
+  };
+
   // 补班日（周末也开市）
   const A_SHARE_EXTRA_OPEN = new Set([
     '2025-01-26','2025-02-08','2025-04-27','2025-09-28','2025-10-11',
@@ -819,9 +920,11 @@ export default function Home() {
   const [marketStatus, setMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getMarketStatus(new Date()));
   const [hkMarketStatus, setHkMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getHKMarketStatus(new Date()));
   const [usMarketStatus, setUsMarketStatus] = useState<'open' | 'closed'>(() => getUSMarketStatus(new Date()));
+  const [globalMarketStatus, setGlobalMarketStatus] = useState<'open' | 'closed'>(() => getGlobalMarketStatus(new Date()));
   const [countdown, setCountdown] = useState('');
   const [hkCountdown, setHkCountdown] = useState('');
   const [usCountdown, setUsCountdown] = useState('');
+  const [globalCountdown, setGlobalCountdown] = useState('');
 
   useEffect(() => {
     const tick = () => {
@@ -866,6 +969,20 @@ export default function Home() {
         setUsCountdown(`${String(usHH).padStart(2,'0')}:${String(usMM).padStart(2,'0')}:${String(usSS).padStart(2,'0')}`);
       } else {
         setUsCountdown('');
+      }
+      // 全球市场（黄金/原油/外汇）状态
+      const globalStatus = getGlobalMarketStatus(now);
+      setGlobalMarketStatus(globalStatus);
+      if (globalStatus !== 'open') {
+        const globalNextMs = getGlobalNextOpenTime(now);
+        const globalDiff = Math.max(0, globalNextMs - now.getTime());
+        const globalTotalSec = Math.floor(globalDiff / 1000);
+        const gHH = Math.floor(globalTotalSec / 3600);
+        const gMM = Math.floor((globalTotalSec % 3600) / 60);
+        const gSS = globalTotalSec % 60;
+        setGlobalCountdown(`${String(gHH).padStart(2,'0')}:${String(gMM).padStart(2,'0')}:${String(gSS).padStart(2,'0')}`);
+      } else {
+        setGlobalCountdown('');
       }
     };
     tick();
@@ -1537,12 +1654,26 @@ export default function Home() {
                     )}
                   </div>
                   <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
-                    {item.data?.success && (
-                      <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
-                        color: (item.data.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
-                        {(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.change ?? 0).toFixed(item.decimals)}
-                        ({(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.changePercent ?? 0).toFixed(2)}%)
-                      </span>
+                    {globalMarketStatus === 'open' ? (
+                      <>
+                        <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                        {item.data?.success && (
+                          <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                            color: (item.data.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
+                            {(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.change ?? 0).toFixed(item.decimals)}
+                            ({(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.changePercent ?? 0).toFixed(2)}%)
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                        休市中，离开市
+                        {globalCountdown && (
+                          <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                            {globalCountdown}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>,
@@ -1578,12 +1709,26 @@ export default function Home() {
                       )}
                     </div>
                     <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
-                      {item.data?.success && (
-                        <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
-                          color: (item.data.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
-                          {(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.change ?? 0).toFixed(item.decimals)}
-                          ({(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.changePercent ?? 0).toFixed(2)}%)
-                        </span>
+                      {globalMarketStatus === 'open' ? (
+                        <>
+                          <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                          {item.data?.success && (
+                            <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                              color: (item.data.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
+                              {(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.change ?? 0).toFixed(item.decimals)}
+                              ({(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.changePercent ?? 0).toFixed(2)}%)
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                          休市中，离开市
+                          {globalCountdown && (
+                            <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                              {globalCountdown}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
