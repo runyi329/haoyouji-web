@@ -1015,50 +1015,9 @@ export default function Home() {
   const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
   const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
   const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
-  // 全球市场卡片旋转木马：8张卡片（原4张+复制4张），滑到第5张时无动画跳回第1张
-  const [globalSlidePos, setGlobalSlidePos] = useState(0); // 0-7，真实滑动位置
-  const [globalRealDot, setGlobalRealDot] = useState(0); // 0-3，圆点指示器
-  const [globalAnimate, setGlobalAnimate] = useState(true); // 是否启用过渡
-  const [globalContainerWidth, setGlobalContainerWidth] = useState(0);
+  // 全球市场卡片匀速无缝滚动（跑马灯）
+  const [globalScrollPaused, setGlobalScrollPaused] = useState(false);
   const globalSwipeRef = useRef<HTMLDivElement>(null);
-  const globalTouchStartX = useRef(0);
-  const globalTouchStartY = useRef(0);
-  const globalAutoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    if (!globalSwipeRef.current) return;
-    const ro = new ResizeObserver(entries => { setGlobalContainerWidth(entries[0].contentRect.width); });
-    ro.observe(globalSwipeRef.current);
-    setGlobalContainerWidth(globalSwipeRef.current.offsetWidth);
-    return () => ro.disconnect();
-  }, []);
-  // 滑到第4-7张时，动画结束后无动画跳回对应的前4张
-  useEffect(() => {
-    if (globalSlidePos >= 4) {
-      const t = setTimeout(() => {
-        setGlobalAnimate(false);
-        setGlobalSlidePos(globalSlidePos - 4);
-        setTimeout(() => setGlobalAnimate(true), 30);
-      }, 380);
-      return () => clearTimeout(t);
-    }
-  }, [globalSlidePos]);
-  const globalGoNext = () => {
-    setGlobalAnimate(true);
-    setGlobalSlidePos(prev => {
-      const next = prev + 1;
-      setGlobalRealDot(next % 4);
-      return next;
-    });
-  };
-  const globalGoTo = (dot: number) => {
-    setGlobalAnimate(true);
-    setGlobalSlidePos(dot);
-    setGlobalRealDot(dot);
-  };
-  useEffect(() => {
-    globalAutoPlayRef.current = setInterval(globalGoNext, 3000);
-    return () => { if (globalAutoPlayRef.current) clearInterval(globalAutoPlayRef.current); };
-  }, []);
   // 股票卡片滑动状态
   const [stockCardIndex, setStockCardIndex] = useState(0);
   const [stockContainerWidth, setStockContainerWidth] = useState(0);
@@ -1591,104 +1550,48 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 全球市场自动轮播卡片区域 */}
+          {/* 全球市场匀速无缝滚动卡片区域 */}
+          <style>{`
+            @keyframes global-scroll {
+              0%   { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+            .global-scroll-track {
+              animation: global-scroll 12s linear infinite;
+            }
+            .global-scroll-track:hover,
+            .global-scroll-track.paused {
+              animation-play-state: paused;
+            }
+          `}</style>
           <div
             ref={globalSwipeRef}
             className="mx-3 mt-1.5 overflow-hidden rounded-xl flex-shrink-0"
             style={{ touchAction: 'pan-y', position: 'relative' }}
-            onTouchStart={(e) => {
-              globalTouchStartX.current = e.touches[0].clientX;
-              globalTouchStartY.current = e.touches[0].clientY;
-              if (globalAutoPlayRef.current) clearInterval(globalAutoPlayRef.current);
-            }}
-            onTouchEnd={(e) => {
-              const dx = e.changedTouches[0].clientX - globalTouchStartX.current;
-              const dy = e.changedTouches[0].clientY - globalTouchStartY.current;
-              if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-                globalGoNext();
-              }
-              globalAutoPlayRef.current = setInterval(globalGoNext, 3000);
-            }}
           >
+            {/* 双份卡片，CSS animation匀速无缝循环 */}
             <div
-              style={{
-                display: 'flex',
-                transition: globalAnimate ? 'transform 0.35s cubic-bezier(0.4,0,0.2,1)' : 'none',
-                transform: `translateX(${globalSlidePos * -(globalContainerWidth || 0)}px)`,
-              }}
+              className={`global-scroll-track${globalScrollPaused ? ' paused' : ''}`}
+              style={{ display: 'flex', gap: '10px', width: 'max-content' }}
+              onTouchStart={() => setGlobalScrollPaused(true)}
+              onTouchEnd={() => setGlobalScrollPaused(false)}
             >
-              {/* 8张卡片（原4张+复制4张），旋转木马效果 */}
-              {[{
-                key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1, icon: '✨',
-              }, {
-                key: 'oil', label: '原油 WTI', data: oilPrice, unit: '/桶', decimals: 2, icon: '⛽',
-              }, {
-                key: 'dxy', label: '美元指数 DXY', data: dollarIndex, unit: '', decimals: 3, icon: '💵',
-              }, {
-                key: 'cnh', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4, icon: '🎴',
-              }].flatMap((item, idx) => [
-                // 原4张
-                <div
-                  key={item.key}
-                  className="flex-shrink-0"
-                  style={{
-                    minWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
-                    maxWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
-                    boxSizing: 'border-box',
-                    background: 'rgba(255,255,255,0.82)',
-                    border: '1px solid rgba(203,164,113,0.35)',
-                    boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
-                    borderRadius: '12px',
-                    padding: '8px 12px',
-                  }}
-                >
-                  <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                    <Globe className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
-                    <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>{item.label}</span>
-                  </div>
-                  <div className="flex items-baseline">
-                    {!item.data?.success ? (
-                      <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
-                    ) : (
-                      <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} />
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
-                    {globalMarketStatus === 'open' ? (
-                      <>
-                        <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
-                        {item.data?.success && (
-                          <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
-                            color: (item.data.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
-                            {(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.change ?? 0).toFixed(item.decimals)}
-                            ({(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.changePercent ?? 0).toFixed(2)}%)
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
-                        休市中，离开市
-                        {globalCountdown && (
-                          <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                            {globalCountdown}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>,
-              ]).concat(
-                // 复制4张（第5-8张），用于旋转木马效果
-                [{key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1},
-                 {key: 'oil', label: '原油 WTI', data: oilPrice, unit: '/桶', decimals: 2},
-                 {key: 'dxy', label: '美元指数 DXY', data: dollarIndex, unit: '', decimals: 3},
-                 {key: 'cnh', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4}].map((item, idx) => (
+              {/* 渲染两份卡片实现无缝循环 */}
+              {[...Array(2)].map((_, copyIdx) =>
+                [{
+                  key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1,
+                }, {
+                  key: 'oil', label: '原油 WTI', data: oilPrice, unit: '/桶', decimals: 2,
+                }, {
+                  key: 'dxy', label: '美元指数 DXY', data: dollarIndex, unit: '', decimals: 3,
+                }, {
+                  key: 'cnh', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4,
+                }].map((item) => (
                   <div
-                    key={`${item.key}-clone`}
-                    className="flex-shrink-0"
+                    key={`${item.key}-${copyIdx}`}
                     style={{
-                      minWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
-                      maxWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
+                      width: '160px',
+                      flexShrink: 0,
                       boxSizing: 'border-box',
                       background: 'rgba(255,255,255,0.82)',
                       border: '1px solid rgba(203,164,113,0.35)',
@@ -1735,23 +1638,6 @@ export default function Home() {
                 ))
               )}
             </div>
-          </div>
-          {/* 全球市场圆点指示器 */}
-          <div className="flex items-center justify-center mt-1 mb-1" style={{ gap: '5px' }}>
-            {[0, 1, 2, 3].map((i) => (
-              <div
-                key={i}
-                onClick={() => { if (globalAutoPlayRef.current) clearInterval(globalAutoPlayRef.current); globalGoTo(i); globalAutoPlayRef.current = setInterval(globalGoNext, 3000); }}
-                style={{
-                  width: globalRealDot === i ? '14px' : '5px',
-                  height: '5px',
-                  borderRadius: '3px',
-                  background: globalRealDot === i ? 'rgba(168,0,0,0.7)' : 'rgba(168,0,0,0.25)',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer',
-                }}
-              />
-            ))}
           </div>
 
           {/* 占位内容 */}
