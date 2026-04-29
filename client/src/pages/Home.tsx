@@ -725,8 +725,10 @@ export default function Home() {
   }, []);
 
   // 获取上证指数实时数据
+  // 注意：必须用 marketStatus state（每秒更新）来驱动 refetchInterval，
+  // 不能用 isMarketOpen()（只在组件初始化时求值一次，之后不会随时间变化）
   const { data: shanghaiIndex } = trpc.stock.getShanghaiIndex.useQuery(undefined, {
-    refetchInterval: isMarketOpen() ? 3000 : false,
+    refetchInterval: marketStatus === 'open' ? 3000 : false,
     staleTime: 3000,
   });
 
