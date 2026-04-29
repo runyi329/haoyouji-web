@@ -19792,20 +19792,30 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        // Yahoo Finance DX-Y.NYB 美元指数实时数据
-        const res = await fetch(
-          'https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1m&range=1d',
-          { headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
-        );
+        // Tushare USDOLLAR 日线数据（FXCM美元指数，数值/100 ≈ DXY）
+        const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+        const res = await fetch('http://api.tushare.pro', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_name: 'fx_daily',
+            token: TUSHARE_TOKEN,
+            params: { ts_code: 'USDOLLAR' },
+            fields: 'ts_code,trade_date,bid_close,bid_open'
+          }),
+          signal: AbortSignal.timeout(8000)
+        });
         const data = await res.json() as any;
-        const meta = data?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('解析失败');
-        const price = meta.regularMarketPrice || 0;
-        const prev = meta.previousClose || meta.chartPreviousClose || 0;
-        const change = price - prev;
-        const changePercent = prev > 0 ? (change / prev * 100) : 0;
-        const result = { price, prevClose: prev, change, changePercent, success: true };
-        setCache(cacheKey, result);
+        const items = data?.data?.items || [];
+        if (!items.length) throw new Error('无数据');
+        // items[0] = 最新日, items[1] = 前一日
+        // fields: [ts_code, trade_date, bid_close, bid_open]
+        const latestClose = (items[0][2] as number) / 100;  // 除以100转换为DXY近似值
+        const prevClose = items[1] ? (items[1][2] as number) / 100 : latestClose;
+        const change = latestClose - prevClose;
+        const changePercent = prevClose > 0 ? (change / prevClose * 100) : 0;
+        const result = { price: latestClose, prevClose, change, changePercent, success: true };
+        setCache(cacheKey, result); // 日线数据（getCache内置TTL）
         return result;
       } catch (e) {
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
