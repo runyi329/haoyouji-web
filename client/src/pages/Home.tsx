@@ -374,8 +374,8 @@ function GoldFlipCounter({ total, unit, decimals }: { total: number; unit?: stri
       if (!containerRef.current) return;
       const containerW = containerRef.current.clientWidth - 8;
       const rawNum = displayTotal || total;
-      const numDigits = decimals ? String(rawNum).replace(/[^0-9]/g, '').length : rawNum.toLocaleString('zh-CN').replace(/[^0-9]/g, '').length;
-      const numCommas = decimals ? Math.floor((numDigits - decimals - 1) / 3) : Math.floor((numDigits - 1) / 3);
+      const numDigits = String(rawNum).replace(/[^0-9]/g, '').length;
+      const numCommas = 0; // 不显示千分位逗号
       const dotUnits = decimals ? 0.3 : 0;
       const totalUnits = numDigits * 0.72 + numCommas * 0.3 + dotUnits + 0.5;
       const s = Math.floor((containerW - (numDigits + numCommas + (decimals ? 1 : 0)) * 2) / totalUnits);
@@ -387,12 +387,11 @@ function GoldFlipCounter({ total, unit, decimals }: { total: number; unit?: stri
   }, [displayTotal, total, decimals]);
 
   const buildDigitSeq = (num: number): string[] => {
-    if (!decimals) return num.toLocaleString('zh-CN').split('');
+    if (!decimals) return String(num).split('');
     const s = String(num).padStart(decimals + 1, '0');
     const intPart = s.slice(0, s.length - decimals);
     const decPart = s.slice(s.length - decimals);
-    const intFormatted = parseInt(intPart, 10).toLocaleString('zh-CN');
-    return [...intFormatted.split(''), '.', ...decPart.split('')];
+    return [...intPart.split(''), '.', ...decPart.split('')];
   };
 
   const curDigits = buildDigitSeq(displayTotal);
@@ -446,8 +445,8 @@ function RedFlipCounter({ total, unitColor, unit, decimals }: { total: number; u
       const containerW = containerRef.current.clientWidth - 8;
       const rawNum = displayTotal || total;
       // 如果有小数位，计算实际数字位数（不含千分位逗号）
-      const numDigits = decimals ? String(rawNum).replace(/[^0-9]/g, '').length : rawNum.toLocaleString('zh-CN').replace(/[^0-9]/g, '').length;
-      const numCommas = decimals ? Math.floor((numDigits - decimals - 1) / 3) : Math.floor((numDigits - 1) / 3);
+      const numDigits = String(rawNum).replace(/[^0-9]/g, '').length;
+      const numCommas = 0; // 不显示千分位逗号
       // 小数点占 0.3 * size
       const dotUnits = decimals ? 0.3 : 0;
       const totalUnits = numDigits * 0.72 + numCommas * 0.3 + dotUnits + 0.5;
@@ -609,10 +608,10 @@ export default function Home() {
     // 2025年
     '2025-01-01','2025-01-28','2025-01-29','2025-01-30','2025-01-31',
     '2025-02-03','2025-02-04',
-    '2025-04-04','2025-04-05','2025-04-07',
-    '2025-05-01','2025-05-02','2025-05-05',
+    '2025-04-04','2025-04-05','2025-04-06',
+    '2025-05-01','2025-05-02','2025-05-03','2025-05-04','2025-05-05',
     '2025-05-31','2025-06-02',
-    '2025-10-01','2025-10-02','2025-10-03','2025-10-06','2025-10-07','2025-10-08',
+    '2025-10-01','2025-10-02','2025-10-03','2025-10-04','2025-10-05','2025-10-06','2025-10-07','2025-10-08',
     // 2026年
     '2026-01-01','2026-01-02',
     '2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-23','2026-02-24',
@@ -623,7 +622,7 @@ export default function Home() {
   ]);
   // 补班日（周末也开市）
   const A_SHARE_EXTRA_OPEN = new Set([
-    '2025-01-26','2025-02-08','2025-04-27','2025-09-28',
+    '2025-01-26','2025-02-08','2025-04-27','2025-09-28','2025-10-11',
     '2026-02-15','2026-04-12','2026-09-27','2026-10-10',
   ]);
 
