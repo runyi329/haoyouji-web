@@ -1559,7 +1559,7 @@ export default function Home() {
               100% { transform: translateX(-50%); }
             }
             .global-scroll-track {
-              animation: global-scroll 16s linear infinite;
+              animation: global-scroll 20s linear infinite;
             }
             .global-scroll-track.paused {
               animation-play-state: paused;
