@@ -628,55 +628,12 @@ export default function Home() {
 
         {/* ── 左：AI 人脉 ── */}
         <div className="bg-white rounded-2xl shadow-sm flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
-          {/* 卡片头部：标题 + 共享按钮 + 头像 */}
-          <div className="flex items-center justify-between px-3 pt-3 pb-2">
+          {/* 卡片头部：标题 */}
+          <div className="flex items-center px-3 pt-3 pb-2">
             <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 人脉</span>
-            <div className="flex items-center space-x-2">
-              {/* 共享按钮 - 与头像同尺寸 */}
-              <div
-                onClick={() => navigate("/parent/contacts/sharing")}
-                className="relative w-8 h-8 rounded-full bg-[#A80000] flex items-center justify-center shadow-sm cursor-pointer hover:bg-[#8a0000] transition-colors flex-shrink-0"
-              >
-                <Handshake className="w-4 h-4 text-white" />
-                {hasUnreadSharing && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-[#D32F2F] rounded-full border border-white animate-pulse" />
-                )}
-              </div>
-            <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
-              <DropdownMenuTrigger asChild>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100 cursor-pointer flex-shrink-0">
-                  {user?.avatar ? (
-                    <img src={user.avatar} alt="用户头像" className="w-full h-full object-cover" />
-                  ) : (
-                    <User className="w-4 h-4 text-white" />
-                  )}
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => { setProfileMenuOpen(false); navigate("/parent/profile"); }}
-                  className="flex items-center cursor-pointer"
-                >
-                  <UserCircle className="w-4 h-4 mr-2" />
-                  <span>个人中心</span>
-                </DropdownMenuItem>
-                {isJiang && (
-                  <DropdownMenuItem
-                    onClick={() => { setProfileMenuOpen(false); navigate("/admin/super-view"); }}
-                    className="flex items-center cursor-pointer"
-                  >
-                    <span className="w-4 h-4 mr-2 flex items-center justify-center text-xs font-bold text-[#D32F2F] bg-red-50 rounded-sm">润</span>
-                    <span>全局视角</span>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-[#D32F2F]">
-                  <LogOut className="w-4 h-4 mr-2" />
-                  <span>退出登录</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            </div>
           </div>
+
+
 
           {/* 我的人脉 - 红色容器 */}
           <div
@@ -729,6 +686,60 @@ export default function Home() {
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* 底部两个大图标：人脉共享 + 个人中心 */}
+          <div className="grid grid-cols-2 gap-2 px-3 mt-1.5 mb-3">
+            {/* 人脉共享 */}
+            <div
+              onClick={() => navigate("/parent/contacts/sharing")}
+              className="relative flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors"
+            >
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm">
+                <Handshake className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-[#A80000] text-xs mt-1 font-medium">人脉共享</span>
+              {hasUnreadSharing && (
+                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#D32F2F] rounded-full border border-white animate-pulse" />
+              )}
+            </div>
+            {/* 个人中心 */}
+            <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <div className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors">
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100">
+                    {user?.avatar ? (
+                      <img src={user.avatar} alt="用户头像" className="w-full h-full object-cover" />
+                    ) : (
+                      <User className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                  <span className="text-[#A80000] text-xs mt-1 font-medium">个人中心</span>
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => { setProfileMenuOpen(false); navigate("/parent/profile"); }}
+                  className="flex items-center cursor-pointer"
+                >
+                  <UserCircle className="w-4 h-4 mr-2" />
+                  <span>个人中心</span>
+                </DropdownMenuItem>
+                {isJiang && (
+                  <DropdownMenuItem
+                    onClick={() => { setProfileMenuOpen(false); navigate("/admin/super-view"); }}
+                    className="flex items-center cursor-pointer"
+                  >
+                    <span className="w-4 h-4 mr-2 flex items-center justify-center text-xs font-bold text-[#D32F2F] bg-red-50 rounded-sm">润</span>
+                    <span>全局视角</span>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={handleLogout} className="flex items-center cursor-pointer text-[#D32F2F]">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  <span>退出登录</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
         </div>
