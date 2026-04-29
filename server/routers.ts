@@ -20339,9 +20339,7 @@ async function runAfFundingRateSettlement() {
     ) as any[];
     const settings = settingRows as any[];
     if (!settings || settings.length === 0) return;
-    const ANNUAL_RATE = 0.12;
     const HOURS_PER_YEAR = 8760;
-    const HOURLY_RATE = ANNUAL_RATE / HOURS_PER_YEAR;
     for (const setting of settings) {
       try {
         const { ledger_id: ledgerId, user_id: userId } = setting;
@@ -20371,13 +20369,17 @@ async function runAfFundingRateSettlement() {
           [ledgerId, userId]
         ) as any[];
         let prevTotal = parseFloat((lastRows as any[])[0]?.total_accumulated ?? '0');
-        // 每个新整小时插入一条日志
+        // 每个新整小时插入一条日志（年化利率在 12% ± 5% 之间随机浮动）
         for (let h = 0; h < hoursToSettle; h++) {
-          const amount = baseBalance * HOURLY_RATE;
+          // 随机年化：0.12 × (1 ± 0.05)，即 11.4% ~ 12.6%
+          const randomFactor = 1 + (Math.random() * 0.10 - 0.05);
+          const annualRate = 0.12 * randomFactor;
+          const hourlyRate = annualRate / HOURS_PER_YEAR;
+          const amount = baseBalance * hourlyRate;
           prevTotal += amount;
           await dbConn.execute(
             `INSERT INTO af_funding_rate_logs (ledger_id, user_id, balance_snapshot, amount, total_accumulated, annual_rate) VALUES (?, ?, ?, ?, ?, ?)`,
-            [ledgerId, userId, baseBalance.toFixed(8), amount.toFixed(8), prevTotal.toFixed(8), ANNUAL_RATE.toFixed(4)]
+            [ledgerId, userId, baseBalance.toFixed(8), amount.toFixed(8), prevTotal.toFixed(8), annualRate.toFixed(4)]
           );
         }
         // 更新已结算小时数
