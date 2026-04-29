@@ -1,0 +1,70 @@
+name: 美股全生命周期数据回填
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: '确认运行（输入 yes 确认）'
+        required: true
+        default: 'yes'
+
+jobs:
+  build:
+    name: 在服务器上运行美股数据回填
+    runs-on: ubuntu-latest
+    timeout-minutes: 1440  # 最长24小时（美股约1万只，预计需要8-12小时）
+
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      - name: 🔑 配置 SSH 密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 📦 上传回填脚本到服务器
+        run: |
+          scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_PORT }} \
+            scripts/tushare/build_us_lifecycle.py \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/
+
+      - name: 🚀 在服务器上运行美股数据回填
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
+            -o ServerAliveInterval=60 \
+            -o ServerAliveCountMax=1440 \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            set -e
+            echo "=== 检查 Python 环境 ==="
+            python3 --version
+
+            echo "=== 检查依赖 ==="
+            python3 -c "import pymysql; print('pymysql OK:', pymysql.__version__)" 2>/dev/null || {
+              echo "安装 pymysql..."
+              pip3 install pymysql --quiet --break-system-packages 2>&1 || pip3 install pymysql --quiet 2>&1
+            }
+
+            echo "=== 检查是否已有进程在运行 ==="
+            if pgrep -f "build_us_lifecycle.py" > /dev/null; then
+              echo "已有回填进程在运行，退出"
+              exit 0
+            fi
+
+            echo "=== 启动美股数据回填（后台运行）==="
+            nohup python3 /root/build_us_lifecycle.py > /root/us_lifecycle_stdout.log 2>&1 &
+            BACKFILL_PID=$!
+            echo "回填进程 PID: $BACKFILL_PID"
+
+            # 等待回填完成，每60秒输出一次进度
+            while kill -0 $BACKFILL_PID 2>/dev/null; do
+              sleep 60
+              echo "--- $(date '+%Y-%m-%d %H:%M:%S') 进度 ---"
+              tail -5 /root/us_lifecycle.log 2>/dev/null || echo "日志尚未生成"
+            done
+
+            echo "=== 回填完成，最终日志 ==="
+            tail -30 /root/us_lifecycle.log 2>/dev/null || cat /root/us_lifecycle_stdout.log 2>/dev/null || echo "日志为空"
+          ENDSSH
