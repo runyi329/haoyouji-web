@@ -19634,6 +19634,32 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         }
       }
     }),
+    getHangSengIndex: publicProcedure.query(async () => {
+      const cacheKey = 'hkHSI';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        const res = await fetch('https://qt.gtimg.cn/q=hkHSI', {
+          headers: { 'Referer': 'https://finance.qq.com', 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(5000),
+        });
+        const text = await res.text();
+        const match = text.match(/v_hkHSI="([^"]+)"/);
+        if (!match) throw new Error('解析失败');
+        const parts = match[1].split('~');
+        // parts[3]=当前价, parts[4]=昨收, parts[30]=更新时间, parts[31]=涨跌额, parts[32]=涨跌幅
+        const price = parseFloat(parts[3]);
+        const prevClose = parseFloat(parts[4]);
+        const change = parseFloat(parts[31]);
+        const changePercent = parseFloat(parts[32]);
+        const updateTime = parts[30] || '';
+        const result = { price, prevClose, change, changePercent, updateTime, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        return { price: 0, prevClose: 0, change: 0, changePercent: 0, updateTime: '', success: false };
+      }
+    }),
   }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
