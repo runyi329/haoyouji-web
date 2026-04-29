@@ -480,8 +480,8 @@ export default function Home() {
 
   // 获取上证指数实时数据
   const { data: shanghaiIndex } = trpc.stock.getShanghaiIndex.useQuery(undefined, {
-    refetchInterval: isMarketOpen() ? 5000 : false,
-    staleTime: 30000,
+    refetchInterval: isMarketOpen() ? 3000 : false,
+    staleTime: 3000,
   });
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -784,22 +784,14 @@ export default function Home() {
             <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 錢脉</span>
           </div>
 
-          {/* 我的股票 - 上证指数，样式与“我的人脉”一致 */}
+          {/* 我的股票 - 上证指数，样式与"我的人脉"一致 */}
           <div className="mx-3 rounded-xl bg-gradient-to-br from-[#A80000] to-[#d44] px-3 py-2">
-            <div className="flex items-center justify-between mb-0.5">
-              <div className="flex items-center space-x-1 opacity-80">
-                <Coins className="w-3.5 h-3.5 text-white" />
-                <span className="text-white text-xs">我的股票</span>
-              </div>
-              {shanghaiIndex?.success && (
-                <span className={`text-xs font-medium ${
-                  (shanghaiIndex.change ?? 0) >= 0 ? 'text-red-200' : 'text-green-300'
-                }`}>
-                  {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
-                  &nbsp;({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
-                </span>
-              )}
+            {/* 标题行：我的股票（不换行） */}
+            <div className="flex items-center space-x-1 opacity-80 mb-1" style={{ whiteSpace: 'nowrap' }}>
+              <Coins className="w-3.5 h-3.5 text-white flex-shrink-0" />
+              <span className="text-white text-xs font-medium">我的股票</span>
             </div>
+            {/* 指数数字 */}
             <div className="flex items-baseline">
               {!shanghaiIndex?.success ? (
                 <Loader2 className="w-5 h-5 animate-spin text-white/60" />
@@ -807,7 +799,18 @@ export default function Home() {
                 <RedFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unitColor="rgba(255,255,255,0.7)" unit="点" decimals={2} />
               )}
             </div>
-            <div className="text-white/50 text-center" style={{ fontSize: '0.55rem', marginTop: '2px' }}>上证指数 {isMarketOpen() ? '开市中' : '已收盘'}</div>
+            {/* 涌跌信息 + 开市状态，放在指数下方 */}
+            <div className="flex items-center justify-between mt-1">
+              <div className="text-white/50" style={{ fontSize: '0.6rem' }}>上证指数 {isMarketOpen() ? '开市中' : '已收盘'}</div>
+              {shanghaiIndex?.success && (
+                <span className={`text-xs font-medium ${
+                  (shanghaiIndex.change ?? 0) >= 0 ? 'text-red-200' : 'text-green-300'
+                }`} style={{ fontSize: '0.65rem' }}>
+                  {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
+                  &nbsp;({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
+                </span>
+              )}
+            </div>
           </div>
 
           {/* 占位内容 */}
