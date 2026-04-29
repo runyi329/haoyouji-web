@@ -354,11 +354,11 @@ function GoldFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDi
   );
 }
 
-function GoldFlipCounter({ total, unit, decimals }: { total: number; unit?: string; decimals?: number }) {
+function GoldFlipCounter({ total, unit, decimals, fixedSize }: { total: number; unit?: string; decimals?: number; fixedSize?: number }) {
   const [displayTotal, setDisplayTotal] = useState(0);
   const [prevTotal, setPrevTotal] = useState(0);
   const [flipKey, setFlipKey] = useState(0);
-  const [digitSize, setDigitSize] = useState(32);
+  const [digitSize, setDigitSize] = useState(fixedSize ?? 32);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -370,6 +370,8 @@ function GoldFlipCounter({ total, unit, decimals }: { total: number; unit?: stri
   }, [total]);
 
   useEffect(() => {
+    // 如果传入了固定尺寸，不计算自适应大小
+    if (fixedSize) { setDigitSize(fixedSize); return; }
     const calcSize = () => {
       if (!containerRef.current) return;
       const containerW = containerRef.current.clientWidth - 8;
@@ -384,7 +386,7 @@ function GoldFlipCounter({ total, unit, decimals }: { total: number; unit?: stri
     calcSize();
     window.addEventListener('resize', calcSize);
     return () => window.removeEventListener('resize', calcSize);
-  }, [displayTotal, total, decimals]);
+  }, [displayTotal, total, decimals, fixedSize]);
 
   const buildDigitSeq = (num: number): string[] => {
     if (!decimals) return String(num).split('');
@@ -1557,7 +1559,7 @@ export default function Home() {
               100% { transform: translateX(-50%); }
             }
             .global-scroll-track {
-              animation: global-scroll 14s linear infinite;
+              animation: global-scroll 16s linear infinite;
             }
             .global-scroll-track.paused {
               animation-play-state: paused;
@@ -1609,7 +1611,7 @@ export default function Home() {
                       {!item.data?.success ? (
                         <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
                       ) : (
-                        <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} />
+                        <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} fixedSize={26} />
                       )}
                     </div>
                     <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
