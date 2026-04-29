@@ -5216,7 +5216,7 @@ export default function LedgerDetail() {
               if (balance <= 0) return null;
               return (
                 <div className="flex-shrink-0 px-5 py-3 bg-green-50 border-b border-green-100">
-                  <div className="text-xs text-gray-500">当前余额 <span className="font-semibold text-gray-700">{balance.toFixed(2)} USDT</span>　参考年化 ≈ <span className="font-bold text-green-600">12%</span></div>
+                  <div className="text-xs text-gray-500">当前余额 <span className="font-semibold text-gray-700">{balance.toFixed(2)} USDT</span>　参考年化 ≈ <span className="font-bold text-green-600">10~12%</span></div>
                 </div>
               );
             })()}
