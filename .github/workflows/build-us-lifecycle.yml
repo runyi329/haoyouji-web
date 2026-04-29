@@ -1,6 +1,9 @@
 name: 美股全生命周期数据回填
 
 on:
+  push:
+    paths:
+      - 'scripts/tushare/build_us_lifecycle.py'
   workflow_dispatch:
     inputs:
       confirm:
