@@ -801,7 +801,7 @@ export default function Home() {
             </div>
             {/* 涌跌信息 + 开市状态，放在指数下方 */}
             <div className="flex items-center justify-between mt-1">
-              <div className="text-white/50" style={{ fontSize: '0.6rem' }}>上证指数 {isMarketOpen() ? '开市中' : '已收盘'}</div>
+              <div className="text-white/50" style={{ fontSize: '0.6rem' }}>{isMarketOpen() ? '开市中' : '已收盘'}</div>
               {shanghaiIndex?.success && (
                 <span className={`text-xs font-medium ${
                   (shanghaiIndex.change ?? 0) >= 0 ? 'text-red-200' : 'text-green-300'
