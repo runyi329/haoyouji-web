@@ -1255,6 +1255,8 @@ export default function Home() {
                 className="flex-shrink-0 cursor-pointer"
                 style={{
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
+                  maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
+                  boxSizing: 'border-box',
                   background: 'rgba(255,255,255,0.82)',
                   border: '1px solid rgba(203,164,113,0.35)',
                   boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
@@ -1304,6 +1306,8 @@ export default function Home() {
                 className="flex-shrink-0 cursor-pointer"
                 style={{
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
+                  maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
+                  boxSizing: 'border-box',
                   background: 'rgba(255,255,255,0.82)',
                   border: '1px solid rgba(203,164,113,0.35)',
                   boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
@@ -1353,6 +1357,8 @@ export default function Home() {
                 className="flex-shrink-0 cursor-pointer"
                 style={{
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
+                  maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
+                  boxSizing: 'border-box',
                   background: 'rgba(255,255,255,0.82)',
                   border: '1px solid rgba(203,164,113,0.35)',
                   boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
