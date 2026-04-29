@@ -1013,10 +1013,10 @@ export default function Home() {
   });
 
   // 全球市场实时行情
-  const { data: goldPrice } = trpc.stock.getGoldPrice.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
-  const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
-  const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
-  const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
+  const { data: goldPrice } = trpc.stock.getGoldPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   // 全球市场卡片匀速无缝滚动（跑马灯）
   const [globalScrollPaused, setGlobalScrollPaused] = useState(false);
   const globalSwipeRef = useRef<HTMLDivElement>(null);
@@ -1587,7 +1587,7 @@ export default function Home() {
                 }, {
                   key: 'oil', label: '原油 WTI', data: oilPrice, unit: '/桶', decimals: 2,
                 }, {
-                  key: 'dxy', label: '美元指数 DXY', data: dollarIndex, unit: '', decimals: 3,
+                  key: 'dxy', label: 'USD/CNY', data: dollarIndex, unit: '', decimals: 4,
                 }, {
                   key: 'cnh', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4,
                 }].map((item) => (
