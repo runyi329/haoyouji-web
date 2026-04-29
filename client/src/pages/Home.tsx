@@ -893,11 +893,21 @@ export default function Home() {
     staleTime: 5000,
   });
 
-  // 港股卡片滑动状态
+  // 股票卡片滑动状态
   const [stockCardIndex, setStockCardIndex] = useState(0);
+  const [stockContainerWidth, setStockContainerWidth] = useState(0);
   const stockSwipeRef = useRef<HTMLDivElement>(null);
   const stockTouchStartX = useRef(0);
   const stockTouchStartY = useRef(0);
+  useEffect(() => {
+    if (!stockSwipeRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      setStockContainerWidth(entries[0].contentRect.width);
+    });
+    ro.observe(stockSwipeRef.current);
+    setStockContainerWidth(stockSwipeRef.current.offsetWidth);
+    return () => ro.disconnect();
+  }, []);
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -1214,11 +1224,11 @@ export default function Home() {
             <span className="text-xs font-semibold tracking-wide" style={{ color: '#6B1A1A' }}>AI 錢脉</span>
           </div>
 
-          {/* 可左右滑动的股票卡片区域：A股 + 港股 */}
+          {/* 可左右滑动的股票卡片区域：A股 + 港股 + 美股 */}
           <div
             ref={stockSwipeRef}
             className="mx-3 overflow-hidden rounded-xl flex-shrink-0"
-            style={{ touchAction: 'pan-y' }}
+            style={{ touchAction: 'pan-y', position: 'relative' }}
             onTouchStart={(e) => {
               stockTouchStartX.current = e.touches[0].clientX;
               stockTouchStartY.current = e.touches[0].clientY;
@@ -1235,16 +1245,16 @@ export default function Home() {
             <div
               className="flex"
               style={{
-                width: '300%',
-                transform: `translateX(${stockCardIndex * -33.333}%)`,
+                transform: `translateX(${stockCardIndex * -stockContainerWidth}px)`,
                 transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
                 willChange: 'transform',
               }}
             >
               {/* 卡片1：我的A股 */}
               <div
-                className="w-full flex-shrink-0 px-0 py-2 cursor-pointer"
+                className="flex-shrink-0 cursor-pointer"
                 style={{
+                  minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   background: 'rgba(255,255,255,0.82)',
                   border: '1px solid rgba(203,164,113,0.35)',
                   boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
@@ -1291,14 +1301,14 @@ export default function Home() {
 
               {/* 卡片2：我的港股 */}
               <div
-                className="w-full flex-shrink-0 cursor-pointer"
+                className="flex-shrink-0 cursor-pointer"
                 style={{
+                  minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   background: 'rgba(255,255,255,0.82)',
                   border: '1px solid rgba(203,164,113,0.35)',
                   boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
                   borderRadius: '12px',
                   padding: '8px 12px',
-                  marginLeft: '0',
                 }}
                 onClick={() => navigate('/hk-stock-tracker')}
               >
@@ -1340,14 +1350,14 @@ export default function Home() {
 
               {/* 卡片3：我的美股 */}
               <div
-                className="w-full flex-shrink-0 cursor-pointer"
+                className="flex-shrink-0 cursor-pointer"
                 style={{
+                  minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   background: 'rgba(255,255,255,0.82)',
                   border: '1px solid rgba(203,164,113,0.35)',
                   boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
                   borderRadius: '12px',
                   padding: '8px 12px',
-                  marginLeft: '0',
                 }}
                 onClick={() => navigate('/us-stock-tracker')}
               >
