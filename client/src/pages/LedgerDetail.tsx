@@ -2187,9 +2187,10 @@ export default function LedgerDetail() {
   const [fundingRateAllLogs, setFundingRateAllLogs] = useState<any[]>([]);
   const [fundingRateHasMore, setFundingRateHasMore] = useState(true);
   const [fundingRateLoadingMore, setFundingRateLoadingMore] = useState(false);
+  const [fundingRateQueryVersion, setFundingRateQueryVersion] = useState(0);
   const { data: fundingRateLogsData, isLoading: fundingRateLogsLoading } = trpc.ledger.afGetFundingRateLogs.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage2, pageSize: 50 },
-    { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs2, staleTime: 0, refetchOnMount: 'always' }
+    { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs2 && fundingRateQueryVersion > 0, staleTime: 0 }
   );
   // ETH 持仓计算预览数据（仅 isCustomAF 时加载）
   const { data: ethPositionSettings } = trpc.ethPositionGetSettings.useQuery(
@@ -2359,6 +2360,9 @@ export default function LedgerDetail() {
       setFundingRateLogsPage2(1);
       setFundingRateAllLogs([]);
       setFundingRateHasMore(true);
+    } else {
+      // 每次打开弹窗时递增版本号，强制重新请求
+      setFundingRateQueryVersion(v => v + 1);
     }
   }, [showFundingRateLogs2]);
 
@@ -5212,11 +5216,7 @@ export default function LedgerDetail() {
               if (balance <= 0) return null;
               return (
                 <div className="flex-shrink-0 px-5 py-3 bg-green-50 border-b border-green-100">
-                  <div className="text-xs text-gray-500 mb-1">当前余额 <span className="font-semibold text-gray-700">{balance.toFixed(2)} USDT</span></div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-xs text-gray-500">≈ 每天可得 <span className="font-bold text-green-600">{perDay.toFixed(4)} USDT</span></div>
-                    <div className="text-xs text-gray-400">≈ 每小时 <span className="font-semibold text-green-500">{perHour.toFixed(6)} USDT</span></div>
-                  </div>
+                  <div className="text-xs text-gray-500">当前余额 <span className="font-semibold text-gray-700">{balance.toFixed(2)} USDT</span>　参考年化 ≈ <span className="font-bold text-green-600">12%</span></div>
                 </div>
               );
             })()}
