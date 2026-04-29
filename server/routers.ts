@@ -19681,6 +19681,56 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         }
       }
     }),
+    // 标普500实时行情（美股）
+    getSP500Index: publicProcedure.query(async () => {
+      const cacheKey = 'usspx';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        // Yahoo Finance API 获取标普500（^GSPC）
+        const res = await fetch(
+          'https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=1d',
+          {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'application/json',
+            },
+            signal: AbortSignal.timeout(8000),
+          }
+        );
+        const json = await res.json() as any;
+        const meta = json?.chart?.result?.[0]?.meta;
+        if (!meta) throw new Error('解析失败');
+        const price = meta.regularMarketPrice ?? 0;
+        const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const change = price - prevClose;
+        const changePercent = prevClose > 0 ? (change / prevClose * 100) : 0;
+        const result = { price, prevClose, change, changePercent, updateTime: '', success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        try {
+          // 备用：腐讯证券 API us.SPX
+          const res2 = await fetch('https://qt.gtimg.cn/q=us.SPX', {
+            headers: { 'Referer': 'https://finance.qq.com', 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(5000),
+          });
+          const text2 = await res2.text();
+          const m2 = text2.match(/v_us\.SPX="([^"]+)"/);
+          if (!m2) throw new Error('备用API解析失败');
+          const p2 = m2[1].split('~');
+          const price2 = parseFloat(p2[3]);
+          const prevClose2 = parseFloat(p2[4]);
+          const change2 = parseFloat(p2[31]) || (price2 - prevClose2);
+          const changePercent2 = parseFloat(p2[32]) || (prevClose2 > 0 ? change2 / prevClose2 * 100 : 0);
+          const result2 = { price: price2, prevClose: prevClose2, change: change2, changePercent: changePercent2, updateTime: '', success: true };
+          setCache(cacheKey, result2);
+          return result2;
+        } catch (e2) {
+          return { price: 0, prevClose: 0, change: 0, changePercent: 0, updateTime: '', success: false };
+        }
+      }
+    }),
   }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）

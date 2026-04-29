@@ -750,11 +750,78 @@ export default function Home() {
     return nowMs + 24 * 60 * 60 * 1000;
   };
 
+  // 美股市场状态判断（美东时间 9:30-16:00，夏令时 BJ 21:30-04:00，冬令时 BJ 22:30-05:00）
+  const getUSMarketStatus = (now: Date): 'open' | 'closed' => {
+    const BJ_OFFSET = 8 * 60 * 60 * 1000;
+    const bj = new Date(now.getTime() + BJ_OFFSET);
+    const day = bj.getUTCDay();
+    // 周六周日不开市
+    if (day === 0 || day === 6) return 'closed';
+    const h = bj.getUTCHours();
+    const m = bj.getUTCMinutes();
+    const mins = h * 60 + m;
+    // 判断是否夏令时（美国夏令时为 3月4日 - 11月1日）
+    const month = bj.getUTCMonth() + 1; // 1-12
+    const date = bj.getUTCDate();
+    // 简化判断：3月第二个周日后到11月第一个周日前为夏令时
+    const isDST = (month > 3 || (month === 3 && date >= 8)) && (month < 11 || (month === 11 && date < 1));
+    // 夏令时：BJ 21:30-04:00（次日）；冬令时：BJ 22:30-05:00（次日）
+    const openMins = isDST ? 21 * 60 + 30 : 22 * 60 + 30;
+    const closeMins = isDST ? 24 * 60 + 0 + 4 * 60 : 24 * 60 + 0 + 5 * 60; // 跨日
+    // 当天 21:30+ 或次日 0:00-04:00
+    if (mins >= openMins) return 'open';
+    if (mins < (isDST ? 4 * 60 : 5 * 60)) {
+      // 需要判断前一天是否周五（周五晚上开始到周六凌晨结束）
+      const prevDay = day === 0 ? 6 : day - 1;
+      if (prevDay !== 0) return 'open'; // 周一到周五的凌晨都算开市
+    }
+    return 'closed';
+  };
+
+  // 美股下一个开市时间（返回 UTC ms）
+  const getUSNextOpenTime = (now: Date): number => {
+    const BJ_OFFSET = 8 * 60 * 60 * 1000;
+    const nowMs = now.getTime();
+    const bjDate = new Date(nowMs + BJ_OFFSET);
+    const month = bjDate.getUTCMonth() + 1;
+    const date = bjDate.getUTCDate();
+    const isDST = (month > 3 || (month === 3 && date >= 8)) && (month < 11 || (month === 11 && date < 1));
+    const openHour = isDST ? 21 : 22;
+    const openMin = 30;
+    const todayBjUtcMidnight = Date.UTC(
+      bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate()
+    ) - BJ_OFFSET;
+    const h = bjDate.getUTCHours();
+    const m = bjDate.getUTCMinutes();
+    const mins = h * 60 + m;
+    const day = bjDate.getUTCDay();
+    // 当天未到开市时间且是工作日
+    if (day !== 0 && day !== 6 && mins < openHour * 60 + openMin) {
+      return todayBjUtcMidnight + (openHour * 60 + openMin) * 60 * 1000;
+    }
+    // 找下一个工作日
+    for (let i = 1; i <= 7; i++) {
+      const candidateBjUtcMidnight = todayBjUtcMidnight + i * 24 * 60 * 60 * 1000;
+      const candidateBjDate = new Date(candidateBjUtcMidnight + BJ_OFFSET);
+      const cd = candidateBjDate.getUTCDay();
+      if (cd !== 0 && cd !== 6) {
+        const cm = candidateBjDate.getUTCMonth() + 1;
+        const cdate = candidateBjDate.getUTCDate();
+        const cIsDST = (cm > 3 || (cm === 3 && cdate >= 8)) && (cm < 11 || (cm === 11 && cdate < 1));
+        const cOpenHour = cIsDST ? 21 : 22;
+        return candidateBjUtcMidnight + (cOpenHour * 60 + 30) * 60 * 1000;
+      }
+    }
+    return nowMs + 24 * 60 * 60 * 1000;
+  };
+
   // 市场状态和倒计时 state
   const [marketStatus, setMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getMarketStatus(new Date()));
   const [hkMarketStatus, setHkMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getHKMarketStatus(new Date()));
+  const [usMarketStatus, setUsMarketStatus] = useState<'open' | 'closed'>(() => getUSMarketStatus(new Date()));
   const [countdown, setCountdown] = useState('');
   const [hkCountdown, setHkCountdown] = useState('');
+  const [usCountdown, setUsCountdown] = useState('');
 
   useEffect(() => {
     const tick = () => {
@@ -786,6 +853,20 @@ export default function Home() {
       } else {
         setHkCountdown('');
       }
+      // 美股市场状态
+      const usStatus = getUSMarketStatus(now);
+      setUsMarketStatus(usStatus);
+      if (usStatus !== 'open') {
+        const usNextMs = getUSNextOpenTime(now);
+        const usDiff = Math.max(0, usNextMs - now.getTime());
+        const usTotalSec = Math.floor(usDiff / 1000);
+        const usHH = Math.floor(usTotalSec / 3600);
+        const usMM = Math.floor((usTotalSec % 3600) / 60);
+        const usSS = usTotalSec % 60;
+        setUsCountdown(`${String(usHH).padStart(2,'0')}:${String(usMM).padStart(2,'0')}:${String(usSS).padStart(2,'0')}`);
+      } else {
+        setUsCountdown('');
+      }
     };
     tick();
     const timer = setInterval(tick, 1000);
@@ -803,6 +884,12 @@ export default function Home() {
   // 获取恒生指数实时数据（港股市场时间：9:30-12:00, 13:00-16:00 HKT）
   const { data: hangSengIndex } = trpc.stock.getHangSengIndex.useQuery(undefined, {
     refetchInterval: 5000, // 港股市场状态判断复杂，简化为定时刷新
+    staleTime: 5000,
+  });
+
+  // 获取标普500实时数据（美股）
+  const { data: sp500Index } = trpc.stock.getSP500Index.useQuery(undefined, {
+    refetchInterval: usMarketStatus === 'open' ? 5000 : 60000,
     staleTime: 5000,
   });
 
@@ -1249,12 +1336,61 @@ export default function Home() {
                   )}
                 </div>
               </div>
+
+              {/* 卡片3：我的美股 */}
+              <div
+                className="w-full flex-shrink-0 cursor-pointer"
+                style={{
+                  background: 'rgba(255,255,255,0.82)',
+                  border: '1px solid rgba(203,164,113,0.35)',
+                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
+                  borderRadius: '12px',
+                  padding: '8px 12px',
+                  marginLeft: '0',
+                }}
+                onClick={() => navigate('/us-stock-tracker')}
+              >
+                <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的美股</span>
+                </div>
+                <div className="flex items-baseline">
+                  {!sp500Index?.success ? (
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
+                  ) : (
+                    <GoldFlipCounter total={Math.round((sp500Index.price ?? 0) * 100)} unit="点" decimals={2} />
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
+                  {usMarketStatus === 'open' ? (
+                    <>
+                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                      {sp500Index?.success && (
+                        <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                          color: (sp500Index.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
+                          {(sp500Index.change ?? 0) >= 0 ? '+' : ''}{(sp500Index.change ?? 0).toFixed(2)}
+                          ({(sp500Index.change ?? 0) >= 0 ? '+' : ''}{(sp500Index.changePercent ?? 0).toFixed(2)}%)
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                      休市中，离开市
+                      {usCountdown && (
+                        <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                          {usCountdown}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 
           {/* 圆点指示器 */}
           <div className="flex items-center justify-center mt-1.5 mb-1" style={{ gap: '5px' }}>
-            {[0, 1].map((i) => (
+            {[0, 1, 2].map((i) => (
               <div
                 key={i}
                 onClick={() => setStockCardIndex(i)}
