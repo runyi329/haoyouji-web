@@ -916,38 +916,42 @@ export default function Home() {
         </div>
 
         {/* ── 右：AI 錢脉 ── */}
-        <div className="bg-white rounded-2xl shadow-sm flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
+        <div className="rounded-2xl shadow-sm flex flex-col" style={{
+          height: '100%',
+          overflow: 'hidden',
+          background: 'linear-gradient(160deg, #F5E6C0 0%, #E8C97A 40%, #CBA471 100%)',
+          boxShadow: '0 2px 12px rgba(203,164,113,0.35)'
+        }}>
           {/* 卡片头部：标题 */}
           <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
-            <span className="text-xs font-semibold tracking-wide" style={{ color: '#A80000' }}>AI 錢脉</span>
-            <span style={{ fontSize: '0.55rem', color: '#CBA471', letterSpacing: '0.03em', opacity: 0.8 }}>红白金</span>
+            <span className="text-xs font-semibold tracking-wide" style={{ color: '#6B1A1A' }}>AI 錢脉</span>
           </div>
 
-          {/* 我的股票 - 上证指数，红金渐变质感卡片 */}
+          {/* 我的股票 - 上证指数，白色卡片内嵌 */}
           <div className="mx-3 rounded-xl px-3 py-2" style={{
-            background: 'linear-gradient(135deg, #6B1A1A 0%, #A80000 45%, #7A5020 100%)',
-            border: '1px solid rgba(203,164,113,0.5)',
-            boxShadow: '0 2px 8px rgba(107,26,26,0.3), inset 0 1px 0 rgba(203,164,113,0.2)'
+            background: 'rgba(255,255,255,0.75)',
+            border: '1px solid rgba(203,164,113,0.4)',
+            boxShadow: '0 1px 6px rgba(107,74,16,0.12)'
           }}>
             {/* 标题行：我的股票（不换行） */}
             <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-              <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#CBA471' }} />
-              <span className="text-xs font-semibold" style={{ color: '#CBA471', letterSpacing: '0.05em' }}>我的股票</span>
+              <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+              <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的股票</span>
             </div>
             {/* 指数数字：金色翻牌 */}
             <div className="flex items-baseline">
               {!shanghaiIndex?.success ? (
-                <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'rgba(203,164,113,0.7)' }} />
+                <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
               ) : (
                 <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
               )}
             </div>
             {/* 涌跌信息 + 开市状态 */}
             <div className="flex items-center justify-between mt-1">
-              <div style={{ fontSize: '0.6rem', color: 'rgba(203,164,113,0.6)' }}>{isMarketOpen() ? '开市中' : '已收盘'}</div>
+              <div style={{ fontSize: '0.6rem', color: '#888' }}>{isMarketOpen() ? '开市中' : '已收盘'}</div>
               {shanghaiIndex?.success && (
                 <span style={{ fontSize: '0.65rem', fontWeight: 600,
-                  color: (shanghaiIndex.change ?? 0) >= 0 ? '#FFB3B3' : '#86EFAC' }}>
+                  color: (shanghaiIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
                   {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
                   &nbsp;({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
                 </span>
@@ -957,11 +961,11 @@ export default function Home() {
 
           {/* 占位内容 */}
           <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center mb-2 shadow-sm">
-              <Wallet className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2 shadow-sm" style={{ background: 'rgba(168,0,0,0.12)', border: '1px solid rgba(168,0,0,0.2)' }}>
+              <Wallet className="w-5 h-5" style={{ color: '#A80000' }} />
             </div>
-            <p className="text-gray-400 text-xs text-center">智能财务功能</p>
-            <p className="text-gray-300 text-xs text-center">升级装修</p>
+            <p className="text-xs text-center" style={{ color: '#7A5020' }}>智能财务功能</p>
+            <p className="text-xs text-center" style={{ color: '#CBA471' }}>升级装修</p>
           </div>
         </div>
 
