@@ -798,7 +798,13 @@ export default function Home() {
       <div className="px-4 mt-2 pb-20 grid grid-cols-2 gap-2 flex-1 min-h-0">
 
         {/* ── 左：AI 人脉 ── */}
-        <div className="bg-white rounded-2xl shadow-sm flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
+        <div className="bg-white rounded-2xl flex flex-col" style={{
+          height: '100%',
+          overflow: 'hidden',
+          boxShadow: '0 4px 16px rgba(168,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9)',
+          border: '1px solid rgba(255,255,255,0.8)',
+          transform: 'translateY(-1px)'
+        }}>
           {/* 卡片头部：标题 */}
           <div className="flex items-center px-3 pt-3 pb-2">
             <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 人脉</span>
@@ -916,11 +922,13 @@ export default function Home() {
         </div>
 
         {/* ── 右：AI 錢脉 ── */}
-        <div className="rounded-2xl shadow-sm flex flex-col" style={{
+        <div className="rounded-2xl flex flex-col" style={{
           height: '100%',
           overflow: 'hidden',
           background: 'linear-gradient(160deg, #F5E6C0 0%, #E8C97A 40%, #CBA471 100%)',
-          boxShadow: '0 2px 12px rgba(203,164,113,0.35)'
+          boxShadow: '0 4px 16px rgba(203,164,113,0.35), 0 1px 4px rgba(107,74,16,0.15), inset 0 1px 0 rgba(255,255,255,0.6)',
+          border: '1px solid rgba(255,255,255,0.5)',
+          transform: 'translateY(-1px)'
         }}>
           {/* 卡片头部：标题 */}
           <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
