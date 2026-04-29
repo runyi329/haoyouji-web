@@ -1538,7 +1538,7 @@ export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boole
           </button>
         )}
         <button
-          onClick={() => homeMode ? setLocation('/ledger/37/stock-lifecycle') : setLocation(`/ledger/${ledgerId}/stock-lifecycle`)}
+          onClick={() => homeMode ? setLocation('/stock-tracker/stock-lifecycle') : setLocation(`/ledger/${ledgerId}/stock-lifecycle`)}
           className="flex items-center justify-center px-3 h-7 rounded-full text-sm font-medium"
           style={{
             backgroundColor: "rgba(255,255,255,0.9)",

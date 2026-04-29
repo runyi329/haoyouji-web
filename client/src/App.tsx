@@ -148,6 +148,7 @@ const LedgerAIDatabase = lazy(() => import("./pages/LedgerAIDatabase"));
 const StockTrackerHome = lazy(() => import("./pages/LedgerAIDatabase").then(m => ({ default: m.StockTrackerHome })));
 const RetailInvestor = lazy(() => import("./pages/RetailInvestor"));
 const StockLifecycle = lazy(() => import("./pages/StockLifecycle"));
+const StockTrackerLifecycle = lazy(() => import("./pages/StockLifecycle").then(m => ({ default: m.StockTrackerLifecycle })));
 const StockDetail = lazy(() => import("./pages/StockDetail"));
 const AdminTransactionList = lazy(() => import("./pages/AdminTransactionList"));
 const LedgerImport = lazy(() => import("./pages/LedgerImport"));
@@ -453,6 +454,7 @@ function Router() {
         <Route path="/ledger/:id/aa-dividend-manage" component={LedgerAADividendManage} />
         <Route path="/ledger/:id/ai-database" component={LedgerAIDatabase} />
         <Route path="/stock-tracker" component={StockTrackerHome} />
+        <Route path="/stock-tracker/stock-lifecycle" component={StockTrackerLifecycle} />
         <Route path="/ledger/:id/retail-investor" component={RetailInvestor} />
         <Route path="/ledger/:id/admin-transactions" component={AdminTransactionList} />
         <Route path="/ledger/:id/import" component={LedgerImport} />
