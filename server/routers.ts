@@ -20284,11 +20284,11 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         const match = text.match(/v_sh000001="([^"]+)"/);
         if (!match) throw new Error('解析失败');
         const parts = match[1].split('~');
-        // parts[3]=当前价, parts[4]=昨收, parts[30]=更新时间, parts[32]=涨跌额, parts[33]=涨跌幅
+        // parts[3]=当前价, parts[4]=昨收, parts[30]=更新时间, parts[31]=涨跌额, parts[32]=涨跌幅
         const price = parseFloat(parts[3]);
         const prevClose = parseFloat(parts[4]);
-        const change = parseFloat(parts[32]);
-        const changePercent = parseFloat(parts[33]);
+        const change = parseFloat(parts[31]);
+        const changePercent = parseFloat(parts[32]);
         const updateTime = parts[30] || '';
         const result = { price, prevClose, change, changePercent, updateTime, success: true };
         setCache(cacheKey, result);
