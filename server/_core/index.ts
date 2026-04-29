@@ -499,6 +499,10 @@ async function startServer() {
     const { startStockDailyScanner } = await import('../stock-daily-scanner');
     startStockDailyScanner();
 
+    // 启动港股日线数据定时扫描器（每个港股交易日 BJT 16:30 首触，无数据则每小时重试至 21:00）
+    const { startHkStockDailyScanner } = await import('../hk-stock-daily-scanner');
+    startHkStockDailyScanner();
+
     // ─── 内嵌定时备份任务（每天北京时间凌晨 2:00 精确触发）───
     const scheduleBackup = () => {
       // 计算距离下次 BJT 02:00 的毫秒数

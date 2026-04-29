@@ -19730,6 +19730,168 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         }
       }
     }),
+    // ========== 港股全生命周期相关接口 ==========
+    /** 港股全生命周期趋势折线图（hk_trend_cache）*/
+    hkTrendData: publicProcedure
+      .input(z.object({
+        granularity: z.enum(['day', 'week', 'month', 'year']).default('day'),
+      }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        try {
+          const limitDays: number = input.granularity === 'day' ? 60 : input.granularity === 'week' ? 260 : input.granularity === 'month' ? 1200 : 9999;
+          const [cacheRows] = await dbConn.execute(
+            `SELECT trade_date, above, below, equal_cnt FROM hk_trend_cache WHERE market = 'all' ORDER BY trade_date DESC LIMIT ${limitDays}`
+          ) as any[];
+          const rows = (cacheRows as any[]).reverse();
+          if (rows.length === 0) return { points: [], cacheReady: false, latestDate: '' };
+          let points: { date: string; above: number; below: number; equal: number }[] = [];
+          if (input.granularity === 'day') {
+            points = rows.map((r: any) => ({
+              date: `${r.trade_date.slice(0,4)}-${r.trade_date.slice(4,6)}-${r.trade_date.slice(6,8)}`,
+              above: Number(r.above),
+              below: Number(r.below),
+              equal: Number(r.equal_cnt),
+            }));
+          } else {
+            const groupMap: Record<string, any[]> = {};
+            for (const r of rows) {
+              const td: string = r.trade_date;
+              const y = parseInt(td.slice(0, 4));
+              const m = parseInt(td.slice(4, 6));
+              const day = parseInt(td.slice(6, 8));
+              let key: string;
+              if (input.granularity === 'month') {
+                key = `${y}-${String(m).padStart(2, '0')}`;
+              } else if (input.granularity === 'year') {
+                key = `${y}`;
+              } else {
+                const date = new Date(y, m - 1, day);
+                const startOfYear = new Date(y, 0, 1);
+                const weekNum = Math.ceil(((date.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7);
+                key = `${y}-W${String(weekNum).padStart(2, '0')}`;
+              }
+              if (!groupMap[key]) groupMap[key] = [];
+              groupMap[key].push(r);
+            }
+            for (const [key, dayRows] of Object.entries(groupMap).sort()) {
+              const last = dayRows[dayRows.length - 1];
+              points.push({ date: key, above: Number(last.above), below: Number(last.below), equal: Number(last.equal_cnt) });
+            }
+          }
+          const latestDate = rows[rows.length - 1]?.trade_date ?? '';
+          return { points, latestDate, cacheReady: true };
+        } finally { /* pool auto-manages connections */ }
+      }),
+    /** 港股涨跌幅分布（替代A股涨停聚集效应）*/
+    hkPctDistribution: publicProcedure
+      .query(async () => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        try {
+          const [ldRows] = await dbConn.execute("SELECT MAX(trade_date) AS latest FROM hk_trend_cache WHERE market = 'all'") as any[];
+          const latestDate = (ldRows as any[])[0]?.latest ?? '';
+          if (!latestDate) return { latestDate: '', totalCount: 0, buckets: [], up5Count: 0, down5Count: 0, up10Count: 0, down10Count: 0, dataReady: false };
+          const [rows] = await dbConn.execute(
+            `SELECT total_count, buckets_json, up5_count, down5_count, up10_count, down10_count FROM hk_pct_distribution WHERE trade_date = ?`,
+            [latestDate]
+          ) as any[];
+          const row = (rows as any[])[0];
+          if (!row) return { latestDate, totalCount: 0, buckets: [], up5Count: 0, down5Count: 0, up10Count: 0, down10Count: 0, dataReady: false };
+          let buckets: any[] = [];
+          try { buckets = JSON.parse(row.buckets_json); } catch {}
+          const totalCount = Number(row.total_count);
+          return {
+            latestDate,
+            totalCount,
+            buckets: buckets.map((b: any) => ({
+              bucket: Number(b.bucket),
+              count: Number(b.count),
+              pct: totalCount > 0 ? parseFloat((Number(b.count) / totalCount * 100).toFixed(3)) : 0,
+            })),
+            up5Count: Number(row.up5_count),
+            down5Count: Number(row.down5_count),
+            up10Count: Number(row.up10_count),
+            down10Count: Number(row.down10_count),
+            dataReady: true,
+          };
+        } finally { /* pool auto-manages connections */ }
+      }),
+    /** 港股个股全生命周期涨跌天数统计 */
+    hkStockLifecycle: publicProcedure
+      .input(z.object({
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(10).max(200).default(50),
+        sortBy: z.enum(['up', 'down', 'flat', 'total', 'upRate']).default('upRate'),
+        sortDir: z.enum(['asc', 'desc']).default('desc'),
+        keyword: z.string().optional(),
+        minTotalDays: z.number().int().min(0).default(0),
+      }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        try {
+          const minDaysCond = input.minTotalDays > 0 ? `AND COALESCE(l.total_days, 0) >= ${Number(input.minTotalDays)}` : '';
+          const kwCond = input.keyword ? `AND (b.ts_code LIKE ? OR b.name LIKE ?)` : '';
+          const kwParams: string[] = input.keyword ? [`%${input.keyword}%`, `%${input.keyword}%`] : [];
+          const sortColMap: Record<string, string> = {
+            up: 'up_days', down: 'down_days', flat: 'flat_days',
+            total: 'total_days', upRate: 'up_rate',
+          };
+          const sortCol = sortColMap[input.sortBy] || 'up_rate';
+          const sortDir = input.sortDir === 'asc' ? 'ASC' : 'DESC';
+          const offset = (input.page - 1) * input.pageSize;
+          const [countRows] = await dbConn.execute(
+            `SELECT COUNT(*) AS cnt FROM hk_stock_basic b
+             LEFT JOIN hk_stock_lifecycle l ON l.ts_code = b.ts_code
+             WHERE 1=1 ${minDaysCond} ${kwCond}`,
+            kwParams
+          ) as any[];
+          const total = Number((countRows as any[])[0]?.cnt) || 0;
+          const [rows] = await dbConn.execute(
+            `SELECT
+              b.ts_code,
+              b.name,
+              COALESCE(l.up_days, 0) AS up_days,
+              COALESCE(l.down_days, 0) AS down_days,
+              COALESCE(l.flat_days, 0) AS flat_days,
+              COALESCE(l.total_days, 0) AS total_days,
+              COALESCE(l.up_rate, 0) AS up_rate
+            FROM hk_stock_basic b
+            LEFT JOIN hk_stock_lifecycle l ON l.ts_code = b.ts_code
+            WHERE 1=1 ${minDaysCond} ${kwCond}
+            ORDER BY ${sortCol} ${sortDir}, b.ts_code ASC
+            LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`,
+            kwParams
+          ) as any[];
+          return {
+            total,
+            page: input.page,
+            pageSize: input.pageSize,
+            list: (rows as any[]).map(r => ({
+              tsCode: r.ts_code as string,
+              name: r.name as string,
+              upDays: Number(r.up_days),
+              downDays: Number(r.down_days),
+              flatDays: Number(r.flat_days),
+              totalDays: Number(r.total_days),
+              upRate: Number(r.up_rate),
+            })),
+          };
+        } finally { /* pool auto-manages connections */ }
+      }),
+    /** 港股最新数据日期 */
+    hkLatestDate: publicProcedure
+      .query(async () => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return { latestDate: '', dataReady: false };
+        try {
+          const [rows] = await dbConn.execute("SELECT MAX(trade_date) AS latest FROM hk_trend_cache WHERE market = 'all'") as any[];
+          const latestDate = (rows as any[])[0]?.latest ?? '';
+          return { latestDate, dataReady: !!latestDate };
+        } finally { /* pool auto-manages connections */ }
+      }),
   }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）

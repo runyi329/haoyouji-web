@@ -1303,7 +1303,8 @@ export default function Home() {
 
               {/* 卡片2：我的港股 */}
               <div
-                className="flex-shrink-0"
+                className="flex-shrink-0 cursor-pointer"
+                onClick={() => setLocation('/hk-stock-tracker')}
                 style={{
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
@@ -1314,7 +1315,6 @@ export default function Home() {
                   borderRadius: '12px',
                   padding: '8px 12px',
                 }}
-
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
