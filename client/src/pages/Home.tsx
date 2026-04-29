@@ -286,7 +286,7 @@ function RedFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDig
   );
 }
 
-function RedFlipCounter({ total, unitColor, unit }: { total: number; unitColor?: string; unit?: string }) {
+function RedFlipCounter({ total, unitColor, unit, decimals }: { total: number; unitColor?: string; unit?: string; decimals?: number }) {
   const [displayTotal, setDisplayTotal] = useState(0);
   const [prevTotal, setPrevTotal] = useState(0);
   const [flipKey, setFlipKey] = useState(0);
@@ -295,7 +295,6 @@ function RedFlipCounter({ total, unitColor, unit }: { total: number; unitColor?:
 
   useEffect(() => {
     if (total > 0 && total !== displayTotal) {
-      // 每次数据变化（包括初始加载 0→实际值）都触发翻牌动画
       setPrevTotal(displayTotal);
       setDisplayTotal(total);
       setFlipKey(k => k + 1);
@@ -306,23 +305,36 @@ function RedFlipCounter({ total, unitColor, unit }: { total: number; unitColor?:
   useEffect(() => {
     const calcSize = () => {
       if (!containerRef.current) return;
-      const containerW = containerRef.current.clientWidth - 8; // 减去少量padding
-      const digits = (displayTotal || total).toLocaleString('zh-CN').split('');
-      const numDigits = digits.filter(d => d !== ',' && d !== '\uff0c').length;
-      const numCommas = digits.length - numDigits;
-      // 每个数字占 0.72 * size，逗号占 0.3 * size，单位占 0.5 * size，间距 2px
-      const totalUnits = numDigits * 0.72 + numCommas * 0.3 + 0.5;
-      const s = Math.floor((containerW - digits.length * 2) / totalUnits);
+      const containerW = containerRef.current.clientWidth - 8;
+      const rawNum = displayTotal || total;
+      // 如果有小数位，计算实际数字位数（不含千分位逗号）
+      const numDigits = decimals ? String(rawNum).replace(/[^0-9]/g, '').length : rawNum.toLocaleString('zh-CN').replace(/[^0-9]/g, '').length;
+      const numCommas = decimals ? Math.floor((numDigits - decimals - 1) / 3) : Math.floor((numDigits - 1) / 3);
+      // 小数点占 0.3 * size
+      const dotUnits = decimals ? 0.3 : 0;
+      const totalUnits = numDigits * 0.72 + numCommas * 0.3 + dotUnits + 0.5;
+      const s = Math.floor((containerW - (numDigits + numCommas + (decimals ? 1 : 0)) * 2) / totalUnits);
       setDigitSize(Math.max(20, Math.min(36, s)));
     };
     calcSize();
     window.addEventListener('resize', calcSize);
     return () => window.removeEventListener('resize', calcSize);
-  }, [displayTotal, total]);
+  }, [displayTotal, total, decimals]);
 
-  const toDigits = (num: number) => num.toLocaleString('zh-CN').split('');
-  const curDigits = toDigits(displayTotal);
-  const prevDigits = toDigits(prevTotal);
+  // 构建带小数点的数字序列
+  // decimals=2 时：410285 → ['4','1','0','2','.','8','5']
+  const buildDigitSeq = (num: number): string[] => {
+    if (!decimals) return num.toLocaleString('zh-CN').split('');
+    const s = String(num).padStart(decimals + 1, '0');
+    const intPart = s.slice(0, s.length - decimals);
+    const decPart = s.slice(s.length - decimals);
+    // 整数部分加千分位
+    const intFormatted = parseInt(intPart, 10).toLocaleString('zh-CN');
+    return [...intFormatted.split(''), '.', ...decPart.split('')];
+  };
+
+  const curDigits = buildDigitSeq(displayTotal);
+  const prevDigits = buildDigitSeq(prevTotal);
   const maxLen = Math.max(curDigits.length, prevDigits.length);
   const pad = (arr: string[]) => Array(maxLen - arr.length).fill('\u00a0').concat(arr);
   const cur = pad(curDigits);
@@ -333,6 +345,8 @@ function RedFlipCounter({ total, unitColor, unit }: { total: number; unitColor?:
       {cur.map((digit, i) => (
         digit === ',' || digit === '\u002c' || digit === '\uff0c' ? (
           <span key={i} className="font-bold" style={{ fontSize: digitSize * 0.5 + 'px', alignSelf: 'center', color: unitColor ?? 'rgba(255,255,255,0.7)', lineHeight: digitSize + 'px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>,</span>
+        ) : digit === '.' ? (
+          <span key={i} className="font-black" style={{ fontSize: digitSize * 0.65 + 'px', alignSelf: 'flex-end', color: unitColor ?? 'rgba(255,255,255,0.9)', lineHeight: 1, paddingBottom: '2px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>.</span>
         ) : (
           <RedFlipDigit
             key={`red-${i}-${flipKey}`}
@@ -790,7 +804,7 @@ export default function Home() {
               {!shanghaiIndex?.success ? (
                 <Loader2 className="w-5 h-5 animate-spin text-white/60" />
               ) : (
-                <RedFlipCounter total={Math.round(shanghaiIndex.price ?? 0)} unitColor="rgba(255,255,255,0.7)" unit="点" />
+                <RedFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unitColor="rgba(255,255,255,0.7)" unit="点" decimals={2} />
               )}
             </div>
             <div className="text-white/50 text-center" style={{ fontSize: '0.55rem', marginTop: '2px' }}>上证指数 {isMarketOpen() ? '开市中' : '已收盘'}</div>
