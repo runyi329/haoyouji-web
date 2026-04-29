@@ -19687,42 +19687,41 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        // Yahoo Finance API 获取标普500（^GSPC）
-        const res = await fetch(
-          'https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=1d',
-          {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-              'Accept': 'application/json',
-            },
-            signal: AbortSignal.timeout(8000),
-          }
-        );
-        const json = await res.json() as any;
-        const meta = json?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('解析失败');
-        const price = meta.regularMarketPrice ?? 0;
-        const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? 0;
-        const change = price - prevClose;
-        const changePercent = prevClose > 0 ? (change / prevClose * 100) : 0;
-        const result = { price, prevClose, change, changePercent, updateTime: '', success: true };
+        // 主源：腾讯证券 usINX（标普500指数）
+        const res = await fetch('https://qt.gtimg.cn/q=usINX', {
+          headers: { 'Referer': 'https://finance.qq.com', 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(8000),
+        });
+        const text = await res.text();
+        const m = text.match(/v_usINX="([^"]+)"/);
+        if (!m) throw new Error('解析失败');
+        const p = m[1].split('~');
+        const price = parseFloat(p[3]);
+        const prevClose = parseFloat(p[9]) || parseFloat(p[4]);
+        const change = parseFloat(p[31]) || (price - prevClose);
+        const changePercent = parseFloat(p[32]) || (prevClose > 0 ? change / prevClose * 100 : 0);
+        const updateTime = p[30] || '';
+        if (!price || price <= 0) throw new Error('无效价格');
+        const result = { price, prevClose, change, changePercent, updateTime, success: true };
         setCache(cacheKey, result);
         return result;
       } catch (e) {
         try {
-          // 备用：腐讯证券 API us.SPX
-          const res2 = await fetch('https://qt.gtimg.cn/q=us.SPX', {
-            headers: { 'Referer': 'https://finance.qq.com', 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(5000),
-          });
-          const text2 = await res2.text();
-          const m2 = text2.match(/v_us\.SPX="([^"]+)"/);
-          if (!m2) throw new Error('备用API解析失败');
-          const p2 = m2[1].split('~');
-          const price2 = parseFloat(p2[3]);
-          const prevClose2 = parseFloat(p2[4]);
-          const change2 = parseFloat(p2[31]) || (price2 - prevClose2);
-          const changePercent2 = parseFloat(p2[32]) || (prevClose2 > 0 ? change2 / prevClose2 * 100 : 0);
+          // 备用： Yahoo Finance
+          const res2 = await fetch(
+            'https://query2.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=1d',
+            {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' },
+              signal: AbortSignal.timeout(6000),
+            }
+          );
+          const json = await res2.json() as any;
+          const meta = json?.chart?.result?.[0]?.meta;
+          if (!meta) throw new Error('备用解析失败');
+          const price2 = meta.regularMarketPrice ?? 0;
+          const prevClose2 = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+          const change2 = price2 - prevClose2;
+          const changePercent2 = prevClose2 > 0 ? (change2 / prevClose2 * 100) : 0;
           const result2 = { price: price2, prevClose: prevClose2, change: change2, changePercent: changePercent2, updateTime: '', success: true };
           setCache(cacheKey, result2);
           return result2;
