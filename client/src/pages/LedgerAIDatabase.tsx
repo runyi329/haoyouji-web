@@ -1493,7 +1493,7 @@ function MacroSection() {
 }
 
 // ─── 主页面 ────────────────────────────────────────────────
-export default function LedgerAIDatabase() {
+export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boolean }) {
   const params = useParams();
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
@@ -1513,7 +1513,7 @@ export default function LedgerAIDatabase() {
       {/* 顶部红色导航 */}
       <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ background: RED, color: "#fff" }}>
         <button
-          onClick={() => setLocation(`/ledger/${ledgerId}`)}
+          onClick={() => homeMode ? setLocation('/') : setLocation(`/ledger/${ledgerId}`)}
           className="w-7 h-7 flex items-center justify-center rounded-full"
           style={{ background: "rgba(255,255,255,0.2)" }}
         >
@@ -1522,20 +1522,23 @@ export default function LedgerAIDatabase() {
         <div className="flex-1">
           <p className="font-bold text-lg">A股追踪</p>
         </div>
+        {/* 散户入口：仅在账本模式下显示 */}
+        {!homeMode && (
+          <button
+            onClick={() => setLocation(`/ledger/${ledgerId}/retail-investor`)}
+            className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-bold"
+            style={{
+              backgroundColor: "#FFD600",
+              color: "#B71C1C",
+              border: "none",
+              minWidth: "52px",
+            }}
+          >
+            散户入口
+          </button>
+        )}
         <button
-          onClick={() => setLocation(`/ledger/${ledgerId}/retail-investor`)}
-          className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-bold"
-          style={{
-            backgroundColor: "#FFD600",
-            color: "#B71C1C",
-            border: "none",
-            minWidth: "52px",
-          }}
-        >
-          散户入口
-        </button>
-        <button
-          onClick={() => setLocation(`/ledger/${ledgerId}/stock-lifecycle`)}
+          onClick={() => homeMode ? setLocation('/ledger/37/stock-lifecycle') : setLocation(`/ledger/${ledgerId}/stock-lifecycle`)}
           className="flex items-center justify-center px-3 h-7 rounded-full text-sm font-medium"
           style={{
             backgroundColor: "rgba(255,255,255,0.9)",
@@ -1576,4 +1579,14 @@ export default function LedgerAIDatabase() {
       </div>
     </div>
   );
+}
+
+// 默认导出：账本模式（保持原有路由兼容）
+export default function LedgerAIDatabase() {
+  return <LedgerAIDatabaseContent homeMode={false} />;
+}
+
+// 首页模式：返回首页，去掉散户入口
+export function StockTrackerHome() {
+  return <LedgerAIDatabaseContent homeMode={true} />;
 }
