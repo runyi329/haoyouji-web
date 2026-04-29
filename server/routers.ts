@@ -20369,11 +20369,10 @@ async function runAfFundingRateSettlement() {
           [ledgerId, userId]
         ) as any[];
         let prevTotal = parseFloat((lastRows as any[])[0]?.total_accumulated ?? '0');
-        // 每个新整小时插入一条日志（年化利率在 12% ± 5% 之间随机浮动）
+        // 每个新整小时插入一条日志（年化利率在 10%~12% 之间均匀随机）
         for (let h = 0; h < hoursToSettle; h++) {
-          // 随机年化：0.12 × (1 ± 0.05)，即 11.4% ~ 12.6%
-          const randomFactor = 1 + (Math.random() * 0.10 - 0.05);
-          const annualRate = 0.12 * randomFactor;
+          // 随机年化：10% ~ 12% 均匀分布
+          const annualRate = 0.10 + Math.random() * 0.02;
           const hourlyRate = annualRate / HOURS_PER_YEAR;
           const amount = baseBalance * hourlyRate;
           prevTotal += amount;
