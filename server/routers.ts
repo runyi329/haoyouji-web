@@ -19730,6 +19730,104 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         }
       }
     }),
+
+    // ========== 全球市场实时行情接口 ==========
+    /** 黄金实时行情 (Yahoo Finance GC=F) */
+    getGoldPrice: publicProcedure.query(async () => {
+      const cacheKey = 'global_gold';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        const res = await fetch(
+          'https://query2.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&range=1d',
+          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+        );
+        const json = await res.json() as any;
+        const meta = json?.chart?.result?.[0]?.meta;
+        if (!meta) throw new Error('解析失败');
+        const price = meta.regularMarketPrice ?? 0;
+        const prev = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const change = price - prev;
+        const changePercent = prev > 0 ? (change / prev * 100) : 0;
+        const result = { price, prevClose: prev, change, changePercent, success: true };
+        setCache(cacheKey, result); // 5分钟缓存
+        return result;
+      } catch (e) {
+        return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+      }
+    }),
+    /** 原油实时行情 (Yahoo Finance CL=F) */
+    getOilPrice: publicProcedure.query(async () => {
+      const cacheKey = 'global_oil';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        const res = await fetch(
+          'https://query2.finance.yahoo.com/v8/finance/chart/CL%3DF?interval=1d&range=1d',
+          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+        );
+        const json = await res.json() as any;
+        const meta = json?.chart?.result?.[0]?.meta;
+        if (!meta) throw new Error('解析失败');
+        const price = meta.regularMarketPrice ?? 0;
+        const prev = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const change = price - prev;
+        const changePercent = prev > 0 ? (change / prev * 100) : 0;
+        const result = { price, prevClose: prev, change, changePercent, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+      }
+    }),
+    /** 美元指数实时行情 (Yahoo Finance DX-Y.NYB) */
+    getDollarIndex: publicProcedure.query(async () => {
+      const cacheKey = 'global_dxy';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        const res = await fetch(
+          'https://query2.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=1d',
+          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+        );
+        const json = await res.json() as any;
+        const meta = json?.chart?.result?.[0]?.meta;
+        if (!meta) throw new Error('解析失败');
+        const price = meta.regularMarketPrice ?? 0;
+        const prev = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const change = price - prev;
+        const changePercent = prev > 0 ? (change / prev * 100) : 0;
+        const result = { price, prevClose: prev, change, changePercent, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+      }
+    }),
+    /** 美元/人民币实时汇率 (Yahoo Finance USDCNH=X) */
+    getUsdCnh: publicProcedure.query(async () => {
+      const cacheKey = 'global_usdcnh';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        const res = await fetch(
+          'https://query2.finance.yahoo.com/v8/finance/chart/USDCNH%3DX?interval=1d&range=1d',
+          { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+        );
+        const json = await res.json() as any;
+        const meta = json?.chart?.result?.[0]?.meta;
+        if (!meta) throw new Error('解析失败');
+        const price = meta.regularMarketPrice ?? 0;
+        const prev = meta.chartPreviousClose ?? meta.previousClose ?? 0;
+        const change = price - prev;
+        const changePercent = prev > 0 ? (change / prev * 100) : 0;
+        const result = { price, prevClose: prev, change, changePercent, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+      }
+    }),
     // ========== 港股全生命周期相关接口 ==========
     /** 港股全生命周期趋势折线图（hk_trend_cache）*/
     hkTrendData: publicProcedure
