@@ -1304,7 +1304,7 @@ export default function Home() {
               {/* 卡片2：我的港股 */}
               <div
                 className="flex-shrink-0 cursor-pointer"
-                onClick={() => setLocation('/hk-stock-tracker')}
+                onClick={() => navigate('/hk-stock-tracker')}
                 style={{
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
