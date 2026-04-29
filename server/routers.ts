@@ -19892,6 +19892,197 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
           return { latestDate, dataReady: !!latestDate };
         } finally { /* pool auto-manages connections */ }
       }),
+    /** 美股全生命周期涨跌天数列表 */
+    usStockLifecycle: publicProcedure
+      .input(z.object({
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(10).max(200).default(50),
+        sortBy: z.enum(['up', 'down', 'flat', 'total', 'upRate']).default('upRate'),
+        sortDir: z.enum(['asc', 'desc']).default('desc'),
+        keyword: z.string().optional(),
+        minTotalDays: z.number().int().min(0).default(0),
+        classify: z.string().optional(), // 'stock' | 'etf' | 'fund' | '' (全部)
+      }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        try {
+          const minDaysCond = input.minTotalDays > 0 ? `AND COALESCE(l.total_days, 0) >= ${Number(input.minTotalDays)}` : '';
+          const kwCond = input.keyword ? `AND (l.ts_code LIKE ? OR l.name LIKE ? OR l.enname LIKE ?)` : '';
+          const kwParams: string[] = input.keyword ? [`%${input.keyword}%`, `%${input.keyword}%`, `%${input.keyword}%`] : [];
+          const classifyCond = input.classify ? `AND l.classify = ?` : '';
+          const classifyParams: string[] = input.classify ? [input.classify] : [];
+          const allParams = [...kwParams, ...classifyParams];
+          const sortColMap: Record<string, string> = {
+            up: 'up_days', down: 'down_days', flat: 'flat_days',
+            total: 'total_days', upRate: 'up_rate',
+          };
+          const sortCol = sortColMap[input.sortBy] || 'up_rate';
+          const sortDir = input.sortDir === 'asc' ? 'ASC' : 'DESC';
+          const offset = (input.page - 1) * input.pageSize;
+          // 检查表是否存在
+          const [tableCheck] = await dbConn.execute(
+            "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'us_stock_lifecycle'"
+          ) as any[];
+          if (Number((tableCheck as any[])[0]?.cnt) === 0) {
+            return { total: 0, page: input.page, pageSize: input.pageSize, list: [], dataReady: false };
+          }
+          const [countRows] = await dbConn.execute(
+            `SELECT COUNT(*) AS cnt FROM us_stock_lifecycle l WHERE total_days > 0 ${minDaysCond} ${kwCond} ${classifyCond}`,
+            allParams
+          ) as any[];
+          const total = Number((countRows as any[])[0]?.cnt) || 0;
+          const [rows] = await dbConn.execute(
+            `SELECT
+              l.ts_code,
+              l.name,
+              l.enname,
+              l.classify,
+              l.list_date,
+              l.delist_date,
+              l.up_days,
+              l.down_days,
+              l.flat_days,
+              l.total_days,
+              l.up_rate
+            FROM us_stock_lifecycle l
+            WHERE total_days > 0 ${minDaysCond} ${kwCond} ${classifyCond}
+            ORDER BY ${sortCol} ${sortDir}, l.ts_code ASC
+            LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`,
+            allParams
+          ) as any[];
+          return {
+            total,
+            page: input.page,
+            pageSize: input.pageSize,
+            dataReady: true,
+            list: (rows as any[]).map(r => ({
+              tsCode: r.ts_code as string,
+              name: r.name as string | null,
+              enname: r.enname as string | null,
+              classify: r.classify as string | null,
+              listDate: r.list_date as string | null,
+              delistDate: r.delist_date as string | null,
+              upDays: Number(r.up_days),
+              downDays: Number(r.down_days),
+              flatDays: Number(r.flat_days),
+              totalDays: Number(r.total_days),
+              upRate: Number(r.up_rate),
+            })),
+          };
+        } finally { /* pool auto-manages connections */ }
+      }),
+    /** 美股个股详情：基本信息 + 全生命周期涨跌天数（实时从 Tushare 拉取） */
+    usStockDetail: publicProcedure
+      .input(z.object({ tsCode: z.string(), _r: z.number().optional() }))
+      .query(async ({ input }) => {
+        const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+        const TUSHARE_URL = 'http://api.tushare.pro';
+        try {
+          // 1. 先从数据库查缓存
+          const dbConn = await getDbConnection();
+          if (dbConn) {
+            try {
+              const [tableCheck] = await dbConn.execute(
+                "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'us_stock_lifecycle'"
+              ) as any[];
+              if (Number((tableCheck as any[])[0]?.cnt) > 0) {
+                const [cached] = await dbConn.execute(
+                  'SELECT * FROM us_stock_lifecycle WHERE ts_code = ?', [input.tsCode]
+                ) as any[];
+                if ((cached as any[]).length > 0) {
+                  const r = (cached as any[])[0];
+                  if (Number(r.total_days) > 0) {
+                    return {
+                      tsCode: r.ts_code,
+                      name: r.name,
+                      enname: r.enname,
+                      classify: r.classify,
+                      listDate: r.list_date,
+                      delistDate: r.delist_date,
+                      upDays: Number(r.up_days),
+                      downDays: Number(r.down_days),
+                      flatDays: Number(r.flat_days),
+                      totalDays: Number(r.total_days),
+                      upRate: Number(r.up_rate).toFixed(2),
+                      updatedAt: r.updated_at ? String(r.updated_at).slice(0, 10) : null,
+                      fromCache: true,
+                    };
+                  }
+                }
+              }
+            } catch (_) { /* 忽略缓存查询错误 */ }
+          }
+          // 2. 实时从 Tushare 拉取
+          const resp = await fetch(TUSHARE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_name: 'us_basic',
+              token: TUSHARE_TOKEN,
+              params: { ts_code: input.tsCode },
+              fields: 'ts_code,name,enname,classify,list_date,delist_date',
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          const json = await resp.json() as any;
+          let basicInfo: any = null;
+          if (json.code === 0 && json.data?.items?.length) {
+            const fields: string[] = json.data.fields;
+            const row = json.data.items[0];
+            basicInfo = {
+              tsCode: String(row[fields.indexOf('ts_code')]),
+              name: row[fields.indexOf('name')] ? String(row[fields.indexOf('name')]) : null,
+              enname: row[fields.indexOf('enname')] ? String(row[fields.indexOf('enname')]) : null,
+              classify: row[fields.indexOf('classify')] ? String(row[fields.indexOf('classify')]) : null,
+              listDate: row[fields.indexOf('list_date')] ? String(row[fields.indexOf('list_date')]) : null,
+              delistDate: row[fields.indexOf('delist_date')] ? String(row[fields.indexOf('delist_date')]) : null,
+            };
+          }
+          if (!basicInfo) {
+            return { tsCode: input.tsCode, name: null, enname: input.tsCode, classify: null, listDate: null, delistDate: null, upDays: 0, downDays: 0, flatDays: 0, totalDays: 0, upRate: '0.00', updatedAt: null };
+          }
+          // 3. 分段拉取全量日线数据
+          let upDays = 0, downDays = 0, flatDays = 0, totalDays = 0;
+          const listYear = basicInfo.listDate ? parseInt(basicInfo.listDate.slice(0, 4)) : 1990;
+          const currentYear = new Date().getFullYear();
+          const segments: Array<{ start: string; end: string }> = [];
+          for (let y = listYear; y <= currentYear; y += 10) {
+            segments.push({ start: `${y}0101`, end: `${Math.min(y + 9, currentYear)}1231` });
+          }
+          const fetchSegment = async (seg: { start: string; end: string }) => {
+            const r = await fetch(TUSHARE_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                api_name: 'us_daily',
+                token: TUSHARE_TOKEN,
+                params: { ts_code: input.tsCode, start_date: seg.start, end_date: seg.end },
+                fields: 'pct_chg',
+              }),
+              signal: AbortSignal.timeout(15000),
+            });
+            return r.json() as Promise<any>;
+          };
+          const results = await Promise.all(segments.map(fetchSegment));
+          for (const dailyJson of results) {
+            if (dailyJson.code === 0 && dailyJson.data?.items?.length) {
+              const pctIdx = (dailyJson.data.fields as string[]).indexOf('pct_chg');
+              for (const row of dailyJson.data.items) {
+                const pct = Number(row[pctIdx]) || 0;
+                totalDays++;
+                if (pct > 0) upDays++;
+                else if (pct < 0) downDays++;
+                else flatDays++;
+              }
+            }
+          }
+          const upRate = totalDays > 0 ? ((upDays / totalDays) * 100).toFixed(2) : '0.00';
+          return { ...basicInfo, upDays, downDays, flatDays, totalDays, upRate, updatedAt: new Date().toISOString().slice(0, 10), fromCache: false };
+        } catch (e: any) {
+          return { tsCode: input.tsCode, name: null, enname: input.tsCode, classify: null, listDate: null, delistDate: null, upDays: 0, downDays: 0, flatDays: 0, totalDays: 0, upRate: '0.00', updatedAt: null };
+        }
+      }),
   }),
 });
 // 管理员容器定义管理（独立 router，仅超级管理员可用）

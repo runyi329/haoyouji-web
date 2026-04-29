@@ -1355,7 +1355,9 @@ export default function Home() {
               {/* 卡片3：我的美股 */}
               <div
                 className="flex-shrink-0"
+                onClick={() => navigate('/us-stock-tracker')}
                 style={{
+                  cursor: 'pointer',
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
