@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
@@ -557,6 +557,189 @@ function getLevelClassName(level?: string): string {
 }
 
 
+// ── 全球市场节假日（组件外部，避免每次渲染重建）──────────────────────────
+const GLOBAL_MARKET_HOLIDAYS_OUTER = new Set([
+  '2025-01-01','2025-01-20','2025-02-17','2025-04-18','2025-05-26',
+  '2025-06-19','2025-07-04','2025-09-01','2025-11-27','2025-12-25',
+  '2026-01-01','2026-01-19','2026-02-16','2026-04-03','2026-05-25',
+  '2026-06-19','2026-07-04','2026-09-07','2026-11-26','2026-12-25',
+]);
+
+function getBjDateStrOuter(d: Date): string {
+  const bj = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+  return `${bj.getUTCFullYear()}-${String(bj.getUTCMonth()+1).padStart(2,'0')}-${String(bj.getUTCDate()).padStart(2,'0')}`;
+}
+
+function getGlobalMarketStatusOuter(now: Date): 'open' | 'closed' {
+  const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const day = bj.getUTCDay();
+  const dateStr = getBjDateStrOuter(now);
+  if (day === 6) return 'closed';
+  if (day === 0) {
+    const h = bj.getUTCHours(), m = bj.getUTCMinutes();
+    return (h * 60 + m) >= 6 * 60 ? 'open' : 'closed';
+  }
+  if (GLOBAL_MARKET_HOLIDAYS_OUTER.has(dateStr)) return 'closed';
+  if (day === 5) {
+    const h = bj.getUTCHours(), m = bj.getUTCMinutes();
+    return (h * 60 + m) < 23 * 60 ? 'open' : 'closed';
+  }
+  return 'open';
+}
+
+function getGlobalNextOpenTimeOuter(now: Date): number {
+  const BJ_OFFSET = 8 * 60 * 60 * 1000;
+  const nowMs = now.getTime();
+  const bjDate = new Date(nowMs + BJ_OFFSET);
+  const day = bjDate.getUTCDay();
+  if (day === 6) {
+    const todayBjMidnight = Date.UTC(bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate()) - BJ_OFFSET;
+    return todayBjMidnight + 24 * 3600 * 1000 + 6 * 3600 * 1000;
+  }
+  if (day === 0) {
+    const todayBjMidnight = Date.UTC(bjDate.getUTCFullYear(), bjDate.getUTCMonth(), bjDate.getUTCDate()) - BJ_OFFSET;
+    return todayBjMidnight + 6 * 3600 * 1000;
+  }
+  if (day === 5) {
+    const h = bjDate.getUTCHours(), m = bjDate.getUTCMinutes();
+    if (h * 60 + m >= 23 * 60) {
+      for (let i = 1; i <= 7; i++) {
+        const cMs = nowMs + i * 24 * 3600 * 1000;
+        const cBj = new Date(cMs + BJ_OFFSET);
+        const cDay = cBj.getUTCDay();
+        const cStr = getBjDateStrOuter(new Date(cMs));
+        if (cDay === 0) return Date.UTC(cBj.getUTCFullYear(), cBj.getUTCMonth(), cBj.getUTCDate()) - BJ_OFFSET + 6 * 3600 * 1000;
+        if (cDay !== 6 && !GLOBAL_MARKET_HOLIDAYS_OUTER.has(cStr)) return Date.UTC(cBj.getUTCFullYear(), cBj.getUTCMonth(), cBj.getUTCDate()) - BJ_OFFSET;
+      }
+    }
+  }
+  if (GLOBAL_MARKET_HOLIDAYS_OUTER.has(getBjDateStrOuter(now))) {
+    for (let i = 1; i <= 7; i++) {
+      const cMs = nowMs + i * 24 * 3600 * 1000;
+      const cBj = new Date(cMs + BJ_OFFSET);
+      const cDay = cBj.getUTCDay();
+      const cStr = getBjDateStrOuter(new Date(cMs));
+      if (cDay !== 0 && cDay !== 6 && !GLOBAL_MARKET_HOLIDAYS_OUTER.has(cStr)) {
+        return Date.UTC(cBj.getUTCFullYear(), cBj.getUTCMonth(), cBj.getUTCDate()) - BJ_OFFSET;
+      }
+    }
+  }
+  return nowMs + 3600 * 1000;
+}
+
+// ── 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁）────────────────
+const GlobalMarketStrip = React.memo(function GlobalMarketStrip() {
+  const { data: goldPrice } = trpc.stock.getGoldPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+
+  const [globalMarketStatus, setGlobalMarketStatus] = useState<'open' | 'closed'>(() => getGlobalMarketStatusOuter(new Date()));
+  const [globalCountdown, setGlobalCountdown] = useState('');
+  const [globalScrollPaused, setGlobalScrollPaused] = useState(false);
+
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const status = getGlobalMarketStatusOuter(now);
+      setGlobalMarketStatus(status);
+      if (status !== 'open') {
+        const nextMs = getGlobalNextOpenTimeOuter(now);
+        const diff = Math.max(0, nextMs - now.getTime());
+        const totalSec = Math.floor(diff / 1000);
+        const hh = Math.floor(totalSec / 3600);
+        const mm = Math.floor((totalSec % 3600) / 60);
+        const ss = totalSec % 60;
+        setGlobalCountdown(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`);
+      } else {
+        setGlobalCountdown('');
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const items = [
+    { key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1 },
+    { key: 'oil',  label: '原油 WTI',      data: oilPrice,  unit: '/桶',   decimals: 2 },
+    { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3 },
+    { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,    unit: '',      decimals: 4 },
+  ];
+
+  return (
+    <div className="mx-3 mt-1.5 flex-shrink-0" style={{ overflow: 'hidden', borderRadius: '12px', position: 'relative',
+      border: '1px solid rgba(203,164,113,0.35)',
+      boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
+      background: 'rgba(255,255,255,0.82)' }}>
+      <style>{`
+        @keyframes global-scroll {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .global-scroll-track {
+          animation: global-scroll 20s linear infinite;
+        }
+        .global-scroll-track.paused {
+          animation-play-state: paused;
+        }
+      `}</style>
+      <div
+        className={`global-scroll-track${globalScrollPaused ? ' paused' : ''}`}
+        style={{ display: 'flex', gap: 0, width: 'max-content' }}
+        onTouchStart={() => setGlobalScrollPaused(true)}
+        onTouchEnd={() => setGlobalScrollPaused(false)}
+      >
+        {[...Array(2)].map((_, copyIdx) =>
+          items.map((item) => (
+            <div
+              key={`${item.key}-${copyIdx}`}
+              style={{ width: '160px', flexShrink: 0, boxSizing: 'border-box',
+                background: 'transparent', borderRadius: 0,
+                padding: '8px 12px', borderRight: '1px solid rgba(203,164,113,0.25)' }}
+            >
+              <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                <Globe className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>{item.label}</span>
+              </div>
+              <div className="flex items-baseline">
+                {!item.data?.success ? (
+                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
+                ) : (
+                  <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} fixedSize={26} />
+                )}
+              </div>
+              <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
+                {globalMarketStatus === 'open' ? (
+                  <>
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                    {item.data?.success && (
+                      <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
+                        color: (item.data.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
+                        {(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.change ?? 0).toFixed(item.decimals)}
+                        ({(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.changePercent ?? 0).toFixed(2)}%)
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                    休市中，离开市
+                    {globalCountdown && (
+                      <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                        {globalCountdown}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+});
+
 export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -922,11 +1105,9 @@ export default function Home() {
   const [marketStatus, setMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getMarketStatus(new Date()));
   const [hkMarketStatus, setHkMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getHKMarketStatus(new Date()));
   const [usMarketStatus, setUsMarketStatus] = useState<'open' | 'closed'>(() => getUSMarketStatus(new Date()));
-  const [globalMarketStatus, setGlobalMarketStatus] = useState<'open' | 'closed'>(() => getGlobalMarketStatus(new Date()));
   const [countdown, setCountdown] = useState('');
   const [hkCountdown, setHkCountdown] = useState('');
   const [usCountdown, setUsCountdown] = useState('');
-  const [globalCountdown, setGlobalCountdown] = useState('');
 
   useEffect(() => {
     const tick = () => {
@@ -972,20 +1153,7 @@ export default function Home() {
       } else {
         setUsCountdown('');
       }
-      // 全球市场（黄金/原油/外汇）状态
-      const globalStatus = getGlobalMarketStatus(now);
-      setGlobalMarketStatus(globalStatus);
-      if (globalStatus !== 'open') {
-        const globalNextMs = getGlobalNextOpenTime(now);
-        const globalDiff = Math.max(0, globalNextMs - now.getTime());
-        const globalTotalSec = Math.floor(globalDiff / 1000);
-        const gHH = Math.floor(globalTotalSec / 3600);
-        const gMM = Math.floor((globalTotalSec % 3600) / 60);
-        const gSS = globalTotalSec % 60;
-        setGlobalCountdown(`${String(gHH).padStart(2,'0')}:${String(gMM).padStart(2,'0')}:${String(gSS).padStart(2,'0')}`);
-      } else {
-        setGlobalCountdown('');
-      }
+      // 全球市场状态已移至 GlobalMarketStrip 组件内部管理
     };
     tick();
     const timer = setInterval(tick, 1000);
@@ -1012,14 +1180,8 @@ export default function Home() {
     staleTime: 5000,
   });
 
-  // 全球市场实时行情
-  const { data: goldPrice } = trpc.stock.getGoldPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  // 全球市场卡片匀速无缝滚动（跑马灯）
-  const [globalScrollPaused, setGlobalScrollPaused] = useState(false);
-  const globalSwipeRef = useRef<HTMLDivElement>(null);
+  // 全球市场卡片已移至独立的 GlobalMarketStrip 组件
+  // 股票卡片滑动状态（保留）
   // 股票卡片滑动状态
   const [stockCardIndex, setStockCardIndex] = useState(0);
   const [stockContainerWidth, setStockContainerWidth] = useState(0);
@@ -1552,96 +1714,8 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 全球市场匀速无缝滚动卡片区域（无缝拼接，无间距无圆角） */}
-          <style>{`
-            @keyframes global-scroll {
-              0%   { transform: translateX(0); }
-              100% { transform: translateX(-50%); }
-            }
-            .global-scroll-track {
-              animation: global-scroll 20s linear infinite;
-            }
-            .global-scroll-track.paused {
-              animation-play-state: paused;
-            }
-          `}</style>
-          <div
-            ref={globalSwipeRef}
-            className="mx-3 mt-1.5 flex-shrink-0"
-            style={{ overflow: 'hidden', borderRadius: '12px', position: 'relative',
-              border: '1px solid rgba(203,164,113,0.35)',
-              boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
-              background: 'rgba(255,255,255,0.82)' }}
-          >
-            {/* 双份卡片，CSS animation匀速无缝循环，无间距无圆角 */}
-            <div
-              className={`global-scroll-track${globalScrollPaused ? ' paused' : ''}`}
-              style={{ display: 'flex', gap: 0, width: 'max-content' }}
-              onTouchStart={() => setGlobalScrollPaused(true)}
-              onTouchEnd={() => setGlobalScrollPaused(false)}
-            >
-              {/* 渲染两份卡片实现无缝循环 */}
-              {[...Array(2)].map((_, copyIdx) =>
-                [{
-                  key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1,
-                }, {
-                  key: 'oil', label: '原油 WTI', data: oilPrice, unit: '/桶', decimals: 2,
-                }, {
-                  key: 'dxy', label: '美元指数 DXY', data: dollarIndex, unit: '', decimals: 3,
-                }, {
-                  key: 'cnh', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4,
-                }].map((item) => (
-                  <div
-                    key={`${item.key}-${copyIdx}`}
-                    style={{
-                      width: '160px',
-                      flexShrink: 0,
-                      boxSizing: 'border-box',
-                      background: 'transparent',
-                      borderRadius: 0,
-                      padding: '8px 12px',
-                      borderRight: '1px solid rgba(203,164,113,0.25)',
-                    }}
-                  >
-                    <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                      <Globe className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
-                      <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>{item.label}</span>
-                    </div>
-                    <div className="flex items-baseline">
-                      {!item.data?.success ? (
-                        <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
-                      ) : (
-                        <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} fixedSize={26} />
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
-                      {globalMarketStatus === 'open' ? (
-                        <>
-                          <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
-                          {item.data?.success && (
-                            <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
-                              color: (item.data.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
-                              {(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.change ?? 0).toFixed(item.decimals)}
-                              ({(item.data.change ?? 0) >= 0 ? '+' : ''}{(item.data.changePercent ?? 0).toFixed(2)}%)
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
-                          休市中，离开市
-                          {globalCountdown && (
-                            <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                              {globalCountdown}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          {/* 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁） */}
+          <GlobalMarketStrip />
 
           {/* 占位内容 */}
           <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
