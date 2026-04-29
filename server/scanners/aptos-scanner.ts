@@ -164,11 +164,10 @@ async function processDepositActivity(activity: any, walletAddress: string) {
     const matchResult = await dbRecharge.findOrderByAmount(amount, txVersion);
 
     if (!matchResult) {
-      console.log(`[Aptos Scanner] ⚠️  No matching order for amount ${amount} USDT`);
-      // 记录未匹配交易
-      await dbRecharge.recordUnmatchedTransaction(txVersion, amount, '');
+      // 未匹配时不加入 processedTxns，下次扫描会重试
+      // 只有成功完成订单后才加入，防止重复入账
+      console.log(`[Aptos Scanner] ⚠️  No matching order for amount ${amount} USDT, will retry next scan`);
       scanStats.unmatchedTransactions++;
-      processedTxns.add(txVersion);
       return;
     }
 

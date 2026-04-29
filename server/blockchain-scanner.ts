@@ -198,11 +198,10 @@ async function processTRC20Transaction(tx: any, walletAddress: string) {
     const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash);
 
     if (!matchResult) {
-      console.log(`[Scanner] ⚠️ No matching order for amount ${amount} USDT`);
-      // 记录未匹配交易，供管理员手动处理
-      await dbRecharge.recordUnmatchedTransaction(txnHash, amount, fromAddress);
+      // 未匹配时不加入 processedTxns，下次扫描会重试
+      // 只有成功完成订单后才加入，防止重复入账
+      console.log(`[Scanner] ⚠️ No matching order for amount ${amount} USDT, will retry next scan`);
       currentScanStats.unmatchedTransactions++;
-      processedTxns.add(txnHash);
       return;
     }
 
