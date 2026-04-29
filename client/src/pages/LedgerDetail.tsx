@@ -5194,7 +5194,7 @@ export default function LedgerDetail() {
       {/* AF 账本：资金费率日志弹窗 */}
       {showFundingRateLogs && (
         <div className="fixed inset-0 z-[100] flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={() => setShowFundingRateLogs(false)}>
-          <div className="mt-auto mx-0 rounded-t-3xl flex flex-col" style={{ backgroundColor: '#fff', maxHeight: '80vh', minHeight: 0 }} onClick={e => e.stopPropagation()}>
+          <div className="mt-auto mx-0 rounded-t-3xl flex flex-col" style={{ backgroundColor: '#fff', height: '80vh', minHeight: 0 }} onClick={e => e.stopPropagation()}>
             {/* 弹窗标题栏 */}
             <div className="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <div>
