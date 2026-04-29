@@ -1520,7 +1520,7 @@ export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boole
           <ChevronLeft className="w-4 h-4 text-white" />
         </button>
         <div className="flex-1">
-          <p className="font-bold text-lg">A股追踪</p>
+          <p className="font-bold text-lg">A股AI实时追踪</p>
         </div>
         {/* 散户入口：仅在账本模式下显示 */}
         {!homeMode && (

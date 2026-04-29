@@ -603,18 +603,127 @@ export default function Home() {
     staleTime: 30000,
   });
 
-  // 判断是否为A股开市时间（工作日 9:30-15:00 北京时间）
-  const isMarketOpen = () => {
-    const now = new Date();
-    // 转为北京时间
-    const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-    const day = bjNow.getUTCDay(); // 0=周日, 6=周六
-    if (day === 0 || day === 6) return false;
-    const h = bjNow.getUTCHours();
-    const m = bjNow.getUTCMinutes();
-    const minutes = h * 60 + m;
-    return (minutes >= 9 * 60 + 30 && minutes < 15 * 60);
+  // ── A股市场状态逻辑 ──────────────────────────────────────────
+  // 2025-2026年A股法定节假日（不开市）
+  const A_SHARE_HOLIDAYS = new Set([
+    // 2025年
+    '2025-01-01','2025-01-28','2025-01-29','2025-01-30','2025-01-31',
+    '2025-02-03','2025-02-04',
+    '2025-04-04','2025-04-05','2025-04-07',
+    '2025-05-01','2025-05-02','2025-05-05',
+    '2025-05-31','2025-06-02',
+    '2025-10-01','2025-10-02','2025-10-03','2025-10-06','2025-10-07','2025-10-08',
+    // 2026年
+    '2026-01-01','2026-01-02',
+    '2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-23','2026-02-24',
+    '2026-04-06',
+    '2026-05-01','2026-05-04','2026-05-05',
+    '2026-06-19',
+    '2026-10-01','2026-10-02','2026-10-05','2026-10-06','2026-10-07','2026-10-08',
+  ]);
+  // 补班日（周末也开市）
+  const A_SHARE_EXTRA_OPEN = new Set([
+    '2025-01-26','2025-02-08','2025-04-27','2025-09-28',
+    '2026-02-15','2026-04-12','2026-09-27','2026-10-10',
+  ]);
+
+  const getBjDateStr = (d: Date) => {
+    const bj = new Date(d.getTime() + 8 * 60 * 60 * 1000);
+    const y = bj.getUTCFullYear();
+    const mo = String(bj.getUTCMonth() + 1).padStart(2, '0');
+    const da = String(bj.getUTCDate()).padStart(2, '0');
+    return `${y}-${mo}-${da}`;
   };
+
+  // 返回市场状态: 'open' | 'lunch' | 'closed'
+  const getMarketStatus = (now: Date): 'open' | 'lunch' | 'closed' => {
+    const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const dateStr = getBjDateStr(now);
+    const day = bj.getUTCDay();
+    const isWeekend = day === 0 || day === 6;
+    const isHoliday = A_SHARE_HOLIDAYS.has(dateStr);
+    const isExtraOpen = A_SHARE_EXTRA_OPEN.has(dateStr);
+    if ((isWeekend || isHoliday) && !isExtraOpen) return 'closed';
+    const h = bj.getUTCHours();
+    const m = bj.getUTCMinutes();
+    const mins = h * 60 + m;
+    if (mins >= 9 * 60 + 30 && mins < 11 * 60 + 30) return 'open';
+    if (mins >= 11 * 60 + 30 && mins < 13 * 60) return 'lunch';
+    if (mins >= 13 * 60 && mins < 15 * 60) return 'open';
+    return 'closed';
+  };
+
+  const isMarketOpen = () => getMarketStatus(new Date()) === 'open';
+
+  // 计算下一个开市时间点（返回 UTC ms）
+  const getNextOpenTime = (now: Date): number => {
+    const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const h = bj.getUTCHours();
+    const m = bj.getUTCMinutes();
+    const s = bj.getUTCSeconds();
+    const mins = h * 60 + m;
+    const status = getMarketStatus(now);
+    // 如果是午休，下一个开市时间是当天 13:00
+    if (status === 'lunch') {
+      const todayOpen13 = new Date(bj);
+      todayOpen13.setUTCHours(5, 0, 0, 0); // UTC 5:00 = BJ 13:00
+      return todayOpen13.getTime() - 8 * 60 * 60 * 1000;
+    }
+    // 当天未开市（早于 9:30）
+    const dateStr = getBjDateStr(now);
+    const day = bj.getUTCDay();
+    const isWeekend = day === 0 || day === 6;
+    const isHoliday = A_SHARE_HOLIDAYS.has(dateStr);
+    const isExtraOpen = A_SHARE_EXTRA_OPEN.has(dateStr);
+    const todayIsOpen = (!isWeekend && !isHoliday) || isExtraOpen;
+    if (todayIsOpen && mins < 9 * 60 + 30) {
+      const todayOpen = new Date(bj);
+      todayOpen.setUTCHours(1, 30, 0, 0); // UTC 1:30 = BJ 9:30
+      return todayOpen.getTime() - 8 * 60 * 60 * 1000;
+    }
+    // 否则找下一个开市日
+    let candidate = new Date(bj);
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+    for (let i = 0; i < 10; i++) {
+      const ds = getBjDateStr(new Date(candidate.getTime() - 8 * 60 * 60 * 1000));
+      const cd = candidate.getUTCDay();
+      const cIsWeekend = cd === 0 || cd === 6;
+      const cIsHoliday = A_SHARE_HOLIDAYS.has(ds);
+      const cIsExtra = A_SHARE_EXTRA_OPEN.has(ds);
+      if ((!cIsWeekend && !cIsHoliday) || cIsExtra) {
+        candidate.setUTCHours(1, 30, 0, 0); // BJ 9:30
+        return candidate.getTime() - 8 * 60 * 60 * 1000;
+      }
+      candidate.setUTCDate(candidate.getUTCDate() + 1);
+    }
+    return now.getTime() + 24 * 60 * 60 * 1000;
+  };
+
+  // 市场状态和倒计时 state
+  const [marketStatus, setMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getMarketStatus(new Date()));
+  const [countdown, setCountdown] = useState('');
+
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const status = getMarketStatus(now);
+      setMarketStatus(status);
+      if (status !== 'open') {
+        const nextMs = getNextOpenTime(now);
+        const diff = Math.max(0, nextMs - now.getTime());
+        const totalSec = Math.floor(diff / 1000);
+        const hh = Math.floor(totalSec / 3600);
+        const mm = Math.floor((totalSec % 3600) / 60);
+        const ss = totalSec % 60;
+        setCountdown(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`);
+      } else {
+        setCountdown('');
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // 获取上证指数实时数据
   const { data: shanghaiIndex } = trpc.stock.getShanghaiIndex.useQuery(undefined, {
@@ -962,7 +1071,15 @@ export default function Home() {
             </div>
             {/* 涌跌信息 + 开市状态 */}
             <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
-              <div style={{ fontSize: '0.6rem', color: '#888', flexShrink: 0, whiteSpace: 'nowrap' }}>{isMarketOpen() ? '开市中' : '已收盘'}</div>
+              <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap',
+                color: marketStatus === 'open' ? '#A80000' : '#888' }}>
+                {marketStatus === 'open' ? '开市中' : marketStatus === 'lunch' ? '午休中' : '休市中'}
+                {marketStatus !== 'open' && countdown && (
+                  <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                    {countdown}
+                  </span>
+                )}
+              </div>
               {shanghaiIndex?.success && (
                 <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
                   color: (shanghaiIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
