@@ -898,8 +898,13 @@ export default function Home() {
   const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
   const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
   const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 300000, staleTime: 300000 });
-  // 全球市场卡片自动轮播状态
-  const [globalCardIndex, setGlobalCardIndex] = useState(0);
+  // 全球市场卡片无缝循环轮播状态
+  // 原理：4张真实卡片，前后各克隆1张，共6张（克隆末,真0,真1,真2,真3,克隆首）
+  // 真实索引从1开始（0是克隆末，5是克隆首）
+  const GLOBAL_CARDS_COUNT = 4;
+  const [globalRealIndex, setGlobalRealIndex] = useState(0); // 0-3 真实索引
+  const [globalSlideIndex, setGlobalSlideIndex] = useState(1); // 1-4 滑动索引（含克隆）
+  const [globalTransition, setGlobalTransition] = useState(true); // 是否启用过渡动画
   const [globalContainerWidth, setGlobalContainerWidth] = useState(0);
   const globalSwipeRef = useRef<HTMLDivElement>(null);
   const globalTouchStartX = useRef(0);
@@ -912,8 +917,54 @@ export default function Home() {
     setGlobalContainerWidth(globalSwipeRef.current.offsetWidth);
     return () => ro.disconnect();
   }, []);
+  // 当滑到克隆卡片时，无动画跳回真实卡片
   useEffect(() => {
-    globalAutoPlayRef.current = setInterval(() => { setGlobalCardIndex(prev => (prev + 1) % 4); }, 3000);
+    if (globalSlideIndex === 0) {
+      // 滑到克隆末（第0位），无动画跳到真实末（第4位）
+      const t = setTimeout(() => {
+        setGlobalTransition(false);
+        setGlobalSlideIndex(GLOBAL_CARDS_COUNT);
+        setGlobalRealIndex(GLOBAL_CARDS_COUNT - 1);
+        setTimeout(() => setGlobalTransition(true), 50);
+      }, 350);
+      return () => clearTimeout(t);
+    }
+    if (globalSlideIndex === GLOBAL_CARDS_COUNT + 1) {
+      // 滑到克隆首（第5位），无动画跳到真实首（第1位）
+      const t = setTimeout(() => {
+        setGlobalTransition(false);
+        setGlobalSlideIndex(1);
+        setGlobalRealIndex(0);
+        setTimeout(() => setGlobalTransition(true), 50);
+      }, 350);
+      return () => clearTimeout(t);
+    }
+  }, [globalSlideIndex]);
+  const globalGoNext = () => {
+    setGlobalTransition(true);
+    setGlobalSlideIndex(prev => {
+      const next = prev + 1;
+      if (next <= GLOBAL_CARDS_COUNT) setGlobalRealIndex(next - 1);
+      else setGlobalRealIndex(0); // 克隆首，视觉上是0
+      return next;
+    });
+  };
+  const globalGoPrev = () => {
+    setGlobalTransition(true);
+    setGlobalSlideIndex(prev => {
+      const next = prev - 1;
+      if (next >= 1) setGlobalRealIndex(next - 1);
+      else setGlobalRealIndex(GLOBAL_CARDS_COUNT - 1); // 克隆末，视觉上是末
+      return next;
+    });
+  };
+  const globalGoTo = (realIdx: number) => {
+    setGlobalTransition(true);
+    setGlobalSlideIndex(realIdx + 1);
+    setGlobalRealIndex(realIdx);
+  };
+  useEffect(() => {
+    globalAutoPlayRef.current = setInterval(globalGoNext, 3000);
     return () => { if (globalAutoPlayRef.current) clearInterval(globalAutoPlayRef.current); };
   }, []);
   // 股票卡片滑动状态
@@ -1462,21 +1513,23 @@ export default function Home() {
               const dx = e.changedTouches[0].clientX - globalTouchStartX.current;
               const dy = e.changedTouches[0].clientY - globalTouchStartY.current;
               if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-                if (dx < 0) setGlobalCardIndex(prev => (prev + 1) % 4);
-                if (dx > 0) setGlobalCardIndex(prev => (prev - 1 + 4) % 4);
+                if (dx < 0) globalGoNext();
+                if (dx > 0) globalGoPrev();
               }
-              globalAutoPlayRef.current = setInterval(() => { setGlobalCardIndex(prev => (prev + 1) % 4); }, 3000);
+              globalAutoPlayRef.current = setInterval(globalGoNext, 3000);
             }}
           >
             <div
               style={{
                 display: 'flex',
-                transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
-                transform: `translateX(${globalCardIndex * -(globalContainerWidth || 0)}px)`,
+                transition: globalTransition ? 'transform 0.35s cubic-bezier(0.4,0,0.2,1)' : 'none',
+                transform: `translateX(${globalSlideIndex * -(globalContainerWidth || 0)}px)`,
               }}
             >
-              {/* 卡瑲1：黄金 */}
+              {/* 无缝循环：克隆末(USD/CNH) + 4张真实卡片 + 克隆首(黄金)，共6张 */}
               {[{
+                key: 'clone-last', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4, icon: '🎴',
+              }, {
                 key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1, icon: '✨',
               }, {
                 key: 'oil', label: '原油 WTI', data: oilPrice, unit: '/桶', decimals: 2, icon: '⛽',
@@ -1484,6 +1537,8 @@ export default function Home() {
                 key: 'dxy', label: '美元指数 DXY', data: dollarIndex, unit: '', decimals: 3, icon: '💵',
               }, {
                 key: 'cnh', label: 'USD/CNH', data: usdCnh, unit: '', decimals: 4, icon: '🎴',
+              }, {
+                key: 'clone-first', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1, icon: '✨',
               }].map((item) => (
                 <div
                   key={item.key}
@@ -1528,12 +1583,12 @@ export default function Home() {
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
-                onClick={() => { setGlobalCardIndex(i); if (globalAutoPlayRef.current) clearInterval(globalAutoPlayRef.current); globalAutoPlayRef.current = setInterval(() => setGlobalCardIndex(prev => (prev + 1) % 4), 3000); }}
+                onClick={() => { if (globalAutoPlayRef.current) clearInterval(globalAutoPlayRef.current); globalGoTo(i); globalAutoPlayRef.current = setInterval(globalGoNext, 3000); }}
                 style={{
-                  width: globalCardIndex === i ? '14px' : '5px',
+                  width: globalRealIndex === i ? '14px' : '5px',
                   height: '5px',
                   borderRadius: '3px',
-                  background: globalCardIndex === i ? 'rgba(168,0,0,0.7)' : 'rgba(168,0,0,0.25)',
+                  background: globalRealIndex === i ? 'rgba(168,0,0,0.7)' : 'rgba(168,0,0,0.25)',
                   transition: 'all 0.3s ease',
                   cursor: 'pointer',
                 }}
