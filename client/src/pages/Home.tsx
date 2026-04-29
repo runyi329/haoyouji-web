@@ -726,121 +726,10 @@ export default function Home() {
   }, []);
 
   // 获取上证指数实时数据
-  // 股市切换：cn=沦市 hk=港股
-  const [stockMarket, setStockMarket] = useState<'cn' | 'hk'>('cn');
-
   const { data: shanghaiIndex } = trpc.stock.getShanghaiIndex.useQuery(undefined, {
-    refetchInterval: (stockMarket === 'cn' && isMarketOpen()) ? 3000 : false,
+    refetchInterval: isMarketOpen() ? 3000 : false,
     staleTime: 3000,
   });
-
-  const { data: hangSengIndex } = trpc.stock.getHangSengIndex.useQuery(undefined, {
-    refetchInterval: (stockMarket === 'hk' && isHkMarketOpen()) ? 3000 : false,
-    staleTime: 3000,
-    enabled: stockMarket === 'hk',
-  });
-
-  // 港股开市判断（北京时间）
-  const getHkMarketStatus = (now: Date): 'open' | 'lunch' | 'closed' => {
-    const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-    const dateStr = getBjDateStr(now);
-    const day = bj.getUTCDay();
-    if (day === 0 || day === 6) return 'closed';
-    // 港股节假日（简化，主要假期与A股重叠）
-    const HK_HOLIDAYS = new Set([
-      '2025-01-01','2025-01-29','2025-01-30','2025-01-31',
-      '2025-04-04','2025-04-05','2025-04-07','2025-04-18','2025-04-19','2025-04-21',
-      '2025-05-01','2025-05-05',
-      '2025-05-31',
-      '2025-07-01',
-      '2025-10-01','2025-10-02','2025-10-07',
-      '2025-12-25','2025-12-26',
-      '2026-01-01','2026-01-02',
-      '2026-02-17','2026-02-18','2026-02-19','2026-02-20',
-      '2026-04-03','2026-04-06','2026-04-07',
-      '2026-05-01','2026-05-25',
-      '2026-07-01',
-      '2026-10-01','2026-10-02',
-      '2026-12-25',
-    ]);
-    if (HK_HOLIDAYS.has(dateStr)) return 'closed';
-    const h = bj.getUTCHours();
-    const m = bj.getUTCMinutes();
-    const mins = h * 60 + m;
-    // 港股: 9:30-12:00 开市, 12:00-13:00 午休, 13:00-16:10 开市
-    if (mins >= 9 * 60 + 30 && mins < 12 * 60) return 'open';
-    if (mins >= 12 * 60 && mins < 13 * 60) return 'lunch';
-    if (mins >= 13 * 60 && mins < 16 * 60 + 10) return 'open';
-    return 'closed';
-  };
-
-  const isHkMarketOpen = () => getHkMarketStatus(new Date()) === 'open';
-
-  // 港股市场状态 state
-  const [hkMarketStatus, setHkMarketStatus] = useState<'open' | 'lunch' | 'closed'>(() => getHkMarketStatus(new Date()));
-
-  useEffect(() => {
-    const tickHk = () => setHkMarketStatus(getHkMarketStatus(new Date()));
-    tickHk();
-    const t = setInterval(tickHk, 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // 港股下一开市时间
-  const getHkNextOpenTime = (now: Date): number => {
-    const bj = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-    const h = bj.getUTCHours();
-    const m = bj.getUTCMinutes();
-    const mins = h * 60 + m;
-    const status = getHkMarketStatus(now);
-    if (status === 'lunch') {
-      const t = new Date(bj); t.setUTCHours(5, 0, 0, 0);
-      return t.getTime() - 8 * 60 * 60 * 1000;
-    }
-    const dateStr = getBjDateStr(now);
-    const day = bj.getUTCDay();
-    const HK_HOLIDAYS_CHECK = new Set(['2025-01-01','2025-01-29','2025-01-30','2025-01-31','2025-04-04','2025-04-05','2025-04-07','2025-04-18','2025-04-19','2025-04-21','2025-05-01','2025-05-05','2025-05-31','2025-07-01','2025-10-01','2025-10-02','2025-10-07','2025-12-25','2025-12-26','2026-01-01','2026-01-02','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-04-03','2026-04-06','2026-04-07','2026-05-01','2026-05-25','2026-07-01','2026-10-01','2026-10-02','2026-12-25']);
-    const todayIsOpen = (day !== 0 && day !== 6) && !HK_HOLIDAYS_CHECK.has(dateStr);
-    if (todayIsOpen && mins < 9 * 60 + 30) {
-      const t = new Date(bj); t.setUTCHours(1, 30, 0, 0);
-      return t.getTime() - 8 * 60 * 60 * 1000;
-    }
-    let candidate = new Date(bj);
-    candidate.setUTCDate(candidate.getUTCDate() + 1);
-    for (let i = 0; i < 10; i++) {
-      const ds = getBjDateStr(new Date(candidate.getTime() - 8 * 60 * 60 * 1000));
-      const cd = candidate.getUTCDay();
-      if (cd !== 0 && cd !== 6 && !HK_HOLIDAYS_CHECK.has(ds)) {
-        candidate.setUTCHours(1, 30, 0, 0);
-        return candidate.getTime() - 8 * 60 * 60 * 1000;
-      }
-      candidate.setUTCDate(candidate.getUTCDate() + 1);
-    }
-    return now.getTime() + 24 * 60 * 60 * 1000;
-  };
-
-  // 港股倒计时
-  const [hkCountdown, setHkCountdown] = useState('');
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      const status = getHkMarketStatus(now);
-      if (status !== 'open') {
-        const nextMs = getHkNextOpenTime(now);
-        const diff = Math.max(0, nextMs - now.getTime());
-        const totalSec = Math.floor(diff / 1000);
-        const hh = Math.floor(totalSec / 3600);
-        const mm = Math.floor((totalSec % 3600) / 60);
-        const ss = totalSec % 60;
-        setHkCountdown(`${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`);
-      } else {
-        setHkCountdown('');
-      }
-    };
-    tick();
-    const t = setInterval(tick, 1000);
-    return () => clearInterval(t);
-  }, []);
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -1157,100 +1046,45 @@ export default function Home() {
             <span className="text-xs font-semibold tracking-wide" style={{ color: '#6B1A1A' }}>AI 錢脉</span>
           </div>
 
-          {/* 我的股票 - 沪/港切换，白色卡片内嵌 */}
+          {/* 我的股票 - 上证指数，白色卡片内嵌 */}
           <div
-            className="mx-3 rounded-xl px-3 py-2"
+            className="mx-3 rounded-xl px-3 py-2 cursor-pointer"
             style={{
               background: 'rgba(255,255,255,0.82)',
               border: '1px solid rgba(203,164,113,0.35)',
               boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)'
             }}
+            onClick={() => navigate('/stock-tracker')}
           >
-            {/* 标题行：我的股票 + 国旗切换按钮 */}
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center space-x-1 cursor-pointer" style={{ whiteSpace: 'nowrap' }} onClick={() => navigate('/stock-tracker')}>
-                <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
-                <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的股票</span>
-              </div>
-              {/* 国旗切换按钮 */}
-              <div className="flex items-center" style={{ gap: '4px' }}>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setStockMarket('cn'); }}
-                  style={{
-                    width: '22px', height: '22px', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '13px', lineHeight: 1, cursor: 'pointer', border: 'none', padding: 0,
-                    background: stockMarket === 'cn' ? 'rgba(168,0,0,0.15)' : 'transparent',
-                    boxShadow: stockMarket === 'cn' ? 'inset 0 0 0 1.5px rgba(168,0,0,0.5)' : 'inset 0 0 0 1px rgba(0,0,0,0.12)',
-                    transition: 'all 0.2s',
-                  }}
-                  title="沪市（上证指数）"
-                >🇨🇳</button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setStockMarket('hk'); }}
-                  style={{
-                    width: '22px', height: '22px', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '13px', lineHeight: 1, cursor: 'pointer', border: 'none', padding: 0,
-                    background: stockMarket === 'hk' ? 'rgba(168,0,0,0.15)' : 'transparent',
-                    boxShadow: stockMarket === 'hk' ? 'inset 0 0 0 1.5px rgba(168,0,0,0.5)' : 'inset 0 0 0 1px rgba(0,0,0,0.12)',
-                    transition: 'all 0.2s',
-                  }}
-                  title="港股（恒生指数）"
-                >🇭🇰</button>
-              </div>
+            {/* 标题行：我的股票（不换行） */}
+            <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+              <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+              <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的股票</span>
             </div>
-            {/* 指数数字：金色翻牌，点击跳转 */}
-            <div className="flex items-baseline cursor-pointer" onClick={() => navigate('/stock-tracker')}>
-              {stockMarket === 'cn' ? (
-                !shanghaiIndex?.success ? (
-                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
-                ) : (
-                  <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
-                )
+            {/* 指数数字：金色翻牌 */}
+            <div className="flex items-baseline">
+              {!shanghaiIndex?.success ? (
+                <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
               ) : (
-                !hangSengIndex?.success ? (
-                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
-                ) : (
-                  <GoldFlipCounter total={Math.round((hangSengIndex.price ?? 0) * 100)} unit="点" decimals={2} />
-                )
+                <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
               )}
             </div>
-            {/* 涨跌信息 + 开市状态 */}
+            {/* 涌跌信息 + 开市状态 */}
             <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
-              {stockMarket === 'cn' ? (
-                <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap',
-                  color: marketStatus === 'open' ? '#A80000' : '#888' }}>
-                  {marketStatus === 'open' ? '开市中' : marketStatus === 'lunch' ? '午休中' : '休市中'}
-                  {marketStatus !== 'open' && countdown && (
-                    <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                      {countdown}
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap',
-                  color: hkMarketStatus === 'open' ? '#A80000' : '#888' }}>
-                  {hkMarketStatus === 'open' ? '开市中' : hkMarketStatus === 'lunch' ? '午休中' : '休市中'}
-                  {hkMarketStatus !== 'open' && hkCountdown && (
-                    <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                      {hkCountdown}
-                    </span>
-                  )}
-                </div>
-              )}
-              {stockMarket === 'cn' && shanghaiIndex?.success && (
+              <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap',
+                color: marketStatus === 'open' ? '#A80000' : '#888' }}>
+                {marketStatus === 'open' ? '开市中' : marketStatus === 'lunch' ? '午休中' : '休市中'}
+                {marketStatus !== 'open' && countdown && (
+                  <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                    {countdown}
+                  </span>
+                )}
+              </div>
+              {shanghaiIndex?.success && (
                 <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
                   color: (shanghaiIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
                   {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
                   ({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
-                </span>
-              )}
-              {stockMarket === 'hk' && hangSengIndex?.success && (
-                <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
-                  color: (hangSengIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
-                  {(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.change ?? 0).toFixed(2)}
-                  ({(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.changePercent ?? 0).toFixed(2)}%)
                 </span>
               )}
             </div>
