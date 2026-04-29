@@ -815,11 +815,12 @@ export default function Home() {
           {/* 我的人脉 - 红色容器 */}
           <div
             className="mx-3 rounded-xl bg-gradient-to-br from-[#A80000] to-[#d44] px-3 py-2 cursor-pointer"
+            style={{ boxShadow: '0 3px 10px rgba(168,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.18)' }}
             onClick={() => navigate('/parent/contacts/list?_t=' + Date.now())}
           >
             <div className="flex items-center space-x-1 opacity-80 mb-0.5">
-              <Users className="w-3.5 h-3.5 text-white" />
-              <span className="text-white text-xs">我的人脉</span>
+              <Users className="w-3.5 h-3.5 text-white" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.3))' }} />
+              <span className="text-white text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>我的人脉</span>
             </div>
             <div className="flex items-baseline">
               {isLoading ? (
@@ -831,7 +832,7 @@ export default function Home() {
           </div>
 
           {/* 全网人脉 - 白底红边容器，格式与我的人脉一致 */}
-          <div className="mx-3 mt-1.5 rounded-xl border border-red-200 bg-white px-3 py-2">
+          <div className="mx-3 mt-1.5 rounded-xl border border-red-200 bg-white px-3 py-2" style={{ boxShadow: '0 2px 6px rgba(168,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)' }}>
             <div className="flex items-center space-x-1 opacity-70 mb-0.5">
               <Globe className="w-3.5 h-3.5 text-[#A80000]" />
               <span className="text-[#A80000] text-xs">全网人脉</span>
@@ -853,6 +854,7 @@ export default function Home() {
                 key={item.name}
                 onClick={() => item.path && navigate(item.path)}
                 className={`bg-[#FAF3ED] rounded-lg py-1.5 flex flex-col items-center transition-colors ${item.path ? 'cursor-pointer hover:bg-red-50' : ''}`}
+                style={{ boxShadow: '0 1px 4px rgba(168,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.8)' }}
               >
                 <span className="text-gray-400 text-center leading-tight" style={{ fontSize: '0.6rem' }}>{item.name}</span>
                 <div className="flex items-baseline space-x-0.5 mt-0.5">
@@ -872,8 +874,8 @@ export default function Home() {
               onClick={() => navigate("/parent/contacts/sharing")}
               className="relative flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors"
             >
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm">
-                <Handshake className="w-5 h-5 text-white" />
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                <Handshake className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
               </div>
               <span className="text-[#A80000] text-xs mt-1 font-medium">人脉共享</span>
               {hasUnreadSharing && (
@@ -884,7 +886,7 @@ export default function Home() {
             <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <div className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors">
-                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center shadow-sm overflow-hidden border-2 border-red-100">
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center overflow-hidden border-2 border-red-100" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
                     {user?.avatar ? (
                       <img src={user.avatar} alt="用户头像" className="w-full h-full object-cover" />
                     ) : (
@@ -937,9 +939,9 @@ export default function Home() {
 
           {/* 我的股票 - 上证指数，白色卡片内嵌 */}
           <div className="mx-3 rounded-xl px-3 py-2" style={{
-            background: 'rgba(255,255,255,0.75)',
-            border: '1px solid rgba(203,164,113,0.4)',
-            boxShadow: '0 1px 6px rgba(107,74,16,0.12)'
+            background: 'rgba(255,255,255,0.82)',
+            border: '1px solid rgba(203,164,113,0.35)',
+            boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)'
           }}>
             {/* 标题行：我的股票（不换行） */}
             <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
@@ -955,13 +957,13 @@ export default function Home() {
               )}
             </div>
             {/* 涌跌信息 + 开市状态 */}
-            <div className="flex items-center justify-between mt-1">
-              <div style={{ fontSize: '0.6rem', color: '#888' }}>{isMarketOpen() ? '开市中' : '已收盘'}</div>
+            <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
+              <div style={{ fontSize: '0.6rem', color: '#888', flexShrink: 0, whiteSpace: 'nowrap' }}>{isMarketOpen() ? '开市中' : '已收盘'}</div>
               {shanghaiIndex?.success && (
-                <span style={{ fontSize: '0.65rem', fontWeight: 600,
+                <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
                   color: (shanghaiIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
                   {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
-                  &nbsp;({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
+                  ({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
                 </span>
               )}
             </div>
