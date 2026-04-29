@@ -1550,29 +1550,31 @@ export default function Home() {
             ))}
           </div>
 
-          {/* 全球市场匀速无缝滚动卡片区域 */}
+          {/* 全球市场匀速无缝滚动卡片区域（无缝拼接，无间距无圆角） */}
           <style>{`
             @keyframes global-scroll {
               0%   { transform: translateX(0); }
               100% { transform: translateX(-50%); }
             }
             .global-scroll-track {
-              animation: global-scroll 12s linear infinite;
+              animation: global-scroll 14s linear infinite;
             }
-            .global-scroll-track:hover,
             .global-scroll-track.paused {
               animation-play-state: paused;
             }
           `}</style>
           <div
             ref={globalSwipeRef}
-            className="mx-3 mt-1.5 overflow-hidden rounded-xl flex-shrink-0"
-            style={{ touchAction: 'pan-y', position: 'relative' }}
+            className="mx-3 mt-1.5 flex-shrink-0"
+            style={{ overflow: 'hidden', borderRadius: '12px', position: 'relative',
+              border: '1px solid rgba(203,164,113,0.35)',
+              boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
+              background: 'rgba(255,255,255,0.82)' }}
           >
-            {/* 双份卡片，CSS animation匀速无缝循环 */}
+            {/* 双份卡片，CSS animation匀速无缝循环，无间距无圆角 */}
             <div
               className={`global-scroll-track${globalScrollPaused ? ' paused' : ''}`}
-              style={{ display: 'flex', gap: '10px', width: 'max-content' }}
+              style={{ display: 'flex', gap: 0, width: 'max-content' }}
               onTouchStart={() => setGlobalScrollPaused(true)}
               onTouchEnd={() => setGlobalScrollPaused(false)}
             >
@@ -1593,11 +1595,10 @@ export default function Home() {
                       width: '160px',
                       flexShrink: 0,
                       boxSizing: 'border-box',
-                      background: 'rgba(255,255,255,0.82)',
-                      border: '1px solid rgba(203,164,113,0.35)',
-                      boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
-                      borderRadius: '12px',
+                      background: 'transparent',
+                      borderRadius: 0,
                       padding: '8px 12px',
+                      borderRight: '1px solid rgba(203,164,113,0.25)',
                     }}
                   >
                     <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
