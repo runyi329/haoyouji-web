@@ -717,7 +717,7 @@ export default function Home() {
                   <span className="text-[#A80000] text-xs mt-1 font-medium">个人中心</span>
                 </div>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent side="top" align="end" className="w-48">
                 <DropdownMenuItem
                   onClick={() => { setProfileMenuOpen(false); navigate("/parent/profile"); }}
                   className="flex items-center cursor-pointer"
