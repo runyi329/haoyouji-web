@@ -286,6 +286,144 @@ function RedFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDig
   );
 }
 
+// 金色质感翻牌单个数字组件
+function GoldFlipDigit({ digit, prevDigit, flip, size }: { digit: string; prevDigit: string; flip: boolean; size: number }) {
+  const w = Math.round(size * 0.72);
+  const h = size;
+  const fs = Math.round(size * 0.82);
+
+  const numStyle = (top: number): React.CSSProperties => ({
+    position: 'absolute',
+    top: top + 'px',
+    left: 0,
+    right: 0,
+    height: h + 'px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: fs + 'px',
+    fontWeight: 900,
+    color: '#6B4A10',
+    lineHeight: 1,
+    userSelect: 'none',
+  });
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block', width: w + 'px', height: h + 'px', perspective: '600px' }}>
+      <style>{`
+        @keyframes gfd-flipTop {
+          0%   { transform: rotateX(0deg); }
+          100% { transform: rotateX(-90deg); }
+        }
+        @keyframes gfd-flipBottom {
+          0%   { transform: rotateX(90deg); }
+          100% { transform: rotateX(0deg); }
+        }
+        .gfd-anim-top    { animation: gfd-flipTop    0.22s ease-in  forwards; transform-style: preserve-3d; backface-visibility: hidden; }
+        .gfd-anim-bottom { animation: gfd-flipBottom 0.22s ease-out 0.22s forwards; transform-style: preserve-3d; backface-visibility: hidden; }
+      `}</style>
+      {/* 静态上半：奶白背景 */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
+        background: '#FFFDF5', borderRadius: '4px 4px 0 0', overflow: 'hidden',
+        boxShadow: 'inset 0 -1px 0 rgba(203,164,113,0.4)' }}>
+        <div style={numStyle(0)}>{digit}</div>
+      </div>
+      {/* 静态下半：浅金背景 */}
+      <div style={{ position: 'absolute', top: h / 2 + 'px', left: 0, right: 0, height: h / 2 + 'px',
+        background: '#F5E6C0', borderRadius: '0 0 4px 4px', overflow: 'hidden' }}>
+        <div style={numStyle(-(h / 2))}>{digit}</div>
+      </div>
+      {/* 动画上半：旧数字翻走 */}
+      {flip && (
+        <div className="gfd-anim-top" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: h / 2 + 'px',
+          background: '#FFFDF5', borderRadius: '4px 4px 0 0', overflow: 'hidden',
+          transformOrigin: 'bottom center', zIndex: 10,
+          boxShadow: 'inset 0 -1px 0 rgba(203,164,113,0.4)' }}>
+          <div style={numStyle(0)}>{prevDigit}</div>
+        </div>
+      )}
+      {/* 动画下半：新数字翻入 */}
+      {flip && (
+        <div className="gfd-anim-bottom" style={{ position: 'absolute', top: h / 2 + 'px', left: 0, right: 0, height: h / 2 + 'px',
+          background: '#F5E6C0', borderRadius: '0 0 4px 4px', overflow: 'hidden',
+          transformOrigin: 'top center', zIndex: 10 }}>
+          <div style={numStyle(-(h / 2))}>{digit}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GoldFlipCounter({ total, unit, decimals }: { total: number; unit?: string; decimals?: number }) {
+  const [displayTotal, setDisplayTotal] = useState(0);
+  const [prevTotal, setPrevTotal] = useState(0);
+  const [flipKey, setFlipKey] = useState(0);
+  const [digitSize, setDigitSize] = useState(32);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (total > 0 && total !== displayTotal) {
+      setPrevTotal(displayTotal);
+      setDisplayTotal(total);
+      setFlipKey(k => k + 1);
+    }
+  }, [total]);
+
+  useEffect(() => {
+    const calcSize = () => {
+      if (!containerRef.current) return;
+      const containerW = containerRef.current.clientWidth - 8;
+      const rawNum = displayTotal || total;
+      const numDigits = decimals ? String(rawNum).replace(/[^0-9]/g, '').length : rawNum.toLocaleString('zh-CN').replace(/[^0-9]/g, '').length;
+      const numCommas = decimals ? Math.floor((numDigits - decimals - 1) / 3) : Math.floor((numDigits - 1) / 3);
+      const dotUnits = decimals ? 0.3 : 0;
+      const totalUnits = numDigits * 0.72 + numCommas * 0.3 + dotUnits + 0.5;
+      const s = Math.floor((containerW - (numDigits + numCommas + (decimals ? 1 : 0)) * 2) / totalUnits);
+      setDigitSize(Math.max(20, Math.min(36, s)));
+    };
+    calcSize();
+    window.addEventListener('resize', calcSize);
+    return () => window.removeEventListener('resize', calcSize);
+  }, [displayTotal, total, decimals]);
+
+  const buildDigitSeq = (num: number): string[] => {
+    if (!decimals) return num.toLocaleString('zh-CN').split('');
+    const s = String(num).padStart(decimals + 1, '0');
+    const intPart = s.slice(0, s.length - decimals);
+    const decPart = s.slice(s.length - decimals);
+    const intFormatted = parseInt(intPart, 10).toLocaleString('zh-CN');
+    return [...intFormatted.split(''), '.', ...decPart.split('')];
+  };
+
+  const curDigits = buildDigitSeq(displayTotal);
+  const prevDigits = buildDigitSeq(prevTotal);
+  const maxLen = Math.max(curDigits.length, prevDigits.length);
+  const pad = (arr: string[]) => Array(maxLen - arr.length).fill('\u00a0').concat(arr);
+  const cur = pad(curDigits);
+  const prev = pad(prevDigits);
+
+  return (
+    <div ref={containerRef} className="flex items-end w-full justify-end" style={{ gap: '2px' }}>
+      {cur.map((digit, i) => (
+        digit === ',' || digit === '\u002c' || digit === '\uff0c' ? (
+          <span key={i} className="font-bold" style={{ fontSize: digitSize * 0.5 + 'px', alignSelf: 'center', color: 'rgba(203,164,113,0.9)', lineHeight: digitSize + 'px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>,</span>
+        ) : digit === '.' ? (
+          <span key={i} className="font-black" style={{ fontSize: digitSize * 0.65 + 'px', alignSelf: 'flex-end', color: 'rgba(203,164,113,1)', lineHeight: 1, paddingBottom: '2px', width: digitSize * 0.3 + 'px', textAlign: 'center' }}>.</span>
+        ) : (
+          <GoldFlipDigit
+            key={`gold-${i}-${flipKey}`}
+            digit={digit === '\u00a0' ? '' : digit}
+            prevDigit={prev[i] === '\u00a0' ? '' : (prev[i] ?? '')}
+            flip={digit !== prev[i] && flipKey > 0}
+            size={digitSize}
+          />
+        )
+      ))}
+      <span className="font-medium" style={{ fontSize: digitSize * 0.38 + 'px', color: 'rgba(203,164,113,0.85)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '2px' }}>{unit ?? '点'}</span>
+    </div>
+  );
+}
+
 function RedFlipCounter({ total, unitColor, unit, decimals }: { total: number; unitColor?: string; unit?: string; decimals?: number }) {
   const [displayTotal, setDisplayTotal] = useState(0);
   const [prevTotal, setPrevTotal] = useState(0);
@@ -781,31 +919,35 @@ export default function Home() {
         <div className="bg-white rounded-2xl shadow-sm flex flex-col" style={{ height: '100%', overflow: 'hidden' }}>
           {/* 卡片头部：标题 */}
           <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
-            <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 錢脉</span>
+            <span className="text-xs font-semibold tracking-wide" style={{ color: '#A80000' }}>AI 錢脉</span>
+            <span style={{ fontSize: '0.55rem', color: '#CBA471', letterSpacing: '0.03em', opacity: 0.8 }}>红白金</span>
           </div>
 
-          {/* 我的股票 - 上证指数，样式与"我的人脉"一致 */}
-          <div className="mx-3 rounded-xl bg-gradient-to-br from-[#A80000] to-[#d44] px-3 py-2">
+          {/* 我的股票 - 上证指数，红金渐变质感卡片 */}
+          <div className="mx-3 rounded-xl px-3 py-2" style={{
+            background: 'linear-gradient(135deg, #6B1A1A 0%, #A80000 45%, #7A5020 100%)',
+            border: '1px solid rgba(203,164,113,0.5)',
+            boxShadow: '0 2px 8px rgba(107,26,26,0.3), inset 0 1px 0 rgba(203,164,113,0.2)'
+          }}>
             {/* 标题行：我的股票（不换行） */}
-            <div className="flex items-center space-x-1 opacity-80 mb-1" style={{ whiteSpace: 'nowrap' }}>
-              <Coins className="w-3.5 h-3.5 text-white flex-shrink-0" />
-              <span className="text-white text-xs font-medium">我的股票</span>
+            <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+              <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#CBA471' }} />
+              <span className="text-xs font-semibold" style={{ color: '#CBA471', letterSpacing: '0.05em' }}>我的股票</span>
             </div>
-            {/* 指数数字 */}
+            {/* 指数数字：金色翻牌 */}
             <div className="flex items-baseline">
               {!shanghaiIndex?.success ? (
-                <Loader2 className="w-5 h-5 animate-spin text-white/60" />
+                <Loader2 className="w-5 h-5 animate-spin" style={{ color: 'rgba(203,164,113,0.7)' }} />
               ) : (
-                <RedFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unitColor="rgba(255,255,255,0.7)" unit="点" decimals={2} />
+                <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
               )}
             </div>
-            {/* 涌跌信息 + 开市状态，放在指数下方 */}
+            {/* 涌跌信息 + 开市状态 */}
             <div className="flex items-center justify-between mt-1">
-              <div className="text-white/50" style={{ fontSize: '0.6rem' }}>{isMarketOpen() ? '开市中' : '已收盘'}</div>
+              <div style={{ fontSize: '0.6rem', color: 'rgba(203,164,113,0.6)' }}>{isMarketOpen() ? '开市中' : '已收盘'}</div>
               {shanghaiIndex?.success && (
-                <span className={`text-xs font-medium ${
-                  (shanghaiIndex.change ?? 0) >= 0 ? 'text-red-200' : 'text-green-300'
-                }`} style={{ fontSize: '0.65rem' }}>
+                <span style={{ fontSize: '0.65rem', fontWeight: 600,
+                  color: (shanghaiIndex.change ?? 0) >= 0 ? '#FFB3B3' : '#86EFAC' }}>
                   {(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.change ?? 0).toFixed(2)}
                   &nbsp;({(shanghaiIndex.change ?? 0) >= 0 ? '+' : ''}{(shanghaiIndex.changePercent ?? 0).toFixed(2)}%)
                 </span>
