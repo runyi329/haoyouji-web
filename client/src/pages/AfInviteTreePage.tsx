@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, GitBranch } from "lucide-react";
+import { ArrowLeft, GitBranch, ArrowUpDown } from "lucide-react";
 
 // ===== 家族树状图弹层组件（紧凑家谱样式）=====
 type TreeUser = { id: number; name: string; invitedByUserId: number | null; payoutRatio: number };
@@ -225,6 +225,7 @@ export default function AfInviteTreePage() {
 
 
   // ===== 简化树状图弹层状态 =====
+  const [sortOrder, setSortOrder] = useState<'asset' | 'reg_asc' | 'reg_desc'>('asset');
   const [showSimpleTree, setShowSimpleTree] = useState(false);
   const [treeEditingId, setTreeEditingId] = useState<number | null>(null);
   const [treeInputVal, setTreeInputVal] = useState('');
@@ -319,6 +320,22 @@ export default function AfInviteTreePage() {
           <div className="text-base font-bold text-gray-900">邀请名单</div>
           <div className="text-xs text-gray-400">共 {inviteTreeData?.users?.length ?? 0} 人</div>
         </div>
+        {/* 排序按钮 */}
+        {isYJH && (
+          <button
+            onClick={() => setSortOrder(v => v === 'asset' ? 'reg_asc' : v === 'reg_asc' ? 'reg_desc' : 'asset')}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium mr-2"
+            style={{
+              backgroundColor: sortOrder !== 'asset' ? '#EFF6FF' : '#F5F5F5',
+              color: sortOrder !== 'asset' ? '#1565C0' : '#757575',
+              border: sortOrder !== 'asset' ? '1px solid #BBDEFB' : '1px solid #E0E0E0'
+            }}
+            title={sortOrder === 'asset' ? '当前：按资产排序' : sortOrder === 'reg_asc' ? '当前：注册时间↑' : '当前：注册时间↓'}
+          >
+            <ArrowUpDown className="w-3.5 h-3.5" />
+            <span>{sortOrder === 'asset' ? '资产' : sortOrder === 'reg_asc' ? '注册↑' : '注册↓'}</span>
+          </button>
+        )}
         {/* 简化树状图按钮 */}
         {isYJH && (
           <button
@@ -517,6 +534,12 @@ export default function AfInviteTreePage() {
         ) : (
           <div className="space-y-2">
             {[...(inviteTreeData.users as any[])].sort((a: any, b: any) => {
+              if (sortOrder === 'reg_asc') {
+                return (a.registeredAtTs ?? 0) - (b.registeredAtTs ?? 0);
+              } else if (sortOrder === 'reg_desc') {
+                return (b.registeredAtTs ?? 0) - (a.registeredAtTs ?? 0);
+              }
+              // 默认：按总资产降序
               const assetA = Number(a.totalRecharge ?? 0) + Number(a.balance ?? 0);
               const assetB = Number(b.totalRecharge ?? 0) + Number(b.balance ?? 0);
               return assetB - assetA;
