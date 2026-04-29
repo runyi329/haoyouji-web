@@ -63,7 +63,7 @@ type StockItem = {
   upRate: number;
 };
 
-export default function StockLifecycle() {
+export default function StockLifecycle({ homeMode = false }: { homeMode?: boolean }) {
   const { id: ledgerId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
 
@@ -174,7 +174,7 @@ export default function StockLifecycle() {
       {/* 顶部导航 */}
       <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ background: RED, color: "#fff" }}>
         <button
-          onClick={() => setLocation(`/ledger/${ledgerId}/ai-database`)}
+          onClick={() => homeMode ? setLocation('/stock-tracker') : setLocation(`/ledger/${ledgerId}/ai-database`)}
           className="w-7 h-7 flex items-center justify-center rounded-full"
           style={{ background: "rgba(255,255,255,0.2)" }}
         >
@@ -423,4 +423,9 @@ function StockRow({ stock, idx, sortBy, onAI }: { stock: StockItem; idx: number;
       </button>
     </div>
   );
+}
+
+// 首页模式：返回/stock-tracker，无账本上下文
+export function StockTrackerLifecycle() {
+  return <StockLifecycle homeMode={true} />;
 }
