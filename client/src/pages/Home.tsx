@@ -1227,15 +1227,16 @@ export default function Home() {
               const dx = e.changedTouches[0].clientX - stockTouchStartX.current;
               const dy = e.changedTouches[0].clientY - stockTouchStartY.current;
               if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-                if (dx < 0 && stockCardIndex === 0) setStockCardIndex(1);
-                if (dx > 0 && stockCardIndex === 1) setStockCardIndex(0);
+                if (dx < 0) setStockCardIndex(prev => Math.min(prev + 1, 2));
+                if (dx > 0) setStockCardIndex(prev => Math.max(prev - 1, 0));
               }
             }}
           >
             <div
               className="flex"
               style={{
-                transform: `translateX(${stockCardIndex * -100}%)`,
+                width: '300%',
+                transform: `translateX(${stockCardIndex * -33.333}%)`,
                 transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
                 willChange: 'transform',
               }}
