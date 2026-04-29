@@ -10459,7 +10459,7 @@ export const appRouter = router({
           const rawDb = await getDbConnection();
           if (!rawDb) return { users: [], allPayoutRatios: [] };
           // BFS 递归查询所有层级下线，记录层数
-          type InviteUser = { id: number; name: string; username: string; layer: number; invitedAt: string | null; inviterName: string | null; registeredAt: string | null };
+          type InviteUser = { id: number; name: string; username: string; layer: number; invitedAt: string | null; inviterName: string | null; registeredAt: string | null; registeredAtTs: number | null };
           const result: InviteUser[] = [];
           let queue: Array<{ id: number; layer: number; name: string }> = [{ id: YJH_USER_ID, layer: 0, name: 'YJH' }];
           const visited = new Set<number>([YJH_USER_ID]);
@@ -10487,7 +10487,8 @@ export const appRouter = router({
                   layer,
                   invitedAt: child.invited_at ? new Date(child.invited_at).toLocaleDateString('zh-CN') : null,
                   inviterName,
-                  registeredAt: child.createdAt ? new Date(child.createdAt).toLocaleDateString('zh-CN') : null
+                  registeredAt: child.createdAt ? new Date(child.createdAt).toLocaleDateString('zh-CN') : null,
+                  registeredAtTs: child.createdAt ? new Date(child.createdAt).getTime() : null
                 });
                 queue.push({ id: child.id, layer, name: child.name || child.username || '未知用户' });
               }
@@ -10508,7 +10509,8 @@ export const appRouter = router({
                 layer: 0,
                 invitedAt: null,
                 inviterName: null,
-                registeredAt: yjhRow.createdAt ? new Date(yjhRow.createdAt).toLocaleDateString('zh-CN') : null
+                registeredAt: yjhRow.createdAt ? new Date(yjhRow.createdAt).toLocaleDateString('zh-CN') : null,
+                registeredAtTs: yjhRow.createdAt ? new Date(yjhRow.createdAt).getTime() : null
               });
             }
           } catch (e) {
