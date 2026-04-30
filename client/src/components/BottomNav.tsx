@@ -34,6 +34,17 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
 
   const handleNavigation = (path: string) => {
     setShowLedgerMenu(false);
+    // 未登录用户点击人脉/錢脉时提示登录
+    if (!user && (path === '/' || path.startsWith('/ledger') || path.startsWith('/parent'))) {
+      import('sonner').then(({ toast }) => {
+        toast('请先登录后使用此功能', {
+          description: '登录后可查看个人人脉和账本数据',
+          action: { label: '去登录', onClick: () => setLocation('/login') },
+          duration: 3000,
+        });
+      });
+      return;
+    }
     setLocation(path);
   };
 
