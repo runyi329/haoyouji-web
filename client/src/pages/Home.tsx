@@ -652,7 +652,11 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
 
   const [globalMarketStatus, setGlobalMarketStatus] = useState<'open' | 'closed'>(() => getGlobalMarketStatusOuter(new Date()));
   const [globalCountdown, setGlobalCountdown] = useState('');
-  const [globalScrollPaused, setGlobalScrollPaused] = useState(false);
+  const [globalCardIndex, setGlobalCardIndex] = useState(0);
+  const globalTouchStartX = useRef(0);
+  const globalTouchStartY = useRef(0);
+  const globalContainerRef = useRef<HTMLDivElement>(null);
+  const [globalContainerWidth, setGlobalContainerWidth] = useState(0);
 
   useEffect(() => {
     const tick = () => {
@@ -676,6 +680,25 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
     return () => clearInterval(timer);
   }, []);
 
+  // 自动轮播
+  useEffect(() => {
+    const autoPlay = setInterval(() => {
+      setGlobalCardIndex(prev => (prev + 1) % 4);
+    }, 3000);
+    return () => clearInterval(autoPlay);
+  }, []);
+
+  // 监听容器宽度
+  useEffect(() => {
+    if (!globalContainerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) setGlobalContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(globalContainerRef.current);
+    setGlobalContainerWidth(globalContainerRef.current.offsetWidth);
+    return () => ro.disconnect();
+  }, []);
+
   const items = [
     { key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1 },
     { key: 'oil',  label: '原油 WTI',      data: oilPrice,  unit: '/桶',   decimals: 2 },
@@ -684,35 +707,44 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   ];
 
   return (
-    <div className="mx-3 flex-shrink-0" style={{ overflow: 'hidden', borderRadius: '12px', position: 'relative', marginTop: '2px',
+    <div className="mx-3 flex-shrink-0" style={{ borderRadius: '12px', position: 'relative', marginTop: '2px',
       border: '1px solid rgba(203,164,113,0.35)',
       boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
       background: 'rgba(255,255,255,0.82)' }}>
-      <style>{`
-        @keyframes global-scroll {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .global-scroll-track {
-          animation: global-scroll 20s linear infinite;
-        }
-        .global-scroll-track.paused {
-          animation-play-state: paused;
-        }
-      `}</style>
+      {/* 可滑动卡片区域 */}
       <div
-        className={`global-scroll-track${globalScrollPaused ? ' paused' : ''}`}
-        style={{ display: 'flex', gap: 0, width: 'max-content' }}
-        onTouchStart={() => setGlobalScrollPaused(true)}
-        onTouchEnd={() => setGlobalScrollPaused(false)}
+        ref={globalContainerRef}
+        style={{ overflow: 'hidden', borderRadius: '12px', touchAction: 'pan-y' }}
+        onTouchStart={(e) => {
+          globalTouchStartX.current = e.touches[0].clientX;
+          globalTouchStartY.current = e.touches[0].clientY;
+        }}
+        onTouchEnd={(e) => {
+          const dx = e.changedTouches[0].clientX - globalTouchStartX.current;
+          const dy = e.changedTouches[0].clientY - globalTouchStartY.current;
+          if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+            if (dx < 0) setGlobalCardIndex(prev => Math.min(prev + 1, 3));
+            if (dx > 0) setGlobalCardIndex(prev => Math.max(prev - 1, 0));
+          }
+        }}
       >
-        {[...Array(2)].map((_, copyIdx) =>
-          items.map((item) => (
+        <div
+          style={{
+            display: 'flex',
+            transform: `translateX(${globalCardIndex * -(globalContainerWidth || 0)}px)`,
+            transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
+            willChange: 'transform',
+          }}
+        >
+          {items.map((item) => (
             <div
-              key={`${item.key}-${copyIdx}`}
-              style={{ width: '160px', flexShrink: 0, boxSizing: 'border-box',
-                background: 'transparent', borderRadius: 0,
-                padding: '6px 10px', borderRight: '1px solid rgba(203,164,113,0.25)' }}
+              key={item.key}
+              style={{
+                minWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
+                maxWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
+                boxSizing: 'border-box',
+                padding: '6px 10px',
+              }}
             >
               <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                 <Globe className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
@@ -720,9 +752,9 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
               </div>
               <div className="flex items-baseline">
                 {!item.data?.success ? (
-                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
+                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#A80000' }} />
                 ) : (
-                  <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} fixedSize={26} />
+                  <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} />
                 )}
               </div>
               <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
@@ -749,8 +781,25 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
                 )}
               </div>
             </div>
-          ))
-        )}
+          ))}
+        </div>
+      </div>
+      {/* 圆点指示器 */}
+      <div className="flex items-center justify-center py-1" style={{ gap: '5px' }}>
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            onClick={() => setGlobalCardIndex(i)}
+            style={{
+              width: globalCardIndex === i ? '14px' : '5px',
+              height: '5px',
+              borderRadius: '3px',
+              background: globalCardIndex === i ? 'rgba(168,0,0,0.8)' : 'rgba(168,0,0,0.25)',
+              transition: 'all 0.3s ease',
+              cursor: 'pointer',
+            }}
+          />
+        ))}
       </div>
     </div>
   );
