@@ -19851,6 +19851,29 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
+    /** 比特币实时行情 (Binance BTC/USDT) */
+    getBtcPrice: publicProcedure.query(async () => {
+      const cacheKey = 'global_btc';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        // Binance 公开 API，无需 key
+        const res = await fetch(
+          'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT',
+          { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+        );
+        const data = await res.json() as any;
+        const price = parseFloat(data.lastPrice) || 0;
+        const prev = parseFloat(data.prevClosePrice) || 0;
+        const change = parseFloat(data.priceChange) || 0;
+        const changePercent = parseFloat(data.priceChangePercent) || 0;
+        const result = { price, prevClose: prev, change, changePercent, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+      }
+    }),
     // ========== 港股全生命周期相关接口 ==========
     /** 港股全生命周期趋势折线图（hk_trend_cache）*/
     hkTrendData: publicProcedure

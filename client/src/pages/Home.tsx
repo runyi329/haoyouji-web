@@ -649,6 +649,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  const { data: btcPrice } = trpc.stock.getBtcPrice.useQuery(undefined, { refetchInterval: 5000, staleTime: 2000 });
 
   const [globalMarketStatus, setGlobalMarketStatus] = useState<'open' | 'closed'>(() => getGlobalMarketStatusOuter(new Date()));
   const [globalCountdown, setGlobalCountdown] = useState('');
@@ -694,9 +695,10 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   }, []);
 
   // 无缝循环：当滚到克隆卡片时，无动画跳回真实卡片
+  // items 共 5 张，克隆后共 7 张 (index 0-6)，真实卡片 index 1-5
   useEffect(() => {
-    if (globalRealIndex === 5) {
-      // 滚到尾部克隆（第1张的克隆），延迟后无动画跳回真实第1张
+    if (globalRealIndex === 6) {  // 尾部克隆（第1张的克隆）
+      // 滚到尾部克隆，延迟后无动画跳回真实第1张
       globalIsTransitioning.current = true;
       const t = setTimeout(() => {
         setGlobalTransition(false);
@@ -710,11 +712,11 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
       }, 320);
       return () => clearTimeout(t);
     } else if (globalRealIndex === 0) {
-      // 滚到头部克隆（第4张的克隆），延迟后无动画跳回真实第4张
+      // 滚到头部克隆（第5张的克隆），延迟后无动画跳回真实第5张
       globalIsTransitioning.current = true;
       const t = setTimeout(() => {
         setGlobalTransition(false);
-        setGlobalRealIndex(4);
+        setGlobalRealIndex(5);
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             setGlobalTransition(true);
@@ -738,10 +740,11 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   }, []);
 
   const items = [
-    { key: 'gold', label: '黄金 XAU/USD', data: goldPrice, unit: '/盎司', decimals: 1 },
-    { key: 'oil',  label: '原油 WTI',      data: oilPrice,  unit: '/桶',   decimals: 2 },
+    { key: 'gold', label: '黄金 XAU/USD', data: goldPrice,   unit: '/盎司', decimals: 1 },
+    { key: 'oil',  label: '原油 WTI',      data: oilPrice,   unit: '/桶',   decimals: 2 },
     { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3 },
-    { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,    unit: '',      decimals: 4 },
+    { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4 },
+    { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',      decimals: 0 },
   ];
 
   return (
@@ -832,11 +835,11 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
           ))}
         </div>
       </div>
-      {/* 圆点指示器 - 映射到真实索引（1-4） */}
+      {/* 圆点指示器 - 映射到真实索引（1-5） */}
       <div className="flex items-center justify-center py-1" style={{ gap: '5px' }}>
-        {[0, 1, 2, 3].map((i) => {
-          // globalRealIndex: 0=克隆第4张, 1-4=真实卡片, 5=克隆第1张
-          const dotActive = globalRealIndex === 5 ? i === 0 : globalRealIndex === 0 ? i === 3 : i === globalRealIndex - 1;
+        {[0, 1, 2, 3, 4].map((i) => {
+          // globalRealIndex: 0=克隆第5张, 1-5=真实卡片, 6=克隆第1张
+          const dotActive = globalRealIndex === 6 ? i === 0 : globalRealIndex === 0 ? i === 4 : i === globalRealIndex - 1;
           return (
             <div
               key={i}
