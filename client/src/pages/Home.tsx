@@ -1770,8 +1770,8 @@ export default function Home() {
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
               {/* 顶部标题行：小图标 + 标题（对齐我的A股样式） */}
-              <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                {/* Lottie 图标，放大到 28px，往左偏移 4px */}
+              <div className="flex items-end space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                {/* Lottie 图标，放大到 28px，往左偏移 4px，底部对齐文字 */}
                 <div style={{ width: 28, height: 28, overflow: 'hidden', position: 'relative', flexShrink: 0, marginLeft: -4 }}>
                   <div style={{
                     width: 400,
