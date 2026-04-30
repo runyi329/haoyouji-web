@@ -782,11 +782,36 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
       <text x="7" y="7" textAnchor="middle" dominantBaseline="central" fontSize="7.5" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">¥</text>
     </svg>
   );
+  const OilIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <defs>
+        <radialGradient id="oilCircleGrad" cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stopColor="#f8f8f8"/>
+          <stop offset="100%" stopColor="#d0d0d0"/>
+        </radialGradient>
+        <radialGradient id="oilDropGrad" cx="38%" cy="28%" r="70%">
+          <stop offset="0%" stopColor="#555555"/>
+          <stop offset="40%" stopColor="#1a1a1a"/>
+          <stop offset="100%" stopColor="#000000"/>
+        </radialGradient>
+        <radialGradient id="oilHighlight" cx="35%" cy="25%" r="40%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </radialGradient>
+      </defs>
+      {/* 白色圆形背景（带轻微灰色渐变增加立体感） */}
+      <circle cx="7" cy="7" r="7" fill="url(#oilCircleGrad)" stroke="#c8c8c8" strokeWidth="0.4"/>
+      {/* 黑色油滴（水滴形状：圆底+尖顶） */}
+      <path d="M7 2.2 C7 2.2 4.2 6.0 4.2 8.0 C4.2 9.77 5.46 11.2 7 11.2 C8.54 11.2 9.8 9.77 9.8 8.0 C9.8 6.0 7 2.2 7 2.2 Z" fill="url(#oilDropGrad)"/>
+      {/* 高光反射 */}
+      <path d="M7 2.2 C7 2.2 4.2 6.0 4.2 8.0 C4.2 9.77 5.46 11.2 7 11.2 C8.54 11.2 9.8 9.77 9.8 8.0 C9.8 6.0 7 2.2 7 2.2 Z" fill="url(#oilHighlight)"/>
+    </svg>
+  );
   const items = [
     { key: 'gold', label: '黄金 XAU/USD', data: goldPrice,   unit: '/盎司', decimals: 1,
       iconType: 'svg' as const, IconComp: GoldIcon },
     { key: 'oil',  label: '原油 WTI',      data: oilPrice,   unit: '/桶',   decimals: 2,
-      iconType: 'img' as const, iconUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oil-pump-icon-circle.png' },
+      iconType: 'svg' as const, IconComp: OilIcon },
     { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3,
       iconType: 'svg' as const, IconComp: DxyIcon },
     { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4,
