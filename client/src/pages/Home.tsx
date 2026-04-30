@@ -1491,15 +1491,7 @@ export default function Home() {
   }, [socialPageIndex]);
 
   // AI 社交轮播：自动轮播
-  useEffect(() => {
-    socialAutoTimer.current = setInterval(() => {
-      if (!socialIsTransitioning.current) {
-        setSocialTransition(true);
-        setSocialPageIndex(prev => prev + 1);
-      }
-    }, 5000);
-    return () => { if (socialAutoTimer.current) clearInterval(socialAutoTimer.current); };
-  }, []);
+  // AI 社交不自动轮播，只支持手动滑动
 
   const handleLogout = async () => {
     // 清除三层存储（localStorage + Cookie + IndexedDB）
@@ -1544,10 +1536,12 @@ export default function Home() {
       {/* ═══════════════════════════════════════════ */}
       {/* 上半区：AI 社交（静态）*/}
       {/* ═══════════════════════════════════════════ */}
-      {/* AI 社交静态内容 */}
-      <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
-        <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
-          <div className="w-full h-full flex flex-col px-3 py-2">
+      {/* AI 社交：手动滑动翻页 + 圆点指示器（无自动轮播）*/}
+      {(() => {
+        const realDotIndex = ((socialPageIndex - 1 + SOCIAL_PAGES) % SOCIAL_PAGES);
+        const socialPages = [
+          // 页1：功能入口
+          <div key="p1" className="w-full h-full flex flex-col px-3 py-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
               <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
@@ -1567,11 +1561,84 @@ export default function Home() {
                 <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.65rem' }}>标签管理与分析</span>
               </div>
             </div>
+          </div>,
+          // 页2：留白
+          <div key="p2" className="w-full h-full" />,
+          // 页3：留白
+          <div key="p3" className="w-full h-full" />,
+        ];
+        const clonedPages = [socialPages[SOCIAL_PAGES - 1], ...socialPages, socialPages[0]];
+        return (
+          <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
+            <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
+              <div
+                ref={socialContainerRef}
+                className="flex-1 overflow-hidden"
+                style={{ touchAction: 'pan-y' }}
+                onTouchStart={e => {
+                  socialTouchStartX.current = e.touches[0].clientX;
+                  socialTouchStartY.current = e.touches[0].clientY;
+                }}
+                onTouchEnd={e => {
+                  const dx = e.changedTouches[0].clientX - socialTouchStartX.current;
+                  const dy = e.changedTouches[0].clientY - socialTouchStartY.current;
+                  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+                    if (!socialIsTransitioning.current) {
+                      setSocialTransition(true);
+                      if (dx < 0) setSocialPageIndex(prev => prev + 1);
+                      if (dx > 0) setSocialPageIndex(prev => prev - 1);
+                    }
+                  }
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    height: '100%',
+                    transform: `translateX(${socialPageIndex * -(socialWidth || 0)}px)`,
+                    transition: socialTransition ? 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' : 'none',
+                    willChange: 'transform',
+                  }}
+                >
+                  {clonedPages.map((page, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        minWidth: socialWidth > 0 ? `${socialWidth}px` : '100%',
+                        maxWidth: socialWidth > 0 ? `${socialWidth}px` : '100%',
+                        height: '100%',
+                        boxSizing: 'border-box',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {page}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* 圆点指示器 */}
+              <div className="flex justify-center items-center space-x-1.5 py-1.5 flex-shrink-0">
+                {Array.from({ length: SOCIAL_PAGES }).map((_, i) => (
+                  <div
+                    key={i}
+                    onClick={() => { setSocialTransition(true); setSocialPageIndex(i + 1); }}
+                    style={{
+                      width: realDotIndex === i ? '14px' : '6px',
+                      height: '6px',
+                      borderRadius: '3px',
+                      background: realDotIndex === i ? '#A80000' : 'rgba(168,0,0,0.25)',
+                      transition: 'all 0.3s ease',
+                      cursor: 'pointer',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
-      {/* 以下为旧的轮播代码，已禁用 - 开始 */}
+      {/* 备用占位符 */}
 
 
       {/* ═══════════════════════════════════════════ */}
