@@ -1756,26 +1756,27 @@ export default function Home() {
             </div>
             {/* 第二行：智能钱包（横向宽条）- 黑白金立体风格 */}
             <div
-              className="rounded-xl cursor-pointer active:scale-[0.98] flex-1 relative overflow-hidden"
+              className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] flex-1 relative overflow-hidden"
               style={{
                 background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
                 boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                 border: '1px solid rgba(201,168,76,0.6)',
                 transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                padding: '8px 12px',
               }}
             >
               {/* 顶部金色高光线 */}
               <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-              {/* 左上角标题行：绝对定位，图标+文字紧贴左上 */}
-              <div className="absolute flex items-end space-x-0.5" style={{ top: 6, left: 6, whiteSpace: 'nowrap' }}>
-                {/* Lottie 图标 28px，底部对齐文字 */}
-                <div style={{ width: 28, height: 28, overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+              {/* 标题行：与『我的A股』完全一致的 flex items-center space-x-1 mb-1 */}
+              <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                {/* Lottie 图标，容器 14px，内部 scale 放大显示 */}
+                <div style={{ width: 14, height: 14, overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
                   <div style={{
                     width: 400,
                     height: 400,
-                    transform: 'scale(0.07)',
+                    transform: 'scale(0.035)',
                     transformOrigin: 'top left',
                     position: 'absolute',
                     top: 0,
@@ -1786,6 +1787,8 @@ export default function Home() {
                 </div>
                 <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能钱包</span>
               </div>
+              {/* 下方留空 */}
+              <div className="flex-1" />
             </div>
           </div>
         </div>
