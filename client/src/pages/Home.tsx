@@ -708,9 +708,15 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
 
   return (
     <div className="mx-3 flex-shrink-0" style={{ borderRadius: '12px', position: 'relative', marginTop: '2px',
-      border: '1px solid rgba(220,220,225,0.7)',
-      boxShadow: '0 3px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(180,180,190,0.4)',
-      background: 'linear-gradient(160deg, #e8e8ec 0%, #d4d4d8 30%, #c8c8cc 55%, #d8d8dc 75%, #e4e4e8 100%)' }}>
+      border: '1.5px solid #8B6914',
+      boxShadow: '0 4px 14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,220,100,0.35), inset 0 -1px 0 rgba(80,50,0,0.4)',
+      background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px), linear-gradient(160deg, #C8A84B 0%, #A8882E 20%, #BFA040 40%, #9A7A20 60%, #B89838 80%, #C8A84B 100%)' }}>
+      {/* 四角铆钉 */}
+      {[{top:'5px',left:'5px'},{top:'5px',right:'5px'},{bottom:'5px',left:'5px'},{bottom:'5px',right:'5px'}].map((pos, i) => (
+        <div key={i} style={{ position:'absolute', width:'7px', height:'7px', borderRadius:'50%', zIndex:10, ...pos,
+          background: 'radial-gradient(circle at 35% 35%, #F5D78E 0%, #C9A84C 40%, #8B6914 70%, #5C4010 100%)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,220,100,0.5)' }} />
+      ))}
       {/* 可滑动卡片区域 */}
       <div
         ref={globalContainerRef}
@@ -1588,9 +1594,9 @@ export default function Home() {
               touchAction: 'pan-y',
               position: 'relative',
               borderRadius: '12px',
-              border: '1px solid rgba(220,220,225,0.7)',
-              boxShadow: '0 3px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(180,180,190,0.4)',
-              background: 'linear-gradient(160deg, #e8e8ec 0%, #d4d4d8 30%, #c8c8cc 55%, #d8d8dc 75%, #e4e4e8 100%)',
+              border: '1.5px solid #8B6914',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,220,100,0.35), inset 0 -1px 0 rgba(80,50,0,0.4)',
+              background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px), linear-gradient(160deg, #C8A84B 0%, #A8882E 20%, #BFA040 40%, #9A7A20 60%, #B89838 80%, #C8A84B 100%)',
               overflow: 'hidden',
               marginBottom: '6px',
             }}
@@ -1607,6 +1613,12 @@ export default function Home() {
               }
             }}
           >
+            {/* 四角铆钉 */}
+            {[{top:'5px',left:'5px'},{top:'5px',right:'5px'},{bottom:'5px',left:'5px'},{bottom:'5px',right:'5px'}].map((pos, i) => (
+              <div key={i} style={{ position:'absolute', width:'7px', height:'7px', borderRadius:'50%', zIndex:10, ...pos,
+                background: 'radial-gradient(circle at 35% 35%, #F5D78E 0%, #C9A84C 40%, #8B6914 70%, #5C4010 100%)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,220,100,0.5)' }} />
+            ))}
             <div
               className="flex"
               style={{
