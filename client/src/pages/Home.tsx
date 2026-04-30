@@ -1390,19 +1390,16 @@ export default function Home() {
       <div className="px-4 mt-2 pb-20 grid grid-cols-2 gap-2 flex-1 min-h-0">
 
         {/* ── 左：AI 人脉 ── */}
-        <div className="rounded-2xl flex flex-col relative overflow-hidden" style={{
+        <div className="bg-white rounded-2xl flex flex-col" style={{
           height: '100%',
           overflow: 'hidden',
-          background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
-          boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
-          border: '1px solid rgba(201,168,76,0.6)',
+          boxShadow: '0 4px 16px rgba(168,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9)',
+          border: '1px solid rgba(255,255,255,0.8)',
           transform: 'translateY(-1px)'
         }}>
-          {/* 顶部金色高光线 */}
-          <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
           {/* 卡片头部：标题 */}
           <div className="flex items-center px-3 pt-3 pb-2">
-            <span className="text-xs font-semibold tracking-wide" style={{ color: '#F5D78E' }}>AI 人脉</span>
+            <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 人脉</span>
           </div>
 
 
@@ -1426,11 +1423,11 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 全网人脉 - 深色金边容器 */}
-          <div className="mx-3 mt-1.5 rounded-xl px-3 py-2" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,168,76,0.35)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)' }}>
-            <div className="flex items-center space-x-1 opacity-80 mb-0.5">
-              <Globe className="w-3.5 h-3.5" style={{ color: '#C9A84C' }} />
-              <span className="text-xs" style={{ color: '#F5D78E' }}>全网人脉</span>
+          {/* 全网人脉 - 白底红边容器，格式与我的人脉一致 */}
+          <div className="mx-3 mt-1.5 rounded-xl border border-red-200 bg-white px-3 py-2" style={{ boxShadow: '0 2px 6px rgba(168,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)' }}>
+            <div className="flex items-center space-x-1 opacity-70 mb-0.5">
+              <Globe className="w-3.5 h-3.5 text-[#A80000]" />
+              <span className="text-[#A80000] text-xs">全网人脉</span>
             </div>
             <div className="flex items-baseline">
               <RedFlipCounter total={networkTotal?.total ?? 0} unitColor="#A80000" />
@@ -1448,12 +1445,12 @@ export default function Home() {
               <div
                 key={item.name}
                 onClick={() => item.path && navigate(item.path)}
-                className={`rounded-lg py-1.5 flex flex-col items-center transition-colors ${item.path ? 'cursor-pointer' : ''}`}
-                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,168,76,0.25)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)' }}
+                className={`bg-[#FAF3ED] rounded-lg py-1.5 flex flex-col items-center transition-colors ${item.path ? 'cursor-pointer hover:bg-red-50' : ''}`}
+                style={{ boxShadow: '0 1px 4px rgba(168,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.8)' }}
               >
-                <span className="text-center leading-tight" style={{ fontSize: '0.6rem', color: 'rgba(245,215,142,0.6)' }}>{item.name}</span>
+                <span className="text-gray-400 text-center leading-tight" style={{ fontSize: '0.6rem' }}>{item.name}</span>
                 <div className="flex items-baseline space-x-0.5 mt-0.5">
-                  <span className="font-bold" style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1.1rem)', color: '#F5D78E' }}>
+                  <span className="font-bold text-[#222222]" style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1.1rem)' }}>
                     {formatNumber(item.value)}
                   </span>
                   <span className="text-gray-400" style={{ fontSize: '0.6rem' }}>{item.unit}</span>
@@ -1467,13 +1464,12 @@ export default function Home() {
             {/* 人脉共享 */}
             <div
               onClick={() => navigate("/parent/contacts/sharing")}
-              className="relative flex flex-col items-center justify-center py-3 rounded-xl cursor-pointer active:scale-[0.98] transition-all"
-              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,168,76,0.35)' }}
+              className="relative flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors"
             >
-              <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)', border: '1px solid rgba(201,168,76,0.6)', boxShadow: '0 3px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)' }}>
-                <Handshake className="w-5 h-5" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                <Handshake className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
               </div>
-              <span className="text-xs mt-1 font-medium" style={{ color: '#F5D78E' }}>人脉共享</span>
+              <span className="text-[#A80000] text-xs mt-1 font-medium">人脉共享</span>
               {hasUnreadSharing && (
                 <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#D32F2F] rounded-full border border-white animate-pulse" />
               )}
@@ -1481,15 +1477,15 @@ export default function Home() {
             {/* 个人中心 */}
             <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
               <DropdownMenuTrigger asChild>
-                <div className="flex flex-col items-center justify-center py-3 rounded-xl cursor-pointer active:scale-[0.98] transition-all" style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,168,76,0.35)' }}>
-                  <div className="w-11 h-11 rounded-full flex items-center justify-center overflow-hidden" style={{ background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%)', border: '1px solid rgba(201,168,76,0.6)', boxShadow: '0 3px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)' }}>
+                <div className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors">
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center overflow-hidden border-2 border-red-100" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
                     {user?.avatar ? (
                       <img src={user.avatar} alt="用户头像" className="w-full h-full object-cover" />
                     ) : (
                       <User className="w-5 h-5 text-white" />
                     )}
                   </div>
-                  <span className="text-xs mt-1 font-medium" style={{ color: '#F5D78E' }}>个人中心</span>
+                  <span className="text-[#A80000] text-xs mt-1 font-medium">个人中心</span>
                 </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="center" className="w-full bg-[#FFF8F0] border-[#A80000]/20">
