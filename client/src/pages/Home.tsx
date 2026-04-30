@@ -1768,9 +1768,14 @@ export default function Home() {
               <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-              {/* Lottie 钱包动画 */}
-              <div className="w-16 h-16 flex-shrink-0" style={{ margin: '-4px 0' }}>
-                <WalletLottie />
+              {/* Lottie 钱包动画 - 容器大小对齐个人中心头像(44px)，内部放大裁切空白边界 */}
+              <div
+                className="flex-shrink-0 overflow-hidden"
+                style={{ width: 44, height: 44 }}
+              >
+                <div style={{ width: '100%', height: '100%', transform: 'scale(2.2)', transformOrigin: 'center center' }}>
+                  <WalletLottie />
+                </div>
               </div>
               <div className="flex flex-col">
                 <span className="text-sm font-bold tracking-widest" style={{ color: '#F5D78E', textShadow: '0 0 8px rgba(245,215,142,0.5), 0 1px 3px rgba(0,0,0,0.8)' }}>智能钱包</span>
