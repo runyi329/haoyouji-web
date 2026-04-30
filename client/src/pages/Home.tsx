@@ -646,7 +646,29 @@ const UnderConstructionLottie = React.memo(function UnderConstructionLottie() {
   return <Lottie animationData={animData} loop={true} style={{ width: '100%', height: '100%' }} />;
 });
 
-// ── 金色钱包 Lottie 动画组件（懒加载，避免影响首屏渲染）────────────────────
+// ── 蓄水池 Lottie 动画组件（懒加载）──────────────────────────────────
+const XushuchiLottie = React.memo(function XushuchiLottie() {
+  const [animData, setAnimData] = React.useState<object | null>(null);
+  React.useEffect(() => {
+    fetch('/xushuchi.json')
+      .then(r => r.json())
+      .then(setAnimData)
+      .catch(() => {});
+  }, []);
+  // 原始尺寸 1024×768，比例 4:3
+  // 手机容器宽度约 330-390px，高度约 42% 屏幕高（去掉圆点指示器）
+  // 最大清晰尺寸：宽度 100%，高度自适应（保持比例）
+  if (!animData) return <div style={{ width: '100%', aspectRatio: '4/3' }} />;
+  return (
+    <Lottie
+      animationData={animData}
+      loop={true}
+      style={{ width: '100%', aspectRatio: '4/3', maxHeight: '100%', objectFit: 'contain' }}
+    />
+  );
+});
+
+// ── 金色钉包 Lottie 动画组件（懒加载，避免影响首屏渲染）────────────────────
 const WalletLottie = React.memo(function WalletLottie() {
   const [animData, setAnimData] = React.useState<object | null>(null);
   React.useEffect(() => {
@@ -1682,8 +1704,10 @@ export default function Home() {
               <span className="text-xs text-gray-300 mt-1">装修升级中</span>
             </div>
           </div>,
-          // 页2：留白
-          <div key="p2" className="w-full h-full" />,
+          // 页2：蓄水池动画
+          <div key="p2" className="w-full h-full flex flex-col items-center justify-center">
+            <XushuchiLottie />
+          </div>,
           // 页3：积分兑换商城
           <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
             {/* 顶部：积分余额 */}
