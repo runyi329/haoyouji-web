@@ -244,20 +244,14 @@ export default function FunderManagement() {
     { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
   );
   // 受邀订单的已结佣金独立于利息结算记录，初始为 0（只有通过「记录结佣」按钮操作后才会有値）
-  // 注意：后端返回的 key 可能是字符串（MySQL row.order_id），用字符串和数字都尝试读取
-  console.log('[DEBUG paid summary]', { editingOrderId, editingPaidSummary, keys: editingPaidSummary ? Object.keys(editingPaidSummary) : null });
+  // 后端返回数组格式 [{orderId, total, currency}]，用 find 查找
   const previewPaidInterestData = editingOrder?.participantInfo
-    ? { total: 0, currency: 'U' }
-    : (editingOrderId && editingPaidSummary
-        ? ((editingPaidSummary as any)[editingOrderId] ?? (editingPaidSummary as any)[String(editingOrderId)] ?? { total: 0, currency: 'U' })
-        : { total: 0, currency: 'U' });
-  // 兼容旧格式（纯数字）和新格式（{total, currency}对象）
-  const previewPaidInterest = typeof previewPaidInterestData === 'object' && previewPaidInterestData !== null
-    ? ((previewPaidInterestData as any).total ?? 0)
-    : (typeof previewPaidInterestData === 'number' ? previewPaidInterestData : 0);
-  const previewPaidInterestCurrency = typeof previewPaidInterestData === 'object' && previewPaidInterestData !== null
-    ? ((previewPaidInterestData as any).currency || 'U')
-    : 'U';
+    ? { orderId: 0, total: 0, currency: 'U' }
+    : (editingOrderId && Array.isArray(editingPaidSummary)
+        ? (editingPaidSummary.find((r: any) => r.orderId === editingOrderId) ?? { orderId: 0, total: 0, currency: 'U' })
+        : { orderId: 0, total: 0, currency: 'U' });
+  const previewPaidInterest = (previewPaidInterestData as any).total ?? 0;
+  const previewPaidInterestCurrency: string = (previewPaidInterestData as any).currency || 'U';
 
   // 担保价值（所有担保货币折算为 USDT 的总值）
   const computedCollateralValue = useMemo(() => {
