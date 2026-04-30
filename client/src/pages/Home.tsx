@@ -1974,7 +1974,7 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                 }}
                 onClick={() => navigate('/stock-tracker')}
               >
@@ -2029,7 +2029,7 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                 }}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
@@ -2084,7 +2084,7 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                 }}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
@@ -2166,7 +2166,7 @@ export default function Home() {
                   boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                   border: '1px solid rgba(201,168,76,0.6)',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                 }}
               >
                 {/* 顶部金色高光线 */}
@@ -2187,7 +2187,7 @@ export default function Home() {
                   boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                   border: '1px solid rgba(201,168,76,0.6)',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  padding: '8px 12px',
+                  padding: '6px 10px',
                 }}
               >
                 {/* 顶部金色高光线 */}
@@ -2209,7 +2209,7 @@ export default function Home() {
                 boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                 border: '1px solid rgba(201,168,76,0.6)',
                 transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                padding: '8px 12px',
+                padding: '6px 10px',
               }}
             >
               {/* 顶部金色高光线 */}
