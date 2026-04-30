@@ -708,9 +708,9 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
 
   return (
     <div className="mx-3 flex-shrink-0" style={{ borderRadius: '12px', position: 'relative', marginTop: '2px',
-      border: '1px solid rgba(203,164,113,0.35)',
-      boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
-      background: 'rgba(255,255,255,0.82)' }}>
+      border: '1px solid rgba(220,220,225,0.7)',
+      boxShadow: '0 3px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(180,180,190,0.4)',
+      background: 'linear-gradient(160deg, #e8e8ec 0%, #d4d4d8 30%, #c8c8cc 55%, #d8d8dc 75%, #e4e4e8 100%)' }}>
       {/* 可滑动卡片区域 */}
       <div
         ref={globalContainerRef}
@@ -1588,9 +1588,9 @@ export default function Home() {
               touchAction: 'pan-y',
               position: 'relative',
               borderRadius: '12px',
-              border: '1px solid rgba(203,164,113,0.35)',
-              boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
-              background: 'rgba(255,255,255,0.82)',
+              border: '1px solid rgba(220,220,225,0.7)',
+              boxShadow: '0 3px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(180,180,190,0.4)',
+              background: 'linear-gradient(160deg, #e8e8ec 0%, #d4d4d8 30%, #c8c8cc 55%, #d8d8dc 75%, #e4e4e8 100%)',
               overflow: 'hidden',
               marginBottom: '6px',
             }}
