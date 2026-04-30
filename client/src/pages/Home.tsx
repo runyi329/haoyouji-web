@@ -1785,7 +1785,7 @@ export default function Home() {
                     <WalletLottie />
                   </div>
                 </div>
-                <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能钱包</span>
+                <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em', marginLeft: 4 }}>智能钱包</span>
               </div>
               {/* 下方留空 */}
               <div className="flex-1" />
