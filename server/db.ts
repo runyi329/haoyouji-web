@@ -850,6 +850,7 @@ export async function getAllUsers() {
     points: users.points,
     isLocked: users.isLocked,
     familyId: users.familyId,
+    avatar: users.avatar,
     createdAt: users.createdAt,
     lastSignedIn: users.lastSignedIn,
   }).from(users).orderBy(desc(users.createdAt));

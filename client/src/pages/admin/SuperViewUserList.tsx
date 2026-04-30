@@ -111,8 +111,16 @@ export default function SuperViewUserList() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm text-gray-900">{u.name || u.username}</div>
-                <div className="text-xs text-gray-400">@{u.username} &nbsp;<span className="text-gray-300">|</span>&nbsp; ID: {u.id}</div>
+                {/* 主行：显示昵称(name)，若为空则显示“未设置昵称” */}
+                <div className="font-medium text-sm text-gray-900 truncate">
+                  {u.name ? u.name : <span className="text-gray-400 italic">未设置昵称</span>}
+                </div>
+                {/* 次行：同时显示用户名和 ID */}
+                <div className="text-xs text-gray-400 truncate">
+                  {u.username ? <span className="text-blue-400">@{u.username}</span> : <span className="text-gray-300">未设置用户名</span>}
+                  &nbsp;<span className="text-gray-300">|</span>&nbsp;
+                  ID: {u.id}
+                </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${
