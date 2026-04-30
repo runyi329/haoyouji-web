@@ -1619,28 +1619,33 @@ function TradingCostSection() {
         {/* 图表区域（无额外卡片，直接在容器内） */}
         <div>
 
-          {/* Tab1：印花税历年收入 */}
+          {/* Tab1：印花税历年收入（水平条形图，Y轴=年份，X轴=金额） */}
           {subTab === "stamp" && (
             <>
               <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>历年证券交易印花税收入（亿元）</p>
-              <p className="text-[11px] mb-3" style={{ color: DIM }}>红色柱 = 突破2000亿元牛市年份</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={TRADING_COST_DATA} margin={{ top: 8, right: 4, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-                  <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
-                    tickFormatter={(v) => v % 5 === 0 ? String(v) : ""}
+              <p className="text-[11px] mb-3" style={{ color: DIM }}>红色柱 = 牛市年份（印花税突破2000亿）</p>
+              <ResponsiveContainer width="100%" height={35 * TRADING_COST_DATA.length}>
+                <BarChart
+                  data={[...TRADING_COST_DATA].reverse()}
+                  layout="vertical"
+                  margin={{ top: 4, right: 48, left: 32, bottom: 4 }}
+                  barSize={14}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
+                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
+                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)}
                   />
-                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
                   <Tooltip
                     contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
                     formatter={(v: any) => [`${Number(v).toLocaleString()}亿`, "印花税"]}
                     labelFormatter={(l) => `${l}年`}
                   />
-                  <ReferenceLine y={2000} stroke="#FF7043" strokeDasharray="4 2"
-                    label={{ value: "2000亿线", position: "insideTopRight", fontSize: 9, fill: "#FF7043" }}
+                  <ReferenceLine x={2000} stroke="#FF7043" strokeDasharray="4 2"
+                    label={{ value: "2000亿", position: "top", fontSize: 9, fill: "#FF7043" }}
                   />
-                  <Bar dataKey="stamp" radius={[2, 2, 0, 0]}>
-                    {TRADING_COST_DATA.map((d, i) => (
+                  <Bar dataKey="stamp" radius={[0, 2, 2, 0]}>
+                    {[...TRADING_COST_DATA].reverse().map((d, i) => (
                       <Cell key={i} fill={BULL_YEARS.has(d.year) ? RED : "#90CAF9"} fillOpacity={0.9} />
                     ))}
                   </Bar>
@@ -1657,44 +1662,51 @@ function TradingCostSection() {
             </>
           )}
 
-          {/* Tab2：全市场成交额 */}
+          {/* Tab2：全市场成交额（水平条形图） */}
           {subTab === "turnover" && (
             <>
               <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>历年A股全市场成交额（亿元）</p>
               <p className="text-[11px] mb-3" style={{ color: DIM }}>2025年突破414万亿元，创历史新高</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={TRADING_COST_DATA} margin={{ top: 8, right: 4, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-                  <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
-                    tickFormatter={(v) => v % 5 === 0 ? String(v) : ""}
+              <ResponsiveContainer width="100%" height={35 * TRADING_COST_DATA.length}>
+                <BarChart
+                  data={[...TRADING_COST_DATA].reverse()}
+                  layout="vertical"
+                  margin={{ top: 4, right: 64, left: 32, bottom: 4 }}
+                  barSize={14}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
+                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
+                    tickFormatter={(v) => v >= 10000 ? `${(v/10000).toFixed(0)}万亿` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)}
                   />
-                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false}
-                    tickFormatter={(v) => v >= 10000 ? `${(v/10000).toFixed(0)}万亿` : `${v}`}
-                  />
+                  <YAxis type="category" dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
                   <Tooltip
                     contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
                     formatter={(v: any) => [`${(Number(v)/10000).toFixed(2)}万亿`, "成交额"]}
                     labelFormatter={(l) => `${l}年`}
                   />
-                  <Bar dataKey="turnover" fill="#43A047" fillOpacity={0.85} radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="turnover" fill="#43A047" fillOpacity={0.85} radius={[0, 2, 2, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </>
           )}
 
-          {/* Tab3：各项税费对比（近15年，2010-2025） */}
+          {/* Tab3：各项税费对比（水平堆叠条形图，1990-2025全部） */}
           {subTab === "compare" && (
             <>
-              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>各项税费对比（2010-2025年，亿元）</p>
+              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>历年各项税费对比（1990-2025年，亿元）</p>
               <p className="text-[11px] mb-3" style={{ color: DIM }}>印花税 / 券商佣金 / 经手费 / 过户费 / 监管费</p>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={35 * TRADING_COST_DATA.length}>
                 <BarChart
-                  data={TRADING_COST_DATA.filter(d => d.year >= 2010)}
-                  margin={{ top: 8, right: 4, left: -10, bottom: 0 }}
+                  data={[...TRADING_COST_DATA].reverse()}
+                  layout="vertical"
+                  margin={{ top: 4, right: 8, left: 32, bottom: 4 }}
+                  barSize={14}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-                  <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false} />
-                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
+                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
+                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)}
+                  />
+                  <YAxis type="category" dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
                   <Tooltip
                     contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
                     formatter={(v: any, name: any) => {
@@ -1706,30 +1718,33 @@ function TradingCostSection() {
                   <Legend formatter={(v) => ({ stamp: "印花税", commission: "券商佣金", handling: "经手费", transfer: "过户费", supervision: "监管费" }[v] || v)}
                     wrapperStyle={{ fontSize: 10 }}
                   />
-                  <Bar dataKey="stamp"      fill={RED}       fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
-                  <Bar dataKey="commission" fill="#1976D2"   fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
-                  <Bar dataKey="handling"   fill="#F57C00"   fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
-                  <Bar dataKey="transfer"   fill="#7B1FA2"   fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
-                  <Bar dataKey="supervision" fill="#795548"  fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
+                  <Bar dataKey="stamp"       fill={RED}      fillOpacity={0.85} radius={[0,0,0,0]} stackId="a" />
+                  <Bar dataKey="commission"  fill="#1976D2"  fillOpacity={0.85} radius={[0,0,0,0]} stackId="a" />
+                  <Bar dataKey="handling"    fill="#F57C00"  fillOpacity={0.85} radius={[0,0,0,0]} stackId="a" />
+                  <Bar dataKey="transfer"    fill="#7B1FA2"  fillOpacity={0.85} radius={[0,0,0,0]} stackId="a" />
+                  <Bar dataKey="supervision" fill="#795548"  fillOpacity={0.85} radius={[0,2,2,0]} stackId="a" />
                 </BarChart>
               </ResponsiveContainer>
             </>
           )}
 
-          {/* Tab4：费率趋势（各项税费/成交额，‰） */}
+          {/* Tab4：费率趋势（折线图，Y轴=年份，X轴=‰） */}
           {subTab === "ratio" && (
             <>
               <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>各项税费占成交额比例趋势（2000-2025年，‰）</p>
               <p className="text-[11px] mb-3" style={{ color: DIM }}>综合费率从约16‰降至约1.2‰，投资者成本大幅下降</p>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={ratioData} margin={{ top: 8, right: 4, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-                  <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
-                    tickFormatter={(v) => v % 5 === 0 ? String(v) : ""}
-                  />
-                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false}
+              <ResponsiveContainer width="100%" height={35 * ratioData.length}>
+                <BarChart
+                  data={[...ratioData].reverse()}
+                  layout="vertical"
+                  margin={{ top: 4, right: 48, left: 32, bottom: 4 }}
+                  barSize={14}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
+                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
                     tickFormatter={(v) => `${v}‰`}
                   />
+                  <YAxis type="category" dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
                   <Tooltip
                     contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
                     formatter={(v: any, name: any) => {
@@ -1742,10 +1757,10 @@ function TradingCostSection() {
                     formatter={(v) => ({ stampRatio: "印花税‰", commRatio: "佣金‰", totalRatio: "总税费‰" }[v] || v)}
                     wrapperStyle={{ fontSize: 10 }}
                   />
-                  <Line type="monotone" dataKey="stampRatio" stroke={RED}       strokeWidth={2} dot={false} name="stampRatio" />
-                  <Line type="monotone" dataKey="commRatio"  stroke="#1976D2"   strokeWidth={2} dot={false} name="commRatio" />
-                  <Line type="monotone" dataKey="totalRatio" stroke="#43A047"   strokeWidth={2} dot={false} name="totalRatio" />
-                </LineChart>
+                  <Bar dataKey="totalRatio" fill="#43A047"  fillOpacity={0.5}  radius={[0,2,2,0]} stackId="b" />
+                  <Bar dataKey="stampRatio" fill={RED}      fillOpacity={0.85} radius={[0,0,0,0]} stackId="c" />
+                  <Bar dataKey="commRatio"  fill="#1976D2"  fillOpacity={0.85} radius={[0,2,2,0]} stackId="d" />
+                </BarChart>
               </ResponsiveContainer>
             </>
           )}
