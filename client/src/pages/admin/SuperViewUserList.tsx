@@ -111,17 +111,23 @@ export default function SuperViewUserList() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                {/* 第一行：昵称 */}
-                <div className="text-xs text-gray-400">
-                  <span className="text-gray-300">昵称：</span>
-                  {u.name ? <span className="font-medium text-gray-900">{u.name}</span> : <span className="italic text-gray-300">未设置</span>}
-                </div>
-                {/* 第二行：账号 */}
-                <div className="text-xs text-gray-400">
-                  <span className="text-gray-300">账号：</span>
-                  {u.username ? <span className="text-blue-500 font-medium">{u.username}</span> : <span className="italic text-gray-300">未设置</span>}
-                </div>
-                {/* 第三行：ID */}
+                {/* 姓名和用户名相同时只显示一次，不同时分两行显示 */}
+                {u.name && u.username && u.name === u.username ? (
+                  // 相同：只显示一次
+                  <div className="font-medium text-sm text-gray-900 truncate">{u.name}</div>
+                ) : (
+                  // 不同：分两行展示
+                  <>
+                    <div className="text-xs text-gray-400">
+                      <span className="text-gray-300">姓名：</span>
+                      {u.name ? <span className="font-medium text-gray-900">{u.name}</span> : <span className="italic text-gray-300">未设置</span>}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      <span className="text-gray-300">账号：</span>
+                      {u.username ? <span className="text-blue-500 font-medium">{u.username}</span> : <span className="italic text-gray-300">未设置</span>}
+                    </div>
+                  </>
+                )}
                 <div className="text-xs text-gray-300">ID: {u.id}</div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
