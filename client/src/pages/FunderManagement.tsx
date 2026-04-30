@@ -244,11 +244,17 @@ export default function FunderManagement() {
     { enabled: !!editingOrderId && ledgerId > 0 }
   );
   // 受邀订单的已结佣金独立于利息结算记录，初始为 0（只有通过「记录结佣」按钮操作后才会有値）
-  const previewPaidInterest = editingOrder?.participantInfo
-    ? 0
+  const previewPaidInterestData = editingOrder?.participantInfo
+    ? { total: 0, currency: 'U' }
     : (editingOrderId && editingPaidSummary
-        ? ((editingPaidSummary as any)[editingOrderId] ?? 0)
-        : 0);
+        ? ((editingPaidSummary as any)[editingOrderId] ?? { total: 0, currency: 'U' })
+        : { total: 0, currency: 'U' });
+  const previewPaidInterest = typeof previewPaidInterestData === 'object' && previewPaidInterestData !== null
+    ? (previewPaidInterestData as any).total ?? 0
+    : Number(previewPaidInterestData) ?? 0;
+  const previewPaidInterestCurrency = typeof previewPaidInterestData === 'object' && previewPaidInterestData !== null
+    ? ((previewPaidInterestData as any).currency || 'U')
+    : 'U';
 
   // 担保价值（所有担保货币折算为 USDT 的总值）
   const computedCollateralValue = useMemo(() => {
@@ -1763,8 +1769,8 @@ export default function FunderManagement() {
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
                                     {(() => {
                                       const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
-                                      // 货币单位跟随结算货币
-                                      const mainUnit = formData.interestRateCurrency === 'CNY' ? ' 元' : ' U';
+                                      // 货币单位跟随实际结息记录的币种
+                                      const mainUnit = previewPaidInterestCurrency === 'CNY' ? ' 元' : ' U';
                                       return <>{val.toLocaleString(undefined, { maximumFractionDigits: 2 })}{mainUnit}</>;
                                     })()}
                                   </span>
@@ -1772,8 +1778,8 @@ export default function FunderManagement() {
                                 {(() => {
                                   const val = previewPaidInterest > 0 ? previewPaidInterest : 0;
                                   if (val <= 0) return null;
-                                  // 货币单位跟随结算货币
-                                  const isCNY4 = formData.interestRateCurrency === 'CNY';
+                                  // 货币单位跟随实际结息记录的币种
+                                  const isCNY4 = previewPaidInterestCurrency === 'CNY';
                                   const altVal = isCNY4 ? val / 7 : val * 7;
                                   const altUnit = isCNY4 ? 'U' : '元';
                                   return <div className="text-[10px] text-gray-400 mt-0.5">≈ {altVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} {altUnit}</div>;
