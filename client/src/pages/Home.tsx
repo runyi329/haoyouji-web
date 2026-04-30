@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import Lottie from "lottie-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { 
   Users, 
@@ -629,8 +630,21 @@ function getGlobalNextOpenTimeOuter(now: Date): number {
   return nowMs + 3600 * 1000;
 }
 
-// ── 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁）────────────────
-const GlobalMarketStrip = React.memo(function GlobalMarketStrip() {
+// ── 金色钱包 Lottie 动画组件（懒加载，避免影响首屏渲染）────────────────────
+const WalletLottie = React.memo(function WalletLottie() {
+  const [animData, setAnimData] = React.useState<object | null>(null);
+  React.useEffect(() => {
+    fetch('/wallet_gold.json')
+      .then(r => r.json())
+      .then(setAnimData)
+      .catch(() => {});
+  }, []);
+  if (!animData) return <div className="w-12 h-12" />;
+  return <Lottie animationData={animData} loop={true} style={{ width: '100%', height: '100%' }} />;
+});
+
+// ── 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁）────────────────────
+const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   const { data: goldPrice } = trpc.stock.getGoldPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
@@ -1740,14 +1754,28 @@ export default function Home() {
                 <span className="text-[#A80000] text-xs mt-1 font-medium">智能会计</span>
               </div>
             </div>
-            {/* 第二行：智能钱包（横向宽条） */}
+            {/* 第二行：智能钱包（横向宽条）- 黑白金立体风格 */}
             <div
-              className="flex flex-row items-center justify-center gap-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70 flex-1"
+              className="flex flex-row items-center justify-center gap-3 rounded-xl cursor-pointer active:scale-[0.98] flex-1 relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+                border: '1px solid rgba(201,168,76,0.6)',
+                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              }}
             >
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-                <Wallet className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+              {/* 顶部金色高光线 */}
+              <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
+              {/* 底部暗影线 */}
+              <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
+              {/* Lottie 钱包动画 */}
+              <div className="w-12 h-12 flex-shrink-0">
+                <WalletLottie />
               </div>
-              <span className="text-[#A80000] text-sm font-medium">智能钱包</span>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold tracking-widest" style={{ color: '#F5D78E', textShadow: '0 0 8px rgba(245,215,142,0.5), 0 1px 3px rgba(0,0,0,0.8)' }}>智能钱包</span>
+                <span className="text-xs" style={{ color: 'rgba(201,168,76,0.7)', letterSpacing: '0.05em' }}>SMART WALLET</span>
+              </div>
             </div>
           </div>
         </div>
