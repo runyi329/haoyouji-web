@@ -79,7 +79,7 @@ export default function Wallet() {
     const recharges = (recentRechargeQuery.data ?? []).map((r: any) => ({
       id: `r-${r.id}`,
       type: "recharge" as const,
-      amount: r.amount,
+      amount: Number(r.amount),
       status: r.status,
       createdAt: r.createdAt,
       remark: r.remark || "",
@@ -87,7 +87,7 @@ export default function Wallet() {
     const withdraws = (recentWithdrawQuery.data ?? []).map((w: any) => ({
       id: `w-${w.id}`,
       type: "withdraw" as const,
-      amount: w.amount,
+      amount: Number(w.amount),
       status: w.status,
       createdAt: w.createdAt,
       remark: w.remark || "",
