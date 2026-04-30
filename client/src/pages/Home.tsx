@@ -423,7 +423,7 @@ function GoldFlipCounter({ total, unit, decimals, fixedSize }: { total: number; 
           />
         )
       ))}
-      {unit && <span className="font-medium" style={{ fontSize: digitSize * 0.38 + 'px', color: 'rgba(203,164,113,0.85)', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '2px', whiteSpace: 'nowrap' }}>{unit}</span>}
+      {unit && <span className="font-medium" style={{ fontSize: digitSize * 0.38 + 'px', color: '#333333', marginLeft: '3px', alignSelf: 'flex-end', marginBottom: '2px', whiteSpace: 'nowrap' }}>{unit}</span>}
     </div>
   );
 }
@@ -776,7 +776,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
                     )}
                   </>
                 ) : (
-                  <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
+                  <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#333333' }}>
                     休市中，离开市
                     {globalCountdown && (
                       <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -1662,7 +1662,7 @@ export default function Home() {
                       )}
                     </>
                   ) : (
-                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#333333' }}>
                       {marketStatus === 'lunch' ? '午休中' : '休市中'}，离开市
                       {countdown && (
                         <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -1709,7 +1709,7 @@ export default function Home() {
                       )}
                     </>
                   ) : (
-                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#333333' }}>
                       {hkMarketStatus === 'lunch' ? '午休中' : '休市中'}，离开市
                       {hkCountdown && (
                         <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -1757,7 +1757,7 @@ export default function Home() {
                       )}
                     </>
                   ) : (
-                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#333333' }}>
                       休市中，离开市
                       {usCountdown && (
                         <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
