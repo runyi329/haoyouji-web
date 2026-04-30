@@ -1891,16 +1891,18 @@ function TradingCostSection() {
                         <div
                           style={{
                             position: 'absolute', top: '50%', transform: 'translateY(-50%)',
-                            right: `${100 - Math.max(pctW, 0.5)}%`,
-                            paddingLeft: 3, fontSize: 8, fontWeight: 700, whiteSpace: 'nowrap',
-                            color: pctW > 82 ? '#fff' : MUTED,
-                            textShadow: pctW > 82 ? '0 1px 2px rgba(0,0,0,0.35)' : 'none',
-                            opacity: animated && pctW > 3 ? 1 : 0,
-                            transition: `right 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 18}ms, opacity 0.3s ease ${i * 18 + 500}ms`,
+                            // 条形足够长（≥20%）：内置靠右白色；条形短：紧贴右侧深色
+                            ...(pctW >= 20
+                              ? { right: `${100 - Math.max(pctW, 0.5)}%`, paddingRight: 4, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }
+                              : { left: `${Math.max(pctW, 0.5)}%`, paddingLeft: 3, color: TEXT }
+                            ),
+                            fontSize: 8, fontWeight: 700, whiteSpace: 'nowrap',
+                            opacity: animated ? 1 : 0,
+                            transition: `left 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 18}ms, right 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 18}ms, opacity 0.3s ease ${i * 18 + 400}ms`,
                             pointerEvents: 'none',
                           }}
                         >
-                          {totalVal.toFixed(0)}亿
+                          {totalVal >= 10000 ? `${(totalVal/10000).toFixed(1)}万亿` : `${totalVal.toFixed(0)}亿`}
                         </div>
                       )}
                     </div>
