@@ -740,15 +740,41 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   }, []);
 
   const CDN_ICONS = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK';
+  // 内联 SVG 图标组件，无需外部 CDN
+  const GoldIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <circle cx="7" cy="7" r="7" fill="url(#goldGrad)"/>
+      <defs>
+        <radialGradient id="goldGrad" cx="35%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#FFE066"/>
+          <stop offset="45%" stopColor="#D4A017"/>
+          <stop offset="100%" stopColor="#8B6914"/>
+        </radialGradient>
+      </defs>
+      <text x="7" y="10" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#fff" fontFamily="serif">Au</text>
+    </svg>
+  );
+  const DxyIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <circle cx="7" cy="7" r="7" fill="#1a3a6e"/>
+      <text x="7" y="10.5" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">$</text>
+    </svg>
+  );
+  const CnhIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <rect width="14" height="14" rx="7" fill="#CC0001"/>
+      <text x="7" y="10.5" textAnchor="middle" fontSize="7.5" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">¥</text>
+    </svg>
+  );
   const items = [
     { key: 'gold', label: '黄金 XAU/USD', data: goldPrice,   unit: '/盎司', decimals: 1,
-      iconType: 'lucide' as const, iconName: 'TrendingUp' },
+      iconType: 'svg' as const, IconComp: GoldIcon },
     { key: 'oil',  label: '原油 WTI',      data: oilPrice,   unit: '/桶',   decimals: 2,
       iconType: 'img' as const, iconUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oil-pump-icon-circle.png' },
     { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3,
-      iconType: 'lucide' as const, iconName: 'DollarSign' },
+      iconType: 'svg' as const, IconComp: DxyIcon },
     { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4,
-      iconType: 'lucide' as const, iconName: 'ArrowLeftRight' },
+      iconType: 'svg' as const, IconComp: CnhIcon },
     { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',      decimals: 0,
       iconType: 'img' as const, iconUrl: `${CDN_ICONS}/btc_732a725a.png` },
   ];
@@ -806,6 +832,8 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
               <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                 {item.iconType === 'img' ? (
                   <img src={(item as any).iconUrl} alt={item.key} style={{ width: '14px', height: '14px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                ) : item.iconType === 'svg' ? (
+                  (() => { const IC = (item as any).IconComp; return <IC />; })()
                 ) : (
                   <Globe className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
                 )}
