@@ -816,7 +816,8 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
       iconType: 'svg' as const, IconComp: DxyIcon },
     { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4,
       iconType: 'svg' as const, IconComp: CnhIcon },
-    { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',      decimals: 0,
+    { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',
+      decimals: (btcPrice?.success && (btcPrice.price ?? 0) >= 100000) ? 0 : 1,
       iconType: 'img' as const, iconUrl: `${CDN_ICONS}/btc_732a725a.png` },
   ];
 
