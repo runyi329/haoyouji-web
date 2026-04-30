@@ -16,6 +16,7 @@ import {
   Globe,
   BarChart2,
   FileText,
+  UserPlus,
 } from "lucide-react";
 import {
   DropdownMenu,
