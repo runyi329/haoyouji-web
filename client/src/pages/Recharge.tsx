@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
-import { ArrowLeft, Copy, Check, Clock, Wallet, AlertCircle, CheckCircle2, History } from "lucide-react";
+import { ArrowLeft, Copy, Check, Clock, AlertCircle, CheckCircle2, History, ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
 
@@ -12,7 +12,6 @@ interface RechargeProps {
 export default function Recharge({ hideHeader = false, hideBalance = false }: RechargeProps = {}) {
   const [, setLocation] = useLocation();
   const search = useSearch();
-  // 解析来源参数，支持从账本跳转过来后返回
   const searchParams = new URLSearchParams(search);
   const fromLedger = searchParams.get('from') === 'ledger';
   const fromLedgerId = searchParams.get('ledgerId');
@@ -34,7 +33,6 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   const [submitting, setSubmitting] = useState(false);
   const [showLedgerHistory, setShowLedgerHistory] = useState(false);
 
-  // 账户明细流水
   const { data: ledgerHistoryData, isLoading: ledgerHistoryLoading } = trpc.ledger.afGetMyRechargeHistory.useQuery(
     { ledgerId: Number(fromLedgerId), ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}) },
     { enabled: !!fromLedgerId && showLedgerHistory, staleTime: 30000 }
@@ -43,8 +41,6 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
 
   const createOrderMutation = trpc.recharge.createOrder.useMutation();
   const submitTransferMutation = trpc.recharge.submitTransfer.useMutation();
-  // 按账本隔离余额：如果有 ledgerId 则只计算该账本的充値和手动调账
-  // 管理员视角查看时，传递 viewAsUserId 以显示被查看用户的余额
   const balanceQuery = trpc.recharge.getBalance.useQuery(
     fromLedgerId
       ? { ledgerId: Number(fromLedgerId), ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}) }
@@ -52,16 +48,12 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   );
   const displayBalance = balanceQuery.data;
 
-
-
-  // 创建充值订单
   const handleCreateOrder = async () => {
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount < 1) {
       alert("请输入有效的充值金额");
       return;
     }
-
     try {
       const result = await createOrderMutation.mutateAsync({
         amount: numAmount,
@@ -69,26 +61,19 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
         ...(fromLedgerId ? { ledgerId: Number(fromLedgerId) } : {}),
         ...(viewAsUserId ? { viewAsUserId: Number(viewAsUserId) } : {}),
       });
-
       setOrder(result);
-
-      // 生成二维码（确保walletAddress不为空）
       if (result.walletAddress) {
         const qr = await QRCode.toDataURL(result.walletAddress);
         setQrCode(qr);
       }
-
-      // 计算剩余时间
       const expiresAt = new Date(result.expiresAt).getTime();
       const now = Date.now();
       setTimeLeft(Math.floor((expiresAt - now) / 1000));
-
     } catch (error: any) {
       alert(error.message || "创建订单失败");
     }
   };
 
-  // 提交转账确认
   const handleSubmitTransfer = async () => {
     if (!order?.orderNo) return;
     setSubmitting(true);
@@ -102,105 +87,103 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
     }
   };
 
-  // 复制到剪贴板
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // 倒计时
   useEffect(() => {
     if (timeLeft <= 0) return;
-
     const timer = setInterval(() => {
       setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
+        if (prev <= 1) { clearInterval(timer); return 0; }
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, [timeLeft]);
 
-  // 格式化倒计时
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // 黑金通用样式
+  const darkBg = "min-h-screen pb-20" ;
+  const darkNavBar = "sticky top-0 z-10 border-b border-[#2a2a2a]";
+  const goldText = "text-[#CBA471]";
+  const goldBorder = "border-[#CBA471]";
+
   // ========== 已提交确认页面 ==========
   if (submitted && order) {
     return (
-      <div className="min-h-screen bg-gray-50 pb-20">
-        {/* 顶部导航 */}
-        <div className="bg-white border-b sticky top-0 z-10">
+      <div className={darkBg} style={{background:'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)'}}>
+        <div className={darkNavBar} style={{background:'#111111'}}>
           <div className="flex items-center px-4 py-3">
             <button onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history')} className="mr-3">
-              <ArrowLeft className="w-6 h-6" />
+              <ArrowLeft className="w-6 h-6 text-[#CBA471]" />
             </button>
-            <h1 className="text-lg font-semibold">提交成功</h1>
+            <h1 className="text-lg font-semibold text-[#CBA471] tracking-widest">提交成功</h1>
           </div>
         </div>
 
-        <div className="p-3 space-y-3">
+        <div className="p-4 space-y-4">
           {/* 成功图标 */}
-          <div className="bg-white rounded-lg p-5 text-center">
-            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <CheckCircle2 className="w-8 h-8 text-green-500" />
+          <div className="rounded-2xl p-6 text-center" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a',boxShadow:'0 8px 32px rgba(0,0,0,0.5)'}}>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{background:'linear-gradient(135deg,#1a3a1a,#2d5a2d)'}}>
+              <CheckCircle2 className="w-9 h-9 text-green-400" />
             </div>
-            <h2 className="text-lg font-bold text-gray-900 mb-1">转账确认已提交</h2>
-            <p className="text-sm text-gray-500">系统正在扫描链上交易，确认到账后将自动入账</p>
+            <h2 className="text-lg font-bold text-white mb-2">转账确认已提交</h2>
+            <p className="text-sm text-gray-400">系统正在扫描链上交易，确认到账后将自动入账</p>
           </div>
 
           {/* 订单信息 */}
-          <div className="bg-white rounded-lg p-3 space-y-2.5">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-500">订单号</span>
-              <span className="font-mono text-sm">{order.orderNo}</span>
+          <div className="rounded-2xl p-4 space-y-3" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a',boxShadow:'0 4px 20px rgba(0,0,0,0.4)'}}>
+            <div className="flex justify-between items-center py-2 border-b border-[#2a2a2a]">
+              <span className="text-gray-400 text-sm">订单号</span>
+              <span className="font-mono text-sm text-white">{order.orderNo}</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-500">充值金额</span>
-              <span className="font-bold text-[#D32F2F]">{order.amount} USDT</span>
+            <div className="flex justify-between items-center py-2 border-b border-[#2a2a2a]">
+              <span className="text-gray-400 text-sm">充值金额</span>
+              <span className="font-bold text-[#CBA471]">{order.amount} USDT</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-500">网络</span>
-              <span>{order.network}</span>
+            <div className="flex justify-between items-center py-2 border-b border-[#2a2a2a]">
+              <span className="text-gray-400 text-sm">网络</span>
+              <span className="text-white">{order.network}</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-500">状态</span>
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                <Clock className="w-3 h-3 mr-1" />
-                确认中
+            <div className="flex justify-between items-center py-2">
+              <span className="text-gray-400 text-sm">状态</span>
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-900/40 text-blue-300 border border-blue-700/50">
+                <Clock className="w-3 h-3 mr-1" />确认中
               </span>
             </div>
           </div>
 
           {/* 提示 */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="text-sm font-medium text-blue-900 mb-1.5">温馨提示</div>
-            <ul className="text-xs text-blue-800 space-y-1">
+          <div className="rounded-2xl p-4" style={{background:'rgba(203,164,113,0.08)',border:'1px solid rgba(203,164,113,0.2)'}}>
+            <div className="text-sm font-medium text-[#CBA471] mb-2">温馨提示</div>
+            <ul className="text-xs text-gray-400 space-y-1.5">
               <li>• 通常1-3分钟内即可确认到账</li>
               <li>• 您可以在充值记录中查看订单状态</li>
-              <li>• 如果超过30分钟未到账，请联系管理员处理</li>
+              <li>• 如超过30分钟未到账，请联系客服处理</li>
             </ul>
           </div>
 
           {/* 操作按钮 */}
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             <button
               onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history')}
-              className="w-full bg-[#D32F2F] text-white py-3.5 rounded-lg font-medium"
+              className="w-full py-4 rounded-xl font-semibold text-black tracking-widest"
+              style={{background:'linear-gradient(135deg,#CBA471,#e8c98a,#CBA471)',boxShadow:'0 4px 20px rgba(203,164,113,0.4)'}}
             >
               查看充值记录
             </button>
             <button
               onClick={() => { setOrder(null); setSubmitted(false); }}
-              className="w-full bg-white border border-gray-300 text-gray-700 py-3.5 rounded-lg font-medium"
+              className="w-full py-4 rounded-xl font-semibold text-[#CBA471]"
+              style={{background:'transparent',border:'1px solid #CBA471'}}
             >
               继续充值
             </button>
@@ -213,324 +196,271 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
   // ========== 确认支付页面（已创建订单） ==========
   if (order) {
     return (
-      <div className="min-h-screen bg-gray-50 pb-20">
-        {/* 顶部导航 */}
-        <div className="bg-white border-b sticky top-0 z-10">
+      <div className={darkBg} style={{background:'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)'}}>
+        <div className={darkNavBar} style={{background:'#111111'}}>
           <div className="flex items-center px-4 py-3">
             <button onClick={() => setOrder(null)} className="mr-3">
-              <ArrowLeft className="w-6 h-6" />
+              <ArrowLeft className="w-6 h-6 text-[#CBA471]" />
             </button>
-            <h1 className="text-lg font-semibold">确认支付</h1>
+            <h1 className="text-lg font-semibold text-[#CBA471] tracking-widest">确认支付</h1>
           </div>
         </div>
 
         <div className="p-4 space-y-4">
-          {/* 倒计时提示 */}
+          {/* 倒计时 */}
           {timeLeft > 0 ? (
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-start">
-              <Clock className="w-5 h-5 text-orange-500 mt-0.5 mr-3 flex-shrink-0" />
-              <div className="flex-1">
-                <div className="font-medium text-orange-900">请在 {formatTime(timeLeft)} 内完成支付</div>
-                <div className="text-sm text-orange-700 mt-1">订单将在30分钟后自动过期</div>
+            <div className="rounded-xl p-4 flex items-start" style={{background:'rgba(255,160,0,0.08)',border:'1px solid rgba(255,160,0,0.25)'}}>
+              <Clock className="w-5 h-5 text-amber-400 mt-0.5 mr-3 flex-shrink-0" />
+              <div>
+                <div className="font-medium text-amber-300">请在 {formatTime(timeLeft)} 内完成支付</div>
+                <div className="text-xs text-amber-500/80 mt-1">订单将在30分钟后自动过期</div>
               </div>
             </div>
           ) : (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start">
-              <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
-              <div className="flex-1">
-                <div className="font-medium text-red-900">订单已过期</div>
-                <div className="text-sm text-red-700 mt-1">请重新创建充值订单</div>
+            <div className="rounded-xl p-4 flex items-start" style={{background:'rgba(244,67,54,0.08)',border:'1px solid rgba(244,67,54,0.25)'}}>
+              <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 mr-3 flex-shrink-0" />
+              <div>
+                <div className="font-medium text-red-300">订单已过期</div>
+                <div className="text-xs text-red-500/80 mt-1">请重新创建充值订单</div>
               </div>
             </div>
           )}
 
           {/* 支付金额 */}
-          <div className="bg-white rounded-lg p-6 text-center">
-            <div className="text-gray-600 mb-2">应付金额</div>
-            <div className="text-4xl font-bold text-[#D32F2F] mb-1">
+          <div className="rounded-2xl p-6 text-center" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a',boxShadow:'0 8px 32px rgba(0,0,0,0.5)'}}>
+            <div className="text-gray-400 text-sm mb-2">应付金额</div>
+            <div className="text-5xl font-bold text-[#CBA471] mb-1" style={{textShadow:'0 0 20px rgba(203,164,113,0.4)'}}>
               {order.amount}
             </div>
-            <div className="text-gray-500">USDT ({order.network})</div>
+            <div className="text-gray-400 text-sm">USDT ({order.network})</div>
           </div>
 
           {/* 二维码 */}
-          <div className="bg-white rounded-lg p-6">
-            <div className="text-center mb-4">
-              <div className="text-sm text-gray-600 mb-3">扫码支付</div>
+          <div className="rounded-2xl p-6" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a',boxShadow:'0 4px 20px rgba(0,0,0,0.4)'}}>
+            <div className="text-center">
+              <div className="text-sm text-gray-400 mb-4">扫码支付</div>
               {qrCode && (
-                <img src={qrCode} alt="QR Code" className="w-48 h-48 mx-auto" />
+                <div className="inline-block p-3 rounded-xl bg-white">
+                  <img src={qrCode} alt="QR Code" className="w-44 h-44" />
+                </div>
               )}
             </div>
           </div>
 
           {/* 收款地址 */}
-          <div className="bg-white rounded-lg p-4">
-            <div className="text-sm text-gray-600 mb-2">收款地址</div>
-            <div className="flex items-center bg-gray-50 rounded-lg p-3">
-              <div className="flex-1 font-mono text-sm break-all mr-2">
+          <div className="rounded-2xl p-4" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a',boxShadow:'0 4px 20px rgba(0,0,0,0.4)'}}>
+            <div className="text-sm text-gray-400 mb-3">收款地址</div>
+            <div className="flex items-center rounded-xl p-3" style={{background:'rgba(0,0,0,0.3)',border:'1px solid #333'}}>
+              <div className="flex-1 font-mono text-sm break-all mr-2 text-gray-200">
                 {order.walletAddress}
               </div>
               <button
                 onClick={() => copyToClipboard(order.walletAddress)}
-                className="flex-shrink-0 p-2 hover:bg-gray-200 rounded"
+                className="flex-shrink-0 p-2 rounded-lg transition-colors"
+                style={{background: copied ? 'rgba(76,175,80,0.2)' : 'rgba(203,164,113,0.15)',border:`1px solid ${copied ? '#4CAF50' : '#CBA471'}`}}
               >
-                {copied ? (
-                  <Check className="w-5 h-5 text-green-500" />
-                ) : (
-                  <Copy className="w-5 h-5 text-gray-600" />
-                )}
+                {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-[#CBA471]" />}
               </button>
             </div>
           </div>
 
-          {/* 订单号 */}
-          <div className="bg-white rounded-lg p-4">
-            <div className="text-sm text-gray-600 mb-2">订单号</div>
-            <div className="font-mono text-sm">{order.orderNo}</div>
-          </div>
-
-          {/* ★ 我已成功转账，提交确认 按钮 — 放在订单号下面、重要提示上面 */}
+          {/* 提交按钮 */}
           <button
             onClick={handleSubmitTransfer}
-            disabled={submitting || timeLeft <= 0}
-            className="w-full bg-[#D32F2F] text-white py-4 rounded-lg font-medium text-lg disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+            disabled={submitting || timeLeft === 0}
+            className="w-full py-4 rounded-xl font-semibold text-black tracking-widest disabled:opacity-50"
+            style={{background:'linear-gradient(135deg,#CBA471,#e8c98a,#CBA471)',boxShadow:'0 4px 20px rgba(203,164,113,0.4)'}}
           >
-            {submitting ? (
-              <>
-                <Clock className="w-5 h-5 animate-spin" />
-                提交中...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="w-5 h-5" />
-                我已成功转账，提交确认
-              </>
-            )}
+            {submitting ? '提交中...' : '我已完成转账'}
           </button>
-
-          {/* 重要提示 */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="font-medium text-yellow-900 mb-2">⚠️ 重要提示</div>
-            <ul className="text-sm text-yellow-800 space-y-1.5">
-              <li>• 请转账 <span className="font-bold">{order.amount} USDT</span>，系统按实际到账金额入账</li>
-              <li>• 请选择 <span className="font-bold">{order.network}</span> 网络</li>
-              <li>• 转账完成后，请点击上方按钮提交确认</li>
-              <li>• 请勿向此地址转账其他币种</li>
-            </ul>
-          </div>
-
-          {/* 手续费说明 */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <div className="font-medium text-gray-700 mb-2">💬 关于手续费</div>
-            <ul className="text-sm text-gray-600 space-y-1.5">
-              <li>• 部分钱包会从转账金额中扣除手续费，导致实际到账金额略少</li>
-              <li>• 系统支持智能匹配，即使因手续费导致金额不完全一致，也能自动识别并入账</li>
-              <li>• 如果超过30分钟未自动到账，请联系管理员手动处理</li>
-            </ul>
-          </div>
         </div>
       </div>
     );
   }
 
-  // ========== 默认显示充值金额选择页面 ==========
+  // ========== 主页面 ==========
+  const networks = ["TRC20", "ERC20", "BEP20", "APTOS", "SOLANA"] as const;
+  const quickAmounts = [100, 500, 1000, 5000];
+
   return (
     <>
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className={darkBg} style={{background:'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)'}}>
       {/* 顶部导航 */}
-      {!hideHeader && (<div className="bg-white border-b sticky top-0 z-10">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center">
-            <button onClick={handleBack} className="mr-3">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h1 className="text-lg font-semibold">充值</h1>
-          </div>
-          <div className="flex items-center gap-2">
+      {!hideHeader && (
+        <div className={darkNavBar} style={{background:'#111111'}}>
+          {/* 金色高光线 */}
+          <div style={{height:'2px',background:'linear-gradient(90deg,transparent,#CBA471,#e8c98a,#CBA471,transparent)'}} />
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center">
+              <button onClick={handleBack} className="mr-3">
+                <ArrowLeft className="w-6 h-6 text-[#CBA471]" />
+              </button>
+              <h1 className="text-lg font-semibold text-[#CBA471] tracking-widest">充值</h1>
+            </div>
             <button
               onClick={() => setLocation(fromLedgerId ? `/recharge/history?ledgerId=${fromLedgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}` : '/recharge/history')}
-              className="text-xs px-3 py-1.5 rounded-full border border-[#D32F2F] text-[#D32F2F] bg-white hover:bg-red-50 transition-colors font-medium"
+              className="flex items-center text-sm text-[#CBA471] opacity-80"
             >
-              充值记录
+              <History className="w-4 h-4 mr-1" />记录
             </button>
-            {fromLedgerId && (
-              <button
-                onClick={() => setShowLedgerHistory(true)}
-                className="text-xs px-3 py-1.5 rounded-full border border-[#D32F2F] text-[#D32F2F] bg-white hover:bg-red-50 transition-colors font-medium"
-              >
-                账户明细
-              </button>
-            )}
           </div>
         </div>
-      </div>)}
+      )}
 
       <div className="p-4 space-y-4">
-        {/* 管理员视角提示 */}
-        {viewAsUserId && (
-          <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-2.5 flex items-center gap-2">
-            <span className="text-amber-700 text-sm font-medium">正在为用户 ID:{viewAsUserId} 操作充值</span>
+        {/* 余额卡 */}
+        {!hideBalance && (
+          <div className="rounded-2xl p-5 relative overflow-hidden" style={{background:'linear-gradient(135deg,#1a1a1a 0%,#222222 50%,#1a1a1a 100%)',border:'1px solid #2a2a2a',boxShadow:'0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(203,164,113,0.15)'}}>
+            <div style={{position:'absolute',top:0,left:0,right:0,height:'2px',background:'linear-gradient(90deg,transparent,#CBA471,#e8c98a,#CBA471,transparent)'}} />
+            <div className="text-gray-400 text-sm mb-1">当前余额</div>
+            <div className="text-3xl font-bold text-[#CBA471]" style={{textShadow:'0 0 20px rgba(203,164,113,0.4)'}}>
+              {displayBalance != null ? parseFloat(String(displayBalance)).toFixed(2) : '0.00'}
+              <span className="text-base font-normal text-gray-400 ml-2">USDT</span>
+            </div>
           </div>
         )}
-        {/* 当前余额 */}
-        {!hideBalance && (<div className="bg-gradient-to-r from-[#D32F2F] to-[#E57373] rounded-lg p-6 text-white">
-          <div className="flex items-center mb-2">
-            <Wallet className="w-5 h-5 mr-2" />
-            <span className="text-sm opacity-90">当前余额</span>
-          </div>
-          <div className="text-3xl font-bold">
-            {displayBalance != null ? parseFloat(String(displayBalance)).toFixed(2) : '0.00'} USDT
-          </div>
-        </div>)}
-
-        {/* 充值金额 */}
-        <div className="bg-white rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-3">充值金额</div>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="请输入充值金额"
-            className="w-full text-2xl font-bold border-0 outline-none mb-4"
-            min="1"
-            step="0.01"
-          />
-        </div>
 
         {/* 选择网络 */}
-        <div className="bg-white rounded-lg p-4">
-          <div className="text-sm text-gray-600 mb-3">选择网络</div>
-          <div className="space-y-2">
-            {[
-              { value: 'TRC20' as const, label: 'TRC20', desc: '推荐 • 快速到账 • 低手续费', enabled: true },
-              { value: 'APTOS' as const, label: 'Aptos', desc: '新一代公链 • 快速安全', enabled: true },
-              { value: 'ERC20' as const, label: 'ERC20', desc: '以太坊网络 • 暂未开放', enabled: false },
-              { value: 'SOLANA' as const, label: 'Solana', desc: '高性能公链 • 暂未开放', enabled: false },
-              { value: 'BEP20' as const, label: 'BSC(BEP20)', desc: '币安智能链 • 暂未开放', enabled: false },
-            ].map(item => (
+        <div className="rounded-2xl p-4" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a',boxShadow:'0 4px 20px rgba(0,0,0,0.4)'}}>
+          <div className="text-sm text-gray-400 mb-3">选择网络</div>
+          <div className="flex flex-wrap gap-2">
+            {networks.map(n => (
               <button
-                key={item.value}
-                type="button"
-                disabled={!item.enabled}
-                onClick={() => item.enabled && setNetwork(item.value)}
-                className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                  !item.enabled
-                    ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
-                    : network === item.value
-                      ? 'border-[#D32F2F] bg-red-50'
-                      : 'border-gray-200 hover:border-gray-400'
-                }`}
+                key={n}
+                onClick={() => setNetwork(n)}
+                className="px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                style={network === n
+                  ? {background:'linear-gradient(135deg,#CBA471,#e8c98a)',color:'#111',boxShadow:'0 4px 12px rgba(203,164,113,0.4)'}
+                  : {background:'rgba(255,255,255,0.05)',color:'#888',border:'1px solid #333'}
+                }
               >
-                <div className="text-left">
-                  <div className={`font-medium text-sm ${!item.enabled ? 'text-gray-400' : 'text-gray-900'}`}>{item.label}</div>
-                  <div className={`text-xs mt-0.5 ${!item.enabled ? 'text-gray-300' : 'text-gray-500'}`}>{item.desc}</div>
-                </div>
-                {item.enabled && network === item.value && (
-                  <div className="w-5 h-5 rounded-full bg-[#D32F2F] flex items-center justify-center flex-shrink-0">
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  </div>
-                )}
+                {n}
               </button>
             ))}
           </div>
         </div>
 
-        {/* 提交按钮 */}
+        {/* 输入金额 */}
+        <div className="rounded-2xl p-4" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a',boxShadow:'0 4px 20px rgba(0,0,0,0.4)'}}>
+          <div className="text-sm text-gray-400 mb-3">充值金额</div>
+          <div className="flex items-center rounded-xl px-4 py-3 mb-3" style={{background:'rgba(0,0,0,0.3)',border:'1px solid #333'}}>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="请输入充值金额"
+              className="flex-1 min-w-0 text-xl font-bold outline-none bg-transparent text-white placeholder-gray-600"
+              step="1"
+              min="1"
+            />
+            <span className="text-[#CBA471] text-sm font-medium ml-2">USDT</span>
+          </div>
+          {/* 快捷金额 */}
+          <div className="flex gap-2">
+            {quickAmounts.map(q => (
+              <button
+                key={q}
+                onClick={() => setAmount(String(q))}
+                className="flex-1 py-2 rounded-lg text-xs font-medium transition-all"
+                style={amount === String(q)
+                  ? {background:'rgba(203,164,113,0.2)',color:'#CBA471',border:'1px solid #CBA471'}
+                  : {background:'rgba(255,255,255,0.05)',color:'#888',border:'1px solid #333'}
+                }
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 确认按钮 */}
         <button
           onClick={handleCreateOrder}
-          disabled={!amount || parseFloat(amount) < 1 || createOrderMutation.isPending}
-          className="w-full bg-[#D32F2F] text-white py-4 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+          disabled={createOrderMutation.isPending || !amount}
+          className="w-full py-4 rounded-xl font-semibold text-black tracking-widest disabled:opacity-50"
+          style={{background:'linear-gradient(135deg,#CBA471,#e8c98a,#CBA471)',boxShadow:'0 4px 20px rgba(203,164,113,0.4)'}}
         >
-          {createOrderMutation.isPending ? '创建中...' : '下一步'}
+          {createOrderMutation.isPending ? '创建中...' : '立即充值'}
         </button>
 
-        {/* 温馨提示 */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="font-medium text-blue-900 mb-2">温馨提示</div>
-          <ul className="text-sm text-blue-800 space-y-1.5">
-            <li>• 最低充值金额：1 USDT</li>
-            <li>• 到账时间：1-3分钟（区块确认后自动到账）</li>
-            <li>• 系统按实际到账金额入账，无需担心手续费差异</li>
-            <li>• 转账时请选择正确的网络，否则资产将无法找回</li>
-            <li>• 如果长时间未到账，请联系管理员处理</li>
+        {/* 安全提示 */}
+        <div className="rounded-2xl p-4" style={{background:'rgba(203,164,113,0.06)',border:'1px solid rgba(203,164,113,0.15)'}}>
+          <div className="text-sm font-medium text-[#CBA471] mb-2">充值说明</div>
+          <ul className="text-xs text-gray-500 space-y-1.5">
+            <li>• 请确认选择正确的网络，转错网络资产无法找回</li>
+            <li>• 最小充值金额为 1 USDT</li>
+            <li>• 充值到账时间通常为1-3分钟</li>
+            <li>• 请勿向上述地址转入非 USDT 资产</li>
           </ul>
         </div>
-      </div>
-    </div>
 
-    {/* 账户明细弹窗 */}
-    {showLedgerHistory && (
-      <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-        onClick={() => setShowLedgerHistory(false)}>
-        <div className="mt-auto bg-white rounded-t-2xl max-h-[80vh] flex flex-col"
-          onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <span className="font-semibold text-gray-900">账户明细</span>
-            <button onClick={() => setShowLedgerHistory(false)} className="text-gray-400 text-xl leading-none">×</button>
-          </div>
-          <div className="overflow-y-auto flex-1 px-4 py-2">
-            {ledgerHistoryLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <div className="w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
-              </div>
-            ) : ledgerHistoryList.length === 0 ? (
-              <div className="text-center text-gray-400 text-sm py-10">暂无账目记录</div>
-            ) : (
-              <div>
-                {(() => {
-                  // 从最早到最新累加，计算每条记录后的余额（只计入已完成的充值和所有手动调账）
-                  const sorted = [...ledgerHistoryList].reverse(); // 时间正序
-                  let running = 0;
-                  const balances: number[] = [];
-                  for (const item of sorted) {
-                    const amt = parseFloat(item.amount);
-                    if (item.sourceType === 'recharge' && item.status === 'completed') {
-                      running += amt;
-                    } else if (item.sourceType === 'manual') {
-                      running += amt;
-                    }
-                    balances.push(running);
-                  }
-                  balances.reverse(); // 恢复倒序
-                  return ledgerHistoryList.map((item: any, idx: number) => {
-                    const amt = parseFloat(item.amount);
-                    const isPositive = amt >= 0;
-                    const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
-                    const rawNote = item.note || '';
-                    // 提取备注中的订单号（AF开头的完整编号，AF后接12位数字）
-                    const orderNoMatch = rawNote.match(/AF\d{12}/);
-                    const orderNo = orderNoMatch ? orderNoMatch[0] : null;
-                    // 去掉备注中的订单号，只保留描述文字
-                    const cleanNote = rawNote.replace(/\s*AF\d{12}/, '').trim();
-                    const typeLabel = item.sourceType === 'recharge'
-                      ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : cleanNote || '充值')
-                      : (cleanNote ? cleanNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
-                    const balanceAfter = balances[idx];
-                    const showBalance = item.sourceType === 'manual' || (item.sourceType === 'recharge' && item.status === 'completed');
-                    return (
-                      <div key={item.id || idx} className="flex items-start justify-between py-3 border-b border-gray-100">
-                        <div className="flex-1 min-w-0 mr-3">
-                          <div className="text-gray-900 text-xs leading-snug" style={{wordBreak:'break-all',whiteSpace:'normal',overflowWrap:'anywhere'}}>{typeLabel}</div>
-                          <div className="text-gray-400 text-xs mt-0.5">{dateStr}{orderNo && <span className="ml-1">{orderNo}</span>}</div>
-                        </div>
-                        <div className="flex flex-col items-end">
-                          <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
-                            {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+        {/* 账本历史记录（仅从账本进入时显示） */}
+        {fromLedgerId && (
+          <div className="rounded-2xl overflow-hidden" style={{background:'linear-gradient(135deg,#1e1e1e,#252525)',border:'1px solid #2a2a2a'}}>
+            <button
+              className="w-full flex items-center justify-between px-4 py-3"
+              onClick={() => setShowLedgerHistory(v => !v)}
+            >
+              <span className="text-sm font-medium text-[#CBA471]">账本充值记录</span>
+              {showLedgerHistory ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            </button>
+            {showLedgerHistory && (
+              <div className="border-t border-[#2a2a2a]">
+                {ledgerHistoryLoading ? (
+                  <div className="p-6 text-center text-gray-500 text-sm">加载中...</div>
+                ) : ledgerHistoryList.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500 text-sm">暂无记录</div>
+                ) : (
+                  <div className="divide-y divide-[#2a2a2a]">
+                    {(() => {
+                      let runningBalance = 0;
+                      const sorted = [...ledgerHistoryList].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                      const balances = sorted.map(item => {
+                        const amt = parseFloat(String(item.amount));
+                        runningBalance += amt;
+                        return runningBalance;
+                      });
+                      return sorted.slice().reverse().map((item, i) => {
+                        const revIdx = sorted.length - 1 - i;
+                        const amt = parseFloat(String(item.amount));
+                        const isPositive = amt >= 0;
+                        const date = new Date(item.createdAt);
+                        const dateStr = `${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+                        const rawNote = item.note || '';
+                        const orderNoMatch = rawNote.match(/AF\d{12}/);
+                        const orderNo = orderNoMatch ? orderNoMatch[0] : null;
+                        const cleanNote = rawNote.replace(/\s*AF\d{12}/, '').trim();
+                        const typeLabel = item.sourceType === 'recharge'
+                          ? (item.status === 'completed' ? '充值到账' : item.status === 'submitted' ? '确认中' : item.status === 'pending' ? '待支付' : cleanNote || '充值')
+                          : (cleanNote ? cleanNote.replace('管理员调账', '调账').replace('管理员', '') : '调账');
+                        const balanceAfter = balances[revIdx];
+                        const showBalance = item.sourceType === 'manual' || (item.sourceType === 'recharge' && item.status === 'completed');
+                        return (
+                          <div key={item.id || i} className="flex items-start justify-between px-4 py-3">
+                            <div className="flex-1 min-w-0 mr-3">
+                              <div className="text-gray-300 text-xs leading-snug" style={{wordBreak:'break-all',whiteSpace:'normal',overflowWrap:'anywhere'}}>{typeLabel}</div>
+                              <div className="text-gray-600 text-xs mt-0.5">{dateStr}{orderNo && <span className="ml-1">{orderNo}</span>}</div>
+                            </div>
+                            <div className="flex flex-col items-end">
+                              <div className={`text-sm font-semibold whitespace-nowrap ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                                {isPositive ? '+' : ''}{amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                              </div>
+                              {showBalance && (
+                                <div className="text-gray-600 text-xs mt-0.5 whitespace-nowrap">余额 {balanceAfter.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</div>
+                              )}
+                            </div>
                           </div>
-                          {showBalance && (
-                            <div className="text-gray-400 text-xs mt-0.5 whitespace-nowrap">余额 {balanceAfter.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        </div>
+        )}
       </div>
-    )}
+    </div>
     </>
   );
 }
