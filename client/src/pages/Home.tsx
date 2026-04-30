@@ -1908,16 +1908,13 @@ export default function Home() {
                 onClick={() => navigate('/stock-tracker')}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  {/* 中国国旗圆形图标 */}
-                  <svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" style={{ borderRadius: '50%', overflow: 'hidden' }}>
-                    <circle cx="8" cy="8" r="8" fill="#DE2910"/>
-                    {/* 大星 */}
-                    <polygon points="4.5,3.2 5.1,5.0 3.2,3.8 5.8,3.8 3.9,5.0" fill="#FFDE00" transform="translate(0.5,0.5)"/>
-                    {/* 四小星 */}
-                    <polygon points="7.5,1.5 7.8,2.4 8.7,2.4 8.0,2.9 8.3,3.8 7.5,3.3 6.7,3.8 7.0,2.9 6.3,2.4 7.2,2.4" fill="#FFDE00" transform="translate(0.2,-0.2) scale(0.7) translate(3.5,1.5)"/>
-                    <polygon points="7.5,1.5 7.8,2.4 8.7,2.4 8.0,2.9 8.3,3.8 7.5,3.3 6.7,3.8 7.0,2.9 6.3,2.4 7.2,2.4" fill="#FFDE00" transform="translate(1.5,0.5) scale(0.7) translate(3.5,1.5)"/>
-                    <polygon points="7.5,1.5 7.8,2.4 8.7,2.4 8.0,2.9 8.3,3.8 7.5,3.3 6.7,3.8 7.0,2.9 6.3,2.4 7.2,2.4" fill="#FFDE00" transform="translate(1.5,2.0) scale(0.7) translate(3.5,1.5)"/>
-                    <polygon points="7.5,1.5 7.8,2.4 8.7,2.4 8.0,2.9 8.3,3.8 7.5,3.3 6.7,3.8 7.0,2.9 6.3,2.4 7.2,2.4" fill="#FFDE00" transform="translate(0.2,2.5) scale(0.7) translate(3.5,1.5)"/>
+                  {/* 中国国旗圆形图标 - circle-flags 风格 */}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512" className="flex-shrink-0">
+                    <mask id="cn-mask"><circle cx="256" cy="256" r="256" fill="#fff"/></mask>
+                    <g mask="url(#cn-mask)">
+                      <path fill="#d80027" d="M0 0h512v512H0z"/>
+                      <path fill="#ffda44" d="m140.1 155.8 22.1 68h71.5l-57.8 42.1 22.1 68-57.9-42-57.9 42 22.2-68-57.9-42.1H118zm163.4 240.7-16.9-20.8-25 9.7 14.5-22.5-16.9-20.9 25.9 6.9 14.6-22.5 1.4 26.8 26 6.9-25.1 9.6zm33.6-61 8-25.6-21.9-15.5 26.8-.4 7.9-25.6 8.7 25.4 26.8-.3-21.5 16 8.6 25.4-21.9-15.5zm45.3-147.6L370.6 212l19.2 18.7-26.5-3.8-11.8 24-4.6-26.4-26.6-3.8 23.8-12.5-4.6-26.5 19.2 18.7zm-78.2-73-2 26.7 24.9 10.1-26.1 6.4-1.9 26.8-14.1-22.8-26.1 6.4 17.3-20.5-14.2-22.7 24.9 10.1z"/>
+                    </g>
                   </svg>
                   <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的A股</span>
                 </div>
@@ -1965,12 +1962,12 @@ export default function Home() {
                 }}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  {/* 香港区旗圆形图标 */}
-                  <svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" style={{ borderRadius: '50%', overflow: 'hidden' }}>
-                    <circle cx="8" cy="8" r="8" fill="#DE2010"/>
-                    {/* 白色洋紫荆花 */}
-                    <g transform="translate(8,8)" fill="white">
-                      <polygon points="0,-4.5 0.8,-1.5 3.8,-2.8 1.8,-0.5 4.5,0.8 1.4,0.8 2.8,3.8 0,2.0 -2.8,3.8 -1.4,0.8 -4.5,0.8 -1.8,-0.5 -3.8,-2.8 -0.8,-1.5" transform="scale(0.55)"/>
+                  {/* 香港区旗圆形图标 - circle-flags 风格 */}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512" className="flex-shrink-0">
+                    <mask id="hk-mask"><circle cx="256" cy="256" r="256" fill="#fff"/></mask>
+                    <g mask="url(#hk-mask)">
+                      <path fill="#d80027" d="M0 0h512v512H0z"/>
+                      <path fill="#eee" d="M282.4 193.7c-5.8 24.2-16.1 19.6-21.2 40.7a55.7 55.7 0 0 1 26-108.3c-10.1 42.2.4 46-4.8 67.6zM205 211.6c21.2 13 13.6 21.4 32.1 32.8a55.7 55.7 0 0 1-94.9-58.2c37 22.7 43.8 13.8 62.8 25.4zm-7 79.3c19-16.2 24.7-6.4 41.2-20.4a55.7 55.7 0 0 1-84.7 72.2c33-28.2 26.6-37.4 43.6-51.8zm73.4 31c-9.6-23 1.5-25.3-6.8-45.3a55.7 55.7 0 0 1 42.6 102.8c-16.6-40-27.3-36.9-35.8-57.4zm52.2-60c-24.9 2-23.7-9.3-45.3-7.6a55.7 55.7 0 0 1 111-8.7c-43.3 3.4-43.6 14.5-65.7 16.3z"/>
                     </g>
                   </svg>
                   <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的港股</span>
@@ -2020,32 +2017,15 @@ export default function Home() {
                 }}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  {/* 美国国旗圆形图标 */}
-                  <svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" style={{ borderRadius: '50%', overflow: 'hidden' }}>
-                    <circle cx="8" cy="8" r="8" fill="#B22234"/>
-                    {/* 红白条纹 */}
-                    <rect x="0" y="1.23" width="16" height="1.23" fill="white"/>
-                    <rect x="0" y="3.69" width="16" height="1.23" fill="white"/>
-                    <rect x="0" y="6.15" width="16" height="1.23" fill="white"/>
-                    <rect x="0" y="8.62" width="16" height="1.23" fill="white"/>
-                    <rect x="0" y="11.08" width="16" height="1.23" fill="white"/>
-                    <rect x="0" y="13.54" width="16" height="1.23" fill="white"/>
-                    {/* 蓝色左上角 */}
-                    <rect x="0" y="0" width="7" height="8" fill="#3C3B6E"/>
-                    {/* 小星星（简化） */}
-                    <g fill="white" fontSize="1.8" textAnchor="middle">
-                      <text x="1.2" y="2.2">★</text>
-                      <text x="3.5" y="2.2">★</text>
-                      <text x="5.8" y="2.2">★</text>
-                      <text x="1.2" y="4.2">★</text>
-                      <text x="3.5" y="4.2">★</text>
-                      <text x="5.8" y="4.2">★</text>
-                      <text x="1.2" y="6.5">★</text>
-                      <text x="3.5" y="6.5">★</text>
-                      <text x="5.8" y="6.5">★</text>
+                  {/* 美国国旗圆形图标 - circle-flags 风格 */}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512" className="flex-shrink-0">
+                    <mask id="us-mask"><circle cx="256" cy="256" r="256" fill="#fff"/></mask>
+                    <g mask="url(#us-mask)">
+                      <path fill="#eee" d="M256 0h256v64l-32 32 32 32v64l-32 32 32 32v64l-32 32 32 32v64l-256 32L0 448v-64l32-32-32-32v-64z"/>
+                      <path fill="#d80027" d="M224 64h288v64H224Zm0 128h288v64H256ZM0 320h512v64H0Zm0 128h512v64H0Z"/>
+                      <path fill="#0052b4" d="M0 0h256v256H0Z"/>
+                      <path fill="#eee" d="m187 243 57-41h-70l57 41-22-67zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67zm162-81 57-41h-70l57 41-22-67zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67Zm162-82 57-41h-70l57 41-22-67Zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67Z"/>
                     </g>
-                    {/* 圆形裁剪边界 */}
-                    <circle cx="8" cy="8" r="8" fill="none" stroke="none"/>
                   </svg>
                   <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的美股</span>
                 </div>
