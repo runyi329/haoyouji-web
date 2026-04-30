@@ -358,27 +358,8 @@ export default function Wallet() {
                           : "none",
                     }}
                   >
-                    {/* 左侧图标 + 信息 */}
+                    {/* 左侧信息 */}
                     <div className="flex items-center space-x-3">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{
-                          background:
-                            tx.type === "recharge"
-                              ? "rgba(34,197,94,0.12)"
-                              : "rgba(239,68,68,0.12)",
-                          border:
-                            tx.type === "recharge"
-                              ? "1px solid rgba(34,197,94,0.3)"
-                              : "1px solid rgba(239,68,68,0.3)",
-                        }}
-                      >
-                        {tx.type === "recharge" ? (
-                          <TrendingUp className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <TrendingDown className="w-4 h-4 text-red-400" />
-                        )}
-                      </div>
                       <div>
                         <div className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
                           {tx.type === "recharge" ? "充值" : "提现"}
