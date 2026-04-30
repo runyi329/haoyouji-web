@@ -684,7 +684,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   ];
 
   return (
-    <div className="mx-3 mt-1.5 flex-shrink-0" style={{ overflow: 'hidden', borderRadius: '12px', position: 'relative',
+    <div className="mx-3 flex-shrink-0" style={{ overflow: 'hidden', borderRadius: '12px', position: 'relative', marginTop: '2px',
       border: '1px solid rgba(203,164,113,0.35)',
       boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
       background: 'rgba(255,255,255,0.82)' }}>
