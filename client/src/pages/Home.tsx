@@ -634,6 +634,18 @@ function getGlobalNextOpenTimeOuter(now: Date): number {
   return nowMs + 3600 * 1000;
 }
 
+// ── 装修升级中 Lottie 动画组件（懒加载）────────────────────────────────────
+const UnderConstructionLottie = React.memo(function UnderConstructionLottie() {
+  const [animData, setAnimData] = React.useState<object | null>(null);
+  React.useEffect(() => {
+    import('@/assets/under-construction.json')
+      .then(m => setAnimData(m.default))
+      .catch(() => {});
+  }, []);
+  if (!animData) return <div style={{ width: 80, height: 80 }} />;
+  return <Lottie animationData={animData} loop={true} style={{ width: '100%', height: '100%' }} />;
+});
+
 // ── 金色钱包 Lottie 动画组件（懒加载，避免影响首屏渲染）────────────────────
 const WalletLottie = React.memo(function WalletLottie() {
   const [animData, setAnimData] = React.useState<object | null>(null);
@@ -1568,8 +1580,11 @@ export default function Home() {
                 <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
               </div>
             </div>
-            <div className="flex-1 flex items-center justify-center">
-              <span className="text-xs text-gray-300">升级中</span>
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <div style={{ width: 80, height: 80 }}>
+                <UnderConstructionLottie />
+              </div>
+              <span className="text-xs text-gray-300 mt-1">装修升级中</span>
             </div>
           </div>,
           // 页2：留白
