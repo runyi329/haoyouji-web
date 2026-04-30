@@ -739,12 +739,18 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
     return () => ro.disconnect();
   }, []);
 
+  const CDN_ICONS = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK';
   const items = [
-    { key: 'gold', label: '黄金 XAU/USD', data: goldPrice,   unit: '/盎司', decimals: 1 },
-    { key: 'oil',  label: '原油 WTI',      data: oilPrice,   unit: '/桶',   decimals: 2 },
-    { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3 },
-    { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4 },
-    { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',      decimals: 0 },
+    { key: 'gold', label: '黄金 XAU/USD', data: goldPrice,   unit: '/盎司', decimals: 1,
+      iconType: 'lucide' as const, iconName: 'TrendingUp' },
+    { key: 'oil',  label: '原油 WTI',      data: oilPrice,   unit: '/桶',   decimals: 2,
+      iconType: 'img' as const, iconUrl: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oil-pump-icon-circle.png' },
+    { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3,
+      iconType: 'lucide' as const, iconName: 'DollarSign' },
+    { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4,
+      iconType: 'lucide' as const, iconName: 'ArrowLeftRight' },
+    { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',      decimals: 0,
+      iconType: 'img' as const, iconUrl: `${CDN_ICONS}/btc_732a725a.png` },
   ];
 
   return (
@@ -798,7 +804,11 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
               }}
             >
               <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                <Globe className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                {item.iconType === 'img' ? (
+                  <img src={(item as any).iconUrl} alt={item.key} style={{ width: '14px', height: '14px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                ) : (
+                  <Globe className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                )}
                 <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>{item.label}</span>
               </div>
               <div className="flex items-baseline">
