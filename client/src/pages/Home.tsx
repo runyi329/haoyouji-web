@@ -1552,12 +1552,6 @@ export default function Home() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
               <div className="flex items-center space-x-2">
-                <div onClick={() => navigate("/parent/asset-report")} className="flex flex-col items-center cursor-pointer">
-                  <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors">
-                    <Coins className="w-3.5 h-3.5 text-[#A80000]" />
-                  </div>
-                  <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>资产</span>
-                </div>
                 <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
                   <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
                     <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
@@ -1566,18 +1560,15 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="flex-1 grid grid-cols-4 gap-2">
-              {[
-                { name: '标签', icon: FileText, path: '/parent/contacts/list' },
-                { name: '地域', icon: Globe, path: '/parent/contacts/list' },
-                { name: '分享', icon: Handshake, path: '/parent/contacts/list' },
-                { name: '数据', icon: BarChart2, path: '/parent/contacts/list' },
-              ].map((item, i) => (
-                <div key={i} onClick={() => navigate(item.path)} className="flex flex-col items-center justify-center bg-red-50 rounded-xl py-2 cursor-pointer hover:bg-red-100 transition-colors">
-                  <item.icon className="w-5 h-5 text-[#A80000] mb-1" />
-                  <span className="text-xs text-[#A80000] font-medium">{item.name}</span>
-                </div>
-              ))}
+            <div className="flex-1 flex items-center justify-center">
+              <div
+                onClick={() => navigate('/parent/contacts/list')}
+                className="flex flex-col items-center justify-center bg-red-50 rounded-2xl px-8 py-4 cursor-pointer hover:bg-red-100 transition-colors"
+              >
+                <FileText className="w-8 h-8 text-[#A80000] mb-2" />
+                <span className="text-sm text-[#A80000] font-semibold">我的人脉</span>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.65rem' }}>标签管理与分析</span>
+              </div>
             </div>
           </div>,
           // 页2：人脉数据统计
@@ -1602,27 +1593,27 @@ export default function Home() {
               ))}
             </div>
           </div>,
-          // 页3：会员权益
+          // 页3：资产与邀请
           <div key="p3" className="w-full h-full flex flex-col px-3 py-2">
             <div className="flex items-center mb-2">
-              <span className="text-xs font-semibold text-[#A80000] tracking-wide">会员权益</span>
+              <span className="text-xs font-semibold text-[#A80000] tracking-wide">我的资产</span>
             </div>
-            <div className="flex-1 grid grid-cols-2 gap-2">
-              <div className="bg-amber-50 rounded-xl px-3 py-2 flex flex-col justify-center border border-amber-100">
-                <span className="text-amber-800 font-bold text-sm">会员特权</span>
-                <span className="text-amber-600 mt-0.5" style={{ fontSize: '0.65rem' }}>尊享 12 项特权</span>
+            <div className="flex-1 grid grid-cols-2 gap-3">
+              <div
+                onClick={() => navigate('/parent/asset-report')}
+                className="bg-red-50 rounded-2xl px-3 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-red-100 transition-colors border border-red-100"
+              >
+                <Coins className="w-7 h-7 text-[#A80000] mb-1.5" />
+                <span className="text-sm text-[#A80000] font-semibold">资产报告</span>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.6rem' }}>查看资产详情</span>
               </div>
-              <div className="bg-red-50 rounded-xl px-3 py-2 flex flex-col justify-center border border-red-100">
-                <span className="text-[#A80000] font-bold text-sm">积分兑换</span>
-                <span className="text-red-400 mt-0.5" style={{ fontSize: '0.65rem' }}>好礼免费换</span>
-              </div>
-              <div onClick={() => navigate('/parent/asset-report')} className="bg-white rounded-xl px-3 py-2 flex flex-col justify-center border border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors">
-                <span className="text-gray-600 font-medium text-xs">我的资产</span>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.6rem' }}>查看报告</span>
-              </div>
-              <div onClick={() => navigate('/parent/contacts/list')} className="bg-white rounded-xl px-3 py-2 flex flex-col justify-center border border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors">
-                <span className="text-gray-600 font-medium text-xs">邀请好友</span>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.6rem' }}>共享人脉</span>
+              <div
+                onClick={() => navigate('/parent/contacts/list')}
+                className="bg-red-50 rounded-2xl px-3 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-red-100 transition-colors border border-red-100"
+              >
+                <UserPlus className="w-7 h-7 text-[#A80000] mb-1.5" />
+                <span className="text-sm text-[#A80000] font-semibold">邀请好友</span>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.6rem' }}>共享人脉资源</span>
               </div>
             </div>
           </div>,
