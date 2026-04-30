@@ -668,6 +668,25 @@ const XushuchiLottie = React.memo(function XushuchiLottie() {
   );
 });
 
+// ── 蓄水池水滴版 Lottie 动画组件（对比用）──────────────────────────────────────
+const XushuchiDropLottie = React.memo(function XushuchiDropLottie() {
+  const [animData, setAnimData] = React.useState<object | null>(null);
+  React.useEffect(() => {
+    fetch('/xushuchi_drop.json')
+      .then(r => r.json())
+      .then(setAnimData)
+      .catch(() => {});
+  }, []);
+  if (!animData) return <div style={{ width: '100%', height: '100%' }} />;
+  return (
+    <Lottie
+      animationData={animData}
+      loop={true}
+      style={{ width: '100%', height: '100%' }}
+    />
+  );
+});
+
 // ── 金色钉包 Lottie 动画组件（懒加载，避免影响首屏渲染）────────────────────
 const WalletLottie = React.memo(function WalletLottie() {
   const [animData, setAnimData] = React.useState<object | null>(null);
@@ -1704,37 +1723,45 @@ export default function Home() {
               <span className="text-xs text-gray-300 mt-1">装修升级中</span>
             </div>
           </div>,
-          // 页2：蓄水池动画
-          <div key="p2" className="w-full h-full flex flex-col items-center justify-center">
-            {/* 相对定位容器：动画 + 叠加文字 */}
-            <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3' }}>
-              <XushuchiLottie />
-              {/* 蓄水池文字：叠在圆球中心，随水位上升慢慢显现 */}
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                pointerEvents: 'none',
-                animation: 'xushuchi-text-appear 2.5s ease-out 2s both',
-              }}>
-                <span style={{
-                  fontSize: '1.5rem',
-                  fontWeight: 'bold',
-                  letterSpacing: '0.3em',
-                  color: 'white',
-                  textShadow: '0 2px 8px rgba(0,80,160,0.6), 0 0 20px rgba(255,255,255,0.4)',
-                  whiteSpace: 'nowrap',
-                }}>蓄水池</span>
+          // 页2：蓄水池动画（左右对比）
+          <div key="p2" className="w-full h-full flex flex-row items-center justify-center gap-1 px-1">
+            {/* 左：原版水流 */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.65rem', color: '#aaa', marginBottom: 2 }}>原版</span>
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3' }}>
+                <XushuchiLottie />
+                <div style={{
+                  position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  pointerEvents: 'none',
+                  animation: 'xushuchi-text-appear 2.5s ease-out 2s both',
+                }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 'bold', letterSpacing: '0.2em', color: 'white', textShadow: '0 2px 8px rgba(0,80,160,0.6)', whiteSpace: 'nowrap' }}>蓄水池</span>
+                </div>
               </div>
-              <style>{`
-                @keyframes xushuchi-text-appear {
-                  0%   { opacity: 0; transform: translate(-50%, -50%) translateY(12px); }
-                  40%  { opacity: 0; transform: translate(-50%, -50%) translateY(12px); }
-                  100% { opacity: 1; transform: translate(-50%, -50%) translateY(0px); }
-                }
-              `}</style>
             </div>
+            {/* 右：水滴版 */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.65rem', color: '#aaa', marginBottom: 2 }}>水滴版</span>
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3' }}>
+                <XushuchiDropLottie />
+                <div style={{
+                  position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  pointerEvents: 'none',
+                  animation: 'xushuchi-text-appear 2.5s ease-out 2s both',
+                }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 'bold', letterSpacing: '0.2em', color: 'white', textShadow: '0 2px 8px rgba(0,80,160,0.6)', whiteSpace: 'nowrap' }}>蓄水池</span>
+                </div>
+              </div>
+            </div>
+            <style>{`
+              @keyframes xushuchi-text-appear {
+                0%   { opacity: 0; transform: translate(-50%, -50%) translateY(12px); }
+                40%  { opacity: 0; transform: translate(-50%, -50%) translateY(12px); }
+                100% { opacity: 1; transform: translate(-50%, -50%) translateY(0px); }
+              }
+            `}</style>
           </div>,
           // 页3：积分兑换商城
           <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
