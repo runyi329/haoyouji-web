@@ -1053,6 +1053,12 @@ export default function Home() {
     enabled: !!user,
     staleTime: 30000,
   });
+  // 全局钱包余额（不按账本隔离）
+  const { data: walletBalance } = trpc.recharge.getBalance.useQuery(undefined, {
+    staleTime: 30000,
+    refetchInterval: 60000,
+  });
+
   // 积分商城：兑换操作
   const redeemRewardMutation = trpc.rewards.redeemReward.useMutation({
     onSuccess: () => {
@@ -2394,7 +2400,7 @@ export default function Home() {
                 <div className="flex-1" />
               </div>
             </div>
-            {/* 第二行：智能钱包（横向宽条）- 黑白金立体风格 */}
+            {/* 第二行：智能钱包（横向宽条）- 黑白金立体风格，点击跳转全局钱包 */}
             <div
               className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] flex-1 relative overflow-hidden"
               style={{
@@ -2404,14 +2410,14 @@ export default function Home() {
                 transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                 padding: '6px 10px',
               }}
+              onClick={() => requireLogin(() => navigate('/wallet'))}
             >
               {/* 顶部金色高光线 */}
               <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-              {/* 标题行：保持 items-center，文字位置不变；图标用负 margin-top 向上溢出，不影响行高 */}
+              {/* 标题行 */}
               <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                {/* Lottie 图标：容器 14px（与文字行高一致），内部用 overflow:visible + 负 margin-top 让图案向上溢出 */}
                 <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -16 }}>
                   <div style={{
                     width: 400,
@@ -2427,8 +2433,13 @@ export default function Home() {
                 </div>
                 <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em', marginLeft: 12 }}>智能钱包</span>
               </div>
-              {/* 下方留空 */}
-              <div className="flex-1" />
+              {/* 余额展示 */}
+              <div className="flex items-baseline space-x-1 relative z-10">
+                <span className="font-bold tabular-nums" style={{ color: '#F5D78E', fontSize: '15px', lineHeight: 1.2 }}>
+                  {typeof walletBalance === 'number' ? walletBalance.toFixed(2) : '--'}
+                </span>
+                <span className="text-xs" style={{ color: 'rgba(245,215,142,0.6)' }}>USDT</span>
+              </div>
             </div>
           </div>
         </div>
