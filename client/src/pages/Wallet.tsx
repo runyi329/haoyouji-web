@@ -427,59 +427,105 @@ export default function Wallet() {
             </div>
           </div>
           <div className="grid grid-cols-4 gap-2">
-            {/* 银行卡 */}
+            {/* 银行卡 - 金色3D球 */}
             <div className="flex flex-col items-center gap-1.5">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(201,168,76,0.15)" }}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <rect x="2" y="5" width="20" height="14" rx="2" stroke="#C9A84C" strokeWidth="1.5"/>
-                  <path d="M2 10h20" stroke="#C9A84C" strokeWidth="1.5"/>
-                  <path d="M6 15h4" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </div>
-              <span className="text-xs" style={{ color: "rgba(201,168,76,0.6)" }}>银行卡</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 32 32" style={{ filter: 'drop-shadow(0px 2px 5px rgba(201,168,76,0.5))' }}>
+                <defs>
+                  <radialGradient id="bank-bg" cx="38%" cy="30%" r="65%">
+                    <stop offset="0%" stopColor="#FFE57A"/>
+                    <stop offset="45%" stopColor="#C9A84C"/>
+                    <stop offset="100%" stopColor="#7A5C10"/>
+                  </radialGradient>
+                  <radialGradient id="bank-shine" cx="35%" cy="25%" r="50%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.6)"/>
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+                  </radialGradient>
+                  <clipPath id="bank-clip"><circle cx="16" cy="16" r="15"/></clipPath>
+                </defs>
+                <circle cx="16" cy="16" r="15" fill="url(#bank-bg)"/>
+                <g clipPath="url(#bank-clip)" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5">
+                  <rect x="6" y="10" width="20" height="13" rx="2"/>
+                  <line x1="6" y1="15" x2="26" y2="15"/>
+                  <line x1="9" y1="19" x2="14" y2="19" strokeLinecap="round"/>
+                </g>
+                <circle cx="16" cy="16" r="15" fill="url(#bank-shine)"/>
+                <circle cx="16" cy="16" r="15" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8"/>
+              </svg>
+              <span className="text-xs" style={{ color: "rgba(201,168,76,0.7)" }}>银行卡</span>
             </div>
-            {/* 支付宝 */}
+            {/* 支付宝 - 蓝色3D球 */}
             <div className="flex flex-col items-center gap-1.5">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(22,119,255,0.2)" }}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="#1677FF" strokeWidth="1.5"/>
-                  <text x="12" y="16" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#1677FF">支</text>
-                </svg>
-              </div>
-              <span className="text-xs" style={{ color: "rgba(201,168,76,0.6)" }}>支付宝</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 32 32" style={{ filter: 'drop-shadow(0px 2px 5px rgba(22,119,255,0.5))' }}>
+                <defs>
+                  <radialGradient id="alipay-bg" cx="38%" cy="30%" r="65%">
+                    <stop offset="0%" stopColor="#69B8FF"/>
+                    <stop offset="45%" stopColor="#1677FF"/>
+                    <stop offset="100%" stopColor="#003A8C"/>
+                  </radialGradient>
+                  <radialGradient id="alipay-shine" cx="35%" cy="25%" r="50%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+                  </radialGradient>
+                  <clipPath id="alipay-clip"><circle cx="16" cy="16" r="15"/></clipPath>
+                </defs>
+                <circle cx="16" cy="16" r="15" fill="url(#alipay-bg)"/>
+                <g clipPath="url(#alipay-clip)">
+                  <text x="16" y="21" textAnchor="middle" fontSize="13" fontWeight="bold" fill="rgba(255,255,255,0.95)" fontFamily="sans-serif">支</text>
+                </g>
+                <circle cx="16" cy="16" r="15" fill="url(#alipay-shine)"/>
+                <circle cx="16" cy="16" r="15" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8"/>
+              </svg>
+              <span className="text-xs" style={{ color: "rgba(201,168,76,0.7)" }}>支付宝</span>
             </div>
-            {/* 微信 */}
+            {/* 微信 - 绿色3D球 */}
             <div className="flex flex-col items-center gap-1.5">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(7,193,96,0.2)" }}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="#07C160" strokeWidth="1.5"/>
-                  <text x="12" y="16" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#07C160">微</text>
-                </svg>
-              </div>
-              <span className="text-xs" style={{ color: "rgba(201,168,76,0.6)" }}>微信</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 32 32" style={{ filter: 'drop-shadow(0px 2px 5px rgba(7,193,96,0.5))' }}>
+                <defs>
+                  <radialGradient id="wechat-bg" cx="38%" cy="30%" r="65%">
+                    <stop offset="0%" stopColor="#73D13D"/>
+                    <stop offset="45%" stopColor="#07C160"/>
+                    <stop offset="100%" stopColor="#004D1A"/>
+                  </radialGradient>
+                  <radialGradient id="wechat-shine" cx="35%" cy="25%" r="50%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+                  </radialGradient>
+                  <clipPath id="wechat-clip"><circle cx="16" cy="16" r="15"/></clipPath>
+                </defs>
+                <circle cx="16" cy="16" r="15" fill="url(#wechat-bg)"/>
+                <g clipPath="url(#wechat-clip)">
+                  <text x="16" y="21" textAnchor="middle" fontSize="13" fontWeight="bold" fill="rgba(255,255,255,0.95)" fontFamily="sans-serif">微</text>
+                </g>
+                <circle cx="16" cy="16" r="15" fill="url(#wechat-shine)"/>
+                <circle cx="16" cy="16" r="15" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8"/>
+              </svg>
+              <span className="text-xs" style={{ color: "rgba(201,168,76,0.7)" }}>微信</span>
             </div>
-            {/* 数字钱包 */}
+            {/* 数字钱包 - 紫色3D球 */}
             <div className="flex flex-col items-center gap-1.5">
-              <div
-                className="w-11 h-11 rounded-xl flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(201,168,76,0.2)" }}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <path d="M19 7H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="#C9A84C" strokeWidth="1.5"/>
-                  <circle cx="16" cy="12" r="1.5" fill="#C9A84C"/>
-                  <path d="M3 10h18" stroke="#C9A84C" strokeWidth="1.5"/>
-                </svg>
-              </div>
-              <span className="text-xs" style={{ color: "rgba(201,168,76,0.6)" }}>数字钱包</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 32 32" style={{ filter: 'drop-shadow(0px 2px 5px rgba(126,87,194,0.5))' }}>
+                <defs>
+                  <radialGradient id="crypto-bg" cx="38%" cy="30%" r="65%">
+                    <stop offset="0%" stopColor="#CE93D8"/>
+                    <stop offset="45%" stopColor="#7E57C2"/>
+                    <stop offset="100%" stopColor="#311B92"/>
+                  </radialGradient>
+                  <radialGradient id="crypto-shine" cx="35%" cy="25%" r="50%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+                  </radialGradient>
+                  <clipPath id="crypto-clip"><circle cx="16" cy="16" r="15"/></clipPath>
+                </defs>
+                <circle cx="16" cy="16" r="15" fill="url(#crypto-bg)"/>
+                <g clipPath="url(#crypto-clip)" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5">
+                  <rect x="5" y="11" width="22" height="12" rx="2"/>
+                  <circle cx="21" cy="17" r="2" fill="rgba(255,255,255,0.9)" stroke="none"/>
+                  <line x1="5" y1="15" x2="27" y2="15"/>
+                </g>
+                <circle cx="16" cy="16" r="15" fill="url(#crypto-shine)"/>
+                <circle cx="16" cy="16" r="15" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8"/>
+              </svg>
+              <span className="text-xs" style={{ color: "rgba(201,168,76,0.7)" }}>数字钱包</span>
             </div>
           </div>
         </div>
