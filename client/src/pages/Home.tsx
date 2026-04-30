@@ -1768,12 +1768,20 @@ export default function Home() {
               <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-              {/* Lottie 钱包动画 - 容器大小对齐个人中心头像(44px)，内部放大裁切空白边界 */}
+              {/* Lottie 钱包动画 - 高清方案：在大容器内矢量渲染，再用scale缩小到目标尺寸，避免放大模糊 */}
               <div
-                className="flex-shrink-0 overflow-hidden"
-                style={{ width: 44, height: 44 }}
+                className="flex-shrink-0"
+                style={{ width: 44, height: 44, overflow: 'hidden', position: 'relative' }}
               >
-                <div style={{ width: '100%', height: '100%', transform: 'scale(3.52)', transformOrigin: 'center center' }}>
+                <div style={{
+                  width: 150,
+                  height: 150,
+                  transform: 'scale(0.293)',
+                  transformOrigin: 'top left',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                }}>
                   <WalletLottie />
                 </div>
               </div>
