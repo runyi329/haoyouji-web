@@ -49,7 +49,6 @@ export const merchantRouter = router({
           status: merchantProducts.status,
           sourceType: merchantProducts.sourceType,
           isShareable: merchantProducts.isShareable,
-          inPointsShop: merchantProducts.inPointsShop,
           salesCount: merchantProducts.salesCount,
           stock: merchantProducts.stock,
           ownerMerchantId: merchantProducts.ownerMerchantId,
