@@ -1769,7 +1769,7 @@ export default function Home() {
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
               {/* Lottie 钱包动画 */}
-              <div className="w-12 h-12 flex-shrink-0">
+              <div className="w-16 h-16 flex-shrink-0" style={{ margin: '-4px 0' }}>
                 <WalletLottie />
               </div>
               <div className="flex flex-col">
