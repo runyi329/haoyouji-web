@@ -652,11 +652,14 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
 
   const [globalMarketStatus, setGlobalMarketStatus] = useState<'open' | 'closed'>(() => getGlobalMarketStatusOuter(new Date()));
   const [globalCountdown, setGlobalCountdown] = useState('');
-  const [globalCardIndex, setGlobalCardIndex] = useState(0);
+  // 无缝循环轮播：内部索引从1开始（对应真实第1张），0和5是克隆卡片
+  const [globalRealIndex, setGlobalRealIndex] = useState(1); // 1-4 对应真实卡片
+  const [globalTransition, setGlobalTransition] = useState(true);
   const globalTouchStartX = useRef(0);
   const globalTouchStartY = useRef(0);
   const globalContainerRef = useRef<HTMLDivElement>(null);
   const [globalContainerWidth, setGlobalContainerWidth] = useState(0);
+  const globalIsTransitioning = useRef(false);
 
   useEffect(() => {
     const tick = () => {
@@ -680,13 +683,48 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
     return () => clearInterval(timer);
   }, []);
 
-  // 自动轮播
+  // 自动轮播（无缝循环）
   useEffect(() => {
     const autoPlay = setInterval(() => {
-      setGlobalCardIndex(prev => (prev + 1) % 4);
+      if (globalIsTransitioning.current) return;
+      setGlobalTransition(true);
+      setGlobalRealIndex(prev => prev + 1);
     }, 3000);
     return () => clearInterval(autoPlay);
   }, []);
+
+  // 无缝循环：当滚到克隆卡片时，无动画跳回真实卡片
+  useEffect(() => {
+    if (globalRealIndex === 5) {
+      // 滚到尾部克隆（第1张的克隆），延迟后无动画跳回真实第1张
+      globalIsTransitioning.current = true;
+      const t = setTimeout(() => {
+        setGlobalTransition(false);
+        setGlobalRealIndex(1);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setGlobalTransition(true);
+            globalIsTransitioning.current = false;
+          });
+        });
+      }, 320);
+      return () => clearTimeout(t);
+    } else if (globalRealIndex === 0) {
+      // 滚到头部克隆（第4张的克隆），延迟后无动画跳回真实第4张
+      globalIsTransitioning.current = true;
+      const t = setTimeout(() => {
+        setGlobalTransition(false);
+        setGlobalRealIndex(4);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setGlobalTransition(true);
+            globalIsTransitioning.current = false;
+          });
+        });
+      }, 320);
+      return () => clearTimeout(t);
+    }
+  }, [globalRealIndex]);
 
   // 监听容器宽度
   useEffect(() => {
@@ -729,22 +767,26 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
           const dx = e.changedTouches[0].clientX - globalTouchStartX.current;
           const dy = e.changedTouches[0].clientY - globalTouchStartY.current;
           if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-            if (dx < 0) setGlobalCardIndex(prev => Math.min(prev + 1, 3));
-            if (dx > 0) setGlobalCardIndex(prev => Math.max(prev - 1, 0));
+            if (!globalIsTransitioning.current) {
+              setGlobalTransition(true);
+              if (dx < 0) setGlobalRealIndex(prev => prev + 1);
+              if (dx > 0) setGlobalRealIndex(prev => prev - 1);
+            }
           }
         }}
       >
         <div
           style={{
             display: 'flex',
-            transform: `translateX(${globalCardIndex * -(globalContainerWidth || 0)}px)`,
-            transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
+            transform: `translateX(${globalRealIndex * -(globalContainerWidth || 0)}px)`,
+            transition: globalTransition ? 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' : 'none',
             willChange: 'transform',
           }}
         >
-          {items.map((item) => (
+          {/* 克隆尾部卡片（第4张）放在最前，实现无缝向左循环 */}
+          {[items[3], ...items, items[0]].map((item, idx) => (
             <div
-              key={item.key}
+              key={`${item.key}-${idx}`}
               style={{
                 minWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
                 maxWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
@@ -790,22 +832,26 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
           ))}
         </div>
       </div>
-      {/* 圆点指示器 */}
+      {/* 圆点指示器 - 映射到真实索引（1-4） */}
       <div className="flex items-center justify-center py-1" style={{ gap: '5px' }}>
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            onClick={() => setGlobalCardIndex(i)}
-            style={{
-              width: globalCardIndex === i ? '14px' : '5px',
-              height: '5px',
-              borderRadius: '3px',
-              background: globalCardIndex === i ? 'rgba(201,168,76,0.9)' : 'rgba(201,168,76,0.3)',
-              transition: 'all 0.3s ease',
-              cursor: 'pointer',
-            }}
-          />
-        ))}
+        {[0, 1, 2, 3].map((i) => {
+          // globalRealIndex: 0=克隆第4张, 1-4=真实卡片, 5=克隆第1张
+          const dotActive = globalRealIndex === 5 ? i === 0 : globalRealIndex === 0 ? i === 3 : i === globalRealIndex - 1;
+          return (
+            <div
+              key={i}
+              onClick={() => { setGlobalTransition(true); setGlobalRealIndex(i + 1); }}
+              style={{
+                width: dotActive ? '14px' : '5px',
+                height: '5px',
+                borderRadius: '3px',
+                background: dotActive ? 'rgba(201,168,76,0.9)' : 'rgba(201,168,76,0.3)',
+                transition: 'all 0.3s ease',
+                cursor: 'pointer',
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );
