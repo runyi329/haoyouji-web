@@ -1554,10 +1554,15 @@ function TradingCostBar({
   rowData?: any;
 }) {
   const pctWidth = maxValue > 0 ? (value / maxValue) * 100 : 0;
-  const nearEnd = pctWidth > 82;
+  // 截至日期（仅2026年有）
+  const dateLabel = rowData?.isPartial && rowData?.tradeDate
+    ? `截至${String(parseInt(rowData.tradeDate.slice(5,7)))}月${String(parseInt(rowData.tradeDate.slice(8,10)))}日`
+    : null;
+  // 纯数值（不含日期）
+  const numLabel = formatValue(value);
   return (
     <div className="flex items-center" style={{ height: TC_ROW_H, marginBottom: 0 }}>
-      {/* 年份标签：靠左固定宽度，右对齐，参照 EraBarChart */}
+      {/* 年份标签：靠左固定宽度，右对齐 */}
       <div
         className="flex-shrink-0 text-right pr-1.5"
         style={{ width: TC_LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${TC_ROW_H}px` }}
@@ -1583,13 +1588,12 @@ function TradingCostBar({
             boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)',
           }}
         />
-        {/* 数值标签：始终显示。条形足够长（≥ 20%）则白色内置；条形短则紧贴色条右侧显示在灰色轨道内 */}
+        {/* 数值标签（纯数字，不含日期） */}
         <div
           style={{
             position: 'absolute',
             top: '50%',
             transform: 'translateY(-50%)',
-            // 条形足够长：内置靠右（right跟随条形右端）；条形短：紧贴在色条右侧（left跟随条形右端）
             ...(pctWidth >= 20
               ? { right: `${100 - Math.max(pctWidth, 0.5)}%`, paddingRight: 4, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }
               : { left: `${Math.max(pctWidth, 0.5)}%`, paddingLeft: 3, color: TEXT }
@@ -1604,9 +1608,25 @@ function TradingCostBar({
             opacity: animated ? 1 : 0,
           }}
         >
-          {formatValue(value, rowData)}
+          {numLabel}
         </div>
       </div>
+      {/* 截至日期：仅2026年，显示在整行最右侧（轨道外），不影响进度条宽度 */}
+      {dateLabel && (
+        <div
+          className="flex-shrink-0 pl-1.5"
+          style={{
+            fontSize: 8,
+            color: MUTED,
+            lineHeight: `${TC_ROW_H}px`,
+            whiteSpace: 'nowrap',
+            opacity: animated ? 1 : 0,
+            transition: `opacity 0.5s ease ${delay + 800}ms`,
+          }}
+        >
+          {dateLabel}
+        </div>
+      )}
     </div>
   );
 }
