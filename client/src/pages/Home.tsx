@@ -1908,7 +1908,17 @@ export default function Home() {
                 onClick={() => navigate('/stock-tracker')}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  {/* 中国国旗圆形图标 */}
+                  <svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" style={{ borderRadius: '50%', overflow: 'hidden' }}>
+                    <circle cx="8" cy="8" r="8" fill="#DE2910"/>
+                    {/* 大星 */}
+                    <polygon points="4.5,3.2 5.1,5.0 3.2,3.8 5.8,3.8 3.9,5.0" fill="#FFDE00" transform="translate(0.5,0.5)"/>
+                    {/* 四小星 */}
+                    <polygon points="7.5,1.5 7.8,2.4 8.7,2.4 8.0,2.9 8.3,3.8 7.5,3.3 6.7,3.8 7.0,2.9 6.3,2.4 7.2,2.4" fill="#FFDE00" transform="translate(0.2,-0.2) scale(0.7) translate(3.5,1.5)"/>
+                    <polygon points="7.5,1.5 7.8,2.4 8.7,2.4 8.0,2.9 8.3,3.8 7.5,3.3 6.7,3.8 7.0,2.9 6.3,2.4 7.2,2.4" fill="#FFDE00" transform="translate(1.5,0.5) scale(0.7) translate(3.5,1.5)"/>
+                    <polygon points="7.5,1.5 7.8,2.4 8.7,2.4 8.0,2.9 8.3,3.8 7.5,3.3 6.7,3.8 7.0,2.9 6.3,2.4 7.2,2.4" fill="#FFDE00" transform="translate(1.5,2.0) scale(0.7) translate(3.5,1.5)"/>
+                    <polygon points="7.5,1.5 7.8,2.4 8.7,2.4 8.0,2.9 8.3,3.8 7.5,3.3 6.7,3.8 7.0,2.9 6.3,2.4 7.2,2.4" fill="#FFDE00" transform="translate(0.2,2.5) scale(0.7) translate(3.5,1.5)"/>
+                  </svg>
                   <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的A股</span>
                 </div>
                 <div className="flex items-baseline">
@@ -1955,7 +1965,14 @@ export default function Home() {
                 }}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  {/* 香港区旗圆形图标 */}
+                  <svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" style={{ borderRadius: '50%', overflow: 'hidden' }}>
+                    <circle cx="8" cy="8" r="8" fill="#DE2010"/>
+                    {/* 白色洋紫荆花 */}
+                    <g transform="translate(8,8)" fill="white">
+                      <polygon points="0,-4.5 0.8,-1.5 3.8,-2.8 1.8,-0.5 4.5,0.8 1.4,0.8 2.8,3.8 0,2.0 -2.8,3.8 -1.4,0.8 -4.5,0.8 -1.8,-0.5 -3.8,-2.8 -0.8,-1.5" transform="scale(0.55)"/>
+                    </g>
+                  </svg>
                   <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的港股</span>
                 </div>
                 <div className="flex items-baseline">
@@ -2003,7 +2020,33 @@ export default function Home() {
                 }}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  {/* 美国国旗圆形图标 */}
+                  <svg width="16" height="16" viewBox="0 0 16 16" className="flex-shrink-0" style={{ borderRadius: '50%', overflow: 'hidden' }}>
+                    <circle cx="8" cy="8" r="8" fill="#B22234"/>
+                    {/* 红白条纹 */}
+                    <rect x="0" y="1.23" width="16" height="1.23" fill="white"/>
+                    <rect x="0" y="3.69" width="16" height="1.23" fill="white"/>
+                    <rect x="0" y="6.15" width="16" height="1.23" fill="white"/>
+                    <rect x="0" y="8.62" width="16" height="1.23" fill="white"/>
+                    <rect x="0" y="11.08" width="16" height="1.23" fill="white"/>
+                    <rect x="0" y="13.54" width="16" height="1.23" fill="white"/>
+                    {/* 蓝色左上角 */}
+                    <rect x="0" y="0" width="7" height="8" fill="#3C3B6E"/>
+                    {/* 小星星（简化） */}
+                    <g fill="white" fontSize="1.8" textAnchor="middle">
+                      <text x="1.2" y="2.2">★</text>
+                      <text x="3.5" y="2.2">★</text>
+                      <text x="5.8" y="2.2">★</text>
+                      <text x="1.2" y="4.2">★</text>
+                      <text x="3.5" y="4.2">★</text>
+                      <text x="5.8" y="4.2">★</text>
+                      <text x="1.2" y="6.5">★</text>
+                      <text x="3.5" y="6.5">★</text>
+                      <text x="5.8" y="6.5">★</text>
+                    </g>
+                    {/* 圆形裁剪边界 */}
+                    <circle cx="8" cy="8" r="8" fill="none" stroke="none"/>
+                  </svg>
                   <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的美股</span>
                 </div>
                 <div className="flex items-baseline">
