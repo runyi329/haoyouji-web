@@ -18708,20 +18708,21 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       if (!dbConn) return null;
       try {
         const [rows] = await dbConn.execute(
-          'SELECT trade_date, turnover_billion, stamp_tax_billion, commission_billion, handling_billion, transfer_billion, supervision_billion, trade_days FROM stock_trading_cost_2026 ORDER BY id DESC LIMIT 1'
+          'SELECT last_update_date, cumulative_amount, stamp_tax, commission, handling_fee, transfer_fee, regulatory_fee, total_tax, trading_days FROM trading_cost_2026 ORDER BY id DESC LIMIT 1'
         ) as any;
         const r = (rows as any[])[0];
         if (!r) return null;
+        const lastDate = r.last_update_date instanceof Date ? r.last_update_date.toISOString().slice(0, 10) : String(r.last_update_date).slice(0, 10);
         return {
-          tradeDate: r.trade_date as string,
-          turnover: Number(r.turnover_billion),
-          stamp: Number(r.stamp_tax_billion),
-          commission: Number(r.commission_billion),
-          handling: Number(r.handling_billion),
-          transfer: Number(r.transfer_billion),
-          supervision: Number(r.supervision_billion),
-          tradeDays: Number(r.trade_days),
-          total: Number(r.stamp_tax_billion) + Number(r.commission_billion) + Number(r.handling_billion) + Number(r.transfer_billion) + Number(r.supervision_billion),
+          tradeDate: lastDate,
+          turnover: Number(r.cumulative_amount),
+          stamp: Number(r.stamp_tax),
+          commission: Number(r.commission),
+          handling: Number(r.handling_fee),
+          transfer: Number(r.transfer_fee),
+          supervision: Number(r.regulatory_fee),
+          tradeDays: Number(r.trading_days),
+          total: Number(r.total_tax),
         };
       } finally { /* pool auto-manages connections */ }
     }),
