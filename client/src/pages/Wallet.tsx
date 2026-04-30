@@ -301,7 +301,7 @@ export default function Wallet() {
               </div>
             </div>
             <button
-              onClick={() => setLocation("/points")}
+              onClick={() => setLocation("/parent/points")}
               className="flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-medium active:scale-[0.97] transition-transform"
               style={{
                 background: "rgba(201,168,76,0.12)",
