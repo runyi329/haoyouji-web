@@ -13059,14 +13059,15 @@ export const appRouter = router({
         if (role !== 'owner' && role !== 'admin' && role !== 'funder') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         if (!input.orderIds.length) return {};
         const rows = await db.execute(
-          sql`SELECT order_id, SUM(amount) as total_paid
+          sql`SELECT order_id, SUM(amount) as total_paid,
+              (SELECT currency FROM funder_interest_payments p2 WHERE p2.ledger_id = ${input.ledgerId} AND p2.order_id = funder_interest_payments.order_id ORDER BY pay_date DESC, id DESC LIMIT 1) as latest_currency
               FROM funder_interest_payments
               WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(input.orderIds.join(','))})
               GROUP BY order_id`
         ) as any;
-        const result: Record<number, number> = {};
+        const result: Array<{ orderId: number; total: number; currency: string }> = [];
         for (const row of ((rows[0] || rows) as any[])) {
-          result[row.order_id] = parseFloat(row.total_paid || '0');
+          result.push({ orderId: Number(row.order_id), total: parseFloat(row.total_paid || '0'), currency: row.latest_currency || 'U' });
         }
         return result;
       }),
