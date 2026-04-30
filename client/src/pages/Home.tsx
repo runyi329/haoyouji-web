@@ -1769,17 +1769,17 @@ export default function Home() {
               <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-              {/* 标题行：与『我的A股』完全一致的 flex items-center space-x-1 mb-1 */}
-              <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                {/* Lottie 图标，容器 14px，内部 scale 放大显示 */}
-                <div style={{ width: 14, height: 14, overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+              {/* 标题行：文字不动，图标容器扩大到 28px，底部对齐，向上变大，向左偏移 */}
+              <div className="flex items-end space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                {/* Lottie 图标：容器 28px，底部对齐文字，向左偏移 3px */}
+                <div style={{ width: 28, height: 28, overflow: 'hidden', position: 'relative', flexShrink: 0, marginLeft: -3 }}>
                   <div style={{
                     width: 400,
                     height: 400,
-                    transform: 'scale(0.035)',
-                    transformOrigin: 'top left',
+                    transform: 'scale(0.07)',
+                    transformOrigin: 'bottom left',
                     position: 'absolute',
-                    top: 0,
+                    bottom: 0,
                     left: 0,
                   }}>
                     <WalletLottie />
