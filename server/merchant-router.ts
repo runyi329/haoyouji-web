@@ -1405,4 +1405,39 @@ export const merchantRouter = router({
         ));
       return { success: true };
     }),
+
+  // ===== 积分商城接口（首页公开展示用）=====
+  // 获取积分商城商品列表（公开接口，无需登录）
+  // 数据来源：merchantProducts 表中 ownerMerchantId IS NULL（平台总库）且 isShareable=1 的商品
+  getPointsShopProducts: publicProcedure
+    .input(z.object({
+      limit: z.number().min(1).max(50).default(20),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select({
+          id: merchantProducts.id,
+          name: merchantProducts.name,
+          subtitle: merchantProducts.subtitle,
+          basePrice: merchantProducts.basePrice,
+          mainImageUrl: merchantProducts.mainImageUrl,
+          extendedFields: merchantProducts.extendedFields,
+          salesCount: merchantProducts.salesCount,
+          stock: merchantProducts.stock,
+          createdAt: merchantProducts.createdAt,
+          categoryName: merchantProductCategories.name,
+        })
+        .from(merchantProducts)
+        .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
+        .where(and(
+          isNull(merchantProducts.ownerMerchantId),
+          eq(merchantProducts.status, "active"),
+          eq(merchantProducts.isShareable, 1)
+        ))
+        .orderBy(desc(merchantProducts.salesCount), desc(merchantProducts.createdAt))
+        .limit(input?.limit ?? 20);
+      return rows;
+    }),
 });
