@@ -1840,31 +1840,41 @@ export default function Home() {
       <div className="px-4 mt-2 pb-20 grid grid-cols-2 gap-2 flex-1 min-h-0">
 
         {/* ── 左：AI 人脉 ── */}
-        <div className="bg-white rounded-2xl flex flex-col" style={{
+        <div className="rounded-2xl flex flex-col relative overflow-hidden" style={{
           height: '100%',
           overflow: 'hidden',
-          boxShadow: '0 4px 16px rgba(168,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9)',
-          border: '1px solid rgba(255,255,255,0.8)',
+          background: 'linear-gradient(155deg, #0D1B3E 0%, #1A2A5E 40%, #0F1F4A 70%, #0A1530 100%)',
+          boxShadow: '0 6px 20px rgba(10,30,80,0.65), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(100,160,255,0.15)',
+          border: '1px solid rgba(80,140,255,0.35)',
           transform: 'translateY(-1px)'
         }}>
+          {/* 顶部蓝色高光线 */}
+          <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #4A90E2 30%, #7DD3FC 55%, #A78BFA 75%, transparent 95%)' }} />
+          {/* 背景星点装饰 */}
+          <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 20% 20%, rgba(100,160,255,0.08) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(167,139,250,0.06) 0%, transparent 50%)' }} />
           {/* 卡片头部：标题 */}
-          <div className="flex items-center px-3 pt-3 pb-2">
-            <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 人脉</span>
+          <div className="flex items-center px-3 pt-3 pb-2 relative z-10">
+            <span className="text-xs font-semibold tracking-widest" style={{ color: '#7DD3FC', textShadow: '0 0 8px rgba(125,211,252,0.5)' }}>AI 人脉</span>
           </div>
 
 
 
-          {/* 我的人脉 - 红色容器 */}
+          {/* 我的人脉 - 深红渐变容器，增强立体感 */}
           <div
-            className="mx-3 rounded-xl bg-gradient-to-br from-[#A80000] to-[#d44] px-3 py-2 cursor-pointer"
-            style={{ boxShadow: '0 3px 10px rgba(168,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.18)' }}
+            className="mx-3 rounded-xl px-3 py-2 cursor-pointer relative overflow-hidden"
+            style={{
+              background: 'linear-gradient(135deg, #8B0000 0%, #C0392B 45%, #A80000 100%)',
+              boxShadow: '0 4px 14px rgba(168,0,0,0.5), 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -1px 0 rgba(0,0,0,0.2)'
+            }}
             onClick={() => requireLogin(() => navigate('/parent/contacts/list?_t=' + Date.now()))}
           >
-            <div className="flex items-center space-x-1 opacity-80 mb-0.5">
-              <Users className="w-3.5 h-3.5 text-white" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.3))' }} />
-              <span className="text-white text-xs" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.25)' }}>我的人脉</span>
+            {/* 内部高光 */}
+            <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.12) 0%, transparent 60%)' }} />
+            <div className="flex items-center space-x-1 mb-0.5 relative z-10" style={{ opacity: 0.9 }}>
+              <Users className="w-3.5 h-3.5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }} />
+              <span className="text-white text-xs font-medium" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.4)', letterSpacing: '0.05em' }}>我的人脉</span>
             </div>
-            <div className="flex items-baseline">
+            <div className="flex items-baseline relative z-10">
               {isLoading ? (
                 <Loader2 className="w-6 h-6 animate-spin text-white/60" />
               ) : (
@@ -1873,19 +1883,23 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 全网人脉 - 白底红边容器，格式与我的人脉一致 */}
-          <div className="mx-3 mt-1.5 rounded-xl border border-red-200 bg-white px-3 py-2" style={{ boxShadow: '0 2px 6px rgba(168,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1)' }}>
-            <div className="flex items-center space-x-1 opacity-70 mb-0.5">
-              <Globe className="w-3.5 h-3.5 text-[#A80000]" />
-              <span className="text-[#A80000] text-xs">全网人脉</span>
+          {/* 全网人脉 - 毛玻璃深蓝容器 */}
+          <div className="mx-3 mt-1.5 rounded-xl px-3 py-2 relative overflow-hidden" style={{
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(100,160,255,0.25)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(100,160,255,0.15)'
+          }}>
+            <div className="flex items-center space-x-1 mb-0.5" style={{ opacity: 0.85 }}>
+              <Globe className="w-3.5 h-3.5" style={{ color: '#7DD3FC', filter: 'drop-shadow(0 0 3px rgba(125,211,252,0.5))' }} />
+              <span className="text-xs font-medium" style={{ color: '#93C5FD', letterSpacing: '0.04em' }}>全网人脉</span>
             </div>
             <div className="flex items-baseline">
-              <RedFlipCounter total={networkTotal?.total ?? 0} unitColor="#A80000" />
+              <RedFlipCounter total={networkTotal?.total ?? 0} unitColor="#7DD3FC" />
             </div>
           </div>
 
           {/* 四格小数据：公司数 / 标签数 / 累计联络 / 使用天数 */}
-          <div className="grid grid-cols-2 gap-1 px-3 mt-1.5">
+          <div className="grid grid-cols-2 gap-1 px-3 mt-1.5 relative z-10">
             {[
               { name: "公司总数", value: stats?.companyCount ?? 0, unit: "家", path: "/parent/contacts/list" },
               { name: "标签总数", value: totalTagCount ?? 0, unit: "个", path: "/parent/contacts/tags" },
@@ -1895,48 +1909,72 @@ export default function Home() {
               <div
                 key={item.name}
                 onClick={() => item.path && requireLogin(() => navigate(item.path))}
-                className={`bg-[#FAF3ED] rounded-lg py-1.5 flex flex-col items-center transition-colors ${item.path ? 'cursor-pointer hover:bg-red-50' : ''}`}
-                style={{ boxShadow: '0 1px 4px rgba(168,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.8)' }}
+                className={`rounded-lg py-1.5 flex flex-col items-center transition-all ${item.path ? 'cursor-pointer' : ''}`}
+                style={{
+                  background: 'rgba(255,255,255,0.07)',
+                  border: '1px solid rgba(100,160,255,0.18)',
+                  boxShadow: 'inset 0 1px 0 rgba(100,160,255,0.12), 0 1px 4px rgba(0,0,0,0.15)'
+                }}
               >
-                <span className="text-gray-400 text-center leading-tight" style={{ fontSize: '0.6rem' }}>{item.name}</span>
+                <span className="text-center leading-tight" style={{ fontSize: '0.6rem', color: 'rgba(147,197,253,0.7)' }}>{item.name}</span>
                 <div className="flex items-baseline space-x-0.5 mt-0.5">
-                  <span className="font-bold text-[#222222]" style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1.1rem)' }}>
+                  <span className="font-bold" style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1.1rem)', color: '#E0F2FE', textShadow: '0 0 6px rgba(125,211,252,0.3)' }}>
                     {formatNumber(item.value)}
                   </span>
-                  <span className="text-gray-400" style={{ fontSize: '0.6rem' }}>{item.unit}</span>
+                  <span style={{ fontSize: '0.6rem', color: 'rgba(147,197,253,0.6)' }}>{item.unit}</span>
                 </div>
               </div>
             ))}
           </div>
 
           {/* 底部两个大图标：人脉共享 + 个人中心 */}
-          <div className="grid grid-cols-2 gap-2 px-3 mt-1.5 mb-3">
+          <div className="grid grid-cols-2 gap-2 px-3 mt-1.5 mb-3 relative z-10">
             {/* 人脉共享 */}
             <div
               onClick={() => requireLogin(() => navigate("/parent/contacts/sharing"))}
-              className="relative flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors"
+              className="relative flex flex-col items-center justify-center py-3 rounded-xl cursor-pointer transition-all"
+              style={{
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(100,160,255,0.2)',
+                boxShadow: 'inset 0 1px 0 rgba(100,160,255,0.12), 0 2px 6px rgba(0,0,0,0.2)'
+              }}
             >
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-                <Handshake className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+              <div className="w-11 h-11 rounded-full flex items-center justify-center relative" style={{
+                background: 'linear-gradient(135deg, #1E40AF 0%, #3B82F6 50%, #6366F1 100%)',
+                boxShadow: '0 4px 10px rgba(59,130,246,0.5), 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.25)'
+              }}>
+                {/* 圆球高光 */}
+                <div className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle at 35% 30%, rgba(255,255,255,0.3) 0%, transparent 55%)' }} />
+                <Handshake className="w-5 h-5 text-white relative z-10" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }} />
               </div>
-              <span className="text-[#A80000] text-xs mt-1 font-medium">人脉共享</span>
+              <span className="text-xs mt-1 font-medium" style={{ color: '#93C5FD' }}>人脉共享</span>
               {hasUnreadSharing && user && (
-                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#D32F2F] rounded-full border border-white animate-pulse" />
+                <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-[#F87171] rounded-full border border-white/30 animate-pulse" style={{ boxShadow: '0 0 6px rgba(248,113,113,0.6)' }} />
               )}
             </div>
             {/* 个人中心 / 未登录时显示登录按钮 */}
             {user ? (
               <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
                 <DropdownMenuTrigger asChild>
-                  <div className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors">
-                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center overflow-hidden border-2 border-red-100" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                  <div className="flex flex-col items-center justify-center py-3 rounded-xl cursor-pointer transition-all" style={{
+                    background: 'rgba(255,255,255,0.07)',
+                    border: '1px solid rgba(100,160,255,0.2)',
+                    boxShadow: 'inset 0 1px 0 rgba(100,160,255,0.12), 0 2px 6px rgba(0,0,0,0.2)'
+                  }}>
+                    <div className="w-11 h-11 rounded-full flex items-center justify-center overflow-hidden relative" style={{
+                      background: 'linear-gradient(135deg, #1E40AF 0%, #3B82F6 50%, #6366F1 100%)',
+                      boxShadow: '0 4px 10px rgba(59,130,246,0.5), 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.25)',
+                      border: '2px solid rgba(100,160,255,0.3)'
+                    }}>
+                      {/* 圆球高光 */}
+                      {!user.avatar && <div className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle at 35% 30%, rgba(255,255,255,0.3) 0%, transparent 55%)' }} />}
                       {user.avatar ? (
                         <img src={user.avatar} alt="用户头像" className="w-full h-full object-cover" />
                       ) : (
-                        <User className="w-5 h-5 text-white" />
+                        <User className="w-5 h-5 text-white relative z-10" />
                       )}
                     </div>
-                    <span className="text-[#A80000] text-xs mt-1 font-medium">个人中心</span>
+                    <span className="text-xs mt-1 font-medium" style={{ color: '#93C5FD' }}>个人中心</span>
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="center" className="w-full bg-[#FFF8F0] border-[#A80000]/20">
@@ -1966,12 +2004,21 @@ export default function Home() {
               /* 未登录：显示登录按钮 */
               <div
                 onClick={() => navigate('/login')}
-                className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors"
+                className="flex flex-col items-center justify-center py-3 rounded-xl cursor-pointer transition-all"
+                style={{
+                  background: 'rgba(255,255,255,0.07)',
+                  border: '1px solid rgba(100,160,255,0.2)',
+                  boxShadow: 'inset 0 1px 0 rgba(100,160,255,0.12), 0 2px 6px rgba(0,0,0,0.2)'
+                }}
               >
-                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-                  <User className="w-5 h-5 text-white" />
+                <div className="w-11 h-11 rounded-full flex items-center justify-center relative" style={{
+                  background: 'linear-gradient(135deg, #1E40AF 0%, #3B82F6 50%, #6366F1 100%)',
+                  boxShadow: '0 4px 10px rgba(59,130,246,0.5), 0 1px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.25)'
+                }}>
+                  <div className="absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle at 35% 30%, rgba(255,255,255,0.3) 0%, transparent 55%)' }} />
+                  <User className="w-5 h-5 text-white relative z-10" />
                 </div>
-                <span className="text-[#A80000] text-xs mt-1 font-medium">点击登录</span>
+                <span className="text-xs mt-1 font-medium" style={{ color: '#93C5FD' }}>点击登录</span>
               </div>
             )}
           </div>
