@@ -1730,7 +1730,7 @@ function TradingCostSection() {
                     : "linear-gradient(90deg, #64B5F6 0%, #90CAF9 100%)"}
                   delay={i * 18}
                   animated={animated}
-                  formatValue={(v) => v >= 1000 ? `${(v/1000).toFixed(1)}k亿` : `${v}亿`}
+                  formatValue={(v) => `${v}亿`}
                 />
               ))}
             </>
@@ -1749,7 +1749,7 @@ function TradingCostSection() {
                   color="linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)"
                   delay={i * 18}
                   animated={animated}
-                  formatValue={(v) => v >= 10000 ? `${(v/10000).toFixed(1)}万亿` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : `${v}`}
+                  formatValue={(v) => v >= 10000 ? `${(v/10000).toFixed(1)}万亿` : `${v}亿`}
                 />
               ))}
             </>
@@ -1812,7 +1812,7 @@ function TradingCostSection() {
                             pointerEvents: 'none',
                           }}
                         >
-                          {totalVal >= 1000 ? `${(totalVal/1000).toFixed(1)}k` : totalVal.toFixed(0)}亿
+                          {totalVal.toFixed(0)}亿
                         </div>
                       )}
                     </div>
