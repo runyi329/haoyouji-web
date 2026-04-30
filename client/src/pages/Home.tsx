@@ -760,7 +760,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
                 {!item.data?.success ? (
                   <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#A80000' }} />
                 ) : (
-                  <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} />
+                  <GoldFlipCounter total={Math.round((item.data.price ?? 0) * Math.pow(10, item.decimals))} unit={item.unit} decimals={item.decimals} fixedSize={26} />
                 )}
               </div>
               <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
@@ -1646,7 +1646,7 @@ export default function Home() {
                   {!shanghaiIndex?.success ? (
                     <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#A80000' }} />
                   ) : (
-                    <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
+                    <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} fixedSize={26} />
                   )}
                 </div>
                 <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
@@ -1693,7 +1693,7 @@ export default function Home() {
                   {!hangSengIndex?.success ? (
                     <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#A80000' }} />
                   ) : (
-                    <GoldFlipCounter total={Math.round((hangSengIndex.price ?? 0) * 100)} unit="点" decimals={2} />
+                    <GoldFlipCounter total={Math.round((hangSengIndex.price ?? 0) * 100)} unit="点" decimals={2} fixedSize={26} />
                   )}
                 </div>
                 <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
@@ -1741,7 +1741,7 @@ export default function Home() {
                   {!sp500Index?.success ? (
                     <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#A80000' }} />
                   ) : (
-                    <GoldFlipCounter total={Math.round((sp500Index.price ?? 0) * 100)} unit="点" decimals={2} />
+                    <GoldFlipCounter total={Math.round((sp500Index.price ?? 0) * 100)} unit="点" decimals={2} fixedSize={26} />
                   )}
                 </div>
                 <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
