@@ -794,7 +794,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
               width: globalCardIndex === i ? '14px' : '5px',
               height: '5px',
               borderRadius: '3px',
-              background: globalCardIndex === i ? 'rgba(168,0,0,0.8)' : 'rgba(168,0,0,0.25)',
+              background: globalCardIndex === i ? 'rgba(201,168,76,0.9)' : 'rgba(201,168,76,0.3)',
               transition: 'all 0.3s ease',
               cursor: 'pointer',
             }}
