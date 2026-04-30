@@ -1719,12 +1719,12 @@ export default function Home() {
           {/* 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁） */}
           <GlobalMarketStrip />
 
-          {/* 三个功能入口 */}
-          <div className="px-3 pt-1.5 pb-2 space-y-1.5">
-            {/* 第一行：智能财务 + 智能会计（与左边人脉共享/个人中心尺寸一致） */}
-            <div className="grid grid-cols-2 gap-2">
+          {/* 三个功能入口 - flex-1撑满剩余空间 */}
+          <div className="px-3 pt-1.5 pb-2 flex flex-col flex-1 min-h-0 gap-1.5">
+            {/* 第一行：智能财务 + 智能会计 */}
+            <div className="grid grid-cols-2 gap-2 flex-1">
               <div
-                className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
+                className="flex flex-col items-center justify-center rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
               >
                 <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
                   <BarChart2 className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
@@ -1732,7 +1732,7 @@ export default function Home() {
                 <span className="text-[#A80000] text-xs mt-1 font-medium">智能财务</span>
               </div>
               <div
-                className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
+                className="flex flex-col items-center justify-center rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
               >
                 <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
                   <FileText className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
@@ -1742,7 +1742,7 @@ export default function Home() {
             </div>
             {/* 第二行：智能钱包（横向宽条） */}
             <div
-              className="flex flex-row items-center justify-center gap-3 py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
+              className="flex flex-row items-center justify-center gap-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70 flex-1"
             >
               <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
                 <Wallet className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
