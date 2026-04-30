@@ -18,7 +18,7 @@ export default function Wallet() {
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">
-          <button onClick={() => setLocation("/profile")} className="mr-3">
+          <button onClick={() => setLocation("/")} className="mr-3">
             <ArrowLeft className="w-6 h-6" />
           </button>
           <h1 className="text-lg font-semibold">我的钱包</h1>
