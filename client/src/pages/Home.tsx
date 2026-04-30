@@ -658,12 +658,12 @@ const XushuchiLottie = React.memo(function XushuchiLottie() {
   // 原始尺寸 1024×768，比例 4:3
   // 手机容器宽度约 330-390px，高度约 42% 屏幕高（去掉圆点指示器）
   // 最大清晰尺寸：宽度 100%，高度自适应（保持比例）
-  if (!animData) return <div style={{ width: '100%', aspectRatio: '4/3' }} />;
+  if (!animData) return <div style={{ width: '100%', height: '100%' }} />;
   return (
     <Lottie
       animationData={animData}
       loop={true}
-      style={{ width: '100%', aspectRatio: '4/3', maxHeight: '100%', objectFit: 'contain' }}
+      style={{ width: '100%', height: '100%' }}
     />
   );
 });
@@ -1706,10 +1706,35 @@ export default function Home() {
           </div>,
           // 页2：蓄水池动画
           <div key="p2" className="w-full h-full flex flex-col items-center justify-center">
-            <div className="text-center mb-2">
-              <span className="text-white text-lg font-bold tracking-widest drop-shadow-md">蓄水池</span>
+            {/* 相对定位容器：动画 + 叠加文字 */}
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '4/3' }}>
+              <XushuchiLottie />
+              {/* 蓄水池文字：叠在圆球中心，随水位上升慢慢显现 */}
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                pointerEvents: 'none',
+                animation: 'xushuchi-text-appear 2.5s ease-out 2s both',
+              }}>
+                <span style={{
+                  fontSize: '1.5rem',
+                  fontWeight: 'bold',
+                  letterSpacing: '0.3em',
+                  color: 'white',
+                  textShadow: '0 2px 8px rgba(0,80,160,0.6), 0 0 20px rgba(255,255,255,0.4)',
+                  whiteSpace: 'nowrap',
+                }}>蓄水池</span>
+              </div>
+              <style>{`
+                @keyframes xushuchi-text-appear {
+                  0%   { opacity: 0; transform: translate(-50%, -50%) translateY(12px); }
+                  40%  { opacity: 0; transform: translate(-50%, -50%) translateY(12px); }
+                  100% { opacity: 1; transform: translate(-50%, -50%) translateY(0px); }
+                }
+              `}</style>
             </div>
-            <XushuchiLottie />
           </div>,
           // 页3：积分兑换商城
           <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
