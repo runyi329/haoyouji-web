@@ -1564,21 +1564,21 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.07)',
-                  border: '1px solid rgba(201,168,76,0.45)',
-                  boxShadow: '0 3px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.82)',
+                  border: '1px solid rgba(203,164,113,0.35)',
+                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
                   borderRadius: '12px',
                   padding: '8px 12px',
                 }}
                 onClick={() => navigate('/stock-tracker')}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#C9A84C' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>我的A股</span>
+                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的A股</span>
                 </div>
                 <div className="flex items-baseline">
                   {!shanghaiIndex?.success ? (
-                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#A80000' }} />
                   ) : (
                     <GoldFlipCounter total={Math.round((shanghaiIndex.price ?? 0) * 100)} unit="点" decimals={2} />
                   )}
@@ -1616,20 +1616,20 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.07)',
-                  border: '1px solid rgba(201,168,76,0.45)',
-                  boxShadow: '0 3px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.82)',
+                  border: '1px solid rgba(203,164,113,0.35)',
+                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
                   borderRadius: '12px',
                   padding: '8px 12px',
                 }}
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#C9A84C' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>我的港股</span>
+                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的港股</span>
                 </div>
                 <div className="flex items-baseline">
                   {!hangSengIndex?.success ? (
-                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#A80000' }} />
                   ) : (
                     <GoldFlipCounter total={Math.round((hangSengIndex.price ?? 0) * 100)} unit="点" decimals={2} />
                   )}
@@ -1668,21 +1668,21 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.07)',
-                  border: '1px solid rgba(201,168,76,0.45)',
-                  boxShadow: '0 3px 10px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)',
+                  background: 'rgba(255,255,255,0.82)',
+                  border: '1px solid rgba(203,164,113,0.35)',
+                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
                   borderRadius: '12px',
                   padding: '8px 12px',
                 }}
 
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#C9A84C' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>我的美股</span>
+                  <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的美股</span>
                 </div>
                 <div className="flex items-baseline">
                   {!sp500Index?.success ? (
-                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#CBA471' }} />
+                    <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#A80000' }} />
                   ) : (
                     <GoldFlipCounter total={Math.round((sp500Index.price ?? 0) * 100)} unit="点" decimals={2} />
                   )}
