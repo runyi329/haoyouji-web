@@ -1720,32 +1720,32 @@ export default function Home() {
           <GlobalMarketStrip />
 
           {/* 三个功能入口 */}
-          <div className="px-3 pt-2 pb-3 space-y-2">
+          <div className="px-3 pt-1 pb-2 space-y-1">
             {/* 第一行：智能财务 + 智能会计（仿人脉共享/个人中心样式） */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               <div
-                className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
+                className="flex flex-col items-center justify-center py-2 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
               >
-                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-                  <BarChart2 className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 2px 6px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                  <BarChart2 className="w-4 h-4 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
                 </div>
-                <span className="text-[#A80000] text-xs mt-1 font-medium">智能财务</span>
+                <span className="text-[#A80000] text-xs mt-0.5 font-medium">智能财务</span>
               </div>
               <div
-                className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
+                className="flex flex-col items-center justify-center py-2 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
               >
-                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-                  <FileText className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 2px 6px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                  <FileText className="w-4 h-4 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
                 </div>
-                <span className="text-[#A80000] text-xs mt-1 font-medium">智能会计</span>
+                <span className="text-[#A80000] text-xs mt-0.5 font-medium">智能会计</span>
               </div>
             </div>
             {/* 第二行：智能钱包（横向宽条） */}
             <div
-              className="flex flex-row items-center justify-center gap-3 py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
+              className="flex flex-row items-center justify-center gap-2 py-2 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
             >
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
-                <Wallet className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 2px 6px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                <Wallet className="w-4 h-4 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
               </div>
               <span className="text-[#A80000] text-sm font-medium">智能钱包</span>
             </div>
