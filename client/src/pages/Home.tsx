@@ -1756,39 +1756,39 @@ export default function Home() {
             </div>
             {/* 第二行：智能钱包（横向宽条）- 黑白金立体风格 */}
             <div
-              className="flex flex-row items-center justify-center gap-3 rounded-xl cursor-pointer active:scale-[0.98] flex-1 relative overflow-hidden"
+              className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] flex-1 relative overflow-hidden"
               style={{
                 background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
                 boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                 border: '1px solid rgba(201,168,76,0.6)',
                 transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                padding: '8px 12px',
               }}
             >
               {/* 顶部金色高光线 */}
               <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-              {/* Lottie 钱包动画 - 高清方案：在大容器内矢量渲染，再用scale缩小到目标尺寸，避免放大模糊 */}
-              <div
-                className="flex-shrink-0"
-                style={{ width: 44, height: 44, overflow: 'hidden', position: 'relative' }}
-              >
-                <div style={{
-                  width: 30,
-                  height: 30,
-                  transform: 'scale(1.467)',
-                  transformOrigin: 'top left',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                }}>
-                  <WalletLottie />
+              {/* 顶部标题行：小图标 + 标题（对齐我的A股样式） */}
+              <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                {/* Lottie 图标，大小与 Coins w-3.5 h-3.5 一致（14px） */}
+                <div style={{ width: 14, height: 14, overflow: 'hidden', position: 'relative', flexShrink: 0 }}>
+                  <div style={{
+                    width: 400,
+                    height: 400,
+                    transform: 'scale(0.035)',
+                    transformOrigin: 'top left',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                  }}>
+                    <WalletLottie />
+                  </div>
                 </div>
+                <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能钱包</span>
               </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-bold tracking-widest" style={{ color: '#F5D78E', textShadow: '0 0 8px rgba(245,215,142,0.5), 0 1px 3px rgba(0,0,0,0.8)' }}>智能钱包</span>
-                <span className="text-xs" style={{ color: 'rgba(201,168,76,0.7)', letterSpacing: '0.05em' }}>SMART WALLET</span>
-              </div>
+              {/* 下方占位区域 */}
+              <div className="flex-1" />
             </div>
           </div>
         </div>
