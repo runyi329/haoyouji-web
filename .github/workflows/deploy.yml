@@ -204,6 +204,10 @@ jobs:
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
                 ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL;
               " 2>&1 && echo "✅ shortcut_buttons 字段已添加" || echo "⚠️ shortcut_buttons 字段可能已存在（正常）"
+              echo "确保 merchant_products 表有 inPointsShop 字段（积分商城开关）..."
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                ALTER TABLE merchant_products ADD COLUMN inPointsShop TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否上架到积分商城（0=否，1=是）' AFTER isShareable;
+              " 2>&1 && echo "✅ inPointsShop 字段已添加" || echo "⚠️ inPointsShop 字段可能已存在（正常）"
             else
               echo "DATABASE_URL not found, 跳过建表"
             fi

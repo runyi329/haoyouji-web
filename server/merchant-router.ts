@@ -49,6 +49,7 @@ export const merchantRouter = router({
           status: merchantProducts.status,
           sourceType: merchantProducts.sourceType,
           isShareable: merchantProducts.isShareable,
+          inPointsShop: merchantProducts.inPointsShop,
           salesCount: merchantProducts.salesCount,
           stock: merchantProducts.stock,
           ownerMerchantId: merchantProducts.ownerMerchantId,
@@ -1408,7 +1409,7 @@ export const merchantRouter = router({
 
   // ===== 积分商城接口（首页公开展示用）=====
   // 获取积分商城商品列表（公开接口，无需登录）
-  // 数据来源：merchantProducts 表中 ownerMerchantId IS NULL（平台总库）且 isShareable=1 的商品
+  // 数据来源：merchantProducts 表中 inPointsShop=1 的商品（不限商家归属）
   getPointsShopProducts: publicProcedure
     .input(z.object({
       limit: z.number().min(1).max(50).default(20),
@@ -1428,16 +1429,32 @@ export const merchantRouter = router({
           stock: merchantProducts.stock,
           createdAt: merchantProducts.createdAt,
           categoryName: merchantProductCategories.name,
+          ownerShopName: merchants.shopName,
         })
         .from(merchantProducts)
         .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
+        .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
         .where(and(
-          isNull(merchantProducts.ownerMerchantId),
-          eq(merchantProducts.status, "active"),
-          eq(merchantProducts.isShareable, 1)
+          eq(merchantProducts.inPointsShop, 1),
+          eq(merchantProducts.status, "active")
         ))
         .orderBy(desc(merchantProducts.salesCount), desc(merchantProducts.createdAt))
         .limit(input?.limit ?? 20);
       return rows;
+    }),
+
+  // 切换商品的积分商城开关（管理员用）
+  toggleProductInPointsShop: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      inPointsShop: z.number().min(0).max(1),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await db.update(merchantProducts)
+        .set({ inPointsShop: input.inPointsShop })
+        .where(eq(merchantProducts.id, input.id));
+      return { success: true };
     }),
 });
