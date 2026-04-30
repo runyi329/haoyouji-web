@@ -1772,7 +1772,7 @@ export default function Home() {
               {/* 标题行：保持 items-center，文字位置不变；图标用负 margin-top 向上溢出，不影响行高 */}
               <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                 {/* Lottie 图标：容器 14px（与文字行高一致），内部用 overflow:visible + 负 margin-top 让图案向上溢出 */}
-                <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -10 }}>
+                <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -16 }}>
                   <div style={{
                     width: 400,
                     height: 400,
