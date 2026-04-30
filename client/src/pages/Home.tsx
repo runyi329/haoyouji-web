@@ -1773,7 +1773,7 @@ export default function Home() {
                 className="flex-shrink-0 overflow-hidden"
                 style={{ width: 44, height: 44 }}
               >
-                <div style={{ width: '100%', height: '100%', transform: 'scale(2.2)', transformOrigin: 'center center' }}>
+                <div style={{ width: '100%', height: '100%', transform: 'scale(3.52)', transformOrigin: 'center center' }}>
                   <WalletLottie />
                 </div>
               </div>
