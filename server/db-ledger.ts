@@ -1462,6 +1462,7 @@ export async function getLedgerMembers(ledgerId: number, userId: number, userRol
       memberType: ledgerMembers.memberType,
       username: users.username,
       avatar: users.avatar,
+      realName: users.name,
     })
     .from(ledgerMembers)
     .leftJoin(users, eq(ledgerMembers.userId, users.id))
