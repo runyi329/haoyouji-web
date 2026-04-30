@@ -1492,6 +1492,266 @@ function MacroSection() {
   );
 }
 
+// ─── 交易成本 Section ────────────────────────────────────────
+const TRADING_COST_DATA = [
+  { year: 1990, turnover: 10,        stamp: 0.3,    handling: 0.0,  transfer: 0.0,  supervision: 0.0,  commission: 0.4,   total: 0.7 },
+  { year: 1991, turnover: 43,        stamp: 2.0,    handling: 0.0,  transfer: 0.0,  supervision: 0.0,  commission: 2.3,   total: 4.3 },
+  { year: 1992, turnover: 680,       stamp: 3.35,   handling: 0.4,  transfer: 0.4,  supervision: 0.1,  commission: 4.8,   total: 9.05 },
+  { year: 1993, turnover: 3627,      stamp: 21.0,   handling: 2.2,  transfer: 2.2,  supervision: 0.3,  commission: 25.4,  total: 51.1 },
+  { year: 1994, turnover: 8128,      stamp: 45.24,  handling: 4.9,  transfer: 4.9,  supervision: 0.7,  commission: 56.9,  total: 112.64 },
+  { year: 1995, turnover: 4036,      stamp: 25.72,  handling: 2.4,  transfer: 2.4,  supervision: 0.3,  commission: 28.3,  total: 59.12 },
+  { year: 1996, turnover: 21332,     stamp: 121.66, handling: 12.8, transfer: 12.8, supervision: 1.7,  commission: 149.3, total: 298.26 },
+  { year: 1997, turnover: 30722,     stamp: 237.27, handling: 18.4, transfer: 18.4, supervision: 2.5,  commission: 215.1, total: 491.67 },
+  { year: 1998, turnover: 23544,     stamp: 235.0,  handling: 14.1, transfer: 14.1, supervision: 1.9,  commission: 164.8, total: 429.9 },
+  { year: 1999, turnover: 31320,     stamp: 313.0,  handling: 18.8, transfer: 18.8, supervision: 2.5,  commission: 219.2, total: 572.3 },
+  { year: 2000, turnover: 60826,     stamp: 478.0,  handling: 36.5, transfer: 36.5, supervision: 4.9,  commission: 425.8, total: 981.7 },
+  { year: 2001, turnover: 38305,     stamp: 383.0,  handling: 23.0, transfer: 23.0, supervision: 3.1,  commission: 268.1, total: 700.2 },
+  { year: 2002, turnover: 27990,     stamp: 280.0,  handling: 16.8, transfer: 16.8, supervision: 2.2,  commission: 195.9, total: 511.7 },
+  { year: 2003, turnover: 32115,     stamp: 321.0,  handling: 5.6,  transfer: 19.3, supervision: 2.6,  commission: 96.3,  total: 444.8 },
+  { year: 2004, turnover: 42334,     stamp: 423.0,  handling: 7.4,  transfer: 25.4, supervision: 3.4,  commission: 127.0, total: 586.2 },
+  { year: 2005, turnover: 31665,     stamp: 179.0,  handling: 5.5,  transfer: 19.0, supervision: 2.5,  commission: 95.0,  total: 301.0 },
+  { year: 2006, turnover: 90469,     stamp: 452.0,  handling: 15.7, transfer: 54.3, supervision: 7.2,  commission: 271.4, total: 800.6 },
+  { year: 2007, turnover: 460556,    stamp: 2005.0, handling: 80.1, transfer: 276.3,supervision: 36.8, commission: 1381.7,total: 3779.9 },
+  { year: 2008, turnover: 267485,    stamp: 778.0,  handling: 46.5, transfer: 53.5, supervision: 21.4, commission: 802.5, total: 1701.9 },
+  { year: 2009, turnover: 534546,    stamp: 534.0,  handling: 93.0, transfer: 106.9,supervision: 42.8, commission: 1603.6,total: 2380.3 },
+  { year: 2010, turnover: 545634,    stamp: 545.0,  handling: 94.9, transfer: 109.1,supervision: 43.7, commission: 1636.9,total: 2429.6 },
+  { year: 2011, turnover: 421644,    stamp: 1053.0, handling: 73.4, transfer: 84.3, supervision: 33.7, commission: 1264.9,total: 2509.3 },
+  { year: 2012, turnover: 314583,    stamp: 984.0,  handling: 54.7, transfer: 62.9, supervision: 25.2, commission: 943.7, total: 2070.5 },
+  { year: 2013, turnover: 468072,    stamp: 1233.0, handling: 81.4, transfer: 93.6, supervision: 37.4, commission: 748.9, total: 2194.3 },
+  { year: 2014, turnover: 742385,    stamp: 1467.0, handling: 129.2,transfer: 148.5,supervision: 59.4, commission: 1187.8,total: 2991.9 },
+  { year: 2015, turnover: 2550538,   stamp: 2476.15,handling: 443.8,transfer: 510.1,supervision: 204.0,commission: 4080.9,total: 7714.95 },
+  { year: 2016, turnover: 1273845,   stamp: 2209.0, handling: 124.1,transfer: 51.0, supervision: 51.0, commission: 2038.2,total: 4473.3 },
+  { year: 2017, turnover: 1124625,   stamp: 2206.0, handling: 109.5,transfer: 45.0, supervision: 45.0, commission: 1799.4,total: 4204.9 },
+  { year: 2018, turnover: 901739,    stamp: 2199.0, handling: 87.8, transfer: 36.1, supervision: 36.1, commission: 1442.8,total: 3801.8 },
+  { year: 2019, turnover: 1274159,   stamp: 2463.0, handling: 124.1,transfer: 51.0, supervision: 51.0, commission: 1019.3,total: 3708.4 },
+  { year: 2020, turnover: 2068253,   stamp: 3087.0, handling: 201.4,transfer: 82.7, supervision: 82.7, commission: 1654.6,total: 5108.4 },
+  { year: 2021, turnover: 2579735,   stamp: 2478.02,handling: 251.3,transfer: 103.2,supervision: 103.2,commission: 2063.8,total: 4999.52 },
+  { year: 2022, turnover: 2245093,   stamp: 2759.33,handling: 218.7,transfer: 89.8, supervision: 89.8, commission: 1796.1,total: 4953.73 },
+  { year: 2023, turnover: 2122109,   stamp: 1800.6, handling: 206.7,transfer: 84.9, supervision: 84.9, commission: 1273.3,total: 3450.4 },
+  { year: 2024, turnover: 2547858,   stamp: 1290.0, handling: 173.8,transfer: 51.0, supervision: 101.9,commission: 1528.7,total: 3145.4 },
+  { year: 2025, turnover: 4141037,   stamp: 2035.0, handling: 282.4,transfer: 82.8, supervision: 165.6,commission: 2484.6,total: 5050.4 },
+];
+
+// 牛市年份（印花税突破2000亿）
+const BULL_YEARS = new Set([2007, 2015, 2020, 2021, 2022, 2025]);
+
+function TradingCostSection() {
+  const [subTab, setSubTab] = useState<"stamp" | "turnover" | "compare" | "ratio">("stamp");
+
+  const SUBTABS = [
+    { key: "stamp" as const,    label: "印花税" },
+    { key: "turnover" as const, label: "成交额" },
+    { key: "compare" as const,  label: "税费对比" },
+    { key: "ratio" as const,    label: "费率趋势" },
+  ];
+
+  // 费率趋势数据（2000年起有意义）
+  const ratioData = TRADING_COST_DATA.filter(d => d.year >= 2000).map(d => ({
+    year: d.year,
+    stampRatio: d.turnover > 0 ? +((d.stamp / d.turnover) * 1000).toFixed(3) : 0,
+    commRatio:  d.turnover > 0 ? +((d.commission / d.turnover) * 1000).toFixed(3) : 0,
+    totalRatio: d.turnover > 0 ? +((d.total / d.turnover) * 1000).toFixed(3) : 0,
+  }));
+
+  // 最新年份摘要
+  const latest = TRADING_COST_DATA[TRADING_COST_DATA.length - 1];
+  const prev   = TRADING_COST_DATA[TRADING_COST_DATA.length - 2];
+  const stampChg = latest.stamp - prev.stamp;
+
+  return (
+    <div>
+      <SectionTitle
+        title="交易成本"
+        sub="印花税 / 券商佣金 / 总税费 · 1990-2025年"
+        extra={
+          <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
+            数据来源：财政部 / 交易所
+          </p>
+        }
+      />
+      <div className="px-4 space-y-3">
+        {/* 摘要卡片 */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+            <p className="text-[12px] mb-1" style={{ color: MUTED }}>2025年印花税</p>
+            <p className="text-lg font-bold" style={{ color: RED }}>{latest.stamp.toLocaleString()}亿</p>
+            <p className="text-[12px]" style={{ color: stampChg >= 0 ? RED : GREEN }}>
+              {stampChg >= 0 ? "▲" : "▼"}{Math.abs(stampChg).toFixed(0)}亿 vs 2024
+            </p>
+          </div>
+          <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+            <p className="text-[12px] mb-1" style={{ color: MUTED }}>2025年总税费</p>
+            <p className="text-lg font-bold" style={{ color: "#F57C00" }}>{latest.total.toLocaleString()}亿</p>
+            <p className="text-[12px]" style={{ color: DIM }}>成交额 {(latest.turnover/10000).toFixed(0)}万亿</p>
+          </div>
+          <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+            <p className="text-[12px] mb-1" style={{ color: MUTED }}>2025年券商佣金</p>
+            <p className="text-lg font-bold" style={{ color: "#1976D2" }}>{latest.commission.toLocaleString()}亿</p>
+            <p className="text-[12px]" style={{ color: DIM }}>历史峰值 2015年 4081亿</p>
+          </div>
+          <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+            <p className="text-[12px] mb-1" style={{ color: MUTED }}>2025年综合费率</p>
+            <p className="text-lg font-bold" style={{ color: "#7B1FA2" }}>
+              {(latest.total / latest.turnover * 1000).toFixed(2)}‰
+            </p>
+            <p className="text-[12px]" style={{ color: DIM }}>2000年约 16‰</p>
+          </div>
+        </div>
+
+        {/* Tab 切换 */}
+        <div className="flex gap-1.5 overflow-x-auto">
+          {SUBTABS.map(t => (
+            <button key={t.key} onClick={() => setSubTab(t.key)}
+              className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium transition-colors"
+              style={{
+                background: subTab === t.key ? RED : "#F0F0F0",
+                color: subTab === t.key ? "#fff" : MUTED,
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 图表卡片 */}
+        <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+
+          {/* Tab1：印花税历年收入 */}
+          {subTab === "stamp" && (
+            <>
+              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>历年证券交易印花税收入（亿元）</p>
+              <p className="text-[11px] mb-3" style={{ color: DIM }}>红色柱 = 突破2000亿元牛市年份</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={TRADING_COST_DATA} margin={{ top: 8, right: 4, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                  <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
+                    tickFormatter={(v) => v % 5 === 0 ? String(v) : ""}
+                  />
+                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
+                    formatter={(v: any) => [`${Number(v).toLocaleString()}亿`, "印花税"]}
+                    labelFormatter={(l) => `${l}年`}
+                  />
+                  <ReferenceLine y={2000} stroke="#FF7043" strokeDasharray="4 2"
+                    label={{ value: "2000亿线", position: "insideTopRight", fontSize: 9, fill: "#FF7043" }}
+                  />
+                  <Bar dataKey="stamp" radius={[2, 2, 0, 0]}>
+                    {TRADING_COST_DATA.map((d, i) => (
+                      <Cell key={i} fill={BULL_YEARS.has(d.year) ? RED : "#90CAF9"} fillOpacity={0.9} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <div className="flex gap-4 justify-center mt-2">
+                <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
+                  <span className="w-3 h-2 inline-block rounded-sm" style={{ background: RED }} />牛市年份
+                </span>
+                <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
+                  <span className="w-3 h-2 inline-block rounded-sm" style={{ background: "#90CAF9" }} />普通年份
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* Tab2：全市场成交额 */}
+          {subTab === "turnover" && (
+            <>
+              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>历年A股全市场成交额（亿元）</p>
+              <p className="text-[11px] mb-3" style={{ color: DIM }}>2025年突破414万亿元，创历史新高</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={TRADING_COST_DATA} margin={{ top: 8, right: 4, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                  <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
+                    tickFormatter={(v) => v % 5 === 0 ? String(v) : ""}
+                  />
+                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false}
+                    tickFormatter={(v) => v >= 10000 ? `${(v/10000).toFixed(0)}万亿` : `${v}`}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
+                    formatter={(v: any) => [`${(Number(v)/10000).toFixed(2)}万亿`, "成交额"]}
+                    labelFormatter={(l) => `${l}年`}
+                  />
+                  <Bar dataKey="turnover" fill="#43A047" fillOpacity={0.85} radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </>
+          )}
+
+          {/* Tab3：各项税费对比（近15年，2010-2025） */}
+          {subTab === "compare" && (
+            <>
+              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>各项税费对比（2010-2025年，亿元）</p>
+              <p className="text-[11px] mb-3" style={{ color: DIM }}>印花税 / 券商佣金 / 经手费 / 过户费 / 监管费</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart
+                  data={TRADING_COST_DATA.filter(d => d.year >= 2010)}
+                  margin={{ top: 8, right: 4, left: -10, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                  <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false} />
+                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
+                    formatter={(v: any, name: any) => {
+                      const labels: Record<string, string> = { stamp: "印花税", commission: "券商佣金", handling: "经手费", transfer: "过户费", supervision: "监管费" };
+                      return [`${Number(v).toFixed(1)}亿`, labels[name] || name];
+                    }}
+                    labelFormatter={(l) => `${l}年`}
+                  />
+                  <Legend formatter={(v) => ({ stamp: "印花税", commission: "券商佣金", handling: "经手费", transfer: "过户费", supervision: "监管费" }[v] || v)}
+                    wrapperStyle={{ fontSize: 10 }}
+                  />
+                  <Bar dataKey="stamp"      fill={RED}       fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
+                  <Bar dataKey="commission" fill="#1976D2"   fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
+                  <Bar dataKey="handling"   fill="#F57C00"   fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
+                  <Bar dataKey="transfer"   fill="#7B1FA2"   fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
+                  <Bar dataKey="supervision" fill="#795548"  fillOpacity={0.85} radius={[1,1,0,0]} stackId="a" />
+                </BarChart>
+              </ResponsiveContainer>
+            </>
+          )}
+
+          {/* Tab4：费率趋势（各项税费/成交额，‰） */}
+          {subTab === "ratio" && (
+            <>
+              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>各项税费占成交额比例趋势（2000-2025年，‰）</p>
+              <p className="text-[11px] mb-3" style={{ color: DIM }}>综合费率从约16‰降至约1.2‰，投资者成本大幅下降</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={ratioData} margin={{ top: 8, right: 4, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
+                  <XAxis dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
+                    tickFormatter={(v) => v % 5 === 0 ? String(v) : ""}
+                  />
+                  <YAxis tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false}
+                    tickFormatter={(v) => `${v}‰`}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
+                    formatter={(v: any, name: any) => {
+                      const labels: Record<string, string> = { stampRatio: "印花税/成交额", commRatio: "佣金/成交额", totalRatio: "总税费/成交额" };
+                      return [`${v}‰`, labels[name] || name];
+                    }}
+                    labelFormatter={(l) => `${l}年`}
+                  />
+                  <Legend
+                    formatter={(v) => ({ stampRatio: "印花税‰", commRatio: "佣金‰", totalRatio: "总税费‰" }[v] || v)}
+                    wrapperStyle={{ fontSize: 10 }}
+                  />
+                  <Line type="monotone" dataKey="stampRatio" stroke={RED}       strokeWidth={2} dot={false} name="stampRatio" />
+                  <Line type="monotone" dataKey="commRatio"  stroke="#1976D2"   strokeWidth={2} dot={false} name="commRatio" />
+                  <Line type="monotone" dataKey="totalRatio" stroke="#43A047"   strokeWidth={2} dot={false} name="totalRatio" />
+                </LineChart>
+              </ResponsiveContainer>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── 主页面 ────────────────────────────────────────────────
 export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boolean }) {
   const params = useParams();
@@ -1574,6 +1834,8 @@ export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boole
         <RisefallSection counts={counts} />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <ValuationSection counts={counts} />
+        <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
+        <TradingCostSection />
         <div className="mx-4 my-1 border-t" style={{ borderColor: BORDER }} />
         <MacroSection />
       </div>
