@@ -1706,8 +1706,10 @@ export default function Home() {
                           {(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.change ?? 0).toFixed(2)}
                           ({(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.changePercent ?? 0).toFixed(2)}%)
                         </span>
-                      ) : (
-                  <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
                       {hkMarketStatus === 'lunch' ? '午休中' : '休市中'}，离开市
                       {hkCountdown && (
                         <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
