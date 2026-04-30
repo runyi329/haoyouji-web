@@ -1909,7 +1909,7 @@ export default function Home() {
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   {/* 中国国旗圆形图标 - circle-flags 风格 */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512" className="flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" className="flex-shrink-0">
                     <mask id="cn-mask"><circle cx="256" cy="256" r="256" fill="#fff"/></mask>
                     <g mask="url(#cn-mask)">
                       <path fill="#d80027" d="M0 0h512v512H0z"/>
@@ -1963,7 +1963,7 @@ export default function Home() {
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   {/* 香港区旗圆形图标 - circle-flags 风格 */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512" className="flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" className="flex-shrink-0">
                     <mask id="hk-mask"><circle cx="256" cy="256" r="256" fill="#fff"/></mask>
                     <g mask="url(#hk-mask)">
                       <path fill="#d80027" d="M0 0h512v512H0z"/>
@@ -2018,7 +2018,7 @@ export default function Home() {
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   {/* 美国国旗圆形图标 - circle-flags 风格 */}
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 512 512" className="flex-shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" className="flex-shrink-0">
                     <mask id="us-mask"><circle cx="256" cy="256" r="256" fill="#fff"/></mask>
                     <g mask="url(#us-mask)">
                       <path fill="#eee" d="M256 0h256v64l-32 32 32 32v64l-32 32 32 32v64l-32 32 32 32v64l-256 32L0 448v-64l32-32-32-32v-64z"/>
