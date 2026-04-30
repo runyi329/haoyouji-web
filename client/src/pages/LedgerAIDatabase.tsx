@@ -1677,8 +1677,8 @@ function TradingCostSection() {
     { key: "ratio" as const,    label: "费率趋势" },
   ];
 
-  // 费率趋势数据（2000年起有意义）
-  const ratioData = allData.filter(d => d.year >= 2000).map(d => ({
+  // 费率趋势数据（全部年份）
+  const ratioData = allData.filter(d => d.year >= 1990).map(d => ({
     year: d.year,
     stampRatio: d.turnover > 0 ? +((d.stamp / d.turnover) * 1000).toFixed(3) : 0,
     commRatio:  d.turnover > 0 ? +((d.commission / d.turnover) * 1000).toFixed(3) : 0,
@@ -1912,10 +1912,10 @@ function TradingCostSection() {
             </>
           )}
 
-          {/* Tab4：费率趋势（CSS进度条，三条并排） */}
+          {/* Tab4：费率趋势（折线图，1990-2026年全部年份） */}
           {subTab === "ratio" && (
             <>
-              <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>各项税费占成交额比例（2000-2025年，‰）</p>
+              <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>各项税费占成交额比例（1990-2026年，‰）</p>
               <div className="flex gap-3 mb-3">
                 {[
                   { color: RED,       label: "印花税‰" },
@@ -1927,44 +1927,31 @@ function TradingCostSection() {
                   </span>
                 ))}
               </div>
-              {[...ratioData].reverse().map((d, i) => {
-                const maxRatio = Math.max(...ratioData.map(x => x.totalRatio));
-                const bars = [
-                  { val: d.totalRatio, color: "#43A047", label: `${d.totalRatio}‰` },
-                  { val: d.stampRatio, color: RED,       label: `${d.stampRatio}‰` },
-                  { val: d.commRatio,  color: "#1976D2", label: `${d.commRatio}‰` },
-                ];
-                return (
-                  <div key={d.year}>
-                    {bars.map((bar, bi) => (
-                      <div key={bi} className="flex items-center" style={{ height: 12, marginBottom: 0 }}>
-                        {/* 年份标签：只在每年第1条显示，其余用空白占位 */}
-                        <div
-                          className="flex-shrink-0 text-right pr-1.5"
-                          style={{ width: TC_LABEL_W, fontSize: 9, color: bi === 0 ? MUTED : 'transparent', lineHeight: '12px' }}
-                        >
-                          {d.year}
-                        </div>
-                        <div className="relative flex-1" style={{ height: 9, borderRadius: 2, background: '#E8E0D8' }}>
-                          <div
-                            style={{
-                              position: 'absolute', top: 0, left: 0, height: '100%',
-                              width: animated ? `${(bar.val / maxRatio) * 100}%` : '0%',
-                              background: bar.color,
-                              opacity: 0.85,
-                              borderRadius: '2px 3px 3px 2px',
-                              transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 25 + bi * 80}ms`,
-                              boxShadow: 'inset 0 -1px 3px rgba(0,0,0,0.12)',
-                            }}
-                          />
-                        </div>
-                        <span className="text-[8px] flex-shrink-0" style={{ width: 32, paddingLeft: 3, color: MUTED }}>{bar.label}</span>
-                      </div>
-                    ))}
-                    <div style={{ height: 3 }} />{/* 年份间小间距 */}
-                  </div>
-                );
-              })}
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={ratioData} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E8E0D8" />
+                  <XAxis
+                    dataKey="year"
+                    tick={{ fontSize: 9, fill: MUTED }}
+                    interval={4}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 9, fill: MUTED }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `${v}‰`}
+                  />
+                  <Tooltip
+                    contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', background: '#fff' }}
+                    formatter={(value: number, name: string) => [`${value}‰`, name]}
+                    labelFormatter={(label) => `${label}年`}
+                  />
+                  <Line type="monotone" dataKey="totalRatio" name="总税费" stroke="#43A047" strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="stampRatio" name="印花税" stroke={RED} strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="commRatio"  name="佣金"   stroke="#1976D2" strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
             </>
           )}
         </div>
