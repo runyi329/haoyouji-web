@@ -13,6 +13,8 @@ import {
   UserCircle,
   Bell,
   Globe,
+  BarChart2,
+  FileText,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -1717,13 +1719,27 @@ export default function Home() {
           {/* 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁） */}
           <GlobalMarketStrip />
 
-          {/* 占位内容 */}
-          <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2 shadow-sm" style={{ background: 'rgba(168,0,0,0.12)', border: '1px solid rgba(168,0,0,0.2)' }}>
-              <Wallet className="w-5 h-5" style={{ color: '#A80000' }} />
-            </div>
-            <p className="text-xs text-center" style={{ color: '#7A5020' }}>智能财务功能</p>
-            <p className="text-xs text-center" style={{ color: '#CBA471' }}>升级装修</p>
+          {/* 三个功能入口 */}
+          <div className="grid grid-cols-3 px-3 py-3" style={{ borderTop: '1px solid rgba(168,0,0,0.10)' }}>
+            {[
+              { name: '智能财务', icon: BarChart2 },
+              { name: '智能会计', icon: FileText },
+              { name: '智能钱包', icon: Wallet },
+            ].map((item, idx) => (
+              <div
+                key={item.name}
+                className="flex flex-col items-center justify-center py-3 cursor-pointer active:opacity-70"
+                style={{ borderRight: idx < 2 ? '1px solid rgba(168,0,0,0.10)' : 'none' }}
+              >
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center mb-1.5"
+                  style={{ background: 'rgba(168,0,0,0.09)', border: '1px solid rgba(168,0,0,0.15)' }}
+                >
+                  <item.icon className="w-5 h-5" style={{ color: '#A80000' }} />
+                </div>
+                <span className="text-xs font-medium" style={{ color: '#5A3010' }}>{item.name}</span>
+              </div>
+            ))}
           </div>
         </div>
 
