@@ -1569,14 +1569,7 @@ export default function Home() {
               </div>
             </div>
             <div className="flex-1 flex items-center justify-center">
-              <div
-                onClick={() => requireLogin(() => navigate('/parent/contacts/list'))}
-                className="flex flex-col items-center justify-center bg-red-50 rounded-2xl px-8 py-4 cursor-pointer hover:bg-red-100 transition-colors"
-              >
-                <FileText className="w-8 h-8 text-[#A80000] mb-2" />
-                <span className="text-sm text-[#A80000] font-semibold">我的人脉</span>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.65rem' }}>标签管理与分析</span>
-              </div>
+              <span className="text-xs text-gray-300">升级中</span>
             </div>
           </div>,
           // 页2：留白
