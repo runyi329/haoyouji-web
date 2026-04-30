@@ -1542,7 +1542,7 @@ const TC_ROW_H = 14;   // 每行总高度（px）
 const TC_BAR_H = 11;   // 条形高度（px）
 
 function TradingCostBar({
-  label, value, maxValue, color, delay = 0, animated, formatValue
+  label, value, maxValue, color, delay = 0, animated, formatValue, rowData
 }: {
   label: string | number;
   value: number;
@@ -1550,7 +1550,8 @@ function TradingCostBar({
   color: string;
   delay?: number;
   animated: boolean;
-  formatValue: (v: number) => string;
+  formatValue: (v: number, d?: any) => string;
+  rowData?: any;
 }) {
   const pctWidth = maxValue > 0 ? (value / maxValue) * 100 : 0;
   const nearEnd = pctWidth > 82;
@@ -1603,7 +1604,7 @@ function TradingCostBar({
             opacity: animated ? 1 : 0,
           }}
         >
-          {formatValue(value)}
+          {formatValue(value, rowData)}
         </div>
       </div>
     </div>
@@ -1771,7 +1772,7 @@ function TradingCostSection() {
               {[...allData].reverse().map((d, i) => (
                 <TradingCostBar
                   key={d.year}
-                  label={(d as any).isPartial ? `${d.year}*` : d.year}
+                  label={d.year}
                   value={d.stamp}
                   maxValue={Math.max(...allData.map(x => x.stamp))}
                   color={BULL_YEARS.has(d.year)
@@ -1779,7 +1780,16 @@ function TradingCostSection() {
                     : "linear-gradient(90deg, #64B5F6 0%, #90CAF9 100%)"}
                   delay={i * 18}
                   animated={animated}
-                  formatValue={(v) => `${v}亿`}
+                  rowData={d}
+                  formatValue={(v, rd) => {
+                    const base = `${v}亿`;
+                    if (rd?.isPartial && rd?.tradeDate) {
+                      const m = String(parseInt(rd.tradeDate.slice(5,7)));
+                      const day = String(parseInt(rd.tradeDate.slice(8,10)));
+                      return `${base}（截至${m}月${day}日）`;
+                    }
+                    return base;
+                  }}
                 />
               ))}
             </>
@@ -1792,13 +1802,22 @@ function TradingCostSection() {
               {[...allData].reverse().map((d, i) => (
                 <TradingCostBar
                   key={d.year}
-                  label={(d as any).isPartial ? `${d.year}*` : d.year}
+                  label={d.year}
                   value={d.turnover}
                   maxValue={Math.max(...allData.map(x => x.turnover))}
                   color="linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)"
                   delay={i * 18}
                   animated={animated}
-                  formatValue={(v) => v >= 10000 ? `${(v/10000).toFixed(1)}万亿` : `${v}亿`}
+                  rowData={d}
+                  formatValue={(v, rd) => {
+                    const base = v >= 10000 ? `${(v/10000).toFixed(1)}万亿` : `${v}亿`;
+                    if (rd?.isPartial && rd?.tradeDate) {
+                      const m = String(parseInt(rd.tradeDate.slice(5,7)));
+                      const day = String(parseInt(rd.tradeDate.slice(8,10)));
+                      return `${base}（截至${m}月${day}日）`;
+                    }
+                    return base;
+                  }}
                 />
               ))}
             </>
@@ -1834,7 +1853,7 @@ function TradingCostSection() {
                 const pctW = (totalVal / maxTotal) * 100;
                 return (
                   <div key={d.year} className="flex items-center" style={{ height: TC_ROW_H, marginBottom: 0 }}>
-                    <div className="flex-shrink-0 text-right pr-1.5" style={{ width: TC_LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${TC_ROW_H}px` }}>{(d as any).isPartial ? `${d.year}*` : d.year}</div>
+                    <div className="flex-shrink-0 text-right pr-1.5" style={{ width: TC_LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${TC_ROW_H}px` }}>{d.year}</div>
                     <div className="relative flex-1" style={{ height: TC_BAR_H, borderRadius: 2, background: '#E8E0D8' }}>
                       <div
                         className="absolute top-0 left-0 h-full flex overflow-hidden"
