@@ -17,6 +17,7 @@ import {
   BarChart2,
   FileText,
   UserPlus,
+  Gift,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -1564,8 +1565,45 @@ export default function Home() {
           </div>,
           // 页2：留白
           <div key="p2" className="w-full h-full" />,
-          // 页3：留白
-          <div key="p3" className="w-full h-full" />,
+          // 页3：积分兑换商城
+          <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
+            {/* 顶部：积分余额 */}
+            <div className="flex items-center justify-between px-3 pt-2 pb-1.5 flex-shrink-0">
+              <div className="flex items-center space-x-1.5">
+                <Gift className="w-3.5 h-3.5 text-[#A80000]" />
+                <span className="text-xs font-semibold text-[#A80000]">积分商城</span>
+              </div>
+              <div className="flex items-center space-x-1 bg-red-50 rounded-full px-2.5 py-0.5">
+                <span className="text-xs text-gray-400">我的积分</span>
+                <span className="text-sm font-bold text-[#A80000]">2,450</span>
+                <span className="text-xs text-gray-400">分</span>
+              </div>
+            </div>
+            {/* 商品网格 */}
+            <div className="flex-1 overflow-y-auto px-3 pb-2">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { name: '星巴克券', points: 100, icon: '☕', tag: '热门' },
+                  { name: '电影票', points: 300, icon: '🎬', tag: '' },
+                  { name: '京东卡 50元', points: 500, icon: '🛒', tag: '新品' },
+                  { name: '10G 流量包', points: 200, icon: '📶', tag: '' },
+                ].map((item, i) => (
+                  <div key={i} className="bg-gray-50 rounded-xl p-2.5 flex flex-col items-center relative">
+                    {item.tag && (
+                      <span className="absolute top-1.5 right-1.5 text-white text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: '#A80000', lineHeight: 1.4 }}>{item.tag}</span>
+                    )}
+                    <span className="text-2xl mb-1">{item.icon}</span>
+                    <span className="text-xs text-gray-700 font-medium text-center leading-tight mb-1.5">{item.name}</span>
+                    <div className="flex items-center space-x-1 mb-2">
+                      <span className="text-[#A80000] font-bold text-xs">{item.points}</span>
+                      <span className="text-gray-400 text-[10px]">分</span>
+                    </div>
+                    <button className="w-full text-[10px] text-[#A80000] border border-[#A80000] rounded-full py-0.5 hover:bg-red-50 transition-colors">立即兑换</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>,
         ];
         const clonedPages = [socialPages[SOCIAL_PAGES - 1], ...socialPages, socialPages[0]];
         return (
