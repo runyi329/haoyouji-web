@@ -1213,7 +1213,7 @@ export default function Home() {
       // 候选日期：BJ 当天 + i 天的 UTC midnight
       const candidateBjUtcMidnight = todayBjUtcMidnight + i * 24 * 60 * 60 * 1000;
       const candidateBjDate = new Date(candidateBjUtcMidnight + BJ_OFFSET);
-      const ds = `${candidateBjDate.getUTCFullYear()}${String(candidateBjDate.getUTCMonth()+1).padStart(2,'0')}${String(candidateBjDate.getUTCDate()).padStart(2,'0')}`;
+      const ds = `${candidateBjDate.getUTCFullYear()}-${String(candidateBjDate.getUTCMonth()+1).padStart(2,'0')}-${String(candidateBjDate.getUTCDate()).padStart(2,'0')}`;
       const cd = candidateBjDate.getUTCDay();
       const cIsWeekend = cd === 0 || cd === 6;
       const cIsHoliday = A_SHARE_HOLIDAYS.has(ds);
