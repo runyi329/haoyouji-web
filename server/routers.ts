@@ -19851,28 +19851,72 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
-    /** 比特币实时行情 (Binance BTC/USDT) */
+    /** 比特币实时行情 (Gate.io 主用 → 火币备用 → OKX 备用) */
     getBtcPrice: publicProcedure.query(async () => {
       const cacheKey = 'global_btc';
       const cached = getCache(cacheKey);
       if (cached) return cached;
+      // 1. Gate.io 主用
       try {
-        // Binance 公开 API，无需 key
         const res = await fetch(
-          'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT',
+          'https://api.gateio.ws/api/v4/spot/tickers?currency_pair=BTC_USDT',
+          { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+        );
+        const data = await res.json() as any[];
+        if (Array.isArray(data) && data.length > 0) {
+          const t = data[0];
+          const price = parseFloat(t.last) || 0;
+          const prev = parseFloat(t.last) - parseFloat(t.change_absolute || '0');
+          const change = parseFloat(t.change_absolute || '0');
+          const changePercent = parseFloat(t.change_percentage || '0');
+          if (price > 0) {
+            const result = { price, prevClose: prev, change, changePercent, success: true };
+            setCache(cacheKey, result);
+            return result;
+          }
+        }
+      } catch (e) { /* 备用 */ }
+      // 2. 火币备用
+      try {
+        const res = await fetch(
+          'https://api.huobi.pro/market/detail/merged?symbol=btcusdt',
           { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
         );
         const data = await res.json() as any;
-        const price = parseFloat(data.lastPrice) || 0;
-        const prev = parseFloat(data.prevClosePrice) || 0;
-        const change = parseFloat(data.priceChange) || 0;
-        const changePercent = parseFloat(data.priceChangePercent) || 0;
-        const result = { price, prevClose: prev, change, changePercent, success: true };
-        setCache(cacheKey, result);
-        return result;
-      } catch (e) {
-        return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
-      }
+        if (data.status === 'ok' && data.tick) {
+          const t = data.tick;
+          const price = parseFloat(t.close) || 0;
+          const prev = parseFloat(t.open) || 0;
+          const change = price - prev;
+          const changePercent = prev > 0 ? (change / prev * 100) : 0;
+          if (price > 0) {
+            const result = { price, prevClose: prev, change, changePercent, success: true };
+            setCache(cacheKey, result);
+            return result;
+          }
+        }
+      } catch (e) { /* 备用 */ }
+      // 3. OKX 备用
+      try {
+        const res = await fetch(
+          'https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT',
+          { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+        );
+        const data = await res.json() as any;
+        if (data.code === '0' && data.data?.length > 0) {
+          const t = data.data[0];
+          const price = parseFloat(t.last) || 0;
+          const prev = parseFloat(t.open24h) || 0;
+          const change = price - prev;
+          const changePercent = prev > 0 ? (change / prev * 100) : 0;
+          if (price > 0) {
+            const result = { price, prevClose: prev, change, changePercent, success: true };
+            setCache(cacheKey, result);
+            return result;
+          }
+        }
+      } catch (e) { /* 失败 */ }
+      return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
     }),
     // ========== 港股全生命周期相关接口 ==========
     /** 港股全生命周期趋势折线图（hk_trend_cache）*/
