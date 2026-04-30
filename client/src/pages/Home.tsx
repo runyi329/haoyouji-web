@@ -1774,9 +1774,9 @@ export default function Home() {
                 style={{ width: 44, height: 44, overflow: 'hidden', position: 'relative' }}
               >
                 <div style={{
-                  width: 60,
-                  height: 60,
-                  transform: 'scale(0.733)',
+                  width: 30,
+                  height: 30,
+                  transform: 'scale(1.467)',
                   transformOrigin: 'top left',
                   position: 'absolute',
                   top: 0,
