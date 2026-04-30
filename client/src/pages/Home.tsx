@@ -1542,23 +1542,19 @@ export default function Home() {
       `}</style>
 
       {/* ═══════════════════════════════════════════ */}
-      {/* 上半区：AI 社交（多页滑动）*/}
+      {/* 上半区：AI 社交（静态）*/}
       {/* ═══════════════════════════════════════════ */}
-      {/* AI 社交轮播内容 */}
-      {(() => {
-        const realDotIndex = ((socialPageIndex - 1 + SOCIAL_PAGES) % SOCIAL_PAGES);
-        const socialPages = [
-          // 页1：功能入口
-          <div key="p1" className="w-full h-full flex flex-col px-3 py-2">
+      {/* AI 社交静态内容 */}
+      <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
+        <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
+          <div className="w-full h-full flex flex-col px-3 py-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
-              <div className="flex items-center space-x-2">
-                <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
-                  <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
-                    <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
-                  </div>
-                  <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
+              <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
+                <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
+                  <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
                 </div>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
               </div>
             </div>
             <div className="flex-1 flex items-center justify-center">
@@ -1571,94 +1567,12 @@ export default function Home() {
                 <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.65rem' }}>标签管理与分析</span>
               </div>
             </div>
-          </div>,
-          // 页2：留白
-          <div key="p2" className="w-full h-full" />,
-          // 页3：留白
-          <div key="p3" className="w-full h-full" />,
-        ];
-
-        // 克隆首尾：[页3(克隆), 页1, 页2, 页3, 页1(克隆)]
-        const clonedPages = [socialPages[SOCIAL_PAGES - 1], ...socialPages, socialPages[0]];
-
-        return (
-          <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
-            <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
-              {/* 滑动区域 */}
-              <div
-                ref={socialContainerRef}
-                className="flex-1 overflow-hidden"
-                style={{ touchAction: 'pan-y' }}
-                onTouchStart={e => {
-                  socialTouchStartX.current = e.touches[0].clientX;
-                  socialTouchStartY.current = e.touches[0].clientY;
-                  if (socialAutoTimer.current) clearInterval(socialAutoTimer.current);
-                }}
-                onTouchEnd={e => {
-                  const dx = e.changedTouches[0].clientX - socialTouchStartX.current;
-                  const dy = e.changedTouches[0].clientY - socialTouchStartY.current;
-                  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
-                    if (!socialIsTransitioning.current) {
-                      setSocialTransition(true);
-                      if (dx < 0) setSocialPageIndex(prev => prev + 1);
-                      if (dx > 0) setSocialPageIndex(prev => prev - 1);
-                    }
-                  }
-                  // 重启自动轮播
-                  socialAutoTimer.current = setInterval(() => {
-                    if (!socialIsTransitioning.current) {
-                      setSocialTransition(true);
-                      setSocialPageIndex(prev => prev + 1);
-                    }
-                  }, 5000);
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    height: '100%',
-                    transform: `translateX(${socialPageIndex * -(socialWidth || 0)}px)`,
-                    transition: socialTransition ? 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' : 'none',
-                    willChange: 'transform',
-                  }}
-                >
-                  {clonedPages.map((page, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        minWidth: socialWidth > 0 ? `${socialWidth}px` : '100%',
-                        maxWidth: socialWidth > 0 ? `${socialWidth}px` : '100%',
-                        height: '100%',
-                        boxSizing: 'border-box',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {page}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {/* 圆点指示器 */}
-              <div className="flex justify-center items-center space-x-1.5 py-1.5 flex-shrink-0">
-                {Array.from({ length: SOCIAL_PAGES }).map((_, i) => (
-                  <div
-                    key={i}
-                    onClick={() => { setSocialTransition(true); setSocialPageIndex(i + 1); }}
-                    style={{
-                      width: realDotIndex === i ? '14px' : '6px',
-                      height: '6px',
-                      borderRadius: '3px',
-                      background: realDotIndex === i ? '#A80000' : 'rgba(168,0,0,0.25)',
-                      transition: 'all 0.3s ease',
-                      cursor: 'pointer',
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
           </div>
-        );
-      })()}
+        </div>
+      </div>
+
+      {/* 以下为旧的轮播代码，已禁用 - 开始 */}
+
 
       {/* ═══════════════════════════════════════════ */}
       {/* 下半区：左 AI 人脉 + 右 AI 錢脉 */}
