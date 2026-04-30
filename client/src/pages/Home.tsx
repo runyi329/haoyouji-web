@@ -772,14 +772,56 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   );
   const DxyIcon = () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-      <circle cx="7" cy="7" r="7" fill="#1a3a6e"/>
-      <text x="7" y="7" textAnchor="middle" dominantBaseline="central" fontSize="8" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">$</text>
+      <defs>
+        <radialGradient id="dxyBgGrad" cx="38%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#2a5aad"/>
+          <stop offset="60%" stopColor="#1a3a6e"/>
+          <stop offset="100%" stopColor="#0d1f3c"/>
+        </radialGradient>
+        <radialGradient id="dxyHighlight" cx="35%" cy="22%" r="45%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.45)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </radialGradient>
+      </defs>
+      <circle cx="7" cy="7" r="7" fill="url(#dxyBgGrad)"/>
+      <circle cx="7" cy="7" r="7" fill="url(#dxyHighlight)"/>
+      <text x="7" y="7" textAnchor="middle" dominantBaseline="central" fontSize="8" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif" style={{ filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.5))' }}>$</text>
     </svg>
   );
   const CnhIcon = () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
-      <rect width="14" height="14" rx="7" fill="#CC0001"/>
-      <text x="7" y="7" textAnchor="middle" dominantBaseline="central" fontSize="7.5" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">¥</text>
+      <defs>
+        <radialGradient id="cnhBgGrad" cx="38%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#e82020"/>
+          <stop offset="60%" stopColor="#cc0001"/>
+          <stop offset="100%" stopColor="#7a0000"/>
+        </radialGradient>
+        <radialGradient id="cnhHighlight" cx="35%" cy="22%" r="45%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.45)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </radialGradient>
+      </defs>
+      <rect width="14" height="14" rx="7" fill="url(#cnhBgGrad)"/>
+      <rect width="14" height="14" rx="7" fill="url(#cnhHighlight)"/>
+      <text x="7" y="7" textAnchor="middle" dominantBaseline="central" fontSize="7.5" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif" style={{ filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.5))' }}>¥</text>
+    </svg>
+  );
+  const BtcIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+      <defs>
+        <radialGradient id="btcBgGrad" cx="38%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#ff9500"/>
+          <stop offset="55%" stopColor="#f7931a"/>
+          <stop offset="100%" stopColor="#c05000"/>
+        </radialGradient>
+        <radialGradient id="btcHighlight" cx="35%" cy="22%" r="45%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.50)"/>
+          <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+        </radialGradient>
+      </defs>
+      <circle cx="7" cy="7" r="7" fill="url(#btcBgGrad)"/>
+      <circle cx="7" cy="7" r="7" fill="url(#btcHighlight)"/>
+      <text x="7.2" y="7" textAnchor="middle" dominantBaseline="central" fontSize="7.5" fontWeight="bold" fill="white" fontFamily="Arial,sans-serif" style={{ filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.4))' }}>₿</text>
     </svg>
   );
   const OilIcon = () => (
@@ -818,7 +860,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
       iconType: 'svg' as const, IconComp: CnhIcon },
     { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',
       decimals: (btcPrice?.success && (btcPrice.price ?? 0) >= 100000) ? 0 : 1,
-      iconType: 'img' as const, iconUrl: `${CDN_ICONS}/btc_732a725a.png` },
+      iconType: 'svg' as const, IconComp: BtcIcon },
   ];
 
   return (
