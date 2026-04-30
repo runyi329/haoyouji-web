@@ -1656,7 +1656,11 @@ export default function Home() {
                     } catch {}
                     const isRedeeming = redeemRewardMutation.isPending;
                     return (
-                      <div key={item.id} className="bg-gray-50 rounded-xl p-2.5 flex flex-col items-center relative">
+                      <div
+                        key={item.id}
+                        className="bg-gray-50 rounded-xl p-2.5 flex flex-col items-center relative cursor-pointer active:bg-gray-100 transition-colors"
+                        onClick={() => navigate(`/products/${item.id}`)}
+                      >
                         {tag && (
                           <span className="absolute top-1.5 right-1.5 text-white text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: '#A80000', lineHeight: 1.4 }}>{tag}</span>
                         )}
@@ -1674,22 +1678,10 @@ export default function Home() {
                         </div>
                         <button
                           disabled={isRedeeming}
-                          onClick={() => requireLogin(() => {
-                            const userPts = userPointsData?.points ?? 0;
-                            if (userPts < pointsCost) {
-                              // 积分不足：友好提示，不拦截查看
-                              toast(`「${item.name}」`, {
-                                description: `积分还差 ${(pointsCost - userPts).toLocaleString()} 分，继续积累后可兑换`,
-                                duration: 3000,
-                              });
-                              return;
-                            }
-                            // 积分充足：提示前往兑换
-                            toast(`请前往商品详情页兑换「${item.name}」`, {
-                              description: `需要 ${pointsCost.toLocaleString()} 积分`,
-                              duration: 3000,
-                            });
-                          })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/products/${item.id}`);
+                          }}
                           className="w-full text-[10px] text-[#A80000] border border-[#A80000] rounded-full py-0.5 hover:bg-red-50 transition-colors disabled:opacity-50"
                         >立即兑换</button>
                       </div>
