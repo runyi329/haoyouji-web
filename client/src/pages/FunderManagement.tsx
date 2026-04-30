@@ -248,7 +248,7 @@ export default function FunderManagement() {
   const previewPaidInterestData = editingOrder?.participantInfo
     ? { orderId: 0, total: 0, currency: 'U' }
     : (editingOrderId && Array.isArray(editingPaidSummary)
-        ? (editingPaidSummary.find((r: any) => r.orderId === editingOrderId) ?? { orderId: 0, total: 0, currency: 'U' })
+        ? (editingPaidSummary.find((r: any) => Number(r.orderId) === Number(editingOrderId)) ?? { orderId: 0, total: 0, currency: 'U' })
         : { orderId: 0, total: 0, currency: 'U' });
   const previewPaidInterest = (previewPaidInterestData as any).total ?? 0;
   const previewPaidInterestCurrency: string = (previewPaidInterestData as any).currency || 'U';
