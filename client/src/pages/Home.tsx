@@ -767,19 +767,19 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
           <stop offset="100%" stopColor="#8B6914"/>
         </radialGradient>
       </defs>
-      <text x="7" y="10" textAnchor="middle" fontSize="7" fontWeight="bold" fill="#fff" fontFamily="serif">Au</text>
+      <text x="7" y="7" textAnchor="middle" dominantBaseline="central" fontSize="7" fontWeight="bold" fill="#fff" fontFamily="serif">Au</text>
     </svg>
   );
   const DxyIcon = () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
       <circle cx="7" cy="7" r="7" fill="#1a3a6e"/>
-      <text x="7" y="10.5" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">$</text>
+      <text x="7" y="7" textAnchor="middle" dominantBaseline="central" fontSize="8" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">$</text>
     </svg>
   );
   const CnhIcon = () => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
       <rect width="14" height="14" rx="7" fill="#CC0001"/>
-      <text x="7" y="10.5" textAnchor="middle" fontSize="7.5" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">¥</text>
+      <text x="7" y="7" textAnchor="middle" dominantBaseline="central" fontSize="7.5" fontWeight="bold" fill="#FFD700" fontFamily="Arial,sans-serif">¥</text>
     </svg>
   );
   const items = [
