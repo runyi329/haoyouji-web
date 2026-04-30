@@ -766,7 +766,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
               <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
                 {globalMarketStatus === 'open' ? (
                   <>
-                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#333333' }}>开市中</div>
                     {item.data?.success && (
                       <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
                         color: (item.data.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
@@ -776,7 +776,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
                     )}
                   </>
                 ) : (
-                  <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                  <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
                     休市中，离开市
                     {globalCountdown && (
                       <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -1640,7 +1640,7 @@ export default function Home() {
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的A股</span>
+                  <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的A股</span>
                 </div>
                 <div className="flex items-baseline">
                   {!shanghaiIndex?.success ? (
@@ -1652,7 +1652,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
                   {marketStatus === 'open' ? (
                     <>
-                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#333333' }}>开市中</div>
                       {shanghaiIndex?.success && (
                         <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
                           color: (shanghaiIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
@@ -1662,7 +1662,7 @@ export default function Home() {
                       )}
                     </>
                   ) : (
-                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
                       {marketStatus === 'lunch' ? '午休中' : '休市中'}，离开市
                       {countdown && (
                         <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -1687,7 +1687,7 @@ export default function Home() {
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的港股</span>
+                  <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的港股</span>
                 </div>
                 <div className="flex items-baseline">
                   {!hangSengIndex?.success ? (
@@ -1699,17 +1699,15 @@ export default function Home() {
                 <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
                   {hkMarketStatus === 'open' ? (
                     <>
-                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#333333' }}>开市中</div>
                       {hangSengIndex?.success && (
                         <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
                           color: (hangSengIndex.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
                           {(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.change ?? 0).toFixed(2)}
                           ({(hangSengIndex.change ?? 0) >= 0 ? '+' : ''}{(hangSengIndex.changePercent ?? 0).toFixed(2)}%)
                         </span>
-                      )}
-                    </>
-                  ) : (
-                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                      ) : (
+                  <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
                       {hkMarketStatus === 'lunch' ? '午休中' : '休市中'}，离开市
                       {hkCountdown && (
                         <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -1735,7 +1733,7 @@ export default function Home() {
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>我的美股</span>
+                  <span className="text-xs font-semibold" style={{ color: '#333333', letterSpacing: '0.05em' }}>我的美股</span>
                 </div>
                 <div className="flex items-baseline">
                   {!sp500Index?.success ? (
@@ -1747,7 +1745,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mt-1" style={{ gap: '4px' }}>
                   {usMarketStatus === 'open' ? (
                     <>
-                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#A80000' }}>开市中</div>
+                      <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#333333' }}>开市中</div>
                       {sp500Index?.success && (
                         <span style={{ fontSize: '0.65rem', fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
                           color: (sp500Index.change ?? 0) >= 0 ? '#A80000' : '#16a34a' }}>
@@ -1757,7 +1755,7 @@ export default function Home() {
                       )}
                     </>
                   ) : (
-                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#888' }}>
+                    <div style={{ fontSize: '0.6rem', flexShrink: 0, whiteSpace: 'nowrap', color: '#555' }}>
                       休市中，离开市
                       {usCountdown && (
                         <span style={{ marginLeft: '3px', color: '#B8860B', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
