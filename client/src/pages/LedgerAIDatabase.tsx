@@ -1569,27 +1569,30 @@ function TradingCostSection() {
           </p>
         }
       />
-      <div className="px-4 space-y-3">
+      <div className="px-4">
+        {/* 整体容器 */}
+        <div className="rounded-xl p-4 space-y-3" style={{ background: CARD, border: `1px solid ${BORDER}`, boxShadow: CARD_SHADOW }}>
+
         {/* 摘要卡片 */}
         <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+          <div className="rounded-lg p-3" style={{ background: BG }}>
             <p className="text-[12px] mb-1" style={{ color: MUTED }}>2025年印花税</p>
             <p className="text-lg font-bold" style={{ color: RED }}>{latest.stamp.toLocaleString()}亿</p>
             <p className="text-[12px]" style={{ color: stampChg >= 0 ? RED : GREEN }}>
               {stampChg >= 0 ? "▲" : "▼"}{Math.abs(stampChg).toFixed(0)}亿 vs 2024
             </p>
           </div>
-          <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+          <div className="rounded-lg p-3" style={{ background: BG }}>
             <p className="text-[12px] mb-1" style={{ color: MUTED }}>2025年总税费</p>
             <p className="text-lg font-bold" style={{ color: "#F57C00" }}>{latest.total.toLocaleString()}亿</p>
             <p className="text-[12px]" style={{ color: DIM }}>成交额 {(latest.turnover/10000).toFixed(0)}万亿</p>
           </div>
-          <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+          <div className="rounded-lg p-3" style={{ background: BG }}>
             <p className="text-[12px] mb-1" style={{ color: MUTED }}>2025年券商佣金</p>
             <p className="text-lg font-bold" style={{ color: "#1976D2" }}>{latest.commission.toLocaleString()}亿</p>
             <p className="text-[12px]" style={{ color: DIM }}>历史峰值 2015年 4081亿</p>
           </div>
-          <div className="rounded-xl p-3" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+          <div className="rounded-lg p-3" style={{ background: BG }}>
             <p className="text-[12px] mb-1" style={{ color: MUTED }}>2025年综合费率</p>
             <p className="text-lg font-bold" style={{ color: "#7B1FA2" }}>
               {(latest.total / latest.turnover * 1000).toFixed(2)}‰
@@ -1613,8 +1616,8 @@ function TradingCostSection() {
           ))}
         </div>
 
-        {/* 图表卡片 */}
-        <div className="rounded-xl p-4" style={{ background: CARD, border: `1px solid ${BORDER}` }}>
+        {/* 图表区域（无额外卡片，直接在容器内） */}
+        <div>
 
           {/* Tab1：印花税历年收入 */}
           {subTab === "stamp" && (
@@ -1747,6 +1750,7 @@ function TradingCostSection() {
             </>
           )}
         </div>
+        </div>{/* end 整体容器 */}
       </div>
     </div>
   );
