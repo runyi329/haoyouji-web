@@ -1706,6 +1706,9 @@ export default function Home() {
           </div>,
           // 页2：蓄水池动画
           <div key="p2" className="w-full h-full flex flex-col items-center justify-center">
+            <div className="text-center mb-2">
+              <span className="text-white text-lg font-bold tracking-widest drop-shadow-md">蓄水池</span>
+            </div>
             <XushuchiLottie />
           </div>,
           // 页3：积分兑换商城
