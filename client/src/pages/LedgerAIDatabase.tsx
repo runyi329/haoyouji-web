@@ -1536,6 +1536,11 @@ const TRADING_COST_DATA = [
 const BULL_YEARS = new Set([2007, 2015, 2020, 2021, 2022, 2025]);
 
 // 交易成本进度条行组件
+// 参照全生命周期 EraBarChart 布局：年份靠左，行高紧凑，无多余间距
+const TC_LABEL_W = 32; // 左侧年份标签宽度（px），与 EraBarChart 一致
+const TC_ROW_H = 14;   // 每行总高度（px）
+const TC_BAR_H = 11;   // 条形高度（px）
+
 function TradingCostBar({
   label, value, maxValue, color, delay = 0, animated, formatValue
 }: {
@@ -1548,26 +1553,58 @@ function TradingCostBar({
   formatValue: (v: number) => string;
 }) {
   const pctWidth = maxValue > 0 ? (value / maxValue) * 100 : 0;
+  const nearEnd = pctWidth > 82;
   return (
-    <div className="flex items-center gap-2 mb-1.5">
-      <span className="text-[10px] w-8 text-right flex-shrink-0" style={{ color: MUTED }}>{label}</span>
-      <div className="flex-1 relative h-5 rounded-r-full overflow-hidden" style={{ background: "#F0EBE4" }}>
+    <div className="flex items-center" style={{ height: TC_ROW_H, marginBottom: 0 }}>
+      {/* 年份标签：靠左固定宽度，右对齐，参照 EraBarChart */}
+      <div
+        className="flex-shrink-0 text-right pr-1.5"
+        style={{ width: TC_LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${TC_ROW_H}px` }}
+      >
+        {label}
+      </div>
+      {/* 条形轨道 */}
+      <div
+        className="relative flex-1"
+        style={{ height: TC_BAR_H, borderRadius: 2, background: '#E8E0D8' }}
+      >
+        {/* 动效条形 */}
         <div
-          className="absolute top-0 left-0 h-full rounded-r-full flex items-center justify-end pr-1.5"
           style={{
-            width: animated ? `${Math.max(pctWidth, 1)}%` : "0%",
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            height: '100%',
+            width: animated ? `${Math.max(pctWidth, 0.5)}%` : '0%',
             background: color,
+            borderRadius: '2px 3px 3px 2px',
             transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
-            boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)",
+            boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)',
+          }}
+        />
+        {/* 数值标签：跟随条形右端，参照 EraBarChart 内置白字 */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            right: `${100 - Math.max(pctWidth, 0.5)}%`,
+            paddingRight: nearEnd ? 3 : 0,
+            paddingLeft: nearEnd ? 0 : 3,
+            color: nearEnd ? '#fff' : MUTED,
+            textShadow: nearEnd ? '0 1px 2px rgba(0,0,0,0.35)' : 'none',
+            fontSize: 8,
+            fontWeight: 700,
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
+            fontVariantNumeric: 'tabular-nums',
+            transition: `right 0.75s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
+            pointerEvents: 'none',
+            opacity: pctWidth < 3 ? 0 : 1,
           }}
         >
-          {pctWidth > 18 && (
-            <span className="text-[9px] font-semibold text-white drop-shadow">{formatValue(value)}</span>
-          )}
+          {formatValue(value)}
         </div>
-        {pctWidth <= 18 && value > 0 && (
-          <span className="absolute left-[calc(var(--bar-w)+2px)] top-1/2 -translate-y-1/2 text-[9px]" style={{ color: MUTED, left: `${Math.max(pctWidth, 1)}%`, paddingLeft: 4 }}>{formatValue(value)}</span>
-        )}
       </div>
     </div>
   );
@@ -1745,35 +1782,38 @@ function TradingCostSection() {
                   { value: d.supervision,color: "#795548" },
                 ];
                 const totalVal = segments.reduce((s, x) => s + x.value, 0);
+                const pctW = (totalVal / maxTotal) * 100;
                 return (
-                  <div key={d.year} className="flex items-center gap-2 mb-1.5">
-                    <span className="text-[10px] w-8 text-right flex-shrink-0" style={{ color: MUTED }}>{d.year}</span>
-                    <div className="flex-1 relative h-5 rounded-r-full overflow-hidden" style={{ background: "#F0EBE4" }}>
+                  <div key={d.year} className="flex items-center" style={{ height: TC_ROW_H, marginBottom: 0 }}>
+                    <div className="flex-shrink-0 text-right pr-1.5" style={{ width: TC_LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${TC_ROW_H}px` }}>{d.year}</div>
+                    <div className="relative flex-1" style={{ height: TC_BAR_H, borderRadius: 2, background: '#E8E0D8' }}>
                       <div
-                        className="absolute top-0 left-0 h-full flex overflow-hidden rounded-r-full"
+                        className="absolute top-0 left-0 h-full flex overflow-hidden"
                         style={{
-                          width: animated ? `${(totalVal / maxTotal) * 100}%` : "0%",
+                          width: animated ? `${pctW}%` : "0%",
+                          borderRadius: '2px 3px 3px 2px',
                           transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 18}ms`,
                         }}
                       >
                         {segments.map((seg, si) => (
-                          <div
-                            key={si}
-                            style={{
-                              width: `${(seg.value / totalVal) * 100}%`,
-                              background: seg.color,
-                              opacity: 0.88,
-                            }}
-                          />
+                          <div key={si} style={{ width: `${(seg.value / totalVal) * 100}%`, background: seg.color, opacity: 0.88 }} />
                         ))}
                       </div>
                       {totalVal > 0 && (
-                        <span
-                          className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] font-semibold"
-                          style={{ color: animated ? MUTED : "transparent", transition: `color 0.3s ease ${i * 18 + 600}ms` }}
+                        <div
+                          style={{
+                            position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+                            right: `${100 - Math.max(pctW, 0.5)}%`,
+                            paddingLeft: 3, fontSize: 8, fontWeight: 700, whiteSpace: 'nowrap',
+                            color: pctW > 82 ? '#fff' : MUTED,
+                            textShadow: pctW > 82 ? '0 1px 2px rgba(0,0,0,0.35)' : 'none',
+                            opacity: animated && pctW > 3 ? 1 : 0,
+                            transition: `right 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 18}ms, opacity 0.3s ease ${i * 18 + 500}ms`,
+                            pointerEvents: 'none',
+                          }}
                         >
                           {totalVal >= 1000 ? `${(totalVal/1000).toFixed(1)}k` : totalVal.toFixed(0)}亿
-                        </span>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1799,32 +1839,39 @@ function TradingCostSection() {
               </div>
               {[...ratioData].reverse().map((d, i) => {
                 const maxRatio = Math.max(...ratioData.map(x => x.totalRatio));
+                const bars = [
+                  { val: d.totalRatio, color: "#43A047", label: `${d.totalRatio}‰` },
+                  { val: d.stampRatio, color: RED,       label: `${d.stampRatio}‰` },
+                  { val: d.commRatio,  color: "#1976D2", label: `${d.commRatio}‰` },
+                ];
                 return (
-                  <div key={d.year} className="mb-2">
-                    <span className="text-[10px]" style={{ color: MUTED }}>{d.year}</span>
-                    <div className="flex flex-col gap-0.5 mt-0.5">
-                      {[
-                        { val: d.totalRatio, color: "#43A047", label: `${d.totalRatio}‰` },
-                        { val: d.stampRatio, color: RED,       label: `${d.stampRatio}‰` },
-                        { val: d.commRatio,  color: "#1976D2", label: `${d.commRatio}‰` },
-                      ].map((bar, bi) => (
-                        <div key={bi} className="flex items-center gap-1">
-                          <div className="flex-1 relative h-3 rounded-r-full overflow-hidden" style={{ background: "#F0EBE4" }}>
-                            <div
-                              className="absolute top-0 left-0 h-full rounded-r-full"
-                              style={{
-                                width: animated ? `${(bar.val / maxRatio) * 100}%` : "0%",
-                                background: bar.color,
-                                opacity: 0.85,
-                                transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 25 + bi * 80}ms`,
-                                boxShadow: "inset 0 -1px 3px rgba(0,0,0,0.12)",
-                              }}
-                            />
-                          </div>
-                          <span className="text-[9px] w-10 flex-shrink-0" style={{ color: MUTED }}>{bar.label}</span>
+                  <div key={d.year}>
+                    {bars.map((bar, bi) => (
+                      <div key={bi} className="flex items-center" style={{ height: 12, marginBottom: 0 }}>
+                        {/* 年份标签：只在每年第1条显示，其余用空白占位 */}
+                        <div
+                          className="flex-shrink-0 text-right pr-1.5"
+                          style={{ width: TC_LABEL_W, fontSize: 9, color: bi === 0 ? MUTED : 'transparent', lineHeight: '12px' }}
+                        >
+                          {d.year}
                         </div>
-                      ))}
-                    </div>
+                        <div className="relative flex-1" style={{ height: 9, borderRadius: 2, background: '#E8E0D8' }}>
+                          <div
+                            style={{
+                              position: 'absolute', top: 0, left: 0, height: '100%',
+                              width: animated ? `${(bar.val / maxRatio) * 100}%` : '0%',
+                              background: bar.color,
+                              opacity: 0.85,
+                              borderRadius: '2px 3px 3px 2px',
+                              transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 25 + bi * 80}ms`,
+                              boxShadow: 'inset 0 -1px 3px rgba(0,0,0,0.12)',
+                            }}
+                          />
+                        </div>
+                        <span className="text-[8px] flex-shrink-0" style={{ width: 32, paddingLeft: 3, color: MUTED }}>{bar.label}</span>
+                      </div>
+                    ))}
+                    <div style={{ height: 3 }} />{/* 年份间小间距 */}
                   </div>
                 );
               })}
