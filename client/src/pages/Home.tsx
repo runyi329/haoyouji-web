@@ -1779,7 +1779,7 @@ export default function Home() {
                     transform: 'scale(0.07)',
                     transformOrigin: 'bottom left',
                     position: 'absolute',
-                    bottom: 0,
+                    bottom: -3,
                     left: 0,
                   }}>
                     <WalletLottie />
