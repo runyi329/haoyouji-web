@@ -6056,15 +6056,20 @@ export default function LedgerDetail() {
                 >
                   <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
                   <div className="flex-1 text-left">
-                    <div className="text-sm font-medium text-gray-900">
-                      {m.nickname && m.nickname !== m.username ? m.nickname : (m.username || '未知用户')}
-                    </div>
+                    {/* 昵称和账号相同时只显示一次，不同时分两行 */}
+                    {m.nickname && m.username && m.nickname === m.username ? (
+                      <div className="text-sm font-medium text-gray-900">{m.nickname}</div>
+                    ) : (
+                      <>
+                        <div className="text-sm font-medium text-gray-900">{m.nickname || m.username || '未知用户'}</div>
+                        {m.username && (
+                          <div className="text-xs text-blue-500">@{m.username}</div>
+                        )}
+                      </>
+                    )}
                     <div className="text-xs text-gray-500 space-y-0.5">
                       <div>
                         {m.role === 'owner' ? '创始人' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资金方' : '普通成员'}
-                        {m.nickname && m.nickname !== m.username && m.username && (
-                          <span className="ml-1.5 text-gray-400">@{m.username}</span>
-                        )}
                       </div>
                       <div className="text-gray-400">ID: {m.userId}</div>
                     </div>
