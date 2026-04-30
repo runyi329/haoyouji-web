@@ -1582,29 +1582,52 @@ function TradingCostBar({
             boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)',
           }}
         />
-        {/* 数值标签：跟随条形右端，参照 EraBarChart 内置白字 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            right: `${100 - Math.max(pctWidth, 0.5)}%`,
-            paddingRight: nearEnd ? 3 : 0,
-            paddingLeft: nearEnd ? 0 : 3,
-            color: nearEnd ? '#fff' : MUTED,
-            textShadow: nearEnd ? '0 1px 2px rgba(0,0,0,0.35)' : 'none',
-            fontSize: 8,
-            fontWeight: 700,
-            lineHeight: 1,
-            whiteSpace: 'nowrap',
-            fontVariantNumeric: 'tabular-nums',
-            transition: `right 0.75s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
-            pointerEvents: 'none',
-            opacity: pctWidth < 3 ? 0 : 1,
-          }}
-        >
-          {formatValue(value)}
-        </div>
+        {/* 数值标签：条形内白色（条形足够长），条形外深色显示在右侧（条形短） */}
+        {pctWidth >= 20 ? (
+          // 条形足够长：白色数字内置在条形内靠右
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              right: `${100 - Math.max(pctWidth, 0.5)}%`,
+              paddingRight: 4,
+              color: '#fff',
+              textShadow: '0 1px 2px rgba(0,0,0,0.4)',
+              fontSize: 8,
+              fontWeight: 700,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+              fontVariantNumeric: 'tabular-nums',
+              transition: `right 0.75s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
+              pointerEvents: 'none',
+            }}
+          >
+            {formatValue(value)}
+          </div>
+        ) : pctWidth >= 1 ? (
+          // 条形太短：深色数字显示在条形右侧
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              left: `${Math.max(pctWidth, 0.5)}%`,
+              paddingLeft: 3,
+              color: TEXT,
+              fontSize: 8,
+              fontWeight: 600,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+              fontVariantNumeric: 'tabular-nums',
+              transition: `left 0.75s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
+              pointerEvents: 'none',
+              opacity: animated ? 1 : 0,
+            }}
+          >
+            {formatValue(value)}
+          </div>
+        ) : null}
       </div>
     </div>
   );
