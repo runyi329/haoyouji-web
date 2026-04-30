@@ -1572,52 +1572,10 @@ export default function Home() {
               </div>
             </div>
           </div>,
-          // 页2：人脉数据统计
-          <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
-            <div className="flex items-center mb-2">
-              <span className="text-xs font-semibold text-[#A80000] tracking-wide">人脉数据</span>
-            </div>
-            <div className="flex-1 grid grid-cols-2 gap-2">
-              {[
-                { label: '月活跃', value: overviewStats?.monthlyActiveCount ?? '-', unit: '人' },
-                { label: '需关注', value: overviewStats?.needsAttentionCount ?? '-', unit: '人' },
-                { label: '日均联络', value: overviewStats?.dailyContactFrequency ?? '-', unit: '次' },
-                { label: '平均标签', value: overviewStats?.averageTagCount ?? '-', unit: '个' },
-              ].map((item, i) => (
-                <div key={i} className="bg-red-50 rounded-xl px-3 py-2 flex flex-col justify-center">
-                  <span className="text-gray-400" style={{ fontSize: '0.6rem' }}>{item.label}</span>
-                  <div className="flex items-baseline space-x-0.5 mt-0.5">
-                    <span className="text-base font-bold text-[#A80000]">{item.value}</span>
-                    <span className="text-gray-400" style={{ fontSize: '0.6rem' }}>{item.unit}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>,
-          // 页3：资产与邀请
-          <div key="p3" className="w-full h-full flex flex-col px-3 py-2">
-            <div className="flex items-center mb-2">
-              <span className="text-xs font-semibold text-[#A80000] tracking-wide">我的资产</span>
-            </div>
-            <div className="flex-1 grid grid-cols-2 gap-3">
-              <div
-                onClick={() => navigate('/parent/asset-report')}
-                className="bg-red-50 rounded-2xl px-3 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-red-100 transition-colors border border-red-100"
-              >
-                <Coins className="w-7 h-7 text-[#A80000] mb-1.5" />
-                <span className="text-sm text-[#A80000] font-semibold">资产报告</span>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.6rem' }}>查看资产详情</span>
-              </div>
-              <div
-                onClick={() => navigate('/parent/contacts/list')}
-                className="bg-red-50 rounded-2xl px-3 py-3 flex flex-col items-center justify-center cursor-pointer hover:bg-red-100 transition-colors border border-red-100"
-              >
-                <UserPlus className="w-7 h-7 text-[#A80000] mb-1.5" />
-                <span className="text-sm text-[#A80000] font-semibold">邀请好友</span>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.6rem' }}>共享人脉资源</span>
-              </div>
-            </div>
-          </div>,
+          // 页2：留白
+          <div key="p2" className="w-full h-full" />,
+          // 页3：留白
+          <div key="p3" className="w-full h-full" />,
         ];
 
         // 克隆首尾：[页3(克隆), 页1, 页2, 页3, 页1(克隆)]
