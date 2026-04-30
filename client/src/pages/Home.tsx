@@ -708,14 +708,14 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
 
   return (
     <div className="mx-3 flex-shrink-0" style={{ borderRadius: '12px', position: 'relative', marginTop: '2px',
-      border: '1.5px solid #8B6914',
-      boxShadow: '0 4px 14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,220,100,0.35), inset 0 -1px 0 rgba(80,50,0,0.4)',
-      background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px), linear-gradient(160deg, #C8A84B 0%, #A8882E 20%, #BFA040 40%, #9A7A20 60%, #B89838 80%, #C8A84B 100%)' }}>
+      border: '1.5px solid rgba(180,185,195,0.8)',
+      boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(140,145,155,0.5)',
+      background: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 2px), linear-gradient(160deg, #e2e4e8 0%, #c8cace 20%, #d8dadd 40%, #bfc1c6 60%, #d2d4d8 80%, #e0e2e6 100%)' }}>
       {/* 四角铆钉 */}
-      {[{top:'5px',left:'5px'},{top:'5px',right:'5px'},{bottom:'5px',left:'5px'},{bottom:'5px',right:'5px'}].map((pos, i) => (
-        <div key={i} style={{ position:'absolute', width:'7px', height:'7px', borderRadius:'50%', zIndex:10, ...pos,
-          background: 'radial-gradient(circle at 35% 35%, #F5D78E 0%, #C9A84C 40%, #8B6914 70%, #5C4010 100%)',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,220,100,0.5)' }} />
+      {[{top:'4px',left:'20px'},{top:'4px',right:'5px'},{bottom:'4px',left:'5px'},{bottom:'4px',right:'5px'}].map((pos, i) => (
+        <div key={i} style={{ position:'absolute', width:'5px', height:'5px', borderRadius:'50%', zIndex:10, ...pos,
+          background: 'radial-gradient(circle at 35% 35%, #ffffff 0%, #d8dadd 35%, #a0a4aa 65%, #707478 100%)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)' }} />
       ))}
       {/* 可滑动卡片区域 */}
       <div
@@ -1594,9 +1594,9 @@ export default function Home() {
               touchAction: 'pan-y',
               position: 'relative',
               borderRadius: '12px',
-              border: '1.5px solid #8B6914',
-              boxShadow: '0 4px 14px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,220,100,0.35), inset 0 -1px 0 rgba(80,50,0,0.4)',
-              background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px, transparent 1px, transparent 3px), linear-gradient(160deg, #C8A84B 0%, #A8882E 20%, #BFA040 40%, #9A7A20 60%, #B89838 80%, #C8A84B 100%)',
+              border: '1.5px solid rgba(180,185,195,0.8)',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(140,145,155,0.5)',
+              background: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 2px), linear-gradient(160deg, #e2e4e8 0%, #c8cace 20%, #d8dadd 40%, #bfc1c6 60%, #d2d4d8 80%, #e0e2e6 100%)',
               overflow: 'hidden',
               marginBottom: '6px',
             }}
@@ -1614,10 +1614,10 @@ export default function Home() {
             }}
           >
             {/* 四角铆钉 */}
-            {[{top:'5px',left:'5px'},{top:'5px',right:'5px'},{bottom:'5px',left:'5px'},{bottom:'5px',right:'5px'}].map((pos, i) => (
-              <div key={i} style={{ position:'absolute', width:'7px', height:'7px', borderRadius:'50%', zIndex:10, ...pos,
-                background: 'radial-gradient(circle at 35% 35%, #F5D78E 0%, #C9A84C 40%, #8B6914 70%, #5C4010 100%)',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,220,100,0.5)' }} />
+            {[{top:'4px',left:'20px'},{top:'4px',right:'5px'},{bottom:'4px',left:'5px'},{bottom:'4px',right:'5px'}].map((pos, i) => (
+              <div key={i} style={{ position:'absolute', width:'5px', height:'5px', borderRadius:'50%', zIndex:10, ...pos,
+                background: 'radial-gradient(circle at 35% 35%, #ffffff 0%, #d8dadd 35%, #a0a4aa 65%, #707478 100%)',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)' }} />
             ))}
             <div
               className="flex"
