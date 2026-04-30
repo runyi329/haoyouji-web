@@ -37,33 +37,67 @@ export const merchantRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
 
-      const rows = await db
-        .select({
-          id: merchantProducts.id,
-          name: merchantProducts.name,
-          subtitle: merchantProducts.subtitle,
-          basePrice: merchantProducts.basePrice,
-          originalPrice: merchantProducts.originalPrice,
-          mainImageUrl: merchantProducts.mainImageUrl,
-          categoryId: merchantProducts.categoryId,
-          status: merchantProducts.status,
-          sourceType: merchantProducts.sourceType,
-          isShareable: merchantProducts.isShareable,
-          salesCount: merchantProducts.salesCount,
-          stock: merchantProducts.stock,
-          ownerMerchantId: merchantProducts.ownerMerchantId,
-          extendedFields: merchantProducts.extendedFields,
-          createdAt: merchantProducts.createdAt,
-          categoryName: merchantProductCategories.name,
-          ownerShopName: merchants.shopName,
-        })
-        .from(merchantProducts)
-        .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
-        .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
-        .orderBy(desc(merchantProducts.createdAt))
-        .limit(200);
-
-      return rows;
+      // 先尝试带 inPointsShop 字段查询，若字段不存在则降级查询（防止数据库迁移未完成时崩溃）
+      try {
+        const rows = await db
+          .select({
+            id: merchantProducts.id,
+            name: merchantProducts.name,
+            subtitle: merchantProducts.subtitle,
+            basePrice: merchantProducts.basePrice,
+            originalPrice: merchantProducts.originalPrice,
+            mainImageUrl: merchantProducts.mainImageUrl,
+            categoryId: merchantProducts.categoryId,
+            status: merchantProducts.status,
+            sourceType: merchantProducts.sourceType,
+            isShareable: merchantProducts.isShareable,
+            inPointsShop: merchantProducts.inPointsShop,
+            salesCount: merchantProducts.salesCount,
+            stock: merchantProducts.stock,
+            ownerMerchantId: merchantProducts.ownerMerchantId,
+            extendedFields: merchantProducts.extendedFields,
+            createdAt: merchantProducts.createdAt,
+            categoryName: merchantProductCategories.name,
+            ownerShopName: merchants.shopName,
+          })
+          .from(merchantProducts)
+          .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
+          .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
+          .orderBy(desc(merchantProducts.createdAt))
+          .limit(200);
+        return rows;
+      } catch (e: any) {
+        // 如果 inPointsShop 字段不存在，降级查询（不含该字段）
+        if (e?.message?.includes('inPointsShop') || e?.message?.includes('Unknown column')) {
+          const rows = await db
+            .select({
+              id: merchantProducts.id,
+              name: merchantProducts.name,
+              subtitle: merchantProducts.subtitle,
+              basePrice: merchantProducts.basePrice,
+              originalPrice: merchantProducts.originalPrice,
+              mainImageUrl: merchantProducts.mainImageUrl,
+              categoryId: merchantProducts.categoryId,
+              status: merchantProducts.status,
+              sourceType: merchantProducts.sourceType,
+              isShareable: merchantProducts.isShareable,
+              salesCount: merchantProducts.salesCount,
+              stock: merchantProducts.stock,
+              ownerMerchantId: merchantProducts.ownerMerchantId,
+              extendedFields: merchantProducts.extendedFields,
+              createdAt: merchantProducts.createdAt,
+              categoryName: merchantProductCategories.name,
+              ownerShopName: merchants.shopName,
+            })
+            .from(merchantProducts)
+            .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
+            .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
+            .orderBy(desc(merchantProducts.createdAt))
+            .limit(200);
+          return rows.map(r => ({ ...r, inPointsShop: 0 }));
+        }
+        throw e;
+      }
     }),
 
   // 获取商品分类

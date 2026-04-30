@@ -1677,11 +1677,14 @@ export default function Home() {
                           onClick={() => requireLogin(() => {
                             const userPts = userPointsData?.points ?? 0;
                             if (userPts < pointsCost) {
-                              toast.error(`积分不足，还需 ${pointsCost - userPts} 分`);
+                              // 积分不足：友好提示，不拦截查看
+                              toast(`「${item.name}」`, {
+                                description: `积分还差 ${(pointsCost - userPts).toLocaleString()} 分，继续积累后可兑换`,
+                                duration: 3000,
+                              });
                               return;
                             }
-                            // 兑换时使用 rewards 表中第一个兑换商品（如果有）
-                            // 这里直接展示商品信息，兑换需要对接 rewards 表
+                            // 积分充足：提示前往兑换
                             toast(`请前往商品详情页兑换「${item.name}」`, {
                               description: `需要 ${pointsCost.toLocaleString()} 积分`,
                               duration: 3000,
