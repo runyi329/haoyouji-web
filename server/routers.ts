@@ -18701,6 +18701,31 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       } finally { /* pool auto-manages connections */ }
     }),
 
+  /** A股2026年交易成本实时累计数据 */
+  aiDashboardTradingCost2026: publicProcedure
+    .query(async () => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return null;
+      try {
+        const [rows] = await dbConn.execute(
+          'SELECT trade_date, turnover_billion, stamp_tax_billion, commission_billion, handling_billion, transfer_billion, supervision_billion, trade_days FROM stock_trading_cost_2026 ORDER BY id DESC LIMIT 1'
+        ) as any;
+        const r = (rows as any[])[0];
+        if (!r) return null;
+        return {
+          tradeDate: r.trade_date as string,
+          turnover: Number(r.turnover_billion),
+          stamp: Number(r.stamp_tax_billion),
+          commission: Number(r.commission_billion),
+          handling: Number(r.handling_billion),
+          transfer: Number(r.transfer_billion),
+          supervision: Number(r.supervision_billion),
+          tradeDays: Number(r.trade_days),
+          total: Number(r.stamp_tax_billion) + Number(r.commission_billion) + Number(r.handling_billion) + Number(r.transfer_billion) + Number(r.supervision_billion),
+        };
+      } finally { /* pool auto-manages connections */ }
+    }),
+
   /** 个股全生命周期涨跌天数统计 */
   aiStockLifecycle: publicProcedure
     .input(z.object({

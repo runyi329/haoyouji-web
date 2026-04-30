@@ -4,7 +4,7 @@
  * 路径: /ledger/:id/ai-database
  * 风格与 LedgerDetailAA 一致：顶部 #D32F2F，页面背景 #FAF3ED，卡片白色
  */
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -1614,6 +1614,29 @@ function TradingCostSection() {
   const [subTab, setSubTab] = useState<"stamp" | "turnover" | "compare" | "ratio">("stamp");
   const [animated, setAnimated] = useState(false);
 
+  // 获取2026年实时累计数据
+  const { data: data2026 } = trpc.aiDashboardTradingCost2026.useQuery();
+
+  // 合并2026年数据到静态数据末尾
+  const allData = useMemo(() => {
+    if (!data2026) return TRADING_COST_DATA;
+    return [
+      ...TRADING_COST_DATA,
+      {
+        year: 2026,
+        turnover: data2026.turnover,
+        stamp: data2026.stamp,
+        commission: data2026.commission,
+        handling: data2026.handling,
+        transfer: data2026.transfer,
+        supervision: data2026.supervision,
+        total: data2026.total,
+        isPartial: true,
+        tradeDate: data2026.tradeDate,
+      } as any,
+    ];
+  }, [data2026]);
+
   // 切换 Tab 时重播动画
   const handleTabChange = (key: typeof subTab) => {
     setAnimated(false);
@@ -1634,14 +1657,16 @@ function TradingCostSection() {
   ];
 
   // 费率趋势数据（2000年起有意义）
-  const ratioData = TRADING_COST_DATA.filter(d => d.year >= 2000).map(d => ({
+  const ratioData = allData.filter(d => d.year >= 2000).map(d => ({
     year: d.year,
     stampRatio: d.turnover > 0 ? +((d.stamp / d.turnover) * 1000).toFixed(3) : 0,
     commRatio:  d.turnover > 0 ? +((d.commission / d.turnover) * 1000).toFixed(3) : 0,
     totalRatio: d.turnover > 0 ? +((d.total / d.turnover) * 1000).toFixed(3) : 0,
+    isPartial: (d as any).isPartial,
+    tradeDate: (d as any).tradeDate,
   }));
 
-  // 最新年份摘要
+  // 最新年份摘要（用2025年固定数据，2026年另外展示）
   const latest = TRADING_COST_DATA[TRADING_COST_DATA.length - 1];
   const prev   = TRADING_COST_DATA[TRADING_COST_DATA.length - 2];
   const stampChg = latest.stamp - prev.stamp;
@@ -1650,7 +1675,7 @@ function TradingCostSection() {
     <div>
       <SectionTitle
         title="交易成本"
-        sub="印花税 / 券商佣金 / 总税费 · 1990-2025年"
+        sub="印花税 / 券商佣金 / 总税费 · 1990-2026年"
         extra={
           <p className="text-[11px] text-right leading-tight whitespace-nowrap" style={{ color: DIM }}>
             数据来源：财政部 / 交易所
@@ -1689,6 +1714,30 @@ function TradingCostSection() {
           </div>
         </div>
 
+        {/* 2026年实时数据摘要（动态加载） */}
+        {data2026 && (
+          <div className="rounded-lg p-3" style={{ background: "#FFF8E1", border: "1px solid #FFE082" }}>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[12px] font-medium" style={{ color: "#E65100" }}>2026年实时累计</p>
+              <p className="text-[10px]" style={{ color: MUTED }}>截至{data2026.tradeDate.slice(5,7)}月{data2026.tradeDate.slice(8,10)}日（{data2026.tradeDays}个交易日）</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-[10px]" style={{ color: MUTED }}>印花税</p>
+                <p className="text-[13px] font-bold" style={{ color: RED }}>{data2026.stamp.toFixed(1)}亿</p>
+              </div>
+              <div>
+                <p className="text-[10px]" style={{ color: MUTED }}>券商佣金</p>
+                <p className="text-[13px] font-bold" style={{ color: "#1976D2" }}>{data2026.commission.toFixed(1)}亿</p>
+              </div>
+              <div>
+                <p className="text-[10px]" style={{ color: MUTED }}>成交额</p>
+                <p className="text-[13px] font-bold" style={{ color: "#2E7D32" }}>{(data2026.turnover/10000).toFixed(1)}万亿</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tab 切换 */}
         <div className="flex gap-1.5 overflow-x-auto">
           {SUBTABS.map(t => (
@@ -1719,12 +1768,12 @@ function TradingCostSection() {
                   <span className="w-3 h-2 inline-block rounded-sm" style={{ background: "#90CAF9" }} />普通年份
                 </span>
               </div>
-              {[...TRADING_COST_DATA].reverse().map((d, i) => (
+              {[...allData].reverse().map((d, i) => (
                 <TradingCostBar
                   key={d.year}
-                  label={d.year}
+                  label={(d as any).isPartial ? `${d.year}*` : d.year}
                   value={d.stamp}
-                  maxValue={Math.max(...TRADING_COST_DATA.map(x => x.stamp))}
+                  maxValue={Math.max(...allData.map(x => x.stamp))}
                   color={BULL_YEARS.has(d.year)
                     ? `linear-gradient(90deg, ${RED} 0%, #FF6B6B 100%)`
                     : "linear-gradient(90deg, #64B5F6 0%, #90CAF9 100%)"}
@@ -1740,12 +1789,12 @@ function TradingCostSection() {
           {subTab === "turnover" && (
             <>
               <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>历年A股全市场成交额（亿元）</p>
-              {[...TRADING_COST_DATA].reverse().map((d, i) => (
+              {[...allData].reverse().map((d, i) => (
                 <TradingCostBar
                   key={d.year}
-                  label={d.year}
+                  label={(d as any).isPartial ? `${d.year}*` : d.year}
                   value={d.turnover}
-                  maxValue={Math.max(...TRADING_COST_DATA.map(x => x.turnover))}
+                  maxValue={Math.max(...allData.map(x => x.turnover))}
                   color="linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)"
                   delay={i * 18}
                   animated={animated}
@@ -1758,7 +1807,7 @@ function TradingCostSection() {
           {/* Tab3：各项税费对比（分段堆叠CSS进度条） */}
           {subTab === "compare" && (
             <>
-              <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>历年各项税费对比（1990-2025年，亿元）</p>
+              <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>历年各项税费对比（1990-2026年，亿元）</p>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
                 {[
                   { color: RED,       label: "印花税" },
@@ -1772,8 +1821,8 @@ function TradingCostSection() {
                   </span>
                 ))}
               </div>
-              {[...TRADING_COST_DATA].reverse().map((d, i) => {
-                const maxTotal = Math.max(...TRADING_COST_DATA.map(x => x.total));
+              {[...allData].reverse().map((d, i) => {
+                const maxTotal = Math.max(...allData.map(x => x.total));
                 const segments = [
                   { value: d.stamp,      color: RED },
                   { value: d.commission, color: "#1976D2" },
@@ -1785,7 +1834,7 @@ function TradingCostSection() {
                 const pctW = (totalVal / maxTotal) * 100;
                 return (
                   <div key={d.year} className="flex items-center" style={{ height: TC_ROW_H, marginBottom: 0 }}>
-                    <div className="flex-shrink-0 text-right pr-1.5" style={{ width: TC_LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${TC_ROW_H}px` }}>{d.year}</div>
+                    <div className="flex-shrink-0 text-right pr-1.5" style={{ width: TC_LABEL_W, fontSize: 9, color: MUTED, lineHeight: `${TC_ROW_H}px` }}>{(d as any).isPartial ? `${d.year}*` : d.year}</div>
                     <div className="relative flex-1" style={{ height: TC_BAR_H, borderRadius: 2, background: '#E8E0D8' }}>
                       <div
                         className="absolute top-0 left-0 h-full flex overflow-hidden"
