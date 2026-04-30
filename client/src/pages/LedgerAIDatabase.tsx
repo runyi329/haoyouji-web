@@ -1366,7 +1366,7 @@ function MacroSection() {
             </div>
             <div className="flex gap-1.5 overflow-x-auto">
               {SUBTABS.map(t => (
-                <button key={t.key} onClick={() => setSubTab(t.key)}
+                <button key={t.key} onClick={() => handleTabChange(t.key)}
                   className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium transition-colors"
                   style={{
                     background: subTab === t.key ? RED : "#F0F0F0",
@@ -1535,8 +1535,59 @@ const TRADING_COST_DATA = [
 // 牛市年份（印花税突破2000亿）
 const BULL_YEARS = new Set([2007, 2015, 2020, 2021, 2022, 2025]);
 
+// 交易成本进度条行组件
+function TradingCostBar({
+  label, value, maxValue, color, delay = 0, animated, formatValue
+}: {
+  label: string | number;
+  value: number;
+  maxValue: number;
+  color: string;
+  delay?: number;
+  animated: boolean;
+  formatValue: (v: number) => string;
+}) {
+  const pctWidth = maxValue > 0 ? (value / maxValue) * 100 : 0;
+  return (
+    <div className="flex items-center gap-2 mb-1.5">
+      <span className="text-[10px] w-8 text-right flex-shrink-0" style={{ color: MUTED }}>{label}</span>
+      <div className="flex-1 relative h-5 rounded-r-full overflow-hidden" style={{ background: "#F0EBE4" }}>
+        <div
+          className="absolute top-0 left-0 h-full rounded-r-full flex items-center justify-end pr-1.5"
+          style={{
+            width: animated ? `${Math.max(pctWidth, 1)}%` : "0%",
+            background: color,
+            transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${delay}ms`,
+            boxShadow: "inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)",
+          }}
+        >
+          {pctWidth > 18 && (
+            <span className="text-[9px] font-semibold text-white drop-shadow">{formatValue(value)}</span>
+          )}
+        </div>
+        {pctWidth <= 18 && value > 0 && (
+          <span className="absolute left-[calc(var(--bar-w)+2px)] top-1/2 -translate-y-1/2 text-[9px]" style={{ color: MUTED, left: `${Math.max(pctWidth, 1)}%`, paddingLeft: 4 }}>{formatValue(value)}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TradingCostSection() {
   const [subTab, setSubTab] = useState<"stamp" | "turnover" | "compare" | "ratio">("stamp");
+  const [animated, setAnimated] = useState(false);
+
+  // 切换 Tab 时重播动画
+  const handleTabChange = (key: typeof subTab) => {
+    setAnimated(false);
+    setSubTab(key);
+    setTimeout(() => setAnimated(true), 60);
+  };
+
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 100);
+    return () => clearTimeout(t);
+  }, []);
 
   const SUBTABS = [
     { key: "stamp" as const,    label: "印花税" },
@@ -1604,7 +1655,7 @@ function TradingCostSection() {
         {/* Tab 切换 */}
         <div className="flex gap-1.5 overflow-x-auto">
           {SUBTABS.map(t => (
-            <button key={t.key} onClick={() => setSubTab(t.key)}
+            <button key={t.key} onClick={() => handleTabChange(t.key)}
               className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium transition-colors"
               style={{
                 background: subTab === t.key ? RED : "#F0F0F0",
@@ -1619,39 +1670,11 @@ function TradingCostSection() {
         {/* 图表区域（无额外卡片，直接在容器内） */}
         <div>
 
-          {/* Tab1：印花税历年收入（水平条形图，Y轴=年份，X轴=金额） */}
+          {/* Tab1：印花税历年收入（CSS进度条动效） */}
           {subTab === "stamp" && (
             <>
-              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>历年证券交易印花税收入（亿元）</p>
-              <p className="text-[11px] mb-3" style={{ color: DIM }}>红色柱 = 牛市年份（印花税突破2000亿）</p>
-              <ResponsiveContainer width="100%" height={35 * TRADING_COST_DATA.length}>
-                <BarChart
-                  data={[...TRADING_COST_DATA].reverse()}
-                  layout="vertical"
-                  margin={{ top: 4, right: 48, left: 32, bottom: 4 }}
-                  barSize={14}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
-                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)}
-                  />
-                  <YAxis type="category" dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
-                  <Tooltip
-                    contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
-                    formatter={(v: any) => [`${Number(v).toLocaleString()}亿`, "印花税"]}
-                    labelFormatter={(l) => `${l}年`}
-                  />
-                  <ReferenceLine x={2000} stroke="#FF7043" strokeDasharray="4 2"
-                    label={{ value: "2000亿", position: "top", fontSize: 9, fill: "#FF7043" }}
-                  />
-                  <Bar dataKey="stamp" radius={[0, 2, 2, 0]}>
-                    {[...TRADING_COST_DATA].reverse().map((d, i) => (
-                      <Cell key={i} fill={BULL_YEARS.has(d.year) ? RED : "#90CAF9"} fillOpacity={0.9} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-              <div className="flex gap-4 justify-center mt-2">
+              <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>历年证券交易印花税收入（亿元）</p>
+              <div className="flex gap-3 mb-3">
                 <span className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
                   <span className="w-3 h-2 inline-block rounded-sm" style={{ background: RED }} />牛市年份
                 </span>
@@ -1659,109 +1682,152 @@ function TradingCostSection() {
                   <span className="w-3 h-2 inline-block rounded-sm" style={{ background: "#90CAF9" }} />普通年份
                 </span>
               </div>
+              {[...TRADING_COST_DATA].reverse().map((d, i) => (
+                <TradingCostBar
+                  key={d.year}
+                  label={d.year}
+                  value={d.stamp}
+                  maxValue={Math.max(...TRADING_COST_DATA.map(x => x.stamp))}
+                  color={BULL_YEARS.has(d.year)
+                    ? `linear-gradient(90deg, ${RED} 0%, #FF6B6B 100%)`
+                    : "linear-gradient(90deg, #64B5F6 0%, #90CAF9 100%)"}
+                  delay={i * 18}
+                  animated={animated}
+                  formatValue={(v) => v >= 1000 ? `${(v/1000).toFixed(1)}k亿` : `${v}亿`}
+                />
+              ))}
             </>
           )}
 
-          {/* Tab2：全市场成交额（水平条形图） */}
+          {/* Tab2：全市场成交额（CSS进度条动效） */}
           {subTab === "turnover" && (
             <>
-              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>历年A股全市场成交额（亿元）</p>
-              <p className="text-[11px] mb-3" style={{ color: DIM }}>2025年突破414万亿元，创历史新高</p>
-              <ResponsiveContainer width="100%" height={35 * TRADING_COST_DATA.length}>
-                <BarChart
-                  data={[...TRADING_COST_DATA].reverse()}
-                  layout="vertical"
-                  margin={{ top: 4, right: 64, left: 32, bottom: 4 }}
-                  barSize={14}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
-                    tickFormatter={(v) => v >= 10000 ? `${(v/10000).toFixed(0)}万亿` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)}
-                  />
-                  <YAxis type="category" dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
-                  <Tooltip
-                    contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
-                    formatter={(v: any) => [`${(Number(v)/10000).toFixed(2)}万亿`, "成交额"]}
-                    labelFormatter={(l) => `${l}年`}
-                  />
-                  <Bar dataKey="turnover" fill="#43A047" fillOpacity={0.85} radius={[0, 2, 2, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>历年A股全市场成交额（亿元）</p>
+              {[...TRADING_COST_DATA].reverse().map((d, i) => (
+                <TradingCostBar
+                  key={d.year}
+                  label={d.year}
+                  value={d.turnover}
+                  maxValue={Math.max(...TRADING_COST_DATA.map(x => x.turnover))}
+                  color="linear-gradient(90deg, #2E7D32 0%, #66BB6A 100%)"
+                  delay={i * 18}
+                  animated={animated}
+                  formatValue={(v) => v >= 10000 ? `${(v/10000).toFixed(1)}万亿` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : `${v}`}
+                />
+              ))}
             </>
           )}
 
-          {/* Tab3：各项税费对比（水平堆叠条形图，1990-2025全部） */}
+          {/* Tab3：各项税费对比（分段堆叠CSS进度条） */}
           {subTab === "compare" && (
             <>
-              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>历年各项税费对比（1990-2025年，亿元）</p>
-              <p className="text-[11px] mb-3" style={{ color: DIM }}>印花税 / 券商佣金 / 经手费 / 过户费 / 监管费</p>
-              <ResponsiveContainer width="100%" height={35 * TRADING_COST_DATA.length}>
-                <BarChart
-                  data={[...TRADING_COST_DATA].reverse()}
-                  layout="vertical"
-                  margin={{ top: 4, right: 8, left: 32, bottom: 4 }}
-                  barSize={14}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
-                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)}
-                  />
-                  <YAxis type="category" dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
-                  <Tooltip
-                    contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
-                    formatter={(v: any, name: any) => {
-                      const labels: Record<string, string> = { stamp: "印花税", commission: "券商佣金", handling: "经手费", transfer: "过户费", supervision: "监管费" };
-                      return [`${Number(v).toFixed(1)}亿`, labels[name] || name];
-                    }}
-                    labelFormatter={(l) => `${l}年`}
-                  />
-                  <Legend formatter={(v) => ({ stamp: "印花税", commission: "券商佣金", handling: "经手费", transfer: "过户费", supervision: "监管费" }[v] || v)}
-                    wrapperStyle={{ fontSize: 10 }}
-                  />
-                  <Bar dataKey="stamp"       fill={RED}      fillOpacity={0.85} radius={[0,0,0,0]} stackId="a" />
-                  <Bar dataKey="commission"  fill="#1976D2"  fillOpacity={0.85} radius={[0,0,0,0]} stackId="a" />
-                  <Bar dataKey="handling"    fill="#F57C00"  fillOpacity={0.85} radius={[0,0,0,0]} stackId="a" />
-                  <Bar dataKey="transfer"    fill="#7B1FA2"  fillOpacity={0.85} radius={[0,0,0,0]} stackId="a" />
-                  <Bar dataKey="supervision" fill="#795548"  fillOpacity={0.85} radius={[0,2,2,0]} stackId="a" />
-                </BarChart>
-              </ResponsiveContainer>
+              <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>历年各项税费对比（1990-2025年，亿元）</p>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
+                {[
+                  { color: RED,       label: "印花税" },
+                  { color: "#1976D2", label: "券商佣金" },
+                  { color: "#F57C00", label: "经手费" },
+                  { color: "#7B1FA2", label: "过户费" },
+                  { color: "#795548", label: "监管费" },
+                ].map(({ color, label }) => (
+                  <span key={label} className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
+                    <span className="w-3 h-2 inline-block rounded-sm" style={{ background: color }} />{label}
+                  </span>
+                ))}
+              </div>
+              {[...TRADING_COST_DATA].reverse().map((d, i) => {
+                const maxTotal = Math.max(...TRADING_COST_DATA.map(x => x.total));
+                const segments = [
+                  { value: d.stamp,      color: RED },
+                  { value: d.commission, color: "#1976D2" },
+                  { value: d.handling,   color: "#F57C00" },
+                  { value: d.transfer,   color: "#7B1FA2" },
+                  { value: d.supervision,color: "#795548" },
+                ];
+                const totalVal = segments.reduce((s, x) => s + x.value, 0);
+                return (
+                  <div key={d.year} className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] w-8 text-right flex-shrink-0" style={{ color: MUTED }}>{d.year}</span>
+                    <div className="flex-1 relative h-5 rounded-r-full overflow-hidden" style={{ background: "#F0EBE4" }}>
+                      <div
+                        className="absolute top-0 left-0 h-full flex overflow-hidden rounded-r-full"
+                        style={{
+                          width: animated ? `${(totalVal / maxTotal) * 100}%` : "0%",
+                          transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 18}ms`,
+                        }}
+                      >
+                        {segments.map((seg, si) => (
+                          <div
+                            key={si}
+                            style={{
+                              width: `${(seg.value / totalVal) * 100}%`,
+                              background: seg.color,
+                              opacity: 0.88,
+                            }}
+                          />
+                        ))}
+                      </div>
+                      {totalVal > 0 && (
+                        <span
+                          className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] font-semibold"
+                          style={{ color: animated ? MUTED : "transparent", transition: `color 0.3s ease ${i * 18 + 600}ms` }}
+                        >
+                          {totalVal >= 1000 ? `${(totalVal/1000).toFixed(1)}k` : totalVal.toFixed(0)}亿
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </>
           )}
 
-          {/* Tab4：费率趋势（折线图，Y轴=年份，X轴=‰） */}
+          {/* Tab4：费率趋势（CSS进度条，三条并排） */}
           {subTab === "ratio" && (
             <>
-              <p className="text-sm font-medium mb-1" style={{ color: TEXT }}>各项税费占成交额比例趋势（2000-2025年，‰）</p>
-              <p className="text-[11px] mb-3" style={{ color: DIM }}>综合费率从约16‰降至约1.2‰，投资者成本大幅下降</p>
-              <ResponsiveContainer width="100%" height={35 * ratioData.length}>
-                <BarChart
-                  data={[...ratioData].reverse()}
-                  layout="vertical"
-                  margin={{ top: 4, right: 48, left: 32, bottom: 4 }}
-                  barSize={14}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke={BORDER} horizontal={false} />
-                  <XAxis type="number" tick={{ fill: MUTED, fontSize: 9 }} axisLine={{ stroke: BORDER }} tickLine={false}
-                    tickFormatter={(v) => `${v}‰`}
-                  />
-                  <YAxis type="category" dataKey="year" tick={{ fill: MUTED, fontSize: 9 }} axisLine={false} tickLine={false} width={32} />
-                  <Tooltip
-                    contentStyle={{ background: CARD, border: `1px solid ${BORDER}`, borderRadius: 8, fontSize: 11 }}
-                    formatter={(v: any, name: any) => {
-                      const labels: Record<string, string> = { stampRatio: "印花税/成交额", commRatio: "佣金/成交额", totalRatio: "总税费/成交额" };
-                      return [`${v}‰`, labels[name] || name];
-                    }}
-                    labelFormatter={(l) => `${l}年`}
-                  />
-                  <Legend
-                    formatter={(v) => ({ stampRatio: "印花税‰", commRatio: "佣金‰", totalRatio: "总税费‰" }[v] || v)}
-                    wrapperStyle={{ fontSize: 10 }}
-                  />
-                  <Bar dataKey="totalRatio" fill="#43A047"  fillOpacity={0.5}  radius={[0,2,2,0]} stackId="b" />
-                  <Bar dataKey="stampRatio" fill={RED}      fillOpacity={0.85} radius={[0,0,0,0]} stackId="c" />
-                  <Bar dataKey="commRatio"  fill="#1976D2"  fillOpacity={0.85} radius={[0,2,2,0]} stackId="d" />
-                </BarChart>
-              </ResponsiveContainer>
+              <p className="text-sm font-medium mb-2" style={{ color: TEXT }}>各项税费占成交额比例（2000-2025年，‰）</p>
+              <div className="flex gap-3 mb-3">
+                {[
+                  { color: RED,       label: "印花税‰" },
+                  { color: "#1976D2", label: "佣金‰" },
+                  { color: "#43A047", label: "总税费‰" },
+                ].map(({ color, label }) => (
+                  <span key={label} className="flex items-center gap-1 text-[11px]" style={{ color: MUTED }}>
+                    <span className="w-3 h-2 inline-block rounded-sm" style={{ background: color }} />{label}
+                  </span>
+                ))}
+              </div>
+              {[...ratioData].reverse().map((d, i) => {
+                const maxRatio = Math.max(...ratioData.map(x => x.totalRatio));
+                return (
+                  <div key={d.year} className="mb-2">
+                    <span className="text-[10px]" style={{ color: MUTED }}>{d.year}</span>
+                    <div className="flex flex-col gap-0.5 mt-0.5">
+                      {[
+                        { val: d.totalRatio, color: "#43A047", label: `${d.totalRatio}‰` },
+                        { val: d.stampRatio, color: RED,       label: `${d.stampRatio}‰` },
+                        { val: d.commRatio,  color: "#1976D2", label: `${d.commRatio}‰` },
+                      ].map((bar, bi) => (
+                        <div key={bi} className="flex items-center gap-1">
+                          <div className="flex-1 relative h-3 rounded-r-full overflow-hidden" style={{ background: "#F0EBE4" }}>
+                            <div
+                              className="absolute top-0 left-0 h-full rounded-r-full"
+                              style={{
+                                width: animated ? `${(bar.val / maxRatio) * 100}%` : "0%",
+                                background: bar.color,
+                                opacity: 0.85,
+                                transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${i * 25 + bi * 80}ms`,
+                                boxShadow: "inset 0 -1px 3px rgba(0,0,0,0.12)",
+                              }}
+                            />
+                          </div>
+                          <span className="text-[9px] w-10 flex-shrink-0" style={{ color: MUTED }}>{bar.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </>
           )}
         </div>
