@@ -241,17 +241,19 @@ export default function FunderManagement() {
   const editingOrderId = editingOrder?.id ?? null;
   const { data: editingPaidSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId, orderIds: editingOrderId ? [editingOrderId] : [] },
-    { enabled: !!editingOrderId && ledgerId > 0 }
+    { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
   );
   // 受邀订单的已结佣金独立于利息结算记录，初始为 0（只有通过「记录结佣」按钮操作后才会有値）
+  // 注意：后端返回的 key 可能是字符串（MySQL row.order_id），用字符串和数字都尝试读取
   const previewPaidInterestData = editingOrder?.participantInfo
     ? { total: 0, currency: 'U' }
     : (editingOrderId && editingPaidSummary
-        ? ((editingPaidSummary as any)[editingOrderId] ?? { total: 0, currency: 'U' })
+        ? ((editingPaidSummary as any)[editingOrderId] ?? (editingPaidSummary as any)[String(editingOrderId)] ?? { total: 0, currency: 'U' })
         : { total: 0, currency: 'U' });
+  // 兼容旧格式（纯数字）和新格式（{total, currency}对象）
   const previewPaidInterest = typeof previewPaidInterestData === 'object' && previewPaidInterestData !== null
-    ? (previewPaidInterestData as any).total ?? 0
-    : Number(previewPaidInterestData) ?? 0;
+    ? ((previewPaidInterestData as any).total ?? 0)
+    : (typeof previewPaidInterestData === 'number' ? previewPaidInterestData : 0);
   const previewPaidInterestCurrency = typeof previewPaidInterestData === 'object' && previewPaidInterestData !== null
     ? ((previewPaidInterestData as any).currency || 'U')
     : 'U';
