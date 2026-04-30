@@ -1769,10 +1769,10 @@ export default function Home() {
               <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
               {/* 底部暗影线 */}
               <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-              {/* 标题行：文字不动，图标容器扩大到 28px，底部对齐，向上变大，向左偏移 */}
-              <div className="flex items-end space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
-                {/* Lottie 图标：容器 28px，底部对齐文字，向左偏移 3px */}
-                <div style={{ width: 28, height: 28, overflow: 'hidden', position: 'relative', flexShrink: 0, marginLeft: -3 }}>
+              {/* 标题行：保持 items-center，文字位置不变；图标用负 margin-top 向上溢出，不影响行高 */}
+              <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
+                {/* Lottie 图标：容器 14px（与文字行高一致），内部用 overflow:visible + 负 margin-top 让图案向上溢出 */}
+                <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -3 }}>
                   <div style={{
                     width: 400,
                     height: 400,
