@@ -1720,26 +1720,35 @@ export default function Home() {
           <GlobalMarketStrip />
 
           {/* 三个功能入口 */}
-          <div className="grid grid-cols-3 px-3 py-3" style={{ borderTop: '1px solid rgba(168,0,0,0.10)' }}>
-            {[
-              { name: '智能财务', icon: BarChart2 },
-              { name: '智能会计', icon: FileText },
-              { name: '智能钱包', icon: Wallet },
-            ].map((item, idx) => (
+          <div className="px-3 pt-2 pb-3 space-y-2">
+            {/* 第一行：智能财务 + 智能会计（仿人脉共享/个人中心样式） */}
+            <div className="grid grid-cols-2 gap-2">
               <div
-                key={item.name}
-                className="flex flex-col items-center justify-center py-3 cursor-pointer active:opacity-70"
-                style={{ borderRight: idx < 2 ? '1px solid rgba(168,0,0,0.10)' : 'none' }}
+                className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
               >
-                <div
-                  className="w-10 h-10 rounded-2xl flex items-center justify-center mb-1.5"
-                  style={{ background: 'rgba(168,0,0,0.09)', border: '1px solid rgba(168,0,0,0.15)' }}
-                >
-                  <item.icon className="w-5 h-5" style={{ color: '#A80000' }} />
+                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                  <BarChart2 className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
                 </div>
-                <span className="text-xs font-medium" style={{ color: '#5A3010' }}>{item.name}</span>
+                <span className="text-[#A80000] text-xs mt-1 font-medium">智能财务</span>
               </div>
-            ))}
+              <div
+                className="flex flex-col items-center justify-center py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
+              >
+                <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                  <FileText className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+                </div>
+                <span className="text-[#A80000] text-xs mt-1 font-medium">智能会计</span>
+              </div>
+            </div>
+            {/* 第二行：智能钱包（横向宽条） */}
+            <div
+              className="flex flex-row items-center justify-center gap-3 py-3 rounded-xl bg-[#FAF3ED] cursor-pointer hover:bg-red-50 transition-colors active:opacity-70"
+            >
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center" style={{ boxShadow: '0 3px 8px rgba(168,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}>
+                <Wallet className="w-5 h-5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+              </div>
+              <span className="text-[#A80000] text-sm font-medium">智能钱包</span>
+            </div>
           </div>
         </div>
 
