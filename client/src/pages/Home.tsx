@@ -1358,7 +1358,18 @@ export default function Home() {
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  
+
+  // AI 社交容器轮播 state
+  const SOCIAL_PAGES = 3;
+  const [socialPageIndex, setSocialPageIndex] = useState(1);
+  const [socialTransition, setSocialTransition] = useState(true);
+  const socialContainerRef = useRef<HTMLDivElement>(null);
+  const [socialWidth, setSocialWidth] = useState(0);
+  const socialTouchStartX = useRef(0);
+  const socialTouchStartY = useRef(0);
+  const socialIsTransitioning = useRef(false);
+  const socialAutoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const needsAttentionCount = overviewStats?.needsAttentionCount ?? 0;
 
   // 解决Safari PWA模式中点×/右滑返回时显示旧缓存数据的问题
@@ -1447,6 +1458,48 @@ export default function Home() {
   }, [isLiulifan, needsAttentionCount]);
 
 
+  // AI 社交轮播：ResizeObserver
+  useEffect(() => {
+    if (!socialContainerRef.current) return;
+    const ro = new ResizeObserver(() => {
+      if (socialContainerRef.current) setSocialWidth(socialContainerRef.current.offsetWidth);
+    });
+    ro.observe(socialContainerRef.current);
+    setSocialWidth(socialContainerRef.current.offsetWidth);
+    return () => ro.disconnect();
+  }, []);
+
+  // AI 社交轮播：无缝循环
+  useEffect(() => {
+    if (socialIsTransitioning.current) return;
+    if (socialPageIndex === SOCIAL_PAGES + 1) {
+      socialIsTransitioning.current = true;
+      setSocialTransition(false);
+      setTimeout(() => {
+        setSocialPageIndex(1);
+        setTimeout(() => { setSocialTransition(true); socialIsTransitioning.current = false; }, 20);
+      }, 320);
+    } else if (socialPageIndex === 0) {
+      socialIsTransitioning.current = true;
+      setSocialTransition(false);
+      setTimeout(() => {
+        setSocialPageIndex(SOCIAL_PAGES);
+        setTimeout(() => { setSocialTransition(true); socialIsTransitioning.current = false; }, 20);
+      }, 320);
+    }
+  }, [socialPageIndex]);
+
+  // AI 社交轮播：自动轮播
+  useEffect(() => {
+    socialAutoTimer.current = setInterval(() => {
+      if (!socialIsTransitioning.current) {
+        setSocialTransition(true);
+        setSocialPageIndex(prev => prev + 1);
+      }
+    }, 5000);
+    return () => { if (socialAutoTimer.current) clearInterval(socialAutoTimer.current); };
+  }, []);
+
   const handleLogout = async () => {
     // 清除三层存储（localStorage + Cookie + IndexedDB）
     const { clearToken } = await import('@/lib/tokenStorage');
@@ -1488,43 +1541,174 @@ export default function Home() {
       `}</style>
 
       {/* ═══════════════════════════════════════════ */}
-      {/* 上半区：AI 社交（占位）+ 刷新/资产工具栏 */}
+      {/* 上半区：AI 社交（多页滑动）*/}
       {/* ═══════════════════════════════════════════ */}
-      <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
-        <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
-          {/* 卡片头部：标题 + 工具栏 */}
-          <div className="flex items-center justify-between px-3 pt-3 pb-2 flex-shrink-0">
-            <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
-            <div className="flex items-center space-x-2">
-              <div
-                onClick={() => navigate("/parent/asset-report")}
-                className="flex flex-col items-center cursor-pointer"
-              >
-                <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors">
-                  <Coins className="w-3.5 h-3.5 text-[#A80000]" />
+      {/* AI 社交轮播内容 */}
+      {(() => {
+        const realDotIndex = ((socialPageIndex - 1 + SOCIAL_PAGES) % SOCIAL_PAGES);
+        const socialPages = [
+          // 页1：功能入口
+          <div key="p1" className="w-full h-full flex flex-col px-3 py-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
+              <div className="flex items-center space-x-2">
+                <div onClick={() => navigate("/parent/asset-report")} className="flex flex-col items-center cursor-pointer">
+                  <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors">
+                    <Coins className="w-3.5 h-3.5 text-[#A80000]" />
+                  </div>
+                  <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>资产</span>
                 </div>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>资产</span>
+                <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
+                  <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
+                    <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
+                  </div>
+                  <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
+                </div>
               </div>
-              <div
-                onClick={handleRefresh}
-                className="flex flex-col items-center cursor-pointer"
-              >
-                <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
-                  <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
+            </div>
+            <div className="flex-1 grid grid-cols-4 gap-2">
+              {[
+                { name: '标签', icon: FileText, path: '/parent/contacts/list' },
+                { name: '地域', icon: Globe, path: '/parent/contacts/list' },
+                { name: '分享', icon: Handshake, path: '/parent/contacts/list' },
+                { name: '数据', icon: BarChart2, path: '/parent/contacts/list' },
+              ].map((item, i) => (
+                <div key={i} onClick={() => navigate(item.path)} className="flex flex-col items-center justify-center bg-red-50 rounded-xl py-2 cursor-pointer hover:bg-red-100 transition-colors">
+                  <item.icon className="w-5 h-5 text-[#A80000] mb-1" />
+                  <span className="text-xs text-[#A80000] font-medium">{item.name}</span>
                 </div>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
+              ))}
+            </div>
+          </div>,
+          // 页2：人脉数据统计
+          <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
+            <div className="flex items-center mb-2">
+              <span className="text-xs font-semibold text-[#A80000] tracking-wide">人脉数据</span>
+            </div>
+            <div className="flex-1 grid grid-cols-2 gap-2">
+              {[
+                { label: '月活跃', value: overviewStats?.monthlyActiveCount ?? '-', unit: '人' },
+                { label: '需关注', value: overviewStats?.needsAttentionCount ?? '-', unit: '人' },
+                { label: '日均联络', value: overviewStats?.dailyContactFrequency ?? '-', unit: '次' },
+                { label: '平均标签', value: overviewStats?.averageTagCount ?? '-', unit: '个' },
+              ].map((item, i) => (
+                <div key={i} className="bg-red-50 rounded-xl px-3 py-2 flex flex-col justify-center">
+                  <span className="text-gray-400" style={{ fontSize: '0.6rem' }}>{item.label}</span>
+                  <div className="flex items-baseline space-x-0.5 mt-0.5">
+                    <span className="text-base font-bold text-[#A80000]">{item.value}</span>
+                    <span className="text-gray-400" style={{ fontSize: '0.6rem' }}>{item.unit}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>,
+          // 页3：会员权益
+          <div key="p3" className="w-full h-full flex flex-col px-3 py-2">
+            <div className="flex items-center mb-2">
+              <span className="text-xs font-semibold text-[#A80000] tracking-wide">会员权益</span>
+            </div>
+            <div className="flex-1 grid grid-cols-2 gap-2">
+              <div className="bg-amber-50 rounded-xl px-3 py-2 flex flex-col justify-center border border-amber-100">
+                <span className="text-amber-800 font-bold text-sm">会员特权</span>
+                <span className="text-amber-600 mt-0.5" style={{ fontSize: '0.65rem' }}>尊享 12 项特权</span>
+              </div>
+              <div className="bg-red-50 rounded-xl px-3 py-2 flex flex-col justify-center border border-red-100">
+                <span className="text-[#A80000] font-bold text-sm">积分兑换</span>
+                <span className="text-red-400 mt-0.5" style={{ fontSize: '0.65rem' }}>好礼免费换</span>
+              </div>
+              <div onClick={() => navigate('/parent/asset-report')} className="bg-white rounded-xl px-3 py-2 flex flex-col justify-center border border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span className="text-gray-600 font-medium text-xs">我的资产</span>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.6rem' }}>查看报告</span>
+              </div>
+              <div onClick={() => navigate('/parent/contacts/list')} className="bg-white rounded-xl px-3 py-2 flex flex-col justify-center border border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors">
+                <span className="text-gray-600 font-medium text-xs">邀请好友</span>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.6rem' }}>共享人脉</span>
+              </div>
+            </div>
+          </div>,
+        ];
+
+        // 克隆首尾：[页3(克隆), 页1, 页2, 页3, 页1(克隆)]
+        const clonedPages = [socialPages[SOCIAL_PAGES - 1], ...socialPages, socialPages[0]];
+
+        return (
+          <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
+            <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
+              {/* 滑动区域 */}
+              <div
+                ref={socialContainerRef}
+                className="flex-1 overflow-hidden"
+                style={{ touchAction: 'pan-y' }}
+                onTouchStart={e => {
+                  socialTouchStartX.current = e.touches[0].clientX;
+                  socialTouchStartY.current = e.touches[0].clientY;
+                  if (socialAutoTimer.current) clearInterval(socialAutoTimer.current);
+                }}
+                onTouchEnd={e => {
+                  const dx = e.changedTouches[0].clientX - socialTouchStartX.current;
+                  const dy = e.changedTouches[0].clientY - socialTouchStartY.current;
+                  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+                    if (!socialIsTransitioning.current) {
+                      setSocialTransition(true);
+                      if (dx < 0) setSocialPageIndex(prev => prev + 1);
+                      if (dx > 0) setSocialPageIndex(prev => prev - 1);
+                    }
+                  }
+                  // 重启自动轮播
+                  socialAutoTimer.current = setInterval(() => {
+                    if (!socialIsTransitioning.current) {
+                      setSocialTransition(true);
+                      setSocialPageIndex(prev => prev + 1);
+                    }
+                  }, 5000);
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    height: '100%',
+                    transform: `translateX(${socialPageIndex * -(socialWidth || 0)}px)`,
+                    transition: socialTransition ? 'transform 0.3s cubic-bezier(0.4,0,0.2,1)' : 'none',
+                    willChange: 'transform',
+                  }}
+                >
+                  {clonedPages.map((page, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        minWidth: socialWidth > 0 ? `${socialWidth}px` : '100%',
+                        maxWidth: socialWidth > 0 ? `${socialWidth}px` : '100%',
+                        height: '100%',
+                        boxSizing: 'border-box',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {page}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* 圆点指示器 */}
+              <div className="flex justify-center items-center space-x-1.5 py-1.5 flex-shrink-0">
+                {Array.from({ length: SOCIAL_PAGES }).map((_, i) => (
+                  <div
+                    key={i}
+                    onClick={() => { setSocialTransition(true); setSocialPageIndex(i + 1); }}
+                    style={{
+                      width: realDotIndex === i ? '14px' : '6px',
+                      height: '6px',
+                      borderRadius: '3px',
+                      background: realDotIndex === i ? '#A80000' : 'rgba(168,0,0,0.25)',
+                      transition: 'all 0.3s ease',
+                      cursor: 'pointer',
+                    }}
+                  />
+                ))}
               </div>
             </div>
           </div>
-          {/* 占位内容 */}
-          <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#A80000] to-[#d44] flex items-center justify-center mb-2 shadow-sm">
-              <span className="text-white text-base">✦</span>
-            </div>
-            <p className="text-gray-300 text-xs text-center">升级装修</p>
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ═══════════════════════════════════════════ */}
       {/* 下半区：左 AI 人脉 + 右 AI 錢脉 */}
