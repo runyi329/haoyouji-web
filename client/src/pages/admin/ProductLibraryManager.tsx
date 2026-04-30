@@ -32,6 +32,7 @@ import {
   EyeOff,
   ShoppingBag,
   ChevronRight,
+  Gift,
 } from "lucide-react";
 
 // ===== 类型定义 =====
@@ -47,6 +48,7 @@ interface Product {
   status: "active" | "inactive" | "draft";
   sourceType: "platform" | "merchant" | "shared";
   isShareable: number;
+  inPointsShop: number;
   salesCount: number;
   stock: number;
   ownerMerchantId?: number;
@@ -85,12 +87,14 @@ function ProductList({
   onEdit,
   onDelete,
   onToggleStatus,
+  onTogglePointsShop,
 }: {
   products: Product[];
   categories: Category[];
   onEdit: (p: Product) => void;
   onDelete: (id: number) => void;
   onToggleStatus: (id: number, status: string) => void;
+  onTogglePointsShop: (id: number, inPointsShop: number) => void;
 }) {
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -237,6 +241,13 @@ function ProductList({
                       </div>
                       {/* 操作按钮 */}
                       <div className="flex items-center gap-0.5">
+                        <button
+                          onClick={() => onTogglePointsShop(product.id, product.inPointsShop ? 0 : 1)}
+                          className={`p-1.5 rounded-lg active:bg-gray-200 ${product.inPointsShop ? 'text-amber-500 bg-amber-50' : 'text-gray-300 hover:bg-gray-100'}`}
+                          title={product.inPointsShop ? "已上架到积分商城（点击下架）" : "上架到积分商城"}
+                        >
+                          <Gift className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => onToggleStatus(product.id, isActive ? "inactive" : "active")}
                           className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 active:bg-gray-200"
@@ -521,6 +532,18 @@ export default function ProductLibraryManager() {
     updateProductMutation.mutate({ id, status: status as any });
   };
 
+  const togglePointsShopMutation = trpc.merchant.toggleProductInPointsShop.useMutation({
+    onSuccess: (_, vars) => {
+      toast.success(vars.inPointsShop ? "已上架到积分商城" : "已从积分商城下架");
+      productsQuery.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleTogglePointsShop = (id: number, inPointsShop: number) => {
+    togglePointsShopMutation.mutate({ id, inPointsShop });
+  };
+
   const activeCount = products.filter((p) => p.status === "active").length;
   const sharedCount = products.filter((p) => p.sourceType === "shared").length;
 
@@ -590,6 +613,7 @@ export default function ProductLibraryManager() {
               onEdit={(p) => { setEditingProduct(p); setShowProductForm(true); }}
               onDelete={handleDeleteProduct}
               onToggleStatus={handleToggleStatus}
+              onTogglePointsShop={handleTogglePointsShop}
             />
           )}
         </TabsContent>
