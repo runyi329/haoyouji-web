@@ -1592,6 +1592,7 @@ export default function Home() {
               boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
               background: 'rgba(255,255,255,0.82)',
               overflow: 'hidden',
+              marginBottom: '6px',
             }}
             onTouchStart={(e) => {
               stockTouchStartX.current = e.touches[0].clientX;
