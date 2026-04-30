@@ -455,29 +455,30 @@ export default function FunderManagement() {
     { enabled: showPaymentPanel !== null }
   );
 
-  const addPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
+    const addPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
     onSuccess: () => {
       toast.success('结息记录已添加');
       setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
       refetchPayments();
+      trpcUtils.ledger.funderGetInterestPaymentSummary.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
   });
-
   const updatePaymentMutation = trpc.ledger.funderUpdateInterestPayment.useMutation({
     onSuccess: () => {
       toast.success('结息记录已更新');
       setEditingPaymentId(null);
       setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
       refetchPayments();
+      trpcUtils.ledger.funderGetInterestPaymentSummary.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
   });
-
   const deletePaymentMutation = trpc.ledger.funderDeleteInterestPayment.useMutation({
     onSuccess: () => {
       toast.success('结息记录已删除');
       refetchPayments();
+      trpcUtils.ledger.funderGetInterestPaymentSummary.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
   });
