@@ -114,6 +114,13 @@ jobs:
             CRON_JOB="0 2 * * * cd /root/haoyouji-web && node scripts/update-gold-daily.mjs >> /var/log/gold-update.log 2>&1"
             (crontab -l 2>/dev/null | grep -v "update-gold-daily"; echo "$CRON_JOB") | crontab -
             echo "✅ 黄金数据每日更新cron任务已设置"
+            # 设置每个交易日收盘后（北京时间16:00 = UTC 08:00）更新A股2026年交易成本累计数据
+            # 失败后每小时重试一次（09:00、10:00），最多重试2次，确保能拉到数据
+            TRADING_COST_CRON_1="0 8 * * 1-5 cd /root/haoyouji-web && node scripts/update-trading-cost-2026.mjs >> /var/log/trading-cost-2026.log 2>&1"
+            TRADING_COST_CRON_2="0 9 * * 1-5 cd /root/haoyouji-web && node scripts/update-trading-cost-2026.mjs >> /var/log/trading-cost-2026.log 2>&1"
+            TRADING_COST_CRON_3="0 10 * * 1-5 cd /root/haoyouji-web && node scripts/update-trading-cost-2026.mjs >> /var/log/trading-cost-2026.log 2>&1"
+            (crontab -l 2>/dev/null | grep -v "update-trading-cost-2026"; echo "$TRADING_COST_CRON_1"; echo "$TRADING_COST_CRON_2"; echo "$TRADING_COST_CRON_3") | crontab -
+            echo "✅ A股2026年交易成本每日更新cron任务已设置（UTC 08:00/09:00/10:00，周一至周五）"
             echo "📤 上传同花顺股票图标到COS..."
             cd /root/haoyouji-web && node scripts/upload-ths-icon.mjs || echo "⚠️ 图标上传失败（非致命）"
             echo "🔍 执行COS诊断..."
