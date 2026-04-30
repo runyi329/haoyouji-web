@@ -1,0 +1,32 @@
+name: 修复 inPointsShop 字段
+on:
+  push:
+    branches:
+      - fix-inpointsshop
+jobs:
+  fix:
+    name: 确保 inPointsShop 字段存在并诊断商品数量
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 在服务器上执行诊断和修复
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 诊断 merchant_products 表 ==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SELECT COUNT(*) as total FROM merchant_products;"
+            echo "=== 检查 inPointsShop 字段 ==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SHOW COLUMNS FROM merchant_products LIKE 'inPointsShop';"
+            echo "=== 强制添加 inPointsShop 字段（如不存在）==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "
+              ALTER TABLE merchant_products ADD COLUMN inPointsShop TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否上架到积分商城（0=否，1=是）' AFTER isShareable;
+            " 2>&1 && echo "✅ 字段添加成功" || echo "⚠️ 字段已存在（正常）"
+            echo "=== 再次确认字段存在 ==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SHOW COLUMNS FROM merchant_products LIKE 'inPointsShop';"
+            echo "=== 查看前5条商品 ==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SELECT id, name, status, inPointsShop FROM merchant_products LIMIT 5;"
+          ENDSSH
