@@ -396,6 +396,94 @@ export default function Wallet() {
           <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: "rgba(0,0,0,0.4)" }} />
         </div>
 
+        {/* ── 收款账户快捷入口 ── */}
+        <div
+          className="rounded-xl px-4 py-3 cursor-pointer active:opacity-80 transition-opacity"
+          style={{
+            background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(201,168,76,0.04) 100%)",
+            border: "1px solid rgba(201,168,76,0.25)",
+          }}
+          onClick={() => setLocation("/payment-accounts")}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center"
+                style={{ background: "linear-gradient(135deg, #C9A84C 0%, #F5D78E 100%)" }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <rect x="2" y="5" width="20" height="14" rx="2" stroke="#1a1a1a" strokeWidth="2"/>
+                  <path d="M2 10h20" stroke="#1a1a1a" strokeWidth="2"/>
+                  <path d="M6 15h4" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <span className="text-sm font-semibold" style={{ color: "#F5D78E" }}>收款账户</span>
+            </div>
+            <div className="flex items-center gap-1" style={{ color: "rgba(201,168,76,0.5)" }}>
+              <span className="text-xs">管理绑定</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                <path d="M9 18l6-6-6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {/* 银行卡 */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(201,168,76,0.15)" }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <rect x="2" y="5" width="20" height="14" rx="2" stroke="#C9A84C" strokeWidth="1.5"/>
+                  <path d="M2 10h20" stroke="#C9A84C" strokeWidth="1.5"/>
+                  <path d="M6 15h4" stroke="#C9A84C" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <span className="text-xs" style={{ color: "rgba(201,168,76,0.6)" }}>银行卡</span>
+            </div>
+            {/* 支付宝 */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(22,119,255,0.2)" }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="#1677FF" strokeWidth="1.5"/>
+                  <text x="12" y="16" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#1677FF">支</text>
+                </svg>
+              </div>
+              <span className="text-xs" style={{ color: "rgba(201,168,76,0.6)" }}>支付宝</span>
+            </div>
+            {/* 微信 */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(7,193,96,0.2)" }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="#07C160" strokeWidth="1.5"/>
+                  <text x="12" y="16" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#07C160">微</text>
+                </svg>
+              </div>
+              <span className="text-xs" style={{ color: "rgba(201,168,76,0.6)" }}>微信</span>
+            </div>
+            {/* 数字钱包 */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className="w-11 h-11 rounded-xl flex items-center justify-center"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(201,168,76,0.2)" }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path d="M19 7H5a2 2 0 00-2 2v6a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="#C9A84C" strokeWidth="1.5"/>
+                  <circle cx="16" cy="12" r="1.5" fill="#C9A84C"/>
+                  <path d="M3 10h18" stroke="#C9A84C" strokeWidth="1.5"/>
+                </svg>
+              </div>
+              <span className="text-xs" style={{ color: "rgba(201,168,76,0.6)" }}>数字钱包</span>
+            </div>
+          </div>
+        </div>
+
         {/* ── 安全提示 ── */}
         <div
           className="rounded-xl px-4 py-3 text-xs space-y-1"
