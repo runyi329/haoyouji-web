@@ -1871,7 +1871,34 @@ export default function Home() {
             {/* 内部高光 */}
             <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.15) 0%, transparent 60%)' }} />
             <div className="flex items-center space-x-1 mb-0.5 relative z-10" style={{ opacity: 0.9 }}>
-              <Users className="w-3.5 h-3.5 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }} />
+              {/* 我的人脉 - 3D 人形圆形图标 */}
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32" style={{ filter: 'drop-shadow(0px 1px 3px rgba(0,0,0,0.4))' }}>
+                <defs>
+                  <radialGradient id="my-contact-bg" cx="38%" cy="30%" r="65%">
+                    <stop offset="0%" stopColor="#FF8A80"/>
+                    <stop offset="45%" stopColor="#E53935"/>
+                    <stop offset="100%" stopColor="#8B0000"/>
+                  </radialGradient>
+                  <radialGradient id="my-contact-shine" cx="35%" cy="25%" r="50%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+                  </radialGradient>
+                  <clipPath id="my-contact-clip"><circle cx="16" cy="16" r="15"/></clipPath>
+                </defs>
+                {/* 圆形背景 */}
+                <circle cx="16" cy="16" r="15" fill="url(#my-contact-bg)"/>
+                {/* 人形图标 - 白色 */}
+                <g clipPath="url(#my-contact-clip)" fill="rgba(255,255,255,0.92)">
+                  {/* 头部 */}
+                  <circle cx="16" cy="11" r="4.5"/>
+                  {/* 身体 */}
+                  <path d="M8 26c0-4.4 3.6-8 8-8s8 3.6 8 8H8z"/>
+                </g>
+                {/* 球面高光 */}
+                <circle cx="16" cy="16" r="15" fill="url(#my-contact-shine)"/>
+                {/* 圆形边框 */}
+                <circle cx="16" cy="16" r="15" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8"/>
+              </svg>
               <span className="text-white text-xs font-medium" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)', letterSpacing: '0.05em' }}>我的人脉</span>
             </div>
             <div className="flex items-baseline relative z-10">
@@ -1890,7 +1917,37 @@ export default function Home() {
             boxShadow: '0 2px 6px rgba(203,164,113,0.15), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(203,164,113,0.1)'
           }}>
             <div className="flex items-center space-x-1 mb-0.5">
-              <Globe className="w-3.5 h-3.5" style={{ color: '#CBA471' }} />
+              {/* 全网人脉 - 3D 地球圆形图标 */}
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 32 32" style={{ filter: 'drop-shadow(0px 1px 3px rgba(0,0,0,0.25))' }}>
+                <defs>
+                  <radialGradient id="globe-bg" cx="38%" cy="30%" r="65%">
+                    <stop offset="0%" stopColor="#FFF3D6"/>
+                    <stop offset="45%" stopColor="#CBA471"/>
+                    <stop offset="100%" stopColor="#8B6914"/>
+                  </radialGradient>
+                  <radialGradient id="globe-shine" cx="35%" cy="25%" r="50%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.6)"/>
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+                  </radialGradient>
+                  <clipPath id="globe-clip"><circle cx="16" cy="16" r="15"/></clipPath>
+                </defs>
+                {/* 圆形背景 */}
+                <circle cx="16" cy="16" r="15" fill="url(#globe-bg)"/>
+                {/* 地球线条 - 白色半透明 */}
+                <g clipPath="url(#globe-clip)" fill="none" stroke="rgba(255,255,255,0.75)" strokeWidth="1.2">
+                  {/* 赤道 */}
+                  <ellipse cx="16" cy="16" rx="15" ry="15"/>
+                  {/* 经线 */}
+                  <ellipse cx="16" cy="16" rx="7" ry="15"/>
+                  {/* 纬线 */}
+                  <line x1="1" y1="16" x2="31" y2="16"/>
+                  <ellipse cx="16" cy="16" rx="15" ry="6"/>
+                </g>
+                {/* 球面高光 */}
+                <circle cx="16" cy="16" r="15" fill="url(#globe-shine)"/>
+                {/* 圆形边框 */}
+                <circle cx="16" cy="16" r="15" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.8"/>
+              </svg>
               <span className="text-xs font-medium" style={{ color: '#8B6914', letterSpacing: '0.04em' }}>全网人脉</span>
             </div>
             <div className="flex items-baseline">
