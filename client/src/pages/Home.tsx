@@ -1583,8 +1583,16 @@ export default function Home() {
           {/* 可左右滑动的股票卡片区域：A股 + 港股 + 美股 */}
           <div
             ref={stockSwipeRef}
-            className="mx-3 overflow-hidden rounded-xl flex-shrink-0"
-            style={{ touchAction: 'pan-y', position: 'relative' }}
+            className="mx-3 flex-shrink-0"
+            style={{
+              touchAction: 'pan-y',
+              position: 'relative',
+              borderRadius: '12px',
+              border: '1px solid rgba(203,164,113,0.35)',
+              boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
+              background: 'rgba(255,255,255,0.82)',
+              overflow: 'hidden',
+            }}
             onTouchStart={(e) => {
               stockTouchStartX.current = e.touches[0].clientX;
               stockTouchStartY.current = e.touches[0].clientY;
@@ -1613,10 +1621,6 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.82)',
-                  border: '1px solid rgba(203,164,113,0.35)',
-                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
-                  borderRadius: '12px',
                   padding: '8px 12px',
                 }}
                 onClick={() => navigate('/stock-tracker')}
@@ -1665,10 +1669,6 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.82)',
-                  border: '1px solid rgba(203,164,113,0.35)',
-                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
-                  borderRadius: '12px',
                   padding: '8px 12px',
                 }}
               >
@@ -1717,13 +1717,8 @@ export default function Home() {
                   minWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   maxWidth: stockContainerWidth > 0 ? `${stockContainerWidth}px` : '100%',
                   boxSizing: 'border-box',
-                  background: 'rgba(255,255,255,0.82)',
-                  border: '1px solid rgba(203,164,113,0.35)',
-                  boxShadow: '0 3px 10px rgba(107,74,16,0.18), inset 0 1px 0 rgba(255,255,255,1)',
-                  borderRadius: '12px',
                   padding: '8px 12px',
                 }}
-
               >
                 <div className="flex items-center space-x-1 mb-1" style={{ whiteSpace: 'nowrap' }}>
                   <Coins className="w-3.5 h-3.5 flex-shrink-0" style={{ color: '#A80000' }} />
@@ -1761,24 +1756,23 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          </div>
-
-          {/* 圆点指示器 */}
-          <div className="flex items-center justify-center mt-1.5 mb-1" style={{ gap: '5px' }}>
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                onClick={() => setStockCardIndex(i)}
-                style={{
-                  width: stockCardIndex === i ? '14px' : '5px',
-                  height: '5px',
-                  borderRadius: '3px',
-                  background: stockCardIndex === i ? 'rgba(201,168,76,0.9)' : 'rgba(201,168,76,0.3)',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer',
-                }}
-              />
-            ))}
+            {/* 圆点指示器 - 在容器内部 */}
+            <div className="flex items-center justify-center py-1" style={{ gap: '5px' }}>
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  onClick={() => setStockCardIndex(i)}
+                  style={{
+                    width: stockCardIndex === i ? '14px' : '5px',
+                    height: '5px',
+                    borderRadius: '3px',
+                    background: stockCardIndex === i ? 'rgba(201,168,76,0.9)' : 'rgba(201,168,76,0.3)',
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                  }}
+                />
+              ))}
+            </div>
           </div>
 
           {/* 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁） */}
