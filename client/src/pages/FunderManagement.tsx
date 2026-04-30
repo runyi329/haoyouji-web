@@ -245,6 +245,7 @@ export default function FunderManagement() {
   );
   // 受邀订单的已结佣金独立于利息结算记录，初始为 0（只有通过「记录结佣」按钮操作后才会有値）
   // 注意：后端返回的 key 可能是字符串（MySQL row.order_id），用字符串和数字都尝试读取
+  console.log('[DEBUG paid summary]', { editingOrderId, editingPaidSummary, keys: editingPaidSummary ? Object.keys(editingPaidSummary) : null });
   const previewPaidInterestData = editingOrder?.participantInfo
     ? { total: 0, currency: 'U' }
     : (editingOrderId && editingPaidSummary
