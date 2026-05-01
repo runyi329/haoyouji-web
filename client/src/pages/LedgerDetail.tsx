@@ -439,7 +439,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
   );
 }
 
-function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, livePrices, dc, viewMode }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; livePrices: Record<string, number>; dc?: Record<string, boolean>; viewMode?: 'medium' | 'large' }) {
+function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paidInterestDetails, livePrices, dc, viewMode }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; livePrices: Record<string, number>; dc?: Record<string, boolean>; viewMode?: 'medium' | 'large' }) {
   const show = (key: string) => dc ? (dc[key] !== false) : true;
   // 参与方视图：显示佣金而非利息
   const pi = order.participantInfo;
@@ -720,23 +720,76 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, live
         <div className={viewMode === 'large' ? 'space-y-1' : 'space-y-0.5'}>
         {show('paidInterest') && (
         <div className={viewMode === 'large' ? 'text-base' : 'text-xs'}>
-          <div className="flex items-center justify-between">
-            <span className="text-gray-400 whitespace-nowrap">已结利息</span>
-            <span className="font-medium" style={{ color: '#4B5563' }}>
-              {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
-            </span>
-          </div>
-          {displayPaid > 0 && (
-            viewMode === 'large' ? (
-              <div className="flex justify-end">
-                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
-              </div>
-            ) : (
-              <div className="flex justify-end">
-                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
-              </div>
-            )
-          )}
+          {(() => {
+            const details = paidInterestDetails && paidInterestDetails.length > 0 ? paidInterestDetails : null;
+            if (!details || details.length === 0) {
+              // 无明细数据时显示总额
+              return (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 whitespace-nowrap">已结利息</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>
+                      {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+                    </span>
+                  </div>
+                  {displayPaid > 0 && (
+                    <div className="flex justify-end">
+                      <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
+                    </div>
+                  )}
+                </>
+              );
+            }
+            // 有明细数据：按币种分行显示
+            const hasCNY = details.some(d => d.currency === 'CNY');
+            const hasU = details.some(d => d.currency === 'U' || d.currency === 'USDT');
+            const multiCurrency = hasCNY && hasU;
+            // 计算所有币种折算为 USDT 的总额
+            let totalInU = 0;
+            for (const d of details) {
+              if (d.currency === 'CNY') {
+                totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / 7;
+              } else {
+                totalInU += d.total;
+              }
+            }
+            return (
+              <>
+                {details.map((d, idx) => {
+                  const isCNY = d.currency === 'CNY';
+                  const unit = isCNY ? '元' : 'U';
+                  const approxU = isCNY ? (d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / 7) : null;
+                  const approxCNY = !isCNY ? d.total * 7 : null;
+                  return (
+                    <div key={idx}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400 whitespace-nowrap">已结利息</span>
+                        <span className="font-medium" style={{ color: '#4B5563' }}>
+                          {d.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {unit}
+                        </span>
+                      </div>
+                      <div className="flex justify-end">
+                        <span className="text-gray-400">
+                          ≈{isCNY
+                            ? (approxU ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U'
+                            : (approxCNY ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' 元'
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {multiCurrency && (
+                  <div className="flex items-center justify-between mt-0.5 pt-0.5" style={{ borderTop: '1px dashed #E5E7EB' }}>
+                    <span className="text-gray-400 whitespace-nowrap font-medium">总计已结</span>
+                    <span className="font-bold" style={{ color: '#1F2937' }}>
+                      {totalInU.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                    </span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
         )}
         {order.interest_start_date && (
@@ -1190,7 +1243,7 @@ function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: R
 // 单张资金方订单卡片（左右两栏布局）
 // AItag Lottie动效数据直接内联，避免fetch/CORS问题
 
-function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, canClick, priceDirection, viewMode }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'>; viewMode?: 'medium' | 'large' }) {
+function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidInterestDetails, onClick, canClick, priceDirection, viewMode }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'>; viewMode?: 'medium' | 'large' }) {
   const [showAIPanel, setShowAIPanel] = useState(false);
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
@@ -1393,7 +1446,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, onClick, c
         {/* 右栏/下半：利息 + 收益分成 */}
         <div className={viewMode === 'large' ? 'p-4 pt-2' : 'w-44 p-4 pl-3 flex flex-col'} style={viewMode === 'large' ? {} : { alignSelf: 'stretch' }}>
           {hasInterest ? (
-            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} livePrices={livePrices} dc={dc} viewMode={viewMode} />
+            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} paidInterestDetails={paidInterestDetails} livePrices={livePrices} dc={dc} viewMode={viewMode} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <ChevronRight className="w-5 h-5 text-gray-200" />
@@ -2257,12 +2310,14 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId), orderIds: funderOrderIds },
     { enabled: isCustomAF && funderOrderIds.length > 0 }
   );
-  // 后端返回数组格式 [{orderId, total, currency}]，转成 map 方便按 orderId 查找
+  // 后端返回数组格式 [{orderId, currency, total, exchangeRate}]，按 orderId 分组，每个订单可能有多个币种
   const interestSummaryMap = useMemo(() => {
     const arr = Array.isArray(interestSummary) ? (interestSummary as any[]) : [];
-    const map: Record<number, { total: number; currency: string }> = {};
+    const map: Record<number, Array<{ currency: string; total: number; exchangeRate: number }>> = {};
     for (const r of arr) {
-      map[Number(r.orderId)] = { total: parseFloat(r.total || '0'), currency: r.currency || 'U' };
+      const oid = Number(r.orderId);
+      if (!map[oid]) map[oid] = [];
+      map[oid].push({ currency: r.currency || 'U', total: parseFloat(r.total || '0'), exchangeRate: parseFloat(r.exchangeRate || '1') });
     }
     return map;
   }, [interestSummary]);
@@ -4283,35 +4338,54 @@ export default function LedgerDetail() {
             ) : funderViewMode === 'medium' ? (
               /* 中图模式：原双栏卡片 */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).map((order: any) => (
-                  <FunderOrderCard
-                    key={order.id}
-                    order={order}
-                    ledgerId={ledgerId}
-                    livePrices={funderLivePrices}
-                    paidInterest={interestSummaryMap[Number(order.id)]?.total ?? 0}
-                    onClick={() => {}}
-                    canClick={false}
-                    priceDirection={funderPriceDirection}
-                  />
-                ))}
+                {(funderAssetOrders as any[]).map((order: any) => {
+                  const details = interestSummaryMap[Number(order.id)] || [];
+                  // 计算折算USDT总额（用于风险敲口计算）
+                  let totalInU = 0;
+                  for (const d of details) {
+                    if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / 7; }
+                    else { totalInU += d.total; }
+                  }
+                  return (
+                    <FunderOrderCard
+                      key={order.id}
+                      order={order}
+                      ledgerId={ledgerId}
+                      livePrices={funderLivePrices}
+                      paidInterest={totalInU}
+                      paidInterestDetails={details}
+                      onClick={() => {}}
+                      canClick={false}
+                      priceDirection={funderPriceDirection}
+                    />
+                  );
+                })}
               </div>
             ) : funderViewMode === 'large' ? (
               /* 大图模式：单列放大，复用FunderOrderCard并传入viewMode='large' */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).map((order: any) => (
-                  <FunderOrderCard
-                    key={order.id}
-                    order={order}
-                    ledgerId={ledgerId}
-                    livePrices={funderLivePrices}
-                    paidInterest={interestSummaryMap[Number(order.id)]?.total ?? 0}
-                    onClick={() => {}}
-                    canClick={false}
-                    priceDirection={funderPriceDirection}
-                    viewMode="large"
-                  />
-                ))}
+                {(funderAssetOrders as any[]).map((order: any) => {
+                  const details = interestSummaryMap[Number(order.id)] || [];
+                  let totalInU = 0;
+                  for (const d of details) {
+                    if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / 7; }
+                    else { totalInU += d.total; }
+                  }
+                  return (
+                    <FunderOrderCard
+                      key={order.id}
+                      order={order}
+                      ledgerId={ledgerId}
+                      livePrices={funderLivePrices}
+                      paidInterest={totalInU}
+                      paidInterestDetails={details}
+                      onClick={() => {}}
+                      canClick={false}
+                      priceDirection={funderPriceDirection}
+                      viewMode="large"
+                    />
+                  );
+                })}
               </div>
             ) : (
               /* 小图模式：只显示当前资产和待结利息 */
