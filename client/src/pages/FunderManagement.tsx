@@ -237,26 +237,28 @@ export default function FunderManagement() {
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
 
-  // 编辑订单时实时查询已结利息
   // 强制转成数字，避免 MySQL 返回字符串导致 tRPC z.number() 校验失败
   const editingOrderId: number | null = editingOrder?.id ? Number(editingOrder.id) : null;
-  // 编辑面板专用：查询当前编辑订单的结息记录（必须在 previewPaidInterest 使用之前声明，避免 TDZ 错误）
+  // 批量查询所有订单的已结利息汇总（不依赖编辑面板是否打开，订单列表加载后即查询）
+  const allOrderIds: number[] = useMemo(
+    () => Array.isArray(assetOrders) ? (assetOrders as any[]).map((o: any) => Number(o.id)).filter(Boolean) : [],
+    [assetOrders]
+  );
+  const { data: allPaidSummary, refetch: refetchAllPaidSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
+    { ledgerId, orderIds: allOrderIds },
+    { enabled: ledgerId > 0 && allOrderIds.length > 0, staleTime: 0 }
+  );
+  // 从批量汇总里读取当前编辑订单的已结利息
+  const editingPaidRecord = Array.isArray(allPaidSummary)
+    ? (allPaidSummary as any[]).find((r: any) => Number(r.orderId) === editingOrderId)
+    : undefined;
+  const previewPaidInterest: number = editingPaidRecord?.total ?? 0;
+  const previewPaidInterestCurrency: string = editingPaidRecord?.currency ?? 'U';
+  // 编辑面板专用：查询当前编辑订单的结息记录列表（用于结息面板展示）
   const { data: editingOrderPayments, refetch: refetchEditingPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: editingOrderId! },
     { enabled: !!editingOrderId, staleTime: 0 }
   );
-  const { data: editingPaidSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
-    { ledgerId, orderIds: editingOrderId ? [editingOrderId] : [] },
-    { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
-  );
-  // 直接从 editingOrderPayments（结息记录列表）前端计算总额和最新币种
-  // 注意：不再用 participantInfo 判断，管理员编辑任何订单都应显示已结利息
-  const previewPaidInterest: number = Array.isArray(editingOrderPayments) && editingOrderPayments.length > 0
-    ? editingOrderPayments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || '0'), 0)
-    : 0;
-  const previewPaidInterestCurrency: string = Array.isArray(editingOrderPayments) && editingOrderPayments.length > 0
-    ? (editingOrderPayments[0]?.currency || 'U')
-    : 'U';
 
   // 担保价值（所有担保货币折算为 USDT 的总值）
   const computedCollateralValue = useMemo(() => {
@@ -463,7 +465,7 @@ export default function FunderManagement() {
       setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
       refetchPayments();
       refetchEditingPayments();
-      trpcUtils.ledger.funderGetInterestPaymentSummary.invalidate({ ledgerId });
+      refetchAllPaidSummary();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -474,7 +476,7 @@ export default function FunderManagement() {
       setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
       refetchPayments();
       refetchEditingPayments();
-      trpcUtils.ledger.funderGetInterestPaymentSummary.invalidate({ ledgerId });
+      refetchAllPaidSummary();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -483,7 +485,7 @@ export default function FunderManagement() {
       toast.success('结息记录已删除');
       refetchPayments();
       refetchEditingPayments();
-      trpcUtils.ledger.funderGetInterestPaymentSummary.invalidate({ ledgerId });
+      refetchAllPaidSummary();
     },
     onError: (err) => toast.error(err.message),
   });
