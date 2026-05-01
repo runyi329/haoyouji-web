@@ -12,19 +12,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
@@ -296,295 +283,18 @@ function ProductList({
     </div>
   );
 }
-function ProductForm({
-  product,
-  categories,
-  merchants,
-  onSave,
-  onClose,
-}: {
-  product?: Product | null;
-  categories: Category[];
-  merchants: Merchant[];
-  onSave: (data: Partial<Product>) => void;
-  onClose: () => void;
-}) {
-  const uploadProductImageMutation = trpc.merchant.uploadProductImage.useMutation();
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-
-  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { toast.error('请选择图片文件'); return; }
-    if (file.size > 10 * 1024 * 1024) { toast.error('图片大小不能超过 10MB'); return; }
-    setIsUploadingImage(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async (ev) => {
-        const base64 = ev.target?.result as string;
-        const result = await uploadProductImageMutation.mutateAsync({ imageData: base64, folder: 'merchant-products' });
-        setForm(prev => ({ ...prev, mainImageUrl: result.url }));
-        toast.success('图片上传成功');
-        setIsUploadingImage(false);
-      };
-      reader.onerror = () => { toast.error('图片读取失败'); setIsUploadingImage(false); };
-      reader.readAsDataURL(file);
-    } catch (err: any) {
-      toast.error('上传失败: ' + (err?.message || ''));
-      setIsUploadingImage(false);
-    }
-  };
-
-  const [form, setForm] = useState({
-    name: product?.name || "",
-    subtitle: product?.subtitle || "",
-    basePrice: product?.basePrice || "",
-    originalPrice: product?.originalPrice || "",
-    mainImageUrl: product?.mainImageUrl || "",
-    categoryId: product?.categoryId ? String(product.categoryId) : "",
-    status: product?.status || "active",
-    sourceType: product?.sourceType || "merchant",
-    isShareable: product?.isShareable !== undefined ? product.isShareable : 1,
-    stock: product?.stock || 999,
-    ownerMerchantId: product?.ownerMerchantId ? String(product.ownerMerchantId) : "",
-    extendedFields: product?.extendedFields || "",
-  });
-
-  const handleSubmit = () => {
-    if (!form.name.trim()) { toast.error("请输入商品名称"); return; }
-    if (!form.basePrice || isNaN(Number(form.basePrice))) { toast.error("请输入有效的价格"); return; }
-    onSave({
-      ...form,
-      basePrice: form.basePrice,
-      categoryId: form.categoryId ? Number(form.categoryId) : undefined,
-      ownerMerchantId: form.ownerMerchantId ? Number(form.ownerMerchantId) : undefined,
-      stock: Number(form.stock),
-    });
-  };
-
-  return (
-    <div className="space-y-4 overflow-y-auto pb-6">
-      {/* 商品名称 */}
-      <div>
-        <Label className="text-xs text-gray-500 mb-1 block">商品名称 *</Label>
-        <Input
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="如：拉菲古堡2018干红葡萄酒"
-          className="h-11"
-        />
-      </div>
-
-      {/* 副标题 */}
-      <div>
-        <Label className="text-xs text-gray-500 mb-1 block">副标题/简介</Label>
-        <Input
-          value={form.subtitle}
-          onChange={(e) => setForm({ ...form, subtitle: e.target.value })}
-          placeholder="如：波尔多一级庄 · 750ml"
-          className="h-11"
-        />
-      </div>
-
-      {/* 价格行 */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="text-xs text-gray-500 mb-1 block">售价 * (¥)</Label>
-          <Input
-            type="number"
-            value={form.basePrice}
-            onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
-            placeholder="0.00"
-            className="h-11"
-          />
-        </div>
-        <div>
-          <Label className="text-xs text-gray-500 mb-1 block">划线原价 (¥)</Label>
-          <Input
-            type="number"
-            value={form.originalPrice}
-            onChange={(e) => setForm({ ...form, originalPrice: e.target.value })}
-            placeholder="可选"
-            className="h-11"
-          />
-        </div>
-      </div>
-
-      {/* 主图上传 */}
-      <div>
-        <Label className="text-xs text-gray-500 mb-1 block">商品主图</Label>
-        <div
-          className="relative border-2 border-dashed border-gray-200 rounded-xl overflow-hidden cursor-pointer hover:border-blue-400 transition-colors"
-          onClick={() => document.getElementById('plm-product-image-input')?.click()}
-        >
-          {form.mainImageUrl ? (
-            <div className="relative">
-              <img src={form.mainImageUrl} alt="商品主图" className="w-full h-36 object-cover" />
-              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                <span className="text-white text-sm font-medium">点击更换图片</span>
-              </div>
-            </div>
-          ) : (
-            <div className="h-28 flex flex-col items-center justify-center gap-2 text-gray-400">
-              {isUploadingImage ? (
-                <>
-                  <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm">上传中...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span className="text-sm">点击上传商品图片</span>
-                  <span className="text-xs">支持 JPG、PNG、WebP，最大 10MB</span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-        <input
-          id="plm-product-image-input"
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleImageChange}
-          disabled={isUploadingImage}
-        />
-        {form.mainImageUrl && (
-          <button
-            type="button"
-            className="text-xs text-red-500 hover:text-red-700 mt-1"
-            onClick={() => setForm(prev => ({ ...prev, mainImageUrl: '' }))}
-          >
-            删除图片
-          </button>
-        )}
-      </div>
-
-      {/* 分类 + 库存 */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="text-xs text-gray-500 mb-1 block">商品分类</Label>
-          <Select value={form.categoryId} onValueChange={(v) => setForm({ ...form, categoryId: v })}>
-            <SelectTrigger className="h-11">
-              <SelectValue placeholder="选择分类" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-xs text-gray-500 mb-1 block">库存数量</Label>
-          <Input
-            type="number"
-            value={form.stock}
-            onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })}
-            className="h-11"
-          />
-        </div>
-      </div>
-
-      {/* 来源 + 状态 */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="text-xs text-gray-500 mb-1 block">商品来源</Label>
-          <Select
-            value={form.sourceType}
-            onValueChange={(v) => setForm({ ...form, sourceType: v as "platform" | "merchant" | "shared" })}
-          >
-            <SelectTrigger className="h-11">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="merchant">商家自录</SelectItem>
-              <SelectItem value="shared">共享商品</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label className="text-xs text-gray-500 mb-1 block">状态</Label>
-          <Select
-            value={form.status}
-            onValueChange={(v) => setForm({ ...form, status: v as "active" | "inactive" | "draft" })}
-          >
-            <SelectTrigger className="h-11">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">上架</SelectItem>
-              <SelectItem value="inactive">下架</SelectItem>
-              <SelectItem value="draft">草稿</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* 归属商家 */}
-      <div>
-        <Label className="text-xs text-gray-500 mb-1 block">归属商家 *</Label>
-        <Select
-          value={form.ownerMerchantId}
-          onValueChange={(v) => setForm({ ...form, ownerMerchantId: v })}
-        >
-          <SelectTrigger className="h-11">
-            <SelectValue placeholder="选择商家" />
-          </SelectTrigger>
-          <SelectContent>
-            {merchants.map((m) => (
-              <SelectItem key={m.id} value={String(m.id)}>
-                {m.shopName} ({m.merchantCode})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* 扩展字段 */}
-      <div>
-        <Label className="text-xs text-gray-500 mb-1 block">扩展字段（JSON）</Label>
-        <Input
-          value={form.extendedFields}
-          onChange={(e) => setForm({ ...form, extendedFields: e.target.value })}
-          placeholder='{"vintage":"2018","region":"波尔多"}'
-          className="h-11 text-xs"
-        />
-      </div>
-
-      {/* 提交按钮 */}
-      <div className="flex gap-2 pt-2">
-        <Button variant="outline" onClick={onClose} className="flex-1 h-12">
-          取消
-        </Button>
-        <Button onClick={handleSubmit} className="flex-1 h-12 bg-red-700 hover:bg-red-800 text-white">
-          {product ? "保存修改" : "添加商品"}
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 // ===== 主组件 =====
 
 export default function ProductLibraryManager() {
   const [activeTab, setActiveTab] = useState("products");
-  const [showProductForm, setShowProductForm] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const productsQuery = trpc.merchant.getProducts.useQuery();
   const categoriesQuery = trpc.merchant.getCategories.useQuery();
   const merchantsQuery = trpc.merchant.getMerchants.useQuery();
 
-  const createProductMutation = trpc.merchant.createProduct.useMutation({
-    onSuccess: () => { toast.success("商品添加成功"); productsQuery.refetch(); setShowProductForm(false); },
-    onError: (e) => toast.error(e.message),
-  });
-
   const updateProductMutation = trpc.merchant.updateProduct.useMutation({
-    onSuccess: () => { toast.success("商品更新成功"); productsQuery.refetch(); setShowProductForm(false); setEditingProduct(null); },
+    onSuccess: () => { toast.success("操作成功"); productsQuery.refetch(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -596,14 +306,6 @@ export default function ProductLibraryManager() {
   const products: Product[] = (productsQuery.data || []) as any;
   const categories: Category[] = (categoriesQuery.data || []) as any;
   const merchants: Merchant[] = (merchantsQuery.data || []) as any;
-
-  const handleSaveProduct = (data: Partial<Product>) => {
-    if (editingProduct) {
-      updateProductMutation.mutate({ id: editingProduct.id, ...data } as any);
-    } else {
-      createProductMutation.mutate(data as any);
-    }
-  };
 
   const handleDeleteProduct = (id: number) => {
     if (confirm("确定要删除这个商品吗？")) {
@@ -863,30 +565,6 @@ export default function ProductLibraryManager() {
         </DialogContent>
       </Dialog>
 
-      {/* 商品表单底部抽屉 */}
-      <Sheet
-        open={showProductForm}
-        onOpenChange={(open) => {
-          if (!open) { setShowProductForm(false); setEditingProduct(null); }
-        }}
-      >
-        <SheetContent side="bottom" className="h-[90vh] rounded-t-2xl px-4 pt-4">
-          <SheetHeader className="mb-4">
-            <SheetTitle className="text-base">
-              {editingProduct ? "编辑商品" : "添加新商品"}
-            </SheetTitle>
-          </SheetHeader>
-          <div className="overflow-y-auto h-[calc(90vh-80px)]">
-            <ProductForm
-              product={editingProduct}
-              categories={categories}
-              merchants={merchants}
-              onSave={handleSaveProduct}
-              onClose={() => { setShowProductForm(false); setEditingProduct(null); }}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
