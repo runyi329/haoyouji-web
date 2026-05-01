@@ -80,8 +80,7 @@ export default function PointsManagement() {
 
   // 获取所有积分记录
   const { data: allLogs, isLoading: isLoadingLogs } = trpc.pointSystem.getAllLogs.useQuery({
-    page: 1,
-    pageSize: 100,
+    limit: 200,
   });
 
   // 获取所有积分规则
@@ -179,10 +178,10 @@ export default function PointsManagement() {
     }));
   };
 
-  const displayUsers = searchKeyword ? searchResults : usersData?.users;
+  const displayUsers = searchKeyword ? searchResults : usersData;
 
   // 筛选历史记录
-  const filteredLogs = allLogs?.logs.filter((log) => {
+  const filteredLogs = (allLogs as any[])?.filter((log: any) => {
     // 用户名筛选
     if (historySearchKeyword && !log.username.includes(historySearchKeyword)) {
       return false;
@@ -349,7 +348,7 @@ export default function PointsManagement() {
                 </TableHeader>
                 <TableBody>
                   {filteredLogs && filteredLogs.length > 0 ? (
-                    filteredLogs.map((log) => (
+                    filteredLogs.map((log: any) => (
                       <TableRow key={log.id}>
                         <TableCell className="text-sm text-muted-foreground">
                           {new Date(log.createdAt).toLocaleString("zh-CN")}
