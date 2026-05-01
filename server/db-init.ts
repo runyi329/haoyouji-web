@@ -665,6 +665,13 @@ export async function initDatabase() {
     `);
     console.log('[DB Init] gto_hand_logs table ready');
 
+    // 添加 merchant_products.pointsPrice 字段（积分兑换价格）
+    const dbConnMerchant = await getDbConnection();
+    if (dbConnMerchant) {
+      await safeAddColumn(dbConnMerchant, 'merchant_products', 'pointsPrice', "INT NOT NULL DEFAULT 0 COMMENT '积分兑换价格（0=未设定）' AFTER `inPointsShop`");
+      console.log('[DB Init] ✅ merchant_products.pointsPrice column checked');
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);

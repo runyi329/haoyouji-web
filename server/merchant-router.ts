@@ -52,6 +52,7 @@ export const merchantRouter = router({
             sourceType: merchantProducts.sourceType,
             isShareable: merchantProducts.isShareable,
             inPointsShop: merchantProducts.inPointsShop,
+            pointsPrice: merchantProducts.pointsPrice,
             salesCount: merchantProducts.salesCount,
             stock: merchantProducts.stock,
             ownerMerchantId: merchantProducts.ownerMerchantId,
@@ -1481,13 +1482,56 @@ export const merchantRouter = router({
     .input(z.object({
       id: z.number(),
       inPointsShop: z.number().min(0).max(1),
+      pointsPrice: z.number().min(0).optional(), // 积分兑换价格
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const updateData: any = { inPointsShop: input.inPointsShop };
+      if (input.inPointsShop === 1 && input.pointsPrice !== undefined) {
+        updateData.pointsPrice = input.pointsPrice;
+      } else if (input.inPointsShop === 0) {
+        updateData.pointsPrice = 0; // 下架时清除积分价格
+      }
       await db.update(merchantProducts)
-        .set({ inPointsShop: input.inPointsShop })
+        .set(updateData)
         .where(eq(merchantProducts.id, input.id));
       return { success: true };
     }),
+
+  // 获取积分商城商品列表（公开接口）
+  getPointsShopProducts: publicProcedure
+    .input(z.object({ limit: z.number().optional() }).optional())
+    .query(async ({ input }) => {
+    const db = await getDb();
+    if (!db) return [];
+    try {
+      const rows = await db
+        .select({
+          id: merchantProducts.id,
+          name: merchantProducts.name,
+          subtitle: merchantProducts.subtitle,
+          basePrice: merchantProducts.basePrice,
+          mainImageUrl: merchantProducts.mainImageUrl,
+          imageUrls: merchantProducts.imageUrls,
+          description: merchantProducts.description,
+          pointsPrice: merchantProducts.pointsPrice,
+          extendedFields: merchantProducts.extendedFields,
+          categoryName: merchantProductCategories.name,
+          ownerShopName: merchants.shopName,
+          ownerMerchantCode: merchants.merchantCode,
+          salesCount: merchantProducts.salesCount,
+          stock: merchantProducts.stock,
+        })
+        .from(merchantProducts)
+        .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
+        .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
+        .where(and(eq(merchantProducts.inPointsShop, 1), eq(merchantProducts.status, 'active')))
+        .orderBy(desc(merchantProducts.updatedAt))
+        .limit(input?.limit ?? 100);
+      return rows;
+    } catch (e) {
+      return [];
+    }
+  }),
 });

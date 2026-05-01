@@ -1744,13 +1744,12 @@ export default function Home() {
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {pointsShopProducts.slice(0, 8).map((item) => {
-                    // 解析 extendedFields 中的积分价格和标签
-                    let pointsCost = Math.round(parseFloat(item.basePrice || '100'));
+                    // 使用 pointsPrice 字段（管理员设定的积分兑换价格）
+                    let pointsCost = (item as any).pointsPrice || Math.round(parseFloat(item.basePrice || '100'));
                     let tag = '';
                     try {
                       if (item.extendedFields) {
                         const ext = JSON.parse(item.extendedFields);
-                        if (ext.pointsCost) pointsCost = Number(ext.pointsCost);
                         if (ext.tag) tag = ext.tag;
                       }
                     } catch {}

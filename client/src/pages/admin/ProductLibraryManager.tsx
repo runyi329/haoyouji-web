@@ -5,6 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -49,6 +56,7 @@ interface Product {
   sourceType: "platform" | "merchant" | "shared";
   isShareable: number;
   inPointsShop: number;
+  pointsPrice?: number;
   salesCount: number;
   stock: number;
   ownerMerchantId?: number;
@@ -94,7 +102,7 @@ function ProductList({
   onEdit: (p: Product) => void;
   onDelete: (id: number) => void;
   onToggleStatus: (id: number, status: string) => void;
-  onTogglePointsShop: (id: number, inPointsShop: number) => void;
+  onTogglePointsShop: (id: number, inPointsShop: number, product?: Product) => void;
 }) {
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -242,11 +250,15 @@ function ProductList({
                       {/* 操作按钮 */}
                       <div className="flex items-center gap-0.5">
                         <button
-                          onClick={() => onTogglePointsShop(product.id, product.inPointsShop ? 0 : 1)}
+                          onClick={() => onTogglePointsShop(product.id, product.inPointsShop ? 0 : 1, product)}
                           className={`p-1.5 rounded-lg active:bg-gray-200 ${product.inPointsShop ? 'text-amber-500 bg-amber-50' : 'text-gray-300 hover:bg-gray-100'}`}
-                          title={product.inPointsShop ? "已上架到积分商城（点击下架）" : "上架到积分商城"}
+                          title={product.inPointsShop ? `已上架到积分商城（积分：${product.pointsPrice ?? 0}）点击下架` : "上架到积分商城"}
                         >
                           <Gift className="w-4 h-4" />
+                          {product.inPointsShop && product.pointsPrice ? (
+                            <span className="absolute -top-1 -right-1 text-[9px] bg-amber-500 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center font-bold leading-none">已
+                            </span>
+                          ) : null}
                         </button>
                         <button
                           onClick={() => onToggleStatus(product.id, isActive ? "inactive" : "active")}
@@ -532,16 +544,43 @@ export default function ProductLibraryManager() {
     updateProductMutation.mutate({ id, status: status as any });
   };
 
+  const [pointsDialogOpen, setPointsDialogOpen] = useState(false);
+  const [pointsDialogProduct, setPointsDialogProduct] = useState<Product | null>(null);
+  const [pointsInput, setPointsInput] = useState("");
+
   const togglePointsShopMutation = trpc.merchant.toggleProductInPointsShop.useMutation({
     onSuccess: (_, vars) => {
-      toast.success(vars.inPointsShop ? "已上架到积分商城" : "已从积分商城下架");
+      toast.success(vars.inPointsShop ? `已上架到积分商城（${vars.pointsPrice}积分）` : "已从积分商城下架");
       productsQuery.refetch();
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const handleTogglePointsShop = (id: number, inPointsShop: number) => {
-    togglePointsShopMutation.mutate({ id, inPointsShop });
+  const handleTogglePointsShop = (id: number, inPointsShop: number, product?: Product) => {
+    if (inPointsShop === 1 && product) {
+      // 上架时弹出积分设定对话框
+      setPointsDialogProduct(product);
+      setPointsInput(product.pointsPrice ? String(product.pointsPrice) : "");
+      setPointsDialogOpen(true);
+    } else {
+      // 下架时直接执行
+      if (confirm("确定要将此商品从积分商城下架吗？")) {
+        togglePointsShopMutation.mutate({ id, inPointsShop: 0 });
+      }
+    }
+  };
+
+  const handleConfirmPointsPrice = () => {
+    const price = parseInt(pointsInput, 10);
+    if (!pointsDialogProduct) return;
+    if (isNaN(price) || price <= 0) {
+      toast.error("请输入有效的积分数量（必须大于0）");
+      return;
+    }
+    togglePointsShopMutation.mutate({ id: pointsDialogProduct.id, inPointsShop: 1, pointsPrice: price });
+    setPointsDialogOpen(false);
+    setPointsDialogProduct(null);
+    setPointsInput("");
   };
 
   const activeCount = products.filter((p) => p.status === "active").length;
@@ -700,6 +739,58 @@ export default function ProductLibraryManager() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* 积分设定对话框 */}
+      <Dialog open={pointsDialogOpen} onOpenChange={(open) => { if (!open) { setPointsDialogOpen(false); setPointsDialogProduct(null); setPointsInput(""); } }}>
+        <DialogContent className="max-w-sm mx-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Gift className="w-5 h-5 text-amber-500" />
+              设定积分兑换价格
+            </DialogTitle>
+          </DialogHeader>
+          {pointsDialogProduct && (
+            <div className="space-y-4 py-2">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <div className="flex items-center gap-3">
+                  {pointsDialogProduct.mainImageUrl && (
+                    <img src={pointsDialogProduct.mainImageUrl} alt={pointsDialogProduct.name} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{pointsDialogProduct.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">原价 ¥{pointsDialogProduct.basePrice}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-gray-700">积分兑换价格</Label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="请输入积分数量，如 500"
+                    value={pointsInput}
+                    onChange={(e) => setPointsInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleConfirmPointsPrice()}
+                    className="pr-12 h-11 text-base"
+                    autoFocus
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">积分</span>
+                </div>
+                <p className="text-xs text-gray-400">设定后，用户可在积分兑换商城用积分兑换此商品（原价将被隐藏）</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setPointsDialogOpen(false); setPointsDialogProduct(null); setPointsInput(""); }} className="flex-1">
+              取消
+            </Button>
+            <Button onClick={handleConfirmPointsPrice} disabled={!pointsInput || togglePointsShopMutation.isPending} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white">
+              {togglePointsShopMutation.isPending ? "保存中..." : "确认上架"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 商品表单底部抽屉 */}
       <Sheet
