@@ -206,6 +206,8 @@ export const merchantRouter = router({
           extendedFields: merchantProducts.extendedFields,
           stock: merchantProducts.stock,
           salesCount: merchantProducts.salesCount,
+          inPointsShop: merchantProducts.inPointsShop,
+          pointsPrice: merchantProducts.pointsPrice,
           categoryName: merchantProductCategories.name,
           ownerShopName: merchants.shopName,
           ownerMerchantCode: merchants.merchantCode,
