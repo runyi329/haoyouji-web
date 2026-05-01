@@ -243,24 +243,20 @@ export default function FunderManagement() {
   // 编辑面板专用：查询当前编辑订单的结息记录（必须在 previewPaidInterest 使用之前声明，避免 TDZ 错误）
   const { data: editingOrderPayments, refetch: refetchEditingPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: editingOrderId! },
-    { enabled: !!editingOrderId && !editingOrder?.participantInfo, staleTime: 0 }
+    { enabled: !!editingOrderId, staleTime: 0 }
   );
   const { data: editingPaidSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId, orderIds: editingOrderId ? [editingOrderId] : [] },
     { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
   );
-  // 受邀订单的已结佣金独立于利息结算记录，初始为 0（只有通过「记录结佣」按钮操作后才会有値）
-  // 直接从 editingOrderPayments（结息记录列表）前端计算总额和最新币种，避免 funderGetInterestPaymentSummary 的 key 类型问题
-  const previewPaidInterest: number = editingOrder?.participantInfo
-    ? 0
-    : (Array.isArray(editingOrderPayments) && editingOrderPayments.length > 0
-        ? editingOrderPayments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || '0'), 0)
-        : 0);
-  const previewPaidInterestCurrency: string = editingOrder?.participantInfo
-    ? 'U'
-    : (Array.isArray(editingOrderPayments) && editingOrderPayments.length > 0
-        ? (editingOrderPayments[0]?.currency || 'U')
-        : 'U');
+  // 直接从 editingOrderPayments（结息记录列表）前端计算总额和最新币种
+  // 注意：不再用 participantInfo 判断，管理员编辑任何订单都应显示已结利息
+  const previewPaidInterest: number = Array.isArray(editingOrderPayments) && editingOrderPayments.length > 0
+    ? editingOrderPayments.reduce((sum: number, p: any) => sum + parseFloat(p.amount || '0'), 0)
+    : 0;
+  const previewPaidInterestCurrency: string = Array.isArray(editingOrderPayments) && editingOrderPayments.length > 0
+    ? (editingOrderPayments[0]?.currency || 'U')
+    : 'U';
 
   // 担保价值（所有担保货币折算为 USDT 的总值）
   const computedCollateralValue = useMemo(() => {
