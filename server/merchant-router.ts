@@ -315,6 +315,7 @@ export const merchantRouter = router({
       basePrice: z.string().optional(),
       originalPrice: z.string().optional(),
       mainImageUrl: z.string().optional(),
+      thumbnailUrl: z.string().optional(),
       imageUrls: z.string().optional(),
       categoryId: z.number().optional(),
       status: z.enum(["active", "inactive", "draft"]).optional(),
@@ -326,8 +327,7 @@ export const merchantRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
-
-      const { id, ...fields } = input;
+      const { id, ...fields } = input;;
       const updateData: Record<string, unknown> = {};
       Object.entries(fields).forEach(([key, value]) => {
         if (value !== undefined) updateData[key] = value;
@@ -1797,6 +1797,7 @@ export const merchantRouter = router({
           basePrice: merchantProducts.basePrice,
           originalPrice: merchantProducts.originalPrice,
           mainImageUrl: merchantProducts.mainImageUrl,
+          thumbnailUrl: merchantProducts.thumbnailUrl,
           categoryId: merchantProducts.categoryId,
           salesCount: merchantProducts.salesCount,
           stock: merchantProducts.stock,
