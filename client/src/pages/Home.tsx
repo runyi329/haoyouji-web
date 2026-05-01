@@ -2522,13 +2522,28 @@ export default function Home() {
                             <ShoppingBag className="w-8 h-8 text-[#A80000] opacity-40" />
                           </div>
                         )}
-                        {/* 蓝色角标：左下角胶囊双色 */}
-                        {(item as any).badgeEnabled === 1 && (item as any).badgeText && (
-                          <div className="absolute bottom-1 left-0 flex items-center overflow-hidden rounded-full shadow-sm" style={{ fontSize: '9px', lineHeight: '1.2' }}>
-                            <span className="bg-blue-600 text-white px-1.5 py-0.5 flex items-center">
-                              <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" /></svg>
-                            </span>
-                            <span className="bg-white text-blue-600 px-1.5 py-0.5 font-semibold border border-blue-200 border-l-0" style={{ maxWidth: '52px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(item as any).badgeText}</span>
+                        {/* 蓝白角标：紧贴左下角，双段文字，无间距 */}
+                        {(item as any).badgeEnabled === 1 && ((item as any).badgeLeftText || (item as any).badgeText) && (
+                          <div
+                            className="absolute bottom-0 left-0 flex items-stretch overflow-hidden shadow-sm"
+                            style={{ borderRadius: '0 4px 0 8px', fontSize: '9px', lineHeight: '16px', height: '16px' }}
+                          >
+                            {(item as any).badgeLeftText && (
+                              <span
+                                className="bg-blue-600 text-white flex items-center px-1.5 font-semibold"
+                                style={{ whiteSpace: 'nowrap' }}
+                              >
+                                {(item as any).badgeLeftText}
+                              </span>
+                            )}
+                            {(item as any).badgeText && (
+                              <span
+                                className="bg-white text-blue-600 flex items-center px-1.5 font-semibold"
+                                style={{ whiteSpace: 'nowrap', borderLeft: (item as any).badgeLeftText ? '1px solid #bfdbfe' : 'none' }}
+                              >
+                                {(item as any).badgeText}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>

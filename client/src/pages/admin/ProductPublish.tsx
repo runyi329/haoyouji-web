@@ -59,7 +59,8 @@ interface ProductFormData {
   pointsPrice: string;
   // 蓝色角标
   badgeEnabled: boolean;
-  badgeText: string;
+  badgeLeftText: string;  // 左段：蓝底白字
+  badgeText: string;     // 右段：白底蓝字
   // 商品详情
   description: string;
   // 物流
@@ -222,6 +223,7 @@ export default function ProductPublish() {
     inPointsShop: false,
     pointsPrice: "",
     badgeEnabled: false,
+    badgeLeftText: "",
     badgeText: "",
     description: "",
     shippingNote: "",
@@ -266,6 +268,7 @@ export default function ProductPublish() {
         inPointsShop: !!p.inPointsShop,
         pointsPrice: p.pointsPrice ? String(p.pointsPrice) : "",
         badgeEnabled: !!p.badgeEnabled,
+        badgeLeftText: p.badgeLeftText || "",
         badgeText: p.badgeText || "",
         description: p.description || "",
         shippingNote: "",
@@ -382,6 +385,7 @@ export default function ProductPublish() {
           description: form.description || undefined,
           extendedFields: form.extendedFields || undefined,
           badgeEnabled: form.badgeEnabled ? 1 : 0,
+          badgeLeftText: form.badgeLeftText || null,
           badgeText: form.badgeText || null,
         } as any);
         // 积分商城设置
@@ -853,8 +857,8 @@ export default function ProductPublish() {
 
           <div className="flex items-center justify-between mb-4">
             <div>
-              <p className="text-sm font-medium text-gray-700">显示蓝色角标</p>
-              <p className="text-xs text-gray-400 mt-0.5">开启后商品图片左下角显示胶囊形角标</p>
+              <p className="text-sm font-medium text-gray-700">显示蓝白角标</p>
+              <p className="text-xs text-gray-400 mt-0.5">开启后商品图片左下角显示胶囊双色角标</p>
             </div>
             <Switch
               checked={form.badgeEnabled}
@@ -863,38 +867,80 @@ export default function ProductPublish() {
           </div>
 
           {form.badgeEnabled && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-              <Label className="text-xs text-blue-700 mb-1.5 block font-medium">
-                角标文字 <span className="text-gray-400">(建议 2-8 字)</span>
-              </Label>
-              <Input
-                type="text"
-                value={form.badgeText}
-                onChange={(e) => {
-                  const val = e.target.value.slice(0, 8);
-                  setForm({ ...form, badgeText: val });
-                }}
-                placeholder="如：看讲解、限时特惠、新品上架..."
-                className="h-11 text-sm bg-white"
-                maxLength={8}
-              />
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-xs text-gray-400">{form.badgeText.length}/8 字</p>
-                {form.badgeText && (
-                  <div className="flex items-center gap-0 rounded-full overflow-hidden text-xs shadow-sm">
-                    <span className="bg-blue-600 text-white px-2 py-0.5 flex items-center gap-1">
-                      <span>▶</span>
-                    </span>
-                    <span className="bg-white text-blue-600 border border-blue-200 px-2 py-0.5 font-medium border-l-0">{form.badgeText}</span>
-                  </div>
-                )}
+            <div className="space-y-3">
+              {/* 左段文字：蓝底白字 */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                <Label className="text-xs text-blue-700 mb-1.5 block font-medium">
+                  左段文字 <span className="text-gray-400">(蓝底白字，最多 4 字)</span>
+                </Label>
+                <Input
+                  type="text"
+                  value={form.badgeLeftText}
+                  onChange={(e) => setForm({ ...form, badgeLeftText: e.target.value.slice(0, 4) })}
+                  placeholder="如：直播、限时、新品"
+                  className="h-10 text-sm bg-white"
+                  maxLength={4}
+                />
+                <p className="text-xs text-gray-400 mt-1">{form.badgeLeftText.length}/4 字</p>
               </div>
-              {form.badgeText && (
-                <p className="text-xs text-blue-600 mt-1.5 flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  角标将显示在商品图片左下角
-                </p>
-              )}
+
+              {/* 右段文字：白底蓝字 */}
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                <Label className="text-xs text-gray-600 mb-1.5 block font-medium">
+                  右段文字 <span className="text-gray-400">(白底蓝字，最多 8 字)</span>
+                </Label>
+                <Input
+                  type="text"
+                  value={form.badgeText}
+                  onChange={(e) => setForm({ ...form, badgeText: e.target.value.slice(0, 8) })}
+                  placeholder="如：看讲解、限时特惠、新品上架"
+                  className="h-10 text-sm bg-white"
+                  maxLength={8}
+                />
+                <p className="text-xs text-gray-400 mt-1">{form.badgeText.length}/8 字</p>
+              </div>
+
+              {/* 实时预览 */}
+              <div className="bg-gray-100 rounded-xl p-3">
+                <p className="text-xs text-gray-500 mb-2 font-medium">实时预览</p>
+                <div className="flex items-end gap-3">
+                  {/* 模拟商品图片占位 */}
+                  <div className="relative w-20 h-20 bg-gray-200 rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden">
+                    <span className="text-gray-400 text-xs">商品图</span>
+                    {/* 角标预览：左下角岖角，紧贴图片边缘 */}
+                    {(form.badgeLeftText || form.badgeText) && (
+                      <div
+                        className="absolute bottom-0 left-0 flex items-stretch overflow-hidden"
+                        style={{ borderRadius: '0 4px 0 8px', fontSize: '9px', lineHeight: '16px', height: '16px' }}
+                      >
+                        {form.badgeLeftText && (
+                          <span
+                            className="bg-blue-600 text-white flex items-center px-1.5 font-medium"
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            {form.badgeLeftText}
+                          </span>
+                        )}
+                        {form.badgeText && (
+                          <span
+                            className="bg-white text-blue-600 flex items-center px-1.5 font-medium"
+                            style={{ whiteSpace: 'nowrap', borderLeft: form.badgeLeftText ? '1px solid #bfdbfe' : 'none' }}
+                          >
+                            {form.badgeText}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-400 leading-relaxed">
+                    <p>↑ 角标显示在商品图片</p>
+                    <p>左下角，紧贴图片边缘</p>
+                    {!form.badgeLeftText && !form.badgeText && (
+                      <p className="text-amber-500 mt-1">请至少填写一段文字</p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
