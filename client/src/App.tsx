@@ -218,6 +218,7 @@ const ProductDetail = lazy(() => import("./pages/ProductDetail"));
 const MerchantProductDetail = lazy(() => import("./pages/MerchantProductDetail"));
 const MyRedeemOrders = lazy(() => import("./pages/MyRedeemOrders"));
 const AdminRedeemOrders = lazy(() => import("./pages/admin/AdminRedeemOrders"));
+const ProductPublish = lazy(() => import("./pages/admin/ProductPublish"));
 const PaymentResult = lazy(() => import("./pages/PaymentResult"));
 const SentiaHome = lazy(() => import("./pages/SentiaHome"));
 // AE 共享抽奖
@@ -366,6 +367,8 @@ function Router() {
         <Route path="/merchant-product/:id" component={MerchantProductDetail} />
         <Route path="/my-redeem-orders" component={MyRedeemOrders} />
         <Route path="/admin/redeem-orders" component={AdminRedeemOrders} />
+        <Route path="/admin/product/new" component={ProductPublish} />
+        <Route path="/admin/product/:id/edit" component={ProductPublish} />
         <Route path="/payment/result" component={PaymentResult} />
 
         {/* 卡券相关页面 */}

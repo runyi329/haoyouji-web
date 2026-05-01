@@ -669,7 +669,7 @@ export default function ProductLibraryManager() {
           <p className="text-xs text-gray-400 mt-0.5">管理商家商品，配置共享关系</p>
         </div>
         <Button
-          onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
+          onClick={() => setLocation("/admin/product/new")}
           className="bg-red-700 hover:bg-red-800 h-9 px-3 text-sm"
         >
           <Plus className="w-4 h-4 mr-1" />
@@ -720,7 +720,7 @@ export default function ProductLibraryManager() {
             <ProductList
               products={products}
               categories={categories}
-              onEdit={(p) => { setEditingProduct(p); setShowProductForm(true); }}
+              onEdit={(p) => setLocation(`/admin/product/${p.id}/edit`)}
               onDelete={handleDeleteProduct}
               onToggleStatus={handleToggleStatus}
               onTogglePointsShop={handleTogglePointsShop}
