@@ -8,6 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -49,6 +64,7 @@ import {
   Network,
   MessageSquare,
   ShoppingBag,
+  PackagePlus,
 } from "lucide-react";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import {
@@ -232,6 +248,21 @@ export default function Profile() {
   // 修改密码对话框
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
 
+  // 上架商品 Sheet 状态
+  const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [productForm, setProductForm] = useState({
+    name: "",
+    subtitle: "",
+    basePrice: "",
+    originalPrice: "",
+    mainImageUrl: "",
+    description: "",
+    stock: "999",
+    categoryId: "",
+    inPointsShop: false,
+    pointsPrice: "",
+  });
+
   // 退出登录确认对话框
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
@@ -281,6 +312,77 @@ export default function Profile() {
       toast.error(`修改失败: ${error.message}`);
     },
   });
+
+  // 获取商品分类
+  const { data: categoriesData } = trpc.merchant.getCategories.useQuery(undefined, {
+    staleTime: 60000,
+  });
+
+  // 创建商品 mutation
+  const createProductMutation = trpc.merchant.createProduct.useMutation({
+    onSuccess: async (data) => {
+      // 如果勾选了积分商城，同时设置积分价格
+      if (productForm.inPointsShop && productForm.pointsPrice && data.productId) {
+        try {
+          await togglePointsShopMutation.mutateAsync({
+            id: data.productId,
+            inPointsShop: 1,
+            pointsPrice: parseInt(productForm.pointsPrice),
+          });
+        } catch (e) {
+          // 上架失败不影响商品创建
+        }
+      }
+      toast.success("商品上架成功！" + (productForm.inPointsShop ? "已同时上架到积分商城" : "可在商品库中查看"));
+      setIsAddProductOpen(false);
+      setProductForm({
+        name: "",
+        subtitle: "",
+        basePrice: "",
+        originalPrice: "",
+        mainImageUrl: "",
+        description: "",
+        stock: "999",
+        categoryId: "",
+        inPointsShop: false,
+        pointsPrice: "",
+      });
+    },
+    onError: (error) => {
+      toast.error("上架失败: " + error.message);
+    },
+  });
+
+  // 积分商城 mutation
+  const togglePointsShopMutation = trpc.merchant.toggleProductInPointsShop.useMutation();
+
+  // 提交商品表单
+  const handleSubmitProduct = () => {
+    if (!productForm.name.trim()) {
+      toast.error("请填写商品名称");
+      return;
+    }
+    if (!productForm.basePrice || isNaN(parseFloat(productForm.basePrice))) {
+      toast.error("请填写正确的商品价格");
+      return;
+    }
+    if (productForm.inPointsShop && (!productForm.pointsPrice || isNaN(parseInt(productForm.pointsPrice)))) {
+      toast.error("已勾选上架积分商城，请填写积分价格");
+      return;
+    }
+    createProductMutation.mutate({
+      name: productForm.name.trim(),
+      subtitle: productForm.subtitle.trim() || undefined,
+      basePrice: productForm.basePrice,
+      originalPrice: productForm.originalPrice || undefined,
+      mainImageUrl: productForm.mainImageUrl.trim() || undefined,
+      description: productForm.description.trim() || undefined,
+      stock: parseInt(productForm.stock) || 999,
+      categoryId: productForm.categoryId ? parseInt(productForm.categoryId) : undefined,
+      status: "active",
+      sourceType: "platform",
+    });
+  };
 
   // 退出登录mutation
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -457,6 +559,7 @@ export default function Profile() {
       { id: "admin-panel", icon: ShieldCheck, label: "后台管理", color: "bg-[#D32F2F]-light text-[#D32F2F]", badge: null, onClick: () => navigate("/admin") },
       { id: "topology", icon: Network, label: "拓扑", color: "bg-[#F3F0FF] text-[#5E35B1]", badge: null, onClick: () => navigate("/parent/topology") },
       { id: "sms-manage", icon: MessageSquare, label: "短信管理", color: "bg-green-50 text-green-600", badge: null, onClick: () => navigate("/jiang/sms-manage") },
+      { id: "add-product", icon: PackagePlus, label: "上架商品", color: "bg-amber-50 text-amber-600", badge: null, onClick: () => setIsAddProductOpen(true) },
     ] : []),
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => toast("功能开发中") },
@@ -770,6 +873,172 @@ export default function Profile() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 上架商品 Sheet */}
+      <Sheet open={isAddProductOpen} onOpenChange={setIsAddProductOpen}>
+        <SheetContent side="bottom" className="h-[90vh] overflow-y-auto rounded-t-2xl">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-lg font-bold flex items-center gap-2">
+              <PackagePlus className="w-5 h-5 text-amber-600" />
+              快速上架商品
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="space-y-4 pb-8">
+            {/* 商品名称 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">商品名称 <span className="text-red-500">*</span></Label>
+              <Input
+                placeholder="请输入商品名称"
+                value={productForm.name}
+                onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+              />
+            </div>
+
+            {/* 副标题 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">副标题（可选）</Label>
+              <Input
+                placeholder="简短描述，如：限时特惠"
+                value={productForm.subtitle}
+                onChange={(e) => setProductForm({ ...productForm, subtitle: e.target.value })}
+              />
+            </div>
+
+            {/* 价格行 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">售价（元）<span className="text-red-500">*</span></Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={productForm.basePrice}
+                  onChange={(e) => setProductForm({ ...productForm, basePrice: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium">原价（元，可选）</Label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  value={productForm.originalPrice}
+                  onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* 库存 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">库存数量</Label>
+              <Input
+                type="number"
+                placeholder="999"
+                value={productForm.stock}
+                onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })}
+              />
+            </div>
+
+            {/* 分类 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">商品分类（可选）</Label>
+              <Select
+                value={productForm.categoryId}
+                onValueChange={(v) => setProductForm({ ...productForm, categoryId: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择分类" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(categoriesData as any[])?.map((cat: any) => (
+                    <SelectItem key={cat.id} value={String(cat.id)}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* 主图 URL */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">主图链接（可选）</Label>
+              <Input
+                placeholder="https://..."
+                value={productForm.mainImageUrl}
+                onChange={(e) => setProductForm({ ...productForm, mainImageUrl: e.target.value })}
+              />
+              {productForm.mainImageUrl && (
+                <div className="mt-2 rounded-lg overflow-hidden border border-gray-100">
+                  <img
+                    src={productForm.mainImageUrl}
+                    alt="预览"
+                    className="w-full h-32 object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 商品描述 */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">商品描述（可选）</Label>
+              <Textarea
+                placeholder="详细描述商品特点、规格等..."
+                value={productForm.description}
+                onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                rows={3}
+              />
+            </div>
+
+            {/* 积分商城开关 */}
+            <div className="bg-amber-50 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-amber-800">同时上架到积分商城</div>
+                  <div className="text-xs text-amber-600 mt-0.5">用户可用积分兑换此商品</div>
+                </div>
+                <Switch
+                  checked={productForm.inPointsShop}
+                  onCheckedChange={(v) => setProductForm({ ...productForm, inPointsShop: v })}
+                />
+              </div>
+              {productForm.inPointsShop && (
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-amber-800">积分兑换价格 <span className="text-red-500">*</span></Label>
+                  <Input
+                    type="number"
+                    placeholder="所需积分数量"
+                    value={productForm.pointsPrice}
+                    onChange={(e) => setProductForm({ ...productForm, pointsPrice: e.target.value })}
+                    className="border-amber-200 focus:border-amber-400"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 提交按钮 */}
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setIsAddProductOpen(false)}
+              >
+                取消
+              </Button>
+              <Button
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={handleSubmitProduct}
+                disabled={createProductMutation.isPending}
+              >
+                {createProductMutation.isPending ? (
+                  <><Loader2 className="w-4 h-4 animate-spin mr-1" />上架中...</>
+                ) : (
+                  "确认上架"
+                )}
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
     </div>
   );
