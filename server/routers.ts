@@ -13060,15 +13060,18 @@ export const appRouter = router({
         if (!input.orderIds.length) return [];
         // 按 order_id + currency 分组汇总，同时取每组最新的 exchange_rate
         const rows = await db.execute(
-          sql`SELECT order_id, COALESCE(currency, 'U') as currency, SUM(amount) as total_paid,
+          sql`SELECT t.order_id, t.currency, t.total_paid,
               (SELECT p2.exchange_rate FROM funder_interest_payments p2
-               WHERE p2.ledger_id = funder_interest_payments.ledger_id
-                 AND p2.order_id = funder_interest_payments.order_id
-                 AND COALESCE(p2.currency, 'U') = COALESCE(funder_interest_payments.currency, 'U')
+               WHERE p2.ledger_id = ${input.ledgerId}
+                 AND p2.order_id = t.order_id
+                 AND IFNULL(p2.currency, 'U') = t.currency
                ORDER BY p2.pay_date DESC, p2.id DESC LIMIT 1) as latest_rate
-              FROM funder_interest_payments
-              WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(input.orderIds.join(','))})
-              GROUP BY order_id, COALESCE(currency, 'U')`
+              FROM (
+                SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
+                FROM funder_interest_payments
+                WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(input.orderIds.join(','))})
+                GROUP BY order_id, IFNULL(currency, 'U')
+              ) t`
         ) as any;
         // 返回: [{ orderId, currency, total, exchangeRate }]
         const result: Array<{ orderId: number; currency: string; total: number; exchangeRate: number }> = [];
