@@ -101,7 +101,8 @@ export const merchantProducts = mysqlTable("merchant_products", {
   pointsPrice: int("pointsPrice").default(0).notNull(), // 积分兑换价格（0=未设定）
   // 蓝色角标（图片左下角胶囊双色角标）
   badgeEnabled: tinyint("badgeEnabled").default(0).notNull(), // 是否显示角标（0=不显示，1=显示）
-  badgeText: varchar("badgeText", { length: 16 }),             // 角标文字（2-8字，右侧白底蓝字区域）
+  badgeLeftText: varchar("badgeLeftText", { length: 8 }),      // 角标左段文字（蓝底白字，如：直播、看讲解）
+  badgeText: varchar("badgeText", { length: 16 }),             // 角标右段文字（白底蓝字，如：看讲解、限时特惠）
   // 扩展字段（JSON，存储红酒特有字段如产区/年份/酒庄等）
   extendedFields: text("extendedFields"),
   sortOrder: int("sortOrder").default(0).notNull(),

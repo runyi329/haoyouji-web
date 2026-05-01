@@ -324,7 +324,8 @@ export const merchantRouter = router({
       extendedFields: z.string().optional(),
       description: z.string().optional(),
       badgeEnabled: z.number().min(0).max(1).optional(), // 是否显示角标
-      badgeText: z.string().max(16).optional().nullable(), // 角标文字（2-8字）
+      badgeLeftText: z.string().max(8).optional().nullable(), // 角标左段文字（蓝底白字）
+      badgeText: z.string().max(16).optional().nullable(), // 角标右段文字（白底蓝字）
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1809,11 +1810,10 @@ export const merchantRouter = router({
           stock: merchantProducts.stock,
           extendedFields: merchantProducts.extendedFields,
           categoryName: merchantProductCategories.name,
-          ownerShopName: merchants.shopName,
-          badgeEnabled: merchantProducts.badgeEnabled,
+          ownerShopName: merchants.shopName,          badgeEnabled: merchantProducts.badgeEnabled,
+          badgeLeftText: merchantProducts.badgeLeftText,
           badgeText: merchantProducts.badgeText,
-        })
-        .from(merchantProducts)
+          // 分类信息   .from(merchantProducts)
         .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
         .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
         .where(and(...conditions))
