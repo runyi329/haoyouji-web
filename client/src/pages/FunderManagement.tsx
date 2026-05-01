@@ -238,7 +238,8 @@ export default function FunderManagement() {
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
 
   // 编辑订单时实时查询已结利息
-  const editingOrderId = editingOrder?.id ?? null;
+  // 强制转成数字，避免 MySQL 返回字符串导致 tRPC z.number() 校验失败
+  const editingOrderId: number | null = editingOrder?.id ? Number(editingOrder.id) : null;
   // 编辑面板专用：查询当前编辑订单的结息记录（必须在 previewPaidInterest 使用之前声明，避免 TDZ 错误）
   const { data: editingOrderPayments, refetch: refetchEditingPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: editingOrderId! },
