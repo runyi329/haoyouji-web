@@ -84,6 +84,7 @@ export const merchantProducts = mysqlTable("merchant_products", {
   subtitle: varchar("subtitle", { length: 300 }),           // 副标题/简介
   description: text("description"),                         // 详细描述（富文本/HTML）
   mainImageUrl: text("mainImageUrl"),                       // 主图URL
+  thumbnailUrl: text("thumbnailUrl"),                         // 列表预览图URL（建议800x800正方形）
   imageUrls: text("imageUrls"),                             // 图片列表（JSON数组）
   videoUrl: text("videoUrl"),                               // 视频介绍URL
   basePrice: decimal("basePrice", { precision: 10, scale: 2 }).notNull(), // 基础价格

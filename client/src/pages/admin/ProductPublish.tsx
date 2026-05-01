@@ -45,6 +45,7 @@ interface ProductFormData {
   brand: string;
   // 图片
   mainImageUrl: string;
+  thumbnailUrl: string; // 列表预览图（建议800x800正方形）
   imageUrls: string[]; // 多图列表（含主图）
   // 价格与库存
   basePrice: string;
@@ -208,6 +209,7 @@ export default function ProductPublish() {
     categoryId: "",
     brand: "",
     mainImageUrl: "",
+    thumbnailUrl: "",
     imageUrls: [],
     basePrice: "",
     originalPrice: "",
@@ -249,6 +251,7 @@ export default function ProductPublish() {
         categoryId: p.categoryId ? String(p.categoryId) : "",
         brand: "",
         mainImageUrl: p.mainImageUrl || "",
+        thumbnailUrl: p.thumbnailUrl || "",
         imageUrls: parsedImageUrls,
         basePrice: p.basePrice || "",
         originalPrice: p.originalPrice || "",
@@ -364,6 +367,7 @@ export default function ProductPublish() {
           basePrice: form.basePrice,
           originalPrice: form.originalPrice || undefined,
           mainImageUrl: mainImageUrl || undefined,
+          thumbnailUrl: form.thumbnailUrl || undefined,
           imageUrls: imageUrlsJson,
           categoryId: form.categoryId ? Number(form.categoryId) : undefined,
           status: finalStatus,
@@ -390,6 +394,7 @@ export default function ProductPublish() {
           basePrice: form.basePrice,
           originalPrice: form.originalPrice || undefined,
           mainImageUrl: mainImageUrl || undefined,
+          thumbnailUrl: form.thumbnailUrl || undefined,
           imageUrls: imageUrlsJson,
           categoryId: form.categoryId ? Number(form.categoryId) : undefined,
           status: finalStatus,
@@ -572,6 +577,73 @@ export default function ProductPublish() {
               建议至少上传一张商品图片
             </p>
           )}
+
+          {/* 列表预览图 */}
+          <div className="mt-4 p-3 bg-amber-50 rounded-xl border border-amber-100">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-xs font-semibold text-amber-800">列表预览图（积分商城封面图）</span>
+              <span className="text-xs text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">建议 800×800px 正方形</span>
+            </div>
+            <p className="text-xs text-amber-500 mb-2">不上传则自动使用主图，上传后在积分商城列表中显示完美方形预览图。</p>
+            <div className="flex items-center gap-3">
+              <div
+                className="relative w-20 h-20 rounded-xl overflow-hidden border-2 border-dashed border-amber-300 flex-shrink-0 cursor-pointer"
+                onClick={() => document.getElementById('thumbnail-upload')?.click()}
+              >
+                {form.thumbnailUrl ? (
+                  <>
+                    <img src={form.thumbnailUrl} alt="预览图" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70"
+                      onClick={(e) => { e.stopPropagation(); setForm(prev => ({ ...prev, thumbnailUrl: '' })); }}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </>
+                ) : (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-amber-400">
+                    <ImagePlus className="w-5 h-5" />
+                    <span className="text-[10px]">上传</span>
+                  </div>
+                )}
+              </div>
+              <div className="text-xs text-gray-500 leading-relaxed">
+                <p>• 上传一张方形封面图</p>
+                <p>• 建议尺寸：800×800px</p>
+                <p>• 主要产品居中，背景简洁</p>
+                <p>• 支持 JPG/PNG/WebP</p>
+              </div>
+            </div>
+            <input
+              id="thumbnail-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) { toast.error('请选择图片文件'); return; }
+                if (file.size > 10 * 1024 * 1024) { toast.error('图片大小不能超过 10MB'); return; }
+                try {
+                  const reader = new FileReader();
+                  reader.onload = async (ev) => {
+                    const base64 = ev.target?.result as string;
+                    const result = await uploadImageMutation.mutateAsync({
+                      imageData: base64,
+                      folder: 'merchant-products/thumbnails',
+                    });
+                    setForm(prev => ({ ...prev, thumbnailUrl: result.url }));
+                    toast.success('预览图上传成功');
+                  };
+                  reader.readAsDataURL(file);
+                } catch (err: any) {
+                  toast.error('上传失败: ' + (err?.message || ''));
+                }
+                e.target.value = '';
+              }}
+            />
+          </div>
         </div>
 
         {/* ===== 区块3：价格与库存 ===== */}

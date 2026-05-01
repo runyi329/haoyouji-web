@@ -2509,10 +2509,10 @@ export default function Home() {
                         navigate('/merchant-product/' + item.id);
                       }}
                     >
-                      {/* 商品图片 */}
-                      {item.mainImageUrl ? (
+                      {/* 商品图片：优先使用 thumbnailUrl（列表预览图），没有则降级用 mainImageUrl */}
+                      {(item.thumbnailUrl || item.mainImageUrl) ? (
                         <img
-                          src={item.mainImageUrl}
+                          src={item.thumbnailUrl || item.mainImageUrl}
                           alt={item.name}
                           className="w-20 h-20 object-cover rounded-xl flex-shrink-0"
                         />
