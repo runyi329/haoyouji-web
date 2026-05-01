@@ -13057,17 +13057,28 @@ export const appRouter = router({
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin' && role !== 'funder') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        if (!input.orderIds.length) return {};
+        if (!input.orderIds.length) return [];
+        // 按 order_id + currency 分组汇总，同时取每组最新的 exchange_rate
         const rows = await db.execute(
-          sql`SELECT order_id, SUM(amount) as total_paid,
-              (SELECT currency FROM funder_interest_payments p2 WHERE p2.ledger_id = ${input.ledgerId} AND p2.order_id = funder_interest_payments.order_id ORDER BY pay_date DESC, id DESC LIMIT 1) as latest_currency
+          sql`SELECT order_id, COALESCE(currency, 'U') as currency, SUM(amount) as total_paid,
+              (SELECT p2.exchange_rate FROM funder_interest_payments p2
+               WHERE p2.ledger_id = funder_interest_payments.ledger_id
+                 AND p2.order_id = funder_interest_payments.order_id
+                 AND COALESCE(p2.currency, 'U') = COALESCE(funder_interest_payments.currency, 'U')
+               ORDER BY p2.pay_date DESC, p2.id DESC LIMIT 1) as latest_rate
               FROM funder_interest_payments
               WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(input.orderIds.join(','))})
-              GROUP BY order_id`
+              GROUP BY order_id, COALESCE(currency, 'U')`
         ) as any;
-        const result: Array<{ orderId: number; total: number; currency: string }> = [];
+        // 返回: [{ orderId, currency, total, exchangeRate }]
+        const result: Array<{ orderId: number; currency: string; total: number; exchangeRate: number }> = [];
         for (const row of ((rows[0] || rows) as any[])) {
-          result.push({ orderId: Number(row.order_id), total: parseFloat(row.total_paid || '0'), currency: row.latest_currency || 'U' });
+          result.push({
+            orderId: Number(row.order_id),
+            currency: row.currency || 'U',
+            total: parseFloat(row.total_paid || '0'),
+            exchangeRate: parseFloat(row.latest_rate || '1'),
+          });
         }
         return result;
       }),
