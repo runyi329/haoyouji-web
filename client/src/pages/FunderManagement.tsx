@@ -239,26 +239,26 @@ export default function FunderManagement() {
 
   // 强制转成数字，避免 MySQL 返回字符串导致 tRPC z.number() 校验失败
   const editingOrderId: number | null = editingOrder?.id ? Number(editingOrder.id) : null;
-  // 批量查询所有订单的已结利息汇总（不依赖编辑面板是否打开，订单列表加载后即查询）
-  const allOrderIds: number[] = useMemo(
-    () => Array.isArray(assetOrders) ? (assetOrders as any[]).map((o: any) => Number(o.id)).filter(Boolean) : [],
-    [assetOrders]
-  );
-  const { data: allPaidSummary, refetch: refetchAllPaidSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
-    { ledgerId, orderIds: allOrderIds },
-    { enabled: ledgerId > 0 && allOrderIds.length > 0, staleTime: 0 }
-  );
-  // 从批量汇总里读取当前编辑订单的已结利息
-  const editingPaidRecord = Array.isArray(allPaidSummary)
-    ? (allPaidSummary as any[]).find((r: any) => Number(r.orderId) === editingOrderId)
-    : undefined;
-  const previewPaidInterest: number = editingPaidRecord?.total ?? 0;
-  const previewPaidInterestCurrency: string = editingPaidRecord?.currency ?? 'U';
-  // 编辑面板专用：查询当前编辑订单的结息记录列表（用于结息面板展示）
+  // 编辑面板专用：查询当前编辑订单的结息记录列表
+  // enabled 只依赖 editingOrderId，不加 participantInfo 限制，确保管理员编辑任何订单都能查到
   const { data: editingOrderPayments, refetch: refetchEditingPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: editingOrderId! },
-    { enabled: !!editingOrderId, staleTime: 0 }
+    { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
   );
+  // 直接从 editingOrderPayments 前端计算已结利息总额和最新币种
+  // 受邀订单（participantInfo）的已结佣金不走此逻辑，显示为 0
+  const previewPaidInterest: number = editingOrder?.participantInfo
+    ? 0
+    : (Array.isArray(editingOrderPayments) && (editingOrderPayments as any[]).length > 0
+        ? (editingOrderPayments as any[]).reduce((sum: number, p: any) => sum + parseFloat(p.amount || '0'), 0)
+        : 0);
+  const previewPaidInterestCurrency: string = editingOrder?.participantInfo
+    ? 'U'
+    : (Array.isArray(editingOrderPayments) && (editingOrderPayments as any[]).length > 0
+        ? ((editingOrderPayments as any[])[0]?.currency || 'U')
+        : 'U');
+  // refetchAllPaidSummary 兼容旧引用（mutation onSuccess 中调用）
+  const refetchAllPaidSummary = refetchEditingPayments;
 
   // 担保价值（所有担保货币折算为 USDT 的总值）
   const computedCollateralValue = useMemo(() => {
