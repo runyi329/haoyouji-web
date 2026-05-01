@@ -243,3 +243,38 @@ export const productImportRequests = mysqlTable("product_import_requests", {
 ]);
 export type ProductImportRequest = typeof productImportRequests.$inferSelect;
 export type InsertProductImportRequest = typeof productImportRequests.$inferInsert;
+
+// ===== 积分兑换订单表（Points Redeem Orders）=====
+// 用户用积分兑换商城商品后生成的订单
+export const pointsRedeemOrders = mysqlTable("points_redeem_orders", {
+  id: int("id").autoincrement().primaryKey(),
+  orderNo: varchar("orderNo", { length: 30 }).notNull().unique(), // 订单号，格式：PO+时间戳+随机3位
+  userId: int("userId").notNull(),                               // 下单用户ID
+  productId: int("productId").notNull(),                         // 商品ID（merchant_products.id）
+  productName: varchar("productName", { length: 200 }).notNull(), // 商品名称快照
+  productImage: text("productImage"),                            // 商品主图快照
+  pointsSpent: int("pointsSpent").notNull(),                     // 消耗积分数
+  quantity: int("quantity").default(1).notNull(),                // 数量
+  status: varchar("status", { length: 20 }).default("pending").notNull(), // pending/shipped/completed/cancelled
+  recipientName: varchar("recipientName", { length: 100 }).notNull(),   // 收件人姓名
+  recipientPhone: varchar("recipientPhone", { length: 20 }).notNull(),  // 收件人手机
+  province: varchar("province", { length: 50 }),                        // 省
+  city: varchar("city", { length: 50 }),                                // 市
+  district: varchar("district", { length: 50 }),                        // 区
+  detailedAddress: text("detailedAddress").notNull(),                   // 详细地址
+  trackingCompany: varchar("trackingCompany", { length: 50 }),  // 快递公司（管理员填写）
+  trackingNo: varchar("trackingNo", { length: 100 }),           // 快递单号（管理员填写）
+  shippedAt: timestamp("shippedAt"),                            // 发货时间
+  remark: text("remark"),                                       // 用户备注
+  cancelReason: text("cancelReason"),                           // 取消原因
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("pro_userId_idx").on(table.userId),
+  index("pro_productId_idx").on(table.productId),
+  index("pro_status_idx").on(table.status),
+  index("pro_orderNo_idx").on(table.orderNo),
+  index("pro_createdAt_idx").on(table.createdAt),
+]);
+export type PointsRedeemOrder = typeof pointsRedeemOrders.$inferSelect;
+export type InsertPointsRedeemOrder = typeof pointsRedeemOrders.$inferInsert;

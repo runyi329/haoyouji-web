@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ArrowLeft, TrendingUp, TrendingDown, Award, Info, Trophy, UserPlus, MessageCircle, Calendar, UserCheck, CheckSquare, PartyPopper, Share2, Heart, MessageSquare, CalendarCheck, Tag } from "lucide-react";
+import { ArrowLeft, TrendingUp, TrendingDown, Award, Info, Trophy, UserPlus, MessageCircle, Calendar, UserCheck, CheckSquare, PartyPopper, Share2, Heart, MessageSquare, CalendarCheck, Tag, Gift, ShoppingBag } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import { TagLabelIcon } from "@/components/icons/TagLabelIcon";
 import { LevelIcon } from "@/components/icons/LevelIcon";
@@ -31,7 +32,8 @@ export default function PointsDetail() {
   ];
   
   const { data: stats, isLoading: statsLoading } = trpc.rewards.getPointStats.useQuery();
-  const { data: history, isLoading: historyLoading } = trpc.rewards.getPointHistory.useQuery({ limit: 50 });
+  const { data: history, isLoading: historyLoading } = trpc.rewards.getMergedPointHistory.useQuery({ limit: 80 });
+  const { data: publicRules, isLoading: rulesLoading } = trpc.pointSystem.getPublicRules.useQuery();
 
   // 格式化日期
   const formatDate = (date: Date) => {
@@ -50,8 +52,18 @@ export default function PointsDetail() {
       task: { label: "任务完成", color: "text-[#1976D2]" },
       reward: { label: "兑换奖品", color: "text-[#D32F2F]" },
       admin: { label: "系统调整", color: "text-[#D32F2F]" },
+      // 新系统积分行为类型
+      add_contact: { label: "添加联系人", color: "text-[#4CAF50]" },
+      add_tag: { label: "添加标签", color: "text-[#4CAF50]" },
+      contact_interaction: { label: "联系互动", color: "text-[#4CAF50]" },
+      daily_checkin: { label: "每日签到", color: "text-[#1976D2]" },
+      invite_user: { label: "推荐新用户", color: "text-[#1976D2]" },
+      share_contact: { label: "分享联系人", color: "text-[#4CAF50]" },
+      redeem_product: { label: "兑换商品", color: "text-[#D32F2F]" },
+      redeem_refund: { label: "兑换退款", color: "text-[#4CAF50]" },
+      admin_adjust: { label: "管理员调整", color: "text-[#FF9800]" },
     };
-    return typeMap[type] || { label: "其他", color: "text-gray-600" };
+    return typeMap[type] || { label: type || "其他", color: "text-gray-600" };
   };
 
   // 积分等级配置
@@ -236,37 +248,51 @@ export default function PointsDetail() {
 
         {activeTab === "rules" && (
           <div className="space-y-3">
+            {/* 去兑换快捷入口 */}
+            <Card className="p-4 bg-gradient-to-r from-red-50 to-orange-50 border-red-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-[#A80000] mb-0.5">脱动商城</div>
+                  <div className="text-xs text-gray-500">用积分兑换精选商品</div>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-[#A80000] hover:bg-[#8a0000] text-white text-xs"
+                  onClick={() => navigate("/home?tab=shop")}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5 mr-1" />
+                  去兑换
+                </Button>
+              </div>
+            </Card>
+
+            {/* 动态积分获取规则 */}
             <Card className="p-4">
               <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
                 <Info className="w-4 h-4" style={{ color: "var(--color-primary)" }} />
                 积分获取规则
               </h2>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex gap-2">
-                  <span className="font-medium min-w-[70px]">添加联系人:</span>
-                  <span>每次添加新联系人可获得积分，等级越高积分越多</span>
+              {rulesLoading ? (
+                <div className="space-y-2">
+                  {[1,2,3].map(i => <Skeleton key={i} className="h-8" />)}
                 </div>
-                <div className="flex gap-2">
-                  <span className="font-medium min-w-[70px]">完成互动:</span>
-                  <span>与联系人互动沟通可获得积分</span>
+              ) : publicRules && publicRules.length > 0 ? (
+                <div className="space-y-2">
+                  {publicRules.map((rule: any) => (
+                    <div key={rule.actionType} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-gray-700">{rule.description || rule.actionType}</span>
+                      </div>
+                      <div className="flex items-center gap-1 ml-3">
+                        <span className="text-base font-bold text-[#A80000]">+{rule.points}</span>
+                        <span className="text-xs text-gray-400">分</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex gap-2">
-                  <span className="font-medium min-w-[70px]">每日签到:</span>
-                  <span>每天登录签到可获得积分，连续签到奖励更多</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="font-medium min-w-[70px]">推荐新用户:</span>
-                  <span>成功推荐新用户注册可获得大量积分</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="font-medium min-w-[70px]">完成任务:</span>
-                  <span>完成系统发布的任务可获得积分</span>
-                </div>
-                <div className="flex gap-2">
-                  <span className="font-medium min-w-[70px]">参与活动:</span>
-                  <span>参与平台组织的各类活动可获得积分</span>
-                </div>
-              </div>
+              ) : (
+                <div className="text-sm text-gray-500 text-center py-4">积分规则配置中，暂无公开规则</div>
+              )}
             </Card>
 
             <Card className="p-4">
@@ -276,8 +302,12 @@ export default function PointsDetail() {
               </h2>
               <div className="space-y-2 text-sm text-gray-600">
                 <div className="flex gap-2">
-                  <span className="font-medium min-w-[70px]">兑换奖品:</span>
-                  <span>使用积分在奖品商店兑换心仪的奖品</span>
+                  <span className="font-medium min-w-[70px]">兑换商品:</span>
+                  <span>在脱动商城使用积分兑换心仪的商品</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="font-medium min-w-[70px]">我的订单:</span>
+                  <span>兑换后可在“我的兑换订单”查看物流状态</span>
                 </div>
                 <div className="flex gap-2">
                   <span className="font-medium min-w-[70px]">注意事项:</span>
@@ -454,7 +484,7 @@ export default function PointsDetail() {
                       return (
                         <tr key={level} className="hover:bg-gray-50">
                           <td className="text-center py-0 px-1.5 font-light sticky left-0 bg-white border border-gray-200">
-                            <LevelIcon level={level} size={12} />
+                            <LevelIcon level={level} />
                           </td>
                           <td className="text-center py-0 px-1.5 font-light border border-gray-200">{addContact}</td>
                           <td className="text-center py-0 px-1.5 font-light border border-gray-200">{addTag}</td>
