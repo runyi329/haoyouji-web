@@ -13,6 +13,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -85,7 +91,6 @@ function sourceLabel(s: string) {
 
 // ===== 商品列表组件 =====
 function ProductList({
-  const [, navigate] = useLocation();
   products,
   categories,
   onEdit,
@@ -100,6 +105,7 @@ function ProductList({
   onToggleStatus: (id: number, status: string) => void;
   onTogglePointsShop: (id: number, inPointsShop: number, product?: Product) => void;
 }) {
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
@@ -287,6 +293,533 @@ function ProductList({
         )}
       </div>
 
+    </div>
+  );
+}
+function ProductForm({
+  product,
+  categories,
+  merchants,
+  onSave,
+  onClose,
+}: {
+  product?: Product | null;
+  categories: Category[];
+  merchants: Merchant[];
+  onSave: (data: Partial<Product>) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: product?.name || "",
+    subtitle: product?.subtitle || "",
+    basePrice: product?.basePrice || "",
+    originalPrice: product?.originalPrice || "",
+    mainImageUrl: product?.mainImageUrl || "",
+    categoryId: product?.categoryId ? String(product.categoryId) : "",
+    status: product?.status || "active",
+    sourceType: product?.sourceType || "merchant",
+    isShareable: product?.isShareable !== undefined ? product.isShareable : 1,
+    stock: product?.stock || 999,
+    ownerMerchantId: product?.ownerMerchantId ? String(product.ownerMerchantId) : "",
+    extendedFields: product?.extendedFields || "",
+  });
+
+  const handleSubmit = () => {
+    if (!form.name.trim()) { toast.error("请输入商品名称"); return; }
+    if (!form.basePrice || isNaN(Number(form.basePrice))) { toast.error("请输入有效的价格"); return; }
+    onSave({
+      ...form,
+      basePrice: form.basePrice,
+      categoryId: form.categoryId ? Number(form.categoryId) : undefined,
+      ownerMerchantId: form.ownerMerchantId ? Number(form.ownerMerchantId) : undefined,
+      stock: Number(form.stock),
+    });
+  };
+
+  return (
+    <div className="space-y-4 overflow-y-auto pb-6">
+      {/* 商品名称 */}
+      <div>
+        <Label className="text-xs text-gray-500 mb-1 block">商品名称 *</Label>
+        <Input
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="如：拉菲古堡2018干红葡萄酒"
+          className="h-11"
+        />
+      </div>
+
+      {/* 副标题 */}
+      <div>
+        <Label className="text-xs text-gray-500 mb-1 block">副标题/简介</Label>
+        <Input
+          value={form.subtitle}
+          onChange={(e) => setForm({ ...form, subtitle: e.target.value })}
+          placeholder="如：波尔多一级庄 · 750ml"
+          className="h-11"
+        />
+      </div>
+
+      {/* 价格行 */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs text-gray-500 mb-1 block">售价 * (¥)</Label>
+          <Input
+            type="number"
+            value={form.basePrice}
+            onChange={(e) => setForm({ ...form, basePrice: e.target.value })}
+            placeholder="0.00"
+            className="h-11"
+          />
+        </div>
+        <div>
+          <Label className="text-xs text-gray-500 mb-1 block">划线原价 (¥)</Label>
+          <Input
+            type="number"
+            value={form.originalPrice}
+            onChange={(e) => setForm({ ...form, originalPrice: e.target.value })}
+            placeholder="可选"
+            className="h-11"
+          />
+        </div>
+      </div>
+
+      {/* 主图URL */}
+      <div>
+        <Label className="text-xs text-gray-500 mb-1 block">主图URL</Label>
+        <Input
+          value={form.mainImageUrl}
+          onChange={(e) => setForm({ ...form, mainImageUrl: e.target.value })}
+          placeholder="https://..."
+          className="h-11"
+        />
+      </div>
+
+      {/* 分类 + 库存 */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs text-gray-500 mb-1 block">商品分类</Label>
+          <Select value={form.categoryId} onValueChange={(v) => setForm({ ...form, categoryId: v })}>
+            <SelectTrigger className="h-11">
+              <SelectValue placeholder="选择分类" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-gray-500 mb-1 block">库存数量</Label>
+          <Input
+            type="number"
+            value={form.stock}
+            onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })}
+            className="h-11"
+          />
+        </div>
+      </div>
+
+      {/* 来源 + 状态 */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs text-gray-500 mb-1 block">商品来源</Label>
+          <Select
+            value={form.sourceType}
+            onValueChange={(v) => setForm({ ...form, sourceType: v as "platform" | "merchant" | "shared" })}
+          >
+            <SelectTrigger className="h-11">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="merchant">商家自录</SelectItem>
+              <SelectItem value="shared">共享商品</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-gray-500 mb-1 block">状态</Label>
+          <Select
+            value={form.status}
+            onValueChange={(v) => setForm({ ...form, status: v as "active" | "inactive" | "draft" })}
+          >
+            <SelectTrigger className="h-11">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">上架</SelectItem>
+              <SelectItem value="inactive">下架</SelectItem>
+              <SelectItem value="draft">草稿</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* 归属商家 */}
+      <div>
+        <Label className="text-xs text-gray-500 mb-1 block">归属商家 *</Label>
+        <Select
+          value={form.ownerMerchantId}
+          onValueChange={(v) => setForm({ ...form, ownerMerchantId: v })}
+        >
+          <SelectTrigger className="h-11">
+            <SelectValue placeholder="选择商家" />
+          </SelectTrigger>
+          <SelectContent>
+            {merchants.map((m) => (
+              <SelectItem key={m.id} value={String(m.id)}>
+                {m.shopName} ({m.merchantCode})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* 扩展字段 */}
+      <div>
+        <Label className="text-xs text-gray-500 mb-1 block">扩展字段（JSON）</Label>
+        <Input
+          value={form.extendedFields}
+          onChange={(e) => setForm({ ...form, extendedFields: e.target.value })}
+          placeholder='{"vintage":"2018","region":"波尔多"}'
+          className="h-11 text-xs"
+        />
+      </div>
+
+      {/* 提交按钮 */}
+      <div className="flex gap-2 pt-2">
+        <Button variant="outline" onClick={onClose} className="flex-1 h-12">
+          取消
+        </Button>
+        <Button onClick={handleSubmit} className="flex-1 h-12 bg-red-700 hover:bg-red-800 text-white">
+          {product ? "保存修改" : "添加商品"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ===== 主组件 =====
+
+export default function ProductLibraryManager() {
+  const [activeTab, setActiveTab] = useState("products");
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  const productsQuery = trpc.merchant.getProducts.useQuery();
+  const categoriesQuery = trpc.merchant.getCategories.useQuery();
+  const merchantsQuery = trpc.merchant.getMerchants.useQuery();
+
+  const createProductMutation = trpc.merchant.createProduct.useMutation({
+    onSuccess: () => { toast.success("商品添加成功"); productsQuery.refetch(); setShowProductForm(false); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const updateProductMutation = trpc.merchant.updateProduct.useMutation({
+    onSuccess: () => { toast.success("商品更新成功"); productsQuery.refetch(); setShowProductForm(false); setEditingProduct(null); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteProductMutation = trpc.merchant.deleteProduct.useMutation({
+    onSuccess: () => { toast.success("商品已删除"); productsQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const products: Product[] = (productsQuery.data || []) as any;
+  const categories: Category[] = (categoriesQuery.data || []) as any;
+  const merchants: Merchant[] = (merchantsQuery.data || []) as any;
+
+  const handleSaveProduct = (data: Partial<Product>) => {
+    if (editingProduct) {
+      updateProductMutation.mutate({ id: editingProduct.id, ...data } as any);
+    } else {
+      createProductMutation.mutate(data as any);
+    }
+  };
+
+  const handleDeleteProduct = (id: number) => {
+    if (confirm("确定要删除这个商品吗？")) {
+      deleteProductMutation.mutate({ id });
+    }
+  };
+
+  const handleToggleStatus = (id: number, status: string) => {
+    updateProductMutation.mutate({ id, status: status as any });
+  };
+
+  const [pointsDialogOpen, setPointsDialogOpen] = useState(false);
+  const [pointsDialogProduct, setPointsDialogProduct] = useState<Product | null>(null);
+  const [pointsInput, setPointsInput] = useState("");
+
+  const togglePointsShopMutation = trpc.merchant.toggleProductInPointsShop.useMutation({
+    onSuccess: (_, vars) => {
+      toast.success(vars.inPointsShop ? `已上架到积分商城（${vars.pointsPrice}积分）` : "已从积分商城下架");
+      productsQuery.refetch();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handleTogglePointsShop = (id: number, inPointsShop: number, product?: Product) => {
+    if (inPointsShop === 1 && product) {
+      // 上架时弹出积分设定对话框
+      setPointsDialogProduct(product);
+      setPointsInput(product.pointsPrice ? String(product.pointsPrice) : "");
+      setPointsDialogOpen(true);
+    } else {
+      // 下架时直接执行
+      if (confirm("确定要将此商品从积分商城下架吗？")) {
+        togglePointsShopMutation.mutate({ id, inPointsShop: 0 });
+      }
+    }
+  };
+
+  const handleConfirmPointsPrice = () => {
+    const price = parseInt(pointsInput, 10);
+    if (!pointsDialogProduct) return;
+    if (isNaN(price) || price <= 0) {
+      toast.error("请输入有效的积分数量（必须大于0）");
+      return;
+    }
+    togglePointsShopMutation.mutate({ id: pointsDialogProduct.id, inPointsShop: 1, pointsPrice: price });
+    setPointsDialogOpen(false);
+    setPointsDialogProduct(null);
+    setPointsInput("");
+  };
+
+  const activeCount = products.filter((p) => p.status === "active").length;
+  const sharedCount = products.filter((p) => p.sourceType === "shared").length;
+
+  return (
+    <div className="space-y-3">
+      {/* 顶部标题栏 */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-base font-bold text-gray-900 flex items-center gap-1.5">
+            <Package className="w-4 h-4 text-red-700" />
+            脉动共享商盟 · 商品库
+          </h2>
+          <p className="text-xs text-gray-400 mt-0.5">管理商家商品，配置共享关系</p>
+        </div>
+        <Button
+          onClick={() => { setEditingProduct(null); setShowProductForm(true); }}
+          className="bg-red-700 hover:bg-red-800 h-9 px-3 text-sm"
+        >
+          <Plus className="w-4 h-4 mr-1" />
+          添加商品
+        </Button>
+      </div>
+
+      {/* 统计数字条 */}
+      <div className="bg-gray-50 rounded-xl px-4 py-3 grid grid-cols-4 divide-x divide-gray-200">
+        {[
+          { label: "总商品", value: products.length, color: "text-gray-900" },
+          { label: "上架中", value: activeCount, color: "text-green-600" },
+          { label: "共享中", value: sharedCount, color: "text-orange-500" },
+          { label: "商家数", value: merchants.length, color: "text-blue-600" },
+        ].map((stat) => (
+          <div key={stat.label} className="text-center px-2">
+            <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
+            <div className="text-xs text-gray-400 mt-0.5">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 主内容 Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="w-full grid grid-cols-4 h-9">
+          <TabsTrigger value="products" className="text-xs px-1">
+            <Package className="w-3.5 h-3.5 mr-1" />
+            商品库
+          </TabsTrigger>
+          <TabsTrigger value="categories" className="text-xs px-1">
+            <Tag className="w-3.5 h-3.5 mr-1" />
+            分类
+          </TabsTrigger>
+          <TabsTrigger value="merchants" className="text-xs px-1">
+            <Store className="w-3.5 h-3.5 mr-1" />
+            商家
+          </TabsTrigger>
+          <TabsTrigger value="sharing" className="text-xs px-1">
+            <Share2 className="w-3.5 h-3.5 mr-1" />
+            共享
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="products" className="mt-3">
+          {productsQuery.isLoading ? (
+            <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
+          ) : (
+            <ProductList
+              products={products}
+              categories={categories}
+              onEdit={(p) => { setEditingProduct(p); setShowProductForm(true); }}
+              onDelete={handleDeleteProduct}
+              onToggleStatus={handleToggleStatus}
+              onTogglePointsShop={handleTogglePointsShop}
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="categories" className="mt-3">
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-gray-700">商品分类</h3>
+            {categories.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">暂无分类</div>
+            ) : (
+              categories.map((cat) => (
+                <div key={cat.id} className="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <Tag className="w-4 h-4 text-gray-300" />
+                    <div>
+                      <div className="text-sm font-medium">{cat.name}</div>
+                      {cat.description && (
+                        <div className="text-xs text-gray-400">{cat.description}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">排序 {cat.sortOrder}</span>
+                    <ChevronRight className="w-4 h-4 text-gray-200" />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="merchants" className="mt-3">
+          <div className="space-y-2">
+            {merchants.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <Store className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">暂无商家</p>
+              </div>
+            ) : (
+              merchants.map((m) => (
+                <div key={m.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                      style={{ backgroundColor: m.themeColor || "#c0392b" }}
+                    >
+                      {m.shopName[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{m.shopName}</span>
+                        <span className="text-xs text-gray-400">@{m.merchantCode}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${m.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                          {m.status === "active" ? "运营中" : "已停用"}
+                        </span>
+                        <span className="text-xs text-gray-400">{m.shopType || "通用"}</span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-sm font-semibold text-gray-900">
+                        {products.filter((p) => p.ownerMerchantId === m.id).length}
+                      </div>
+                      <div className="text-xs text-gray-400">件商品</div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="sharing" className="mt-3">
+          <div className="bg-amber-50 rounded-xl p-4 text-sm text-amber-700 border border-amber-100">
+            <p className="font-medium mb-1">共享商品配置（第三阶段功能）</p>
+            <p className="text-xs leading-relaxed">
+              商家A申请销售商家B的商品，B确认后，A可在自己店铺展示B的商品并赚取佣金。资金通过平台托管，自动分账。
+            </p>
+          </div>
+          <div className="mt-4 text-center py-8 text-gray-400">
+            <Share2 className="w-10 h-10 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">暂无共享关系</p>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* 积分设定对话框 */}
+      <Dialog open={pointsDialogOpen} onOpenChange={(open) => { if (!open) { setPointsDialogOpen(false); setPointsDialogProduct(null); setPointsInput(""); } }}>
+        <DialogContent className="max-w-sm mx-auto rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Gift className="w-5 h-5 text-amber-500" />
+              设定积分兑换价格
+            </DialogTitle>
+          </DialogHeader>
+          {pointsDialogProduct && (
+            <div className="space-y-4 py-2">
+              <div className="bg-gray-50 rounded-xl p-3">
+                <div className="flex items-center gap-3">
+                  {pointsDialogProduct.mainImageUrl && (
+                    <img src={pointsDialogProduct.mainImageUrl} alt={pointsDialogProduct.name} className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{pointsDialogProduct.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">原价 ¥{pointsDialogProduct.basePrice}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-gray-700">积分兑换价格</Label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="请输入积分数量，如 500"
+                    value={pointsInput}
+                    onChange={(e) => setPointsInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleConfirmPointsPrice()}
+                    className="pr-12 h-11 text-base"
+                    autoFocus
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400 font-medium">积分</span>
+                </div>
+                <p className="text-xs text-gray-400">设定后，用户可在积分兑换商城用积分兑换此商品（原价将被隐藏）</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setPointsDialogOpen(false); setPointsDialogProduct(null); setPointsInput(""); }} className="flex-1">
+              取消
+            </Button>
+            <Button onClick={handleConfirmPointsPrice} disabled={!pointsInput || togglePointsShopMutation.isPending} className="flex-1 bg-amber-500 hover:bg-amber-600 text-white">
+              {togglePointsShopMutation.isPending ? "保存中..." : "确认上架"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 商品表单底部抽屉 */}
+      <Sheet
+        open={showProductForm}
+        onOpenChange={(open) => {
+          if (!open) { setShowProductForm(false); setEditingProduct(null); }
+        }}
+      >
+        <SheetContent side="bottom" className="h-[90vh] rounded-t-2xl px-4 pt-4">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-base">
+              {editingProduct ? "编辑商品" : "添加新商品"}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="overflow-y-auto h-[calc(90vh-80px)]">
+            <ProductForm
+              product={editingProduct}
+              categories={categories}
+              merchants={merchants}
+              onSave={handleSaveProduct}
+              onClose={() => { setShowProductForm(false); setEditingProduct(null); }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
