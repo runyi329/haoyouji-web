@@ -1759,6 +1759,46 @@ export const merchantRouter = router({
       return (rules as any[]).filter((r: any) => r.isActive);
     }),
 
+  // 按分类获取商品列表（前台公开接口）
+  getProductsByCategory: publicProcedure
+    .input(z.object({
+      categoryId: z.number().optional(), // 不传则获取全部已上架商品
+      limit: z.number().min(1).max(100).default(50),
+    }).optional())
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+
+      const conditions = [eq(merchantProducts.status, 'active')];
+      if (input?.categoryId) {
+        conditions.push(eq(merchantProducts.categoryId, input.categoryId));
+      }
+
+      const rows = await db
+        .select({
+          id: merchantProducts.id,
+          name: merchantProducts.name,
+          subtitle: merchantProducts.subtitle,
+          basePrice: merchantProducts.basePrice,
+          originalPrice: merchantProducts.originalPrice,
+          mainImageUrl: merchantProducts.mainImageUrl,
+          categoryId: merchantProducts.categoryId,
+          salesCount: merchantProducts.salesCount,
+          stock: merchantProducts.stock,
+          extendedFields: merchantProducts.extendedFields,
+          categoryName: merchantProductCategories.name,
+          ownerShopName: merchants.shopName,
+        })
+        .from(merchantProducts)
+        .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
+        .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
+        .where(and(...conditions))
+        .orderBy(desc(merchantProducts.salesCount), desc(merchantProducts.createdAt))
+        .limit(input?.limit ?? 50);
+
+      return rows;
+    }),
+
   // 上传商品图片到 COS（管理员专用）
   uploadProductImage: protectedProcedure
     .input(z.object({

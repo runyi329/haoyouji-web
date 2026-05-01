@@ -1083,6 +1083,19 @@ export default function Home() {
     refetchInterval: 60000,
   });
 
+  // 商品分类页：分类列表 + 选中分类 + 底部弹出状态
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [categorySheetOpen, setCategorySheetOpen] = useState(false);
+  const { data: productCategories } = trpc.merchant.getCategories.useQuery(undefined, {
+    staleTime: 300000,
+  });
+  // 只取吃喝玩乐4个分类（id 35-38）
+  const mainCategories = (productCategories || []).filter(c => ['吃','喝','玩','乐'].includes(c.name));
+  const { data: categoryProducts, isLoading: isLoadingCategoryProducts } = trpc.merchant.getProductsByCategory.useQuery(
+    selectedCategoryId ? { categoryId: selectedCategoryId, limit: 50 } : undefined,
+    { enabled: categorySheetOpen && selectedCategoryId !== null, staleTime: 60000 }
+  );
+
   // 积分商城：兑换操作
   const redeemRewardMutation = trpc.rewards.redeemReward.useMutation({
     onSuccess: () => {
@@ -1712,87 +1725,52 @@ export default function Home() {
               <XushuchiLottie />
             </div>
           </div>,
-          // 页3：积分兑换商城
+          // 页3：商品分类
           <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
-            {/* 顶部：积分余额 */}
+            {/* 顶部标题 */}
             <div className="flex items-center justify-between px-3 pt-2 pb-1.5 flex-shrink-0">
               <div className="flex items-center space-x-1.5">
-                <Gift className="w-3.5 h-3.5 text-[#A80000]" />
-                <span className="text-xs font-semibold text-[#A80000]">脉动商城</span>
+                <ShoppingBag className="w-3.5 h-3.5 text-[#A80000]" />
+                <span className="text-xs font-semibold text-[#A80000]">商品分类</span>
               </div>
-              <div
-                className="flex items-center space-x-1 bg-red-50 rounded-full px-2.5 py-0.5 cursor-pointer hover:bg-red-100 transition-colors"
-                onClick={() => navigate(user ? "/parent/points" : "/login")}
-              >
-                {user ? (
-                  <>
-                    <span className="text-xs text-gray-400">我的积分</span>
-                    <span className="text-sm font-bold text-[#A80000]">{(userPointsData?.points ?? 0).toLocaleString()}</span>
-                    <span className="text-xs text-gray-400">分</span>
-                  </>
-                ) : (
-                  <span className="text-xs text-gray-400">登录查看积分</span>
-                )}
-              </div>
+              <span className="text-[10px] text-gray-400">选择分类查看商品</span>
             </div>
-            {/* 商品网格 */}
-            <div className="flex-1 overflow-y-auto px-3 pb-2">
-              {isLoadingShopProducts ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
-                </div>
-              ) : !pointsShopProducts || pointsShopProducts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-300">
-                  <Gift className="w-8 h-8 mb-2 opacity-40" />
-                  <span className="text-xs">商品即将上架，敬请期待</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {pointsShopProducts.slice(0, 8).map((item) => {
-                    // 使用 pointsPrice 字段（管理员设定的积分兑换价格）
-                    let pointsCost = (item as any).pointsPrice || Math.round(parseFloat(item.basePrice || '100'));
-                    let tag = '';
-                    try {
-                      if (item.extendedFields) {
-                        const ext = JSON.parse(item.extendedFields);
-                        if (ext.tag) tag = ext.tag;
-                      }
-                    } catch {}
-                    const isRedeeming = redeemRewardMutation.isPending;
-                    return (
-                      <div
-                        key={item.id}
-                        className="bg-gray-50 rounded-xl p-2.5 flex flex-col items-center relative cursor-pointer active:bg-gray-100 transition-colors"
-                        onClick={() => navigate('/merchant-product/' + item.id)}
-                      >
-                        {tag && (
-                          <span className="absolute top-1.5 right-1.5 text-white text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: '#A80000', lineHeight: 1.4 }}>{tag}</span>
-                        )}
-                        {item.mainImageUrl ? (
-                          <img src={item.mainImageUrl} alt={item.name} className="w-10 h-10 object-cover rounded-lg mb-1" />
-                        ) : (
-                          <div className="w-10 h-10 bg-red-50 rounded-lg mb-1 flex items-center justify-center">
-                            <Gift className="w-5 h-5 text-[#A80000] opacity-60" />
-                          </div>
-                        )}
-                        <span className="text-xs text-gray-700 font-medium text-center leading-tight mb-1.5 line-clamp-2">{item.name}</span>
-                        <div className="flex items-center space-x-1 mb-2">
-                          <span className="text-[#A80000] font-bold text-xs">{pointsCost.toLocaleString()}</span>
-                          <span className="text-gray-400 text-[10px]">分</span>
-                        </div>
+            {/* 4个分类入口 */}
+            <div className="flex-1 flex flex-col items-center justify-center px-4 pb-2">
+              {(() => {
+                const catConfig: Record<string, { emoji: string; bg: string; border: string; text: string }> = {
+                  '吃': { emoji: '🍜', bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700' },
+                  '喝': { emoji: '🍵', bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700' },
+                  '玩': { emoji: '🎮', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
+                  '乐': { emoji: '🎉', bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
+                };
+                const displayCats = mainCategories.length > 0
+                  ? mainCategories
+                  : ['吃','喝','玩','乐'].map((name, i) => ({ id: 35 + i, name, description: '', sortOrder: (i+1)*10, isActive: 1, iconUrl: null, merchantId: null, createdAt: new Date(), updatedAt: new Date() }));
+                return (
+                  <div className="grid grid-cols-2 gap-3 w-full">
+                    {displayCats.map((cat) => {
+                      const cfg = catConfig[cat.name] || { emoji: '🛎️', bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700' };
+                      return (
                         <button
-                          disabled={isRedeeming}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate('/merchant-product/' + item.id);
+                          key={cat.id}
+                          className={`${cfg.bg} ${cfg.border} border-2 rounded-2xl p-4 flex flex-col items-center justify-center space-y-1.5 active:scale-95 transition-transform shadow-sm`}
+                          onClick={() => {
+                            setSelectedCategoryId(cat.id);
+                            setCategorySheetOpen(true);
                           }}
-                          className="w-full text-[10px] text-[#A80000] border border-[#A80000] rounded-full py-0.5 hover:bg-red-50 transition-colors disabled:opacity-50"
-                        >立即兑换</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                        >
+                          <span className="text-3xl">{cfg.emoji}</span>
+                          <span className={`text-base font-bold ${cfg.text}`}>{cat.name}</span>
+                          {cat.description && (
+                            <span className="text-[10px] text-gray-400 text-center leading-tight">{cat.description}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>,
         ];
@@ -2475,6 +2453,127 @@ export default function Home() {
         </div>
 
       </div>
+
+      {/* 商品分类底部弹出层 */}
+      {categorySheetOpen && (
+        <>
+          {/* 遮罩 */}
+          <div
+            className="fixed inset-0 z-50 bg-black/40"
+            onClick={() => setCategorySheetOpen(false)}
+          />
+          {/* 底部弹出面板 */}
+          <div
+            className="fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col"
+            style={{ maxHeight: '80vh', maxWidth: 480, margin: '0 auto' }}
+          >
+            {/* 拉条 */}
+            <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+              <div className="w-10 h-1 bg-gray-200 rounded-full" />
+            </div>
+            {/* 标题栏 */}
+            <div className="flex items-center justify-between px-4 pb-3 flex-shrink-0 border-b border-gray-100">
+              <div className="flex items-center space-x-2">
+                {(() => {
+                  const catConfig: Record<string, { emoji: string; text: string }> = {
+                    '吃': { emoji: '🍜', text: 'text-orange-700' },
+                    '喝': { emoji: '🍵', text: 'text-green-700' },
+                    '玩': { emoji: '🎮', text: 'text-blue-700' },
+                    '乐': { emoji: '🎉', text: 'text-purple-700' },
+                  };
+                  const selCat = (productCategories || []).find(c => c.id === selectedCategoryId);
+                  const cfg = selCat ? (catConfig[selCat.name] || { emoji: '🛎️', text: 'text-gray-700' }) : { emoji: '🛎️', text: 'text-gray-700' };
+                  return (
+                    <>
+                      <span className="text-xl">{cfg.emoji}</span>
+                      <span className={`text-base font-bold ${cfg.text}`}>{selCat?.name ?? ''}</span>
+                      {selCat?.description && <span className="text-xs text-gray-400">{selCat.description}</span>}
+                    </>
+                  );
+                })()}
+              </div>
+              <button
+                className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-200 transition-colors"
+                onClick={() => setCategorySheetOpen(false)}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            {/* 商品列表 */}
+            <div className="flex-1 overflow-y-auto px-4 py-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {isLoadingCategoryProducts ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
+                </div>
+              ) : !categoryProducts || categoryProducts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-300">
+                  <ShoppingBag className="w-10 h-10 mb-3 opacity-40" />
+                  <span className="text-sm">暂无商品，敲请期待</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {categoryProducts.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 bg-gray-50 rounded-2xl p-3 active:bg-gray-100 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setCategorySheetOpen(false);
+                        navigate('/merchant-product/' + item.id);
+                      }}
+                    >
+                      {/* 商品图片 */}
+                      {item.mainImageUrl ? (
+                        <img
+                          src={item.mainImageUrl}
+                          alt={item.name}
+                          className="w-20 h-20 object-cover rounded-xl flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-20 h-20 bg-red-50 rounded-xl flex-shrink-0 flex items-center justify-center">
+                          <ShoppingBag className="w-8 h-8 text-[#A80000] opacity-40" />
+                        </div>
+                      )}
+                      {/* 商品信息 */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between h-20">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight">{item.name}</p>
+                          {item.subtitle && (
+                            <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{item.subtitle}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mt-1">
+                          <div className="flex items-baseline space-x-1">
+                            <span className="text-base font-bold text-[#A80000]">¥{parseFloat(item.basePrice || '0').toFixed(2)}</span>
+                            {item.originalPrice && parseFloat(item.originalPrice) > parseFloat(item.basePrice || '0') && (
+                              <span className="text-xs text-gray-300 line-through">¥{parseFloat(item.originalPrice).toFixed(2)}</span>
+                            )}
+                          </div>
+                          {(item.salesCount ?? 0) > 0 && (
+                            <span className="text-[10px] text-gray-400">已售 {item.salesCount}</span>
+                          )}
+                        </div>
+                      </div>
+                      {/* 购买按钮 */}
+                      <button
+                        className="flex-shrink-0 w-8 h-8 bg-[#A80000] rounded-full flex items-center justify-center shadow-sm active:bg-[#8a0000] transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCategorySheetOpen(false);
+                          navigate('/merchant-product/' + item.id);
+                        }}
+                      >
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* 底部安全区 */}
+            <div style={{ height: 'env(safe-area-inset-bottom, 16px)' }} className="flex-shrink-0" />
+          </div>
+        </>
+      )}
 
       {/* Bottom Navigation - fixed定位，不在flex流里 */}
       <BottomNav />
