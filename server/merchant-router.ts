@@ -116,6 +116,21 @@ export const merchantRouter = router({
     return rows;
   }),
 
+  // 更新分类图标URL（管理员用）
+  updateCategoryIcon: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      iconUrl: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(merchantProductCategories)
+        .set({ iconUrl: input.iconUrl })
+        .where(eq(merchantProductCategories.id, input.id));
+      return { success: true };
+    }),
+
   // 获取商家列表
   getMerchants: protectedProcedure.query(async () => {
     const db = await getDb();
