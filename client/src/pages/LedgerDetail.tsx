@@ -758,8 +758,9 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
                 {details.map((d, idx) => {
                   const isCNY = d.currency === 'CNY';
                   const unit = isCNY ? '元' : 'U';
-                  const approxU = isCNY ? (d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / 7) : null;
-                  const approxCNY = !isCNY ? d.total * 7 : null;
+                  const rate = d.exchangeRate > 0 ? d.exchangeRate : 7;
+                  const approxU = isCNY ? d.total / rate : null;
+                  const approxCNY = !isCNY ? d.total * rate : null;
                   return (
                     <div key={idx}>
                       <div className="flex items-center justify-between">
