@@ -1487,6 +1487,22 @@ export const merchantRouter = router({
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      // 自动确保 pointsPrice 字段存在（防止迁移未执行时崩溃）
+      try {
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (conn) {
+          const [cols] = await conn.execute(
+            `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'merchant_products' AND COLUMN_NAME = 'pointsPrice'`
+          );
+          if ((cols as any[])[0].cnt === 0) {
+            await conn.execute(`ALTER TABLE \`merchant_products\` ADD COLUMN \`pointsPrice\` INT NOT NULL DEFAULT 0 COMMENT '积分兑换价格' AFTER \`inPointsShop\``);
+            console.log('[merchant] ✅ Auto-added pointsPrice column to merchant_products');
+          }
+        }
+      } catch (migrateErr) {
+        console.warn('[merchant] Failed to ensure pointsPrice column:', migrateErr);
+      }
       const updateData: any = { inPointsShop: input.inPointsShop };
       if (input.inPointsShop === 1 && input.pointsPrice !== undefined) {
         updateData.pointsPrice = input.pointsPrice;
