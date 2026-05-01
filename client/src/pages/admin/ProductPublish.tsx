@@ -57,6 +57,9 @@ interface ProductFormData {
   // 积分商城
   inPointsShop: boolean;
   pointsPrice: string;
+  // 蓝色角标
+  badgeEnabled: boolean;
+  badgeText: string;
   // 商品详情
   description: string;
   // 物流
@@ -218,6 +221,8 @@ export default function ProductPublish() {
     specs: [],
     inPointsShop: false,
     pointsPrice: "",
+    badgeEnabled: false,
+    badgeText: "",
     description: "",
     shippingNote: "",
     status: "active",
@@ -260,6 +265,8 @@ export default function ProductPublish() {
         specs,
         inPointsShop: !!p.inPointsShop,
         pointsPrice: p.pointsPrice ? String(p.pointsPrice) : "",
+        badgeEnabled: !!p.badgeEnabled,
+        badgeText: p.badgeText || "",
         description: p.description || "",
         shippingNote: "",
         status: p.status || "active",
@@ -374,6 +381,8 @@ export default function ProductPublish() {
           stock: Number(form.stock) || 999,
           description: form.description || undefined,
           extendedFields: form.extendedFields || undefined,
+          badgeEnabled: form.badgeEnabled ? 1 : 0,
+          badgeText: form.badgeText || null,
         } as any);
         // 积分商城设置
         if (form.inPointsShop) {
@@ -832,6 +841,58 @@ export default function ProductPublish() {
                 <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   用户需 {form.pointsPrice} 积分可兑换此商品
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ===== 区块：蓝色角标 ===== */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <SectionTitle icon={<Tag className="w-4 h-4 text-blue-600" />} title="图片角标" />
+
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700">显示蓝色角标</p>
+              <p className="text-xs text-gray-400 mt-0.5">开启后商品图片左下角显示胶囊形角标</p>
+            </div>
+            <Switch
+              checked={form.badgeEnabled}
+              onCheckedChange={(checked) => setForm({ ...form, badgeEnabled: checked })}
+            />
+          </div>
+
+          {form.badgeEnabled && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+              <Label className="text-xs text-blue-700 mb-1.5 block font-medium">
+                角标文字 <span className="text-gray-400">(建议 2-8 字)</span>
+              </Label>
+              <Input
+                type="text"
+                value={form.badgeText}
+                onChange={(e) => {
+                  const val = e.target.value.slice(0, 8);
+                  setForm({ ...form, badgeText: val });
+                }}
+                placeholder="如：看讲解、限时特惠、新品上架..."
+                className="h-11 text-sm bg-white"
+                maxLength={8}
+              />
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-xs text-gray-400">{form.badgeText.length}/8 字</p>
+                {form.badgeText && (
+                  <div className="flex items-center gap-0 rounded-full overflow-hidden text-xs shadow-sm">
+                    <span className="bg-blue-600 text-white px-2 py-0.5 flex items-center gap-1">
+                      <span>▶</span>
+                    </span>
+                    <span className="bg-white text-blue-600 border border-blue-200 px-2 py-0.5 font-medium border-l-0">{form.badgeText}</span>
+                  </div>
+                )}
+              </div>
+              {form.badgeText && (
+                <p className="text-xs text-blue-600 mt-1.5 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  角标将显示在商品图片左下角
                 </p>
               )}
             </div>

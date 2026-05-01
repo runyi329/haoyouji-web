@@ -2510,17 +2510,28 @@ export default function Home() {
                       }}
                     >
                       {/* 商品图片：优先使用 thumbnailUrl（列表预览图），没有则降级用 mainImageUrl */}
-                      {(item.thumbnailUrl || item.mainImageUrl) ? (
-                        <img
-                          src={item.thumbnailUrl || item.mainImageUrl}
-                          alt={item.name}
-                          className="w-20 h-20 object-cover rounded-xl flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-20 h-20 bg-red-50 rounded-xl flex-shrink-0 flex items-center justify-center">
-                          <ShoppingBag className="w-8 h-8 text-[#A80000] opacity-40" />
-                        </div>
-                      )}
+                      <div className="relative flex-shrink-0 w-20 h-20">
+                        {(item.thumbnailUrl || item.mainImageUrl) ? (
+                          <img
+                            src={item.thumbnailUrl || item.mainImageUrl}
+                            alt={item.name}
+                            className="w-20 h-20 object-cover rounded-xl"
+                          />
+                        ) : (
+                          <div className="w-20 h-20 bg-red-50 rounded-xl flex items-center justify-center">
+                            <ShoppingBag className="w-8 h-8 text-[#A80000] opacity-40" />
+                          </div>
+                        )}
+                        {/* 蓝色角标：左下角胶囊双色 */}
+                        {(item as any).badgeEnabled === 1 && (item as any).badgeText && (
+                          <div className="absolute bottom-1 left-0 flex items-center overflow-hidden rounded-full shadow-sm" style={{ fontSize: '9px', lineHeight: '1.2' }}>
+                            <span className="bg-blue-600 text-white px-1.5 py-0.5 flex items-center">
+                              <svg className="w-2 h-2" fill="currentColor" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" /></svg>
+                            </span>
+                            <span className="bg-white text-blue-600 px-1.5 py-0.5 font-semibold border border-blue-200 border-l-0" style={{ maxWidth: '52px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(item as any).badgeText}</span>
+                          </div>
+                        )}
+                      </div>
                       {/* 商品信息 */}
                       <div className="flex-1 min-w-0 flex flex-col justify-between h-20">
                         <div>

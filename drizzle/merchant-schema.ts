@@ -99,6 +99,9 @@ export const merchantProducts = mysqlTable("merchant_products", {
   isShareable: tinyint("isShareable").default(1).notNull(), // 是否允许被其他商家共享
   inPointsShop: tinyint("inPointsShop").default(0).notNull(), // 是否上架到积分商城（0=否，1=是）
   pointsPrice: int("pointsPrice").default(0).notNull(), // 积分兑换价格（0=未设定）
+  // 蓝色角标（图片左下角胶囊双色角标）
+  badgeEnabled: tinyint("badgeEnabled").default(0).notNull(), // 是否显示角标（0=不显示，1=显示）
+  badgeText: varchar("badgeText", { length: 16 }),             // 角标文字（2-8字，右侧白底蓝字区域）
   // 扩展字段（JSON，存储红酒特有字段如产区/年份/酒庄等）
   extendedFields: text("extendedFields"),
   sortOrder: int("sortOrder").default(0).notNull(),
