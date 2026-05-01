@@ -1757,4 +1757,19 @@ export const merchantRouter = router({
       const rules = await getAllPointRules();
       return (rules as any[]).filter((r: any) => r.isActive);
     }),
+
+  // 上传商品图片到 COS（管理员专用）
+  uploadProductImage: protectedProcedure
+    .input(z.object({
+      imageData: z.string(), // base64 字符串或 data URL
+      folder: z.string().default('merchant-products'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const userRole = (ctx.user as any).role;
+      if (userRole !== 'super_admin' && userRole !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限上传商品图片' });
+      }
+      const url = await (uploadImageToCOS as any)(input.imageData, input.folder);
+      return { url };
+    }),
 });
