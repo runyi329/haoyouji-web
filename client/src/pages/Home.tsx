@@ -1725,64 +1725,43 @@ export default function Home() {
               <XushuchiLottie />
             </div>
           </div>,
-          // 页3：积分商城 - 蒂芙尼蓝配色
-          <div key="p3" className="w-full h-full flex flex-col overflow-hidden relative" style={{
-            background: 'linear-gradient(150deg, #0ABAB5 0%, #3ECFCA 30%, #7DDBD7 60%, #C2EFED 100%)'
-          }}>
-            {/* 顶部高光线 */}
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg, transparent 5%, rgba(255,255,255,0.85) 40%, rgba(255,255,255,0.5) 65%, transparent 95%)', zIndex: 1 }} />
+          // 页3：积分商城（商品分类入口）
+          <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
             {/* 顶部标题 */}
-            <div className="flex items-center justify-between px-3 pt-2 pb-1.5 flex-shrink-0" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="flex items-center justify-between px-3 pt-2 pb-1.5 flex-shrink-0">
               <div className="flex items-center space-x-1.5">
-                <Gift style={{ width: '14px', height: '14px', color: 'rgba(255,255,255,0.95)' }} />
-                <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,90,90,0.35)', letterSpacing: '0.02em' }}>积分商城</span>
+                <Gift className="w-3.5 h-3.5 text-[#A80000]" />
+                <span className="text-xs font-semibold text-[#A80000]">积分商城</span>
               </div>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '4px',
-                background: 'rgba(255,255,255,0.28)',
-                borderRadius: '10px', padding: '2px 8px',
-                border: '1px solid rgba(255,255,255,0.45)',
-                backdropFilter: 'blur(6px)'
-              }}>
-                <Coins style={{ width: '11px', height: '11px', color: 'rgba(255,255,255,0.95)' }} />
-                <span style={{ fontSize: '10px', fontWeight: 600, color: '#fff' }}>{userPointsData?.points ?? 0} 积分</span>
+              <div className="flex items-center space-x-1">
+                <Coins className="w-3 h-3 text-amber-500" />
+                <span className="text-[10px] text-amber-600 font-medium">{userPointsData?.points ?? 0} 积分</span>
               </div>
             </div>
             {/* 15个分类入口 - 5列×3行 */}
-            <div className="flex-1 overflow-hidden px-2 pb-1" style={{ position: 'relative', zIndex: 1 }}>
+            <div className="flex-1 overflow-hidden px-2 pb-1">
               <div className="grid grid-cols-5 h-full" style={{ gridTemplateRows: 'repeat(3, 1fr)' }}>
                 {mainCategories.map((cat) => (
                   <button
                     key={cat.id}
-                    className="flex flex-col items-center justify-center active:scale-90 transition-transform px-0.5"
-                    style={{ gap: '3px' }}
+                    className="flex flex-col items-center justify-center space-y-0.5 active:scale-90 transition-transform px-0.5"
                     onClick={() => {
                       setSelectedCategoryId(cat.id);
                       setCategorySheetOpen(true);
                     }}
                   >
-                    {/* 3D玻璃质感图标容器 */}
-                    <div style={{
-                      width: '40px', height: '40px',
-                      borderRadius: '12px',
-                      background: 'linear-gradient(145deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.25) 50%, rgba(200,245,243,0.3) 100%)',
-                      boxShadow: '0 4px 12px rgba(0,130,130,0.2), inset 0 1.5px 2px rgba(255,255,255,0.8), inset 0 -1px 2px rgba(0,110,110,0.12)',
-                      border: '1px solid rgba(255,255,255,0.55)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      backdropFilter: 'blur(4px)',
-                      flexShrink: 0
-                    }}>
-                      {cat.iconUrl ? (
-                        <img
-                          src={cat.iconUrl}
-                          alt={cat.name}
-                          style={{ width: '27px', height: '27px', objectFit: 'contain', filter: 'drop-shadow(0 2px 4px rgba(0,90,90,0.22))' }}
-                        />
-                      ) : (
-                        <ShoppingBag style={{ width: '18px', height: '18px', color: 'rgba(255,255,255,0.9)' }} />
-                      )}
-                    </div>
-                    <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.96)', textShadow: '0 1px 3px rgba(0,80,80,0.3)', lineHeight: 1.2, textAlign: 'center', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cat.name}</span>
+                    {cat.iconUrl ? (
+                      <img
+                        src={cat.iconUrl}
+                        alt={cat.name}
+                        className="w-10 h-10 object-contain drop-shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                        <ShoppingBag className="w-5 h-5 text-gray-400" />
+                      </div>
+                    )}
+                    <span className="text-[10px] text-gray-600 font-medium leading-tight text-center line-clamp-1">{cat.name}</span>
                   </button>
                 ))}
               </div>
@@ -1792,9 +1771,7 @@ export default function Home() {
         const clonedPages = [socialPages[SOCIAL_PAGES - 1], ...socialPages, socialPages[0]];
         return (
           <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
-            <div className="w-full h-full rounded-2xl overflow-hidden relative flex flex-col" style={{
-                boxShadow: '0 6px 20px rgba(10,186,181,0.22), 0 2px 8px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.5)'
-              }}>
+            <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
               <div
                 ref={socialContainerRef}
                 className="flex-1 overflow-hidden"
@@ -1850,10 +1827,9 @@ export default function Home() {
                       width: realDotIndex === i ? '14px' : '6px',
                       height: '6px',
                       borderRadius: '3px',
-                      background: realDotIndex === i ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.38)',
+                      background: realDotIndex === i ? '#A80000' : 'rgba(168,0,0,0.25)',
                       transition: 'all 0.3s ease',
                       cursor: 'pointer',
-                      boxShadow: realDotIndex === i ? '0 1px 4px rgba(0,120,120,0.25)' : 'none',
                     }}
                   />
                 ))}
