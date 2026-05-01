@@ -2820,6 +2820,33 @@ export const appRouter = router({
         return dbPoints.getPointHistory(ctx.user.id, input.limit);
       }),
     
+    // 获取合并积分历史（point_transactions + point_logs 合并，按时间排序）
+    getMergedPointHistory: protectedProcedure
+      .input(z.object({
+        limit: z.number().default(80),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) return [];
+        // 从 point_transactions 取（老系统）
+        const [txRows]: any = await dbConn.execute(
+          `SELECT id, amount as points, type as actionType, description, createdAt, 'transaction' as source FROM point_transactions WHERE userId = ? ORDER BY createdAt DESC LIMIT ?`,
+          [ctx.user.id, input.limit]
+        );
+        // 从 point_logs 取（新系统）
+        const [logRows]: any = await dbConn.execute(
+          `SELECT id, points, actionType, description, createdAt, 'log' as source FROM point_logs WHERE userId = ? ORDER BY createdAt DESC LIMIT ?`,
+          [ctx.user.id, input.limit]
+        );
+        const txList = Array.isArray(txRows) ? txRows : [];
+        const logList = Array.isArray(logRows) ? logRows : [];
+        // 合并并按时间倒序排列
+        const merged = [...txList, ...logList]
+          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, input.limit);
+        return merged;
+      }),
+
     // 获取积分统计数据
     getPointStats: protectedProcedure.query(async ({ ctx }) => {
       const user = await db.getUserById(ctx.user.id);
@@ -7512,6 +7539,15 @@ export const appRouter = router({
         }
         const { getAllPointLogs } = await import('./db-point-system');
         return await getAllPointLogs(input.limit);
+      }),
+
+    // 公开：获取所有已启用的积分规则（用户端展示用）
+    getPublicRules: publicProcedure
+      .query(async () => {
+        const { getAllPointRules } = await import('./db-point-system');
+        const rules = await getAllPointRules();
+        // 只返回已启用的规则
+        return rules.filter((r: any) => r.isActive);
       }),
   }),
 

@@ -48,6 +48,7 @@ import {
   BarChart2,
   Network,
   MessageSquare,
+  ShoppingBag,
 } from "lucide-react";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import {
@@ -426,6 +427,7 @@ export default function Profile() {
     { id: "favorites", icon: Heart, label: "我的收藏", color: "bg-[#FFEBEE] text-pink-600", badge: null, onClick: () => navigate("/parent/poster-favorites") },
     { id: "calendar", icon: Calendar, label: "节点成长", color: "bg-[#E8F5E9] text-[#4CAF50]", badge: null, onClick: () => navigate("/work-groups") },
     { id: "points", icon: Award, label: "我的积分", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => navigate("/parent/points") },
+    { id: "redeem-orders", icon: ShoppingBag, label: "兑换订单", color: "bg-[#FFF3E0] text-orange-600", badge: null, onClick: () => navigate("/my-redeem-orders") },
     { id: "ai-assistant", icon: MessageCircle, label: "AI助手", color: "bg-[#F3E5F5] text-purple-600", badge: null, onClick: () => navigate("/ai") },
   ];
 
@@ -556,7 +558,7 @@ export default function Profile() {
             )}
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
-                {user.role === "super_admin" ? "超级管理员" : user.role === "admin" ? "管理员" : "普通用户"}
+                {(user as any).role === "super_admin" ? "超级管理员" : (user as any).role === "admin" ? "管理员" : "普通用户"}
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/20 text-white">
                 {pointsData?.points || 0} 积分

@@ -30,6 +30,7 @@ import {
   Wallet,
   Package,
   MessageSquare,
+  ShoppingCart,
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
@@ -71,6 +72,7 @@ import CustomAGManager from "./admin/CustomAGManager";
 import CustomAHManager from "./admin/CustomAHManager";
 import CustomAIManager from "./admin/CustomAIManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
+import AdminRedeemOrders from "./admin/AdminRedeemOrders";
 
 // 定制账本类型配置表（新增类型只需在此添加）
 const CUSTOM_LEDGER_TYPES = [
@@ -459,6 +461,11 @@ export default function Admin() {
               商品库
             </TabsTrigger>
 
+            <TabsTrigger value="redeemOrders" className="text-xs sm:text-sm">
+              <ShoppingCart className="w-4 h-4 mr-1 hidden sm:inline" />
+              兑换订单
+            </TabsTrigger>
+
           </TabsList>
 
 
@@ -633,17 +640,17 @@ export default function Admin() {
                         size="icon"
                         variant="ghost"
                         className={`w-8 h-8 ${
-                          u.inviteEnabled 
+                          (u as any).inviteEnabled 
                             ? 'text-[#4CAF50] hover:text-green-700' 
                             : 'text-gray-400 hover:text-gray-500'
                         }`}
                         onClick={() => {
                           toggleInvitePermissionMutation.mutate({
                             userId: u.id,
-                            enabled: !u.inviteEnabled,
+                            enabled: !(u as any).inviteEnabled,
                           });
                         }}
-                        title={u.inviteEnabled ? '关闭邀请功能' : '开启邀请功能'}
+                        title={(u as any).inviteEnabled ? '关闭邀请功能' : '开启邀请功能'}
                       >
                         <Share className="w-4 h-4" />
                       </Button>
@@ -674,7 +681,7 @@ export default function Admin() {
                         onOpenChange={(open) => {
                           setShowEditUser(open ? u.id : null);
                           if (open) {
-                            setEditUsername(u.username);
+                            setEditUsername(u.username ?? "");
                             setEditName(u.name || "");
                           } else {
                             setEditUsername("");
@@ -1173,6 +1180,11 @@ export default function Admin() {
           {/* 脉动共享商盟 - 商品库管理 */}
           <TabsContent value="productLibrary">
             <ProductLibraryManager />
+          </TabsContent>
+
+          {/* 积分兑换订单管理 */}
+          <TabsContent value="redeemOrders">
+            <AdminRedeemOrders />
           </TabsContent>
 
         </Tabs>

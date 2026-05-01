@@ -18,7 +18,8 @@ import {
   wineRegions,
   productImportRequests,
 } from "../drizzle/schema";
-import { eq, desc, and, asc, isNull, ne } from "drizzle-orm";
+import { eq, desc, and, asc, isNull, ne, sql } from "drizzle-orm";
+import { pointsRedeemOrders } from "../drizzle/merchant-schema";
 import { storagePut } from "./storage";
 import { uploadImageToCOS } from "./cos-upload";
 import sharp from "sharp";
@@ -1517,39 +1518,243 @@ export const merchantRouter = router({
       return { success: true };
     }),
 
-  // 获取积分商城商品列表（公开接口）
-  getPointsShopProducts: publicProcedure
-    .input(z.object({ limit: z.number().optional() }).optional())
-    .query(async ({ input }) => {
-    const db = await getDb();
-    if (!db) return [];
-    try {
-      const rows = await db
-        .select({
-          id: merchantProducts.id,
-          name: merchantProducts.name,
-          subtitle: merchantProducts.subtitle,
-          basePrice: merchantProducts.basePrice,
-          mainImageUrl: merchantProducts.mainImageUrl,
-          imageUrls: merchantProducts.imageUrls,
-          description: merchantProducts.description,
-          pointsPrice: merchantProducts.pointsPrice,
-          extendedFields: merchantProducts.extendedFields,
-          categoryName: merchantProductCategories.name,
-          ownerShopName: merchants.shopName,
-          ownerMerchantCode: merchants.merchantCode,
-          salesCount: merchantProducts.salesCount,
-          stock: merchantProducts.stock,
-        })
+   // ===== 积分兑换订单接口 =====
+
+  // 用户：提交积分兑换订单
+  createPointsRedeemOrder: protectedProcedure
+    .input(z.object({
+      productId: z.number(),
+      quantity: z.number().min(1).max(10).default(1),
+      recipientName: z.string().min(1).max(50),
+      recipientPhone: z.string().min(11).max(20),
+      province: z.string().optional(),
+      city: z.string().optional(),
+      district: z.string().optional(),
+      detailedAddress: z.string().min(1).max(200),
+      remark: z.string().max(200).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // 1. 查询商品信息
+      const products = await db
+        .select()
         .from(merchantProducts)
-        .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
-        .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
-        .where(and(eq(merchantProducts.inPointsShop, 1), eq(merchantProducts.status, 'active')))
-        .orderBy(desc(merchantProducts.updatedAt))
-        .limit(input?.limit ?? 100);
-      return rows;
-    } catch (e) {
-      return [];
-    }
-  }),
+        .where(and(eq(merchantProducts.id, input.productId), eq(merchantProducts.status, 'active')))
+        .limit(1);
+      const product = products[0];
+      if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "商品不存在或已下架" });
+      if (!product.inPointsShop) throw new TRPCError({ code: "BAD_REQUEST", message: "该商品未上架积分商城" });
+      if (!product.pointsPrice || product.pointsPrice <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "该商品积分价格未设置" });
+      if (product.stock < input.quantity) throw new TRPCError({ code: "BAD_REQUEST", message: `库存不足，当前库存：${product.stock}` });
+
+      const totalPoints = product.pointsPrice * input.quantity;
+
+      // 2. 检查用户积分
+      const { getUserPoints, subtractUserPoints, createPointLog } = await import('./db-point-system');
+      const currentPoints = await getUserPoints(ctx.user.id);
+      if (currentPoints < totalPoints) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `积分不足，当前积分：${currentPoints}，需要：${totalPoints}` });
+      }
+
+      // 3. 生成订单号
+      const timestamp = Date.now().toString();
+      const random = Math.floor(Math.random() * 900 + 100).toString();
+      const orderNo = `PO${timestamp}${random}`;
+
+      // 4. 扣积分
+      await subtractUserPoints(ctx.user.id, totalPoints);
+
+      // 5. 减库存
+      await db.execute(sql`UPDATE merchant_products SET stock = stock - ${input.quantity}, salesCount = salesCount + ${input.quantity} WHERE id = ${input.productId}`);
+
+      // 6. 建订单
+      await db.insert(pointsRedeemOrders).values({
+        orderNo,
+        userId: ctx.user.id,
+        productId: input.productId,
+        productName: product.name,
+        productImage: product.mainImageUrl || null,
+        pointsSpent: totalPoints,
+        quantity: input.quantity,
+        status: 'pending',
+        recipientName: input.recipientName,
+        recipientPhone: input.recipientPhone,
+        province: input.province || null,
+        city: input.city || null,
+        district: input.district || null,
+        detailedAddress: input.detailedAddress,
+        remark: input.remark || null,
+      });
+
+      // 7. 写积分日志
+      await createPointLog({
+        userId: ctx.user.id,
+        actionType: 'redeem_product',
+        points: -totalPoints,
+        description: `积分兑换商品：${product.name} x${input.quantity}`,
+        relatedId: input.productId,
+      });
+
+      return { success: true, orderNo };
+    }),
+
+  // 用户：查询我的兑换订单
+  getMyRedeemOrders: protectedProcedure
+    .input(z.object({
+      status: z.enum(['all', 'pending', 'shipped', 'completed', 'cancelled']).default('all'),
+      limit: z.number().min(1).max(100).default(20),
+      offset: z.number().min(0).default(0),
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { orders: [] };
+
+      const conditions: any[] = [eq(pointsRedeemOrders.userId, ctx.user.id)];
+      if (input.status !== 'all') {
+        conditions.push(eq(pointsRedeemOrders.status, input.status));
+      }
+
+      const orders = await db
+        .select()
+        .from(pointsRedeemOrders)
+        .where(and(...conditions))
+        .orderBy(desc(pointsRedeemOrders.createdAt))
+        .limit(input.limit)
+        .offset(input.offset);
+
+      return { orders };
+    }),
+
+  // 管理员：查询所有兑换订单
+  adminGetRedeemOrders: protectedProcedure
+    .input(z.object({
+      status: z.enum(['all', 'pending', 'shipped', 'completed', 'cancelled']).default('all'),
+      limit: z.number().min(1).max(100).default(50),
+      offset: z.number().min(0).default(0),
+      keyword: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (!['admin', 'super_admin'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
+      const db = await getDb();
+      if (!db) return { orders: [] };
+
+      const conditions: any[] = [];
+      if (input.status !== 'all') {
+        conditions.push(eq(pointsRedeemOrders.status, input.status));
+      }
+
+      const allOrders = await db
+        .select()
+        .from(pointsRedeemOrders)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(pointsRedeemOrders.createdAt))
+        .limit(input.limit)
+        .offset(input.offset);
+
+      // 关键字过滤（在内存中过滤，数量不大）
+      const kw = input.keyword?.trim().toLowerCase();
+      const orders = kw
+        ? allOrders.filter(o =>
+            o.orderNo.toLowerCase().includes(kw) ||
+            o.recipientName.toLowerCase().includes(kw) ||
+            o.recipientPhone.includes(kw)
+          )
+        : allOrders;
+
+      return { orders };
+    }),
+
+  // 管理员：发货（填写快递信息）
+  adminShipOrder: protectedProcedure
+    .input(z.object({
+      orderId: z.number(),
+      trackingCompany: z.string().max(50).optional(),
+      trackingNo: z.string().min(1).max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (!['admin', 'super_admin'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const orders = await db
+        .select()
+        .from(pointsRedeemOrders)
+        .where(eq(pointsRedeemOrders.id, input.orderId))
+        .limit(1);
+      const order = orders[0];
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (order.status !== 'pending') throw new TRPCError({ code: "BAD_REQUEST", message: "只有待发货订单才能发货" });
+
+      await db
+        .update(pointsRedeemOrders)
+        .set({
+          status: 'shipped',
+          trackingCompany: input.trackingCompany,
+          trackingNo: input.trackingNo,
+          shippedAt: new Date(),
+        })
+        .where(eq(pointsRedeemOrders.id, input.orderId));
+
+      return { success: true };
+    }),
+
+  // 管理员：取消订单（退积分）
+  adminCancelOrder: protectedProcedure
+    .input(z.object({
+      orderId: z.number(),
+      cancelReason: z.string().max(200).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (!['admin', 'super_admin'].includes(ctx.user.role)) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const orders = await db
+        .select()
+        .from(pointsRedeemOrders)
+        .where(eq(pointsRedeemOrders.id, input.orderId))
+        .limit(1);
+      const order = orders[0];
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (!['pending', 'shipped'].includes(order.status)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该订单状态不可取消" });
+      }
+
+      // 退积分
+      const { addUserPoints, createPointLog } = await import('./db-point-system');
+      await addUserPoints(order.userId, order.pointsSpent);
+      await createPointLog({
+        userId: order.userId,
+        actionType: 'redeem_refund',
+        points: order.pointsSpent,
+        description: `积分兑换退款：${order.productName}（订单号：${order.orderNo}）`,
+        relatedId: order.id,
+      });
+
+      // 恢复库存
+      await db.execute(sql`UPDATE merchant_products SET stock = stock + ${order.quantity}, salesCount = GREATEST(0, salesCount - ${order.quantity}) WHERE id = ${order.productId}`);
+
+      await db
+        .update(pointsRedeemOrders)
+        .set({ status: 'cancelled', cancelReason: input.cancelReason || null })
+        .where(eq(pointsRedeemOrders.id, input.orderId));
+
+      return { success: true };
+    }),
+
+  // 公开接口：获取积分规则（用户端展示用）
+  getPublicPointRules: publicProcedure
+    .query(async () => {
+      const { getAllPointRules } = await import('./db-point-system');
+      const rules = await getAllPointRules();
+      return (rules as any[]).filter((r: any) => r.isActive);
+    }),
 });

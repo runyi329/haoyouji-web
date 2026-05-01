@@ -1720,7 +1720,10 @@ export default function Home() {
                 <Gift className="w-3.5 h-3.5 text-[#A80000]" />
                 <span className="text-xs font-semibold text-[#A80000]">脉动商城</span>
               </div>
-              <div className="flex items-center space-x-1 bg-red-50 rounded-full px-2.5 py-0.5">
+              <div
+                className="flex items-center space-x-1 bg-red-50 rounded-full px-2.5 py-0.5 cursor-pointer hover:bg-red-100 transition-colors"
+                onClick={() => navigate(user ? "/parent/points" : "/login")}
+              >
                 {user ? (
                   <>
                     <span className="text-xs text-gray-400">我的积分</span>
