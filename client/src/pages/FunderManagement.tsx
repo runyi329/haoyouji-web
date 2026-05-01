@@ -239,6 +239,11 @@ export default function FunderManagement() {
 
   // 编辑订单时实时查询已结利息
   const editingOrderId = editingOrder?.id ?? null;
+  // 编辑面板专用：查询当前编辑订单的结息记录（必须在 previewPaidInterest 使用之前声明，避免 TDZ 错误）
+  const { data: editingOrderPayments, refetch: refetchEditingPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
+    { ledgerId, orderId: editingOrderId! },
+    { enabled: !!editingOrderId && !editingOrder?.participantInfo, staleTime: 0 }
+  );
   const { data: editingPaidSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId, orderIds: editingOrderId ? [editingOrderId] : [] },
     { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
@@ -453,11 +458,6 @@ export default function FunderManagement() {
   const { data: interestPayments, refetch: refetchPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId, orderId: showPaymentPanel! },
     { enabled: showPaymentPanel !== null }
-  );
-  // 编辑面板专用：查询当前编辑订单的结息记录（用于前端计算已结利息总额和币种）
-  const { data: editingOrderPayments, refetch: refetchEditingPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
-    { ledgerId, orderId: editingOrderId! },
-    { enabled: !!editingOrderId && !editingOrder?.participantInfo, staleTime: 0 }
   );
 
     const addPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
