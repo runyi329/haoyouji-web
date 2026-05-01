@@ -2252,11 +2252,20 @@ export default function LedgerDetail() {
     try { localStorage.setItem(PREV_PRICE_CACHE_KEY, JSON.stringify(freshPrices)); } catch {};
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(freshPrices)]);
-  const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => o.id), [funderAssetOrders]);
+  const funderOrderIds = useMemo(() => (funderAssetOrders as any[]).map((o: any) => Number(o.id)), [funderAssetOrders]);
   const { data: interestSummary } = trpc.ledger.funderGetInterestPaymentSummary.useQuery(
     { ledgerId: Number(ledgerId), orderIds: funderOrderIds },
     { enabled: isCustomAF && funderOrderIds.length > 0 }
   );
+  // 后端返回数组格式 [{orderId, total, currency}]，转成 map 方便按 orderId 查找
+  const interestSummaryMap = useMemo(() => {
+    const arr = Array.isArray(interestSummary) ? (interestSummary as any[]) : [];
+    const map: Record<number, { total: number; currency: string }> = {};
+    for (const r of arr) {
+      map[Number(r.orderId)] = { total: parseFloat(r.total || '0'), currency: r.currency || 'U' };
+    }
+    return map;
+  }, [interestSummary]);
   // AF 账本：YJH邀请树（仅当弹窗打开时才加载）
   // 管理员/创建人点推荐时，强制以YJH(4957151)视角查询，无需切换视角
   const YJH_USER_ID = 4957151;
@@ -4280,7 +4289,7 @@ export default function LedgerDetail() {
                     order={order}
                     ledgerId={ledgerId}
                     livePrices={funderLivePrices}
-                    paidInterest={(interestSummary as any)?.[order.id] ?? 0}
+                    paidInterest={interestSummaryMap[Number(order.id)]?.total ?? 0}
                     onClick={() => {}}
                     canClick={false}
                     priceDirection={funderPriceDirection}
@@ -4296,7 +4305,7 @@ export default function LedgerDetail() {
                     order={order}
                     ledgerId={ledgerId}
                     livePrices={funderLivePrices}
-                    paidInterest={(interestSummary as any)?.[order.id] ?? 0}
+                    paidInterest={interestSummaryMap[Number(order.id)]?.total ?? 0}
                     onClick={() => {}}
                     canClick={false}
                     priceDirection={funderPriceDirection}
