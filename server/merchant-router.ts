@@ -300,6 +300,7 @@ export const merchantRouter = router({
       basePrice: z.string().optional(),
       originalPrice: z.string().optional(),
       mainImageUrl: z.string().optional(),
+      imageUrls: z.string().optional(),
       categoryId: z.number().optional(),
       status: z.enum(["active", "inactive", "draft"]).optional(),
       isShareable: z.number().optional(),
