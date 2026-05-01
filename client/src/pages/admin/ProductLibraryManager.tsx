@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -309,6 +309,32 @@ function ProductForm({
   onSave: (data: Partial<Product>) => void;
   onClose: () => void;
 }) {
+  const uploadProductImageMutation = trpc.merchant.uploadProductImage.useMutation();
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('请选择图片文件'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error('图片大小不能超过 10MB'); return; }
+    setIsUploadingImage(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = ev.target?.result as string;
+        const result = await uploadProductImageMutation.mutateAsync({ imageData: base64, folder: 'merchant-products' });
+        setForm(prev => ({ ...prev, mainImageUrl: result.url }));
+        toast.success('图片上传成功');
+        setIsUploadingImage(false);
+      };
+      reader.onerror = () => { toast.error('图片读取失败'); setIsUploadingImage(false); };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      toast.error('上传失败: ' + (err?.message || ''));
+      setIsUploadingImage(false);
+    }
+  };
+
   const [form, setForm] = useState({
     name: product?.name || "",
     subtitle: product?.subtitle || "",
@@ -384,15 +410,56 @@ function ProductForm({
         </div>
       </div>
 
-      {/* 主图URL */}
+      {/* 主图上传 */}
       <div>
-        <Label className="text-xs text-gray-500 mb-1 block">主图URL</Label>
-        <Input
-          value={form.mainImageUrl}
-          onChange={(e) => setForm({ ...form, mainImageUrl: e.target.value })}
-          placeholder="https://..."
-          className="h-11"
+        <Label className="text-xs text-gray-500 mb-1 block">商品主图</Label>
+        <div
+          className="relative border-2 border-dashed border-gray-200 rounded-xl overflow-hidden cursor-pointer hover:border-blue-400 transition-colors"
+          onClick={() => document.getElementById('plm-product-image-input')?.click()}
+        >
+          {form.mainImageUrl ? (
+            <div className="relative">
+              <img src={form.mainImageUrl} alt="商品主图" className="w-full h-36 object-cover" />
+              <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                <span className="text-white text-sm font-medium">点击更换图片</span>
+              </div>
+            </div>
+          ) : (
+            <div className="h-28 flex flex-col items-center justify-center gap-2 text-gray-400">
+              {isUploadingImage ? (
+                <>
+                  <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">上传中...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-sm">点击上传商品图片</span>
+                  <span className="text-xs">支持 JPG、PNG、WebP，最大 10MB</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <input
+          id="plm-product-image-input"
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageChange}
+          disabled={isUploadingImage}
         />
+        {form.mainImageUrl && (
+          <button
+            type="button"
+            className="text-xs text-red-500 hover:text-red-700 mt-1"
+            onClick={() => setForm(prev => ({ ...prev, mainImageUrl: '' }))}
+          >
+            删除图片
+          </button>
+        )}
       </div>
 
       {/* 分类 + 库存 */}
