@@ -118,3 +118,7 @@ $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_
 $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_funding_rate_settings' AND COLUMN_NAME='open_balance_snapshot'; SET @s = IF(@c=0, 'ALTER TABLE af_funding_rate_settings ADD COLUMN open_balance_snapshot DECIMAL(20,8) NULL COMMENT \\'开启时余额快照\\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
 $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='af_funding_rate_settings' AND COLUMN_NAME='settled_hours'; SET @s = IF(@c=0, 'ALTER TABLE af_funding_rate_settings ADD COLUMN settled_hours INT NOT NULL DEFAULT 0 COMMENT \\'本次开启已结算小时数\\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
 echo "✅ AF 赚费表新字段确认完成"
+
+echo "📊 确保 merchant_products 表有 thumbnailUrl 字段..."
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='merchant_products' AND COLUMN_NAME='thumbnailUrl'; SET @s = IF(@c=0, 'ALTER TABLE merchant_products ADD COLUMN thumbnailUrl text NULL COMMENT \\'列表预览图URL\\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ merchant_products.thumbnailUrl 字段确认完成"
