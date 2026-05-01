@@ -1798,6 +1798,8 @@ export const merchantRouter = router({
           originalPrice: merchantProducts.originalPrice,
           mainImageUrl: merchantProducts.mainImageUrl,
           thumbnailUrl: merchantProducts.thumbnailUrl,
+          pointsPrice: merchantProducts.pointsPrice,
+          inPointsShop: merchantProducts.inPointsShop,
           categoryId: merchantProducts.categoryId,
           salesCount: merchantProducts.salesCount,
           stock: merchantProducts.stock,
