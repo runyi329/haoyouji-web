@@ -1,6 +1,11 @@
 name: Upload Category Icons to COS
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/upload-icons-to-cos.yml'
   workflow_dispatch:
 
 jobs:
