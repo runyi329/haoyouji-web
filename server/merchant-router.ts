@@ -323,6 +323,8 @@ export const merchantRouter = router({
       stock: z.number().optional(),
       extendedFields: z.string().optional(),
       description: z.string().optional(),
+      badgeEnabled: z.number().min(0).max(1).optional(), // 是否显示角标
+      badgeText: z.string().max(16).optional().nullable(), // 角标文字（2-8字）
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -1483,6 +1485,8 @@ export const merchantRouter = router({
           createdAt: merchantProducts.createdAt,
           categoryName: merchantProductCategories.name,
           ownerShopName: merchants.shopName,
+          badgeEnabled: merchantProducts.badgeEnabled,
+          badgeText: merchantProducts.badgeText,
         })
         .from(merchantProducts)
         .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
@@ -1806,6 +1810,8 @@ export const merchantRouter = router({
           extendedFields: merchantProducts.extendedFields,
           categoryName: merchantProductCategories.name,
           ownerShopName: merchants.shopName,
+          badgeEnabled: merchantProducts.badgeEnabled,
+          badgeText: merchantProducts.badgeText,
         })
         .from(merchantProducts)
         .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
