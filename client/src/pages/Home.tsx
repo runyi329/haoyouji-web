@@ -1089,8 +1089,8 @@ export default function Home() {
   const { data: productCategories } = trpc.merchant.getCategories.useQuery(undefined, {
     staleTime: 300000,
   });
-  // 只取吃喝玩乐4个分类（id 35-38）
-  const mainCategories = (productCategories || []).filter(c => ['吃','喝','玩','乐'].includes(c.name));
+  // 取所有活跃分类，按sortOrder排序，最多15个
+  const mainCategories = (productCategories || []).filter(c => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder).slice(0, 15);
   const { data: categoryProducts, isLoading: isLoadingCategoryProducts } = trpc.merchant.getProductsByCategory.useQuery(
     selectedCategoryId ? { categoryId: selectedCategoryId, limit: 50 } : undefined,
     { enabled: categorySheetOpen && selectedCategoryId !== null, staleTime: 60000 }
@@ -1735,42 +1735,33 @@ export default function Home() {
               </div>
               <span className="text-[10px] text-gray-400">选择分类查看商品</span>
             </div>
-            {/* 4个分类入口 */}
-            <div className="flex-1 flex flex-col items-center justify-center px-4 pb-2">
-              {(() => {
-                const catConfig: Record<string, { emoji: string; bg: string; border: string; text: string }> = {
-                  '吃': { emoji: '🍜', bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700' },
-                  '喝': { emoji: '🍵', bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700' },
-                  '玩': { emoji: '🎮', bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' },
-                  '乐': { emoji: '🎉', bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700' },
-                };
-                const displayCats = mainCategories.length > 0
-                  ? mainCategories
-                  : ['吃','喝','玩','乐'].map((name, i) => ({ id: 35 + i, name, description: '', sortOrder: (i+1)*10, isActive: 1, iconUrl: null, merchantId: null, createdAt: new Date(), updatedAt: new Date() }));
-                return (
-                  <div className="grid grid-cols-2 gap-3 w-full">
-                    {displayCats.map((cat) => {
-                      const cfg = catConfig[cat.name] || { emoji: '🛎️', bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700' };
-                      return (
-                        <button
-                          key={cat.id}
-                          className={`${cfg.bg} ${cfg.border} border-2 rounded-2xl p-4 flex flex-col items-center justify-center space-y-1.5 active:scale-95 transition-transform shadow-sm`}
-                          onClick={() => {
-                            setSelectedCategoryId(cat.id);
-                            setCategorySheetOpen(true);
-                          }}
-                        >
-                          <span className="text-3xl">{cfg.emoji}</span>
-                          <span className={`text-base font-bold ${cfg.text}`}>{cat.name}</span>
-                          {cat.description && (
-                            <span className="text-[10px] text-gray-400 text-center leading-tight">{cat.description}</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
+            {/* 15个分类入口 - 5列×3行 */}
+            <div className="flex-1 overflow-hidden px-2 pb-1">
+              <div className="grid grid-cols-5 h-full" style={{ gridTemplateRows: 'repeat(3, 1fr)' }}>
+                {mainCategories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    className="flex flex-col items-center justify-center space-y-0.5 active:scale-90 transition-transform px-0.5"
+                    onClick={() => {
+                      setSelectedCategoryId(cat.id);
+                      setCategorySheetOpen(true);
+                    }}
+                  >
+                    {cat.iconUrl ? (
+                      <img
+                        src={cat.iconUrl}
+                        alt={cat.name}
+                        className="w-10 h-10 object-contain drop-shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                        <ShoppingBag className="w-5 h-5 text-gray-400" />
+                      </div>
+                    )}
+                    <span className="text-[10px] text-gray-600 font-medium leading-tight text-center line-clamp-1">{cat.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>,
         ];
