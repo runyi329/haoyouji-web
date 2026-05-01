@@ -200,15 +200,25 @@ export default function MerchantProductDetail() {
 
         {extraImages.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-gray-700 mb-2">更多图片</p>
-            <div className="grid grid-cols-3 gap-2">
-              {extraImages.map((url: string, i: number) => (
-                <img key={i} src={url} alt="" className="w-full aspect-square object-cover rounded-xl" />
-              ))}
-            </div>
+            <p className="text-xs font-semibold text-gray-700 mb-1">图文详情</p>
           </div>
         )}
       </div>
+
+      {/* 详情长图区域（无缝拼接，全宽展示） */}
+      {extraImages.length > 0 && (
+        <div className="w-full">
+          {extraImages.map((url: string, i: number) => (
+            <img
+              key={i}
+              src={url}
+              alt={`详情图${i + 1}`}
+              className="w-full block"
+              loading="lazy"
+            />
+          ))}
+        </div>
+      )}
 
       {/* 底部操作栏 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3">
