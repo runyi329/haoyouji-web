@@ -2459,7 +2459,7 @@ export default function Home() {
           {/* 底部弹出面板 */}
           <div
             className="fixed left-0 right-0 bottom-0 z-50 bg-white rounded-t-3xl shadow-2xl flex flex-col"
-            style={{ maxHeight: '80vh', maxWidth: 480, margin: '0 auto' }}
+            style={{ height: '67vh', maxWidth: 480, margin: '0 auto' }}
           >
             {/* 拉条 */}
             <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
