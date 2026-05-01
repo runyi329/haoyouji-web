@@ -23,10 +23,6 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import {
-  Sheet,
-  SheetContent,
-} from "@/components/ui/sheet";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -1013,12 +1009,7 @@ export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
   const isLiulifan = user?.username === 'liulifan';
-  // 积分商城商品详情
-  const [selectedShopProductId, setSelectedShopProductId] = useState<number | null>(null);
-  const { data: shopProductDetail, isLoading: isLoadingShopDetail } = trpc.merchant.getProductDetail.useQuery(
-    { id: selectedShopProductId ?? 0 },
-    { enabled: !!selectedShopProductId }
-  );
+  // 积分商城商品详情 - 跳转独立页面
 
   // 未登录时弹出登录提示，已登录则执行回调
   const requireLogin = useCallback((action?: () => void) => {
@@ -1769,7 +1760,7 @@ export default function Home() {
                       <div
                         key={item.id}
                         className="bg-gray-50 rounded-xl p-2.5 flex flex-col items-center relative cursor-pointer active:bg-gray-100 transition-colors"
-                        onClick={() => setSelectedShopProductId(item.id)}
+                        onClick={() => navigate('/merchant-product/' + item.id)}
                       >
                         {tag && (
                           <span className="absolute top-1.5 right-1.5 text-white text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: '#A80000', lineHeight: 1.4 }}>{tag}</span>
@@ -1790,7 +1781,7 @@ export default function Home() {
                           disabled={isRedeeming}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedShopProductId(item.id);
+                            navigate('/merchant-product/' + item.id);
                           }}
                           className="w-full text-[10px] text-[#A80000] border border-[#A80000] rounded-full py-0.5 hover:bg-red-50 transition-colors disabled:opacity-50"
                         >立即兑换</button>
@@ -2485,110 +2476,6 @@ export default function Home() {
       {/* Bottom Navigation - fixed定位，不在flex流里 */}
       <BottomNav />
 
-      {/* 积分商城商品详情弹窗 */}
-      <Sheet open={!!selectedShopProductId} onOpenChange={(open) => { if (!open) setSelectedShopProductId(null); }}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl px-0 pt-0">
-          <div className="overflow-y-auto h-full">
-            {isLoadingShopDetail ? (
-              <div className="flex items-center justify-center h-40">
-                <div className="w-6 h-6 border-2 border-red-700 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : shopProductDetail ? (
-              <div className="pb-8">
-                {/* 主图 */}
-                {shopProductDetail.mainImageUrl ? (
-                  <img src={shopProductDetail.mainImageUrl} alt={shopProductDetail.name} className="w-full aspect-square object-cover" />
-                ) : (
-                  <div className="w-full aspect-square bg-gray-100 flex items-center justify-center">
-                    <ShoppingBag className="w-16 h-16 text-gray-200" />
-                  </div>
-                )}
-                {/* 基本信息 */}
-                <div className="px-4 pt-4 space-y-3">
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-900">{shopProductDetail.name}</h2>
-                    {shopProductDetail.subtitle && <p className="text-sm text-gray-500 mt-0.5">{shopProductDetail.subtitle}</p>}
-                  </div>
-                  {/* 积分价格 */}
-                  {(() => {
-                    const pts = pointsShopProducts?.find(p => p.id === selectedShopProductId);
-                    const pointsCost = (pts as any)?.pointsPrice || (pts ? Math.round(parseFloat(pts.basePrice || '100')) : 0);
-                    return (
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1">
-                          <span className="text-2xl font-bold text-[#A80000]">{pointsCost.toLocaleString()}</span>
-                          <span className="text-sm text-gray-500">积分</span>
-                        </div>
-                        {shopProductDetail.basePrice && (
-                          <span className="text-sm text-gray-400 line-through">¥{shopProductDetail.basePrice}</span>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  {/* 分类/商家 */}
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
-                    {shopProductDetail.categoryName && <span className="bg-gray-100 px-2 py-0.5 rounded-full">{shopProductDetail.categoryName}</span>}
-                    {shopProductDetail.ownerShopName && <span className="bg-gray-100 px-2 py-0.5 rounded-full">来自：{shopProductDetail.ownerShopName}</span>}
-                  </div>
-                  {/* 描述 */}
-                  {shopProductDetail.description && (
-                    <div className="pt-2">
-                      <p className="text-xs font-medium text-gray-700 mb-1">商品描述</p>
-                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{shopProductDetail.description}</p>
-                    </div>
-                  )}
-                  {/* 规格 */}
-                  {shopProductDetail.specs && shopProductDetail.specs.length > 0 && (
-                    <div className="pt-2">
-                      <p className="text-xs font-medium text-gray-700 mb-2">商品规格</p>
-                      <div className="space-y-1.5">
-                        {shopProductDetail.specs.map((spec: any) => (
-                          <div key={spec.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                            <span className="text-sm text-gray-700">{spec.name}</span>
-                            <span className="text-sm font-medium text-red-600">¥{spec.price}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {/* 多图 */}
-                  {shopProductDetail.imageUrls && (() => {
-                    try {
-                      const imgs = JSON.parse(shopProductDetail.imageUrls as string);
-                      if (Array.isArray(imgs) && imgs.length > 1) {
-                        return (
-                          <div className="pt-2">
-                            <p className="text-xs font-medium text-gray-700 mb-2">更多图片</p>
-                            <div className="grid grid-cols-3 gap-2">
-                              {imgs.slice(1).map((url: string, i: number) => (
-                                <img key={i} src={url} alt="" className="w-full aspect-square object-cover rounded-lg" />
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      }
-                    } catch {}
-                    return null;
-                  })()}
-                  {/* 兑换按钮 */}
-                  <div className="pt-4">
-                    <button
-                      onClick={() => {
-                        if (!user) {
-                          toast('请先登录后使用此功能');
-                          return;
-                        }
-                        toast('兑换功能即将开放，敬请期待');
-                      }}
-                      className="w-full py-3 bg-[#A80000] text-white rounded-xl font-medium text-sm"
-                    >立即兑换</button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

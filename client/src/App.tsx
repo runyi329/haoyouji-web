@@ -215,6 +215,7 @@ const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const UserAgreement = lazy(() => import("./pages/UserAgreement"));
 const ProductStore = lazy(() => import("./pages/ProductStore"));
 const ProductDetail = lazy(() => import("./pages/ProductDetail"));
+const MerchantProductDetail = lazy(() => import("./pages/MerchantProductDetail"));
 const PaymentResult = lazy(() => import("./pages/PaymentResult"));
 const SentiaHome = lazy(() => import("./pages/SentiaHome"));
 // AE 共享抽奖
@@ -360,6 +361,7 @@ function Router() {
         {/* 商品商店 */}
         <Route path="/products" component={ProductStore} />
         <Route path="/products/:id" component={ProductDetail} />
+        <Route path="/merchant-product/:id" component={MerchantProductDetail} />
         <Route path="/payment/result" component={PaymentResult} />
 
         {/* 卡券相关页面 */}
