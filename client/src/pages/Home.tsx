@@ -2531,9 +2531,13 @@ export default function Home() {
                         </div>
                         <div className="flex items-center justify-between mt-1">
                           <div className="flex items-baseline space-x-1">
-                            <span className="text-base font-bold text-[#A80000]">¥{parseFloat(item.basePrice || '0').toFixed(2)}</span>
-                            {item.originalPrice && parseFloat(item.originalPrice) > parseFloat(item.basePrice || '0') && (
-                              <span className="text-xs text-gray-300 line-through">¥{parseFloat(item.originalPrice).toFixed(2)}</span>
+                            {(item as any).inPointsShop === 1 && ((item as any).pointsPrice ?? 0) > 0 ? (
+                              <>
+                                <span className="text-base font-bold text-[#A80000]">{(item as any).pointsPrice}</span>
+                                <span className="text-xs font-medium text-[#A80000]">积分</span>
+                              </>
+                            ) : (
+                              <span className="text-base font-bold text-[#A80000]">¥{parseFloat(item.basePrice || '0').toFixed(2)}</span>
                             )}
                           </div>
                           {(item.salesCount ?? 0) > 0 && (
