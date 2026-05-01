@@ -14,7 +14,6 @@ import {
   User,
   LogOut,
   UserCircle,
-  Bell,
   Globe,
   BarChart2,
   FileText,
@@ -2469,18 +2468,13 @@ export default function Home() {
             <div className="flex items-center justify-between px-4 pb-3 flex-shrink-0 border-b border-gray-100">
               <div className="flex items-center space-x-2">
                 {(() => {
-                  const catConfig: Record<string, { emoji: string; text: string }> = {
-                    '吃': { emoji: '🍜', text: 'text-orange-700' },
-                    '喝': { emoji: '🍵', text: 'text-green-700' },
-                    '玩': { emoji: '🎮', text: 'text-blue-700' },
-                    '乐': { emoji: '🎉', text: 'text-purple-700' },
-                  };
                   const selCat = (productCategories || []).find(c => c.id === selectedCategoryId);
-                  const cfg = selCat ? (catConfig[selCat.name] || { emoji: '🛎️', text: 'text-gray-700' }) : { emoji: '🛎️', text: 'text-gray-700' };
                   return (
                     <>
-                      <span className="text-xl">{cfg.emoji}</span>
-                      <span className={`text-base font-bold ${cfg.text}`}>{selCat?.name ?? ''}</span>
+                      {selCat?.iconUrl && (
+                        <img src={selCat.iconUrl} alt={selCat.name} className="w-7 h-7 object-contain" />
+                      )}
+                      <span className="text-base font-bold text-gray-800">{selCat?.name ?? ''}</span>
                       {selCat?.description && <span className="text-xs text-gray-400">{selCat.description}</span>}
                     </>
                   );
