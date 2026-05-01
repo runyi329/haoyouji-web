@@ -107,6 +107,11 @@ function ProductList({
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterSource, setFilterSource] = useState("all");
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const { data: detailData, isLoading: isLoadingDetail } = trpc.merchant.getProductDetail.useQuery(
+    { id: detailProduct?.id ?? 0 },
+    { enabled: !!detailProduct }
+  );
 
   const filtered = products.filter((p) => {
     const matchSearch =
@@ -186,7 +191,8 @@ function ProductList({
             return (
               <div
                 key={product.id}
-                className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm"
+                className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm cursor-pointer active:bg-gray-50"
+                onClick={() => setDetailProduct(product)}
               >
                 <div className="flex items-stretch">
                   {/* 左侧图片 */}
@@ -248,7 +254,7 @@ function ProductList({
                         )}
                       </div>
                       {/* 操作按钮 */}
-                      <div className="flex items-center gap-0.5">
+                      <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => onTogglePointsShop(product.id, product.inPointsShop ? 0 : 1, product)}
                           className={`p-1.5 rounded-lg active:bg-gray-200 ${product.inPointsShop ? 'text-amber-500 bg-amber-50' : 'text-gray-300 hover:bg-gray-100'}`}
@@ -288,6 +294,95 @@ function ProductList({
           })
         )}
       </div>
+
+      {/* 商品详情弹窗 */}
+      <Sheet open={!!detailProduct} onOpenChange={(open) => { if (!open) setDetailProduct(null); }}>
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl px-0 pt-0">
+          <div className="overflow-y-auto h-full">
+            {isLoadingDetail ? (
+              <div className="flex items-center justify-center h-40">
+                <div className="w-6 h-6 border-2 border-red-700 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : detailData ? (
+              <div className="pb-8">
+                {/* 主图 */}
+                {detailData.mainImageUrl ? (
+                  <img src={detailData.mainImageUrl} alt={detailData.name} className="w-full aspect-square object-cover" />
+                ) : (
+                  <div className="w-full aspect-square bg-gray-100 flex items-center justify-center">
+                    <ShoppingBag className="w-16 h-16 text-gray-200" />
+                  </div>
+                )}
+                {/* 基本信息 */}
+                <div className="px-4 pt-4 space-y-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-900">{detailData.name}</h2>
+                    {detailData.subtitle && <p className="text-sm text-gray-500 mt-0.5">{detailData.subtitle}</p>}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-bold text-red-600">¥{detailData.basePrice}</span>
+                    {detailData.originalPrice && (
+                      <span className="text-sm text-gray-400 line-through">¥{detailData.originalPrice}</span>
+                    )}
+                    {detailProduct?.inPointsShop ? (
+                      <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                        积分商城 {detailProduct.pointsPrice} 积分
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* 商家/分类信息 */}
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                    {detailData.categoryName && <span className="bg-gray-100 px-2 py-0.5 rounded-full">{detailData.categoryName}</span>}
+                    {detailData.ownerShopName && <span className="bg-gray-100 px-2 py-0.5 rounded-full">来自：{detailData.ownerShopName}</span>}
+                    <span className="bg-gray-100 px-2 py-0.5 rounded-full">库存 {detailProduct?.stock}</span>
+                    <span className="bg-gray-100 px-2 py-0.5 rounded-full">销量 {detailProduct?.salesCount}</span>
+                  </div>
+                  {/* 描述 */}
+                  {detailData.description && (
+                    <div className="pt-2">
+                      <p className="text-xs font-medium text-gray-700 mb-1">商品描述</p>
+                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{detailData.description}</p>
+                    </div>
+                  )}
+                  {/* 规格 */}
+                  {detailData.specs && detailData.specs.length > 0 && (
+                    <div className="pt-2">
+                      <p className="text-xs font-medium text-gray-700 mb-2">商品规格</p>
+                      <div className="space-y-1.5">
+                        {detailData.specs.map((spec: any) => (
+                          <div key={spec.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                            <span className="text-sm text-gray-700">{spec.name}</span>
+                            <span className="text-sm font-medium text-red-600">¥{spec.price}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* 多图 */}
+                  {detailData.imageUrls && (() => {
+                    try {
+                      const imgs = JSON.parse(detailData.imageUrls as string);
+                      if (Array.isArray(imgs) && imgs.length > 1) {
+                        return (
+                          <div className="pt-2">
+                            <p className="text-xs font-medium text-gray-700 mb-2">更多图片</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              {imgs.slice(1).map((url: string, i: number) => (
+                                <img key={i} src={url} alt="" className="w-full aspect-square object-cover rounded-lg" />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                    } catch {}
+                    return null;
+                  })()}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
