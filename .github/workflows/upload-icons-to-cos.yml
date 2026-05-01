@@ -1,0 +1,115 @@
+name: Upload Category Icons to COS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload-icons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload icons to COS and update DB on server
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          set -e
+          APP_DIR=$(find /root -name "haoyouji-web" -type d 2>/dev/null | head -1 || echo "/root/haoyouji-web")
+          cd "$APP_DIR"
+
+          # 读取环境变量
+          source .env 2>/dev/null || true
+          export COS_SECRET_ID COS_SECRET_KEY
+          export COS_BUCKET="${COS_BUCKET:-haoyouji-images-1396946788}"
+          export COS_REGION="${COS_REGION:-ap-shanghai}"
+          export DB_URL="mysql://root:Miao@20190603@124.223.54.69:3306/crm_db"
+
+          echo "COS_BUCKET: $COS_BUCKET"
+          echo "COS_REGION: $COS_REGION"
+
+          # 下载15个图标
+          mkdir -p /tmp/icons_upload
+          declare -A icons=(
+            [39]="MKosvFzNQTFAWVtZ"
+            [40]="UIzvrmWYmJPvAhNS"
+            [41]="SgxMsxEIXyEyQBNN"
+            [42]="nyZvnXucJYERXSHL"
+            [43]="qrQtCxWjDFwrYeSi"
+            [44]="wamOkiAcrzBcYsPh"
+            [45]="aeGMDyfXovkWMWUt"
+            [46]="uBLIzGrRmqaPvxqI"
+            [47]="sAKrMWkdlieUiKbJ"
+            [48]="dWOFqAeBLVQifRuR"
+            [49]="LohqIniGXAthqGmS"
+            [50]="rQOiLebbFtBZvxSr"
+            [51]="fRjfgGJiJICIeApd"
+            [52]="TPgdfHUCzwclrMJl"
+            [53]="MRBJAPPDfDpbTplX"
+          )
+
+          for id in "${!icons[@]}"; do
+            fname="${icons[$id]}"
+            curl -s -o "/tmp/icons_upload/icon_${id}.png" \
+              "https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/${fname}.png"
+            echo "Downloaded icon_${id}.png"
+          done
+
+          # 创建上传脚本
+          cat > /tmp/upload_icons.mjs << 'JSEOF'
+          import COS from 'cos-nodejs-sdk-v5';
+          import fs from 'fs';
+          import mysql from 'mysql2/promise';
+
+          const COS_SECRET_ID = process.env.COS_SECRET_ID;
+          const COS_SECRET_KEY = process.env.COS_SECRET_KEY;
+          const BUCKET = process.env.COS_BUCKET || 'haoyouji-images-1396946788';
+          const REGION = process.env.COS_REGION || 'ap-shanghai';
+          const DB_URL = process.env.DB_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
+
+          if (!COS_SECRET_ID || !COS_SECRET_KEY) {
+            console.error('❌ 缺少COS密钥');
+            process.exit(1);
+          }
+
+          const cos = new COS({ SecretId: COS_SECRET_ID, SecretKey: COS_SECRET_KEY });
+          const conn = await mysql.createConnection(DB_URL);
+
+          const ids = [39,40,41,42,43,44,45,46,47,48,49,50,51,52,53];
+          let success = 0;
+
+          for (const id of ids) {
+            const filePath = `/tmp/icons_upload/icon_${id}.png`;
+            if (!fs.existsSync(filePath)) { console.log(`⚠️ 文件不存在: ${filePath}`); continue; }
+            const fileBuffer = fs.readFileSync(filePath);
+            const cosKey = `icons/category_${id}.png`;
+            try {
+              await new Promise((resolve, reject) => {
+                cos.putObject({ Bucket: BUCKET, Region: REGION, Key: cosKey, Body: fileBuffer, ContentType: 'image/png' },
+                  (err, data) => err ? reject(err) : resolve(data));
+              });
+              const cosUrl = `https://${BUCKET}.cos.${REGION}.myqcloud.com/${cosKey}`;
+              await conn.execute('UPDATE merchant_product_categories SET iconUrl=? WHERE id=?', [cosUrl, id]);
+              console.log(`✅ [${id}] 上传并更新成功: ${cosUrl}`);
+              success++;
+            } catch (err) {
+              console.error(`❌ [${id}] 失败:`, err.message);
+            }
+          }
+
+          await conn.end();
+          console.log(`\n完成！成功 ${success}/15 个图标`);
+          JSEOF
+
+          # 在项目目录运行（使用项目的node_modules）
+          cd "$APP_DIR"
+          node /tmp/upload_icons.mjs
+          ENDSSH
