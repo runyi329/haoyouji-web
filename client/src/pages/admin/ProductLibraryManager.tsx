@@ -288,6 +288,7 @@ function ProductList({
 
 export default function ProductLibraryManager() {
   const [activeTab, setActiveTab] = useState("products");
+  const [, setLocation] = useLocation();
 
   const productsQuery = trpc.merchant.getProducts.useQuery();
   const categoriesQuery = trpc.merchant.getCategories.useQuery();
