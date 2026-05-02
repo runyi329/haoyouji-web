@@ -25,8 +25,8 @@ const SYMBOLS = ALL_SYMBOLS; // 兼容旧引用
 
 const PAGE_SIZE = 60;
 const TABS = [
-  { key: "data", label: "日线数据" },
   { key: "analysis", label: "数据分析" },
+  { key: "data", label: "日线数据" },
   { key: "predict", label: "预测未来" },
 ];
 
@@ -1213,7 +1213,8 @@ export default function BeDataPage() {
     : (filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key);
 
   const [activeSymbol, setActiveSymbol] = useState(initialSymbol);
-  const [activeTab, setActiveTab] = useState("data");
+  // 美股模式下默认显示数据分析，其他模式保持日线数据
+  const [activeTab, setActiveTab] = useState(hideSymbolTabs ? "analysis" : "data");
   const [page, setPage] = useState(1);
 
   // 当前股票信息（用于美股模式下显示 logo 和名称）
@@ -1275,103 +1276,141 @@ export default function BeDataPage() {
   const analysisLoading = statsLoading || changePctsLoading;
 
   return (
-    <div className={`min-h-screen flex flex-col ${hideSymbolTabs ? 'bg-[#EBF3FF]' : 'bg-gray-50'}`}>
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: hideSymbolTabs ? "#EEF2F8" : "#F5F5F5" }}>
+
       {/* 顶部导航 */}
-      <div className={`sticky top-0 z-10 ${hideSymbolTabs ? 'bg-gradient-to-r from-[#1565C0] to-[#1976D2] shadow-md' : 'bg-white border-b border-gray-200'}`}>
-        <div className="flex items-center h-13 px-3 py-2">
-          <button
-            onClick={() => setLocation(backPath)}
-            className={`flex items-center mr-2 ${hideSymbolTabs ? 'text-white/80' : 'text-gray-600'}`}
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          {hideSymbolTabs && currentStockInfo ? (
-            <div className="flex items-center gap-2 flex-1">
-              <img src={currentStockInfo.icon} alt={currentStockInfo.shortLabel} className="w-8 h-8 object-contain" />
-              <div className="flex flex-col">
-                <span className="font-bold text-white text-sm leading-tight">AI 数据追踪</span>
-                <span className="text-white/70 text-[10px] leading-tight">{currentStockInfo.label} · {currentStockInfo.shortLabel}</span>
+      {hideSymbolTabs ? (
+        // 美股模式：对齐 USStockTracker 风格
+        <div style={{ background: "linear-gradient(135deg, #1565C0 0%, #0D47A1 100%)", padding: "10px 16px 12px", flexShrink: 0, position: "sticky", top: 0, zIndex: 10 }}>
+          {/* 第一行：返回 + 标题 + 更新按鈕 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <button
+              onClick={() => setLocation(backPath)}
+              style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+            >
+              <ChevronLeft style={{ width: 16, height: 16, color: "#fff" }} />
+            </button>
+            {currentStockInfo ? (
+              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
+                <img src={currentStockInfo.icon} alt={currentStockInfo.shortLabel} style={{ width: 32, height: 32, objectFit: "contain", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }} />
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: 16, color: "#fff", margin: 0, lineHeight: 1.2 }}>AI 数据追踪</p>
+                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.3 }}>{currentStockInfo.label} · {currentStockInfo.shortLabel}</p>
+                </div>
+              </div>
+            ) : (
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 700, fontSize: 16, color: "#fff", margin: 0 }}>AI 数据追踪</p>
+              </div>
+            )}
+            <button
+              onClick={() => window.location.reload()}
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer" }}
+            >
+              更新
+            </button>
+          </div>
+
+          {/* 统计信息：三小卡片横排，嵌入蓝色导航栏 */}
+          {!isLoading && total > 0 && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ flex: 1, borderRadius: 10, padding: "7px 10px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>数据范围</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1.4, marginTop: 1 }}>{oldestDate}</div>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", lineHeight: 1.3 }}>~ {latestDate}</div>
+              </div>
+              <div style={{ flex: 1, borderRadius: 10, padding: "7px 10px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>历史数据</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 3, marginTop: 1 }}>
+                  <span style={{ fontSize: 17, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{total}</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>天</span>
+                </div>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", lineHeight: 1.3 }}>{total} 条日线</div>
+              </div>
+              <div style={{ flex: 1, borderRadius: 10, padding: "7px 10px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>最新收盘</div>
+                {latestClose != null ? (
+                  <>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 1 }}>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{formatPrice(latestClose)}</span>
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE", lineHeight: 1.3 }}>
+                      {(latestChangePct ?? 0) >= 0 ? "+" : ""}{latestChangePct?.toFixed(2) ?? "—"}%
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ marginTop: 4, fontSize: 11, color: "rgba(255,255,255,0.5)" }}>—</div>
+                )}
               </div>
             </div>
-          ) : (
-            <span className="font-semibold text-gray-800 text-base flex-1">{pageTitle}</span>
           )}
-          <button
-            onClick={() => window.location.reload()}
-            className={`text-xs font-medium rounded-full px-3 py-1 active:opacity-70 ${hideSymbolTabs ? 'text-[#1565C0] bg-white/90' : 'text-white bg-[#D32F2F]'}`}
-          >
-            更新
-          </button>
         </div>
-
-        {/* 币种 Tab - 横向滚动，只显示Logo图标（美股模式下隐藏） */}
-        {!hideSymbolTabs && <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-hide px-2 gap-1 py-1.5" style={{ WebkitOverflowScrolling: 'touch' }}>
-          {filteredSymbols.map((s) => (
-            <button
-              key={s.key}
-              onClick={() => handleSymbolChange(s.key)}
-              title={s.label}
-              className={`shrink-0 flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${
-                activeSymbol === s.key
-                  ? "border-2 border-[#D32F2F] bg-red-50 shadow-sm"
-                  : "border-2 border-transparent hover:bg-gray-50"
-              }`}
-            >
-              <img
-                src={s.icon}
-                alt={s.shortLabel}
-                className="w-6 h-6 rounded-sm object-contain"
-              />
-              <span className={`text-[9px] font-bold mt-0.5 ${
-                activeSymbol === s.key ? 'text-[#D32F2F]' : 'text-gray-400'
-              }`}>{s.shortLabel}</span>
+      ) : (
+        // 其他模式：保持原来的白色导航栏
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+          <div className="flex items-center h-12 px-3">
+            <button onClick={() => setLocation(backPath)} className="flex items-center text-gray-600 mr-2">
+              <ChevronLeft className="w-5 h-5" />
             </button>
-          ))}
-        </div>}
-      </div>
-
-      {/* 统计栏 */}
-      {!isLoading && total > 0 && (
-        <div className={`px-3 py-2.5 ${hideSymbolTabs ? 'bg-white/80 border-b border-blue-100' : 'bg-white border-b border-gray-200'}`}>
-          <div className="flex flex-col gap-1.5">
-            <div className={`rounded-lg px-3 py-2 border flex items-center justify-between ${hideSymbolTabs ? 'bg-blue-50/60 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
-              <span className={`text-xs shrink-0 ${hideSymbolTabs ? 'text-blue-400' : 'text-gray-400'}`}>数据范围</span>
-              <span className={`text-xs font-medium font-mono ml-2 ${hideSymbolTabs ? 'text-blue-700' : 'text-gray-700'}`}>
-                {oldestDate} ~ {latestDate}
-              </span>
-            </div>
-            <div className={`rounded-lg px-3 py-2 border flex items-center justify-between ${hideSymbolTabs ? 'bg-blue-50/60 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
-              <span className={`text-xs shrink-0 ${hideSymbolTabs ? 'text-blue-400' : 'text-gray-400'}`}>历史数据</span>
-              <span className={`text-xs font-medium ml-2 ${hideSymbolTabs ? 'text-blue-700' : 'text-gray-700'}`}>
-                <span className={`font-bold ${hideSymbolTabs ? 'text-[#1565C0]' : 'text-[#D32F2F]'}`}>{total}</span> 天 &nbsp;
-                <span className={`font-bold ${hideSymbolTabs ? 'text-[#1565C0]' : 'text-[#D32F2F]'}`}>{total}</span> 条日线
-              </span>
-            </div>
-            <div className={`rounded-lg px-3 py-2 border flex items-center justify-between ${hideSymbolTabs ? 'bg-blue-50/60 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
-              <span className={`text-xs shrink-0 ${hideSymbolTabs ? 'text-blue-400' : 'text-gray-400'}`}>最新收盘</span>
-              <span className={`text-xs font-mono ml-2 mr-auto pl-1.5 ${hideSymbolTabs ? 'text-blue-400' : 'text-gray-400'}`}>{latestDate}</span>
-              <span className={`text-xs font-bold font-mono ${pctColor}`}>
-                {latestClose != null ? formatPrice(latestClose) : "-"}
-                <span className="ml-1.5 font-normal">{formatPct(latestChangePct)}</span>
-              </span>
-            </div>
+            <span className="font-semibold text-gray-800 text-base flex-1">{pageTitle}</span>
+            <button onClick={() => window.location.reload()} className="text-xs font-medium text-white bg-[#D32F2F] rounded-full px-3 py-1 active:opacity-70">更新</button>
           </div>
+          {/* 币种 Tab */}
+          <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-hide px-2 gap-1 py-1.5" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {filteredSymbols.map((s) => (
+              <button key={s.key} onClick={() => handleSymbolChange(s.key)} title={s.label}
+                className={`shrink-0 flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${
+                  activeSymbol === s.key ? "border-2 border-[#D32F2F] bg-red-50 shadow-sm" : "border-2 border-transparent hover:bg-gray-50"
+                }`}
+              >
+                <img src={s.icon} alt={s.shortLabel} className="w-6 h-6 rounded-sm object-contain" />
+                <span className={`text-[9px] font-bold mt-0.5 ${activeSymbol === s.key ? 'text-[#D32F2F]' : 'text-gray-400'}`}>{s.shortLabel}</span>
+              </button>
+            ))}
+          </div>
+          {/* 统计栏 */}
+          {!isLoading && total > 0 && (
+            <div className="bg-white border-b border-gray-200 px-3 py-2.5">
+              <div className="flex flex-col gap-1.5">
+                <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
+                  <span className="text-xs text-gray-400 shrink-0">数据范围</span>
+                  <span className="text-xs font-medium text-gray-700 font-mono ml-2">{oldestDate} ~ {latestDate}</span>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
+                  <span className="text-xs text-gray-400 shrink-0">历史数据</span>
+                  <span className="text-xs font-medium text-gray-700 ml-2">
+                    <span className="text-[#D32F2F] font-bold">{total}</span> 天 &nbsp;
+                    <span className="text-[#D32F2F] font-bold">{total}</span> 条日线
+                  </span>
+                </div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
+                  <span className="text-xs text-gray-400 shrink-0">最新收盘</span>
+                  <span className="text-xs text-gray-400 font-mono ml-2 mr-auto pl-1.5">{latestDate}</span>
+                  <span className={`text-xs font-bold font-mono ${pctColor}`}>
+                    {latestClose != null ? formatPrice(latestClose) : "-"}
+                    <span className="ml-1.5 font-normal">{formatPct(latestChangePct)}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* 功能 Tab */}
-      <div className={`border-b flex ${hideSymbolTabs ? 'bg-white border-blue-100' : 'bg-white border-gray-200'}`}>
+      <div style={{ background: "#fff", borderBottom: hideSymbolTabs ? "1px solid #D8E0EC" : "1px solid #E5E7EB", display: "flex", flexShrink: 0 }}>
         {TABS.filter((t) => !(urlFilter === 'stocks' && t.key === 'predict')).map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
-            className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-              activeTab === t.key
-                ? hideSymbolTabs
-                  ? "text-[#1565C0] border-b-2 border-[#1565C0]"
-                  : "text-[#D32F2F] border-b-2 border-[#D32F2F]"
-                : "text-gray-500"
-            }`}
+            style={{
+              flex: 1, padding: "10px 0", fontSize: 14, fontWeight: 500,
+              color: activeTab === t.key ? (hideSymbolTabs ? "#1565C0" : "#D32F2F") : "#9CA3AF",
+              borderBottom: activeTab === t.key ? `2px solid ${hideSymbolTabs ? "#1565C0" : "#D32F2F"}` : "2px solid transparent",
+              background: "none", border: "none",
+              borderBottom: activeTab === t.key ? `2px solid ${hideSymbolTabs ? "#1565C0" : "#D32F2F"}` : "2px solid transparent",
+              cursor: "pointer", transition: "color 0.2s",
+            }}
           >
             {t.label}
           </button>
