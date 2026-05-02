@@ -683,6 +683,7 @@ const WalletLottie = React.memo(function WalletLottie() {
 
 // ── 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁）────────────────────
 const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
+  const [, setLocation] = useLocation();
   const { data: goldPrice } = trpc.stock.getGoldPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
@@ -908,10 +909,22 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
           const dx = e.changedTouches[0].clientX - globalTouchStartX.current;
           const dy = e.changedTouches[0].clientY - globalTouchStartY.current;
           if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 30) {
+            // 判断为横向滑动，切换卡片
             if (!globalIsTransitioning.current) {
               setGlobalTransition(true);
               if (dx < 0) setGlobalRealIndex(prev => prev + 1);
               if (dx > 0) setGlobalRealIndex(prev => prev - 1);
+            }
+          } else if (Math.abs(dx) <= 10 && Math.abs(dy) <= 10) {
+            // 判断为点击（几乎没有移动），执行当前卡片的跳转
+            // globalRealIndex: 0=克隆第5张, 1-5=真实卡片(items[0]-items[4]), 6=克隆第1张
+            let realIdx: number;
+            if (globalRealIndex === 0) realIdx = 4; // 克隆的第5张
+            else if (globalRealIndex === 6) realIdx = 0; // 克隆的第1张
+            else realIdx = globalRealIndex - 1; // 正常情况
+            const currentItem = items[realIdx];
+            if (currentItem && (currentItem as any).link) {
+              setLocation((currentItem as any).link);
             }
           }
         }}
@@ -928,11 +941,6 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
           {[items[3], ...items, items[0]].map((item, idx) => (
             <div
               key={`${item.key}-${idx}`}
-              onClick={() => {
-                if ((item as any).link) {
-                  setLocation((item as any).link);
-                }
-              }}
               style={{
                 minWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
                 maxWidth: globalContainerWidth > 0 ? `${globalContainerWidth}px` : '100%',
