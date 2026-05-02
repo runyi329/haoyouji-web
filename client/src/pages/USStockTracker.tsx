@@ -65,7 +65,7 @@ function Week52Bar({ low, high, current }: { low: number; high: number; current:
           boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
         }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 3 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
         <span style={{ fontSize: 8, color: MUTED2 }}>{fmtPrice(low)}</span>
         <span style={{ fontSize: 8, color: color, fontWeight: 600 }}>{pct.toFixed(0)}%</span>
         <span style={{ fontSize: 8, color: MUTED2 }}>{fmtPrice(high)}</span>
@@ -159,7 +159,7 @@ function StockCard({
     <div
       onClick={onClick}
       style={{
-        padding: "7px 12px",
+        padding: "5px 10px",
         borderBottom: isLast ? "none" : `1px solid ${BORDER}`,
         cursor: "pointer",
       }}
@@ -170,23 +170,23 @@ function StockCard({
         <img
           src={stock.logo}
           alt={stock.name}
-          style={{ width: 32, height: 32, objectFit: "contain", flexShrink: 0, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.12))" }}
+          style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.12))" }}
         />
         {/* 公司名 + 代码 + 行业 */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, lineHeight: 1.2 }}>{stock.name}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: TEXT, lineHeight: 1.2 }}>{stock.name}</span>
             <span style={{ fontSize: 9, color: "#fff", background: BLUE, borderRadius: 3, padding: "1px 4px", lineHeight: 1.4, flexShrink: 0 }}>{stock.sector}</span>
           </div>
-          <span style={{ fontSize: 10, color: MUTED, lineHeight: 1.2 }}>{stock.code} · {priceData?.date ?? "—"}</span>
+          <span style={{ fontSize: 9, color: MUTED, lineHeight: 1.2 }}>{stock.code} · {priceData?.date ?? "—"}</span>
         </div>
         {/* 价格 + 涨跌幅 */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
           {priceData ? (
             <>
-              <span style={{ fontSize: 15, fontWeight: 800, color: TEXT, lineHeight: 1.2 }}>${priceData.close.toFixed(2)}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: TEXT, lineHeight: 1.2 }}>${priceData.close.toFixed(2)}</span>
               <span style={{
-                fontSize: 11, fontWeight: 700, color: changeColor,
+                fontSize: 10, fontWeight: 700, color: changeColor,
                 background: isUp ? "rgba(211,47,47,0.08)" : "rgba(0,176,80,0.08)",
                 borderRadius: 4, padding: "1px 5px", marginTop: 1, lineHeight: 1.3,
               }}>{sign}{priceData.changePct?.toFixed(2) ?? "—"}%</span>
@@ -202,7 +202,7 @@ function StockCard({
       </div>
 
       {/* ── 第二行：今日开高低量振幅 ── */}
-      <div style={{ display: "flex", gap: 0, marginTop: 5 }}>
+      <div style={{ display: "flex", gap: 0, marginTop: 3 }}>
         {[
           { label: "开", val: priceData?.open != null ? `$${priceData.open.toFixed(1)}` : "—" },
           { label: "高", val: dayHigh != null ? `$${dayHigh.toFixed(1)}` : "—" },
@@ -211,26 +211,26 @@ function StockCard({
           { label: "振", val: priceData?.amplitudePct != null ? `${priceData.amplitudePct.toFixed(1)}%` : "—" },
         ].map((item, i) => (
           <div key={i} style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 8, color: MUTED2, lineHeight: 1.3 }}>{item.label}</div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: TEXT, lineHeight: 1.3 }}>{item.val}</div>
+            <div style={{ fontSize: 7.5, color: MUTED2, lineHeight: 1.2 }}>{item.label}</div>
+            <div style={{ fontSize: 9.5, fontWeight: 600, color: TEXT, lineHeight: 1.2 }}>{item.val}</div>
           </div>
         ))}
       </div>
 
       {/* ── 第三行：52周进度条 ── */}
       {w52H != null && w52L != null && curPrice != null ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
           <span style={{ fontSize: 8, color: MUTED2, flexShrink: 0 }}>52W</span>
           <Week52Bar low={w52L} high={w52H} current={curPrice} />
         </div>
       ) : (
-        <div style={{ marginTop: 5, height: 18 }}>
+        <div style={{ marginTop: 3, height: 16 }}>
           <Sk w={200} />
         </div>
       )}
 
       {/* ── 第四行：分析师目标价 + 评级 + 估值 + 支撑/阻力 + 技术面 ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, flexWrap: "wrap" }}>
         {fundamentals ? (
           <>
             {fundamentals.targetPrice != null && (
