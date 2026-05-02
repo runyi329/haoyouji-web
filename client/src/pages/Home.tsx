@@ -1021,9 +1021,9 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
 // ─── 七巨头行情横向滑动条 ────────────────────────────────────────────────────
 const MEGA_SEVEN_HOME = [
   { symbol: "AAPL.US",  name: "Apple",   code: "AAPL",  logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logo_apple_3d_t_16b8b55f.png" },
-  { symbol: "MSFT.US",  name: "Microsoft", code: "MSFT", logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logo_microsoft_3d_t_4719f9c5.png" },
+  { symbol: "MSFT.US",  name: "Microsoft", code: "MSFT", logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logos/logo_microsoft_3d.png" },
   { symbol: "NVDA.US",  name: "NVIDIA",  code: "NVDA",  logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logo_nvidia_3d_t_d451eb3d.png" },
-  { symbol: "GOOGL.US", name: "Alphabet", code: "GOOGL", logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logo_google_3d_t_cd971ae7.png" },
+  { symbol: "GOOGL.US", name: "Alphabet", code: "GOOGL", logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logos/logo_google_3d.png" },
   { symbol: "AMZN.US",  name: "Amazon",  code: "AMZN",  logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logo_amazon_3d_t_0c61d380.png" },
   { symbol: "META.US",  name: "Meta",    code: "META",  logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logo_meta_3d_t_5b7237ab.png" },
   { symbol: "TSLA.US",  name: "Tesla",   code: "TSLA",  logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logo_tesla_3d_t_0d585ca4.png" },
