@@ -262,20 +262,19 @@ export const appRouter = router({
       .input(z.object({ symbol: z.string() }))
       .query(async ({ input }) => {
         try {
+          const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9',
+          };
           // 并行获取 chart（52周数据）和 insights（分析师/技术面）
           const [chartRes, insightsRes] = await Promise.all([
-            callDataApi('YahooFinance/get_stock_chart', {
-              query: {
-                symbol: input.symbol,
-                region: 'US',
-                interval: '1d',
-                range: '5d',
-                includeAdjustedClose: false,
-              },
-            }),
-            callDataApi('YahooFinance/get_stock_insights', {
-              query: { symbol: input.symbol },
-            }),
+            fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${input.symbol}?interval=1d&range=5d&region=US`, { headers })
+              .then(r => r.ok ? r.json() : null)
+              .catch(() => null),
+            fetch(`https://query2.finance.yahoo.com/ws/insights/v3/finance/insights?symbol=${input.symbol}`, { headers })
+              .then(r => r.ok ? r.json() : null)
+              .catch(() => null),
           ]);
 
           // 提取 chart meta 数据
