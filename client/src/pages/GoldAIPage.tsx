@@ -1,13 +1,13 @@
 /**
  * GoldAIPage.tsx
  * 黄金AI分析追踪页面
- * 参考 StockDetail 风格，包含：三品种行情 + K线图 + 涨跌路 + AI分析报告 + 持仓追踪
+ * 配色与 StockDetail 保持一致：米白背景 + 红色主色调 + 白色卡片
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import {
-  ArrowLeft, RefreshCw, TrendingUp, TrendingDown, Sparkles,
-  Plus, Trash2, ChevronDown, ChevronUp
+  ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Sparkles,
+  Plus, Trash2
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -16,21 +16,20 @@ import { toast } from "sonner";
 import ReactECharts from "echarts-for-react";
 import { Streamdown } from "streamdown";
 
-// ─── 配色（参考 StockDetail 风格）────────────────────────────────────────────
-const GOLD = "#C9A84C";
-const GOLD_LIGHT = "#E8D5A3";
-const BG = "#0D0A05";
-const CARD = "rgba(201,168,76,0.06)";
-const CARD_BORDER = "rgba(201,168,76,0.2)";
-const TEXT = "#E8D5A3";
-const MUTED = "rgba(232,213,163,0.5)";
-const RED = "#F44336";
-const GREEN = "#4CAF50";
+// ─── 配色（与 StockDetail 完全一致）────────────────────────────────────────────
+const RED = "#D32F2F";
+const BG = "#F2EAE0";
+const CARD = "#FFFFFF";
+const BORDER = "#E8E0D8";
+const TEXT = "#1A1A1A";
+const MUTED = "#888888";
+const GREEN_A = "#00B050";
+const CARD_SHADOW = "0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)";
 
 // ─── 涨跌颜色（中国习惯：涨红跌绿）────────────────────────────────────────────
 function pctColor(pct: number) {
   if (pct > 0) return RED;
-  if (pct < 0) return GREEN;
+  if (pct < 0) return GREEN_A;
   return MUTED;
 }
 function pctSign(pct: number) {
@@ -57,7 +56,7 @@ function savePositions(positions: Position[]) {
   localStorage.setItem(POSITIONS_KEY, JSON.stringify(positions));
 }
 
-// ─── 涨跌路格子颜色 ─────────────────────────────────────────────────────────
+// ─── 涨跌路格子颜色（与 StockDetail 珠路图一致）─────────────────────────────
 function getBarColor(pct: number) {
   if (pct > 1.5) return { bg: "#C62828", fg: "#fff" };
   if (pct > 0.5) return { bg: "#EF5350", fg: "#fff" };
@@ -113,7 +112,6 @@ export default function GoldAIPage() {
     setAiLoading(true);
     setAiContent("");
     try {
-      // 计算近期趋势描述
       const recentBars = bars.slice(-10);
       let recentTrend = "";
       if (recentBars.length >= 2) {
@@ -189,7 +187,7 @@ export default function GoldAIPage() {
     return { pnl, pct, diff };
   }
 
-  // K线图配置
+  // K线图配置（与 StockDetail 风格一致：白色背景）
   const klineOption = {
     backgroundColor: "transparent",
     grid: { top: 30, bottom: 30, left: 10, right: 10, containLabel: true },
@@ -199,7 +197,7 @@ export default function GoldAIPage() {
         const d = new Date(b.time);
         return `${d.getMonth() + 1}/${d.getDate()}`;
       }),
-      axisLine: { lineStyle: { color: CARD_BORDER } },
+      axisLine: { lineStyle: { color: BORDER } },
       axisLabel: { color: MUTED, fontSize: 10 },
       splitLine: { show: false },
     },
@@ -209,24 +207,24 @@ export default function GoldAIPage() {
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: { color: MUTED, fontSize: 10 },
-      splitLine: { lineStyle: { color: "rgba(201,168,76,0.08)" } },
+      splitLine: { lineStyle: { color: "#F0EBE5" } },
     },
     series: [{
       type: "candlestick",
       data: bars.map(b => [b.open, b.close, b.low, b.high]),
       itemStyle: {
         color: RED,
-        color0: GREEN,
+        color0: GREEN_A,
         borderColor: RED,
-        borderColor0: GREEN,
+        borderColor0: GREEN_A,
       },
     }],
     tooltip: {
       trigger: "axis",
       axisPointer: { type: "cross" },
-      backgroundColor: "rgba(13,10,5,0.9)",
-      borderColor: CARD_BORDER,
-      textStyle: { color: GOLD_LIGHT, fontSize: 11 },
+      backgroundColor: "rgba(255,255,255,0.95)",
+      borderColor: BORDER,
+      textStyle: { color: TEXT, fontSize: 11 },
     },
   };
 
@@ -271,164 +269,158 @@ export default function GoldAIPage() {
 
   return (
     <div className="min-h-screen pb-8" style={{ background: BG, color: TEXT }}>
-      {/* 顶部导航 */}
+      {/* 顶部导航（与 StockDetail 完全一致：红色背景 + 白色文字） */}
       <div
-        className="sticky top-0 z-30 flex items-center px-4 py-3"
-        style={{ background: "rgba(13,10,5,0.95)", borderBottom: `1px solid ${CARD_BORDER}` }}
+        className="sticky top-0 z-30 px-4 py-3 flex items-center gap-3 flex-shrink-0"
+        style={{ background: RED, color: "#fff" }}
       >
         <button
           onClick={() => setLocation("/")}
-          className="flex items-center gap-1 text-sm"
-          style={{ color: MUTED }}
+          className="w-7 h-7 flex items-center justify-center rounded-full"
+          style={{ background: "rgba(255,255,255,0.2)" }}
         >
-          <ArrowLeft size={16} />
-          返回
+          <ChevronLeft className="w-4 h-4 text-white" />
         </button>
-        <div className="flex-1 text-center font-bold" style={{ color: GOLD, fontSize: 15 }}>
-          黄金 AI 分析
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-base">黄金 AI 分析</p>
+          <p className="text-xs opacity-70">XAU/USD · AU9999 · 实时行情</p>
         </div>
         <button
           onClick={() => { refetchGold(); fetchBars(); }}
           disabled={goldLoading}
-          style={{ color: MUTED }}
+          className="w-7 h-7 flex items-center justify-center rounded-full"
+          style={{ background: "rgba(255,255,255,0.2)" }}
         >
-          <RefreshCw size={16} className={goldLoading ? "animate-spin" : ""} />
+          <RefreshCw size={14} className={`text-white ${goldLoading ? "animate-spin" : ""}`} />
         </button>
       </div>
 
       {/* ── 三品种行情卡片 ── */}
-      <div className="px-4 pt-4">
-        <div
-          className="rounded-2xl p-4"
-          style={{ background: CARD, border: `1px solid ${CARD_BORDER}` }}
-        >
-          {goldLoading && !goldData ? (
-            <div className="text-center py-4" style={{ color: MUTED }}>行情加载中...</div>
-          ) : (
-            <>
-              {/* 伦敦金 / 纽约金 */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold" style={{ color: MUTED }}>伦敦金 / 纽约金</span>
-                  <span className="text-xs" style={{ color: MUTED }}>XAU/USD</span>
-                </div>
-                <div className="flex items-baseline gap-3">
-                  <span className="text-3xl font-bold" style={{ color: GOLD }}>
-                    {xau?.price ? xau.price.toFixed(2) : "--"}
-                  </span>
-                  <span className="text-sm" style={{ color: MUTED }}>美元/盎司</span>
-                  {xau && xau.price > 0 && (
-                    <span className="text-sm font-semibold" style={{ color: pctColor(xau.changePercent) }}>
-                      {pctSign(xau.changePercent)}{xau.changePercent.toFixed(2)}%
-                    </span>
-                  )}
-                </div>
+      <div className="mx-0 mt-0" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        {goldLoading && !goldData ? (
+          <div className="text-center py-6" style={{ color: MUTED }}>行情加载中...</div>
+        ) : (
+          <div className="px-4 pt-4 pb-4">
+            {/* 伦敦金 / 纽约金 主价格 */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold" style={{ color: MUTED }}>伦敦金 / 纽约金</span>
+                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF0F0", color: RED, fontWeight: 600 }}>XAU/USD</span>
+              </div>
+              <div className="flex items-baseline gap-3">
+                <span className="text-3xl font-bold" style={{ color: TEXT }}>
+                  {xau?.price ? xau.price.toFixed(2) : "--"}
+                </span>
+                <span className="text-sm" style={{ color: MUTED }}>美元/盎司</span>
                 {xau && xau.price > 0 && (
-                  <div className="flex gap-4 mt-1 text-xs" style={{ color: MUTED }}>
-                    <span>开 {xau.open.toFixed(2)}</span>
-                    <span style={{ color: RED }}>高 {xau.high.toFixed(2)}</span>
-                    <span style={{ color: GREEN }}>低 {xau.low.toFixed(2)}</span>
-                    <span>昨收 {xau.prevClose.toFixed(2)}</span>
+                  <span className="text-base font-bold" style={{ color: pctColor(xau.changePercent) }}>
+                    {pctSign(xau.changePercent)}{xau.changePercent.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+              {xau && xau.price > 0 && (
+                <div className="flex gap-4 mt-1 text-xs" style={{ color: MUTED }}>
+                  <span>开 {xau.open.toFixed(2)}</span>
+                  <span style={{ color: RED }}>高 {xau.high.toFixed(2)}</span>
+                  <span style={{ color: GREEN_A }}>低 {xau.low.toFixed(2)}</span>
+                  <span>昨收 {xau.prevClose.toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+
+            {/* 分隔线 */}
+            <div style={{ height: 1, background: BORDER, margin: "0 0 12px 0" }} />
+
+            {/* 人民币换算价 + 上海金参考价 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl p-3" style={{ background: "#FFF8F2", border: `1px solid ${BORDER}` }}>
+                <div className="text-xs mb-1" style={{ color: MUTED }}>人民币换算价</div>
+                <div className="text-lg font-bold" style={{ color: TEXT }}>
+                  {cny?.price ? cny.price.toFixed(2) : "--"}
+                </div>
+                <div className="text-xs" style={{ color: MUTED }}>元/克</div>
+                {cny && cny.price > 0 && (
+                  <div className="text-xs mt-0.5 font-semibold" style={{ color: pctColor(cny.changePercent) }}>
+                    {pctSign(cny.changePercent)}{cny.changePercent.toFixed(2)}%
                   </div>
                 )}
               </div>
-
-              {/* 分隔线 */}
-              <div style={{ height: 1, background: CARD_BORDER, margin: "0 0 12px 0" }} />
-
-              {/* 人民币换算价 + 上海金参考价 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl p-3" style={{ background: "rgba(201,168,76,0.08)" }}>
-                  <div className="text-xs mb-1" style={{ color: MUTED }}>人民币换算价</div>
-                  <div className="text-lg font-bold" style={{ color: GOLD_LIGHT }}>
-                    {cny?.price ? cny.price.toFixed(2) : "--"}
-                  </div>
-                  <div className="text-xs" style={{ color: MUTED }}>元/克</div>
-                  {cny && cny.price > 0 && (
-                    <div className="text-xs mt-0.5" style={{ color: pctColor(cny.changePercent) }}>
-                      {pctSign(cny.changePercent)}{cny.changePercent.toFixed(2)}%
-                    </div>
-                  )}
+              <div className="rounded-xl p-3" style={{ background: "#FFF8F2", border: `1px solid ${BORDER}` }}>
+                <div className="text-xs mb-1" style={{ color: MUTED }}>上海金（参考）</div>
+                <div className="text-lg font-bold" style={{ color: TEXT }}>
+                  {cny?.price ? cny.price.toFixed(2) : "--"}
                 </div>
-                <div className="rounded-xl p-3" style={{ background: "rgba(201,168,76,0.08)" }}>
-                  <div className="text-xs mb-1" style={{ color: MUTED }}>上海金（参考）</div>
-                  <div className="text-lg font-bold" style={{ color: GOLD_LIGHT }}>
-                    {cny?.price ? cny.price.toFixed(2) : "--"}
-                  </div>
-                  <div className="text-xs" style={{ color: MUTED }}>元/克 · AU9999</div>
-                  <div className="text-xs mt-0.5" style={{ color: MUTED }}>
-                    汇率 {usdCny.toFixed(4)}
-                  </div>
+                <div className="text-xs" style={{ color: MUTED }}>元/克 · AU9999</div>
+                <div className="text-xs mt-0.5" style={{ color: MUTED }}>
+                  汇率 {usdCny.toFixed(4)}
                 </div>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
 
       {/* ── K线图 ── */}
-      <div className="px-4 mt-4">
-        <div
-          className="rounded-2xl"
-          style={{ background: CARD, border: `1px solid ${CARD_BORDER}` }}
-        >
-          <div className="flex items-center justify-between px-4 pt-3 pb-2">
-            <span className="text-sm font-semibold" style={{ color: GOLD }}>K线图</span>
-            <div className="flex gap-1">
-              {(["1m", "3m", "6m", "1y", "5y", "all"] as const).map(r => (
-                <button
-                  key={r}
-                  onClick={() => setRange(r)}
-                  className="text-xs px-2 py-0.5 rounded"
-                  style={{
-                    background: range === r ? GOLD : "transparent",
-                    color: range === r ? "#000" : MUTED,
-                    fontWeight: range === r ? 700 : 400,
-                  }}
-                >
-                  {r === "all" ? "全部" : r}
-                </button>
-              ))}
-            </div>
+      <div className="mx-0" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <span className="text-sm font-semibold" style={{ color: TEXT }}>K线图</span>
+          <div className="flex gap-1">
+            {(["1m", "3m", "6m", "1y", "5y", "all"] as const).map(r => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className="text-xs px-2 py-0.5 rounded"
+                style={{
+                  background: range === r ? RED : "transparent",
+                  color: range === r ? "#fff" : MUTED,
+                  fontWeight: range === r ? 700 : 400,
+                }}
+              >
+                {r === "all" ? "全部" : r}
+              </button>
+            ))}
           </div>
-          {barsLoading ? (
-            <div className="flex items-center justify-center py-8" style={{ color: MUTED }}>
-              <RefreshCw size={16} className="animate-spin mr-2" />加载中...
-            </div>
-          ) : bars.length > 0 ? (
-            <ReactECharts option={klineOption} style={{ height: 220, width: "100%" }} />
-          ) : (
-            <div className="text-center py-8" style={{ color: MUTED }}>暂无K线数据</div>
-          )}
         </div>
+        {barsLoading ? (
+          <div className="flex items-center justify-center py-8" style={{ color: MUTED }}>
+            <RefreshCw size={16} className="animate-spin mr-2" />加载中...
+          </div>
+        ) : bars.length > 0 ? (
+          <ReactECharts option={klineOption} style={{ height: 220, width: "100%" }} />
+        ) : (
+          <div className="text-center py-8" style={{ color: MUTED }}>暂无K线数据</div>
+        )}
       </div>
 
-      {/* ── 涨跌路 ── */}
-      <div className="px-4 mt-4">
-        <div
-          className="rounded-2xl p-4"
-          style={{ background: CARD, border: `1px solid ${CARD_BORDER}` }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold" style={{ color: GOLD }}>涨跌路</span>
-            <div className="flex gap-1">
-              {([30, 60, 90, 180] as const).map(n => (
-                <button
-                  key={n}
-                  onClick={() => setZhuluTab(n)}
-                  className="text-xs px-2 py-0.5 rounded"
-                  style={{
-                    background: zhuluTab === n ? GOLD : "transparent",
-                    color: zhuluTab === n ? "#000" : MUTED,
-                    fontWeight: zhuluTab === n ? 700 : 400,
-                  }}
-                >
-                  {n}天
-                </button>
-              ))}
-            </div>
-          </div>
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
 
+      {/* ── 涨跌路 ── */}
+      <div className="mx-0" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <span className="text-sm font-semibold" style={{ color: TEXT }}>涨跌路</span>
+          <div className="flex gap-1">
+            {([30, 60, 90, 180] as const).map(n => (
+              <button
+                key={n}
+                onClick={() => setZhuluTab(n)}
+                className="text-xs px-2 py-0.5 rounded"
+                style={{
+                  background: zhuluTab === n ? RED : "transparent",
+                  color: zhuluTab === n ? "#fff" : MUTED,
+                  fontWeight: zhuluTab === n ? 700 : 400,
+                }}
+              >
+                {n}天
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-4 py-3">
           {/* 格子图 */}
           {zhuluData.length > 0 ? (
             <>
@@ -457,7 +449,7 @@ export default function GoldAIPage() {
 
               {/* 连涨连跌统计 */}
               <div className="mt-2">
-                <div className="text-xs mb-1" style={{ color: MUTED }}>连涨/连跌统计（近{zhuluTab}天）</div>
+                <div className="text-xs mb-2" style={{ color: MUTED }}>连涨/连跌统计（近{zhuluTab}天）</div>
                 <div className="flex flex-col gap-1">
                   {Array.from({ length: maxStreak }, (_, i) => i + 1).map(n => {
                     const up = upMap[n] || 0;
@@ -486,7 +478,7 @@ export default function GoldAIPage() {
                               </div>
                             )}
                           </div>
-                          <div className="w-px h-3" style={{ background: CARD_BORDER }} />
+                          <div className="w-px h-3" style={{ background: BORDER }} />
                           {/* 跌（绿色，向右） */}
                           <div className="flex-1">
                             {down > 0 && (
@@ -495,7 +487,7 @@ export default function GoldAIPage() {
                                 style={{
                                   width: `${(down / maxVal) * 100}%`,
                                   minWidth: 20,
-                                  background: GREEN,
+                                  background: GREEN_A,
                                   color: "#fff",
                                   fontSize: 9,
                                   height: 14,
@@ -522,41 +514,41 @@ export default function GoldAIPage() {
         </div>
       </div>
 
-      {/* ── AI 分析报告 ── */}
-      <div className="px-4 mt-4">
-        <div
-          className="rounded-2xl p-4"
-          style={{ background: CARD, border: `1px solid ${CARD_BORDER}` }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Sparkles size={16} style={{ color: GOLD }} />
-              <span className="text-sm font-semibold" style={{ color: GOLD }}>AI 行情分析</span>
-            </div>
-            <button
-              onClick={handleGenerateAI}
-              disabled={aiLoading || !goldData?.success}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full"
-              style={{
-                background: aiLoading ? "rgba(201,168,76,0.2)" : GOLD,
-                color: aiLoading ? MUTED : "#000",
-                fontWeight: 600,
-                opacity: (!goldData?.success) ? 0.5 : 1,
-              }}
-            >
-              {aiLoading ? (
-                <><RefreshCw size={12} className="animate-spin" />生成中...</>
-              ) : (
-                <><Sparkles size={12} />生成分析</>
-              )}
-            </button>
-          </div>
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
 
+      {/* ── AI 分析报告 ── */}
+      <div className="mx-0" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <div className="flex items-center gap-2">
+            <Sparkles size={15} style={{ color: RED }} />
+            <span className="text-sm font-semibold" style={{ color: TEXT }}>AI 行情分析</span>
+          </div>
+          <button
+            onClick={handleGenerateAI}
+            disabled={aiLoading || !goldData?.success}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full"
+            style={{
+              background: aiLoading ? "#F5F5F5" : RED,
+              color: aiLoading ? MUTED : "#fff",
+              fontWeight: 600,
+              opacity: (!goldData?.success) ? 0.5 : 1,
+            }}
+          >
+            {aiLoading ? (
+              <><RefreshCw size={12} className="animate-spin" />生成中...</>
+            ) : (
+              <><Sparkles size={12} />生成分析</>
+            )}
+          </button>
+        </div>
+
+        <div className="px-4 py-3">
           {aiContent ? (
             <div>
               <div
                 className="rounded-xl p-3 text-sm leading-relaxed"
-                style={{ background: "rgba(201,168,76,0.05)", border: `1px solid ${CARD_BORDER}` }}
+                style={{ background: "#FFF8F2", border: `1px solid ${BORDER}` }}
               >
                 <Streamdown>{aiContent}</Streamdown>
               </div>
@@ -569,7 +561,7 @@ export default function GoldAIPage() {
           ) : (
             <div
               className="text-center py-6 rounded-xl"
-              style={{ background: "rgba(201,168,76,0.03)", border: `1px dashed ${CARD_BORDER}` }}
+              style={{ background: "#FFF8F2", border: `1px dashed ${BORDER}` }}
             >
               <Sparkles size={24} style={{ color: MUTED, margin: "0 auto 8px" }} />
               <div className="text-sm" style={{ color: MUTED }}>
@@ -583,28 +575,28 @@ export default function GoldAIPage() {
         </div>
       </div>
 
-      {/* ── 持仓追踪 ── */}
-      <div className="px-4 mt-4">
-        <div
-          className="rounded-2xl p-4"
-          style={{ background: CARD, border: `1px solid ${CARD_BORDER}` }}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold" style={{ color: GOLD }}>持仓追踪</span>
-            <button
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full"
-              style={{ background: GOLD, color: "#000", fontWeight: 600 }}
-            >
-              <Plus size={12} />添加持仓
-            </button>
-          </div>
+      {/* 间隙 */}
+      <div style={{ height: 6, background: BG }} />
 
+      {/* ── 持仓追踪 ── */}
+      <div className="mx-0" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
+        <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <span className="text-sm font-semibold" style={{ color: TEXT }}>持仓追踪</span>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full"
+            style={{ background: RED, color: "#fff", fontWeight: 600 }}
+          >
+            <Plus size={12} />添加持仓
+          </button>
+        </div>
+
+        <div className="px-4 py-3">
           {/* 添加持仓表单 */}
           {showAddForm && (
             <div
               className="rounded-xl p-3 mb-3"
-              style={{ background: "rgba(201,168,76,0.08)", border: `1px solid ${CARD_BORDER}` }}
+              style={{ background: "#FFF8F2", border: `1px solid ${BORDER}` }}
             >
               {/* 方向 */}
               <div className="flex gap-2 mb-2">
@@ -615,8 +607,8 @@ export default function GoldAIPage() {
                     className="flex-1 py-1.5 rounded text-sm font-semibold"
                     style={{
                       background: newPos.direction === d
-                        ? (d === "buy" ? RED : GREEN)
-                        : "rgba(201,168,76,0.1)",
+                        ? (d === "buy" ? RED : GREEN_A)
+                        : "#F5F5F5",
                       color: newPos.direction === d ? "#fff" : MUTED,
                     }}
                   >
@@ -634,7 +626,7 @@ export default function GoldAIPage() {
                     value={newPos.openPrice}
                     onChange={e => setNewPos(p => ({ ...p, openPrice: e.target.value }))}
                     className="text-sm"
-                    style={{ background: "rgba(201,168,76,0.05)", borderColor: CARD_BORDER, color: TEXT }}
+                    style={{ background: CARD, borderColor: BORDER, color: TEXT }}
                   />
                 </div>
                 <div>
@@ -645,7 +637,7 @@ export default function GoldAIPage() {
                     value={newPos.lots}
                     onChange={e => setNewPos(p => ({ ...p, lots: e.target.value }))}
                     className="text-sm"
-                    style={{ background: "rgba(201,168,76,0.05)", borderColor: CARD_BORDER, color: TEXT }}
+                    style={{ background: CARD, borderColor: BORDER, color: TEXT }}
                   />
                 </div>
               </div>
@@ -657,14 +649,14 @@ export default function GoldAIPage() {
                   value={newPos.note}
                   onChange={e => setNewPos(p => ({ ...p, note: e.target.value }))}
                   className="text-sm"
-                  style={{ background: "rgba(201,168,76,0.05)", borderColor: CARD_BORDER, color: TEXT }}
+                  style={{ background: CARD, borderColor: BORDER, color: TEXT }}
                 />
               </div>
               <div className="flex gap-2">
                 <Button
                   onClick={handleAddPosition}
                   className="flex-1 text-sm"
-                  style={{ background: GOLD, color: "#000", fontWeight: 600 }}
+                  style={{ background: RED, color: "#fff", fontWeight: 600, border: "none" }}
                 >
                   确认添加
                 </Button>
@@ -672,7 +664,7 @@ export default function GoldAIPage() {
                   variant="outline"
                   onClick={() => setShowAddForm(false)}
                   className="flex-1 text-sm"
-                  style={{ borderColor: CARD_BORDER, color: MUTED }}
+                  style={{ borderColor: BORDER, color: MUTED, background: "transparent" }}
                 >
                   取消
                 </Button>
@@ -694,19 +686,17 @@ export default function GoldAIPage() {
                     key={pos.id}
                     className="rounded-xl p-3"
                     style={{
-                      background: pos.direction === "buy"
-                        ? "rgba(244,67,54,0.06)"
-                        : "rgba(76,175,80,0.06)",
-                      border: `1px solid ${pos.direction === "buy" ? "rgba(244,67,54,0.2)" : "rgba(76,175,80,0.2)"}`,
+                      background: pos.direction === "buy" ? "#FFF0F0" : "#F0FFF4",
+                      border: `1px solid ${pos.direction === "buy" ? "#FFCDD2" : "#C8E6C9"}`,
                     }}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         {pos.direction === "buy"
                           ? <TrendingUp size={14} style={{ color: RED }} />
-                          : <TrendingDown size={14} style={{ color: GREEN }} />
+                          : <TrendingDown size={14} style={{ color: GREEN_A }} />
                         }
-                        <span className="text-sm font-semibold" style={{ color: pos.direction === "buy" ? RED : GREEN }}>
+                        <span className="text-sm font-semibold" style={{ color: pos.direction === "buy" ? RED : GREEN_A }}>
                           {pos.direction === "buy" ? "做多" : "做空"}
                         </span>
                         <span className="text-xs" style={{ color: MUTED }}>{pos.lots}手</span>
