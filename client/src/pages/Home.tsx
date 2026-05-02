@@ -878,7 +878,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
     { key: 'oil',  label: '原油 WTI',      data: oilPrice,   unit: '/桶',   decimals: 2,
       iconType: 'svg' as const, IconComp: OilIcon },
     { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3,
-      iconType: 'svg' as const, IconComp: DxyIcon },
+      iconType: 'svg' as const, IconComp: DxyIcon, link: '/dxy' },
     { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4,
       iconType: 'svg' as const, IconComp: CnhIcon },
     { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',

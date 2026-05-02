@@ -1665,3 +1665,15 @@
 - [x] 后端API：更新funderCreateAssetOrder/funderUpdateAssetOrder/funderGetAssetOrders适配新字段
 - [x] 管理员页面FunderManagement.tsx：重构订单表单，字段改为币种(BTC/ETH/SOL三选一)、买入价格、买入日期、买入数量、存放账号
 - [x] 资金方前端LedgerDetail.tsx：重构订单列表展示，显示新字段；新增订单详情弹窗
+
+## 美元指数（DXY）详情页开发
+
+- [ ] 拉取 DXY 历史日线数据（Yahoo Finance DX-Y.NYB）存入数据库 crypto_klines 表（symbol='DXY'）
+- [ ] 后端：新增 getDXYPrice 实时价格接口（price-scanner.ts 扩展）
+- [ ] 后端：DXY 数据复用现有 getKlines/getStats/getMeta/getAIAnalysis 接口（symbol=DXY）
+- [ ] 前端：新建 DXYDetailPage.tsx（蓝色头部+左右分栏+AI三段式+数据分析tab+日线历史tab）
+- [ ] 前端：数据分析tab包含六种成分货币权重图（环形图）和AI三段式分析
+- [ ] 前端：日线历史tab与美股/数字币格式一致（两位年份、固定宽度、每页100条）
+- [ ] 前端：在 App.tsx 注册 /dxy 路由
+- [ ] 前端：首页美元指数入口点击跳转到 /dxy
+- [ ] 提交推送并等待 GitHub Actions 绿灯
