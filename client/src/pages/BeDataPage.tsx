@@ -9,16 +9,17 @@ import {
 } from "recharts";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
+const COS_BE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
 const ALL_SYMBOLS = [
-  { key: "BTCUSDT", label: "比特币 BTC", shortLabel: "BTC",  icon: `${CDN}/btc_732a725a.png`, type: "crypto" },
-  { key: "ETHUSDT", label: "以太坊 ETH", shortLabel: "ETH",  icon: `${CDN}/eth_6ebbf353.png`, type: "crypto" },
-  { key: "AAPL",   label: "苹果 AAPL",   shortLabel: "AAPL", icon: `${CDN}/aapl_3d0ebe4b.png`, type: "stock" },
-  { key: "MSFT",   label: "微软 MSFT",   shortLabel: "MSFT", icon: `${CDN}/msft_6f03ba12.png`, type: "stock" },
-  { key: "GOOGL",  label: "谷歌 GOOGL",  shortLabel: "GOOGL",icon: `${CDN}/googl_f5e51fc9.png`, type: "stock" },
-  { key: "AMZN",   label: "亚马逊 AMZN",  shortLabel: "AMZN", icon: `${CDN}/amzn_62fb91c5.png`, type: "stock" },
-  { key: "NVDA",   label: "英伟达 NVDA",  shortLabel: "NVDA", icon: `${CDN}/nvda_027844b0.png`, type: "stock" },
-  { key: "TSLA",   label: "特斯拉 TSLA",  shortLabel: "TSLA", icon: `${CDN}/tsla_ce7ce165.png`, type: "stock" },
-  { key: "META",   label: "Meta META",   shortLabel: "META", icon: `${CDN}/meta_c6a365b1.png`, type: "stock" },
+  { key: "BTCUSDT", label: "比特币 BTC", shortLabel: "BTC",  icon: `${CDN}/btc_732a725a.png`, type: "crypto", symbol: "BTCUSDT" },
+  { key: "ETHUSDT", label: "以太坊 ETH", shortLabel: "ETH",  icon: `${CDN}/eth_6ebbf353.png`, type: "crypto", symbol: "ETHUSDT" },
+  { key: "AAPL",   label: "Apple",   shortLabel: "AAPL", icon: `${COS_BE}/logo_apple_3d_t_16b8b55f.png`, type: "stock", symbol: "AAPL.US" },
+  { key: "MSFT",   label: "Microsoft",   shortLabel: "MSFT", icon: `${COS_BE}/logos/logo_microsoft_3d.png`, type: "stock", symbol: "MSFT.US" },
+  { key: "GOOGL",  label: "Alphabet",  shortLabel: "GOOGL", icon: `${COS_BE}/logos/logo_google_3d.png`, type: "stock", symbol: "GOOGL.US" },
+  { key: "AMZN",   label: "Amazon",  shortLabel: "AMZN", icon: `${COS_BE}/logo_amazon_3d_t_0c61d380.png`, type: "stock", symbol: "AMZN.US" },
+  { key: "NVDA",   label: "NVIDIA",  shortLabel: "NVDA", icon: `${COS_BE}/logo_nvidia_3d_t_d451eb3d.png`, type: "stock", symbol: "NVDA.US" },
+  { key: "TSLA",   label: "Tesla",  shortLabel: "TSLA", icon: `${COS_BE}/logo_tesla_3d_t_0d585ca4.png`, type: "stock", symbol: "TSLA.US" },
+  { key: "META",   label: "Meta",   shortLabel: "META", icon: `${COS_BE}/logo_meta_3d_t_5b7237ab.png`, type: "stock", symbol: "META.US" },
 ];
 const SYMBOLS = ALL_SYMBOLS; // 兼容旧引用
 
@@ -1215,6 +1216,9 @@ export default function BeDataPage() {
   const [activeTab, setActiveTab] = useState("data");
   const [page, setPage] = useState(1);
 
+  // 当前股票信息（用于美股模式下显示 logo 和名称）
+  const currentStockInfo = ALL_SYMBOLS.find(s => s.key === activeSymbol);
+
   const { data, isLoading, isFetching } = trpc.cryptoData.getKlines.useQuery(
     { symbol: activeSymbol, page, pageSize: PAGE_SIZE },
     { keepPreviousData: true } as any
@@ -1271,20 +1275,30 @@ export default function BeDataPage() {
   const analysisLoading = statsLoading || changePctsLoading;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className={`min-h-screen flex flex-col ${hideSymbolTabs ? 'bg-[#EBF3FF]' : 'bg-gray-50'}`}>
       {/* 顶部导航 */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="flex items-center h-12 px-3">
+      <div className={`sticky top-0 z-10 ${hideSymbolTabs ? 'bg-gradient-to-r from-[#1565C0] to-[#1976D2] shadow-md' : 'bg-white border-b border-gray-200'}`}>
+        <div className="flex items-center h-13 px-3 py-2">
           <button
             onClick={() => setLocation(backPath)}
-            className="flex items-center text-gray-600 mr-2"
+            className={`flex items-center mr-2 ${hideSymbolTabs ? 'text-white/80' : 'text-gray-600'}`}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-semibold text-gray-800 text-base flex-1">{pageTitle}</span>
+          {hideSymbolTabs && currentStockInfo ? (
+            <div className="flex items-center gap-2 flex-1">
+              <img src={currentStockInfo.icon} alt={currentStockInfo.shortLabel} className="w-8 h-8 object-contain" />
+              <div className="flex flex-col">
+                <span className="font-bold text-white text-sm leading-tight">AI 数据追踪</span>
+                <span className="text-white/70 text-[10px] leading-tight">{currentStockInfo.label} · {currentStockInfo.shortLabel}</span>
+              </div>
+            </div>
+          ) : (
+            <span className="font-semibold text-gray-800 text-base flex-1">{pageTitle}</span>
+          )}
           <button
             onClick={() => window.location.reload()}
-            className="text-xs font-medium text-white bg-[#D32F2F] rounded-full px-3 py-1 active:opacity-70"
+            className={`text-xs font-medium rounded-full px-3 py-1 active:opacity-70 ${hideSymbolTabs ? 'text-[#1565C0] bg-white/90' : 'text-white bg-[#D32F2F]'}`}
           >
             更新
           </button>
@@ -1318,24 +1332,24 @@ export default function BeDataPage() {
 
       {/* 统计栏 */}
       {!isLoading && total > 0 && (
-        <div className="bg-white border-b border-gray-200 px-3 py-2.5">
+        <div className={`px-3 py-2.5 ${hideSymbolTabs ? 'bg-white/80 border-b border-blue-100' : 'bg-white border-b border-gray-200'}`}>
           <div className="flex flex-col gap-1.5">
-            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
-              <span className="text-xs text-gray-400 shrink-0">数据范围</span>
-              <span className="text-xs font-medium text-gray-700 font-mono ml-2">
+            <div className={`rounded-lg px-3 py-2 border flex items-center justify-between ${hideSymbolTabs ? 'bg-blue-50/60 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
+              <span className={`text-xs shrink-0 ${hideSymbolTabs ? 'text-blue-400' : 'text-gray-400'}`}>数据范围</span>
+              <span className={`text-xs font-medium font-mono ml-2 ${hideSymbolTabs ? 'text-blue-700' : 'text-gray-700'}`}>
                 {oldestDate} ~ {latestDate}
               </span>
             </div>
-            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
-              <span className="text-xs text-gray-400 shrink-0">历史数据</span>
-              <span className="text-xs font-medium text-gray-700 ml-2">
-                <span className="text-[#D32F2F] font-bold">{total}</span> 天 &nbsp;
-                <span className="text-[#D32F2F] font-bold">{total}</span> 条日线
+            <div className={`rounded-lg px-3 py-2 border flex items-center justify-between ${hideSymbolTabs ? 'bg-blue-50/60 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
+              <span className={`text-xs shrink-0 ${hideSymbolTabs ? 'text-blue-400' : 'text-gray-400'}`}>历史数据</span>
+              <span className={`text-xs font-medium ml-2 ${hideSymbolTabs ? 'text-blue-700' : 'text-gray-700'}`}>
+                <span className={`font-bold ${hideSymbolTabs ? 'text-[#1565C0]' : 'text-[#D32F2F]'}`}>{total}</span> 天 &nbsp;
+                <span className={`font-bold ${hideSymbolTabs ? 'text-[#1565C0]' : 'text-[#D32F2F]'}`}>{total}</span> 条日线
               </span>
             </div>
-            <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
-              <span className="text-xs text-gray-400 shrink-0">最新收盘</span>
-              <span className="text-xs text-gray-400 font-mono ml-2 mr-auto pl-1.5">{latestDate}</span>
+            <div className={`rounded-lg px-3 py-2 border flex items-center justify-between ${hideSymbolTabs ? 'bg-blue-50/60 border-blue-100' : 'bg-gray-50 border-gray-100'}`}>
+              <span className={`text-xs shrink-0 ${hideSymbolTabs ? 'text-blue-400' : 'text-gray-400'}`}>最新收盘</span>
+              <span className={`text-xs font-mono ml-2 mr-auto pl-1.5 ${hideSymbolTabs ? 'text-blue-400' : 'text-gray-400'}`}>{latestDate}</span>
               <span className={`text-xs font-bold font-mono ${pctColor}`}>
                 {latestClose != null ? formatPrice(latestClose) : "-"}
                 <span className="ml-1.5 font-normal">{formatPct(latestChangePct)}</span>
@@ -1346,14 +1360,16 @@ export default function BeDataPage() {
       )}
 
       {/* 功能 Tab */}
-      <div className="bg-white border-b border-gray-200 flex">
+      <div className={`border-b flex ${hideSymbolTabs ? 'bg-white border-blue-100' : 'bg-white border-gray-200'}`}>
         {TABS.filter((t) => !(urlFilter === 'stocks' && t.key === 'predict')).map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
             className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
               activeTab === t.key
-                ? "text-[#D32F2F] border-b-2 border-[#D32F2F]"
+                ? hideSymbolTabs
+                  ? "text-[#1565C0] border-b-2 border-[#1565C0]"
+                  : "text-[#D32F2F] border-b-2 border-[#D32F2F]"
                 : "text-gray-500"
             }`}
           >
