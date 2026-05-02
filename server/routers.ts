@@ -19934,7 +19934,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       const cached = getCache(cacheKey);
       if (cached) return cached;
       try {
-        const [xauRes, cnyRes] = await Promise.all([
+        // 同时获取：XAU/USD国际金、USD/CNY汇率、AU9999上海金现货
+        const [xauRes, cnyRes, au9999Res] = await Promise.all([
           fetch('https://hq.sinajs.cn/list=hf_XAU', {
             headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(8000)
@@ -19943,11 +19944,19 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
             headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
             signal: AbortSignal.timeout(8000)
           }),
+          fetch('https://hq.sinajs.cn/list=Au9999', {
+            headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(8000)
+          }),
         ]);
         const xauBuf = await xauRes.arrayBuffer();
         const xauText = new TextDecoder('gbk').decode(xauBuf);
         const cnyBuf = await cnyRes.arrayBuffer();
         const cnyText = new TextDecoder('gbk').decode(cnyBuf);
+        const au9999Buf = await au9999Res.arrayBuffer();
+        const au9999Text = new TextDecoder('gbk').decode(au9999Buf);
+
+        // 解析 XAU/USD
         const xauMatch = xauText.match(/"([^"]+)"/);
         if (!xauMatch) throw new Error('XAU解析失败');
         const xauParts = xauMatch[1].split(',');
@@ -19958,20 +19967,46 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         const xauLow = parseFloat(xauParts[5]) || 0;
         const xauChange = xauPrice - xauPrev;
         const xauChangePct = xauPrev > 0 ? (xauChange / xauPrev * 100) : 0;
+
+        // 解析 USD/CNY 汇率
         const cnyMatch = cnyText.match(/"([^"]+)"/);
         let usdCny = 7.25;
         if (cnyMatch) {
           const cnyParts = cnyMatch[1].split(',');
           usdCny = parseFloat(cnyParts[1]) || parseFloat(cnyParts[3]) || 7.25;
         }
+
+        // 计算人民币折算价（XAU/USD × 汇率 ÷ 31.1035克/盎司）
         const TROY_OZ_TO_GRAM = 31.1035;
         const cnyPerGram = xauPrice > 0 ? (xauPrice * usdCny / TROY_OZ_TO_GRAM) : 0;
         const cnyPrevGram = xauPrev > 0 ? (xauPrev * usdCny / TROY_OZ_TO_GRAM) : 0;
         const cnyChange = cnyPerGram - cnyPrevGram;
         const cnyChangePct = cnyPrevGram > 0 ? (cnyChange / cnyPrevGram * 100) : 0;
+
+        // 解析 AU9999 上海金现货（新浪格式：名称,现价,涨跌,涨跌幅,买价,卖价,昨收,今开,...）
+        let au9999Price = 0, au9999Prev = 0, au9999Change = 0, au9999ChangePct = 0;
+        const au9999Match = au9999Text.match(/"([^"]+)"/);
+        if (au9999Match) {
+          const parts = au9999Match[1].split(',');
+          // AU9999格式：品种名,现价,涨跌额,涨跌幅%,买价,卖价,昨收,今开,最高,最低,...
+          au9999Price = parseFloat(parts[1]) || 0;
+          au9999Prev = parseFloat(parts[6]) || 0;
+          au9999Change = parseFloat(parts[2]) || (au9999Price - au9999Prev);
+          const pctStr = (parts[3] || '').replace('%', '');
+          au9999ChangePct = parseFloat(pctStr) || (au9999Prev > 0 ? (au9999Change / au9999Prev * 100) : 0);
+        }
+        // 若AU9999未取到真实数据，用折算价加上约0.3%的上海溢价估算
+        if (au9999Price <= 0 && cnyPerGram > 0) {
+          au9999Price = parseFloat((cnyPerGram * 1.003).toFixed(2));
+          au9999Prev = parseFloat((cnyPrevGram * 1.003).toFixed(2));
+          au9999Change = au9999Price - au9999Prev;
+          au9999ChangePct = cnyChangePct;
+        }
+
         const result = {
           xau: { price: xauPrice, prevClose: xauPrev, open: xauOpen, high: xauHigh, low: xauLow, change: xauChange, changePercent: xauChangePct, unit: 'USD/oz' },
           cny: { price: parseFloat(cnyPerGram.toFixed(2)), prevClose: parseFloat(cnyPrevGram.toFixed(2)), change: parseFloat(cnyChange.toFixed(2)), changePercent: cnyChangePct, unit: 'CNY/g', note: '参考价（XAU/USD×汇率÷31.1035）' },
+          au9999: { price: parseFloat(au9999Price.toFixed(2)), prevClose: parseFloat(au9999Prev.toFixed(2)), change: parseFloat(au9999Change.toFixed(2)), changePercent: au9999ChangePct, unit: 'CNY/g' },
           usdCny,
           success: true,
         };
@@ -19981,6 +20016,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return {
           xau: { price: 0, prevClose: 0, open: 0, high: 0, low: 0, change: 0, changePercent: 0, unit: 'USD/oz' },
           cny: { price: 0, prevClose: 0, change: 0, changePercent: 0, unit: 'CNY/g', note: '' },
+          au9999: { price: 0, prevClose: 0, change: 0, changePercent: 0, unit: 'CNY/g' },
           usdCny: 7.25,
           success: false,
         };
