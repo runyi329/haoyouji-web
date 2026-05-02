@@ -602,8 +602,9 @@ async function startServer() {
 
     // 启动时立即补齐所有缺失数据（数字币 + 美股）
     setTimeout(async () => {
-      const { syncLatestFromBinance, syncStockFromYahoo } = require('../db-crypto');
+      const { syncLatestFromBinance, syncStocksFromTushare } = require('../db-crypto');
       console.log('[启动补齐] 开始补齐所有标的缺失数据...');
+      // 数字币：从 Binance 拉取
       for (const sym of CRYPTO_SYMBOLS) {
         try {
           const r = await syncLatestFromBinance(sym);
@@ -612,14 +613,12 @@ async function startServer() {
           console.error(`[启动补齐] ${sym} 失败:`, e.message);
         }
       }
-      const US_STOCKS_BOOT = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'];
-      for (const sym of US_STOCKS_BOOT) {
-        try {
-          const r = await syncStockFromYahoo(sym);
-          console.log(`[启动补齐] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
-        } catch (e: any) {
-          console.error(`[启动补齐] ${sym} 失败:`, e.message);
-        }
+      // 美股：用 Tushare us_daily 按日期批量拉取（一次调用拿所有股票当天数据）
+      try {
+        const r = await syncStocksFromTushare();
+        console.log(`[启动补齐] 美股七姐妹 共新增 ${r.added} 条，处理日期: ${r.dates.join(', ')}`);
+      } catch (e: any) {
+        console.error('[启动补齐] 美股 Tushare 失败:', e.message);
       }
       console.log('[启动补齐] 全部完成');
     }, 5000); // 服务器启动5秒后执行，避免启动期间资源竞争
@@ -631,7 +630,7 @@ async function startServer() {
     const US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'];
 
     const runUSStockSync = async () => {
-      const { isUSDST, syncStockFromYahoo, isUSTradingDay } = require('../db-crypto');
+      const { isUSDST, syncStocksFromTushare, isUSTradingDay } = require('../db-crypto');
       const now = new Date();
       const bjtNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
       const bjtHour = bjtNow.getUTCHours();
@@ -653,18 +652,16 @@ async function startServer() {
         return;
       }
 
-      // 拉取七姐妹最新数据（syncStockFromYahoo 会自动从最新日期增量拉取）
+      // 用 Tushare us_daily 按日期批量拉取（一次调用拿所有7只股票当天数据）
       let anyAdded = false;
-      for (const sym of US_STOCKS) {
-        try {
-          const r = await syncStockFromYahoo(sym);
-          if (r.added > 0) {
-            console.log(`[美股同步] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
-            anyAdded = true;
-          }
-        } catch (e: any) {
-          console.error(`[美股同步] ${sym} 拉取失败:`, e.message);
+      try {
+        const r = await syncStocksFromTushare();
+        if (r.added > 0) {
+          console.log(`[美股同步] 七姐妹 共新增 ${r.added} 条，处理日期: ${r.dates.join(', ')}`);
+          anyAdded = true;
         }
+      } catch (e: any) {
+        console.error('[美股同步] Tushare 拉取失败:', e.message);
       }
 
       // 有新数据时才触发结算

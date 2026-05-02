@@ -616,3 +616,146 @@ export async function syncStockFromYahoo(symbol: string): Promise<{ added: numbe
   const newLatest = records[records.length - 1].date;
   return { added: records.length, latestDate: newLatest };
 }
+
+/**
+ * 用 Tushare us_daily 按日期批量同步美股（一次调用拉取当天所有股票）
+ * 每天只需 1 次 API 调用，远低于 5次/天 的限额
+ */
+const TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79';
+const TUSHARE_URL = 'http://api.tushare.pro';
+
+// 我们关注的美股代码（Tushare 格式）
+const US_STOCK_SYMBOLS_TUSHARE: Record<string, string> = {
+  'AAPL': 'AAPL',
+  'MSFT': 'MSFT',
+  'GOOGL': 'GOOGL',
+  'AMZN': 'AMZN',
+  'NVDA': 'NVDA',
+  'TSLA': 'TSLA',
+  'META': 'META',
+};
+
+export async function syncStocksFromTushare(): Promise<{ added: number; dates: string[] }> {
+  // 找出所有美股中最早的缺失日期
+  let earliestStart: Date | null = null;
+  for (const sym of Object.keys(US_STOCK_SYMBOLS_TUSHARE)) {
+    const latest = await getLatestCryptoDate(sym);
+    let startDate: Date;
+    if (latest) {
+      startDate = new Date(latest + 'T00:00:00Z');
+      startDate.setUTCDate(startDate.getUTCDate() + 1);
+    } else {
+      startDate = new Date('2010-01-01T00:00:00Z');
+    }
+    if (!earliestStart || startDate < earliestStart) {
+      earliestStart = startDate;
+    }
+  }
+
+  if (!earliestStart) return { added: 0, dates: [] };
+
+  const now = new Date();
+  now.setUTCHours(0, 0, 0, 0);
+  if (earliestStart >= now) return { added: 0, dates: [] };
+
+  let totalAdded = 0;
+  const processedDates: string[] = [];
+
+  // 按日期逐天拉取（跳过周末）
+  const cursor = new Date(earliestStart);
+  while (cursor < now) {
+    const dayOfWeek = cursor.getUTCDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+      continue;
+    }
+
+    const tradeDateStr = cursor.toISOString().slice(0, 10).replace(/-/g, '');
+    
+    try {
+      const resp = await fetch(TUSHARE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_name: 'us_daily',
+          token: TUSHARE_TOKEN,
+          params: { trade_date: tradeDateStr },
+          fields: 'ts_code,trade_date,open,high,low,close,vol',
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+
+      const json = await resp.json() as any;
+      if (json.code !== 0) {
+        console.log(`[Tushare us_daily] ${tradeDateStr} 跳过: ${json.msg}`);
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+
+      const fields: string[] = json.data?.fields || [];
+      const items: any[][] = json.data?.items || [];
+      if (items.length === 0) {
+        // 无数据说明是假日，跳过
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        await new Promise(r => setTimeout(r, 300));
+        continue;
+      }
+
+      const tsCodeIdx = fields.indexOf('ts_code');
+      const openIdx = fields.indexOf('open');
+      const highIdx = fields.indexOf('high');
+      const lowIdx = fields.indexOf('low');
+      const closeIdx = fields.indexOf('close');
+      const volIdx = fields.indexOf('vol');
+
+      const records: CryptoKline[] = [];
+      const dateStr = cursor.toISOString().slice(0, 10);
+
+      for (const item of items) {
+        const tsCode: string = item[tsCodeIdx];
+        // 只保留我们关注的7只股票
+        if (!Object.values(US_STOCK_SYMBOLS_TUSHARE).includes(tsCode)) continue;
+
+        const open = parseFloat(item[openIdx]);
+        const high = parseFloat(item[highIdx]);
+        const low = parseFloat(item[lowIdx]);
+        const close = parseFloat(item[closeIdx]);
+        const volume = parseFloat(item[volIdx]) || 0;
+
+        if (!open || !close || isNaN(open) || isNaN(close)) continue;
+
+        const changePct = open > 0 ? parseFloat(((close - open) / open * 100).toFixed(6)) : null;
+        const amplitudePct = open > 0 && high && low ? parseFloat(((high - low) / open * 100).toFixed(6)) : null;
+
+        records.push({
+          symbol: tsCode,
+          date: dateStr,
+          open,
+          high: high || open,
+          low: low || open,
+          close,
+          volume,
+          quoteVolume: 0,
+          changePct,
+          amplitudePct,
+        });
+      }
+
+      if (records.length > 0) {
+        await batchUpsertCryptoKlines(records);
+        totalAdded += records.length;
+        processedDates.push(dateStr);
+        console.log(`[Tushare us_daily] ${dateStr} 写入 ${records.length} 条`);
+      }
+    } catch (e: any) {
+      console.error(`[Tushare us_daily] ${tradeDateStr} 请求失败:`, e.message);
+    }
+
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    // 限速：每次请求间隔 600ms，确保不超 2次/分钟
+    await new Promise(r => setTimeout(r, 600));
+  }
+
+  return { added: totalAdded, dates: processedDates };
+}
