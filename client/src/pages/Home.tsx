@@ -883,7 +883,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
       iconType: 'svg' as const, IconComp: CnhIcon },
     { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',
       decimals: (btcPrice?.success && (btcPrice.price ?? 0) >= 100000) ? 0 : 1,
-      iconType: 'svg' as const, IconComp: BtcIcon },
+      iconType: 'svg' as const, IconComp: BtcIcon, link: '/ledger/52/be-data?filter=crypto' },
   ];
 
   return (
