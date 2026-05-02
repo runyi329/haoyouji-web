@@ -133,12 +133,9 @@ function StockCard({
   stock: typeof MEGA_SEVEN[0];
   priceData?: { close: number; changePct: number | null; date: string; open?: number; high?: number; low?: number; volume?: number; amplitudePct?: number | null };
   fundamentals?: {
-    week52High: number | null; week52Low: number | null; currentPrice: number | null;
-    dayHigh: number | null; dayLow: number | null; volume: number | null;
-    support: number | null; resistance: number | null;
-    valuationDesc: string | null; valuationDiscount: string | null;
-    targetPrice: number | null; rating: string | null;
-    shortTermDir: string | null; midTermDir: string | null;
+    week52High: number | null;
+    week52Low: number | null;
+    tradingDays?: number;
   } | null;
   onClick: () => void;
   isLast: boolean;
@@ -147,13 +144,10 @@ function StockCard({
   const changeColor = isUp ? RED : GREEN;
   const sign = isUp ? "+" : "";
 
-  // 优先用 fundamentals 的实时数据，fallback 到数据库
-  const dayHigh = fundamentals?.dayHigh ?? priceData?.high ?? null;
-  const dayLow = fundamentals?.dayLow ?? priceData?.low ?? null;
-  const vol = fundamentals?.volume ?? priceData?.volume ?? null;
-  const w52H = fundamentals?.week52High;
-  const w52L = fundamentals?.week52Low;
-  const curPrice = priceData?.close ?? fundamentals?.currentPrice ?? null;
+  const vol = priceData?.volume ?? null;
+  const w52H = fundamentals?.week52High ?? null;
+  const w52L = fundamentals?.week52Low ?? null;
+  const curPrice = priceData?.close ?? null;
 
   return (
     <div
@@ -205,8 +199,8 @@ function StockCard({
       <div style={{ display: "flex", gap: 0, marginTop: 3 }}>
         {[
           { label: "开", val: priceData?.open != null ? `$${priceData.open.toFixed(1)}` : "—" },
-          { label: "高", val: dayHigh != null ? `$${dayHigh.toFixed(1)}` : "—" },
-          { label: "低", val: dayLow != null ? `$${dayLow.toFixed(1)}` : "—" },
+          { label: "高", val: priceData?.high != null ? `$${priceData.high.toFixed(1)}` : "—" },
+          { label: "低", val: priceData?.low != null ? `$${priceData.low.toFixed(1)}` : "—" },
           { label: "量", val: fmtVol(vol) },
           { label: "振", val: priceData?.amplitudePct != null ? `${priceData.amplitudePct.toFixed(1)}%` : "—" },
         ].map((item, i) => (
@@ -217,43 +211,30 @@ function StockCard({
         ))}
       </div>
 
-      {/* ── 第三行：52周进度条 ── */}
-      {w52H != null && w52L != null && curPrice != null ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-          <span style={{ fontSize: 8, color: MUTED2, flexShrink: 0 }}>52W</span>
-          <Week52Bar low={w52L} high={w52H} current={curPrice} />
-        </div>
-      ) : (
-        <div style={{ marginTop: 3, height: 16 }}>
-          <Sk w={200} />
-        </div>
-      )}
-
-      {/* ── 第四行：分析师目标价 + 评级 + 估值 + 支撑/阻力 + 技术面 ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, flexWrap: "wrap" }}>
-        {fundamentals ? (
-          <>
-            {fundamentals.targetPrice != null && (
-              <span style={{ fontSize: 9, color: MUTED }}>
-                目标 <span style={{ color: BLUE, fontWeight: 700 }}>{fmtPrice(fundamentals.targetPrice)}</span>
-              </span>
-            )}
-            <RatingBadge rating={fundamentals.rating} />
-            <ValBadge desc={fundamentals.valuationDesc} discount={fundamentals.valuationDiscount} />
-            {fundamentals.support != null && (
-              <span style={{ fontSize: 9, color: MUTED }}>
-                撑 <span style={{ color: GREEN, fontWeight: 600 }}>{fmtPrice(fundamentals.support)}</span>
-              </span>
-            )}
-            {fundamentals.resistance != null && (
-              <span style={{ fontSize: 9, color: MUTED }}>
-                阻 <span style={{ color: RED, fontWeight: 600 }}>{fmtPrice(fundamentals.resistance)}</span>
-              </span>
-            )}
-            <TrendBadge dir={fundamentals.shortTermDir} />
-          </>
+      {/* ── 第三行：52周高低 + 进度条 ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 0, marginTop: 3 }}>
+        {fundamentals !== undefined ? (
+          w52H != null && w52L != null ? (
+            <>
+              <div style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 7.5, color: MUTED2, lineHeight: 1.2 }}>52W高</div>
+                <div style={{ fontSize: 9.5, fontWeight: 700, color: RED, lineHeight: 1.2 }}>{fmtPrice(w52H)}</div>
+              </div>
+              <div style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 7.5, color: MUTED2, lineHeight: 1.2 }}>52W低</div>
+                <div style={{ fontSize: 9.5, fontWeight: 700, color: GREEN, lineHeight: 1.2 }}>{fmtPrice(w52L)}</div>
+              </div>
+              {curPrice != null && w52H > w52L && (
+                <div style={{ flex: 3, paddingLeft: 8 }}>
+                  <Week52Bar low={w52L} high={w52H} current={curPrice} />
+                </div>
+              )}
+            </>
+          ) : (
+            <span style={{ fontSize: 9, color: MUTED2 }}>暂无年度数据</span>
+          )
         ) : (
-          <Sk w={180} />
+          <Sk w={200} />
         )}
       </div>
     </div>
@@ -365,7 +346,7 @@ export default function USStockTracker() {
             })}
           </div>
           <div style={{ marginTop: 6, fontSize: 9, textAlign: "center", color: MUTED2 }}>
-            * 收盘价来自数据库 · 基本面数据来自 Yahoo Finance 实时接口
+            * 收盘价、量、振幅、52周高低均来自数据库 · 每日收盘后自动更新
           </div>
         </div>
 
