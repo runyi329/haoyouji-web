@@ -139,6 +139,8 @@ const OilBusinessPage = lazy(() => import("./pages/OilBusinessPage"));
 const GoldTrackerPage = lazy(() => import("./pages/GoldTrackerPage"));
 // 美元指数 DXY 详情页
 const DXYDetailPage = lazy(() => import("./pages/DXYDetailPage"));
+// 石油详情页（WTI / Brent）
+const OilDetailPage = lazy(() => import("./pages/OilDetailPage"));
 const GoldAIPage = lazy(() => import("./pages/GoldAIPage"));
 const FundingHistoryPage = lazy(() => import("./pages/FundingHistoryPage"));
 const CryptoFundingHistoryPage = lazy(() => import("./pages/CryptoFundingHistoryPage"));
@@ -596,6 +598,8 @@ function Router() {
         <Route path="/gold-ai" component={GoldAIPage} />
         {/* 美元指数 DXY 详情页 */}
         <Route path="/dxy" component={DXYDetailPage} />
+        {/* 石油详情页（WTI / Brent） */}
+        <Route path="/oil-detail" component={OilDetailPage} />
         <Route path="/ledger/:id/oil/funding-history" component={FundingHistoryPage} />
         {/* 加密货币资金费率历史 */}
         <Route path="/ledger/:id/crypto/funding-history" component={CryptoFundingHistoryPage} />
