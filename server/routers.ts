@@ -257,64 +257,33 @@ export const appRouter = router({
         return await dbCrypto.getLatestStockPrices(input.symbols);
       }),
 
-    // 获取单只美股基本面数据（Yahoo Finance：52周高低、分析师目标价、技术面趋势、支撑/阻力位）
+    // 获取单只美股基本面数据（从数据库计算52周高低，不依赖外部实时接口）
     getStockFundamentals: publicProcedure
       .input(z.object({ symbol: z.string() }))
       .query(async ({ input }) => {
         try {
-          const headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.9',
-          };
-          // 并行获取 chart（52周数据）和 insights（分析师/技术面）
-          const [chartRes, insightsRes] = await Promise.all([
-            fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${input.symbol}?interval=1d&range=5d&region=US`, { headers })
-              .then(r => r.ok ? r.json() : null)
-              .catch(() => null),
-            fetch(`https://query2.finance.yahoo.com/ws/insights/v3/finance/insights?symbol=${input.symbol}`, { headers })
-              .then(r => r.ok ? r.json() : null)
-              .catch(() => null),
-          ]);
+          const conn = await getDbConnection();
+          if (!conn) return null;
 
-          // 提取 chart meta 数据
-          const meta = chartRes?.chart?.result?.[0]?.meta ?? {};
-          const week52High: number | null = meta.fiftyTwoWeekHigh ?? null;
-          const week52Low: number | null = meta.fiftyTwoWeekLow ?? null;
-          const currentPrice: number | null = meta.regularMarketPrice ?? null;
-          const dayHigh: number | null = meta.regularMarketDayHigh ?? null;
-          const dayLow: number | null = meta.regularMarketDayLow ?? null;
-          const volume: number | null = meta.regularMarketVolume ?? null;
-
-          // 提取 insights 数据
-          const finResult = insightsRes?.finance?.result ?? {};
-          const instrInfo = finResult.instrumentInfo ?? {};
-          const keyTech = instrInfo.keyTechnicals ?? {};
-          const valuation = instrInfo.valuation ?? {};
-          const recommendation = finResult.recommendation ?? {};
-          const techEvents = instrInfo.technicalEvents ?? {};
-
-          // 短期技术面方向
-          const shortTermDir: string | null = techEvents.shortTermOutlook?.direction ?? null;
-          const midTermDir: string | null = techEvents.intermediateTermOutlook?.direction ?? null;
+          // 从数据库计算过去252个交易日（约1年）的最高/最低价
+          const [rows] = await (conn as any).execute(
+            `SELECT
+               MAX(high) as week52High,
+               MIN(low)  as week52Low,
+               COUNT(*)  as tradingDays
+             FROM crypto_klines
+             WHERE symbol = ?
+               AND date >= DATE_SUB(CURDATE(), INTERVAL 365 DAY)`,
+            [input.symbol]
+          );
+          const row = (rows as any[])[0];
+          if (!row || row.tradingDays === 0) return null;
 
           return {
             symbol: input.symbol,
-            week52High,
-            week52Low,
-            currentPrice,
-            dayHigh,
-            dayLow,
-            volume,
-            support: keyTech.support ?? null,
-            resistance: keyTech.resistance ?? null,
-            stopLoss: keyTech.stopLoss ?? null,
-            valuationDesc: valuation.description ?? null,  // 'Overvalued' | 'Undervalued' | 'Fairly Valued'
-            valuationDiscount: valuation.discount ?? null, // '-6%' | '+12%' 等
-            targetPrice: recommendation.targetPrice ?? null,
-            rating: recommendation.rating ?? null,          // 'BUY' | 'SELL' | 'HOLD'
-            shortTermDir,
-            midTermDir,
+            week52High: row.week52High != null ? parseFloat(row.week52High) : null,
+            week52Low:  row.week52Low  != null ? parseFloat(row.week52Low)  : null,
+            tradingDays: row.tradingDays,
           };
         } catch (e) {
           console.error(`[getStockFundamentals] ${input.symbol} error:`, e);

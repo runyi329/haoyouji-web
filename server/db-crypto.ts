@@ -769,6 +769,8 @@ export async function getLatestStockPrices(symbols: string[]): Promise<Record<st
   high: number;
   low: number;
   changePct: number | null;
+  volume: number | null;
+  amplitudePct: number | null;
 }>> {
   const conn = await getDbConnection();
   if (!conn || symbols.length === 0) return {};
@@ -776,7 +778,8 @@ export async function getLatestStockPrices(symbols: string[]): Promise<Record<st
     const placeholders = symbols.map(() => '?').join(',');
     const [rows] = await (conn as any).execute(
       `SELECT k.symbol, DATE_FORMAT(k.date, '%Y-%m-%d') as date,
-              k.open, k.high, k.low, k.close, k.change_pct as changePct
+              k.open, k.high, k.low, k.close, k.change_pct as changePct,
+              k.volume, k.amplitude_pct as amplitudePct
        FROM crypto_klines k
        INNER JOIN (
          SELECT symbol, MAX(date) as max_date
@@ -797,6 +800,8 @@ export async function getLatestStockPrices(symbols: string[]): Promise<Record<st
         high: parseFloat(r.high),
         low: parseFloat(r.low),
         changePct: r.changePct !== null ? parseFloat(r.changePct) : null,
+        volume: r.volume !== null ? parseFloat(r.volume) : null,
+        amplitudePct: r.amplitudePct !== null ? parseFloat(r.amplitudePct) : null,
       };
     }
     return result;
