@@ -1196,6 +1196,30 @@ export default function BeDataPage() {
   const isDown = latestChangePct != null && latestChangePct < 0;
   const pctColor = isUp ? "text-red-500" : isDown ? "text-green-600" : "text-gray-500";
 
+  // 数字币实时价格查询
+  const isCryptoMode = urlFilter === 'crypto';
+  const isBtcActive = activeSymbol === 'BTCUSDT';
+  const isEthActive = activeSymbol === 'ETHUSDT';
+  const isSolActive = activeSymbol === 'SOLUSDT';
+
+  const { data: btcPriceData } = trpc.cryptoData.getBtcPrice.useQuery(
+    undefined,
+    { enabled: isCryptoMode && isBtcActive, refetchInterval: 10000 }
+  );
+  const { data: ethPriceData } = trpc.cryptoData.getEthPrice.useQuery(
+    undefined,
+    { enabled: isCryptoMode && isEthActive, refetchInterval: 10000 }
+  );
+  const { data: solPriceData } = trpc.cryptoData.getSolPrice.useQuery(
+    undefined,
+    { enabled: isCryptoMode && isSolActive, refetchInterval: 10000 }
+  );
+
+  // 实时价格（数字币模式下优先用实时价格，否则用日线数据的收盘价）
+  const livePriceData = isBtcActive ? btcPriceData : isEthActive ? ethPriceData : isSolActive ? solPriceData : null;
+  const displayPrice = isCryptoMode && livePriceData?.success ? livePriceData.price : latestClose;
+  const displayChangePct = isCryptoMode && livePriceData?.success ? livePriceData.changePercent : latestChangePct;
+
   // AI 分析查询（仅美股模式且数据加载完成后才请求）
   const [aiExpanded, setAiExpanded] = useState(false);
   const { data: aiData, isLoading: aiLoading } = trpc.cryptoData.getAIAnalysis.useQuery(
@@ -1330,12 +1354,12 @@ export default function BeDataPage() {
               <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>实时行情</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {/* 最新收盘 */}
+                  {/* 最新收盘 / 实时价格 */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>最新收盘</span>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{isCryptoMode ? "实时价格" : "最新收盘"}</span>
                     {isLoading
                       ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                      : <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>{latestClose != null ? formatPrice(latestClose) : "—"}</span>
+                      : <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>{displayPrice != null ? formatPrice(displayPrice) : "—"}</span>
                     }
                   </div>
                   {/* 当日涨跌 */}
@@ -1343,8 +1367,8 @@ export default function BeDataPage() {
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>当日涨跌</span>
                     {isLoading
                       ? <div style={{ width: 40, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                      : <span style={{ fontSize: 12, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE" }}>
-                          {latestChangePct != null ? ((latestChangePct >= 0 ? "+" : "") + latestChangePct.toFixed(2) + "%") : "—"}
+                      : <span style={{ fontSize: 12, fontWeight: 700, color: (displayChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE" }}>
+                          {displayChangePct != null ? ((displayChangePct >= 0 ? "+" : "") + displayChangePct.toFixed(2) + "%") : "—"}
                         </span>
                     }
                   </div>
