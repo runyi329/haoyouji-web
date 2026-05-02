@@ -20,6 +20,60 @@ const GREEN_A = "#388E3C";
 const MUTED = "#888";
 const BG = "#f5f5f5";
 
+// ── WTI 图标：黑底白色油滴 ────────────────────────────────────────────────────
+const WtiIcon = ({ size = 32 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="wtiCircleGrad" cx="40%" cy="35%" r="65%">
+        <stop offset="0%" stopColor="#333333"/>
+        <stop offset="100%" stopColor="#000000"/>
+      </radialGradient>
+      <radialGradient id="wtiDropGrad" cx="38%" cy="28%" r="70%">
+        <stop offset="0%" stopColor="#ffffff"/>
+        <stop offset="60%" stopColor="#e8e8e8"/>
+        <stop offset="100%" stopColor="#cccccc"/>
+      </radialGradient>
+      <radialGradient id="wtiHighlight" cx="35%" cy="25%" r="40%">
+        <stop offset="0%" stopColor="rgba(255,255,255,0.4)"/>
+        <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+      </radialGradient>
+    </defs>
+    {/* 黑色圆形背景 */}
+    <circle cx="16" cy="16" r="16" fill="url(#wtiCircleGrad)"/>
+    {/* 白色油滴 */}
+    <path d="M16 5 C16 5 9.5 14 9.5 18.5 C9.5 22.1 12.4 25.5 16 25.5 C19.6 25.5 22.5 22.1 22.5 18.5 C22.5 14 16 5 16 5 Z" fill="url(#wtiDropGrad)"/>
+    {/* 高光 */}
+    <path d="M16 5 C16 5 9.5 14 9.5 18.5 C9.5 22.1 12.4 25.5 16 25.5 C19.6 25.5 22.5 22.1 22.5 18.5 C22.5 14 16 5 16 5 Z" fill="url(#wtiHighlight)"/>
+  </svg>
+);
+
+// ── Brent 图标：白底黑色油滴（与首页银盘一致） ───────────────────────────────
+const BrentIcon = ({ size = 32 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="brentCircleGrad" cx="40%" cy="35%" r="65%">
+        <stop offset="0%" stopColor="#f8f8f8"/>
+        <stop offset="100%" stopColor="#d0d0d0"/>
+      </radialGradient>
+      <radialGradient id="brentDropGrad" cx="38%" cy="28%" r="70%">
+        <stop offset="0%" stopColor="#555555"/>
+        <stop offset="40%" stopColor="#1a1a1a"/>
+        <stop offset="100%" stopColor="#000000"/>
+      </radialGradient>
+      <radialGradient id="brentHighlight" cx="35%" cy="25%" r="40%">
+        <stop offset="0%" stopColor="rgba(255,255,255,0.55)"/>
+        <stop offset="100%" stopColor="rgba(255,255,255,0)"/>
+      </radialGradient>
+    </defs>
+    {/* 白色圆形背景 */}
+    <circle cx="16" cy="16" r="16" fill="url(#brentCircleGrad)" stroke="#c8c8c8" strokeWidth="0.8"/>
+    {/* 黑色油滴 */}
+    <path d="M16 5 C16 5 9.5 14 9.5 18.5 C9.5 22.1 12.4 25.5 16 25.5 C19.6 25.5 22.5 22.1 22.5 18.5 C22.5 14 16 5 16 5 Z" fill="url(#brentDropGrad)"/>
+    {/* 高光 */}
+    <path d="M16 5 C16 5 9.5 14 9.5 18.5 C9.5 22.1 12.4 25.5 16 25.5 C19.6 25.5 22.5 22.1 22.5 18.5 C22.5 14 16 5 16 5 Z" fill="url(#brentHighlight)"/>
+  </svg>
+);
+
 const THEME = {
   WTI: {
     gradient: "linear-gradient(160deg, #1B5E20 0%, #2E7D32 50%, #1A4A1E 100%)",
@@ -29,9 +83,12 @@ const THEME = {
     shortName: "WTI",
     exchange: "NYMEX",
     unit: "美元/桶",
-    icon: "🛢",
+    // 黑底白字卡片
+    cardBg: "rgba(0,0,0,0.55)",
+    cardBorder: "rgba(255,255,255,0.2)",
     decimals: 2,
-    headerColor: "rgba(76,175,80,0.25)",
+    headerColor: "rgba(0,0,0,0.45)",
+    IconComp: WtiIcon,
   },
   BRENT: {
     gradient: "linear-gradient(160deg, #004D40 0%, #00695C 50%, #003330 100%)",
@@ -41,9 +98,12 @@ const THEME = {
     shortName: "Brent",
     exchange: "ICE",
     unit: "美元/桶",
-    icon: "⛽",
+    // 白底黑字卡片
+    cardBg: "rgba(255,255,255,0.88)",
+    cardBorder: "rgba(0,0,0,0.12)",
     decimals: 2,
-    headerColor: "rgba(38,166,154,0.25)",
+    headerColor: "rgba(255,255,255,0.82)",
+    IconComp: BrentIcon,
   },
 };
 
@@ -250,28 +310,38 @@ function OilQuoteCard({
   const latestChangePct = klinesData?.rows?.[0]?.changePct ?? null;
   const total           = metaData?.total ?? 0;
   const oldestDate      = metaData?.oldestDate ?? "";
-  const latestDate      = metaData?.latestDate ?? "";
+
+  // WTI: 黑底白字 / Brent: 白底黑字
+  const isWti = symbol === "WTI";
+  const textMain    = isWti ? "#ffffff" : "#111111";
+  const textSub     = isWti ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.45)";
+  const skeletonBg  = isWti ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.08)";
+  const upColor     = isWti ? "#FF8A80" : "#D32F2F";
+  const downColor   = isWti ? "#69F0AE" : "#2E7D32";
+  const IconComp    = theme.IconComp;
 
   return (
     <div style={{
       borderRadius: 10,
       padding: "8px 10px",
-      background: theme.headerColor,
-      border: "1px solid rgba(255,255,255,0.2)",
+      background: theme.cardBg,
+      border: `1px solid ${theme.cardBorder}`,
       flex: 1,
     }}>
       {/* 品种标题 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
-        <span style={{ fontSize: 14 }}>{theme.icon}</span>
-        <span style={{ fontSize: 12, fontWeight: 800, color: "#fff" }}>{theme.shortName}</span>
-        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{theme.exchange}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+        <IconComp size={22} />
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: textMain, lineHeight: 1.2 }}>{theme.shortName}</div>
+          <div style={{ fontSize: 9, color: textSub, lineHeight: 1.2 }}>{theme.exchange}</div>
+        </div>
       </div>
 
       {/* 最新收盘价 */}
       <div style={{ marginBottom: 4 }}>
         {klinesLoading
-          ? <div style={{ width: 70, height: 18, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-          : <span style={{ fontSize: 18, fontWeight: 900, color: "#fff", letterSpacing: -0.5 }}>
+          ? <div style={{ width: 70, height: 18, borderRadius: 4, background: skeletonBg }} />
+          : <span style={{ fontSize: 18, fontWeight: 900, color: textMain, letterSpacing: -0.5 }}>
               ${formatPrice(latestClose, theme.decimals)}
             </span>
         }
@@ -280,8 +350,8 @@ function OilQuoteCard({
       {/* 涨跌幅 */}
       <div style={{ marginBottom: 6 }}>
         {klinesLoading
-          ? <div style={{ width: 48, height: 13, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-          : <span style={{ fontSize: 13, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE" }}>
+          ? <div style={{ width: 48, height: 13, borderRadius: 4, background: skeletonBg }} />
+          : <span style={{ fontSize: 13, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? upColor : downColor }}>
               {formatPct(latestChangePct)}
             </span>
         }
@@ -296,10 +366,10 @@ function OilQuoteCard({
           ["起始日期", metaLoading  ? null : oldestDate],
         ].map(([label, val], i) => (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 16 }}>
-            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.5)" }}>{label}</span>
+            <span style={{ fontSize: 9, color: textSub }}>{label}</span>
             {val == null
-              ? <div style={{ width: 44, height: 9, borderRadius: 3, background: "rgba(255,255,255,0.15)" }} />
-              : <span style={{ fontSize: 10, fontWeight: 600, color: "#fff" }}>{val}</span>
+              ? <div style={{ width: 44, height: 9, borderRadius: 3, background: skeletonBg }} />
+              : <span style={{ fontSize: 10, fontWeight: 600, color: textMain }}>{val}</span>
             }
           </div>
         ))}
