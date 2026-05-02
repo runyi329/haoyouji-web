@@ -338,14 +338,14 @@ function OilQuoteCard({
       </div>
 
        {/* 最新收盘价 + 涨跌幅（同一行） */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
         {klinesLoading
           ? <div style={{ width: 70, height: 18, borderRadius: 4, background: skeletonBg }} />
           : <>
               <span style={{ fontSize: 18, fontWeight: 900, color: textMain, letterSpacing: -0.5 }}>
                 ${formatPrice(latestClose, theme.decimals)}
               </span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? upColor : downColor }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? upColor : downColor, textAlign: "right" }}>
                 {formatPct(latestChangePct)}
               </span>
             </>
