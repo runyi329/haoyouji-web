@@ -1185,6 +1185,24 @@ export default function BeDataPage() {
   const isDown = latestChangePct != null && latestChangePct < 0;
   const pctColor = isUp ? "text-red-500" : isDown ? "text-green-600" : "text-gray-500";
 
+  // AI 分析查询（仅美股模式且数据加载完成后才请求）
+  const [aiExpanded, setAiExpanded] = useState(false);
+  const { data: aiData, isLoading: aiLoading } = trpc.cryptoData.getAIAnalysis.useQuery(
+    {
+      symbol: currentStockInfo?.symbol ?? activeSymbol,
+      stockName: currentStockInfo?.label ?? activeSymbol,
+      latestClose: latestClose ?? undefined,
+      latestChangePct: latestChangePct ?? undefined,
+      total,
+      oldestDate,
+      latestDate,
+    },
+    {
+      enabled: hideSymbolTabs && !isLoading && total > 0,
+      staleTime: 10 * 60 * 1000, // 10分钟内不重新请求
+    }
+  );
+
   const handleSymbolChange = (sym: string) => {
     setActiveSymbol(sym);
     setPage(1);
@@ -1247,9 +1265,9 @@ export default function BeDataPage() {
             </button>
           </div>
 
-          {/* 统计信息：三小卡片横排，嵌入蓝色导航栏 */}
+          {/* 统计信息：两小卡片横排，嵌入蓝色导航栏 */}
           {!isLoading && total > 0 && (
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <div style={{ flex: 1, borderRadius: 10, padding: "7px 10px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>数据范围</div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1.4, marginTop: 1 }}>{oldestDate}</div>
@@ -1273,6 +1291,41 @@ export default function BeDataPage() {
               </div>
             </div>
           )}
+
+          {/* AI × 股票名 分析卡片 */}
+          <div
+            onClick={() => setAiExpanded(v => !v)}
+            style={{
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.2)",
+              padding: "9px 12px",
+              cursor: "pointer",
+              transition: "background 0.2s",
+            }}
+          >
+            {/* 标题行 */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>
+                  ✨ AI × {currentStockInfo?.shortLabel ?? activeSymbol}
+                </span>
+                {aiLoading && (
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>分析中...</span>
+                )}
+              </div>
+              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{aiExpanded ? '▲ 收起' : '▼ 展开'}</span>
+            </div>
+
+            {/* 展开后显示 AI 分析内容 */}
+            {aiExpanded && (
+              <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.9)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                {aiLoading
+                  ? '正在生成 AI 分析，请稍候...'
+                  : String(aiData?.analysis ?? '暂无分析结果')}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         // 其他模式：保持原来的白色导航栏

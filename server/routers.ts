@@ -290,6 +290,78 @@ export const appRouter = router({
           return null;
         }
       }),
+
+    // AI 分析该股票（调用 LLM 生成简要分析）
+    getAIAnalysis: publicProcedure
+      .input(z.object({
+        symbol: z.string(),       // 如 AAPL.US
+        stockName: z.string(),    // 如 苹果
+        latestClose: z.number().nullable().optional(),
+        latestChangePct: z.number().nullable().optional(),
+        total: z.number().optional(),
+        oldestDate: z.string().optional(),
+        latestDate: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { invokeLLM } = await import('./_core/llm');
+        const { symbol, stockName, latestClose, latestChangePct, total, oldestDate, latestDate } = input;
+
+        // 从数据库取最近 20 条日线作为上下文
+        let recentKlines: any[] = [];
+        try {
+          const conn = await getDbConnection();
+          if (conn) {
+            const [rows] = await (conn as any).execute(
+              `SELECT date, open, close, high, low, change_pct FROM crypto_klines WHERE symbol = ? ORDER BY date DESC LIMIT 20`,
+              [symbol.replace('.US', '')]
+            );
+            recentKlines = (rows as any[]).map((r: any) => ({
+              date: r.date,
+              open: parseFloat(r.open),
+              close: parseFloat(r.close),
+              high: parseFloat(r.high),
+              low: parseFloat(r.low),
+              changePct: r.change_pct != null ? parseFloat(r.change_pct) : null,
+            }));
+          }
+        } catch (e) {
+          console.error('[getAIAnalysis] klines fetch error:', e);
+        }
+
+        const klinesSummary = recentKlines.length > 0
+          ? recentKlines.map(r => `${r.date}: 开${r.open} 收${r.close} 高${r.high} 低${r.low} 涨跌${r.changePct != null ? r.changePct.toFixed(2) + '%' : '-'}`).join('\n')
+          : '暂无日线数据';
+
+        const prompt = `你是一个专业的金融分析师。请对以下股票做简明分析（中文，200字以内）：
+
+股票：${stockName}（${symbol}）
+最新收盘：${latestClose != null ? latestClose.toFixed(2) : '-'} 美元，当日涨跌：${latestChangePct != null ? (latestChangePct >= 0 ? '+' : '') + latestChangePct.toFixed(2) + '%' : '-'}
+历史数据：${total ?? '-'} 条日线，时间跨度 ${oldestDate ?? '-'} 至 ${latestDate ?? '-'}
+
+最近 20 交易日日线：
+${klinesSummary}
+
+请从以下三个角度简要分析：
+1. 趋势判断：近期价格走势和动能
+2. 关键位置：支撑位和压力位参考
+3. 投资提示：短期注意事项
+
+要求简洁、客观、专业。`;
+
+        try {
+          const res = await invokeLLM({
+            messages: [
+              { role: 'system', content: '你是一个专业的金融分析师，擅长股票技术分析。' },
+              { role: 'user', content: prompt },
+            ],
+          });
+          const content = res?.choices?.[0]?.message?.content ?? '暂无分析结果';
+          return { analysis: content, symbol, stockName };
+        } catch (e) {
+          console.error('[getAIAnalysis] LLM error:', e);
+          return { analysis: '分析服务暂时不可用，请稍后重试。', symbol, stockName };
+        }
+      }),
   }),
 
   // 支付账户管理
