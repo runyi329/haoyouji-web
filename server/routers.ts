@@ -19999,6 +19999,51 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
+    /** Brent 布伦特原油实时价格 (新浪财经 nf_OIL_Brent) */
+    getBrentPrice: publicProcedure.query(async () => {
+      const cacheKey = 'global_brent';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        // 新浪布伦特原油期货：nf_OIL_Brent
+        const res = await fetch(
+          'https://hq.sinajs.cn/list=nf_OIL_Brent',
+          { headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+        );
+        const buf = await res.arrayBuffer();
+        const text = new TextDecoder('gbk').decode(buf);
+        const match = text.match(/"([^"]+)"/);
+        if (!match) throw new Error('解析失败');
+        const parts = match[1].split(',');
+        const price = parseFloat(parts[6]) || parseFloat(parts[3]) || 0;
+        const prev = parseFloat(parts[2]) || 0;
+        const change = price - prev;
+        const changePercent = prev > 0 ? (change / prev * 100) : 0;
+        const result = { price, prevClose: prev, change, changePercent, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        // 备用：通过 Yahoo Finance 延迟报价获取
+        try {
+          const res2 = await fetch(
+            'https://query1.finance.yahoo.com/v8/finance/chart/BZ%3DF?interval=1d&range=2d',
+            { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+          );
+          const json = await res2.json();
+          const meta = json?.chart?.result?.[0]?.meta;
+          if (meta) {
+            const price = meta.regularMarketPrice || 0;
+            const prev = meta.previousClose || meta.chartPreviousClose || 0;
+            const change = price - prev;
+            const changePercent = prev > 0 ? (change / prev * 100) : 0;
+            const result = { price, prevClose: prev, change, changePercent, success: true };
+            setCache(cacheKey, result);
+            return result;
+          }
+        } catch (_) {}
+        return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+      }
+    }),
     /** 美元人民币实时汇率 (新浪财经 USDCNY 在岸人民币) */
     getDollarIndex: publicProcedure.query(async () => {
       const cacheKey = 'global_dxy';
