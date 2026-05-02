@@ -336,12 +336,27 @@ export default function OilDetailPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => window.location.reload()}
-            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
-          >
-            更新
-          </button>
+          {/* WTI / Brent 切换 */}
+          <div style={{ display: "flex", borderRadius: 20, overflow: "hidden", border: "1px solid rgba(255,255,255,0.4)", flexShrink: 0 }}>
+            {(["WTI", "BRENT"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setLocation(`/oil-detail?type=${t}`)}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: 11,
+                  fontWeight: oilType === t ? 700 : 400,
+                  background: oilType === t ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.15)",
+                  color: oilType === t ? (t === "WTI" ? "#1B5E20" : "#004D40") : "#fff",
+                  border: "none",
+                  cursor: "pointer",
+                  letterSpacing: 0.3,
+                }}
+              >
+                {t === "BRENT" ? "Brent" : "WTI"}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 第二行：左右分栏信息卡片 */}
