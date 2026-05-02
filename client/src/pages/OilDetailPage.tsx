@@ -447,7 +447,7 @@ export default function OilDetailPage() {
         {/* 第一行：返回 + 标题 + 更新 */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <button
-            onClick={() => setLocation(-1 as any)}
+            onClick={() => window.history.back()}
             style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.18)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
           >
             <ChevronLeft style={{ width: 16, height: 16, color: "#fff" }} />
