@@ -359,8 +359,8 @@ export async function getKlinesMeta(symbol: string): Promise<{
   const conn = await getDbConnection();
   const [rows] = await conn.execute(
     `SELECT symbol, total,
-       DATE_FORMAT(oldest_date, '%y/%m/%d') as oldestDate,
-       DATE_FORMAT(latest_date, '%y/%m/%d') as latestDate
+       DATE_FORMAT(oldest_date, '%Y/%m/%d') as oldestDate,
+       DATE_FORMAT(latest_date, '%Y/%m/%d') as latestDate
      FROM crypto_klines_meta WHERE symbol = ? LIMIT 1`,
     [symbol]
   ) as any[];
