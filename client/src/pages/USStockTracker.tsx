@@ -126,10 +126,10 @@ function PriceCard({
 export default function USStockTracker() {
   const [, setLocation] = useLocation();
 
-  // 批量获取7只股票最新日线价格
-  const symbols = useMemo(() => MEGA_SEVEN.map(s => s.symbol), []);
+  // 批量获取7只股票最新日线价格（数据库存的是不带 .US 的 code，如 AAPL）
+  const codes = useMemo(() => MEGA_SEVEN.map(s => s.code), []);
   const { data: latestPrices } = trpc.cryptoData.getLatestPrices.useQuery(
-    { symbols },
+    { symbols: codes },
     { refetchInterval: 60_000, staleTime: 30_000 }
   );
 
@@ -213,7 +213,7 @@ export default function USStockTracker() {
             style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1.5px solid ${BORDER}`, padding: "0 12px" }}
           >
             {MEGA_SEVEN.map((stock, idx) => {
-              const pd = latestPrices?.[stock.symbol];
+              const pd = latestPrices?.[stock.code];
               return (
                 <PriceCard
                   key={stock.symbol}
