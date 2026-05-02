@@ -11,9 +11,9 @@ import {
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
 const COS_BE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
 const ALL_SYMBOLS = [
-  { key: "BTCUSDT", label: "比特币 Bitcoin", shortLabel: "BTC",  icon: "/btc-3d-icon.webp", type: "crypto", symbol: "BTCUSDT" },
-  { key: "ETHUSDT", label: "以太坊 Ethereum", shortLabel: "ETH",  icon: "/eth-3d-icon.webp", type: "crypto", symbol: "ETHUSDT" },
-  { key: "SOLUSDT", label: "索拉纳 Solana", shortLabel: "SOL",  icon: "/sol-3d-icon.webp", type: "crypto", symbol: "SOLUSDT" },
+  { key: "BTCUSDT", label: "比特币 Bitcoin", shortLabel: "BTC",  icon: "/btc-circle-icon.webp", type: "crypto", symbol: "BTCUSDT" },
+  { key: "ETHUSDT", label: "以太坊 Ethereum", shortLabel: "ETH",  icon: "/eth-circle-icon.webp", type: "crypto", symbol: "ETHUSDT" },
+  { key: "SOLUSDT", label: "索拉纳 Solana", shortLabel: "SOL",  icon: "/sol-circle-icon.webp", type: "crypto", symbol: "SOLUSDT" },
   { key: "AAPL",   label: "Apple",   shortLabel: "AAPL", icon: `${COS_BE}/logo_apple_3d_t_16b8b55f.png`, type: "stock", symbol: "AAPL.US" },
   { key: "MSFT",   label: "Microsoft",   shortLabel: "MSFT", icon: `${COS_BE}/logos/logo_microsoft_3d.png`, type: "stock", symbol: "MSFT.US" },
   { key: "GOOGL",  label: "Alphabet",  shortLabel: "GOOGL", icon: `${COS_BE}/logos/logo_google_3d.png`, type: "stock", symbol: "GOOGL.US" },
